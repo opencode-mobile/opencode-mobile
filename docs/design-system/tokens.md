@@ -3,6 +3,10 @@
 This document is the canonical planning source for design-system tokens before
 native app implementation exists.
 
+OpenCode web theme evidence is recorded in
+`docs/design-system/opencode-web-theme.md`. Use it as source material when
+choosing primitive palette values and semantic token mappings.
+
 The token system has four levels:
 
 1. Primitive palette

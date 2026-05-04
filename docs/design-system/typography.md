@@ -3,6 +3,11 @@
 Typography should align with opencode's product identity while remaining native
 and readable on each mobile platform.
 
+OpenCode web typography evidence is recorded in
+`docs/design-system/opencode-web-theme.md`. Treat the web system font stack as
+fallback and sizing evidence, not as a replacement for the product font intent
+below.
+
 ## Font Intent
 
 - Primary UI: IBM Plex Sans.
