@@ -1,0 +1,52 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.code-workspace
+
+# Android (see also android/.gitignore)
+**/.gradle/
+**/local.properties
+**/*.hprof
+**/.cxx/
+**/.externalNativeBuild/
+**/captures/
+
+# Xcode / Swift (iOS)
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xccheckout
+**/DerivedData/
+build/
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.moved-aside
+*.hmap
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.xcodeproj/*_Generated.swift
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs
+*.log
