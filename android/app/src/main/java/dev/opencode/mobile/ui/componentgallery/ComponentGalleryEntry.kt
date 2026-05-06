@@ -4,12 +4,14 @@ import kotlinx.serialization.Serializable
 
 enum class ComponentGalleryCategory(val label: String) {
   Foundation("Foundations"),
+  Components("Components"),
 }
 
 @Serializable
 enum class ComponentGalleryEntryId {
   Colors,
   Typography,
+  ListItem,
 }
 
 data class ComponentGalleryEntry(
@@ -32,5 +34,11 @@ val ComponentGalleryEntries =
       title = "Typography",
       description = "Review shared type roles and platform mappings.",
       category = ComponentGalleryCategory.Foundation,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.ListItem,
+      title = "List Item",
+      description = "Reusable project and session row treatment.",
+      category = ComponentGalleryCategory.Components,
     ),
   )

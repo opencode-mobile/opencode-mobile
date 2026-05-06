@@ -22,13 +22,15 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
+import dev.opencode.mobile.ui.main.MainScreen
 
 @Composable
 fun MainNavigation() {
-  val backStack = rememberNavBackStack(ComponentGalleryHome)
+  val backStack = rememberNavBackStack(ProjectListHome)
   var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
   val systemDarkTheme = isSystemInDarkTheme()
   val darkTheme =
@@ -49,6 +51,9 @@ fun MainNavigation() {
         predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
         entryProvider =
           entryProvider {
+            entry<ProjectListHome> {
+              MainScreen(onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) })
+            }
             entry<ComponentGalleryHome> {
               ComponentGalleryScreen(onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) })
             }
@@ -62,6 +67,7 @@ fun MainNavigation() {
                 when (key.entryId) {
                   ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                   ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
+                  ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                 }
               }
             }
