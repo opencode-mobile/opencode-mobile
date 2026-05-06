@@ -1,6 +1,6 @@
 import Foundation
 
-enum ComponentGalleryCategory: String {
+enum ComponentGalleryCategory: String, CaseIterable {
     case foundation = "Foundations"
     case components = "Components"
 }
@@ -9,6 +9,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
     case listItem
+    case choiceBadge
 }
 
 struct ComponentGalleryEntry: Identifiable, Hashable {
@@ -35,6 +36,12 @@ let componentGalleryEntries = [
         id: .listItem,
         title: "List Item",
         description: "Reusable project and session row treatment.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .choiceBadge,
+        title: "Choice Badge",
+        description: "Selectable pill for compact single-choice controls.",
         category: .components
     ),
 ]

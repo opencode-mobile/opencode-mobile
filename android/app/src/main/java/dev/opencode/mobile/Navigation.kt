@@ -22,6 +22,7 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
@@ -68,6 +69,7 @@ fun MainNavigation() {
                   ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                   ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
                   ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
+                  ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                 }
               }
             }

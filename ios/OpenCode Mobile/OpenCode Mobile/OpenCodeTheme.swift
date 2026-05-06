@@ -22,6 +22,18 @@ enum OpenCodeColors {
     static let statusError = dynamic(light: 0xFC533A, dark: 0xCB321C)
     static let statusInfo = dynamic(light: 0xA753AE, dark: 0xCD73D5)
 
+    // List item letter badge (component tokens — listItem.startDecorator.letter.*)
+    static let listItemLetterVioletFill = dynamic(light: 0x4C3D5C, dark: 0x3A2F47)
+    static let listItemLetterVioletTint = dynamic(light: 0xE2D5F5, dark: 0xD8C8EE)
+    static let listItemLetterTealFill = dynamic(light: 0x2D4A42, dark: 0x243832)
+    static let listItemLetterTealTint = dynamic(light: 0xB8F5E0, dark: 0xA8EDD8)
+    static let listItemLetterAmberFill = dynamic(light: 0x5C3D28, dark: 0x4A3224)
+    static let listItemLetterAmberTint = dynamic(light: 0xFFB86C, dark: 0xFFAA55)
+    static let listItemLetterBlueFill = dynamic(light: 0x2A3A55, dark: 0x1E2D42)
+    static let listItemLetterBlueTint = dynamic(light: 0xA8D4FF, dark: 0x9EC8FF)
+    static let listItemLetterRoseFill = dynamic(light: 0x5C2D3D, dark: 0x4A2533)
+    static let listItemLetterRoseTint = dynamic(light: 0xFFB8D4, dark: 0xFFA8CC)
+
     private static func dynamic(
         light: UInt32,
         lightAlpha: CGFloat = 1,

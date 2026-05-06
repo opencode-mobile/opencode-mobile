@@ -12,6 +12,7 @@ enum class ComponentGalleryEntryId {
   Colors,
   Typography,
   ListItem,
+  ChoiceBadge,
 }
 
 data class ComponentGalleryEntry(
@@ -39,6 +40,12 @@ val ComponentGalleryEntries =
       id = ComponentGalleryEntryId.ListItem,
       title = "List Item",
       description = "Reusable project and session row treatment.",
+      category = ComponentGalleryCategory.Components,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.ChoiceBadge,
+      title = "Choice Badge",
+      description = "Selectable pill for compact single-choice controls.",
       category = ComponentGalleryCategory.Components,
     ),
   )

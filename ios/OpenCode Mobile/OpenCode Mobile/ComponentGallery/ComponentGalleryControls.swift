@@ -28,12 +28,15 @@ struct ComponentGalleryControls: View {
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textPrimary)
 
-            Picker("Theme", selection: $themeMode) {
+            HStack(spacing: 8) {
                 ForEach(ComponentGalleryThemeMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
+                    OpenCodeChoiceBadge(
+                        label: mode.rawValue,
+                        selected: themeMode == mode,
+                        action: { themeMode = mode }
+                    )
                 }
             }
-            .pickerStyle(.segmented)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

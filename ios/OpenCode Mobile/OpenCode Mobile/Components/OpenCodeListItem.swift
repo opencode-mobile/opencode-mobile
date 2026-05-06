@@ -5,6 +5,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     let subtitle: String?
     let selected: Bool
     let enabled: Bool
+    let startDecorator: StartDecorator
     let action: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
 
@@ -13,6 +14,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         subtitle: String? = nil,
         selected: Bool = false,
         enabled: Bool = true,
+        startDecorator: StartDecorator = .none,
         action: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
     ) {
@@ -20,6 +22,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.subtitle = subtitle
         self.selected = selected
         self.enabled = enabled
+        self.startDecorator = startDecorator
         self.action = action
         self.trailing = trailing
     }
@@ -40,6 +43,8 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     private var content: some View {
         HStack(spacing: 12) {
+            startDecoratorContent
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(OpenCodeTypography.heading)
@@ -69,29 +74,68 @@ struct OpenCodeListItem<Trailing: View>: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .opacity(enabled ? 1 : 0.7)
     }
+
+    @ViewBuilder
+    private var startDecoratorContent: some View {
+        switch startDecorator {
+        case .none:
+            EmptyView()
+        case let .letter(character, accent):
+            Text(normalizedBadgeLetter(character))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(accent.badgeTint)
+                .frame(width: 24, height: 24)
+                .background(accent.badgeFill, in: RoundedRectangle(cornerRadius: 4))
+                .accessibilityHidden(true)
+        case let .icon(systemName, accessibilityLabel):
+            Image(systemName: systemName)
+                .font(.system(size: 24))
+                .foregroundStyle(OpenCodeColors.iconDefault)
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(accessibilityLabel == nil)
+                .accessibilityLabel(accessibilityLabel ?? "")
+        }
+    }
+}
+
+private func normalizedBadgeLetter(_ character: Character) -> String {
+    let upper = String(character).uppercased(with: .current)
+    guard let first = upper.first else { return "?" }
+    return first.isLetter || first.isNumber ? String(first) : "?"
 }
 
 #Preview {
     VStack(spacing: 12) {
         OpenCodeListItem(
             title: "Material Design Icons integration plan",
-            subtitle: "http://127.0.0.1:4096/"
-        ) {
-            Text("...")
-                .font(OpenCodeTypography.heading)
-        }
+            subtitle: "http://127.0.0.1:4096/",
+            trailing: {
+                Text("...")
+                    .font(OpenCodeTypography.heading)
+            }
+        )
         OpenCodeListItem(
             title: "iOS color palette and typography screens",
             subtitle: "http://127.0.0.1:4096/",
-            selected: true
-        ) {
-            Text("...")
-                .font(OpenCodeTypography.heading)
-        }
+            selected: true,
+            trailing: {
+                Text("...")
+                    .font(OpenCodeTypography.heading)
+            }
+        )
         OpenCodeListItem(
             title: "Update agents.md with notes on screenshot",
             subtitle: "Unavailable",
             enabled: false
+        )
+        OpenCodeListItem(
+            title: "Letter violet",
+            subtitle: "Badge",
+            startDecorator: .letter(Character("m"), .violet),
+            trailing: {
+                Text("...")
+                    .font(OpenCodeTypography.heading)
+            }
         )
     }
     .padding(16)

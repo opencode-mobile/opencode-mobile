@@ -3,10 +3,13 @@ import SwiftUI
 struct ComponentGalleryHomeView: View {
     @State private var themeMode: ComponentGalleryThemeMode = .system
 
+    /// Matches Android: foundations first, then components (declaration order), not alphabetical by label.
     private var entriesByCategory: [(ComponentGalleryCategory, [ComponentGalleryEntry])] {
-        Dictionary(grouping: componentGalleryEntries, by: \.category)
-            .sorted { $0.key.rawValue < $1.key.rawValue }
-            .map { ($0.key, $0.value) }
+        let grouped = Dictionary(grouping: componentGalleryEntries, by: \.category)
+        return ComponentGalleryCategory.allCases.compactMap { category in
+            guard let entries = grouped[category], !entries.isEmpty else { return nil }
+            return (category, entries)
+        }
     }
 
     var body: some View {

@@ -98,6 +98,40 @@ Examples:
 Use component tokens when a component needs stable internal styling across
 states, variants, or platforms.
 
+### List item start decorator (letter badge)
+
+The letter variant of `OpenCodeListItem` uses a fixed **24×24** badge with a
+small corner radius (`listItem.startDecorator.letter.cornerRadius`, **4**)
+derived from these pairs. Do not use these tokens outside the list-item letter
+badge without revisiting the design-system docs.
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `listItem.startDecorator.letter.cornerRadius` | 4 (logical px) | 4 (logical px) |
+| `listItem.startDecorator.letter.accent.violet.fill` | `#4c3d5c` | `#3a2f47` |
+| `listItem.startDecorator.letter.accent.violet.tint` | `#e2d5f5` | `#d8c8ee` |
+| `listItem.startDecorator.letter.accent.teal.fill` | `#2d4a42` | `#243832` |
+| `listItem.startDecorator.letter.accent.teal.tint` | `#b8f5e0` | `#a8edd8` |
+| `listItem.startDecorator.letter.accent.amber.fill` | `#5c3d28` | `#4a3224` |
+| `listItem.startDecorator.letter.accent.amber.tint` | `#ffb86c` | `#ffaa55` |
+| `listItem.startDecorator.letter.accent.blue.fill` | `#2a3a55` | `#1e2d42` |
+| `listItem.startDecorator.letter.accent.blue.tint` | `#a8d4ff` | `#9ec8ff` |
+| `listItem.startDecorator.letter.accent.rose.fill` | `#5c2d3d` | `#4a2533` |
+| `listItem.startDecorator.letter.accent.rose.tint` | `#ffb8d4` | `#ffa8cc` |
+
+### Choice badge
+
+Interactive pill used for gallery controls and similar compact selectors.
+Geometry is shared across platforms; fills map to semantic surfaces as
+documented in `docs/design-system/components/choice-badge.md`.
+
+| Token | Value |
+| --- | --- |
+| `choiceBadge.cornerRadius` | 16 (logical px; capsule when height is smaller) |
+| `choiceBadge.minHeight` | 32 (logical px; enforced via vertical padding) |
+| `choiceBadge.paddingHorizontal` | 12 (logical px) |
+| `choiceBadge.paddingVertical` | 8 (logical px) |
+
 ## Platform Mappings
 
 Platform mappings translate semantic and component tokens into native APIs:

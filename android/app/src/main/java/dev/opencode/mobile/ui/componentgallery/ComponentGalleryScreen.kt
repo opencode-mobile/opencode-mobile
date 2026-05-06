@@ -34,7 +34,10 @@ fun ComponentGalleryScreen(
       }
     }
 
-    entries.groupBy { it.category }.forEach { (category, categoryEntries) ->
+    // Explicit category order (matches iOS enum / declaration order), not map iteration order.
+    ComponentGalleryCategory.entries.forEach { category ->
+      val categoryEntries = entries.filter { it.category == category }
+      if (categoryEntries.isEmpty()) return@forEach
       item {
         Text(
           text = category.label,

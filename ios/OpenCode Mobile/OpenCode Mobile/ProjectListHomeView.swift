@@ -33,11 +33,12 @@ struct ProjectListHomeView: View {
                     ForEach(sessions) { session in
                         OpenCodeListItem(
                             title: session.title,
-                            subtitle: AppConfig.serverBaseURL
-                        ) {
-                            Text("...")
-                                .font(OpenCodeTypography.heading)
-                        }
+                            subtitle: AppConfig.serverBaseURL,
+                            trailing: {
+                                Text("...")
+                                    .font(OpenCodeTypography.heading)
+                            }
+                        )
                         .listRowInsets(EdgeInsets(top: 6, leading: horizontalInset, bottom: 6, trailing: horizontalInset))
                         .listRowBackground(OpenCodeColors.backgroundPrimary)
                         .listRowSeparator(.hidden)

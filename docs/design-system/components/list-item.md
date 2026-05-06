@@ -3,8 +3,8 @@
 ## Intent
 
 Provide a reusable row treatment for selectable project and session lists with a
-consistent rounded surface, title-first hierarchy, and optional trailing
-accessory.
+consistent rounded surface, title-first hierarchy, optional **start decorator**
+(letter badge or icon), and optional trailing accessory.
 
 ## Public API
 
@@ -12,14 +12,28 @@ accessory.
 - States: enabled, disabled.
 - Required content: `title`.
 - Optional content: `subtitle`, trailing accessory content.
+- **Start decorator** (`none` by default):
+  - **`none`**: no leading visual.
+  - **`letter`**: one uppercase character in a **24×24** rounded square; callers
+    choose a **`LetterAccent`** semantic variant (paired fill and tint from
+    component tokens). The component keeps a single grapheme and applies
+    uppercase styling where appropriate.
+  - **`icon`**: **24×24** icon area using platform conventions (Android:
+    `ImageVector` plus optional content description; iOS: SF Symbol `systemName`
+    plus optional accessibility label). Tint follows row emphasis (including
+    disabled).
+
+Internal typography for the letter maps to the **`type.caption`** role with a
+stronger weight so the glyph stays legible inside the small badge; this is not a
+separate public typography override.
 
 ## Token Usage
 
 - Semantic tokens: `color.surface.primary`, `color.surface.secondary`,
   `color.text.primary`, `color.text.secondary`, `color.text.disabled`,
   `color.border.subtle`, `color.icon.default`.
-- Component tokens: none yet; this component currently maps directly to semantic
-  tokens.
+- Component tokens: list-item letter badge accents and corner radius — see
+  `listItem.startDecorator.*` in `docs/design-system/tokens.md`.
 - Typography roles: `type.heading` for title and `type.caption` for subtitle.
 
 ## Behavior
@@ -27,6 +41,10 @@ accessory.
 The component supports tap/click actions when a handler is provided. Selected
 rows use the secondary surface token. Disabled rows reduce emphasis and do not
 run actions. Long title/subtitle strings truncate to one line.
+
+The letter badge is treated as **decorative** for accessibility when the title
+already identifies the row; icons require explicit descriptions on Android and
+recommended labels on iOS.
 
 ## Platform Notes
 
@@ -41,10 +59,13 @@ run actions. Long title/subtitle strings truncate to one line.
 - Default: included.
 - Pressed: covered through platform interaction behavior.
 - Disabled: included.
+- Start decorator: letter accents and icon are explored via **interactive
+  controls** in the component gallery (single preview row), not a static matrix
+  of samples.
 - Loading: not applicable for this component.
 - Error: not applicable for this component.
 
 ## Parity And Divergence
 
-No intentional divergence currently. Both platforms share the same variant and
-state semantics.
+Shared semantics for variants, states, and decorator roles. Platform-specific
+icon identifier types are documented in `docs/design-system/divergences.md`.
