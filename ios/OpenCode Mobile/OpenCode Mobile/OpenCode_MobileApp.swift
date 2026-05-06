@@ -26,6 +26,7 @@ struct OpenCode_MobileApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .openCodeTheme()
         }
         .modelContainer(sharedModelContainer)
     }

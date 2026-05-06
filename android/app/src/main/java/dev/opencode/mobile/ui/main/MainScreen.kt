@@ -10,7 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import dev.opencode.mobile.data.DefaultDataRepository
-import dev.opencode.mobile.theme.MyApplicationTheme
+import dev.opencode.mobile.theme.OpenCodeTheme
 
 @Composable
 fun MainScreen(
@@ -45,11 +45,11 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
-  MyApplicationTheme { MainScreen(listOf("Android")) }
+  OpenCodeTheme(darkTheme = false) { MainScreen(listOf("Android")) }
 }
 
 @Preview(showBackground = true, widthDp = 340)
 @Composable
-fun MainScreenPortraitPreview() {
-  MyApplicationTheme { MainScreen(listOf("Android")) }
+fun MainScreenDarkPreview() {
+  OpenCodeTheme(darkTheme = true) { MainScreen(listOf("Android")) }
 }

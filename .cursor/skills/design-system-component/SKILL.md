@@ -29,8 +29,8 @@ Collection for opencode-mobile.
 4. If needed, update token or typography docs before writing component code.
 5. Design the public API around semantic variants and explicit states.
 6. Once app projects exist, implement iOS and Android in the same change.
-7. Update both platform component registries, galleries, detail pages, or
-   preview routes.
+7. Update both platform Component Gallery registries, detail screens, controls,
+   or preview routes that help review the component.
 8. Add light and dark previews with stable copy and realistic states.
 9. Document every intentional iOS/Android difference in
    `docs/design-system/divergences.md`.
@@ -58,7 +58,7 @@ be intentional and clear from the component docs.
 - Component intent and public API are documented.
 - Tokens and typography roles map back to the design-system docs.
 - iOS and Android implementations are both complete when app projects exist.
-- Both platform galleries or registries list the component.
+- Both platform Component Gallery registries list the component when relevant.
 - Light and dark previews exist on both platforms.
 - Key states use stable copy and realistic data.
 - Temporary mismatches are tracked in the relevant feature `parity-gaps.md`.

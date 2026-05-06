@@ -103,6 +103,16 @@ The Component Collection is built and kept in sync across iOS and Android before
 feature screens depend on reusable UI. Each component should have documented
 intent, supported variants, states, and platform differences.
 
+### Component Gallery
+
+A developer-only in-app inspection surface for the Component Collection and
+Design System foundations.
+
+The Component Gallery is allowed to be the temporary app entry point during
+design-system work. It lists gallery entries and opens a dedicated screen per
+entry with consistent controls for reviewing themes, states, variants, and
+platform behavior. It is not part of the v1 user-facing product navigation.
+
 ### Feature Slice
 
 A user-facing capability developed across both native apps as one coordinated

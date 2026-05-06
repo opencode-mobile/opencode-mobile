@@ -1,27 +1,72 @@
 package dev.opencode.mobile
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import dev.opencode.mobile.ui.main.MainScreen
+import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
+import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
+import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
+import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
+import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 
 @Composable
 fun MainNavigation() {
-  val backStack = rememberNavBackStack(Main)
+  val backStack = rememberNavBackStack(ComponentGalleryHome)
+  var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
+  val systemDarkTheme = isSystemInDarkTheme()
+  val darkTheme =
+    when (themeMode) {
+      ComponentGalleryThemeMode.System -> systemDarkTheme
+      ComponentGalleryThemeMode.Light -> false
+      ComponentGalleryThemeMode.Dark -> true
+    }
 
-  NavDisplay(
-    backStack = backStack,
-    onBack = { backStack.removeLastOrNull() },
-    entryProvider =
-      entryProvider {
-        entry<Main> {
-          MainScreen(onItemClick = { navKey -> backStack.add(navKey) }, modifier = Modifier.safeDrawingPadding().padding(16.dp))
-        }
-      },
-  )
+  OpenCodeTheme(darkTheme = darkTheme) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+      NavDisplay(
+        modifier = Modifier.safeDrawingPadding(),
+        backStack = backStack,
+        onBack = { backStack.removeLastOrNull() },
+        transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+        popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+        predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+        entryProvider =
+          entryProvider {
+            entry<ComponentGalleryHome> {
+              ComponentGalleryScreen(onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) })
+            }
+            entry<ComponentGalleryDetail> { key ->
+              val entry = ComponentGalleryEntries.first { it.id == key.entryId }
+              ComponentGalleryDetailScreen(
+                entry = entry,
+                themeMode = themeMode,
+                onThemeModeChange = { themeMode = it },
+              ) {
+                when (key.entryId) {
+                  ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
+                  ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
+                }
+              }
+            }
+          },
+      )
+    }
+  }
 }

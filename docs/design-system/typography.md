@@ -46,3 +46,24 @@ meaning should not differ.
   assets are available.
 
 Document intentional platform differences in `docs/design-system/divergences.md`.
+
+## Initial Native Role Mapping
+
+The first app themes use platform fallback fonts while preserving the documented
+role names. IBM Plex Sans, IBM Plex Mono, and IBM Plex Sans Condensed assets are
+intentionally deferred so they can be added once across both platforms.
+
+| Role | Android mapping | iOS mapping |
+| --- | --- | --- |
+| `type.display` | `displaySmall`, 28sp, medium | 28pt, medium |
+| `type.title` | `titleLarge`, 20sp, medium | 20pt, medium |
+| `type.heading` | `titleMedium`, 16sp, medium | 16pt, medium |
+| `type.body` | `bodyLarge`, 16sp, regular | 16pt, regular |
+| `type.bodySecondary` | `bodyMedium`, 14sp, regular | 14pt, regular |
+| `type.caption` | `bodySmall`, 13sp, regular | 13pt, regular |
+| `type.code` | `CodeTextStyle`, 14sp, monospace | 14pt, monospaced |
+| `type.button` | `labelLarge`, 14sp, medium | 14pt, medium |
+
+These sizes keep the web extraction's compact feel where it is readable on
+mobile, while allowing native body text to remain slightly larger than the
+desktop web UI.

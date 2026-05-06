@@ -55,8 +55,9 @@ List intentional differences or link to `../divergences.md`.
 
 - The component intent and public API are documented.
 - Android and iOS implementations are added together once app projects exist.
-- Both platform component registries or galleries list the component.
-- Both detail or preview routes open successfully.
+- Both platform Component Gallery registries list the component when a gallery
+  entry is useful for review.
+- Both Component Gallery detail screens or platform previews open successfully.
 - Light and dark previews exist.
 - Relevant states are covered with stable copy and realistic data.
 - Token and typography usage maps back to `docs/design-system/tokens.md` and
