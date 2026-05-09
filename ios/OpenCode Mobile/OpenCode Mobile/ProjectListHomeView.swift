@@ -5,6 +5,7 @@ struct ProjectListHomeView: View {
     private let selectedProjectName = "opencode-mobile"
     @State private var state: SessionListHomeState = .loaded(SessionListHomeState.mockSessions)
     @State private var showComponentGallery = false
+    @State private var selectedSession: SessionListItem?
 
     var body: some View {
         List {
@@ -31,14 +32,15 @@ struct ProjectListHomeView: View {
                         .listRowSeparator(.hidden)
                 } else {
                     ForEach(sessions) { session in
-                        OpenCodeListItem(
-                            title: session.title,
-                            subtitle: AppConfig.serverBaseURL,
-                            trailing: {
-                                Text("...")
-                                    .font(OpenCodeTypography.heading)
-                            }
-                        )
+                        Button {
+                            selectedSession = session
+                        } label: {
+                            OpenCodeListItem(
+                                title: session.title,
+                                subtitle: AppConfig.serverBaseURL
+                            )
+                        }
+                        .buttonStyle(.plain)
                         .listRowInsets(EdgeInsets(top: 6, leading: horizontalInset, bottom: 6, trailing: horizontalInset))
                         .listRowBackground(OpenCodeColors.backgroundPrimary)
                         .listRowSeparator(.hidden)
@@ -79,6 +81,9 @@ struct ProjectListHomeView: View {
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
         }
+        .navigationDestination(item: $selectedSession) { session in
+            SessionChatView(session: session)
+        }
     }
 
     private var header: some View {
@@ -109,7 +114,7 @@ enum SessionListHomeState {
     ]
 }
 
-struct SessionListItem: Identifiable {
+struct SessionListItem: Identifiable, Hashable {
     let id: String
     let title: String
 }

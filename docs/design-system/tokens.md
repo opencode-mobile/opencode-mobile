@@ -98,6 +98,15 @@ Examples:
 Use component tokens when a component needs stable internal styling across
 states, variants, or platforms.
 
+### List item container
+
+The outer list-row surface (`OpenCodeListItem`) uses one shared corner radius on
+iOS and Android.
+
+| Token | Value |
+| --- | --- |
+| `listItem.cornerRadius` | 8 (logical px) |
+
 ### List item start decorator (letter badge)
 
 The letter variant of `OpenCodeListItem` uses a fixed **24×24** badge with a
@@ -131,6 +140,21 @@ documented in `docs/design-system/components/choice-badge.md`.
 | `choiceBadge.minHeight` | 32 (logical px; enforced via vertical padding) |
 | `choiceBadge.paddingHorizontal` | 12 (logical px) |
 | `choiceBadge.paddingVertical` | 8 (logical px) |
+
+### Button
+
+Reusable action component with three variants: full-width text, compact text,
+and square icon.
+
+| Token | Value |
+| --- | --- |
+| `button.cornerRadius` | 8 (logical px) |
+| `button.minHeight.fullWidthText` | 48 (logical px) |
+| `button.minHeight.compactText` | 40 (logical px) |
+| `button.paddingHorizontal.text` | 14 (logical px) |
+| `button.paddingVertical.text` | 10 (logical px) |
+| `button.iconSquare.size` | 40 (logical px; width equals height) |
+| `button.icon.size` | 18 (logical px) |
 
 ## Platform Mappings
 

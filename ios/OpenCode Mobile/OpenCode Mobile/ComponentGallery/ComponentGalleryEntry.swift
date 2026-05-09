@@ -10,6 +10,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case typography
     case listItem
     case choiceBadge
+    case button
 }
 
 struct ComponentGalleryEntry: Identifiable, Hashable {
@@ -42,6 +43,12 @@ let componentGalleryEntries = [
         id: .choiceBadge,
         title: "Choice Badge",
         description: "Selectable pill for compact single-choice controls.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .button,
+        title: "Button",
+        description: "Reusable action component with text and icon variants.",
         category: .components
     ),
 ]

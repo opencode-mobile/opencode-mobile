@@ -13,6 +13,7 @@ enum class ComponentGalleryEntryId {
   Typography,
   ListItem,
   ChoiceBadge,
+  Button,
 }
 
 data class ComponentGalleryEntry(
@@ -46,6 +47,12 @@ val ComponentGalleryEntries =
       id = ComponentGalleryEntryId.ChoiceBadge,
       title = "Choice Badge",
       description = "Selectable pill for compact single-choice controls.",
+      category = ComponentGalleryCategory.Components,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.Button,
+      title = "Button",
+      description = "Reusable action component with text and icon variants.",
       category = ComponentGalleryCategory.Components,
     ),
   )

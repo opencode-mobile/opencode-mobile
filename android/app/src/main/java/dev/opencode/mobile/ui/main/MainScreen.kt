@@ -30,15 +30,26 @@ import dev.opencode.mobile.ui.components.OpenCodeListItem
 @Composable
 fun MainScreen(
   onDeveloperComponentsClick: () -> Unit,
+  onSessionClick: (SessionSummary) -> Unit,
   modifier: Modifier = Modifier,
   viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(DefaultDataRepository()) },
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
-  MainScreen(uiState = state, onDeveloperComponentsClick = onDeveloperComponentsClick, modifier = modifier)
+  MainScreen(
+    uiState = state,
+    onDeveloperComponentsClick = onDeveloperComponentsClick,
+    onSessionClick = onSessionClick,
+    modifier = modifier,
+  )
 }
 
 @Composable
-internal fun MainScreen(uiState: MainScreenUiState, onDeveloperComponentsClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun MainScreen(
+  uiState: MainScreenUiState,
+  onDeveloperComponentsClick: () -> Unit,
+  onSessionClick: (SessionSummary) -> Unit,
+  modifier: Modifier = Modifier,
+) {
   val serverBaseUrl = (uiState as? MainScreenUiState.Success)?.serverBaseUrl ?: "http://127.0.0.1:4096/"
   val selectedProjectName = (uiState as? MainScreenUiState.Success)?.selectedProjectName ?: "opencode-mobile"
   Box(modifier = modifier.fillMaxSize()) {
@@ -100,7 +111,7 @@ internal fun MainScreen(uiState: MainScreenUiState, onDeveloperComponentsClick: 
               OpenCodeListItem(
                 title = session.title,
                 subtitle = serverBaseUrl,
-                trailing = { Text("...", style = MaterialTheme.typography.titleMedium) },
+                onClick = { onSessionClick(session) },
               )
             }
           }
@@ -138,6 +149,7 @@ fun MainScreenPreview() {
           selectedProjectName = "opencode-mobile",
         ),
       onDeveloperComponentsClick = {},
+      onSessionClick = {},
     )
   }
 }
@@ -158,6 +170,7 @@ fun MainScreenDarkPreview() {
           selectedProjectName = "opencode-mobile",
         ),
       onDeveloperComponentsClick = {},
+      onSessionClick = {},
     )
   }
 }

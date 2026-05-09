@@ -47,6 +47,8 @@ landing in developer-only component gallery screens.
 
 - Not applicable in this slice.
 
-## Design-System Components Needed
+## Design-System Components
 
-- New reusable `List Item` component for session rows (and future project rows).
+- **List Item:** implemented (`OpenCodeListItem` on Android and iOS; see
+  `docs/design-system/components/list-item.md` and component gallery entries).
+  Session home uses it for mocked session rows.

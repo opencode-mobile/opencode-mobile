@@ -115,7 +115,6 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
       selected = selected,
       enabled = enabled,
       startDecorator = startDecorator,
-      trailing = { Text("...", style = MaterialTheme.typography.titleMedium) },
     )
   }
 }

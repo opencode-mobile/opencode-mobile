@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let listItemCornerRadius: CGFloat = 8
+
 struct OpenCodeListItem<Trailing: View>: View {
     let title: String
     let subtitle: String?
@@ -68,10 +70,10 @@ struct OpenCodeListItem<Trailing: View>: View {
         .padding(.vertical, 14)
         .background(selected ? OpenCodeColors.surfaceSecondary : OpenCodeColors.surfacePrimary)
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: listItemCornerRadius)
                 .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: listItemCornerRadius))
         .opacity(enabled ? 1 : 0.7)
     }
 
@@ -108,20 +110,12 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
     VStack(spacing: 12) {
         OpenCodeListItem(
             title: "Material Design Icons integration plan",
-            subtitle: "http://127.0.0.1:4096/",
-            trailing: {
-                Text("...")
-                    .font(OpenCodeTypography.heading)
-            }
+            subtitle: "http://127.0.0.1:4096/"
         )
         OpenCodeListItem(
             title: "iOS color palette and typography screens",
             subtitle: "http://127.0.0.1:4096/",
-            selected: true,
-            trailing: {
-                Text("...")
-                    .font(OpenCodeTypography.heading)
-            }
+            selected: true
         )
         OpenCodeListItem(
             title: "Update agents.md with notes on screenshot",
@@ -131,11 +125,7 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
         OpenCodeListItem(
             title: "Letter violet",
             subtitle: "Badge",
-            startDecorator: .letter(Character("m"), .violet),
-            trailing: {
-                Text("...")
-                    .font(OpenCodeTypography.heading)
-            }
+            startDecorator: .letter(Character("m"), .violet)
         )
     }
     .padding(16)

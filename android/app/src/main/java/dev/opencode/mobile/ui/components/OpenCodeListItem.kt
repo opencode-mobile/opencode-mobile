@@ -34,6 +34,7 @@ import dev.opencode.mobile.theme.badgeColors
 
 private val ListItemStartDecoratorSize = 24.dp
 private val ListItemLetterBadgeCornerRadius = 4.dp
+private val ListItemCornerRadius = 8.dp
 
 @Composable
 fun OpenCodeListItem(
@@ -60,7 +61,7 @@ fun OpenCodeListItem(
           Modifier
         }
       ),
-    shape = RoundedCornerShape(14.dp),
+    shape = RoundedCornerShape(ListItemCornerRadius),
     color = containerColor,
     contentColor = contentColor,
     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -150,7 +151,6 @@ private fun OpenCodeListItemPreview() {
     OpenCodeListItem(
       title = "Material Design Icons integration plan",
       subtitle = "http://127.0.0.1:4096/",
-      trailing = { Text("...", style = MaterialTheme.typography.titleMedium) },
     )
   }
 }
@@ -163,7 +163,6 @@ private fun OpenCodeListItemLetterPreview() {
       title = "Purple accent",
       subtitle = "Letter badge",
       startDecorator = StartDecorator.Letter('m', LetterAccent.Violet),
-      trailing = { Text("...", style = MaterialTheme.typography.titleMedium) },
     )
   }
 }
@@ -176,7 +175,6 @@ private fun OpenCodeListItemSelectedPreview() {
       title = "iOS color palette and typography screens",
       subtitle = "http://127.0.0.1:4096/",
       selected = true,
-      trailing = { Text("...", style = MaterialTheme.typography.titleMedium) },
     )
   }
 }

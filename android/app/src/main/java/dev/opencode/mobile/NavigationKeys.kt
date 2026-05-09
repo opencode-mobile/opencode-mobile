@@ -8,3 +8,4 @@ import kotlinx.serialization.Serializable
 @Serializable data object ComponentGalleryHome : NavKey
 
 @Serializable data class ComponentGalleryDetail(val entryId: ComponentGalleryEntryId) : NavKey
+@Serializable data class SessionChat(val sessionId: String, val sessionTitle: String) : NavKey

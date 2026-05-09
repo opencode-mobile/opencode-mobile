@@ -32,8 +32,9 @@ separate public typography override.
 - Semantic tokens: `color.surface.primary`, `color.surface.secondary`,
   `color.text.primary`, `color.text.secondary`, `color.text.disabled`,
   `color.border.subtle`, `color.icon.default`.
-- Component tokens: list-item letter badge accents and corner radius — see
-  `listItem.startDecorator.*` in `docs/design-system/tokens.md`.
+- Component tokens: outer row corner radius — `listItem.cornerRadius` in
+  `docs/design-system/tokens.md`; letter badge accents and inner badge radius —
+  see `listItem.startDecorator.*` in the same file.
 - Typography roles: `type.heading` for title and `type.caption` for subtitle.
 
 ## Behavior

@@ -63,3 +63,9 @@ List intentional differences or link to `../divergences.md`.
 - Token and typography usage maps back to `docs/design-system/tokens.md` and
   `docs/design-system/typography.md`.
 - Intentional platform differences are documented in the same change.
+
+## Current Component Docs
+
+- `choice-badge.md`
+- `list-item.md`
+- `button.md`

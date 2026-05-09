@@ -22,12 +22,14 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.main.MainScreen
+import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 
 @Composable
 fun MainNavigation() {
@@ -53,7 +55,10 @@ fun MainNavigation() {
         entryProvider =
           entryProvider {
             entry<ProjectListHome> {
-              MainScreen(onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) })
+              MainScreen(
+                onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) },
+                onSessionClick = { session -> backStack.add(SessionChat(session.id, session.title)) },
+              )
             }
             entry<ComponentGalleryHome> {
               ComponentGalleryScreen(onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) })
@@ -70,8 +75,12 @@ fun MainNavigation() {
                   ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
                   ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                   ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
+                  ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                 }
               }
+            }
+            entry<SessionChat> { key ->
+              SessionChatScreen(sessionId = key.sessionId, sessionTitle = key.sessionTitle)
             }
           },
       )

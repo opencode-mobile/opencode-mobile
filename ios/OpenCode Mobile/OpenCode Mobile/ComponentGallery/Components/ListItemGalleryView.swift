@@ -101,11 +101,7 @@ struct ListItemGalleryView: View {
                 subtitle: subtitle,
                 selected: selected,
                 enabled: enabled,
-                startDecorator: startDecorator,
-                trailing: {
-                    Text("...")
-                        .font(OpenCodeTypography.heading)
-                }
+                startDecorator: startDecorator
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

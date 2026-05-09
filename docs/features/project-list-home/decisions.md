@@ -26,3 +26,14 @@
 - Reason: project selection and switching are intentionally split into a
   separate feature slice, while session-first home behavior is needed now.
 - Revisit when: project selection/switching flow is implemented.
+
+## Avoid List disclosure chevrons on session rows (iOS)
+
+- Date: 2026-05-09
+- Decision: drive navigation to Session Chat with an explicit `Button` and
+  `navigationDestination(item:)` binding instead of `NavigationLink` inside
+  `List`.
+- Reason: `NavigationLink` rows in `List` get a system disclosure chevron; the
+  product layout should match Android (no trailing chevron) for session rows.
+- Revisit when: if Apple exposes a first-class way to suppress list disclosure
+  without changing navigation pattern, consider simplifying.

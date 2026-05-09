@@ -22,18 +22,18 @@ implementation belong in the feature's `parity-gaps.md`.
 
 ## Current Divergences
 
-## List item start decorator icon identifier
+## Native icon identifier inputs
 
 - Status: intentional
 - Area: component | accessibility
-- Shared intent: A **24×24** leading icon in `OpenCodeListItem` that follows list
-  emphasis (including disabled) and keeps feature copy out of raw implementation
-  details.
-- iOS behavior: `StartDecorator.icon(systemName:accessibilityLabel:)` uses an SF
-  Symbol name (`String`) with an optional accessibility label.
-- Android behavior: `StartDecorator.Icon(imageVector:contentDescription:)` uses a
-  Compose `ImageVector` (typically Material Icons) with an optional Android
-  content description.
+- Shared intent: icon-bearing component APIs should remain ergonomic and
+  type-safe while preserving shared component semantics across platforms.
+- iOS behavior: icon inputs use SF Symbol names (`String`) with optional
+  accessibility labels (for example `StartDecorator.icon(...)` and
+  `OpenCodeButton.Variant.iconSquare(...)`).
+- Android behavior: icon inputs use Compose `ImageVector` values with optional
+  content descriptions (for example `StartDecorator.Icon(...)` and
+  `OpenCodeButtonVariant.IconSquare(...)`).
 - Reason: Each platform already has a native, type-safe icon selection model;
   forcing a single shared identifier string would fight tooling and provide no
   meaningful cross-platform coupling at this layer.

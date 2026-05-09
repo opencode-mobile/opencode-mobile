@@ -38,6 +38,8 @@ struct ComponentGalleryDetailView: View {
             ListItemGalleryView()
         case .choiceBadge:
             ChoiceBadgeGalleryView()
+        case .button:
+            ButtonGalleryView()
         }
     }
 }
