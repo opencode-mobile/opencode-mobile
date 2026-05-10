@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -29,6 +30,7 @@ private val OpenCodeButtonTextVerticalPadding = 10.dp
 private val OpenCodeButtonFullMinHeight = 48.dp
 private val OpenCodeButtonCompactMinHeight = 40.dp
 private val OpenCodeButtonIconSquareSize = 40.dp
+private val OpenCodeButtonIconCircleSize = 40.dp
 private val OpenCodeButtonIconSize = 18.dp
 
 sealed interface OpenCodeButtonVariant {
@@ -40,6 +42,16 @@ sealed interface OpenCodeButtonVariant {
     val imageVector: ImageVector,
     val contentDescription: String? = null,
   ) : OpenCodeButtonVariant
+
+  data class IconCircle(
+    val imageVector: ImageVector,
+    val contentDescription: String? = null,
+  ) : OpenCodeButtonVariant
+}
+
+enum class OpenCodeButtonContrast {
+  High,
+  Low,
 }
 
 @Composable
@@ -48,20 +60,24 @@ fun OpenCodeButton(
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
   enabled: Boolean = true,
+  contrast: OpenCodeButtonContrast = OpenCodeButtonContrast.High,
 ) {
   val containerColor =
     when {
       !enabled -> MaterialTheme.colorScheme.surfaceVariant
+      contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
       else -> MaterialTheme.colorScheme.onSurface
     }
   val borderColor =
     when {
       !enabled -> MaterialTheme.colorScheme.outlineVariant
+      contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
       else -> MaterialTheme.colorScheme.onSurface
     }
   val contentColor =
     when {
       !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+      contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
       else -> MaterialTheme.colorScheme.surface
     }
 
@@ -70,11 +86,17 @@ fun OpenCodeButton(
       is OpenCodeButtonVariant.FullWidthText -> Modifier.fillMaxWidth().defaultMinSize(minHeight = OpenCodeButtonFullMinHeight)
       is OpenCodeButtonVariant.CompactText -> Modifier.defaultMinSize(minHeight = OpenCodeButtonCompactMinHeight)
       is OpenCodeButtonVariant.IconSquare -> Modifier.size(OpenCodeButtonIconSquareSize)
+      is OpenCodeButtonVariant.IconCircle -> Modifier.size(OpenCodeButtonIconCircleSize)
+    }
+  val shape =
+    when (variant) {
+      is OpenCodeButtonVariant.IconCircle -> CircleShape
+      else -> OpenCodeButtonCornerRadius
     }
 
   Surface(
     modifier = modifier.then(variantModifier).clickable(enabled = enabled, onClick = onClick),
-    shape = OpenCodeButtonCornerRadius,
+    shape = shape,
     color = containerColor,
     contentColor = contentColor,
     border = BorderStroke(OpenCodeButtonBorderWidth, borderColor),
@@ -103,6 +125,15 @@ fun OpenCodeButton(
           Text(text = variant.title, style = MaterialTheme.typography.labelLarge)
         }
       is OpenCodeButtonVariant.IconSquare ->
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            imageVector = variant.imageVector,
+            contentDescription = variant.contentDescription,
+            modifier = Modifier.size(OpenCodeButtonIconSize),
+            tint = contentColor,
+          )
+        }
+      is OpenCodeButtonVariant.IconCircle ->
         Box(contentAlignment = Alignment.Center) {
           Icon(
             imageVector = variant.imageVector,
@@ -143,6 +174,29 @@ private fun OpenCodeButtonIconPreview() {
   OpenCodeTheme(darkTheme = true) {
     OpenCodeButton(
       variant = OpenCodeButtonVariant.IconSquare(Icons.Filled.ArrowUpward, "Send"),
+      onClick = {},
+    )
+  }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeButtonIconCirclePreview() {
+  OpenCodeTheme(darkTheme = true) {
+    OpenCodeButton(
+      variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Send"),
+      onClick = {},
+    )
+  }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeButtonLowContrastPreview() {
+  OpenCodeTheme(darkTheme = true) {
+    OpenCodeButton(
+      variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Attach context"),
+      contrast = OpenCodeButtonContrast.Low,
       onClick = {},
     )
   }

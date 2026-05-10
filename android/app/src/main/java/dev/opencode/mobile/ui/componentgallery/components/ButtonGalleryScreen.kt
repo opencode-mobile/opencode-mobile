@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 
@@ -23,11 +24,13 @@ private enum class GalleryButtonVariant {
   FullWidthText,
   CompactText,
   IconSquare,
+  IconCircle,
 }
 
 @Composable
 fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
   var variantName by rememberSaveable { mutableStateOf(GalleryButtonVariant.FullWidthText.name) }
+  var contrastName by rememberSaveable { mutableStateOf(OpenCodeButtonContrast.High.name) }
   var enabled by rememberSaveable { mutableStateOf(true) }
 
   val variantSelection =
@@ -42,6 +45,13 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
       GalleryButtonVariant.FullWidthText -> OpenCodeButtonVariant.FullWidthText("Run")
       GalleryButtonVariant.CompactText -> OpenCodeButtonVariant.CompactText("Build")
       GalleryButtonVariant.IconSquare -> OpenCodeButtonVariant.IconSquare(Icons.Filled.ArrowUpward, "Send")
+      GalleryButtonVariant.IconCircle -> OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Send")
+    }
+  val contrastSelection =
+    try {
+      OpenCodeButtonContrast.valueOf(contrastName)
+    } catch (_: IllegalArgumentException) {
+      OpenCodeButtonContrast.High
     }
 
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -55,6 +65,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
                 GalleryButtonVariant.FullWidthText -> "Full width"
                 GalleryButtonVariant.CompactText -> "Compact"
                 GalleryButtonVariant.IconSquare -> "Icon"
+                GalleryButtonVariant.IconCircle -> "Circle"
               },
             selected = option == variantSelection,
             onClick = { variantName = option.name },
@@ -67,9 +78,24 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
       OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
     }
 
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OpenCodeButtonContrast.entries.forEach { option ->
+        OpenCodeChoiceBadge(
+          label =
+            when (option) {
+              OpenCodeButtonContrast.High -> "High contrast"
+              OpenCodeButtonContrast.Low -> "Low contrast"
+            },
+          selected = option == contrastSelection,
+          onClick = { contrastName = option.name },
+        )
+      }
+    }
+
     OpenCodeButton(
       variant = variant,
       enabled = enabled,
+      contrast = contrastSelection,
       onClick = {},
     )
   }

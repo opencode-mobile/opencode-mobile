@@ -143,8 +143,12 @@ documented in `docs/design-system/components/choice-badge.md`.
 
 ### Button
 
-Reusable action component with three variants: full-width text, compact text,
-and square icon.
+Reusable action component with text and icon-only variants.
+
+High contrast buttons invert against the surrounding page using semantic
+foreground/background tokens. Low contrast buttons use secondary surface fill,
+primary or strong content, and subtle border so secondary actions remain visible
+without competing with primary actions.
 
 | Token | Value |
 | --- | --- |
@@ -154,6 +158,7 @@ and square icon.
 | `button.paddingHorizontal.text` | 14 (logical px) |
 | `button.paddingVertical.text` | 10 (logical px) |
 | `button.iconSquare.size` | 40 (logical px; width equals height) |
+| `button.iconCircle.size` | 40 (logical px; width equals height) |
 | `button.icon.size` | 18 (logical px) |
 
 ## Platform Mappings

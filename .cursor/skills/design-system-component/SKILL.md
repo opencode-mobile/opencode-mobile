@@ -16,6 +16,10 @@ Collection for opencode-mobile.
 - Public APIs should be variant-first and state-aware.
 - Do not expose raw hex colors, one-off gradients, ad-hoc radius values, or
   arbitrary typography overrides as public customization.
+- Promote feature-local UI into the Component Collection when it duplicates an
+  existing component role, is needed on both platforms, or is likely to recur.
+  Feature-local custom UI should remain the last resort after reuse and
+  reusable-component creation or extension are considered.
 - Record intentional platform differences in the same change.
 
 ## Workflow

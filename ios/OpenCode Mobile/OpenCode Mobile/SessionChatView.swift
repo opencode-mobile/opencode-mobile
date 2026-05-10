@@ -52,48 +52,50 @@ struct SessionChatView: View {
     }
 
     private var composer: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("Ask anything...", text: $state.composerText)
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Ask anything...", text: $state.composerText, axis: .vertical)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textPrimary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
 
-                Button {
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 40, height: 40)
-                        .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(label: state.selectedModel, selected: false) {
+                        state.selectNextModel()
+                    }
+                    OpenCodeChoiceBadge(label: state.selectedMode, selected: false) {
+                        state.selectNextMode()
+                    }
+                    OpenCodeChoiceBadge(label: state.selectedThinkingEffort, selected: false) {
+                        state.selectNextThinkingEffort()
+                    }
                 }
-                .buttonStyle(.plain)
-
-                Button {
-                    sendPrompt()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 40, height: 40)
-                        .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
-                .disabled(state.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
             HStack {
-                Button("Build") {}
+                OpenCodeButton(
+                    variant: .iconCircle(systemName: "plus", accessibilityLabel: "Attach context"),
+                    contrast: .low
+                ) {
+                }
+
                 Spacer(minLength: 0)
-                Button("DeepSeek V4 Flash") {}
-                Spacer(minLength: 0)
-                Button("Default") {}
+
+                OpenCodeButton(
+                    variant: .iconCircle(systemName: "arrow.up", accessibilityLabel: "Send prompt"),
+                    enabled: state.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                    contrast: .low
+                ) {
+                    sendPrompt()
+                }
             }
-            .font(OpenCodeTypography.button)
-            .tint(OpenCodeColors.textSecondary)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 20))
+        .padding(.vertical, 12)
+        .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 26))
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 26)
                 .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
         )
         .padding(.horizontal, 12)
@@ -126,6 +128,13 @@ private struct SessionChatScreenState {
     let sessionTitle: String
     var messages: [SessionChatMessage]
     var composerText: String
+    var selectedModel: String
+    var selectedMode: String
+    var selectedThinkingEffort: String
+
+    private static let availableModels = ["DeepSeek V4 Flash"]
+    private static let availableModes = ["Build", "Plan"]
+    private static let availableThinkingEfforts = ["Default", "Low", "Medium", "High"]
 
     static func initial(session: SessionListItem) -> SessionChatScreenState {
         SessionChatScreenState(
@@ -134,8 +143,29 @@ private struct SessionChatScreenState {
             messages: [
                 SessionChatMessage(role: .assistant, text: "Session ready. Enter a prompt to continue.")
             ],
-            composerText: ""
+            composerText: "",
+            selectedModel: availableModels[0],
+            selectedMode: availableModes[0],
+            selectedThinkingEffort: availableThinkingEfforts[0]
         )
+    }
+
+    mutating func selectNextModel() {
+        selectedModel = nextValue(in: Self.availableModels, current: selectedModel)
+    }
+
+    mutating func selectNextMode() {
+        selectedMode = nextValue(in: Self.availableModes, current: selectedMode)
+    }
+
+    mutating func selectNextThinkingEffort() {
+        selectedThinkingEffort = nextValue(in: Self.availableThinkingEfforts, current: selectedThinkingEffort)
+    }
+
+    private func nextValue(in values: [String], current: String) -> String {
+        guard values.isEmpty == false else { return current }
+        guard let currentIndex = values.firstIndex(of: current) else { return values[0] }
+        return values[(currentIndex + 1) % values.count]
     }
 }
 

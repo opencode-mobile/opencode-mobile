@@ -12,13 +12,15 @@ icon-only button needs.
   - `fullWidthText(title)` - stretches to available width.
   - `compactText(title)` - sizes to content width.
   - `iconSquare(icon)` - fixed **40x40** square action.
+  - `iconCircle(icon)` - fixed **40x40** circular action.
+- Contrast: `high` (default) or `low`.
 - States: `enabled`, `disabled`.
 - Required content:
   - text title for text variants;
-  - native icon identifier for icon variant (Android `ImageVector`, iOS SF
+  - native icon identifier for icon variants (Android `ImageVector`, iOS SF
     Symbol `systemName`).
 - Optional content:
-  - icon accessibility label for `iconSquare`.
+  - icon accessibility label for icon variants.
 
 ## Token Usage
 
@@ -26,7 +28,8 @@ icon-only button needs.
   `color.text.primary`, `color.text.secondary`, `color.text.disabled`,
   `color.border.subtle`, `color.border.default`, `color.icon.strong`.
 - Component tokens: `button.cornerRadius`, `button.minHeight.*`,
-  `button.padding.*`, and `button.iconSquare.size`.
+  `button.padding.*`, `button.iconSquare.size`, and
+  `button.iconCircle.size`.
 - Typography roles:
   - `type.button` for text variants.
   - icon glyph uses platform-native icon sizing.
@@ -36,14 +39,22 @@ icon-only button needs.
 Buttons are stateless and trigger the provided action only when enabled.
 Disabled buttons reduce visual emphasis and block interaction.
 
-For the **enabled** state, default styling is **high-contrast**: the button
+For the **enabled** state, default styling is **high contrast**: the button
 surface inverts against page background (dark fill with light label in light
-mode; light fill with dark label in dark mode). Disabled state stays muted and
-does not use this inversion.
+mode; light fill with dark label in dark mode).
+
+Low contrast buttons are for secondary actions that should remain available
+without competing with a primary action. They use `color.surface.secondary` for
+the fill, primary or strong content color for text/icons, and
+`color.border.subtle` for the border.
+
+Disabled state stays muted, blocks interaction, and overrides contrast.
 
 `fullWidthText` always fills its container width and keeps a minimum touch
 height. `compactText` keeps the same visual language but sizes to content.
-`iconSquare` enforces a 1:1 fixed frame with centered icon content.
+`iconSquare` and `iconCircle` enforce a 1:1 fixed frame with centered icon
+content. `iconCircle` differs from `iconSquare` by geometry only; contrast
+behavior is shared across all variants.
 
 Pressed feedback is provided through native button interaction behavior with
 shared token mapping (secondary surface emphasis on iOS; equivalent mapping on

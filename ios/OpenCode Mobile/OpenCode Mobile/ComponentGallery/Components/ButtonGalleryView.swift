@@ -4,6 +4,7 @@ private enum GalleryButtonVariant: String, CaseIterable, Identifiable {
     case fullWidth
     case compact
     case icon
+    case circle
 
     var id: String { rawValue }
 
@@ -12,12 +13,14 @@ private enum GalleryButtonVariant: String, CaseIterable, Identifiable {
         case .fullWidth: "Full width"
         case .compact: "Compact"
         case .icon: "Icon"
+        case .circle: "Circle"
         }
     }
 }
 
 struct ButtonGalleryView: View {
     @State private var selectedVariant: GalleryButtonVariant = .fullWidth
+    @State private var contrast: OpenCodeButtonContrast = .high
     @State private var enabled = true
 
     private var variant: OpenCodeButtonVariant {
@@ -28,6 +31,8 @@ struct ButtonGalleryView: View {
             .compactText(title: "Build")
         case .icon:
             .iconSquare(systemName: "arrow.up", accessibilityLabel: "Send")
+        case .circle:
+            .iconCircle(systemName: "arrow.up", accessibilityLabel: "Send")
         }
     }
 
@@ -56,7 +61,20 @@ struct ButtonGalleryView: View {
                 )
             }
 
-            OpenCodeButton(variant: variant, enabled: enabled, action: {})
+            HStack(spacing: 8) {
+                OpenCodeChoiceBadge(
+                    label: "High contrast",
+                    selected: contrast == .high,
+                    action: { contrast = .high }
+                )
+                OpenCodeChoiceBadge(
+                    label: "Low contrast",
+                    selected: contrast == .low,
+                    action: { contrast = .low }
+                )
+            }
+
+            OpenCodeButton(variant: variant, enabled: enabled, contrast: contrast, action: {})
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

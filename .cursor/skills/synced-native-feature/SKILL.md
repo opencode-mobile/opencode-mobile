@@ -17,6 +17,9 @@ in both native apps.
 - Use existing design-system components first.
 - If a feature needs new reusable UI, pause feature implementation and use
   `.cursor/skills/design-system-component/SKILL.md`.
+- Use custom feature-local UI only after checking for an existing component and
+  considering whether the missing UI should become a reusable component.
+  Document the reason when custom local UI remains the right choice.
 - Document inconsistencies as soon as they are discovered.
 
 ## Start The Feature
@@ -45,6 +48,8 @@ Before implementation, document:
 - user actions and events;
 - loading, empty, error, and permission states;
 - design-system components needed;
+- existing components that will be reused, components that need to be created or
+  extended, and any feature-local UI that remains after that check;
 - expected iOS and Android navigation entry points.
 
 ## Implementation Workflow
@@ -55,13 +60,16 @@ Before implementation, document:
 3. Confirm required components already exist in the Component Collection.
 4. If reusable UI is missing, switch to the design-system component skill and
    return after it is documented.
-5. Implement the domain adapter, repository/service, Screen Model, and screen on
+5. Use custom feature-local UI only for behavior or layout that is not covered by
+   existing components and does not warrant a reusable component yet; document
+   that reason in feature docs.
+6. Implement the domain adapter, repository/service, Screen Model, and screen on
    both platforms once app projects exist.
-6. Keep copy, state names, error categories, and permission behavior aligned.
-7. Update `progress.md` after each meaningful platform milestone.
-8. Add each mismatch to `parity-gaps.md` immediately.
-9. Record local feature decisions in `decisions.md`.
-10. Run relevant platform checks when they exist.
+7. Keep copy, state names, error categories, and permission behavior aligned.
+8. Update `progress.md` after each meaningful platform milestone.
+9. Add each mismatch to `parity-gaps.md` immediately.
+10. Record local feature decisions in `decisions.md`.
+11. Run relevant platform checks when they exist.
 
 ## Parity Gap Format
 

@@ -62,6 +62,14 @@ A user, assistant, command, or tool-related item inside a session.
 The mobile client treats messages as the main way to understand what happened in
 a session and as the vehicle for sending new prompts.
 
+### Thinking Effort
+
+The user's selected reasoning-effort preference for the next prompt.
+
+The mobile client may expose values such as Default, Low, Medium, and High when
+the connected model or server supports that control. The term describes user
+intent and should not be coupled to a specific provider's internal naming.
+
 ### permission request
 
 A request from opencode for the user to approve or deny an action during a

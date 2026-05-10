@@ -73,6 +73,11 @@ Do not add these to v1 without revisiting the project docs:
 - Public design-system component APIs should be variant-first and state-aware.
   Do not expose raw hex colors, one-off typography, arbitrary gradients, or
   ad-hoc radius overrides as public customization.
+- Feature UI must follow the component-first fallback order: use an existing
+  Component Collection primitive when one fits; create or extend a reusable
+  component through the design-system workflow when one is missing; use
+  feature-local custom UI only after those options are unsuitable, and document
+  why.
 - When a feature needs a reusable primitive, component, or semantic variant,
   add it through the design-system component workflow before composing the
   feature screen.

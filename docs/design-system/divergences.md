@@ -30,10 +30,12 @@ implementation belong in the feature's `parity-gaps.md`.
   type-safe while preserving shared component semantics across platforms.
 - iOS behavior: icon inputs use SF Symbol names (`String`) with optional
   accessibility labels (for example `StartDecorator.icon(...)` and
-  `OpenCodeButton.Variant.iconSquare(...)`).
+  `OpenCodeButton.Variant.iconSquare(...)` or
+  `OpenCodeButton.Variant.iconCircle(...)`).
 - Android behavior: icon inputs use Compose `ImageVector` values with optional
   content descriptions (for example `StartDecorator.Icon(...)` and
-  `OpenCodeButtonVariant.IconSquare(...)`).
+  `OpenCodeButtonVariant.IconSquare(...)` or
+  `OpenCodeButtonVariant.IconCircle(...)`).
 - Reason: Each platform already has a native, type-safe icon selection model;
   forcing a single shared identifier string would fight tooling and provide no
   meaningful cross-platform coupling at this layer.
