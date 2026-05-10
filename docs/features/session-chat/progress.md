@@ -7,11 +7,12 @@
 
 ## Design System
 
-- Reused existing list-item component patterns for home session rows.
+- Home session rows reuse existing list-item patterns.
 - Session Chat scaffold uses existing platform theme tokens and typography.
-- No new reusable design-system component introduced in this slice.
-- Composer selectors use the reusable `OpenCodeChoiceBadge` component; circular
-  action buttons use the reusable low-contrast `OpenCodeButton` component.
+- Composer chips use `OpenCodeChoiceBadge`; tapping a chip opens the shared
+  design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
+  (checkmark on the current selection). Circular actions use the reusable
+  low-contrast **`OpenCodeButton`** component.
 
 ## Android
 
@@ -20,6 +21,8 @@
 - Added Session Chat scaffold with local message list and composer send behavior.
 - Refined composer into prompt input, local selector chips, attachment
   affordance, and Send action rows.
+- Composer selector chips open **`OpenCodeBottomSheet`** pickers instead of
+  cycling values in place.
 
 ## iOS
 
@@ -30,15 +33,17 @@
 - Added local message list and composer send behavior in Session Chat.
 - Refined composer to match Android's prompt input, local selector chips,
   attachment affordance, and Send action rows.
+- Composer selector chips open **`openCodeBottomSheet`** pickers instead of
+  cycling values in place.
 
 ## Validation Status
 
-- Android `:app:compileDebugKotlin` passed on 2026-05-09.
-- iOS simulator debug build passed on 2026-05-09.
+- Android `:app:compileDebugKotlin` passed on 2026-05-10.
+- iOS simulator debug build passed on 2026-05-10.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
-- Composer selector validation pending: chip taps cycle local mode and Thinking
-  Effort state; attachment remains a no-op.
+- Composer selectors: chip taps open bottom sheets for model, agent mode, and
+  Thinking Effort; attachment remains a no-op.
 
 ## Remaining Work
 

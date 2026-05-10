@@ -1,8 +1,32 @@
 import SwiftUI
 
+private enum SessionChatPickers {
+    static let models = ["DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet"]
+    static let modes = ["Build", "Plan"]
+    static let thinkingEfforts = ["Default", "Low", "Medium", "High"]
+}
+
+private enum ComposerPickerKind {
+    case model
+    case mode
+    case thinking
+
+    var sheetTitle: String {
+        switch self {
+        case .model:
+            "Model"
+        case .mode:
+            "Agent mode"
+        case .thinking:
+            "Thinking level"
+        }
+    }
+}
+
 struct SessionChatView: View {
     let session: SessionListItem
     @State private var state: SessionChatScreenState
+    @State private var activePicker: ComposerPickerKind?
 
     init(session: SessionListItem) {
         self.session = session
@@ -35,6 +59,67 @@ struct SessionChatView: View {
             composer
         }
         .background(OpenCodeColors.backgroundPrimary)
+        .openCodeBottomSheet(
+            isPresented: pickerPresentedBinding,
+            title: activePicker?.sheetTitle ?? "",
+            content: { pickerSheetEntries },
+        )
+    }
+
+    private var pickerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { activePicker != nil },
+            set: { presented in
+                if !presented { activePicker = nil }
+            },
+        )
+    }
+
+    @ViewBuilder
+    private var pickerSheetEntries: some View {
+        switch activePicker {
+        case .model:
+            ForEach(SessionChatPickers.models, id: \.self) { model in
+                OpenCodeBottomSheetEntry(
+                    title: model,
+                    endDecorator: model == state.selectedModel
+                        ? .icon(systemName: "checkmark", accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        state.selectModel(model)
+                        activePicker = nil
+                    },
+                )
+            }
+        case .mode:
+            ForEach(SessionChatPickers.modes, id: \.self) { mode in
+                OpenCodeBottomSheetEntry(
+                    title: mode,
+                    endDecorator: mode == state.selectedMode
+                        ? .icon(systemName: "checkmark", accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        state.selectMode(mode)
+                        activePicker = nil
+                    },
+                )
+            }
+        case .thinking:
+            ForEach(SessionChatPickers.thinkingEfforts, id: \.self) { level in
+                OpenCodeBottomSheetEntry(
+                    title: level,
+                    endDecorator: level == state.selectedThinkingEffort
+                        ? .icon(systemName: "checkmark", accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        state.selectThinkingEffort(level)
+                        activePicker = nil
+                    },
+                )
+            }
+        case .none:
+            EmptyView()
+        }
     }
 
     private var header: some View {
@@ -62,13 +147,13 @@ struct SessionChatView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(label: state.selectedModel, selected: false) {
-                        state.selectNextModel()
+                        activePicker = .model
                     }
                     OpenCodeChoiceBadge(label: state.selectedMode, selected: false) {
-                        state.selectNextMode()
+                        activePicker = .mode
                     }
                     OpenCodeChoiceBadge(label: state.selectedThinkingEffort, selected: false) {
-                        state.selectNextThinkingEffort()
+                        activePicker = .thinking
                     }
                 }
             }
@@ -132,10 +217,6 @@ private struct SessionChatScreenState {
     var selectedMode: String
     var selectedThinkingEffort: String
 
-    private static let availableModels = ["DeepSeek V4 Flash"]
-    private static let availableModes = ["Build", "Plan"]
-    private static let availableThinkingEfforts = ["Default", "Low", "Medium", "High"]
-
     static func initial(session: SessionListItem) -> SessionChatScreenState {
         SessionChatScreenState(
             sessionId: session.id,
@@ -144,28 +225,25 @@ private struct SessionChatScreenState {
                 SessionChatMessage(role: .assistant, text: "Session ready. Enter a prompt to continue.")
             ],
             composerText: "",
-            selectedModel: availableModels[0],
-            selectedMode: availableModes[0],
-            selectedThinkingEffort: availableThinkingEfforts[0]
+            selectedModel: SessionChatPickers.models[0],
+            selectedMode: SessionChatPickers.modes[0],
+            selectedThinkingEffort: SessionChatPickers.thinkingEfforts[0],
         )
     }
 
-    mutating func selectNextModel() {
-        selectedModel = nextValue(in: Self.availableModels, current: selectedModel)
+    mutating func selectModel(_ model: String) {
+        guard SessionChatPickers.models.contains(model) else { return }
+        selectedModel = model
     }
 
-    mutating func selectNextMode() {
-        selectedMode = nextValue(in: Self.availableModes, current: selectedMode)
+    mutating func selectMode(_ mode: String) {
+        guard SessionChatPickers.modes.contains(mode) else { return }
+        selectedMode = mode
     }
 
-    mutating func selectNextThinkingEffort() {
-        selectedThinkingEffort = nextValue(in: Self.availableThinkingEfforts, current: selectedThinkingEffort)
-    }
-
-    private func nextValue(in values: [String], current: String) -> String {
-        guard values.isEmpty == false else { return current }
-        guard let currentIndex = values.firstIndex(of: current) else { return values[0] }
-        return values[(currentIndex + 1) % values.count]
+    mutating func selectThinkingEffort(_ effort: String) {
+        guard SessionChatPickers.thinkingEfforts.contains(effort) else { return }
+        selectedThinkingEffort = effort
     }
 }
 

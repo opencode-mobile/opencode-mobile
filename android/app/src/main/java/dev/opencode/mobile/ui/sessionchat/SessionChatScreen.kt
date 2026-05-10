@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,63 +33,134 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import java.util.UUID
 
+private enum class ComposerPickerKind(val sheetTitle: String) {
+  Model("Model"),
+  Mode("Agent mode"),
+  Thinking("Thinking level"),
+}
+
 @Composable
 fun SessionChatScreen(sessionId: String, sessionTitle: String, modifier: Modifier = Modifier) {
   var uiState by remember(sessionId, sessionTitle) { mutableStateOf(SessionChatUiState.initial(sessionId, sessionTitle)) }
+  var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
 
-  Column(modifier = modifier.fillMaxSize()) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      Text(text = sessionTitle, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-      Text(text = "Session ID: $sessionId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+  Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+      Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(text = sessionTitle, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(text = "Session ID: $sessionId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
 
-    LazyColumn(
-      modifier = Modifier.weight(1f).fillMaxWidth(),
-      contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      items(uiState.messages, key = { it.id }) { message ->
-        Column(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalAlignment = if (message.role == MessageRole.User) Alignment.End else Alignment.Start,
-        ) {
-          Text(
-            text = "${message.role.label}: ${message.text}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-          )
+      LazyColumn(
+        modifier = Modifier.weight(1f).fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        items(uiState.messages, key = { it.id }) { message ->
+          Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = if (message.role == MessageRole.User) Alignment.End else Alignment.Start,
+          ) {
+            Text(
+              text = "${message.role.label}: ${message.text}",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+          }
         }
       }
+
+      SessionComposer(
+        state = uiState,
+        onTextChange = { nextValue -> uiState = uiState.copy(composerText = nextValue) },
+        onModelClick = { activePicker = ComposerPickerKind.Model },
+        onModeClick = { activePicker = ComposerPickerKind.Mode },
+        onThinkingEffortClick = { activePicker = ComposerPickerKind.Thinking },
+        onAttachClick = {},
+        onSendClick = {
+          val prompt = uiState.composerText.trim()
+          if (prompt.isEmpty()) return@SessionComposer
+          uiState =
+            uiState.copy(
+              composerText = "",
+              messages = uiState.messages + SessionChatMessage(id = UUID.randomUUID().toString(), role = MessageRole.User, text = prompt),
+            )
+        },
+      )
     }
 
-    SessionComposer(
-      state = uiState,
-      onTextChange = { nextValue -> uiState = uiState.copy(composerText = nextValue) },
-      onModelClick = { uiState = uiState.copy(selectedModel = nextValue(AvailableModels, uiState.selectedModel)) },
-      onModeClick = { uiState = uiState.copy(selectedMode = nextValue(AvailableModes, uiState.selectedMode)) },
-      onThinkingEffortClick = {
-        uiState =
-          uiState.copy(
-            selectedThinkingEffort = nextValue(AvailableThinkingEfforts, uiState.selectedThinkingEffort),
-          )
-      },
-      onAttachClick = {},
-      onSendClick = {
-        val prompt = uiState.composerText.trim()
-        if (prompt.isEmpty()) return@SessionComposer
-        uiState =
-          uiState.copy(
-            composerText = "",
-            messages = uiState.messages + SessionChatMessage(id = UUID.randomUUID().toString(), role = MessageRole.User, text = prompt),
-          )
-      },
-    )
+    OpenCodeBottomSheet(
+      visible = activePicker != null,
+      title = activePicker?.sheetTitle ?: "",
+      onDismissRequest = { activePicker = null },
+    ) {
+      when (activePicker) {
+        ComposerPickerKind.Model ->
+          AvailableModels.forEach { model ->
+            OpenCodeBottomSheetEntry(
+              title = model,
+              endDecorator =
+                if (model == uiState.selectedModel) {
+                  BottomSheetEntryDecorator.Icon(Icons.Filled.Check, "Selected")
+                } else {
+                  BottomSheetEntryDecorator.None
+                },
+              onClick = {
+                if (AvailableModels.contains(model)) {
+                  uiState = uiState.copy(selectedModel = model)
+                }
+                activePicker = null
+              },
+            )
+          }
+        ComposerPickerKind.Mode ->
+          AvailableModes.forEach { mode ->
+            OpenCodeBottomSheetEntry(
+              title = mode,
+              endDecorator =
+                if (mode == uiState.selectedMode) {
+                  BottomSheetEntryDecorator.Icon(Icons.Filled.Check, "Selected")
+                } else {
+                  BottomSheetEntryDecorator.None
+                },
+              onClick = {
+                if (AvailableModes.contains(mode)) {
+                  uiState = uiState.copy(selectedMode = mode)
+                }
+                activePicker = null
+              },
+            )
+          }
+        ComposerPickerKind.Thinking ->
+          AvailableThinkingEfforts.forEach { effort ->
+            OpenCodeBottomSheetEntry(
+              title = effort,
+              endDecorator =
+                if (effort == uiState.selectedThinkingEffort) {
+                  BottomSheetEntryDecorator.Icon(Icons.Filled.Check, "Selected")
+                } else {
+                  BottomSheetEntryDecorator.None
+                },
+              onClick = {
+                if (AvailableThinkingEfforts.contains(effort)) {
+                  uiState = uiState.copy(selectedThinkingEffort = effort)
+                }
+                activePicker = null
+              },
+            )
+          }
+        null -> Unit
+      }
+    }
   }
 }
 
@@ -195,16 +267,9 @@ private enum class MessageRole(val label: String) {
   Assistant("Assistant"),
 }
 
-private val AvailableModels = listOf("DeepSeek V4 Flash")
+private val AvailableModels = listOf("DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet")
 private val AvailableModes = listOf("Build", "Plan")
 private val AvailableThinkingEfforts = listOf("Default", "Low", "Medium", "High")
-
-private fun nextValue(values: List<String>, current: String): String {
-  if (values.isEmpty()) return current
-  val currentIndex = values.indexOf(current)
-  val nextIndex = if (currentIndex == -1) 0 else (currentIndex + 1) % values.size
-  return values[nextIndex]
-}
 
 @Preview(showBackground = true)
 @Composable

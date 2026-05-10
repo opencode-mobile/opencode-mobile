@@ -34,6 +34,8 @@ struct ComponentGalleryDetailView: View {
             ColorGalleryView()
         case .typography:
             TypographyGalleryView()
+        case .bottomSheet:
+            BottomSheetGalleryView()
         case .listItem:
             ListItemGalleryView()
         case .choiceBadge:

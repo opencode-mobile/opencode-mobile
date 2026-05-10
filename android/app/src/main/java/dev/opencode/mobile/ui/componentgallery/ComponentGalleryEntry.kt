@@ -11,6 +11,7 @@ enum class ComponentGalleryCategory(val label: String) {
 enum class ComponentGalleryEntryId {
   Colors,
   Typography,
+  BottomSheet,
   ListItem,
   ChoiceBadge,
   Button,
@@ -36,6 +37,12 @@ val ComponentGalleryEntries =
       title = "Typography",
       description = "Review shared type roles and platform mappings.",
       category = ComponentGalleryCategory.Foundation,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.BottomSheet,
+      title = "Bottom Sheet",
+      description = "Modal action sheet with title, close affordance, and entries.",
+      category = ComponentGalleryCategory.Components,
     ),
     ComponentGalleryEntry(
       id = ComponentGalleryEntryId.ListItem,

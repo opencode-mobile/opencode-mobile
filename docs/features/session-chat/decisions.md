@@ -11,9 +11,11 @@
 
 ## Use local composer selectors in scaffold
 
-- Date: 2026-05-09
+- Date: 2026-05-09 (interaction clarified 2026-05-10)
 - Decision: Session Chat composer shows local selector chips for model, mode, and
-  Thinking Effort before real prompt delivery is connected.
+  Thinking Effort before real prompt delivery is connected. Tapping a chip opens
+  **`OpenCodeBottomSheet`** to pick an explicit value instead of cycling options in
+  place.
 - Reason: the composer needs to reserve the product shape for next-prompt
   controls while keeping this slice server-independent.
 - Revisit when: server-backed prompt sending defines supported model, mode, and

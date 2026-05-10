@@ -66,6 +66,7 @@ List intentional differences or link to `../divergences.md`.
 
 ## Current Component Docs
 
+- `bottom-sheet.md`
 - `choice-badge.md`
 - `list-item.md`
 - `button.md`

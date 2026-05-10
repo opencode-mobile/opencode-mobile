@@ -52,9 +52,11 @@ Chat screen with visible messages and a composer ready for new prompts.
 
 - The composer uses a three-row layout inspired by compact mobile chat UIs:
   prompt input, selector chips, then attachment and Send actions.
-- Selector chips show current values only, without visible labels:
-  `DeepSeek V4 Flash`, `Build` or `Plan`, and `Default`, `Low`, `Medium`, or
-  `High`.
+- Selector chips show current values only, without visible labels. Tapping a chip
+  opens the shared **`OpenCodeBottomSheet`** with one row per option for **model**,
+  **agent mode** (`Build` / `Plan`), and **Thinking Effort** (`Default`, `Low`,
+  `Medium`, `High`). Mock models include placeholder entries alongside
+  `DeepSeek V4 Flash` until server-backed lists exist.
 - Selector changes are local/mock state only until server-backed prompt delivery
   defines real option sources and request mapping.
 - The attachment `+` is visually present as an `Attach context` affordance but
@@ -64,3 +66,5 @@ Chat screen with visible messages and a composer ready for new prompts.
 
 - Reuse existing `OpenCodeListItem` on home for session rows.
 - Use existing theme tokens and typography for Session Chat scaffold.
+- Reuse **`OpenCodeBottomSheet`** for composer option pickers (model, mode,
+  Thinking Effort).

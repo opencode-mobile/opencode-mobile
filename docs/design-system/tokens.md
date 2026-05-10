@@ -161,6 +161,24 @@ without competing with primary actions.
 | `button.iconCircle.size` | 40 (logical px; width equals height) |
 | `button.icon.size` | 18 (logical px) |
 
+### Bottom sheet
+
+Reusable modal action sheet with a title, close affordance, and compact action
+entries.
+
+| Token | Value |
+| --- | --- |
+| `bottomSheet.cornerRadiusTop` | 24 (logical px) |
+| `bottomSheet.header.paddingHorizontal` | 20 (logical px) |
+| `bottomSheet.header.paddingTop` | 12 (logical px) |
+| `bottomSheet.header.paddingBottom` | 8 (logical px) |
+| `bottomSheet.content.paddingBottom` | 20 (logical px) |
+| `bottomSheet.entry.minHeight` | 48 (logical px) |
+| `bottomSheet.entry.paddingHorizontal` | 20 (logical px) |
+| `bottomSheet.entry.paddingVertical` | 12 (logical px) |
+| `bottomSheet.entry.decorator.size` | 24 (logical px) |
+| `bottomSheet.entry.decorator.iconSize` | 20 (logical px) |
+
 ## Platform Mappings
 
 Platform mappings translate semantic and component tokens into native APIs:
