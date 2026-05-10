@@ -9,6 +9,9 @@
 
 - Home session rows reuse existing list-item patterns.
 - Session Chat scaffold uses existing platform theme tokens and typography.
+- Screen chrome uses **`OpenCodeTopBar`**: title **Session**, leading **back**
+  (pops the navigation stack), optional bottom divider; session identity stays in
+  body copy as **Session ID** under the bar (not in the top-bar title).
 - Composer chips use `OpenCodeChoiceBadge`; tapping a chip opens the shared
   design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
   (checkmark on the current selection). Circular actions use the reusable

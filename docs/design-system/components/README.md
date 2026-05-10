@@ -46,6 +46,10 @@ Describe interaction, loading, disabled, error, and accessibility behavior.
 - Loading:
 - Error:
 
+When a Component Gallery entry exists, prefer one live component preview plus
+interactive controls that switch variants and states instead of a static matrix
+of separate samples.
+
 ## Parity And Divergence
 
 List intentional differences or link to `../divergences.md`.
@@ -58,6 +62,12 @@ List intentional differences or link to `../divergences.md`.
 - Both platform Component Gallery registries list the component when a gallery
   entry is useful for review.
 - Both Component Gallery detail screens or platform previews open successfully.
+- Gallery-driven components prefer a single live preview with controls for
+  variants and states instead of a static matrix of duplicate examples.
+- When a component must be judged edge-to-edge (for example `OpenCodeTopBar`),
+  the gallery detail shell may render that entry’s content full width while
+  keeping the header, theme controls, and other gallery entries on the normal
+  horizontal inset.
 - Light and dark previews exist.
 - Relevant states are covered with stable copy and realistic data.
 - Token and typography usage maps back to `docs/design-system/tokens.md` and
@@ -66,6 +76,7 @@ List intentional differences or link to `../divergences.md`.
 
 ## Current Component Docs
 
+- `top-bar.md`
 - `bottom-sheet.md`
 - `choice-badge.md`
 - `list-item.md`

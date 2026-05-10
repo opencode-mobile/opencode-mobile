@@ -43,4 +43,18 @@ implementation belong in the feature's `parity-gaps.md`.
   example “folder”, “warning”) mapped per platform, revisit whether the public
   API should expose those kinds instead of raw identifiers.
 
-No other intentional design-system divergences have been recorded yet.
+## Top bar title alignment
+
+- Status: intentional
+- Area: component
+- Shared intent: `OpenCodeTopBar` should read as one shared page-level
+  navigation component with the same leading semantics, title contract, and
+  trailing action model on both platforms.
+- iOS behavior: title remains visually centered within the bar.
+- Android behavior: title is aligned to the start edge after the leading action.
+- Reason: centered iOS navigation titles and start-aligned Android app-bar
+  titles both match established platform expectations better than forcing one
+  cross-platform alignment rule.
+- Review trigger: If product design later calls for a distinct branded app
+  chrome that intentionally overrides native alignment expectations on both
+  platforms, revisit this divergence.

@@ -1,0 +1,160 @@
+import SwiftUI
+
+private enum GalleryTopBarLeading: String, CaseIterable, Identifiable {
+    case none
+    case back
+    case close
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "None"
+        case .back: "Back"
+        case .close: "Close"
+        }
+    }
+}
+
+private enum GalleryTopBarActions: String, CaseIterable, Identifiable {
+    case none
+    case icons
+    case label
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "None"
+        case .icons: "Icons"
+        case .label: "Label"
+        }
+    }
+}
+
+struct TopBarGalleryView: View {
+    @State private var leading: GalleryTopBarLeading = .none
+    @State private var actions: GalleryTopBarActions = .none
+    @State private var showDivider = false
+    @State private var actionsEnabled = true
+
+    private var title: String {
+        switch actions {
+        case .none:
+            "Component Gallery"
+        case .icons:
+            "Session actions"
+        case .label:
+            "Project settings"
+        }
+    }
+
+    private var leadingVariant: OpenCodeTopBarLeading {
+        switch leading {
+        case .none:
+            .none
+        case .back:
+            .back(action: {})
+        case .close:
+            .close(action: {})
+        }
+    }
+
+    private var actionVariants: [OpenCodeTopBarAction] {
+        switch actions {
+        case .none:
+            []
+        case .icons:
+            [
+                .icon(systemName: "magnifyingglass", accessibilityLabel: "Search", enabled: actionsEnabled, action: {}),
+                .icon(systemName: "ellipsis", accessibilityLabel: "More actions", enabled: actionsEnabled, action: {}),
+            ]
+        case .label:
+            [
+                .label(title: "Done", enabled: actionsEnabled, action: {})
+            ]
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Top bar")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textPrimary)
+
+                ControlGroup(title: "Leading") {
+                    HStack(spacing: 8) {
+                        ForEach(GalleryTopBarLeading.allCases) { option in
+                            OpenCodeChoiceBadge(
+                                label: option.label,
+                                selected: leading == option,
+                                action: { leading = option }
+                            )
+                        }
+                    }
+                }
+
+                ControlGroup(title: "Actions") {
+                    HStack(spacing: 8) {
+                        ForEach(GalleryTopBarActions.allCases) { option in
+                            OpenCodeChoiceBadge(
+                                label: option.label,
+                                selected: actions == option,
+                                action: { actions = option }
+                            )
+                        }
+                    }
+                }
+
+                ControlGroup(title: "State") {
+                    HStack(spacing: 8) {
+                        OpenCodeChoiceBadge(
+                            label: "Divider",
+                            selected: showDivider,
+                            action: { showDivider.toggle() }
+                        )
+                        OpenCodeChoiceBadge(
+                            label: "Actions enabled",
+                            selected: actionsEnabled,
+                            action: { actionsEnabled.toggle() }
+                        )
+                    }
+                }
+
+                Text("Switch controls to review the title-only, back, close, icon-action, labeled-action, divider, and disabled-action states.")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textSecondary)
+            }
+            .padding(.horizontal, 16)
+
+            OpenCodeTopBar(
+                title: title,
+                leading: leadingVariant,
+                actions: actionVariants,
+                showDivider: showDivider
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ControlGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textPrimary)
+            content()
+        }
+    }
+}
+
+#Preview {
+    TopBarGalleryView()
+        .padding(16)
+        .openCodeTheme()
+}

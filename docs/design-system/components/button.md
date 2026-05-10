@@ -64,8 +64,10 @@ Android).
 
 - iOS: implemented as a `Button` with a custom style that maps variant geometry
   and press feedback.
-- Android: implemented with `Surface` plus optional `Modifier.clickable`, with
-  variant-specific layout and sizing.
+- Android: implemented with Material 3 `Surface(onClick = ..., enabled = ...)`
+  so interaction and ripple indication follow the component shape (rounded
+  rectangle or circle for icon variants). Avoid layering `Modifier.clickable`
+  outside `Surface`, which can produce a rectangular ripple that ignores shape.
 
 ## Previews
 

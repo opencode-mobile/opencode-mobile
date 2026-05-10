@@ -24,6 +24,7 @@ private enum ComposerPickerKind {
 }
 
 struct SessionChatView: View {
+    @Environment(\.dismiss) private var dismiss
     let session: SessionListItem
     @State private var state: SessionChatScreenState
     @State private var activePicker: ComposerPickerKind?
@@ -35,7 +36,18 @@ struct SessionChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            OpenCodeTopBar(
+                title: "Session",
+                leading: .back(action: { dismiss() }),
+                showDivider: true
+            )
+
+            Text("Session ID: \(state.sessionId)")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
@@ -64,6 +76,7 @@ struct SessionChatView: View {
             title: activePicker?.sheetTitle ?? "",
             content: { pickerSheetEntries },
         )
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var pickerPresentedBinding: Binding<Bool> {
@@ -120,20 +133,6 @@ struct SessionChatView: View {
         case .none:
             EmptyView()
         }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(state.sessionTitle)
-                .font(OpenCodeTypography.title)
-                .foregroundStyle(OpenCodeColors.textPrimary)
-            Text("Session ID: \(state.sessionId)")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     private var composer: some View {

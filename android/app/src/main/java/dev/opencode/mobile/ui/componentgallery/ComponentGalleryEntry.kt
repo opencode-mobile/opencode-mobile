@@ -11,6 +11,7 @@ enum class ComponentGalleryCategory(val label: String) {
 enum class ComponentGalleryEntryId {
   Colors,
   Typography,
+  TopBar,
   BottomSheet,
   ListItem,
   ChoiceBadge,
@@ -37,6 +38,12 @@ val ComponentGalleryEntries =
       title = "Typography",
       description = "Review shared type roles and platform mappings.",
       category = ComponentGalleryCategory.Foundation,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.TopBar,
+      title = "Top Bar",
+      description = "Page-level navigation bar with leading affordance and actions.",
+      category = ComponentGalleryCategory.Components,
     ),
     ComponentGalleryEntry(
       id = ComponentGalleryEntryId.BottomSheet,

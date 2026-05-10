@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -95,7 +94,9 @@ fun OpenCodeButton(
     }
 
   Surface(
-    modifier = modifier.then(variantModifier).clickable(enabled = enabled, onClick = onClick),
+    onClick = onClick,
+    enabled = enabled,
+    modifier = modifier.then(variantModifier),
     shape = shape,
     color = containerColor,
     contentColor = contentColor,

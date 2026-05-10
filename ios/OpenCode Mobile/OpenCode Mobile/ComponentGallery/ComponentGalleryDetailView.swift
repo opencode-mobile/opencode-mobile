@@ -3,6 +3,7 @@ import SwiftUI
 struct ComponentGalleryDetailView: View {
     let entry: ComponentGalleryEntry
     @Binding var themeMode: ComponentGalleryThemeMode
+    private let horizontalPadding: CGFloat = 16
 
     var body: some View {
         ScrollView {
@@ -15,13 +16,20 @@ struct ComponentGalleryDetailView: View {
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textSecondary)
                 }
+                .padding(.horizontal, horizontalPadding)
 
                 ComponentGalleryControls(themeMode: $themeMode)
+                    .padding(.horizontal, horizontalPadding)
 
-                content
+                if entry.id == .topBar {
+                    content
+                } else {
+                    content
+                        .padding(.horizontal, horizontalPadding)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(.vertical, 16)
         }
         .navigationTitle(entry.title)
         .background(OpenCodeColors.backgroundPrimary)
@@ -34,6 +42,8 @@ struct ComponentGalleryDetailView: View {
             ColorGalleryView()
         case .typography:
             TypographyGalleryView()
+        case .topBar:
+            TopBarGalleryView()
         case .bottomSheet:
             BottomSheetGalleryView()
         case .listItem:

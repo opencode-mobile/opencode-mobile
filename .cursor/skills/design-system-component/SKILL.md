@@ -34,7 +34,12 @@ Collection for opencode-mobile.
 5. Design the public API around semantic variants and explicit states.
 6. Once app projects exist, implement iOS and Android in the same change.
 7. Update both platform Component Gallery registries, detail screens, controls,
-   or preview routes that help review the component.
+   or preview routes that help review the component. For gallery entries,
+   prefer **one live preview** plus **interactive controls** that switch variants
+   and states (see `docs/design-system/components/README.md` template and
+   Definition of Done). If the component must be reviewed **full width**
+   (for example a page top bar), wire the gallery detail shell so that entry’s
+   content is edge-to-edge while the page header and theme controls stay padded.
 8. Add light and dark previews with stable copy and realistic states.
 9. Document every intentional iOS/Android difference in
    `docs/design-system/divergences.md`.

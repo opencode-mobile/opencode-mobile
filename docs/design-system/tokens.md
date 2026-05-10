@@ -161,6 +161,20 @@ without competing with primary actions.
 | `button.iconCircle.size` | 40 (logical px; width equals height) |
 | `button.icon.size` | 18 (logical px) |
 
+### Top bar
+
+Reusable page-level navigation bar with an optional leading navigation affordance,
+single-line title, and compact trailing actions.
+
+| Token | Value |
+| --- | --- |
+| `topBar.minHeight` | 56 (logical px) |
+| `topBar.paddingHorizontal` | 12 (logical px) |
+| `topBar.paddingVertical` | 12 (logical px) |
+| `topBar.itemSpacing` | 8 (logical px) |
+| `topBar.titleSpacing` | 12 (logical px) |
+| `topBar.dividerThickness` | 1 (logical px) |
+
 ### Bottom sheet
 
 Reusable modal action sheet with a title, close affordance, and compact action

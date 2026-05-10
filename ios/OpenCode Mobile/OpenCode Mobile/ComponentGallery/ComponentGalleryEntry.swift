@@ -8,6 +8,7 @@ enum ComponentGalleryCategory: String, CaseIterable {
 enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
+    case topBar
     case bottomSheet
     case listItem
     case choiceBadge
@@ -33,6 +34,12 @@ let componentGalleryEntries = [
         title: "Typography",
         description: "Review shared type roles and platform mappings.",
         category: .foundation
+    ),
+    ComponentGalleryEntry(
+        id: .topBar,
+        title: "Top Bar",
+        description: "Page-level navigation bar with leading affordance and actions.",
+        category: .components
     ),
     ComponentGalleryEntry(
         id: .bottomSheet,

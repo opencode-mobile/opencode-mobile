@@ -26,6 +26,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
@@ -74,6 +75,7 @@ fun MainNavigation() {
                 when (key.entryId) {
                   ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                   ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
+                  ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
                   ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                   ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                   ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
@@ -82,7 +84,11 @@ fun MainNavigation() {
               }
             }
             entry<SessionChat> { key ->
-              SessionChatScreen(sessionId = key.sessionId, sessionTitle = key.sessionTitle)
+              SessionChatScreen(
+                sessionId = key.sessionId,
+                sessionTitle = key.sessionTitle,
+                onNavigateBack = { backStack.removeLastOrNull() },
+              )
             }
           },
       )

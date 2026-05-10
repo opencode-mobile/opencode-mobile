@@ -40,6 +40,8 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import java.util.UUID
 
 private enum class ComposerPickerKind(val sheetTitle: String) {
@@ -49,16 +51,28 @@ private enum class ComposerPickerKind(val sheetTitle: String) {
 }
 
 @Composable
-fun SessionChatScreen(sessionId: String, sessionTitle: String, modifier: Modifier = Modifier) {
+fun SessionChatScreen(
+  sessionId: String,
+  sessionTitle: String,
+  modifier: Modifier = Modifier,
+  onNavigateBack: () -> Unit = {},
+) {
   var uiState by remember(sessionId, sessionTitle) { mutableStateOf(SessionChatUiState.initial(sessionId, sessionTitle)) }
   var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
 
   Box(modifier = modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
-      Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(text = sessionTitle, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text(text = "Session ID: $sessionId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
+      OpenCodeTopBar(
+        title = "Session",
+        leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+        showDivider = true,
+      )
+      Text(
+        text = "Session ID: ${uiState.sessionId}",
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
 
       LazyColumn(
         modifier = Modifier.weight(1f).fillMaxWidth(),
