@@ -13,7 +13,7 @@ private let bottomSheetInitialHeight: CGFloat = 176
 
 enum BottomSheetEntryDecorator {
     case none
-    case icon(systemName: String, accessibilityLabel: String? = nil)
+    case icon(OpenCodeIcon, accessibilityLabel: String? = nil)
 }
 
 private struct BottomSheetContentHeightKey: PreferenceKey {
@@ -127,7 +127,7 @@ private struct OpenCodeBottomSheetContainer<SheetContent: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 OpenCodeButton(
-                    variant: .iconCircle(systemName: "xmark", accessibilityLabel: "Close"),
+                    variant: .iconCircle(.close, accessibilityLabel: "Close"),
                     contrast: .low,
                     action: onDismiss
                 )
@@ -154,8 +154,8 @@ private struct BottomSheetEntryDecoration: View {
         switch decorator {
         case .none:
             EmptyView()
-        case let .icon(systemName, accessibilityLabel):
-            Image(systemName: systemName)
+        case let .icon(icon, accessibilityLabel):
+            OpenCodeIconImage(icon: icon)
                 .font(.system(size: bottomSheetEntryIconSize, weight: .medium))
                 .foregroundStyle(enabled ? OpenCodeColors.iconDefault : OpenCodeColors.textDisabled)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
@@ -187,13 +187,13 @@ extension View {
         .openCodeBottomSheet(isPresented: .constant(true), title: "Session actions") {
             OpenCodeBottomSheetEntry(
                 title: "New session",
-                startDecorator: .icon(systemName: "plus", accessibilityLabel: "New session"),
+                startDecorator: .icon(.add, accessibilityLabel: "New session"),
                 action: {}
             )
             OpenCodeBottomSheetEntry(
                 title: "Open project",
-                startDecorator: .icon(systemName: "folder.fill", accessibilityLabel: "Open project"),
-                endDecorator: .icon(systemName: "chevron.right"),
+                startDecorator: .icon(.folder, accessibilityLabel: "Open project"),
+                endDecorator: .icon(.chevronRight),
                 action: {}
             )
         }
@@ -207,13 +207,13 @@ extension View {
             OpenCodeBottomSheetEntry(title: "Rename session", action: {})
             OpenCodeBottomSheetEntry(
                 title: "Fork session",
-                endDecorator: .icon(systemName: "chevron.right"),
+                endDecorator: .icon(.chevronRight),
                 action: {}
             )
             OpenCodeBottomSheetEntry(
                 title: "Delete session",
                 enabled: false,
-                startDecorator: .icon(systemName: "xmark", accessibilityLabel: "Delete session"),
+                startDecorator: .icon(.close, accessibilityLabel: "Delete session"),
                 action: {}
             )
         }

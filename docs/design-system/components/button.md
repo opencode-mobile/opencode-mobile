@@ -17,8 +17,8 @@ icon-only button needs.
 - States: `enabled`, `disabled`.
 - Required content:
   - text title for text variants;
-  - native icon identifier for icon variants (Android `ImageVector`, iOS SF
-    Symbol `systemName`).
+  - catalog icon for icon variants (Android `ImageVector` via `OpenCodeIcons`, iOS
+    `OpenCodeIcon`).
 - Optional content:
   - icon accessibility label for icon variants.
 

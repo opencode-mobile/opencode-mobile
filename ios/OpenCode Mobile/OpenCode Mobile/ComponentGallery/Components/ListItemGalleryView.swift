@@ -41,7 +41,7 @@ struct ListItemGalleryView: View {
         case .letter:
             .letter(Character("A"), letterAccent)
         case .icon:
-            .icon(systemName: "folder.fill", accessibilityLabel: "Folder")
+            .icon(.folder, accessibilityLabel: "Folder")
         }
     }
 

@@ -16,10 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,8 +36,13 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 private enum class ComposerPickerKind(val sheetTitle: String) {
@@ -84,11 +85,20 @@ fun SessionChatScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = if (message.role == MessageRole.User) Alignment.End else Alignment.Start,
           ) {
-            Text(
-              text = "${message.role.label}: ${message.text}",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurface,
-            )
+            if (message.role == MessageRole.User) {
+              OpenCodeOutgoingMessage(
+                text = message.text,
+                metadataLabel = message.metadataLabel,
+                onRestoreClick = { uiState = uiState.copy(composerText = message.text) },
+                modifier = Modifier.fillMaxWidth(),
+              )
+            } else {
+              Text(
+                text = "${message.role.label}: ${message.text}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+            }
           }
         }
       }
@@ -106,7 +116,16 @@ fun SessionChatScreen(
           uiState =
             uiState.copy(
               composerText = "",
-              messages = uiState.messages + SessionChatMessage(id = UUID.randomUUID().toString(), role = MessageRole.User, text = prompt),
+              messages =
+                uiState.messages +
+                  SessionChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    role = MessageRole.User,
+                    text = prompt,
+                    mode = uiState.selectedMode,
+                    model = uiState.selectedModel,
+                    sentTime = formatSentTime(LocalTime.now()),
+                  ),
             )
         },
       )
@@ -124,7 +143,7 @@ fun SessionChatScreen(
               title = model,
               endDecorator =
                 if (model == uiState.selectedModel) {
-                  BottomSheetEntryDecorator.Icon(Icons.Filled.Check, "Selected")
+                  BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                 } else {
                   BottomSheetEntryDecorator.None
                 },
@@ -142,7 +161,7 @@ fun SessionChatScreen(
               title = mode,
               endDecorator =
                 if (mode == uiState.selectedMode) {
-                  BottomSheetEntryDecorator.Icon(Icons.Filled.Check, "Selected")
+                  BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                 } else {
                   BottomSheetEntryDecorator.None
                 },
@@ -160,7 +179,7 @@ fun SessionChatScreen(
               title = effort,
               endDecorator =
                 if (effort == uiState.selectedThinkingEffort) {
-                  BottomSheetEntryDecorator.Icon(Icons.Filled.Check, "Selected")
+                  BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                 } else {
                   BottomSheetEntryDecorator.None
                 },
@@ -234,12 +253,12 @@ private fun SessionComposer(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       OpenCodeButton(
-        variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.Add, "Attach context"),
+        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Attach context"),
         contrast = OpenCodeButtonContrast.Low,
         onClick = onAttachClick,
       )
       OpenCodeButton(
-        variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Send prompt"),
+        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
         enabled = state.composerText.isNotBlank(),
         contrast = OpenCodeButtonContrast.Low,
         onClick = onSendClick,
@@ -274,7 +293,17 @@ private data class SessionChatUiState(
   }
 }
 
-private data class SessionChatMessage(val id: String, val role: MessageRole, val text: String)
+private data class SessionChatMessage(
+  val id: String,
+  val role: MessageRole,
+  val text: String,
+  val mode: String? = null,
+  val model: String? = null,
+  val sentTime: String? = null,
+) {
+  val metadataLabel: String
+    get() = listOfNotNull(mode, model, sentTime).joinToString(" · ")
+}
 
 private enum class MessageRole(val label: String) {
   User("You"),
@@ -284,6 +313,9 @@ private enum class MessageRole(val label: String) {
 private val AvailableModels = listOf("DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet")
 private val AvailableModes = listOf("Build", "Plan")
 private val AvailableThinkingEfforts = listOf("Default", "Low", "Medium", "High")
+private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+
+private fun formatSentTime(time: LocalTime): String = time.format(SentTimeFormatter)
 
 @Preview(showBackground = true)
 @Composable

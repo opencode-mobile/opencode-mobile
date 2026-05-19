@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,6 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val OpenCodeButtonCornerRadius = RoundedCornerShape(8.dp)
 private val OpenCodeButtonBorderWidth = 1.dp
@@ -174,7 +173,7 @@ private fun OpenCodeButtonCompactPreview() {
 private fun OpenCodeButtonIconPreview() {
   OpenCodeTheme(darkTheme = true) {
     OpenCodeButton(
-      variant = OpenCodeButtonVariant.IconSquare(Icons.Filled.ArrowUpward, "Send"),
+      variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send"),
       onClick = {},
     )
   }
@@ -185,7 +184,7 @@ private fun OpenCodeButtonIconPreview() {
 private fun OpenCodeButtonIconCirclePreview() {
   OpenCodeTheme(darkTheme = true) {
     OpenCodeButton(
-      variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Send"),
+      variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send"),
       onClick = {},
     )
   }
@@ -196,7 +195,7 @@ private fun OpenCodeButtonIconCirclePreview() {
 private fun OpenCodeButtonLowContrastPreview() {
   OpenCodeTheme(darkTheme = true) {
     OpenCodeButton(
-      variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Attach context"),
+      variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Attach context"),
       contrast = OpenCodeButtonContrast.Low,
       onClick = {},
     )

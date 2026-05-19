@@ -8,6 +8,8 @@ enum ComponentGalleryCategory: String, CaseIterable {
 enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
+    case icons
+    case outgoingMessage
     case topBar
     case bottomSheet
     case listItem
@@ -34,6 +36,18 @@ let componentGalleryEntries = [
         title: "Typography",
         description: "Review shared type roles and platform mappings.",
         category: .foundation
+    ),
+    ComponentGalleryEntry(
+        id: .icons,
+        title: "Icons",
+        description: "Material Icons catalog synced from icons/manifest.yaml.",
+        category: .foundation
+    ),
+    ComponentGalleryEntry(
+        id: .outgoingMessage,
+        title: "Outgoing Message",
+        description: "Trailing prompt card with five-line collapse behavior.",
+        category: .components
     ),
     ComponentGalleryEntry(
         id: .topBar,

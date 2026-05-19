@@ -7,12 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +17,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val TopBarMinHeight = 56.dp
 private val TopBarHorizontalPadding = 12.dp
@@ -120,13 +115,13 @@ private fun LeadingControl(leading: OpenCodeTopBarLeading) {
     OpenCodeTopBarLeading.None -> Unit
     is OpenCodeTopBarLeading.Back ->
       OpenCodeButton(
-        variant = OpenCodeButtonVariant.IconCircle(Icons.AutoMirrored.Filled.ArrowBack, leading.contentDescription),
+        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, leading.contentDescription),
         contrast = OpenCodeButtonContrast.Low,
         onClick = leading.onClick,
       )
     is OpenCodeTopBarLeading.Close ->
       OpenCodeButton(
-        variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.Close, leading.contentDescription),
+        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, leading.contentDescription),
         contrast = OpenCodeButtonContrast.Low,
         onClick = leading.onClick,
       )
@@ -190,8 +185,8 @@ private fun OpenCodeTopBarPreviewContent() {
       leading = OpenCodeTopBarLeading.Close(onClick = {}),
       actions =
         listOf(
-          OpenCodeTopBarAction.Icon(Icons.Filled.Search, "Search", onClick = {}),
-          OpenCodeTopBarAction.Icon(Icons.Filled.MoreVert, "More actions", onClick = {}),
+          OpenCodeTopBarAction.Icon(OpenCodeIcons.Search, "Search", onClick = {}),
+          OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", onClick = {}),
         ),
     )
 
@@ -204,7 +199,7 @@ private fun OpenCodeTopBarPreviewContent() {
     Text(text = "Disabled action", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
     OpenCodeTopBar(
       title = "Rename session",
-      leading = OpenCodeTopBarLeading.CustomIcon(Icons.Filled.Edit, "Edit", onClick = {}),
+      leading = OpenCodeTopBarLeading.CustomIcon(OpenCodeIcons.Edit, "Edit", onClick = {}),
       actions = listOf(OpenCodeTopBarAction.Label("Save", enabled = false, onClick = {})),
       showDivider = true,
     )

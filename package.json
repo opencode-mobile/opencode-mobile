@@ -1,0 +1,14 @@
+{
+  "name": "opencode-mobile",
+  "private": true,
+  "description": "Dev tooling for opencode-mobile (icon sync, etc.)",
+  "scripts": {
+    "icons:sync": "node scripts/sync-icons.mjs",
+    "icons:check": "node scripts/check-icons.mjs",
+    "icons:audit": "node scripts/audit-icon-usage.mjs"
+  },
+  "devDependencies": {
+    "@material-design-icons/svg": "^0.14.15",
+    "yaml": "^2.8.0"
+  }
+}

@@ -22,26 +22,22 @@ implementation belong in the feature's `parity-gaps.md`.
 
 ## Current Divergences
 
-## Native icon identifier inputs
+## Material icon platform types
 
 - Status: intentional
 - Area: component | accessibility
-- Shared intent: icon-bearing component APIs should remain ergonomic and
-  type-safe while preserving shared component semantics across platforms.
-- iOS behavior: icon inputs use SF Symbol names (`String`) with optional
-  accessibility labels (for example `StartDecorator.icon(...)` and
-  `OpenCodeButton.Variant.iconSquare(...)` or
-  `OpenCodeButton.Variant.iconCircle(...)`).
-- Android behavior: icon inputs use Compose `ImageVector` values with optional
-  content descriptions (for example `StartDecorator.Icon(...)` and
-  `OpenCodeButtonVariant.IconSquare(...)` or
-  `OpenCodeButtonVariant.IconCircle(...)`).
-- Reason: Each platform already has a native, type-safe icon selection model;
-  forcing a single shared identifier string would fight tooling and provide no
-  meaningful cross-platform coupling at this layer.
-- Review trigger: If we introduce a shared catalog of semantic icon kinds (for
-  example “folder”, “warning”) mapped per platform, revisit whether the public
-  API should expose those kinds instead of raw identifiers.
+- Shared intent: both apps render the same Material glyph shapes from
+  [`icons/manifest.yaml`](../../icons/manifest.yaml); see
+  [`icons.md`](icons.md).
+- iOS behavior: icon-bearing APIs use `OpenCodeIcon` (asset catalog name) and
+  `OpenCodeIconImage` for template rendering.
+- Android behavior: icon-bearing APIs use Compose `ImageVector` from
+  `OpenCodeIcons`.
+- Reason: each platform keeps a native, type-safe icon model while sharing one
+  manifest-driven catalog and generated assets.
+- Review trigger: if a semantic `OpenCodeIconKind` API replaces raw catalog
+  symbols at component boundaries, revisit whether both platforms should expose
+  only that kind.
 
 ## Top bar title alignment
 

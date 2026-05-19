@@ -9,11 +9,11 @@ enum OpenCodeTopBarLeading {
     case none
     case back(accessibilityLabel: String = "Back", action: () -> Void)
     case close(accessibilityLabel: String = "Close", action: () -> Void)
-    case customIcon(systemName: String, accessibilityLabel: String, action: () -> Void)
+    case customIcon(OpenCodeIcon, accessibilityLabel: String, action: () -> Void)
 }
 
 enum OpenCodeTopBarAction {
-    case icon(systemName: String, accessibilityLabel: String, enabled: Bool = true, action: () -> Void)
+    case icon(OpenCodeIcon, accessibilityLabel: String, enabled: Bool = true, action: () -> Void)
     case label(title: String, enabled: Bool = true, action: () -> Void)
 }
 
@@ -92,19 +92,19 @@ struct OpenCodeTopBar: View {
                 .accessibilityHidden(true)
         case let .back(accessibilityLabel, action):
             OpenCodeButton(
-                variant: .iconCircle(systemName: "chevron.left", accessibilityLabel: accessibilityLabel),
+                variant: .iconCircle(.arrowBack, accessibilityLabel: accessibilityLabel),
                 contrast: .low,
                 action: action
             )
         case let .close(accessibilityLabel, action):
             OpenCodeButton(
-                variant: .iconCircle(systemName: "xmark", accessibilityLabel: accessibilityLabel),
+                variant: .iconCircle(.close, accessibilityLabel: accessibilityLabel),
                 contrast: .low,
                 action: action
             )
-        case let .customIcon(systemName, accessibilityLabel, action):
+        case let .customIcon(icon, accessibilityLabel, action):
             OpenCodeButton(
-                variant: .iconCircle(systemName: systemName, accessibilityLabel: accessibilityLabel),
+                variant: .iconCircle(icon, accessibilityLabel: accessibilityLabel),
                 contrast: .low,
                 action: action
             )
@@ -144,9 +144,9 @@ struct OpenCodeTopBar: View {
     @ViewBuilder
     private func trailingButton(for action: OpenCodeTopBarAction) -> some View {
         switch action {
-        case let .icon(systemName, accessibilityLabel, enabled, action):
+        case let .icon(icon, accessibilityLabel, enabled, action):
             OpenCodeButton(
-                variant: .iconCircle(systemName: systemName, accessibilityLabel: accessibilityLabel),
+                variant: .iconCircle(icon, accessibilityLabel: accessibilityLabel),
                 enabled: enabled,
                 contrast: .low,
                 action: action
@@ -194,8 +194,8 @@ private struct OpenCodeTopBarPreviewContent: View {
                     title: "Session actions",
                     leading: .close(action: {}),
                     actions: [
-                        .icon(systemName: "magnifyingglass", accessibilityLabel: "Search", action: {}),
-                        .icon(systemName: "ellipsis", accessibilityLabel: "More actions", action: {}),
+                        .icon(.search, accessibilityLabel: "Search", action: {}),
+                        .icon(.moreVert, accessibilityLabel: "More actions", action: {}),
                     ]
                 )
             }
@@ -210,7 +210,7 @@ private struct OpenCodeTopBarPreviewContent: View {
             previewSection("Disabled action") {
                 OpenCodeTopBar(
                     title: "Rename session",
-                    leading: .customIcon(systemName: "pencil", accessibilityLabel: "Edit", action: {}),
+                    leading: .customIcon(.edit, accessibilityLabel: "Edit", action: {}),
                     actions: [.label(title: "Save", enabled: false, action: {})],
                     showDivider: true
                 )

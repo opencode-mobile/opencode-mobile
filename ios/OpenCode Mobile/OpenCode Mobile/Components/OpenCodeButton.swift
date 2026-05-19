@@ -3,8 +3,8 @@ import SwiftUI
 enum OpenCodeButtonVariant {
     case fullWidthText(title: String)
     case compactText(title: String)
-    case iconSquare(systemName: String, accessibilityLabel: String?)
-    case iconCircle(systemName: String, accessibilityLabel: String?)
+    case iconSquare(OpenCodeIcon, accessibilityLabel: String?)
+    case iconCircle(OpenCodeIcon, accessibilityLabel: String?)
 }
 
 enum OpenCodeButtonContrast {
@@ -47,13 +47,13 @@ struct OpenCodeButton: View {
         case let .compactText(title):
             Text(title)
                 .font(OpenCodeTypography.button)
-        case let .iconSquare(systemName, accessibilityLabel):
-            Image(systemName: systemName)
+        case let .iconSquare(icon, accessibilityLabel):
+            OpenCodeIconImage(icon: icon)
                 .font(.system(size: 18, weight: .semibold))
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
-        case let .iconCircle(systemName, accessibilityLabel):
-            Image(systemName: systemName)
+        case let .iconCircle(icon, accessibilityLabel):
+            OpenCodeIconImage(icon: icon)
                 .font(.system(size: 18, weight: .semibold))
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
@@ -212,20 +212,20 @@ private extension OpenCodeButtonVariant {
 }
 
 #Preview("Icon") {
-    OpenCodeButton(variant: .iconSquare(systemName: "arrow.up", accessibilityLabel: "Send"), action: {})
+    OpenCodeButton(variant: .iconSquare(.arrowUpward, accessibilityLabel: "Send"), action: {})
         .padding()
         .openCodeTheme()
 }
 
 #Preview("Icon Circle") {
-    OpenCodeButton(variant: .iconCircle(systemName: "arrow.up", accessibilityLabel: "Send"), action: {})
+    OpenCodeButton(variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send"), action: {})
         .padding()
         .openCodeTheme()
 }
 
 #Preview("Low Contrast") {
     OpenCodeButton(
-        variant: .iconCircle(systemName: "plus", accessibilityLabel: "Attach context"),
+        variant: .iconCircle(.add, accessibilityLabel: "Attach context"),
         contrast: .low,
         action: {}
     )

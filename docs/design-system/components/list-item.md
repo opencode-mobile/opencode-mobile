@@ -18,10 +18,9 @@ consistent rounded surface, title-first hierarchy, optional **start decorator**
     choose a **`LetterAccent`** semantic variant (paired fill and tint from
     component tokens). The component keeps a single grapheme and applies
     uppercase styling where appropriate.
-  - **`icon`**: **24×24** icon area using platform conventions (Android:
-    `ImageVector` plus optional content description; iOS: SF Symbol `systemName`
-    plus optional accessibility label). Tint follows row emphasis (including
-    disabled).
+  - **`icon`**: **24×24** Material catalog icon (Android: `ImageVector` from
+    `OpenCodeIcons` plus optional content description; iOS: `OpenCodeIcon` plus
+    optional accessibility label). Tint follows row emphasis (including disabled).
 
 Internal typography for the letter maps to the **`type.caption`** role with a
 stronger weight so the glyph stays legible inside the small badge; this is not a

@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +19,7 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryDecoratorKind {
   None,
@@ -54,7 +53,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
       GalleryDecoratorKind.None -> StartDecorator.None
       GalleryDecoratorKind.Letter -> StartDecorator.Letter('A', letterAccent)
       GalleryDecoratorKind.Icon ->
-        StartDecorator.Icon(imageVector = Icons.Filled.Folder, contentDescription = "Folder")
+        StartDecorator.Icon(imageVector = OpenCodeIcons.Folder, contentDescription = "Folder")
     }
 
   val subtitle: String? =

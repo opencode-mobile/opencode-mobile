@@ -11,6 +11,8 @@ enum class ComponentGalleryCategory(val label: String) {
 enum class ComponentGalleryEntryId {
   Colors,
   Typography,
+  Icons,
+  OutgoingMessage,
   TopBar,
   BottomSheet,
   ListItem,
@@ -38,6 +40,18 @@ val ComponentGalleryEntries =
       title = "Typography",
       description = "Review shared type roles and platform mappings.",
       category = ComponentGalleryCategory.Foundation,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.Icons,
+      title = "Icons",
+      description = "Material Icons catalog synced from icons/manifest.yaml.",
+      category = ComponentGalleryCategory.Foundation,
+    ),
+    ComponentGalleryEntry(
+      id = ComponentGalleryEntryId.OutgoingMessage,
+      title = "Outgoing Message",
+      description = "Trailing prompt card with five-line collapse behavior.",
+      category = ComponentGalleryCategory.Components,
     ),
     ComponentGalleryEntry(
       id = ComponentGalleryEntryId.TopBar,

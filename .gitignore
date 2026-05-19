@@ -50,3 +50,9 @@ build/
 
 # Logs
 *.log
+
+# Node (icon sync tooling)
+node_modules/
+
+# Material icon sync cache (generated assets are committed)
+icons/cache/

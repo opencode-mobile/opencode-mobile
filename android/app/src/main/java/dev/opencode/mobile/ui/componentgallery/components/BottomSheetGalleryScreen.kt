@@ -4,13 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
@@ -45,12 +39,12 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
   val startDecorator =
     when (startDecoratorKind) {
       GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
-      GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(Icons.Filled.Folder, "Project")
+      GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Project")
     }
   val endDecorator =
     when (endDecoratorKind) {
       GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
-      GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(Icons.Filled.ChevronRight, null)
+      GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null)
     }
 
   Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -93,30 +87,30 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     )
     OpenCodeBottomSheetEntry(
       title = "Create new session",
-      startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.Add, "Create new session"),
+      startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "Create new session"),
       onClick = { visible = false },
     )
     if (itemCount >= 4) {
       OpenCodeBottomSheetEntry(
         title = "Rename session",
-        startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.Edit, "Rename session"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, "Rename session"),
         onClick = { visible = false },
       )
       OpenCodeBottomSheetEntry(
         title = "Fork session",
-        endDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.ChevronRight, null),
+        endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
         onClick = { visible = false },
       )
     }
     if (itemCount >= 6) {
       OpenCodeBottomSheetEntry(
         title = "Review diff",
-        startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.Description, "Review diff"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Review diff"),
         onClick = { visible = false },
       )
       OpenCodeBottomSheetEntry(
         title = "Abort active work",
-        startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.StopCircle, "Abort active work"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle, "Abort active work"),
         onClick = { visible = false },
       )
     }

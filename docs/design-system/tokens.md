@@ -193,6 +193,24 @@ entries.
 | `bottomSheet.entry.decorator.size` | 24 (logical px) |
 | `bottomSheet.entry.decorator.iconSize` | 20 (logical px) |
 
+### Outgoing message
+
+Reusable outgoing prompt card for session conversations.
+
+| Token | Value |
+| --- | --- |
+| `outgoingMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
+| `outgoingMessage.maxWidthFraction` | 0.84 of the available row width |
+| `outgoingMessage.paddingHorizontal` | 18 (logical px) |
+| `outgoingMessage.paddingVertical` | 14 (logical px) |
+| `outgoingMessage.contentSpacing` | 4 (logical px) |
+| `outgoingMessage.footerSpacing` | 6 (logical px) |
+| `outgoingMessage.controlItemSpacing` | 8 (logical px) |
+| `outgoingMessage.actionIconTouchTarget` | 28 (logical px) |
+| `outgoingMessage.actionIconSize` | 16 (logical px) |
+| `outgoingMessage.chevronTouchTarget` | 28 (logical px) |
+| `outgoingMessage.chevronIconSize` | 16 (logical px) |
+
 ## Platform Mappings
 
 Platform mappings translate semantic and component tokens into native APIs:

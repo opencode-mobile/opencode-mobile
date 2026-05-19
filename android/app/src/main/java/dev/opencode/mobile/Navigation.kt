@@ -26,6 +26,8 @@ import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
@@ -75,6 +77,8 @@ fun MainNavigation() {
                 when (key.entryId) {
                   ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                   ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
+                  ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
+                  ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                   ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
                   ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                   ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()

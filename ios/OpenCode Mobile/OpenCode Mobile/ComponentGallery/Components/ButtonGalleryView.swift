@@ -30,9 +30,9 @@ struct ButtonGalleryView: View {
         case .compact:
             .compactText(title: "Build")
         case .icon:
-            .iconSquare(systemName: "arrow.up", accessibilityLabel: "Send")
+            .iconSquare(.arrowUpward, accessibilityLabel: "Send")
         case .circle:
-            .iconCircle(systemName: "arrow.up", accessibilityLabel: "Send")
+            .iconCircle(.arrowUpward, accessibilityLabel: "Send")
         }
     }
 

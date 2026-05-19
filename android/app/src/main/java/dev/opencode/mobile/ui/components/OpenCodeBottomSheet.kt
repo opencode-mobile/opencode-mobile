@@ -11,11 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val BottomSheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 private val BottomSheetHeaderHorizontalPadding = 20.dp
@@ -90,7 +86,7 @@ fun OpenCodeBottomSheet(
           overflow = TextOverflow.Ellipsis,
         )
         OpenCodeButton(
-          variant = OpenCodeButtonVariant.IconCircle(Icons.Filled.Close, "Close"),
+          variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
           contrast = OpenCodeButtonContrast.Low,
           onClick = onDismissRequest,
         )
@@ -167,13 +163,13 @@ private fun OpenCodeBottomSheetLightPreview() {
     OpenCodeBottomSheet(visible = true, title = "Session actions", onDismissRequest = {}) {
       OpenCodeBottomSheetEntry(
         title = "New session",
-        startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.Add, "New session"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "New session"),
         onClick = {},
       )
       OpenCodeBottomSheetEntry(
         title = "Open project",
-        startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.Folder, "Open project"),
-        endDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.ChevronRight, null),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Open project"),
+        endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
         onClick = {},
       )
     }
@@ -188,13 +184,13 @@ private fun OpenCodeBottomSheetDarkPreview() {
       OpenCodeBottomSheetEntry(title = "Rename session", onClick = {})
       OpenCodeBottomSheetEntry(
         title = "Fork session",
-        endDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.ChevronRight, null),
+        endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
         onClick = {},
       )
       OpenCodeBottomSheetEntry(
         title = "Delete session",
         enabled = false,
-        startDecorator = BottomSheetEntryDecorator.Icon(Icons.Filled.Close, "Delete session"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, "Delete session"),
         onClick = {},
       )
     }

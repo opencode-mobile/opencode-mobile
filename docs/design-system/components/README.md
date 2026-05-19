@@ -76,6 +76,8 @@ List intentional differences or link to `../divergences.md`.
 
 ## Current Component Docs
 
+- `../icons.md` (shared Material icon catalog and sync workflow)
+- `outgoing-message.md`
 - `top-bar.md`
 - `bottom-sheet.md`
 - `choice-badge.md`

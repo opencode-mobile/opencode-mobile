@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
+
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +19,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryButtonVariant {
   FullWidthText,
@@ -44,8 +45,8 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
     when (variantSelection) {
       GalleryButtonVariant.FullWidthText -> OpenCodeButtonVariant.FullWidthText("Run")
       GalleryButtonVariant.CompactText -> OpenCodeButtonVariant.CompactText("Build")
-      GalleryButtonVariant.IconSquare -> OpenCodeButtonVariant.IconSquare(Icons.Filled.ArrowUpward, "Send")
-      GalleryButtonVariant.IconCircle -> OpenCodeButtonVariant.IconCircle(Icons.Filled.ArrowUpward, "Send")
+      GalleryButtonVariant.IconSquare -> OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send")
+      GalleryButtonVariant.IconCircle -> OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send")
     }
   val contrastSelection =
     try {

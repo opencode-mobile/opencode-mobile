@@ -5,9 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +18,7 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryTopBarLeading {
   None,
@@ -70,8 +68,8 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
       GalleryTopBarActions.None -> emptyList()
       GalleryTopBarActions.Icons ->
         listOf(
-          OpenCodeTopBarAction.Icon(Icons.Filled.Search, "Search", enabled = actionsEnabled, onClick = {}),
-          OpenCodeTopBarAction.Icon(Icons.Filled.MoreVert, "More actions", enabled = actionsEnabled, onClick = {}),
+          OpenCodeTopBarAction.Icon(OpenCodeIcons.Search, "Search", enabled = actionsEnabled, onClick = {}),
+          OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", enabled = actionsEnabled, onClick = {}),
         )
       GalleryTopBarActions.Label ->
         listOf(OpenCodeTopBarAction.Label("Done", enabled = actionsEnabled, onClick = {}))

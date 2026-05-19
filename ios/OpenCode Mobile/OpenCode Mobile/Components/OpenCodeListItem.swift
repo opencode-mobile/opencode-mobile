@@ -89,8 +89,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                 .frame(width: 24, height: 24)
                 .background(accent.badgeFill, in: RoundedRectangle(cornerRadius: 4))
                 .accessibilityHidden(true)
-        case let .icon(systemName, accessibilityLabel):
-            Image(systemName: systemName)
+        case let .icon(icon, accessibilityLabel):
+            OpenCodeIconImage(icon: icon)
                 .font(.system(size: 24))
                 .foregroundStyle(OpenCodeColors.iconDefault)
                 .frame(width: 24, height: 24)

@@ -72,8 +72,8 @@ block interaction and reduce visual emphasis.
   Leading and trailing affordances reuse **`OpenCodeButton`** (`IconCircle` /
   `CompactText`) so ripple and shape match the shared button component.
 
-Leading **back** / **close** use fixed Material icons on Android and SF Symbols
-on iOS; **customIcon** remains caller-provided per platform identifier rules in
+Leading **back** / **close** use fixed catalog icons; **customIcon** remains
+caller-provided per platform catalog types (`OpenCodeIcon` / `OpenCodeIcons`) in
 `../divergences.md`.
 
 ## Previews

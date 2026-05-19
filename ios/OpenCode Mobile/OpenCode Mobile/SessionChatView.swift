@@ -96,7 +96,7 @@ struct SessionChatView: View {
                 OpenCodeBottomSheetEntry(
                     title: model,
                     endDecorator: model == state.selectedModel
-                        ? .icon(systemName: "checkmark", accessibilityLabel: "Selected")
+                        ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
                         state.selectModel(model)
@@ -109,7 +109,7 @@ struct SessionChatView: View {
                 OpenCodeBottomSheetEntry(
                     title: mode,
                     endDecorator: mode == state.selectedMode
-                        ? .icon(systemName: "checkmark", accessibilityLabel: "Selected")
+                        ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
                         state.selectMode(mode)
@@ -122,7 +122,7 @@ struct SessionChatView: View {
                 OpenCodeBottomSheetEntry(
                     title: level,
                     endDecorator: level == state.selectedThinkingEffort
-                        ? .icon(systemName: "checkmark", accessibilityLabel: "Selected")
+                        ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
                         state.selectThinkingEffort(level)
@@ -159,7 +159,7 @@ struct SessionChatView: View {
 
             HStack {
                 OpenCodeButton(
-                    variant: .iconCircle(systemName: "plus", accessibilityLabel: "Attach context"),
+                    variant: .iconCircle(.add, accessibilityLabel: "Attach context"),
                     contrast: .low
                 ) {
                 }
@@ -167,7 +167,7 @@ struct SessionChatView: View {
                 Spacer(minLength: 0)
 
                 OpenCodeButton(
-                    variant: .iconCircle(systemName: "arrow.up", accessibilityLabel: "Send prompt"),
+                    variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
                     enabled: state.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
                     contrast: .low
                 ) {
@@ -186,25 +186,49 @@ struct SessionChatView: View {
         .padding(.bottom, 10)
     }
 
+    @ViewBuilder
     private func messageText(_ message: SessionChatMessage) -> some View {
-        Text("\(message.role.label): \(message.text)")
-            .font(OpenCodeTypography.body)
-            .foregroundStyle(OpenCodeColors.textPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+        if message.role == .user {
+            OpenCodeOutgoingMessage(
+                text: message.text,
+                metadataLabel: message.metadataLabel,
+                onRestoreClick: { state.composerText = message.text }
             )
+        } else {
+            Text("\(message.role.label): \(message.text)")
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                )
+        }
     }
 
     private func sendPrompt() {
         let trimmed = state.composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        state.messages.append(SessionChatMessage(role: .user, text: trimmed))
+        state.messages.append(
+            SessionChatMessage(
+                role: .user,
+                text: trimmed,
+                mode: state.selectedMode,
+                model: state.selectedModel,
+                sentTime: Self.sentTimeFormatter.string(from: Date())
+            )
+        )
         state.composerText = ""
     }
+
+    private static let sentTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
 }
 
 private struct SessionChatScreenState {
@@ -250,6 +274,13 @@ private struct SessionChatMessage: Identifiable {
     let id = UUID()
     let role: SessionChatRole
     let text: String
+    var mode: String? = nil
+    var model: String? = nil
+    var sentTime: String? = nil
+
+    var metadataLabel: String {
+        [mode, model, sentTime].compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 private enum SessionChatRole {

@@ -42,6 +42,10 @@ struct ComponentGalleryDetailView: View {
             ColorGalleryView()
         case .typography:
             TypographyGalleryView()
+        case .icons:
+            IconsGalleryView()
+        case .outgoingMessage:
+            OutgoingMessageGalleryView()
         case .topBar:
             TopBarGalleryView()
         case .bottomSheet:

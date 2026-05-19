@@ -66,8 +66,8 @@ struct TopBarGalleryView: View {
             []
         case .icons:
             [
-                .icon(systemName: "magnifyingglass", accessibilityLabel: "Search", enabled: actionsEnabled, action: {}),
-                .icon(systemName: "ellipsis", accessibilityLabel: "More actions", enabled: actionsEnabled, action: {}),
+                .icon(.search, accessibilityLabel: "Search", enabled: actionsEnabled, action: {}),
+                .icon(.moreVert, accessibilityLabel: "More actions", enabled: actionsEnabled, action: {}),
             ]
         case .label:
             [

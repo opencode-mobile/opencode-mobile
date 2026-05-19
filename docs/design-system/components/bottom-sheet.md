@@ -42,7 +42,8 @@ behavior should remain available.
 Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
 
-Icon decorators use platform-native icon inputs. Icons are decorative when the
+Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
+`OpenCodeIcons` on Android). Icons are decorative when the
 entry title already describes the action; otherwise callers should provide an
 accessibility label or description using the platform convention.
 

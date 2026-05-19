@@ -26,7 +26,7 @@ struct BottomSheetGalleryView: View {
         case .none:
             .none
         case .icon:
-            .icon(systemName: "folder.fill", accessibilityLabel: "Project")
+            .icon(.folder, accessibilityLabel: "Project")
         }
     }
 
@@ -35,7 +35,7 @@ struct BottomSheetGalleryView: View {
         case .none:
             .none
         case .icon:
-            .icon(systemName: "chevron.right")
+            .icon(.chevronRight)
         }
     }
 
@@ -84,30 +84,30 @@ struct BottomSheetGalleryView: View {
             )
             OpenCodeBottomSheetEntry(
                 title: "Create new session",
-                startDecorator: .icon(systemName: "plus", accessibilityLabel: "Create new session"),
+                startDecorator: .icon(.add, accessibilityLabel: "Create new session"),
                 action: { isPresented = false }
             )
             if itemCount >= 4 {
                 OpenCodeBottomSheetEntry(
                     title: "Rename session",
-                    startDecorator: .icon(systemName: "pencil", accessibilityLabel: "Rename session"),
+                    startDecorator: .icon(.edit, accessibilityLabel: "Rename session"),
                     action: { isPresented = false }
                 )
                 OpenCodeBottomSheetEntry(
                     title: "Fork session",
-                    endDecorator: .icon(systemName: "chevron.right"),
+                    endDecorator: .icon(.chevronRight),
                     action: { isPresented = false }
                 )
             }
             if itemCount >= 6 {
                 OpenCodeBottomSheetEntry(
                     title: "Review diff",
-                    startDecorator: .icon(systemName: "doc.text", accessibilityLabel: "Review diff"),
+                    startDecorator: .icon(.description, accessibilityLabel: "Review diff"),
                     action: { isPresented = false }
                 )
                 OpenCodeBottomSheetEntry(
                     title: "Abort active work",
-                    startDecorator: .icon(systemName: "stop.circle", accessibilityLabel: "Abort active work"),
+                    startDecorator: .icon(.stopCircle, accessibilityLabel: "Abort active work"),
                     action: { isPresented = false }
                 )
             }

@@ -1,0 +1,51 @@
+# Material Icons catalog — see docs/design-system/icons.md
+icons:
+  - name: add
+    style: filled
+    notes: SF Symbol plus
+  - name: arrow_back
+    style: filled
+    notes: SF Symbol chevron.left
+  - name: arrow_upward
+    style: filled
+    notes: SF Symbol arrow.up
+  - name: check
+    style: filled
+    notes: SF Symbol checkmark
+  - name: chevron_right
+    style: filled
+  - name: close
+    style: filled
+    notes: SF Symbol xmark
+  - name: content_copy
+    style: filled
+    notes: SF Symbol doc.on.doc
+  - name: collapse_content
+    source: material_symbols
+    style: filled
+    notes: Outgoing message expanded state
+  - name: description
+    style: filled
+    notes: SF Symbol doc.text
+  - name: edit
+    style: filled
+    notes: SF Symbol pencil
+  - name: expand_content
+    source: material_symbols
+    style: filled
+    notes: Outgoing message collapsed state
+  - name: folder
+    style: filled
+    notes: SF Symbol folder.fill
+  - name: more_vert
+    style: filled
+    notes: SF Symbol ellipsis
+  - name: search
+    style: filled
+    notes: SF Symbol magnifyingglass
+  - name: stop_circle
+    style: filled
+    notes: SF Symbol stop.circle
+  - name: undo
+    style: filled
+    notes: SF Symbol arrow.uturn.backward
