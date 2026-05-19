@@ -1,17 +1,21 @@
+import Factory
 import SwiftUI
 
 struct ProjectListHomeView: View {
     private let horizontalInset: CGFloat = 16
-    private let selectedProjectName = "opencode-mobile"
-    @State private var state: SessionListHomeState = .loaded(SessionListHomeState.mockSessions)
+    @State private var viewModel: ProjectListHomeViewModel
     @State private var showComponentGallery = false
     @State private var selectedSession: SessionListItem?
+
+    init(viewModel: ProjectListHomeViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
 
     var body: some View {
         List {
             header
 
-            switch state {
+            switch viewModel.state {
             case .loading:
                 HStack {
                     Spacer()
@@ -37,7 +41,7 @@ struct ProjectListHomeView: View {
                         } label: {
                             OpenCodeListItem(
                                 title: session.title,
-                                subtitle: AppConfig.serverBaseURL
+                                subtitle: viewModel.serverBaseURL
                             )
                         }
                         .buttonStyle(.plain)
@@ -84,14 +88,17 @@ struct ProjectListHomeView: View {
         .navigationDestination(item: $selectedSession) { session in
             SessionChatView(session: session)
         }
+        .task {
+            await viewModel.loadSessions()
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Selected project: \(selectedProjectName)")
+            Text("Selected project: \(viewModel.selectedProjectName)")
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textPrimary)
-            Text("Connected server: \(AppConfig.serverBaseURL)")
+            Text("Connected server: \(viewModel.serverBaseURL)")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textSecondary)
         }
@@ -105,13 +112,6 @@ enum SessionListHomeState {
     case loading
     case loaded([SessionListItem])
     case error(String)
-
-    static let mockSessions: [SessionListItem] = [
-        .init(id: "1", title: "Importing icons explanation"),
-        .init(id: "2", title: "Material Design Icons integration plan"),
-        .init(id: "3", title: "iOS color palette and typography screens"),
-        .init(id: "4", title: "Organize notes and docs; update agents.md")
-    ]
 }
 
 struct SessionListItem: Identifiable, Hashable {
@@ -121,15 +121,46 @@ struct SessionListItem: Identifiable, Hashable {
 
 #Preview {
     NavigationStack {
-        ProjectListHomeView()
+        ProjectListHomeView(
+            viewModel: ProjectListHomeViewModel(sessionRepository: PreviewSessionRepository())
+        )
     }
     .openCodeTheme()
 }
 
 #Preview("Dark") {
     NavigationStack {
-        ProjectListHomeView()
+        ProjectListHomeView(
+            viewModel: ProjectListHomeViewModel(sessionRepository: PreviewSessionRepository())
+        )
     }
     .openCodeTheme()
     .preferredColorScheme(.dark)
+}
+
+private struct PreviewSessionRepository: SessionRepository {
+    func listSessions() async throws -> [Session] {
+        [
+            Session(id: "1", title: "Importing icons explanation", slug: nil, projectID: nil, directory: nil, parentID: nil),
+            Session(id: "2", title: "Material Design Icons integration plan", slug: nil, projectID: nil, directory: nil, parentID: nil),
+        ]
+    }
+
+    func createSession(parentID: String?, title: String?) async throws -> Session { fatalError() }
+    func getAllSessionStatuses() async throws -> [SessionStatus] { fatalError() }
+    func getSession(id: String) async throws -> Session { fatalError() }
+    func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
+    func deleteSession(id: String) async throws -> Bool { fatalError() }
+    func listChildSessions(id: String) async throws -> [Session] { fatalError() }
+    func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
+    func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
+    func forkSession(id: String, atMessageID: String?) async throws -> Session { fatalError() }
+    func abortSession(id: String) async throws -> Bool { fatalError() }
+    func shareSession(id: String) async throws -> Session { fatalError() }
+    func unshareSession(id: String) async throws -> Session { fatalError() }
+    func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] { fatalError() }
+    func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
+    func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
+    func unrevertSession(id: String) async throws -> Bool { fatalError() }
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool { fatalError() }
 }

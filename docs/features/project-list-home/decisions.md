@@ -9,6 +9,15 @@
   profile infrastructure exists.
 - Revisit when: connection mechanism and profile persistence are implemented.
 
+## Android emulator reaches host via 10.0.2.2
+
+- Date: 2026-05-19
+- Decision: on Android emulators, rewrite `127.0.0.1` / `localhost` in the
+  configured base URL to `10.0.2.2` so `GET /session` reaches `opencode serve`
+  on the development machine (iOS Simulator uses host loopback directly).
+- Reason: emulator loopback is not the host machine.
+- See: [`session-repository/manual-test.md`](../session-repository/manual-test.md).
+
 ## Keep component gallery as secondary developer route
 
 - Date: 2026-05-06

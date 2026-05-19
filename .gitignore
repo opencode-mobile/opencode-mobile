@@ -54,5 +54,10 @@ build/
 # Node (icon sync tooling)
 node_modules/
 
+# OpenAPI fetch + generated clients
+build/openapi/
+android/app/build/generated/openapi/
+ios/OpenCode Mobile/Generated/
+
 # Material icon sync cache (generated assets are committed)
 icons/cache/

@@ -20,10 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.opencode.mobile.data.DefaultDataRepository
-import dev.opencode.mobile.data.SessionSummary
+import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 
@@ -32,7 +31,7 @@ fun MainScreen(
   onDeveloperComponentsClick: () -> Unit,
   onSessionClick: (SessionSummary) -> Unit,
   modifier: Modifier = Modifier,
-  viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(DefaultDataRepository()) },
+  viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   MainScreen(

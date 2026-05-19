@@ -74,6 +74,21 @@ or responding to a permission request.
 Keep these boundaries small until implementation proves a broader abstraction is
 needed.
 
+## Dependency Injection
+
+Use platform DI frameworks so UI and Screen Models do not construct repositories
+inline.
+
+- **Android:** Dagger Hilt — `@HiltAndroidApp`, feature modules (`NetworkModule`,
+  `SessionModule`), `@HiltViewModel` for Screen Models, `hiltViewModel()` in
+  Compose.
+- **iOS:** Factory — `AppContainer` registers `ServerConnection`, API clients,
+  adapters, and repository implementations; views resolve ViewModels from the
+  container.
+
+Screen Models depend on repository **protocols** only. Concrete wiring lives in
+DI modules.
+
 ## Screen Models
 
 Each feature screen should have a Screen Model that exposes:

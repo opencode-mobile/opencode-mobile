@@ -141,6 +141,7 @@ private fun ListItemStartDecoration(decorator: StartDecorator, enabled: Boolean)
         tint = tint,
       )
     }
+    is StartDecorator.None -> Unit
   }
 }
 

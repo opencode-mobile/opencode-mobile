@@ -1,0 +1,380 @@
+openapi: 3.1.0
+info:
+  title: opencode sessions
+  description: Sessions API subset for opencode-mobile (maintained until /doc includes session paths).
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:4096
+paths:
+  /session:
+    get:
+      operationId: listSessions
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+    post:
+      operationId: createSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "200":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /session/status:
+    get:
+      operationId: getAllSessionStatuses
+      responses:
+        "200":
+          description: Status map
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/SessionStatus"
+  /session/{id}:
+    get:
+      operationId: getSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    patch:
+      operationId: updateSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionRequest"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    delete:
+      operationId: deleteSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /session/{id}/children:
+    get:
+      operationId: listChildSessions
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Child sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+  /session/{id}/todo:
+    get:
+      operationId: listSessionTodos
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Todos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Todo"
+  /session/{id}/init:
+    post:
+      operationId: initializeSessionAgents
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitSessionRequest"
+      responses:
+        "200":
+          description: Initialized
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /session/{id}/fork:
+    post:
+      operationId: forkSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForkSessionRequest"
+      responses:
+        "200":
+          description: Forked session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /session/{id}/abort:
+    post:
+      operationId: abortSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Aborted
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /session/{id}/share:
+    post:
+      operationId: shareSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Shared session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    delete:
+      operationId: unshareSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Unshared session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /session/{id}/diff:
+    get:
+      operationId: getSessionDiff
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: messageID
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File diffs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileDiff"
+  /session/{id}/summarize:
+    post:
+      operationId: summarizeSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SummarizeSessionRequest"
+      responses:
+        "200":
+          description: Summarized
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /session/{id}/revert:
+    post:
+      operationId: revertSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevertSessionRequest"
+      responses:
+        "200":
+          description: Reverted
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /session/{id}/unrevert:
+    post:
+      operationId: unrevertSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Unreverted
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /session/{id}/permissions/{permissionID}:
+    post:
+      operationId: respondToPermission
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: permissionID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PermissionResponseRequest"
+      responses:
+        "200":
+          description: Response recorded
+          content:
+            application/json:
+              schema:
+                type: boolean
+components:
+  parameters:
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Session:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        projectID:
+          type: string
+        directory:
+          type: string
+        parentID:
+          type: string
+        title:
+          type: string
+        version:
+          type: string
+        summary:
+          $ref: "#/components/schemas/SessionSummary"
+        time:
+          $ref: "#/components/schemas/SessionTime"
+    SessionSummary:
+      type: object
+      properties:
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        files:
+          type: integer
+    SessionTime:
+      type: object
+      properties:
+        created:
+          type: integer
+          format: int64
+        updated:
+          type: integer
+          format: int64
+    SessionStatus:
+      type: object
+      additionalProperties: true
+    Todo:
+      type: object
+      additionalProperties: true
+    FileDiff:
+      type: object
+      additionalProperties: true
+    CreateSessionRequest:
+      type: object
+      properties:
+        parentID:
+          type: string
+        title:
+          type: string
+    UpdateSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+    ForkSessionRequest:
+      type: object
+      properties:
+        messageID:
+          type: string
+    InitSessionRequest:
+      type: object
+      required: [messageID, providerID, modelID]
+      properties:
+        messageID:
+          type: string
+        providerID:
+          type: string
+        modelID:
+          type: string
+    SummarizeSessionRequest:
+      type: object
+      required: [providerID, modelID]
+      properties:
+        providerID:
+          type: string
+        modelID:
+          type: string
+    RevertSessionRequest:
+      type: object
+      required: [messageID]
+      properties:
+        messageID:
+          type: string
+        partID:
+          type: string
+    PermissionResponseRequest:
+      type: object
+      required: [response]
+      properties:
+        response:
+          type: string
+          enum: [approve, deny, once]

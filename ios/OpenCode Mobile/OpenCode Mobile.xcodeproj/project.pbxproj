@@ -112,6 +112,7 @@
 			);
 			name = "OpenCode Mobile";
 			packageProductDependencies = (
+				63OC00022FA93400002BDFFC /* Factory */,
 			);
 			productName = "OpenCode Mobile";
 			productReference = 63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */;
@@ -135,6 +136,7 @@
 			);
 			name = "OpenCode MobileTests";
 			packageProductDependencies = (
+				63OC00022FA93400002BDFFC /* Factory */,
 			);
 			productName = "OpenCode MobileTests";
 			productReference = 63369C1E2FA933AF002BDFFC /* OpenCode MobileTests.xctest */;
@@ -198,6 +200,9 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 63369C102FA933AE002BDFFC /* Products */;
 			projectDirPath = "";
+			packageReferences = (
+				63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */,
+			);
 			projectRoot = "";
 			targets = (
 				63369C0E2FA933AE002BDFFC /* OpenCode Mobile */,
@@ -403,6 +408,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
@@ -436,6 +442,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
@@ -582,6 +589,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hmlongco/Factory";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.3;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		63OC00022FA93400002BDFFC /* Factory */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */;
+			productName = Factory;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 63369C072FA933AE002BDFFC /* Project object */;
 }

@@ -4,8 +4,11 @@
 sessions from native iOS and Android apps.
 
 The project documents product scope, feasibility, and native app architecture.
-App shells exist under `android/` and `ios/OpenCode Mobile/`. Broad feature UI,
-OpenAPI client generation, and release processes are not started yet.
+App shells exist under `android/` and `ios/OpenCode Mobile/`. Session list home
+loads real sessions via **Session Repository** (hand-written HTTP clients; see
+`docs/features/session-repository/`). OpenAPI fetch tooling and a maintained
+sessions spec exist; full `/doc` codegen is not wired into app builds yet.
+Release processes are not started.
 
 ## Bounded Context
 
@@ -54,6 +57,15 @@ A conversation and work stream managed by opencode for the current project.
 The mobile client can list sessions, create sessions, rename sessions, delete
 sessions, fork sessions, inspect their messages, send prompts, abort active
 work, review diffs, and respond to permission requests.
+
+### Session Repository
+
+The mobile integration layer that performs session lifecycle operations against
+the opencode server (list, create, update, delete, fork, status, abort, diff,
+permissions, and related session-scoped controls).
+
+Distinct from a **session**: the repository is app infrastructure; the session
+is the server-managed conversation for the current project.
 
 ### message
 

@@ -5,12 +5,13 @@
 //  Created by Ivan Fenenko on 04.05.26.
 //
 
+import Factory
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
         NavigationStack {
-            ProjectListHomeView()
+            ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
         }
     }
 }
