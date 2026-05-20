@@ -101,7 +101,9 @@ states, variants, or platforms.
 ### List item container
 
 The outer list-row surface (`OpenCodeListItem`) uses one shared corner radius on
-iOS and Android.
+iOS and Android. **`plain`** unselected rows use `color.background.primary`;
+**`card`** unselected rows use `color.surface.primary` plus a **1px** stroke from
+`color.border.subtle`. Selected rows in either style use `color.surface.secondary`.
 
 | Token | Value |
 | --- | --- |

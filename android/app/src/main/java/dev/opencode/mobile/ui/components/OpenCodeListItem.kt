@@ -36,19 +36,30 @@ private val ListItemStartDecoratorSize = 24.dp
 private val ListItemLetterBadgeCornerRadius = 4.dp
 private val ListItemCornerRadius = 8.dp
 
+enum class OpenCodeListItemStyle {
+  Plain,
+  Card,
+}
+
 @Composable
 fun OpenCodeListItem(
   title: String,
   subtitle: String? = null,
   selected: Boolean = false,
   enabled: Boolean = true,
+  style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
   startDecorator: StartDecorator = StartDecorator.None,
   onClick: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
   trailing: (@Composable () -> Unit)? = null,
 ) {
   val containerColor =
-    if (selected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+    when {
+      style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
+      style == OpenCodeListItemStyle.Card -> MaterialTheme.colorScheme.surface
+      selected -> MaterialTheme.colorScheme.surfaceVariant
+      else -> MaterialTheme.colorScheme.background
+    }
   val contentColor =
     if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -64,7 +75,12 @@ fun OpenCodeListItem(
     shape = RoundedCornerShape(ListItemCornerRadius),
     color = containerColor,
     contentColor = contentColor,
-    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    border =
+      if (style == OpenCodeListItemStyle.Card) {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+      } else {
+        null
+      },
   ) {
     Row(
       modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -189,6 +205,18 @@ private fun OpenCodeListItemDisabledPreview() {
       subtitle = "Unavailable",
       enabled = false,
       startDecorator = StartDecorator.Letter('x', LetterAccent.Teal),
+    )
+  }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeListItemCardPreview() {
+  OpenCodeTheme(darkTheme = false) {
+    OpenCodeListItem(
+      title = "Card style with border",
+      subtitle = "http://127.0.0.1:4096/",
+      style = OpenCodeListItemStyle.Card,
     )
   }
 }

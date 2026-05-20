@@ -19,19 +19,13 @@ private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
 struct ListItemGalleryView: View {
     @State private var selected = false
     @State private var enabled = true
+    @State private var cardStyle = false
     @State private var subtitleVisible = true
     @State private var decoratorKind: GalleryDecoratorKind = .none
     @State private var letterAccent: LetterAccent = .violet
 
     private var subtitle: String? {
-        switch (subtitleVisible, enabled) {
-        case (false, _):
-            nil
-        case (true, false):
-            "Unavailable"
-        case (true, true):
-            "http://127.0.0.1:4096/"
-        }
+        subtitleVisible ? "http://127.0.0.1:4096/" : nil
     }
 
     private var startDecorator: StartDecorator {
@@ -54,11 +48,26 @@ struct ListItemGalleryView: View {
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(label: "Selected", selected: selected, action: { selected.toggle() })
                     OpenCodeChoiceBadge(label: "Enabled", selected: enabled, action: { enabled.toggle() })
-                    OpenCodeChoiceBadge(
-                        label: "Subtitle",
-                        selected: subtitleVisible,
-                        action: { subtitleVisible.toggle() }
-                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Subtitle")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textPrimary)
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(label: "On", selected: subtitleVisible, action: { subtitleVisible = true })
+                    OpenCodeChoiceBadge(label: "Off", selected: !subtitleVisible, action: { subtitleVisible = false })
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Style")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textPrimary)
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(label: "Plain", selected: !cardStyle, action: { cardStyle = false })
+                    OpenCodeChoiceBadge(label: "Card", selected: cardStyle, action: { cardStyle = true })
                 }
             }
 
@@ -101,6 +110,7 @@ struct ListItemGalleryView: View {
                 subtitle: subtitle,
                 selected: selected,
                 enabled: enabled,
+                style: cardStyle ? .card : .plain,
                 startDecorator: startDecorator
             )
         }

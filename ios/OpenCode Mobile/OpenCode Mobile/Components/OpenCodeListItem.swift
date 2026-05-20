@@ -2,11 +2,17 @@ import SwiftUI
 
 private let listItemCornerRadius: CGFloat = 8
 
+enum OpenCodeListItemStyle {
+    case plain
+    case card
+}
+
 struct OpenCodeListItem<Trailing: View>: View {
     let title: String
     let subtitle: String?
     let selected: Bool
     let enabled: Bool
+    let style: OpenCodeListItemStyle
     let startDecorator: StartDecorator
     let action: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
@@ -16,6 +22,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         subtitle: String? = nil,
         selected: Bool = false,
         enabled: Bool = true,
+        style: OpenCodeListItemStyle = .plain,
         startDecorator: StartDecorator = .none,
         action: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
@@ -24,6 +31,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.subtitle = subtitle
         self.selected = selected
         self.enabled = enabled
+        self.style = style
         self.startDecorator = startDecorator
         self.action = action
         self.trailing = trailing
@@ -68,13 +76,26 @@ struct OpenCodeListItem<Trailing: View>: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(selected ? OpenCodeColors.surfaceSecondary : OpenCodeColors.surfacePrimary)
-        .overlay(
-            RoundedRectangle(cornerRadius: listItemCornerRadius)
-                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
-        )
+        .background(containerBackground)
+        .overlay {
+            if style == .card {
+                RoundedRectangle(cornerRadius: listItemCornerRadius)
+                    .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: listItemCornerRadius))
         .opacity(enabled ? 1 : 0.7)
+    }
+
+    private var containerBackground: Color {
+        switch (style, selected) {
+        case (.plain, false):
+            OpenCodeColors.backgroundPrimary
+        case (.plain, true), (.card, true):
+            OpenCodeColors.surfaceSecondary
+        case (.card, false):
+            OpenCodeColors.surfacePrimary
+        }
     }
 
     @ViewBuilder
@@ -126,6 +147,11 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
             title: "Letter violet",
             subtitle: "Badge",
             startDecorator: .letter(Character("m"), .violet)
+        )
+        OpenCodeListItem(
+            title: "Card style with border",
+            subtitle: "http://127.0.0.1:4096/",
+            style: .card
         )
     }
     .padding(16)
