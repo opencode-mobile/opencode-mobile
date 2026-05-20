@@ -5,9 +5,11 @@ sessions from native iOS and Android apps.
 
 The project documents product scope, feasibility, and native app architecture.
 App shells exist under `android/` and `ios/OpenCode Mobile/`. Session list home
-loads real sessions via **Session Repository** (hand-written HTTP clients; see
-`docs/features/session-repository/`). OpenAPI fetch tooling and a maintained
-sessions spec exist; full `/doc` codegen is not wired into app builds yet.
+loads real sessions via **Session Repository**; Session Chat loads messages and
+sends async prompts via **Message Repository** (hand-written HTTP clients; see
+`docs/features/session-repository/` and `docs/features/message-repository/`).
+OpenAPI fetch tooling and maintained sessions/messages specs exist; full `/doc`
+codegen is not wired into app builds yet.
 Release processes are not started.
 
 ## Bounded Context
@@ -66,6 +68,14 @@ permissions, and related session-scoped controls).
 
 Distinct from a **session**: the repository is app infrastructure; the session
 is the server-managed conversation for the current project.
+
+### Message Repository
+
+The mobile integration layer that reads and sends **messages** for a session
+(list, get one, sync send, and asynchronous prompt send).
+
+Distinct from a **message**: the repository is app infrastructure; a message is
+a single item in a session timeline.
 
 ### message
 

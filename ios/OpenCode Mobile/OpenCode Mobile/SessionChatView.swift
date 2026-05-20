@@ -1,10 +1,5 @@
+import Factory
 import SwiftUI
-
-private enum SessionChatPickers {
-    static let models = ["DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet"]
-    static let modes = ["Build", "Plan"]
-    static let thinkingEfforts = ["Default", "Low", "Medium", "High"]
-}
 
 private enum ComposerPickerKind {
     case model
@@ -25,14 +20,20 @@ private enum ComposerPickerKind {
 
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
-    let session: SessionListItem
-    @State private var state: SessionChatScreenState
+    @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
 
-    init(session: SessionListItem) {
+    init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
-        _state = State(initialValue: SessionChatScreenState.initial(session: session))
+        _viewModel = State(
+            initialValue: viewModel ?? Container.makeSessionChatViewModel(
+                sessionID: session.id,
+                sessionTitle: session.title
+            )
+        )
     }
+
+    private let session: SessionListItem
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,32 +43,14 @@ struct SessionChatView: View {
                 showDivider: true
             )
 
-            Text("Session ID: \(state.sessionId)")
+            Text("Session ID: \(viewModel.state.sessionID)")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(state.messages) { message in
-                        HStack {
-                            if message.role == .assistant {
-                                messageText(message)
-                                Spacer(minLength: 0)
-                            } else {
-                                Spacer(minLength: 0)
-                                messageText(message)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
+            timeline
             composer
         }
         .background(OpenCodeColors.backgroundPrimary)
@@ -77,67 +60,113 @@ struct SessionChatView: View {
             content: { pickerSheetEntries },
         )
         .toolbar(.hidden, for: .navigationBar)
-    }
-
-    private var pickerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { activePicker != nil },
-            set: { presented in
-                if !presented { activePicker = nil }
-            },
-        )
+        .task {
+            await viewModel.loadMessages()
+        }
     }
 
     @ViewBuilder
-    private var pickerSheetEntries: some View {
-        switch activePicker {
-        case .model:
-            ForEach(SessionChatPickers.models, id: \.self) { model in
-                OpenCodeBottomSheetEntry(
-                    title: model,
-                    endDecorator: model == state.selectedModel
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        state.selectModel(model)
-                        activePicker = nil
-                    },
-                )
+    private var timeline: some View {
+        switch viewModel.state {
+        case .loading:
+            Spacer()
+            ProgressView()
+            Spacer()
+        case .empty:
+            Spacer()
+            Text("No messages yet. Send a prompt to start.")
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textSecondary)
+                .padding(.horizontal, 16)
+            Spacer()
+        case let .error(_, _, message, _):
+            Spacer()
+            Text(message)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textSecondary)
+                .padding(.horizontal, 16)
+            Spacer()
+        case let .loaded(_, _, messages, _, _, isRefreshing, errorBanner):
+            VStack(spacing: 0) {
+                if let errorBanner {
+                    Text(errorBanner)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 4)
+                }
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(messages) { message in
+                            HStack {
+                                if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                                    messageRow(message)
+                                    Spacer(minLength: 0)
+                                } else {
+                                    Spacer(minLength: 0)
+                                    messageRow(message)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .refreshable {
+                    await viewModel.refreshMessages()
+                }
+                .overlay {
+                    if isRefreshing {
+                        ProgressView()
+                    }
+                }
             }
-        case .mode:
-            ForEach(SessionChatPickers.modes, id: \.self) { mode in
-                OpenCodeBottomSheetEntry(
-                    title: mode,
-                    endDecorator: mode == state.selectedMode
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        state.selectMode(mode)
-                        activePicker = nil
-                    },
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func messageRow(_ message: SessionChatRow) -> some View {
+        switch message.role {
+        case .user:
+            OpenCodeOutgoingMessage(
+                text: message.text,
+                metadataLabel: message.metadataLabel,
+                onRestoreClick: { viewModel.restoreComposerText(message.text) }
+            )
+        case .assistant:
+            Text(message.text.isEmpty ? "…" : message.text)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
                 )
-            }
-        case .thinking:
-            ForEach(SessionChatPickers.thinkingEfforts, id: \.self) { level in
-                OpenCodeBottomSheetEntry(
-                    title: level,
-                    endDecorator: level == state.selectedThinkingEffort
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        state.selectThinkingEffort(level)
-                        activePicker = nil
-                    },
-                )
-            }
-        case .none:
-            EmptyView()
+        case .command, .tool, .unknown:
+            Text("\(message.role.displayLabel): \(message.text.isEmpty ? "…" : message.text)")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textSecondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Ask anything...", text: $state.composerText, axis: .vertical)
+        let composer = viewModel.state.composer
+        let isSending: Bool = {
+            if case let .loaded(_, _, _, _, isSending, _, _) = viewModel.state {
+                return isSending
+            }
+            return false
+        }()
+
+        return VStack(alignment: .leading, spacing: 10) {
+            TextField("Ask anything...", text: composerTextBinding, axis: .vertical)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textPrimary)
                 .padding(.horizontal, 4)
@@ -145,13 +174,13 @@ struct SessionChatView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: state.selectedModel, selected: false) {
+                    OpenCodeChoiceBadge(label: composer.selectedModel, selected: false) {
                         activePicker = .model
                     }
-                    OpenCodeChoiceBadge(label: state.selectedMode, selected: false) {
+                    OpenCodeChoiceBadge(label: composer.selectedMode, selected: false) {
                         activePicker = .mode
                     }
-                    OpenCodeChoiceBadge(label: state.selectedThinkingEffort, selected: false) {
+                    OpenCodeChoiceBadge(label: composer.selectedThinkingEffort, selected: false) {
                         activePicker = .thinking
                     }
                 }
@@ -161,17 +190,16 @@ struct SessionChatView: View {
                 OpenCodeButton(
                     variant: .iconCircle(.add, accessibilityLabel: "Attach context"),
                     contrast: .low
-                ) {
-                }
+                ) {}
 
                 Spacer(minLength: 0)
 
                 OpenCodeButton(
                     variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
-                    enabled: state.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                    enabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending,
                     contrast: .low
                 ) {
-                    sendPrompt()
+                    Task { await viewModel.sendPrompt() }
                 }
             }
         }
@@ -186,113 +214,67 @@ struct SessionChatView: View {
         .padding(.bottom, 10)
     }
 
+    private var composerTextBinding: Binding<String> {
+        Binding(
+            get: { viewModel.state.composer.text },
+            set: { viewModel.updateComposerText($0) }
+        )
+    }
+
+    private var pickerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { activePicker != nil },
+            set: { presented in
+                if !presented { activePicker = nil }
+            },
+        )
+    }
+
     @ViewBuilder
-    private func messageText(_ message: SessionChatMessage) -> some View {
-        if message.role == .user {
-            OpenCodeOutgoingMessage(
-                text: message.text,
-                metadataLabel: message.metadataLabel,
-                onRestoreClick: { state.composerText = message.text }
-            )
-        } else {
-            Text("\(message.role.label): \(message.text)")
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+    private var pickerSheetEntries: some View {
+        let composer = viewModel.state.composer
+        switch activePicker {
+        case .model:
+            ForEach(SessionChatPickers.models, id: \.self) { model in
+                OpenCodeBottomSheetEntry(
+                    title: model,
+                    endDecorator: model == composer.selectedModel
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        viewModel.selectModel(model)
+                        activePicker = nil
+                    },
                 )
-        }
-    }
-
-    private func sendPrompt() {
-        let trimmed = state.composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        state.messages.append(
-            SessionChatMessage(
-                role: .user,
-                text: trimmed,
-                mode: state.selectedMode,
-                model: state.selectedModel,
-                sentTime: Self.sentTimeFormatter.string(from: Date())
-            )
-        )
-        state.composerText = ""
-    }
-
-    private static let sentTimeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h:mm a"
-        return formatter
-    }()
-}
-
-private struct SessionChatScreenState {
-    let sessionId: String
-    let sessionTitle: String
-    var messages: [SessionChatMessage]
-    var composerText: String
-    var selectedModel: String
-    var selectedMode: String
-    var selectedThinkingEffort: String
-
-    static func initial(session: SessionListItem) -> SessionChatScreenState {
-        SessionChatScreenState(
-            sessionId: session.id,
-            sessionTitle: session.title,
-            messages: [
-                SessionChatMessage(role: .assistant, text: "Session ready. Enter a prompt to continue.")
-            ],
-            composerText: "",
-            selectedModel: SessionChatPickers.models[0],
-            selectedMode: SessionChatPickers.modes[0],
-            selectedThinkingEffort: SessionChatPickers.thinkingEfforts[0],
-        )
-    }
-
-    mutating func selectModel(_ model: String) {
-        guard SessionChatPickers.models.contains(model) else { return }
-        selectedModel = model
-    }
-
-    mutating func selectMode(_ mode: String) {
-        guard SessionChatPickers.modes.contains(mode) else { return }
-        selectedMode = mode
-    }
-
-    mutating func selectThinkingEffort(_ effort: String) {
-        guard SessionChatPickers.thinkingEfforts.contains(effort) else { return }
-        selectedThinkingEffort = effort
-    }
-}
-
-private struct SessionChatMessage: Identifiable {
-    let id = UUID()
-    let role: SessionChatRole
-    let text: String
-    var mode: String? = nil
-    var model: String? = nil
-    var sentTime: String? = nil
-
-    var metadataLabel: String {
-        [mode, model, sentTime].compactMap { $0 }.joined(separator: " · ")
-    }
-}
-
-private enum SessionChatRole {
-    case user
-    case assistant
-
-    var label: String {
-        switch self {
-        case .user:
-            "You"
-        case .assistant:
-            "Assistant"
+            }
+        case .mode:
+            ForEach(SessionChatPickers.modes, id: \.self) { mode in
+                OpenCodeBottomSheetEntry(
+                    title: mode,
+                    endDecorator: mode == composer.selectedMode
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        viewModel.selectMode(mode)
+                        activePicker = nil
+                    },
+                )
+            }
+        case .thinking:
+            ForEach(SessionChatPickers.thinkingEfforts, id: \.self) { level in
+                OpenCodeBottomSheetEntry(
+                    title: level,
+                    endDecorator: level == composer.selectedThinkingEffort
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        viewModel.selectThinkingEffort(level)
+                        activePicker = nil
+                    },
+                )
+            }
+        case .none:
+            EmptyView()
         }
     }
 }

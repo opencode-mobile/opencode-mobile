@@ -29,6 +29,6 @@
 
 ## Remaining
 
-- MessageRepository slice
 - Connection Profile persistence
+- See [Message Repository](../message-repository/progress.md) for message/prompt work
 - Full `/doc` spec when server publishes session paths

@@ -16,9 +16,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -40,10 +47,6 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import java.util.UUID
 
 private enum class ComposerPickerKind(val sheetTitle: String) {
   Model("Model"),
@@ -51,14 +54,20 @@ private enum class ComposerPickerKind(val sheetTitle: String) {
   Thinking("Thinking level"),
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionChatScreen(
   sessionId: String,
   sessionTitle: String,
   modifier: Modifier = Modifier,
   onNavigateBack: () -> Unit = {},
+  viewModel: SessionChatViewModel = hiltViewModel(key = sessionId),
 ) {
-  var uiState by remember(sessionId, sessionTitle) { mutableStateOf(SessionChatUiState.initial(sessionId, sessionTitle)) }
+  LaunchedEffect(sessionId, sessionTitle) {
+    viewModel.bind(sessionId, sessionTitle)
+  }
+
+  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
 
   Box(modifier = modifier.fillMaxSize()) {
@@ -75,59 +84,78 @@ fun SessionChatScreen(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      LazyColumn(
-        modifier = Modifier.weight(1f).fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        items(uiState.messages, key = { it.id }) { message ->
-          Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = if (message.role == MessageRole.User) Alignment.End else Alignment.Start,
+      uiState.errorMessage?.let { message ->
+        Text(
+          text = message,
+          modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.error,
+        )
+      }
+
+      when (uiState.timeline) {
+        TimelineState.Loading ->
+          Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
           ) {
-            if (message.role == MessageRole.User) {
-              OpenCodeOutgoingMessage(
-                text = message.text,
-                metadataLabel = message.metadataLabel,
-                onRestoreClick = { uiState = uiState.copy(composerText = message.text) },
-                modifier = Modifier.fillMaxWidth(),
-              )
-            } else {
-              Text(
-                text = "${message.role.label}: ${message.text}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
+            CircularProgressIndicator()
+          }
+        TimelineState.Error ->
+          Box(
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
+            contentAlignment = Alignment.Center,
+          ) {
+            Text(
+              text = uiState.errorMessage ?: "Unable to load messages",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+          }
+        TimelineState.Empty ->
+          Box(
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
+            contentAlignment = Alignment.Center,
+          ) {
+            Text(
+              text = "No messages yet. Send a prompt to start.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+        TimelineState.Ready ->
+          PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refreshMessages() },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+          ) {
+            LazyColumn(
+              modifier = Modifier.fillMaxSize(),
+              contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              items(uiState.messages, key = { it.id }) { message ->
+                MessageRow(
+                  message = message,
+                  onRestoreClick = { viewModel.restoreComposerText(message.text) },
+                )
+              }
             }
           }
-        }
       }
 
       SessionComposer(
-        state = uiState,
-        onTextChange = { nextValue -> uiState = uiState.copy(composerText = nextValue) },
+        composerText = uiState.composerText,
+        selectedModel = uiState.selectedModel,
+        selectedMode = uiState.selectedMode,
+        selectedThinkingEffort = uiState.selectedThinkingEffort,
+        sendEnabled = uiState.composerText.isNotBlank() && !uiState.isSending,
+        onTextChange = viewModel::updateComposerText,
         onModelClick = { activePicker = ComposerPickerKind.Model },
         onModeClick = { activePicker = ComposerPickerKind.Mode },
         onThinkingEffortClick = { activePicker = ComposerPickerKind.Thinking },
         onAttachClick = {},
-        onSendClick = {
-          val prompt = uiState.composerText.trim()
-          if (prompt.isEmpty()) return@SessionComposer
-          uiState =
-            uiState.copy(
-              composerText = "",
-              messages =
-                uiState.messages +
-                  SessionChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = MessageRole.User,
-                    text = prompt,
-                    mode = uiState.selectedMode,
-                    model = uiState.selectedModel,
-                    sentTime = formatSentTime(LocalTime.now()),
-                  ),
-            )
-        },
+        onSendClick = viewModel::sendPrompt,
       )
     }
 
@@ -138,7 +166,7 @@ fun SessionChatScreen(
     ) {
       when (activePicker) {
         ComposerPickerKind.Model ->
-          AvailableModels.forEach { model ->
+          SessionChatViewModel.AvailableModels.forEach { model ->
             OpenCodeBottomSheetEntry(
               title = model,
               endDecorator =
@@ -148,15 +176,13 @@ fun SessionChatScreen(
                   BottomSheetEntryDecorator.None
                 },
               onClick = {
-                if (AvailableModels.contains(model)) {
-                  uiState = uiState.copy(selectedModel = model)
-                }
+                viewModel.selectModel(model)
                 activePicker = null
               },
             )
           }
         ComposerPickerKind.Mode ->
-          AvailableModes.forEach { mode ->
+          SessionChatViewModel.AvailableModes.forEach { mode ->
             OpenCodeBottomSheetEntry(
               title = mode,
               endDecorator =
@@ -166,15 +192,13 @@ fun SessionChatScreen(
                   BottomSheetEntryDecorator.None
                 },
               onClick = {
-                if (AvailableModes.contains(mode)) {
-                  uiState = uiState.copy(selectedMode = mode)
-                }
+                viewModel.selectMode(mode)
                 activePicker = null
               },
             )
           }
         ComposerPickerKind.Thinking ->
-          AvailableThinkingEfforts.forEach { effort ->
+          SessionChatViewModel.AvailableThinkingEfforts.forEach { effort ->
             OpenCodeBottomSheetEntry(
               title = effort,
               endDecorator =
@@ -184,9 +208,7 @@ fun SessionChatScreen(
                   BottomSheetEntryDecorator.None
                 },
               onClick = {
-                if (AvailableThinkingEfforts.contains(effort)) {
-                  uiState = uiState.copy(selectedThinkingEffort = effort)
-                }
+                viewModel.selectThinkingEffort(effort)
                 activePicker = null
               },
             )
@@ -198,8 +220,76 @@ fun SessionChatScreen(
 }
 
 @Composable
+private fun MessageRow(
+  message: SessionChatMessageItem,
+  onRestoreClick: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(
+    modifier = modifier.fillMaxWidth(),
+    horizontalAlignment =
+      if (message.role == MessageRole.User) {
+        Alignment.End
+      } else {
+        Alignment.Start
+      },
+  ) {
+    when (message.role) {
+      MessageRole.User ->
+        OpenCodeOutgoingMessage(
+          text = message.text,
+          metadataLabel = message.metadataLabel,
+          onRestoreClick = onRestoreClick,
+          modifier = Modifier.fillMaxWidth(),
+        )
+      MessageRole.Assistant ->
+        AssistantMessageBubble(text = message.text)
+      MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
+        FallbackMessageBubble(roleLabel = message.role.displayLabel(), text = message.text)
+    }
+  }
+}
+
+@Composable
+private fun AssistantMessageBubble(text: String, modifier: Modifier = Modifier) {
+  Text(
+    text = text.ifBlank { "…" },
+    modifier =
+      modifier
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+        .padding(horizontal = 12.dp, vertical = 8.dp),
+    style = MaterialTheme.typography.bodyMedium,
+    color = MaterialTheme.colorScheme.onSurface,
+  )
+}
+
+@Composable
+private fun FallbackMessageBubble(
+  roleLabel: String,
+  text: String,
+  modifier: Modifier = Modifier,
+) {
+  Text(
+    text = "$roleLabel: ${text.ifBlank { "…" }}",
+    modifier =
+      modifier
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+        .padding(horizontal = 12.dp, vertical = 8.dp),
+    style = MaterialTheme.typography.bodySmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+  )
+}
+
+@Composable
 private fun SessionComposer(
-  state: SessionChatUiState,
+  composerText: String,
+  selectedModel: String,
+  selectedMode: String,
+  selectedThinkingEffort: String,
+  sendEnabled: Boolean,
   onTextChange: (String) -> Unit,
   onModelClick: () -> Unit,
   onModeClick: () -> Unit,
@@ -218,14 +308,14 @@ private fun SessionComposer(
     verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     BasicTextField(
-      value = state.composerText,
+      value = composerText,
       onValueChange = onTextChange,
       textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
       cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
       modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
       decorationBox = { innerTextField ->
         Box {
-          if (state.composerText.isBlank()) {
+          if (composerText.isBlank()) {
             Text(
               text = "Ask anything...",
               style = MaterialTheme.typography.bodyLarge,
@@ -242,9 +332,9 @@ private fun SessionComposer(
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      OpenCodeChoiceBadge(label = state.selectedModel, selected = false, onClick = onModelClick)
-      OpenCodeChoiceBadge(label = state.selectedMode, selected = false, onClick = onModeClick)
-      OpenCodeChoiceBadge(label = state.selectedThinkingEffort, selected = false, onClick = onThinkingEffortClick)
+      OpenCodeChoiceBadge(label = selectedModel, selected = false, onClick = onModelClick)
+      OpenCodeChoiceBadge(label = selectedMode, selected = false, onClick = onModeClick)
+      OpenCodeChoiceBadge(label = selectedThinkingEffort, selected = false, onClick = onThinkingEffortClick)
     }
 
     Row(
@@ -259,63 +349,13 @@ private fun SessionComposer(
       )
       OpenCodeButton(
         variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
-        enabled = state.composerText.isNotBlank(),
+        enabled = sendEnabled,
         contrast = OpenCodeButtonContrast.Low,
         onClick = onSendClick,
       )
     }
   }
 }
-
-private data class SessionChatUiState(
-  val sessionId: String,
-  val sessionTitle: String,
-  val messages: List<SessionChatMessage>,
-  val composerText: String,
-  val selectedModel: String,
-  val selectedMode: String,
-  val selectedThinkingEffort: String,
-) {
-  companion object {
-    fun initial(sessionId: String, sessionTitle: String): SessionChatUiState =
-      SessionChatUiState(
-        sessionId = sessionId,
-        sessionTitle = sessionTitle,
-        messages =
-          listOf(
-            SessionChatMessage(id = "assistant-1", role = MessageRole.Assistant, text = "Session ready. Enter a prompt to continue."),
-          ),
-        composerText = "",
-        selectedModel = AvailableModels.first(),
-        selectedMode = AvailableModes.first(),
-        selectedThinkingEffort = AvailableThinkingEfforts.first(),
-      )
-  }
-}
-
-private data class SessionChatMessage(
-  val id: String,
-  val role: MessageRole,
-  val text: String,
-  val mode: String? = null,
-  val model: String? = null,
-  val sentTime: String? = null,
-) {
-  val metadataLabel: String
-    get() = listOfNotNull(mode, model, sentTime).joinToString(" · ")
-}
-
-private enum class MessageRole(val label: String) {
-  User("You"),
-  Assistant("Assistant"),
-}
-
-private val AvailableModels = listOf("DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet")
-private val AvailableModes = listOf("Build", "Plan")
-private val AvailableThinkingEfforts = listOf("Default", "Low", "Medium", "High")
-private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-
-private fun formatSentTime(time: LocalTime): String = time.format(SentTimeFormatter)
 
 @Preview(showBackground = true)
 @Composable

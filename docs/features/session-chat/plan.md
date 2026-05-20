@@ -16,8 +16,13 @@ Chat screen with visible messages and a composer ready for new prompts.
 
 ## Out Of Scope
 
-- Real server-backed message history.
-- Real prompt delivery, SSE streaming, and reconnect behavior.
+- SSE streaming and reconnect behavior (see Message Repository + future event stream slices).
+- Server-backed composer option mapping (see [Message Repository](../message-repository/plan.md)).
+
+## Delivered via Message Repository slice
+
+- Real server-backed message history and async prompt send are implemented in
+  [Message Repository](../message-repository/plan.md) and wired into Session Chat.
 - Abort, permission request, and diff interactions.
 - Real attachment handling or mobile file upload.
 

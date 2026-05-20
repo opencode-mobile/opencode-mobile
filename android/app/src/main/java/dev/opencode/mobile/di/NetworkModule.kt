@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.network.ServerConnection
 import io.ktor.client.HttpClient
@@ -62,4 +63,8 @@ object NetworkModule {
   @Provides
   @Singleton
   fun provideSessionsApi(httpClient: HttpClient): SessionsApi = SessionsApi(httpClient)
+
+  @Provides
+  @Singleton
+  fun provideMessagesApi(httpClient: HttpClient): MessagesApi = MessagesApi(httpClient)
 }

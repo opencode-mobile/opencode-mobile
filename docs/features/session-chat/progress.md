@@ -50,6 +50,5 @@
 
 ## Remaining Work
 
-- Replace local messages with server-backed history.
-- Connect composer send to real prompt API.
+- Server-backed history and async send: see [Message Repository](../message-repository/progress.md).
 - Add stream updates, abort behavior, and permission request handling.

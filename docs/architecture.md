@@ -80,8 +80,8 @@ Use platform DI frameworks so UI and Screen Models do not construct repositories
 inline.
 
 - **Android:** Dagger Hilt — `@HiltAndroidApp`, feature modules (`NetworkModule`,
-  `SessionModule`), `@HiltViewModel` for Screen Models, `hiltViewModel()` in
-  Compose.
+  `SessionModule`, `MessageModule`), `@HiltViewModel` for Screen Models,
+  `hiltViewModel()` in Compose.
 - **iOS:** Factory — `AppContainer` registers `ServerConnection`, API clients,
   adapters, and repository implementations; views resolve ViewModels from the
   container.
