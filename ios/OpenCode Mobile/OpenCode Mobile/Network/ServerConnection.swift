@@ -20,9 +20,10 @@ struct ServerConnection: Sendable {
         )
     }
 
-    func authorizedRequest(path: String, method: String = "GET") -> URLRequest {
+    func authorizedRequest(path: String, method: String = "GET", directory: String? = nil) -> URLRequest {
         let normalizedPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        var request = URLRequest(url: apiBaseURL.appendingPathComponent(normalizedPath))
+        let url = apiBaseURL.appendingPathComponent(normalizedPath).appendingDirectoryQuery(directory)
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let password, !password.isEmpty {

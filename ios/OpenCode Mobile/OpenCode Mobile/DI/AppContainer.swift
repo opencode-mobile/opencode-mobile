@@ -14,6 +14,27 @@ extension Container {
         self { SessionDomainAdapter() }.singleton
     }
 
+    var projectsAPIClient: Factory<ProjectsAPIClient> {
+        self { ProjectsAPIClient(connection: self.serverConnection()) }.singleton
+    }
+
+    var projectDomainAdapter: Factory<ProjectDomainAdapter> {
+        self { ProjectDomainAdapter() }.singleton
+    }
+
+    var projectRepository: Factory<any ProjectRepository> {
+        self {
+            DefaultProjectRepository(
+                api: self.projectsAPIClient(),
+                adapter: self.projectDomainAdapter()
+            )
+        }.singleton
+    }
+
+    var connectionProfileStore: Factory<any ConnectionProfileStore> {
+        self { UserDefaultsConnectionProfileStore() }.singleton
+    }
+
     var sessionRepository: Factory<any SessionRepository> {
         self {
             DefaultSessionRepository(
@@ -42,15 +63,20 @@ extension Container {
 
     var projectListHomeViewModel: Factory<ProjectListHomeViewModel> {
         self { @MainActor in
-            ProjectListHomeViewModel(sessionRepository: self.sessionRepository())
+            ProjectListHomeViewModel(
+                projectRepository: self.projectRepository(),
+                sessionRepository: self.sessionRepository(),
+                connectionProfileStore: self.connectionProfileStore()
+            )
         }
     }
 
-    var sessionChatViewModel: ParameterFactory<(sessionID: String, sessionTitle: String), SessionChatViewModel> {
+    var sessionChatViewModel: ParameterFactory<(sessionID: String, sessionTitle: String, worktree: String), SessionChatViewModel> {
         self { @MainActor in
             SessionChatViewModel(
                 sessionID: $0.sessionID,
                 sessionTitle: $0.sessionTitle,
+                worktree: $0.worktree,
                 messageRepository: self.messageRepository()
             )
         }
@@ -64,7 +90,7 @@ extension Container {
     }
 
     @MainActor
-    static func makeSessionChatViewModel(sessionID: String, sessionTitle: String) -> SessionChatViewModel {
-        shared.sessionChatViewModel((sessionID: sessionID, sessionTitle: sessionTitle))
+    static func makeSessionChatViewModel(sessionID: String, sessionTitle: String, worktree: String) -> SessionChatViewModel {
+        shared.sessionChatViewModel((sessionID: sessionID, sessionTitle: sessionTitle, worktree: worktree))
     }
 }

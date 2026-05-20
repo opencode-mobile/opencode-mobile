@@ -168,6 +168,21 @@ requirements and use foreground SSE plus refresh-on-reconnect.
 Manual Connection Profiles are sufficient for v1. QR pairing and mDNS discovery
 can later improve setup, but they are not required for feasibility.
 
+## Multi-Project On One Server
+
+The public `/doc` OpenAPI surface describes a single server boot context
+(`Instance.directory`). In practice, the running server also accepts an
+undocumented `directory` query parameter (absolute worktree path) on session,
+message, and related routes so clients can scope reads and writes to another
+project without changing the boot directory.
+
+Mobile v1 uses that parameter for **added projects** on the home screen: the app
+persists user-curated worktree paths per Connection Profile server URL and sends
+`directory={worktree}` on scoped Session and Message repository calls. Project
+catalog and health calls stay unscoped (`GET /project`, `GET /global/health`).
+There is no `POST /project/switch` or profile-switching API—multi-project UX is
+local curation plus per-request scoping, not server-side project selection.
+
 ## API Client Strategy
 
 Future iOS and Android apps should use the OpenAPI 3.1 spec as the source of

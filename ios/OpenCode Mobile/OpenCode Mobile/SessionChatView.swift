@@ -28,7 +28,8 @@ struct SessionChatView: View {
         _viewModel = State(
             initialValue: viewModel ?? Container.makeSessionChatViewModel(
                 sessionID: session.id,
-                sessionTitle: session.title
+                sessionTitle: session.title,
+                worktree: session.worktree
             )
         )
     }
@@ -281,7 +282,9 @@ struct SessionChatView: View {
 
 #Preview {
     NavigationStack {
-        SessionChatView(session: .init(id: "1", title: "Importing icons explanation"))
+        SessionChatView(
+            session: .init(id: "1", title: "Importing icons explanation", worktree: "/Users/demo/opencode-mobile")
+        )
     }
     .openCodeTheme()
 }

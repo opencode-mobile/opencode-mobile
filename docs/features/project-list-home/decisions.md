@@ -26,6 +26,8 @@
 - Reason: preserve design-system review workflows while end users land on
   session-oriented home.
 - Revisit when: developer-only entry routing strategy is formalized.
+- Update (2026-05-20): home uses the `widgets` catalog icon and label
+  **Developer components**; see [Project Selection decisions](../project-selection/decisions.md).
 
 ## Use fixed selected-project context temporarily
 

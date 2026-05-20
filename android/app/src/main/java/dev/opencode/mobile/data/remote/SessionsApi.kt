@@ -10,6 +10,7 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.network.applyDirectory
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
@@ -23,65 +24,114 @@ import kotlinx.serialization.json.JsonObject
 class SessionsApi(
   private val httpClient: HttpClient,
 ) {
-  suspend fun listSessions(): List<SessionDto> =
-    httpClient.get("session").body()
+  suspend fun listSessions(directory: String? = null): List<SessionDto> =
+    httpClient.get("session") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun createSession(body: CreateSessionRequestDto): SessionDto =
-    httpClient.post("session") { setBody(body) }.body()
+  suspend fun createSession(body: CreateSessionRequestDto, directory: String? = null): SessionDto =
+    httpClient.post("session") {
+      applyDirectory(directory)
+      setBody(body)
+    }.body()
 
-  suspend fun getAllSessionStatuses(): Map<String, JsonObject> =
-    httpClient.get("session/status").body()
+  suspend fun getAllSessionStatuses(directory: String? = null): Map<String, JsonObject> =
+    httpClient.get("session/status") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun getSession(id: String): SessionDto =
-    httpClient.get("session/$id").body()
+  suspend fun getSession(id: String, directory: String? = null): SessionDto =
+    httpClient.get("session/$id") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun updateSession(id: String, body: UpdateSessionRequestDto): SessionDto =
-    httpClient.patch("session/$id") { setBody(body) }.body()
+  suspend fun updateSession(id: String, body: UpdateSessionRequestDto, directory: String? = null): SessionDto =
+    httpClient.patch("session/$id") {
+      applyDirectory(directory)
+      setBody(body)
+    }.body()
 
-  suspend fun deleteSession(id: String): Boolean =
-    httpClient.delete("session/$id").body()
+  suspend fun deleteSession(id: String, directory: String? = null): Boolean =
+    httpClient.delete("session/$id") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun listChildSessions(id: String): List<SessionDto> =
-    httpClient.get("session/$id/children").body()
+  suspend fun listChildSessions(id: String, directory: String? = null): List<SessionDto> =
+    httpClient.get("session/$id/children") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun listSessionTodos(id: String): List<TodoDto> =
-    httpClient.get("session/$id/todo").body()
+  suspend fun listSessionTodos(id: String, directory: String? = null): List<TodoDto> =
+    httpClient.get("session/$id/todo") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun initializeSessionAgents(id: String, body: InitSessionRequestDto): Boolean =
-    httpClient.post("session/$id/init") { setBody(body) }.body()
+  suspend fun initializeSessionAgents(
+    id: String,
+    body: InitSessionRequestDto,
+    directory: String? = null,
+  ): Boolean =
+    httpClient.post("session/$id/init") {
+      applyDirectory(directory)
+      setBody(body)
+    }.body()
 
-  suspend fun forkSession(id: String, body: ForkSessionRequestDto): SessionDto =
-    httpClient.post("session/$id/fork") { setBody(body) }.body()
+  suspend fun forkSession(id: String, body: ForkSessionRequestDto, directory: String? = null): SessionDto =
+    httpClient.post("session/$id/fork") {
+      applyDirectory(directory)
+      setBody(body)
+    }.body()
 
-  suspend fun abortSession(id: String): Boolean =
-    httpClient.post("session/$id/abort").body()
+  suspend fun abortSession(id: String, directory: String? = null): Boolean =
+    httpClient.post("session/$id/abort") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun shareSession(id: String): SessionDto =
-    httpClient.post("session/$id/share").body()
+  suspend fun shareSession(id: String, directory: String? = null): SessionDto =
+    httpClient.post("session/$id/share") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun unshareSession(id: String): SessionDto =
-    httpClient.delete("session/$id/share").body()
+  suspend fun unshareSession(id: String, directory: String? = null): SessionDto =
+    httpClient.delete("session/$id/share") {
+      applyDirectory(directory)
+    }.body()
 
-  suspend fun getSessionDiff(id: String, messageId: String?): List<FileDiffDto> =
+  suspend fun getSessionDiff(id: String, messageId: String?, directory: String? = null): List<FileDiffDto> =
     httpClient.get("session/$id/diff") {
+      applyDirectory(directory)
       messageId?.let { parameter("messageID", it) }
     }.body()
 
-  suspend fun summarizeSession(id: String, body: SummarizeSessionRequestDto): Boolean =
-    httpClient.post("session/$id/summarize") { setBody(body) }.body()
+  suspend fun summarizeSession(
+    id: String,
+    body: SummarizeSessionRequestDto,
+    directory: String? = null,
+  ): Boolean =
+    httpClient.post("session/$id/summarize") {
+      applyDirectory(directory)
+      setBody(body)
+    }.body()
 
-  suspend fun revertSession(id: String, body: RevertSessionRequestDto): Boolean =
-    httpClient.post("session/$id/revert") { setBody(body) }.body()
+  suspend fun revertSession(id: String, body: RevertSessionRequestDto, directory: String? = null): Boolean =
+    httpClient.post("session/$id/revert") {
+      applyDirectory(directory)
+      setBody(body)
+    }.body()
 
-  suspend fun unrevertSession(id: String): Boolean =
-    httpClient.post("session/$id/unrevert").body()
+  suspend fun unrevertSession(id: String, directory: String? = null): Boolean =
+    httpClient.post("session/$id/unrevert") {
+      applyDirectory(directory)
+    }.body()
 
   suspend fun respondToPermission(
     sessionId: String,
     permissionId: String,
     body: PermissionResponseRequestDto,
+    directory: String? = null,
   ): Boolean =
     httpClient.post("session/$sessionId/permissions/$permissionId") {
+      applyDirectory(directory)
       setBody(body)
     }.body()
 }

@@ -5,9 +5,10 @@ sessions from native iOS and Android apps.
 
 The project documents product scope, feasibility, and native app architecture.
 App shells exist under `android/` and `ios/OpenCode Mobile/`. Session list home
-loads real sessions via **Session Repository**; Session Chat loads messages and
-sends async prompts via **Message Repository** (hand-written HTTP clients; see
-`docs/features/session-repository/` and `docs/features/message-repository/`).
+loads curated **added projects** and sessions via **Project Selection**;
+**Session Repository** and **Message Repository** scope calls with `directory`;
+Session Chat sends async prompts (see `docs/features/project-selection/`,
+`docs/features/session-repository/`, `docs/features/message-repository/`).
 OpenAPI fetch tooling and maintained sessions/messages specs exist; full `/doc`
 codegen is not wired into app builds yet.
 Release processes are not started.
@@ -41,16 +42,26 @@ does not provide that transport.
 
 A saved mobile configuration for one reachable opencode server.
 
-A Connection Profile includes the server base URL, authentication fields, and
-the result of a health check. It represents how the mobile client reaches
+A Connection Profile includes the server base URL, authentication fields, the
+result of a health check, and an ordered list of **added project** worktree paths
+the user chose to show on home. It represents how the mobile client reaches
 opencode, not a user account.
+
+### Added project
+
+A development project worktree the user explicitly added to the home list for a
+Connection Profile.
+
+Adding a project is local curation only; it does not create a project on the
+server. The app scopes API calls with that worktree path.
 
 ### current project
 
-The development project currently served by an opencode server.
+The project context the opencode server uses for a request.
 
-The mobile client may display project information returned by the server, but v1
-does not promise project switching or project launching.
+When the mobile client sends `directory={worktree}` on API calls, **current
+project** means that worktree. With no `directory` parameter, it means the
+server process boot worktree (`GET /project/current` without a query).
 
 ### session
 

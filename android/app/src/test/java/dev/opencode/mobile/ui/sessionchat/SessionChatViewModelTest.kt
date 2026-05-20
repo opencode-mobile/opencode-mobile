@@ -33,7 +33,7 @@ class SessionChatViewModelTest {
   @Test
   fun loadMessages_success() = runTest {
     val viewModel = SessionChatViewModel(FakeMessageRepository())
-    viewModel.bind("ses-1", "Title")
+    viewModel.bind("ses-1", "Title", "/repo")
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
@@ -45,7 +45,7 @@ class SessionChatViewModelTest {
   @Test
   fun loadMessages_empty() = runTest {
     val viewModel = SessionChatViewModel(FakeMessageRepository(messages = emptyList()))
-    viewModel.bind("ses-1", "Title")
+    viewModel.bind("ses-1", "Title", "/repo")
     advanceUntilIdle()
 
     assertEquals(TimelineState.Empty, viewModel.uiState.value.timeline)
@@ -54,7 +54,7 @@ class SessionChatViewModelTest {
   @Test
   fun loadMessages_error() = runTest {
     val viewModel = SessionChatViewModel(FakeMessageRepository(shouldFailLoad = true))
-    viewModel.bind("ses-1", "Title")
+    viewModel.bind("ses-1", "Title", "/repo")
     advanceUntilIdle()
 
     assertEquals(TimelineState.Error, viewModel.uiState.value.timeline)
@@ -64,7 +64,7 @@ class SessionChatViewModelTest {
   fun sendPrompt_success_reloadsMessages() = runTest {
     val repository = FakeMessageRepository()
     val viewModel = SessionChatViewModel(repository)
-    viewModel.bind("ses-1", "Title")
+    viewModel.bind("ses-1", "Title", "/repo")
     advanceUntilIdle()
 
     viewModel.updateComposerText("New prompt")
@@ -79,7 +79,7 @@ class SessionChatViewModelTest {
   @Test
   fun sendPrompt_failure_removesOptimisticMessage() = runTest {
     val viewModel = SessionChatViewModel(FakeMessageRepository(shouldFailSend = true))
-    viewModel.bind("ses-1", "Title")
+    viewModel.bind("ses-1", "Title", "/repo")
     advanceUntilIdle()
 
     viewModel.updateComposerText("Fail me")
@@ -105,16 +105,16 @@ private class FakeMessageRepository(
 ) : MessageRepository {
   var sendPromptAsyncCalled: Boolean = false
 
-  override suspend fun listMessages(sessionId: String): List<Message> {
+  override suspend fun listMessages(sessionId: String, directory: String?): List<Message> {
     if (shouldFailLoad) error("load failed")
     return messages
   }
 
-  override suspend fun getMessage(sessionId: String, messageId: String): Message = error("unused")
+  override suspend fun getMessage(sessionId: String, messageId: String, directory: String?): Message = error("unused")
 
-  override suspend fun sendMessage(sessionId: String, text: String): Message = error("unused")
+  override suspend fun sendMessage(sessionId: String, text: String, directory: String?): Message = error("unused")
 
-  override suspend fun sendPromptAsync(sessionId: String, text: String) {
+  override suspend fun sendPromptAsync(sessionId: String, text: String, directory: String?) {
     sendPromptAsyncCalled = true
     if (shouldFailSend) error("send failed")
   }

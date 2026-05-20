@@ -17,6 +17,7 @@ class SessionDomainAdapter {
       projectId = dto.projectId,
       directory = dto.directory,
       parentId = dto.parentId,
+      updatedAtEpochMs = dto.time?.updated,
     )
 
   fun toSessionSummary(session: Session): SessionSummary =

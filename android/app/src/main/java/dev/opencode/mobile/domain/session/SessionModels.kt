@@ -7,6 +7,7 @@ data class Session(
   val projectId: String? = null,
   val directory: String? = null,
   val parentId: String? = null,
+  val updatedAtEpochMs: Long? = null,
 )
 
 data class SessionSummary(

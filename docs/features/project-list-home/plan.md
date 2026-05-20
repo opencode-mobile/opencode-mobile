@@ -1,5 +1,10 @@
 # Session List Home
 
+> **Superseded** by [Project Selection](../project-selection/plan.md) for home
+> behavior: curated added projects, per-worktree session previews, inline health
+> probe, and `directory` query scoping. Session list rows and developer gallery
+> entry remain; project/server header lines are removed.
+
 ## User Goal
 
 Open the app directly into a session list for a selected project so users can

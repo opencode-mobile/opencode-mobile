@@ -63,10 +63,12 @@ enum SessionChatScreenState: Equatable {
 @Observable
 final class SessionChatViewModel {
     private(set) var state: SessionChatScreenState
+    private let worktree: String
     private let messageRepository: any MessageRepository
     private let sentTimeFormatter: DateFormatter
 
-    init(sessionID: String, sessionTitle: String, messageRepository: any MessageRepository) {
+    init(sessionID: String, sessionTitle: String, worktree: String, messageRepository: any MessageRepository) {
+        self.worktree = worktree
         self.messageRepository = messageRepository
         self.state = .loading(
             sessionID: sessionID,
@@ -86,7 +88,7 @@ final class SessionChatViewModel {
         state = .loading(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
 
         do {
-            let messages = try await messageRepository.listMessages(sessionID: sessionID)
+            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
             applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
         } catch {
             applyError(error, sessionID: sessionID)
@@ -111,7 +113,7 @@ final class SessionChatViewModel {
         }
 
         do {
-            let messages = try await messageRepository.listMessages(sessionID: sessionID)
+            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
             applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
         } catch {
             if case let .loaded(_, _, messages, _, _, _, _) = state {
@@ -180,8 +182,8 @@ final class SessionChatViewModel {
         )
 
         do {
-            try await messageRepository.sendPromptAsync(sessionID: sessionID, text: trimmed)
-            let messages = try await messageRepository.listMessages(sessionID: sessionID)
+            try await messageRepository.sendPromptAsync(sessionID: sessionID, text: trimmed, directory: worktree)
+            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
             applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
         } catch {
             if case let .loaded(id, title, messages, composer, _, _, _) = state {

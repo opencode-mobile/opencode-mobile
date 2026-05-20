@@ -8,6 +8,12 @@ struct SessionDTO: Codable, Sendable {
     let directory: String?
     let parentID: String?
     let version: String?
+    let time: SessionTimeDTO?
+}
+
+struct SessionTimeDTO: Codable, Sendable {
+    let created: Int64?
+    let updated: Int64?
 }
 
 struct CreateSessionRequestDTO: Codable, Sendable {

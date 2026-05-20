@@ -1,5 +1,9 @@
 # Sync Probe
 
+> **Note:** Inline `GET /global/health` probing on project home shipped in
+> [Project Selection](../project-selection/plan.md). This slice remains
+> documentation for a standalone probe screen or richer connection UX later.
+
 ## User Goal
 
 Quickly confirm that the mobile app can reach the configured opencode server and

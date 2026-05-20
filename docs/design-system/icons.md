@@ -26,6 +26,19 @@ Each entry maps to:
 Use `OpenCodeIconImage(icon:)` on iOS for template-rendered icons that follow
 `OpenCodeColors.iconDefault` / `iconStrong` tints.
 
+## Product usage
+
+Some catalog icons have a stable product meaning beyond gallery samples:
+
+| Icon | Usage |
+| --- | --- |
+| `widgets` | Home top-bar action that opens the developer-only Component Gallery (`accessibilityLabel`: Developer components) |
+| `add` | **Browse projects** list row on home (start decorator) |
+| `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
+
+Manifest `notes` may mention SF Symbol equivalents; feature decisions live under
+`docs/features/<feature-slug>/decisions.md`.
+
 ## Adding an icon
 
 1. Add an entry to `icons/manifest.yaml` (`name`, `style`, optional `source`, optional `notes`).

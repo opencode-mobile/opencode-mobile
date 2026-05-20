@@ -7,6 +7,7 @@ struct SessionChatViewModelTests {
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
+            worktree: "/repo",
             messageRepository: FakeMessageRepository()
         )
         await viewModel.loadMessages()
@@ -22,6 +23,7 @@ struct SessionChatViewModelTests {
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
+            worktree: "/repo",
             messageRepository: FakeMessageRepository(messages: [])
         )
         await viewModel.loadMessages()
@@ -35,6 +37,7 @@ struct SessionChatViewModelTests {
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
+            worktree: "/repo",
             messageRepository: FakeMessageRepository(shouldFailLoad: true)
         )
         await viewModel.loadMessages()
@@ -49,6 +52,7 @@ struct SessionChatViewModelTests {
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
+            worktree: "/repo",
             messageRepository: repository
         )
         await viewModel.loadMessages()
@@ -67,6 +71,7 @@ struct SessionChatViewModelTests {
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
+            worktree: "/repo",
             messageRepository: FakeMessageRepository(shouldFailSend: true)
         )
         await viewModel.loadMessages()
@@ -99,22 +104,22 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         self.shouldFailSend = shouldFailSend
     }
 
-    func listMessages(sessionID: String) async throws -> [Message] {
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         if shouldFailLoad {
             throw MessageError.transport("load failed")
         }
         return messages
     }
 
-    func getMessage(sessionID: String, messageID: String) async throws -> Message {
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
         fatalError()
     }
 
-    func sendMessage(sessionID: String, text: String) async throws -> Message {
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
         fatalError()
     }
 
-    func sendPromptAsync(sessionID: String, text: String) async throws {
+    func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
         sendPromptAsyncCalled = true
         if shouldFailSend {
             throw MessageError.transport("send failed")

@@ -7,6 +7,7 @@ struct Session: Sendable, Equatable {
     let projectID: String?
     let directory: String?
     let parentID: String?
+    let updatedAtEpochMs: Int64?
 }
 
 struct SessionStatus: Sendable, Equatable {

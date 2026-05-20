@@ -8,12 +8,13 @@ struct SessionDomainAdapter: Sendable {
             slug: dto.slug,
             projectID: dto.projectID,
             directory: dto.directory,
-            parentID: dto.parentID
+            parentID: dto.parentID,
+            updatedAtEpochMs: dto.time?.updated
         )
     }
 
-    func listItem(from session: Session) -> SessionListItem {
-        SessionListItem(id: session.id, title: session.title)
+    func listItem(from session: Session, worktree: String) -> SessionListItem {
+        SessionListItem(id: session.id, title: session.title, worktree: worktree)
     }
 
     func sessionStatus(sessionID: String, raw: [String: String]) -> SessionStatus {

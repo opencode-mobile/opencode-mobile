@@ -1,8 +1,8 @@
 import Foundation
 
 protocol SessionRepository: Sendable {
-    func listSessions() async throws -> [Session]
-    func createSession(parentID: String?, title: String?) async throws -> Session
+    func listSessions(directory: String?) async throws -> [Session]
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
     func getAllSessionStatuses() async throws -> [SessionStatus]
     func getSession(id: String) async throws -> Session
     func updateSession(id: String, title: String?) async throws -> Session
@@ -30,12 +30,14 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         self.adapter = adapter
     }
 
-    func listSessions() async throws -> [Session] {
-        try await run { try await api.listSessions().map(adapter.session) }
+    func listSessions(directory: String?) async throws -> [Session] {
+        try await run { try await api.listSessions(directory: directory).map(adapter.session) }
     }
 
-    func createSession(parentID: String?, title: String?) async throws -> Session {
-        try await run { adapter.session(from: try await api.createSession(parentID: parentID, title: title)) }
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
+        try await run {
+            adapter.session(from: try await api.createSession(parentID: parentID, title: title, directory: directory))
+        }
     }
 
     func getAllSessionStatuses() async throws -> [SessionStatus] {

@@ -30,19 +30,24 @@ constructor(
   val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
 
   private var boundSessionId: String? = null
+  private var boundWorktree: String? = null
 
-  fun bind(sessionId: String, sessionTitle: String) {
-    if (boundSessionId == sessionId && _uiState.value.sessionTitle == sessionTitle) return
+  fun bind(sessionId: String, sessionTitle: String, worktree: String) {
+    if (boundSessionId == sessionId && boundWorktree == worktree && _uiState.value.sessionTitle == sessionTitle) {
+      return
+    }
     boundSessionId = sessionId
+    boundWorktree = worktree
     _uiState.value = SessionChatUiState.initial(sessionId, sessionTitle)
     loadMessages()
   }
 
   fun loadMessages() {
     val sessionId = boundSessionId ?: return
+    val worktree = boundWorktree ?: return
     viewModelScope.launch {
       _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
-      runCatching { messageRepository.listMessages(sessionId) }
+      runCatching { messageRepository.listMessages(sessionId, worktree) }
         .onSuccess { messages -> applyLoadedMessages(messages) }
         .onFailure { throwable -> applyLoadError(throwable) }
     }
@@ -50,9 +55,10 @@ constructor(
 
   fun refreshMessages() {
     val sessionId = boundSessionId ?: return
+    val worktree = boundWorktree ?: return
     viewModelScope.launch {
       _uiState.update { it.copy(isRefreshing = true, errorMessage = null) }
-      runCatching { messageRepository.listMessages(sessionId) }
+      runCatching { messageRepository.listMessages(sessionId, worktree) }
         .onSuccess { messages -> applyLoadedMessages(messages, isRefreshing = false) }
         .onFailure { throwable ->
           _uiState.update {
@@ -93,6 +99,7 @@ constructor(
 
   fun sendPrompt() {
     val sessionId = boundSessionId ?: return
+    val worktree = boundWorktree ?: return
     val prompt = _uiState.value.composerText.trim()
     if (prompt.isEmpty() || _uiState.value.isSending) return
 
@@ -115,9 +122,9 @@ constructor(
           timeline = TimelineState.Ready,
         )
       }
-      runCatching { messageRepository.sendPromptAsync(sessionId, prompt) }
+      runCatching { messageRepository.sendPromptAsync(sessionId, prompt, worktree) }
         .onSuccess {
-          runCatching { messageRepository.listMessages(sessionId) }
+          runCatching { messageRepository.listMessages(sessionId, worktree) }
             .onSuccess { messages ->
               _uiState.update {
                 it.copy(

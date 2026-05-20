@@ -61,7 +61,9 @@ fun MainNavigation() {
             entry<ProjectListHome> {
               MainScreen(
                 onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) },
-                onSessionClick = { session -> backStack.add(SessionChat(session.id, session.title)) },
+                onSessionClick = { target ->
+                  backStack.add(SessionChat(target.sessionId, target.title, target.worktree))
+                },
               )
             }
             entry<ComponentGalleryHome> {
@@ -91,6 +93,7 @@ fun MainNavigation() {
               SessionChatScreen(
                 sessionId = key.sessionId,
                 sessionTitle = key.sessionTitle,
+                worktree = key.worktree,
                 onNavigateBack = { backStack.removeLastOrNull() },
               )
             }

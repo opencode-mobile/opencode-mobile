@@ -36,6 +36,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
       "search" to OpenCodeIcons.Search,
       "stop_circle" to OpenCodeIcons.StopCircle,
       "undo" to OpenCodeIcons.Undo,
+      "widgets" to OpenCodeIcons.Widgets,
     )
 
   Column(

@@ -59,12 +59,13 @@ private enum class ComposerPickerKind(val sheetTitle: String) {
 fun SessionChatScreen(
   sessionId: String,
   sessionTitle: String,
+  worktree: String,
   modifier: Modifier = Modifier,
   onNavigateBack: () -> Unit = {},
-  viewModel: SessionChatViewModel = hiltViewModel(key = sessionId),
+  viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
-  LaunchedEffect(sessionId, sessionTitle) {
-    viewModel.bind(sessionId, sessionTitle)
+  LaunchedEffect(sessionId, sessionTitle, worktree) {
+    viewModel.bind(sessionId, sessionTitle, worktree)
   }
 
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -361,6 +362,10 @@ private fun SessionComposer(
 @Composable
 private fun SessionChatScreenPreview() {
   OpenCodeTheme(darkTheme = false) {
-    SessionChatScreen(sessionId = "1", sessionTitle = "Importing icons explanation")
+    SessionChatScreen(
+      sessionId = "1",
+      sessionTitle = "Importing icons explanation",
+      worktree = "/Users/demo/opencode-mobile",
+    )
   }
 }

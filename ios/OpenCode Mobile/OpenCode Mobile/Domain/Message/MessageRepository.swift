@@ -1,10 +1,10 @@
 import Foundation
 
 protocol MessageRepository: Sendable {
-    func listMessages(sessionID: String) async throws -> [Message]
-    func getMessage(sessionID: String, messageID: String) async throws -> Message
-    func sendMessage(sessionID: String, text: String) async throws -> Message
-    func sendPromptAsync(sessionID: String, text: String) async throws
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message]
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message
+    func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws
 }
 
 struct DefaultMessageRepository: MessageRepository, Sendable {
@@ -16,25 +16,35 @@ struct DefaultMessageRepository: MessageRepository, Sendable {
         self.adapter = adapter
     }
 
-    func listMessages(sessionID: String) async throws -> [Message] {
-        try await run { try await api.listMessages(sessionID: sessionID).map(adapter.message) }
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await run { try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message) }
     }
 
-    func getMessage(sessionID: String, messageID: String) async throws -> Message {
-        try await run { adapter.message(from: try await api.getMessage(sessionID: sessionID, messageID: messageID)) }
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
+        try await run {
+            adapter.message(from: try await api.getMessage(sessionID: sessionID, messageID: messageID, directory: directory))
+        }
     }
 
-    func sendMessage(sessionID: String, text: String) async throws -> Message {
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
         try await run {
             adapter.message(
-                from: try await api.sendMessage(sessionID: sessionID, body: adapter.sendRequest(text: text))
+                from: try await api.sendMessage(
+                    sessionID: sessionID,
+                    body: adapter.sendRequest(text: text),
+                    directory: directory
+                )
             )
         }
     }
 
-    func sendPromptAsync(sessionID: String, text: String) async throws {
+    func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
         try await run {
-            try await api.sendPromptAsync(sessionID: sessionID, body: adapter.sendRequest(text: text))
+            try await api.sendPromptAsync(
+                sessionID: sessionID,
+                body: adapter.sendRequest(text: text),
+                directory: directory
+            )
         }
     }
 

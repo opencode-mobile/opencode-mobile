@@ -49,3 +49,6 @@ icons:
   - name: undo
     style: filled
     notes: SF Symbol arrow.uturn.backward
+  - name: widgets
+    style: filled
+    notes: SF Symbol square.grid.2x2 (component gallery)

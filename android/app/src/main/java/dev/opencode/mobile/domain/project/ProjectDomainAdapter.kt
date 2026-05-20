@@ -1,0 +1,37 @@
+package dev.opencode.mobile.domain.project
+
+import dev.opencode.mobile.data.remote.dto.HealthDto
+import dev.opencode.mobile.data.remote.dto.ProjectDto
+import io.ktor.client.plugins.ResponseException
+import java.io.File
+
+class ProjectDomainAdapter {
+  fun toProject(dto: ProjectDto): Project =
+    Project(
+      id = dto.id,
+      worktree = dto.worktree,
+      displayName = displayNameFromWorktree(dto.worktree),
+    )
+
+  fun mapProbeError(throwable: Throwable): ServerProbeError =
+    when (throwable) {
+      is ServerProbeError -> throwable
+      is ResponseException ->
+        ServerProbeError.Http(
+          statusCode = throwable.response.status.value,
+          message = throwable.message,
+        )
+      else -> ServerProbeError.Transport(throwable)
+    }
+
+  fun requireHealthy(dto: HealthDto) {
+    if (!dto.healthy) {
+      throw ServerProbeError.Unhealthy(dto.version)
+    }
+  }
+
+  companion object {
+    fun displayNameFromWorktree(worktree: String): String =
+      File(worktree).name.ifBlank { worktree }
+  }
+}
