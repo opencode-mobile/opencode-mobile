@@ -13,8 +13,8 @@ struct SessionDomainAdapter: Sendable {
         )
     }
 
-    func listItem(from session: Session, worktree: String) -> SessionListItem {
-        SessionListItem(id: session.id, title: session.title, worktree: worktree)
+    func listItem(from session: Session, worktree: String, statusLabel: String? = nil) -> SessionListItem {
+        SessionListItem(id: session.id, title: session.title, worktree: worktree, statusLabel: statusLabel)
     }
 
     func sessionStatus(sessionID: String, raw: [String: String]) -> SessionStatus {

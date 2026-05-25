@@ -49,19 +49,27 @@ final class ProjectListHomeViewModel {
     private let projectRepository: any ProjectRepository
     private let sessionRepository: any SessionRepository
     private let connectionProfileStore: any ConnectionProfileStore
+    private let foregroundEventStream: any ForegroundEventStream
+    private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
     private let serverBaseURL: String
+    private var homeRefreshTask: Task<Void, Never>?
+    private var statusRefreshTask: Task<Void, Never>?
+    private var eventObservationTask: Task<Void, Never>?
 
     init(
         projectRepository: any ProjectRepository,
         sessionRepository: any SessionRepository,
         connectionProfileStore: any ConnectionProfileStore,
+        foregroundEventStream: any ForegroundEventStream,
         serverBaseURL: String = AppConfig.serverBaseURL.absoluteString
     ) {
         self.projectRepository = projectRepository
         self.sessionRepository = sessionRepository
         self.connectionProfileStore = connectionProfileStore
+        self.foregroundEventStream = foregroundEventStream
         self.serverBaseURL = serverBaseURL
+        observeForegroundEvents()
     }
 
     func refresh() async {
@@ -187,7 +195,19 @@ final class ProjectListHomeViewModel {
             let sessions =
                 try await sessionRepository.listSessions(directory: worktree)
                     .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
-            let items = sessions.map { sessionAdapter.listItem(from: $0, worktree: worktree) }
+            let statusBySessionID =
+                Dictionary(
+                    uniqueKeysWithValues: (try await sessionRepository.getAllSessionStatuses(directory: worktree))
+                        .map { ($0.sessionID, $0) }
+                )
+            let items =
+                sessions.map { session in
+                    sessionAdapter.listItem(
+                        from: session,
+                        worktree: worktree,
+                        statusLabel: statusBySessionID[session.id].flatMap(eventAdapter.statusLabel)
+                    )
+                }
             return ProjectSectionItem(
                 id: worktree,
                 worktree: worktree,
@@ -247,4 +267,94 @@ final class ProjectListHomeViewModel {
     }
 
     private static let previewSessionLimit = 3
+    private static let homeRefreshDebounceMs = 500
+    private static let statusRefreshDebounceMs = 300
+
+    private func observeForegroundEvents() {
+        eventObservationTask?.cancel()
+        eventObservationTask = Task {
+            for await event in foregroundEventStream.events() {
+                switch event.type {
+                case "stream.reconnected":
+                    await runHomeLoad(skipProbe: true)
+                default:
+                    if event.triggersHomeRefresh {
+                        scheduleHomeRefresh()
+                    }
+                    if event.triggersStatusRefresh {
+                        scheduleStatusRefresh()
+                    }
+                }
+            }
+        }
+    }
+
+    private func scheduleHomeRefresh() {
+        homeRefreshTask?.cancel()
+        homeRefreshTask = Task {
+            try? await Task.sleep(for: .milliseconds(Self.homeRefreshDebounceMs))
+            guard !Task.isCancelled else { return }
+            await runHomeLoad(skipProbe: true)
+        }
+    }
+
+    private func scheduleStatusRefresh() {
+        statusRefreshTask?.cancel()
+        statusRefreshTask = Task {
+            try? await Task.sleep(for: .milliseconds(Self.statusRefreshDebounceMs))
+            guard !Task.isCancelled else { return }
+            await refreshSessionStatuses()
+        }
+    }
+
+    private func refreshSessionStatuses() async {
+        guard case let .loaded(sections, showAdd, candidates, seeAll) = state else { return }
+        var updatedSections: [ProjectSectionItem] = []
+        for section in sections {
+            if let statuses = try? await sessionRepository.getAllSessionStatuses(directory: section.worktree) {
+                let byID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
+                updatedSections.append(
+                    ProjectSectionItem(
+                        id: section.id,
+                        worktree: section.worktree,
+                        displayName: section.displayName,
+                        pathSubtitle: section.pathSubtitle,
+                        letter: section.letter,
+                        letterAccent: section.letterAccent,
+                        previewSessions: section.previewSessions.map { applyStatus($0, byID: byID) },
+                        allSessions: section.allSessions.map { applyStatus($0, byID: byID) },
+                        totalSessionCount: section.totalSessionCount,
+                        loadError: section.loadError
+                    )
+                )
+            } else {
+                updatedSections.append(section)
+            }
+        }
+        var updatedSeeAll = seeAll
+        if let seeAll,
+           let statuses = try? await sessionRepository.getAllSessionStatuses(directory: seeAll.worktree) {
+            let byID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
+            updatedSeeAll = SeeAllSessionsSheetState(
+                worktree: seeAll.worktree,
+                projectName: seeAll.projectName,
+                sessions: seeAll.sessions.map { applyStatus($0, byID: byID) }
+            )
+        }
+        state = .loaded(
+            sections: updatedSections,
+            showAddProjectSheet: showAdd,
+            candidates: candidates,
+            seeAllSessions: updatedSeeAll
+        )
+    }
+
+    private func applyStatus(_ item: SessionListItem, byID: [String: SessionStatus]) -> SessionListItem {
+        SessionListItem(
+            id: item.id,
+            title: item.title,
+            worktree: item.worktree,
+            statusLabel: byID[item.id].flatMap(eventAdapter.statusLabel)
+        )
+    }
 }

@@ -125,6 +125,7 @@ struct ProjectListHomeView: View {
                 ForEach(section.previewSessions) { session in
                     OpenCodeListItem(
                         title: session.title,
+                        subtitle: session.statusLabel,
                         action: { selectedSession = session }
                     )
                 }
@@ -229,6 +230,14 @@ struct SessionListItem: Identifiable, Hashable {
     let id: String
     let title: String
     let worktree: String
+    let statusLabel: String?
+
+    init(id: String, title: String, worktree: String, statusLabel: String? = nil) {
+        self.id = id
+        self.title = title
+        self.worktree = worktree
+        self.statusLabel = statusLabel
+    }
 }
 
 extension SeeAllSessionsSheetState: Identifiable {
@@ -241,7 +250,8 @@ extension SeeAllSessionsSheetState: Identifiable {
             viewModel: ProjectListHomeViewModel(
                 projectRepository: PreviewProjectRepository(),
                 sessionRepository: PreviewSessionRepository(),
-                connectionProfileStore: PreviewConnectionProfileStore()
+                connectionProfileStore: PreviewConnectionProfileStore(),
+                foregroundEventStream: PreviewForegroundEventStream()
             )
         )
     }
@@ -267,7 +277,7 @@ private struct PreviewSessionRepository: SessionRepository {
         [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: directory, parentID: nil, updatedAtEpochMs: 1)]
     }
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
-    func getAllSessionStatuses() async throws -> [SessionStatus] { fatalError() }
+    func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String) async throws -> Bool { fatalError() }
@@ -283,4 +293,12 @@ private struct PreviewSessionRepository: SessionRepository {
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
     func unrevertSession(id: String) async throws -> Bool { fatalError() }
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool { fatalError() }
+}
+
+@MainActor
+private final class PreviewForegroundEventStream: ForegroundEventStream {
+    var connectionState: EventStreamConnectionState = .idle
+    func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
+    func start() {}
+    func stop() {}
 }

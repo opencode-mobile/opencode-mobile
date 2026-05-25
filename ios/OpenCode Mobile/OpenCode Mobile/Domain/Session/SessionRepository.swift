@@ -3,7 +3,7 @@ import Foundation
 protocol SessionRepository: Sendable {
     func listSessions(directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
-    func getAllSessionStatuses() async throws -> [SessionStatus]
+    func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
     func getSession(id: String) async throws -> Session
     func updateSession(id: String, title: String?) async throws -> Session
     func deleteSession(id: String) async throws -> Bool
@@ -40,9 +40,9 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         }
     }
 
-    func getAllSessionStatuses() async throws -> [SessionStatus] {
+    func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         try await run {
-            try await api.getAllSessionStatuses().map { adapter.sessionStatus(sessionID: $0.key, raw: $0.value) }
+            try await api.getAllSessionStatuses(directory: directory).map { adapter.sessionStatus(sessionID: $0.key, raw: $0.value) }
         }
     }
 

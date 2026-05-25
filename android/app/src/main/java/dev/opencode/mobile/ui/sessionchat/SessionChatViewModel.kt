@@ -1,13 +1,19 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.session.SessionRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -24,6 +30,9 @@ class SessionChatViewModel
 @Inject
 constructor(
   private val messageRepository: MessageRepository,
+  private val sessionRepository: SessionRepository,
+  private val foregroundEventStream: ForegroundEventStream,
+  private val eventDomainAdapter: EventDomainAdapter,
 ) : ViewModel() {
   private val _uiState =
     MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
@@ -31,6 +40,12 @@ constructor(
 
   private var boundSessionId: String? = null
   private var boundWorktree: String? = null
+  private var messageRefreshJob: Job? = null
+  private var workingPollJob: Job? = null
+
+  init {
+    observeForegroundEvents()
+  }
 
   fun bind(sessionId: String, sessionTitle: String, worktree: String) {
     if (boundSessionId == sessionId && boundWorktree == worktree && _uiState.value.sessionTitle == sessionTitle) {
@@ -40,6 +55,7 @@ constructor(
     boundWorktree = worktree
     _uiState.value = SessionChatUiState.initial(sessionId, sessionTitle)
     loadMessages()
+    refreshSessionStatus()
   }
 
   fun loadMessages() {
@@ -122,50 +138,74 @@ constructor(
           timeline = TimelineState.Ready,
         )
       }
-      runCatching { messageRepository.sendPromptAsync(sessionId, prompt, worktree) }
-        .onSuccess {
-          runCatching { messageRepository.listMessages(sessionId, worktree) }
-            .onSuccess { messages ->
-              _uiState.update {
-                it.copy(
-                  isSending = false,
-                  messages = messages.map(::toMessageItem),
-                  timeline = if (messages.isEmpty()) TimelineState.Empty else TimelineState.Ready,
-                )
-              }
-            }
-            .onFailure { throwable ->
-              _uiState.update {
-                it.copy(
-                  isSending = false,
-                  messages = it.messages.filterNot { item -> item.id == optimistic.id },
-                  errorMessage = errorMessage(throwable),
-                )
-              }
-            }
+      try {
+        messageRepository.sendPromptAsync(sessionId, prompt, worktree)
+        refreshSessionStatus()
+        try {
+          val messages = messageRepository.listMessages(sessionId, worktree)
+          applyLoadedMessages(messages)
+        } catch (_: Throwable) {
+          // Prompt was accepted; SSE or pull-to-refresh will sync the timeline.
+          _uiState.update { it.copy(isSending = false) }
         }
-        .onFailure { throwable ->
-          _uiState.update {
-            it.copy(
-              isSending = false,
-              messages = it.messages.filterNot { item -> item.id == optimistic.id },
-              errorMessage = errorMessage(throwable),
-            )
-          }
+      } catch (throwable: Throwable) {
+        logSendFailure(throwable)
+        _uiState.update {
+          it.copy(
+            isSending = false,
+            messages = it.messages.filterNot { item -> item.id == optimistic.id },
+            errorMessage = errorMessage(throwable),
+          )
         }
+      }
     }
   }
 
-  private fun applyLoadedMessages(messages: List<Message>, isRefreshing: Boolean = false) {
-    _uiState.update {
-      it.copy(
-        timeline = if (messages.isEmpty()) TimelineState.Empty else TimelineState.Ready,
-        messages = messages.map(::toMessageItem),
-        isSending = false,
+  private fun logSendFailure(throwable: Throwable) {
+    runCatching { Log.e(TAG, "sendPromptAsync failed", throwable) }
+  }
+
+  private fun applyLoadedMessages(
+    messages: List<Message>,
+    isRefreshing: Boolean = false,
+    fromQuietRefresh: Boolean = false,
+  ) {
+    _uiState.update { state ->
+      val serverItems = timelineMessages(messages)
+      val merged =
+        if (fromQuietRefresh && state.isSending) {
+          mergeWithPending(serverItems, state.messages.filter { it.isPending })
+        } else {
+          serverItems
+        }
+      state.copy(
+        timeline = if (merged.isEmpty()) TimelineState.Empty else TimelineState.Ready,
+        messages = merged,
+        isSending = if (fromQuietRefresh) state.isSending else false,
         isRefreshing = isRefreshing,
+        errorMessage = if (fromQuietRefresh) state.errorMessage else null,
       )
     }
   }
+
+  private fun mergeWithPending(
+    serverItems: List<SessionChatMessageItem>,
+    pendingItems: List<SessionChatMessageItem>,
+  ): List<SessionChatMessageItem> {
+    if (pendingItems.isEmpty()) return serverItems
+    val pendingToKeep =
+      pendingItems.filter { pending ->
+        !serverItems.any { it.role == MessageRole.User && it.text == pending.text }
+      }
+    return serverItems + pendingToKeep
+  }
+
+  private fun timelineMessages(messages: List<Message>): List<SessionChatMessageItem> =
+    messages
+      .sortedWith(
+        compareBy<Message>({ it.sentAtEpochMs ?: Long.MAX_VALUE }, { it.id }),
+      )
+      .map(::toMessageItem)
 
   private fun applyLoadError(throwable: Throwable) {
     _uiState.update {
@@ -210,11 +250,78 @@ constructor(
       else -> throwable.message ?: "Something went wrong"
     }
 
+  private fun observeForegroundEvents() {
+    viewModelScope.launch {
+      foregroundEventStream.events.collect { event ->
+        val sessionId = boundSessionId ?: return@collect
+        when {
+          event.type == "stream.reconnected" -> {
+            refreshMessagesQuietly()
+            refreshSessionStatus()
+          }
+          event.triggersMessageRefresh && event.sessionId == sessionId -> scheduleMessageRefresh()
+          event.triggersStatusRefresh && event.sessionId == sessionId -> refreshSessionStatus()
+        }
+      }
+    }
+  }
+
+  private fun scheduleMessageRefresh() {
+    messageRefreshJob?.cancel()
+    messageRefreshJob =
+      viewModelScope.launch {
+        delay(MESSAGE_REFRESH_DEBOUNCE_MS)
+        refreshMessagesQuietly()
+      }
+  }
+
+  private fun refreshMessagesQuietly() {
+    val sessionId = boundSessionId ?: return
+    val worktree = boundWorktree ?: return
+    viewModelScope.launch {
+      runCatching { messageRepository.listMessages(sessionId, worktree) }
+        .onSuccess { messages -> applyLoadedMessages(messages, fromQuietRefresh = true) }
+    }
+  }
+
+  private fun refreshSessionStatus() {
+    val sessionId = boundSessionId ?: return
+    val worktree = boundWorktree ?: return
+    viewModelScope.launch {
+      runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
+        .onSuccess { statuses ->
+          val status = statuses.firstOrNull { it.sessionId == sessionId }
+          val label = status?.let(eventDomainAdapter::statusLabel)
+          _uiState.update { it.copy(sessionStatusLabel = label) }
+          updateWorkingPoll(isBusy = status?.raw?.get("type") == "busy")
+        }
+    }
+  }
+
+  private fun updateWorkingPoll(isBusy: Boolean) {
+    if (isBusy) {
+      if (workingPollJob?.isActive == true) return
+      workingPollJob =
+        viewModelScope.launch {
+          while (true) {
+            delay(WORKING_POLL_INTERVAL_MS)
+            refreshMessagesQuietly()
+          }
+        }
+    } else {
+      workingPollJob?.cancel()
+      workingPollJob = null
+    }
+  }
+
   companion object {
+    private const val TAG = "SessionChat"
     val AvailableModels = listOf("DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet")
     val AvailableModes = listOf("Build", "Plan")
     val AvailableThinkingEfforts = listOf("Default", "Low", "Medium", "High")
     private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+    private const val MESSAGE_REFRESH_DEBOUNCE_MS = 300L
+    private const val WORKING_POLL_INTERVAL_MS = 2_000L
   }
 }
 
@@ -229,6 +336,7 @@ data class SessionChatUiState(
   val selectedThinkingEffort: String,
   val isSending: Boolean = false,
   val isRefreshing: Boolean = false,
+  val sessionStatusLabel: String? = null,
   val errorMessage: String? = null,
 ) {
   companion object {

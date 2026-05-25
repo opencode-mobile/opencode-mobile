@@ -32,3 +32,15 @@
   slice.
 - Revisit when: context attachment behavior is explicitly designed within v1
   scope.
+
+## WhatsApp-style timeline order and scroll anchor
+
+- Date: 2026-05-24
+- Decision: Session Chat lists messages oldest-to-newest (`time.created` ascending,
+  then message id). Opening a session or receiving a new bottom message scrolls
+  to the latest entry; pull-to-refresh does not jump when the latest message is
+  unchanged.
+- Reason: chat products anchor on the most recent message at the bottom; server
+  order is usually chronological but the apps enforce sort and scroll explicitly.
+- Revisit when: read-position preservation is needed while the user has scrolled
+  up into history (only auto-scroll when already near the bottom).

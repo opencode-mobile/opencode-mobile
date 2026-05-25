@@ -12,6 +12,12 @@ Ship repository **and** wire Session Chat (history + async send), matching Sessi
 
 Optimistic user bubble, then full `listMessages` reload after `prompt_async` succeeds. On failure, show error and remove the optimistic row.
 
+While `isSending`, debounced SSE reloads and the busy-session poll use a **quiet refresh** path: they merge server messages with any pending optimistic row (until the server returns matching user text) and do not clear `isSending` or the error banner. Explicit load, pull-to-refresh, and the post-send reload still replace the timeline and clear the sending flag.
+
+## Provider errors on assistant messages
+
+When `parts` are empty but `info.error` is present, `MessageDomainAdapter` maps display text from `error.data.message`, then `error.data.responseBody`, then `error.name`. Session Chat shows that string in the assistant bubble instead of the `…` placeholder.
+
 ## Prompt payload
 
 Text-only `parts: [{ type: "text", text }]` for send routes. Composer model/mode/Thinking Effort chips stay mock/local until a follow-up slice.
@@ -36,4 +42,4 @@ Hand-written Ktor / URLSession clients aligned with `api/opencode-messages.opena
 
 ## Refresh without SSE
 
-Pull-to-refresh and reload when Session Chat appears. No polling.
+Pull-to-refresh and reload when Session Chat appears. Foreground busy-session polling is owned by the [Foreground Event Stream](../foreground-event-stream/decisions.md) slice, not Message Repository.

@@ -21,6 +21,20 @@ data class MessageInfoDto(
   @SerialName("modelID") val modelId: String? = null,
   @SerialName("providerID") val providerId: String? = null,
   val time: MessageTimeDto? = null,
+  val error: MessageErrorInfoDto? = null,
+)
+
+@Serializable
+data class MessageErrorInfoDto(
+  val name: String? = null,
+  val data: MessageErrorDataDto? = null,
+)
+
+@Serializable
+data class MessageErrorDataDto(
+  val message: String? = null,
+  val statusCode: Int? = null,
+  val responseBody: String? = null,
 )
 
 @Serializable

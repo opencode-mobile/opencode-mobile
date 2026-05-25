@@ -1,0 +1,82 @@
+openapi: 3.1.0
+info:
+  title: opencode Events API (mobile subset)
+  version: 0.1.0
+  description: |
+    Maintained subset for mobile Foreground Event Stream until live /doc export
+    is used for codegen. SSE data lines are JSON envelopes with a payload object.
+
+paths:
+  /global/event:
+    get:
+      operationId: subscribeGlobalEvents
+      summary: Subscribe to global server-sent events
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+
+  /event:
+    get:
+      operationId: subscribeInstanceEvents
+      summary: Subscribe to instance server-sent events
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/EventEnvelope"
+
+components:
+  schemas:
+    EventEnvelope:
+      type: object
+      properties:
+        payload:
+          $ref: "#/components/schemas/EventPayload"
+      required:
+        - payload
+
+    EventPayload:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Bus event type (e.g. server.connected, message.updated, session.status)
+        properties:
+          type: object
+          additionalProperties: true
+      required:
+        - type
+        - properties
+
+    SessionStatusValue:
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [idle]
+          required: [type]
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [busy]
+          required: [type]
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [retry]
+            attempt:
+              type: integer
+            message:
+              type: string
+            next:
+              type: number
+          required: [type]

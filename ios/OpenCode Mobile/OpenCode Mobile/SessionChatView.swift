@@ -1,5 +1,6 @@
 import Factory
 import SwiftUI
+import UIKit
 
 private enum ComposerPickerKind {
     case model
@@ -18,10 +19,35 @@ private enum ComposerPickerKind {
     }
 }
 
+private enum TimelineScrollAnchor {
+    static let bottom = "session-chat-timeline-bottom"
+}
+
+private struct SessionIdRow: View {
+    let sessionID: String
+
+    var body: some View {
+        Text("Session ID: \(sessionID)")
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textSecondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                UIPasteboard.general.string = sessionID
+            }
+    }
+}
+
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
+    @State private var scrollPosition: String?
+    @State private var observationStopTask: Task<Void, Never>?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -40,16 +66,20 @@ struct SessionChatView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Session",
-                leading: .back(action: { dismiss() }),
+                leading: .back(action: leaveSession),
                 showDivider: true
             )
 
-            Text("Session ID: \(viewModel.state.sessionID)")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+            SessionIdRow(sessionID: viewModel.state.sessionID)
+
+            if let statusLabel = viewModel.sessionStatusLabel {
+                Text(statusLabel)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textInteractive)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
 
             timeline
             composer
@@ -61,8 +91,35 @@ struct SessionChatView: View {
             content: { pickerSheetEntries },
         )
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            cancelScheduledStopObserving()
+            viewModel.startObserving()
+        }
+        .onDisappear {
+            scheduleStopObserving()
+        }
         .task {
             await viewModel.loadMessages()
+        }
+    }
+
+    private func leaveSession() {
+        cancelScheduledStopObserving()
+        viewModel.stopObserving()
+        dismiss()
+    }
+
+    private func cancelScheduledStopObserving() {
+        observationStopTask?.cancel()
+        observationStopTask = nil
+    }
+
+    private func scheduleStopObserving() {
+        cancelScheduledStopObserving()
+        observationStopTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            viewModel.stopObserving()
         }
     }
 
@@ -87,7 +144,7 @@ struct SessionChatView: View {
                 .foregroundStyle(OpenCodeColors.textSecondary)
                 .padding(.horizontal, 16)
             Spacer()
-        case let .loaded(_, _, messages, _, _, isRefreshing, errorBanner):
+        case let .loaded(sessionID, _, messages, _, _, isRefreshing, errorBanner):
             VStack(spacing: 0) {
                 if let errorBanner {
                     Text(errorBanner)
@@ -109,10 +166,23 @@ struct SessionChatView: View {
                                     messageRow(message)
                                 }
                             }
+                            .id(message.id)
                         }
+                        Color.clear
+                            .frame(height: 1)
+                            .id(TimelineScrollAnchor.bottom)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    .scrollTargetLayout()
+                }
+                .defaultScrollAnchor(.bottom)
+                .scrollPosition(id: $scrollPosition, anchor: .bottom)
+                .onChange(of: sessionID) { _, _ in
+                    scrollPosition = nil
+                }
+                .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
+                    await scrollTimelineToBottom(animated: scrollPosition != nil)
                 }
                 .refreshable {
                     await viewModel.refreshMessages()
@@ -125,6 +195,38 @@ struct SessionChatView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func timelineScrollTaskID(sessionID: String, messages: [SessionChatRow]) -> String {
+        "\(sessionID)-\(messages.count)-\(messages.last?.id ?? "empty")"
+    }
+
+    @MainActor
+    private func scrollTimelineToBottom(animated: Bool) async {
+        guard !messagesFromLoadedState().isEmpty else { return }
+        if animated {
+            withAnimation {
+                scrollPosition = TimelineScrollAnchor.bottom
+            }
+        } else {
+            scrollPosition = TimelineScrollAnchor.bottom
+        }
+        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(50))
+        if animated {
+            withAnimation {
+                scrollPosition = TimelineScrollAnchor.bottom
+            }
+        } else {
+            scrollPosition = TimelineScrollAnchor.bottom
+        }
+    }
+
+    private func messagesFromLoadedState() -> [SessionChatRow] {
+        if case let .loaded(_, _, messages, _, _, _, _) = viewModel.state {
+            return messages
+        }
+        return []
     }
 
     @ViewBuilder

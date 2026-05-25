@@ -61,12 +61,30 @@ extension Container {
         }.singleton
     }
 
+    var eventsAPIClient: Factory<EventsAPIClient> {
+        self { EventsAPIClient(connection: self.serverConnection()) }.singleton
+    }
+
+    var eventDomainAdapter: Factory<EventDomainAdapter> {
+        self { EventDomainAdapter() }.singleton
+    }
+
+    var foregroundEventStream: Factory<DefaultForegroundEventStream> {
+        self { @MainActor in
+            DefaultForegroundEventStream(
+                api: self.eventsAPIClient(),
+                adapter: self.eventDomainAdapter()
+            )
+        }.singleton
+    }
+
     var projectListHomeViewModel: Factory<ProjectListHomeViewModel> {
         self { @MainActor in
             ProjectListHomeViewModel(
                 projectRepository: self.projectRepository(),
                 sessionRepository: self.sessionRepository(),
-                connectionProfileStore: self.connectionProfileStore()
+                connectionProfileStore: self.connectionProfileStore(),
+                foregroundEventStream: self.foregroundEventStream()
             )
         }
     }
@@ -77,7 +95,9 @@ extension Container {
                 sessionID: $0.sessionID,
                 sessionTitle: $0.sessionTitle,
                 worktree: $0.worktree,
-                messageRepository: self.messageRepository()
+                messageRepository: self.messageRepository(),
+                sessionRepository: self.sessionRepository(),
+                foregroundEventStream: self.foregroundEventStream()
             )
         }
     }

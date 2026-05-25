@@ -4,11 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.mobile.theme.LetterAccent
@@ -22,6 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @HiltViewModel
@@ -32,15 +37,20 @@ constructor(
   private val sessionRepository: SessionRepository,
   private val connectionProfileStore: ConnectionProfileStore,
   private val sessionDomainAdapter: SessionDomainAdapter,
+  private val eventDomainAdapter: EventDomainAdapter,
+  private val foregroundEventStream: ForegroundEventStream,
   private val serverConnection: ServerConnection,
 ) : ViewModel() {
   private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   private val serverBaseUrl: String get() = serverConnection.baseUrl
+  private var homeRefreshJob: Job? = null
+  private var statusRefreshJob: Job? = null
 
   init {
     refresh()
+    observeForegroundEvents()
   }
 
   fun refresh() {
@@ -189,7 +199,17 @@ constructor(
       sessionRepository
         .listSessions(directory = worktree)
         .sortedByDescending { it.updatedAtEpochMs ?: 0L }
-    val summaries = sessions.map(sessionDomainAdapter::toSessionSummary)
+    val statusBySessionId =
+      runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
+        .getOrDefault(emptyList())
+        .associateBy { it.sessionId }
+    val summaries =
+      sessions.map { session ->
+        sessionDomainAdapter.toSessionSummary(
+          session,
+          statusLabel = statusBySessionId[session.id]?.let(eventDomainAdapter::statusLabel),
+        )
+      }
     return ProjectSectionUi(
       worktree = worktree,
       displayName = project.displayName,
@@ -246,8 +266,76 @@ constructor(
       is ServerProbeError.Unhealthy -> "Server reported unhealthy"
     }
 
+  private fun observeForegroundEvents() {
+    viewModelScope.launch {
+      foregroundEventStream.events.collect { event ->
+        when {
+          event.type == "stream.reconnected" -> runHomeLoad(skipProbe = true)
+          event.triggersHomeRefresh -> scheduleHomeRefresh()
+          event.triggersStatusRefresh -> scheduleStatusRefresh()
+        }
+      }
+    }
+  }
+
+  private fun scheduleHomeRefresh() {
+    homeRefreshJob?.cancel()
+    homeRefreshJob =
+      viewModelScope.launch {
+        delay(HOME_REFRESH_DEBOUNCE_MS)
+        runHomeLoad(skipProbe = true)
+      }
+  }
+
+  private fun scheduleStatusRefresh() {
+    statusRefreshJob?.cancel()
+    statusRefreshJob =
+      viewModelScope.launch {
+        delay(STATUS_REFRESH_DEBOUNCE_MS)
+        refreshSessionStatuses()
+      }
+  }
+
+  private suspend fun refreshSessionStatuses() {
+    val state = _uiState.value as? MainScreenUiState.Loaded ?: return
+    val updatedSections =
+      state.sections.map { section ->
+        runCatching {
+          val statusBySessionId =
+            sessionRepository
+              .getAllSessionStatuses(directory = section.worktree)
+              .associateBy(SessionStatus::sessionId)
+          section.copy(
+            previewSessions = section.previewSessions.map { applyStatus(it, statusBySessionId) },
+            allSessions = section.allSessions.map { applyStatus(it, statusBySessionId) },
+          )
+        }.getOrDefault(section)
+      }
+    val updatedSeeAll =
+      state.seeAllSessions?.let { sheet ->
+        val statusBySessionId =
+          runCatching {
+            sessionRepository
+              .getAllSessionStatuses(directory = sheet.worktree)
+              .associateBy(SessionStatus::sessionId)
+          }.getOrElse { emptyMap() }
+        sheet.copy(sessions = sheet.sessions.map { applyStatus(it, statusBySessionId) })
+      }
+    _uiState.value = state.copy(sections = updatedSections, seeAllSessions = updatedSeeAll)
+  }
+
+  private fun applyStatus(
+    summary: SessionSummary,
+    statusBySessionId: Map<String, SessionStatus>,
+  ): SessionSummary =
+    summary.copy(
+      statusLabel = statusBySessionId[summary.id]?.let(eventDomainAdapter::statusLabel),
+    )
+
   private companion object {
     const val PREVIEW_SESSION_LIMIT = 3
+    const val HOME_REFRESH_DEBOUNCE_MS = 500L
+    const val STATUS_REFRESH_DEBOUNCE_MS = 300L
   }
 }
 

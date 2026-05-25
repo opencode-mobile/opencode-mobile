@@ -15,6 +15,18 @@ struct MessageInfoDTO: Codable, Sendable {
     let modelID: String?
     let providerID: String?
     let time: MessageTimeDTO?
+    let error: MessageErrorInfoDTO?
+}
+
+struct MessageErrorInfoDTO: Codable, Sendable {
+    let name: String?
+    let data: MessageErrorDataDTO?
+}
+
+struct MessageErrorDataDTO: Codable, Sendable {
+    let message: String?
+    let statusCode: Int?
+    let responseBody: String?
 }
 
 struct MessageModelRefDTO: Codable, Sendable {

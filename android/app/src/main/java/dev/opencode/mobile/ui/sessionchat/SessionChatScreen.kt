@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -27,8 +28,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.content.ClipData
+import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -78,12 +84,15 @@ fun SessionChatScreen(
         leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
         showDivider = true,
       )
-      Text(
-        text = "Session ID: ${uiState.sessionId}",
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
+      SessionIdRow(sessionId = uiState.sessionId)
+      uiState.sessionStatusLabel?.let { statusLabel ->
+        Text(
+          text = statusLabel,
+          modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+          style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.primary,
+        )
+      }
 
       uiState.errorMessage?.let { message ->
         Text(
@@ -124,13 +133,30 @@ fun SessionChatScreen(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
-        TimelineState.Ready ->
+        TimelineState.Ready -> {
+          val listState = rememberLazyListState()
+          var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
+
+          LaunchedEffect(uiState.sessionId, uiState.messages.lastOrNull()?.id) {
+            val lastIndex = uiState.messages.lastIndex
+            if (lastIndex < 0) return@LaunchedEffect
+            val lastId = uiState.messages[lastIndex].id
+            if (lastId == lastScrolledMessageId) return@LaunchedEffect
+            if (lastScrolledMessageId == null) {
+              listState.scrollToItem(lastIndex)
+            } else {
+              listState.animateScrollToItem(lastIndex)
+            }
+            lastScrolledMessageId = lastId
+          }
+
           PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { viewModel.refreshMessages() },
             modifier = Modifier.weight(1f).fillMaxWidth(),
           ) {
             LazyColumn(
+              state = listState,
               modifier = Modifier.fillMaxSize(),
               contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
               verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -143,6 +169,7 @@ fun SessionChatScreen(
               }
             }
           }
+        }
       }
 
       SessionComposer(
@@ -218,6 +245,28 @@ fun SessionChatScreen(
       }
     }
   }
+}
+
+@Composable
+private fun SessionIdRow(sessionId: String, modifier: Modifier = Modifier) {
+  val context = LocalContext.current
+  Text(
+    text = "Session ID: $sessionId",
+    modifier =
+      modifier
+        .fillMaxWidth()
+        .clickable { copySessionId(context, sessionId) }
+        .padding(horizontal = 16.dp, vertical = 8.dp),
+    style = MaterialTheme.typography.bodySmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    maxLines = 1,
+    overflow = TextOverflow.MiddleEllipsis,
+  )
+}
+
+private fun copySessionId(context: Context, sessionId: String) {
+  val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+  clipboard.setPrimaryClip(ClipData.newPlainText("Session ID", sessionId))
 }
 
 @Composable

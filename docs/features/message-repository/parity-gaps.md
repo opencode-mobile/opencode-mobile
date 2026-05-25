@@ -23,19 +23,19 @@
 ## No live assistant streaming
 
 - **Intent:** Timeline updates as the assistant works.
-- **iOS:** Manual refresh only.
-- **Android:** Manual refresh only.
+- **iOS:** Foreground SSE reloads messages on bus events (see [Foreground Event Stream](../foreground-event-stream/progress.md)).
+- **Android:** Foreground SSE reloads messages on bus events (see [Foreground Event Stream](../foreground-event-stream/progress.md)).
 - **Area:** Behavior.
-- **Reason:** Foreground SSE out of scope for this slice.
-- **Next action:** Foreground event stream slice.
-- **Status:** Temporary.
+- **Reason:** Addressed by Foreground Event Stream slice; incremental part streaming still deferred.
+- **Next action:** Optional targeted updates from `message.part.updated` payloads.
+- **Status:** Temporary (full reload only).
 
 ## Assistant messages without text parts
 
-- **Intent:** Show meaningful assistant content when the server returns tool/reasoning parts only.
-- **iOS:** Adapter fallback summary (e.g. tool name).
-- **Android:** Adapter fallback summary (e.g. tool name).
+- **Intent:** Show meaningful assistant content when the server returns no text parts.
+- **iOS:** Tool-part fallback summary (e.g. tool name); `info.error` message when the provider fails.
+- **Android:** Tool-part fallback summary (e.g. tool name); `info.error` message when the provider fails.
 - **Area:** Behavior.
-- **Reason:** Minimal v1 mapping until rich assistant UI exists.
+- **Reason:** Minimal v1 mapping until rich assistant UI exists. Provider errors are surfaced as plain text; reasoning and other non-text part types are not rendered yet.
 - **Next action:** Rich part rendering in Session Chat.
-- **Status:** Temporary.
+- **Status:** Temporary (tool/reasoning parts); provider error text is shipped.

@@ -63,13 +63,33 @@ enum SessionChatScreenState: Equatable {
 @Observable
 final class SessionChatViewModel {
     private(set) var state: SessionChatScreenState
+    private(set) var sessionStatusLabel: String?
+    private let sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
+    private let sessionRepository: any SessionRepository
+    private let foregroundEventStream: any ForegroundEventStream
+    private let eventAdapter = EventDomainAdapter()
     private let sentTimeFormatter: DateFormatter
+    private var messageRefreshTask: Task<Void, Never>?
+    private var eventObservationTask: Task<Void, Never>?
+    private var workingPollTask: Task<Void, Never>?
 
-    init(sessionID: String, sessionTitle: String, worktree: String, messageRepository: any MessageRepository) {
+    private static let workingPollIntervalMs = 2_000
+
+    init(
+        sessionID: String,
+        sessionTitle: String,
+        worktree: String,
+        messageRepository: any MessageRepository,
+        sessionRepository: any SessionRepository,
+        foregroundEventStream: any ForegroundEventStream
+    ) {
+        self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
+        self.sessionRepository = sessionRepository
+        self.foregroundEventStream = foregroundEventStream
         self.state = .loading(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -81,6 +101,10 @@ final class SessionChatViewModel {
         self.sentTimeFormatter = formatter
     }
 
+    func startObserving() {
+        observeForegroundEvents()
+    }
+
     func loadMessages() async {
         let sessionID = state.sessionID
         let sessionTitle = state.sessionTitle
@@ -90,6 +114,7 @@ final class SessionChatViewModel {
         do {
             let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
             applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
+            await refreshSessionStatus()
         } catch {
             applyError(error, sessionID: sessionID)
         }
@@ -183,8 +208,24 @@ final class SessionChatViewModel {
 
         do {
             try await messageRepository.sendPromptAsync(sessionID: sessionID, text: trimmed, directory: worktree)
-            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
-            applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
+            await refreshSessionStatus()
+            do {
+                let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+                applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
+            } catch {
+                // Prompt was accepted; SSE or pull-to-refresh will sync the timeline.
+                if case let .loaded(id, title, messages, composer, _, _, _) = state {
+                    state = .loaded(
+                        sessionID: id,
+                        sessionTitle: title,
+                        messages: messages,
+                        composer: composer,
+                        isSending: false,
+                        isRefreshing: false,
+                        errorBanner: nil
+                    )
+                }
+            }
         } catch {
             if case let .loaded(id, title, messages, composer, _, _, _) = state {
                 state = .loaded(
@@ -202,10 +243,31 @@ final class SessionChatViewModel {
         }
     }
 
-    private func applyLoadedMessages(_ messages: [Message], sessionID: String, isRefreshing: Bool) {
+    private func applyLoadedMessages(
+        _ messages: [Message],
+        sessionID: String,
+        isRefreshing: Bool,
+        fromQuietRefresh: Bool = false
+    ) {
         let sessionTitle = state.sessionTitle
         let composer = state.composer
-        let rows = messages.map(row(from:))
+        let isSending = fromQuietRefresh ? isSendingFromCurrentState() : false
+        let errorBanner = fromQuietRefresh ? errorBannerFromCurrentState() : nil
+        let serverRows =
+            messages
+                .sorted {
+                    let leftTime = $0.sentAtEpochMs ?? Int64.max
+                    let rightTime = $1.sentAtEpochMs ?? Int64.max
+                    if leftTime != rightTime { return leftTime < rightTime }
+                    return $0.id < $1.id
+                }
+                .map(row(from:))
+        let rows =
+            if fromQuietRefresh, isSending {
+                mergeWithPending(serverRows, pendingRowsFromCurrentState())
+            } else {
+                serverRows
+            }
         if rows.isEmpty {
             state = .empty(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
         } else {
@@ -214,11 +276,41 @@ final class SessionChatViewModel {
                 sessionTitle: sessionTitle,
                 messages: rows,
                 composer: composer,
-                isSending: false,
+                isSending: fromQuietRefresh ? isSending : false,
                 isRefreshing: isRefreshing,
-                errorBanner: nil
+                errorBanner: fromQuietRefresh ? errorBanner : nil
             )
         }
+    }
+
+    private func mergeWithPending(_ serverRows: [SessionChatRow], _ pendingRows: [SessionChatRow]) -> [SessionChatRow] {
+        guard !pendingRows.isEmpty else { return serverRows }
+        let pendingToKeep =
+            pendingRows.filter { pending in
+                !serverRows.contains(where: { $0.role == .user && $0.text == pending.text })
+            }
+        return serverRows + pendingToKeep
+    }
+
+    private func pendingRowsFromCurrentState() -> [SessionChatRow] {
+        if case let .loaded(_, _, messages, _, _, _, _) = state {
+            return messages.filter(\.isPending)
+        }
+        return []
+    }
+
+    private func isSendingFromCurrentState() -> Bool {
+        if case let .loaded(_, _, _, _, isSending, _, _) = state {
+            return isSending
+        }
+        return false
+    }
+
+    private func errorBannerFromCurrentState() -> String? {
+        if case let .loaded(_, _, _, _, _, _, errorBanner) = state {
+            return errorBanner
+        }
+        return nil
     }
 
     private func applyError(_ error: Error, sessionID: String) {
@@ -293,6 +385,76 @@ final class SessionChatViewModel {
             selectedMode: SessionChatPickers.modes[0],
             selectedThinkingEffort: SessionChatPickers.thinkingEfforts[0]
         )
+    }
+
+    private func observeForegroundEvents() {
+        eventObservationTask?.cancel()
+        eventObservationTask = Task {
+            for await event in foregroundEventStream.events() {
+                switch event.type {
+                case "stream.reconnected":
+                    await refreshMessagesQuietly()
+                    await refreshSessionStatus()
+                default:
+                    if event.triggersMessageRefresh, event.sessionID == sessionID {
+                        scheduleMessageRefresh()
+                    }
+                    if event.triggersStatusRefresh, event.sessionID == sessionID {
+                        await refreshSessionStatus()
+                    }
+                }
+            }
+        }
+    }
+
+    private func scheduleMessageRefresh() {
+        messageRefreshTask?.cancel()
+        messageRefreshTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await refreshMessagesQuietly()
+        }
+    }
+
+    private func refreshMessagesQuietly() async {
+        do {
+            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+            applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false, fromQuietRefresh: true)
+        } catch {
+            return
+        }
+    }
+
+    func stopObserving() {
+        eventObservationTask?.cancel()
+        eventObservationTask = nil
+        messageRefreshTask?.cancel()
+        messageRefreshTask = nil
+        workingPollTask?.cancel()
+        workingPollTask = nil
+    }
+
+    private func refreshSessionStatus() async {
+        guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: worktree) else { return }
+        let status = statuses.first(where: { $0.sessionID == sessionID })
+        sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
+        updateWorkingPoll(isBusy: status?.raw["type"] == "busy")
+    }
+
+    private func updateWorkingPoll(isBusy: Bool) {
+        if isBusy {
+            guard workingPollTask == nil else { return }
+            workingPollTask = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(Self.workingPollIntervalMs))
+                    guard !Task.isCancelled else { return }
+                    await refreshMessagesQuietly()
+                }
+            }
+        } else {
+            workingPollTask?.cancel()
+            workingPollTask = nil
+        }
     }
 }
 

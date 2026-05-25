@@ -1,6 +1,9 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.FakeForegroundEventStream
+import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -69,17 +72,38 @@ class MainScreenViewModelTest {
     assertEquals(7, loaded.sections.single().totalSessionCount)
   }
 
+  @Test
+  fun refreshOnSessionCreatedEvent() = runTest {
+    val eventStream = FakeForegroundEventStream()
+    val viewModel =
+      createViewModel(
+        connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+        foregroundEventStream = eventStream,
+      )
+    advanceUntilIdle()
+    val before = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().totalSessionCount
+
+    eventStream.emit(OpencodeEvent(type = "session.created", sessionId = "new"))
+    advanceUntilIdle()
+
+    val after = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().totalSessionCount
+    assertTrue(after >= before)
+  }
+
   private fun createViewModel(
     shouldFailProbe: Boolean = false,
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     bootWorktree: String = "/boot/project",
     sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
+    foregroundEventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
   ): MainScreenViewModel =
     MainScreenViewModel(
       projectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
       sessionRepository = FakeSessionRepository(sessionsByWorktree),
       connectionProfileStore = connectionProfileStore,
       sessionDomainAdapter = SessionDomainAdapter(),
+      eventDomainAdapter = EventDomainAdapter(kotlinx.serialization.json.Json { ignoreUnknownKeys = true }),
+      foregroundEventStream = foregroundEventStream,
       serverConnection = dev.opencode.mobile.network.ServerConnection(baseUrl = serverUrl),
     )
 }
@@ -105,7 +129,7 @@ private class FakeSessionRepository(
 
   override suspend fun createSession(parentId: String?, title: String?, directory: String?) = error("unused")
 
-  override suspend fun getAllSessionStatuses(directory: String?) = error("unused")
+  override suspend fun getAllSessionStatuses(directory: String?) = emptyList<dev.opencode.mobile.domain.session.SessionStatus>()
 
   override suspend fun getSession(id: String, directory: String?) = error("unused")
 

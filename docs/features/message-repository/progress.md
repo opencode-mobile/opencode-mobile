@@ -28,6 +28,5 @@
 
 ## Remaining
 
-- Foreground event stream slice
 - Server-backed composer options
 - Connection Profile persistence

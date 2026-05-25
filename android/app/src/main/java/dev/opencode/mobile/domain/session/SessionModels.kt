@@ -13,6 +13,7 @@ data class Session(
 data class SessionSummary(
   val id: String,
   val title: String,
+  val statusLabel: String? = null,
 )
 
 data class SessionStatus(

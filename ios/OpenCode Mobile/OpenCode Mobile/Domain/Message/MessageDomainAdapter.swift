@@ -3,10 +3,11 @@ import Foundation
 struct MessageDomainAdapter: Sendable {
     func message(from dto: MessageDTO) -> Message {
         let info = dto.info
+        let partText = displayText(from: dto.parts)
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: displayText(from: dto.parts),
+            text: partText.isEmpty ? errorText(from: info.error) : partText,
             model: info.model?.modelID ?? info.modelID,
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created
@@ -48,6 +49,20 @@ struct MessageDomainAdapter: Sendable {
         default:
             .unknown
         }
+    }
+
+    private func errorText(from error: MessageErrorInfoDTO?) -> String {
+        guard let error else { return "" }
+        if let message = error.data?.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+            return message
+        }
+        if let body = error.data?.responseBody?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty {
+            return body
+        }
+        if let name = error.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return ""
     }
 
     private func displayText(from parts: [MessagePartDTO]) -> String {

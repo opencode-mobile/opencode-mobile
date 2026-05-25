@@ -7,7 +7,8 @@ struct ProjectListHomeViewModelTests {
         let viewModel = ProjectListHomeViewModel(
             projectRepository: FakeProjectRepository(shouldFailProbe: true),
             sessionRepository: FakeSessionRepository(),
-            connectionProfileStore: FakeConnectionProfileStore()
+            connectionProfileStore: FakeConnectionProfileStore(),
+            foregroundEventStream: FakeForegroundEventStream()
         )
         await viewModel.refresh()
         guard case .probeFailed = viewModel.state else {
@@ -21,7 +22,8 @@ struct ProjectListHomeViewModelTests {
         let viewModel = ProjectListHomeViewModel(
             projectRepository: FakeProjectRepository(bootWorktree: "/boot"),
             sessionRepository: FakeSessionRepository(),
-            connectionProfileStore: store
+            connectionProfileStore: store,
+            foregroundEventStream: FakeForegroundEventStream()
         )
         await viewModel.refresh()
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/boot"))
@@ -39,7 +41,8 @@ struct ProjectListHomeViewModelTests {
         let viewModel = ProjectListHomeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: FakeSessionRepository(sessions: sessions),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            foregroundEventStream: FakeForegroundEventStream()
         )
         await viewModel.refresh()
         guard case let .loaded(sections, _, _, _) = viewModel.state else {
@@ -54,7 +57,8 @@ struct ProjectListHomeViewModelTests {
         let viewModel = ProjectListHomeViewModel(
             projectRepository: SlowFirstProjectRepository(),
             sessionRepository: SlowFirstSessionRepository(),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"])
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"]),
+            foregroundEventStream: FakeForegroundEventStream()
         )
         await viewModel.refresh()
         guard case let .loaded(sections, _, _, _) = viewModel.state else {
@@ -140,7 +144,7 @@ private struct SlowFirstSessionRepository: SessionRepository {
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
-    func getAllSessionStatuses() async throws -> [SessionStatus] { fatalError() }
+    func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String) async throws -> Bool { fatalError() }
@@ -168,7 +172,7 @@ private struct FakeSessionRepository: SessionRepository {
     func listSessions(directory: String?) async throws -> [Session] { sessions }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
-    func getAllSessionStatuses() async throws -> [SessionStatus] { fatalError() }
+    func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String) async throws -> Bool { fatalError() }

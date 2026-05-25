@@ -52,4 +52,31 @@ class MessageDomainAdapterTest {
     assertEquals(MessageRole.Assistant, message.role)
     assertEquals("Tool: glob", message.text)
   }
+
+  @Test
+  fun toMessage_mapsAssistantErrorWhenPartsEmpty() {
+    val raw =
+      """
+      {
+        "info": {
+          "id": "msg-3",
+          "role": "assistant",
+          "error": {
+            "name": "APIError",
+            "data": {
+              "message": "Forbidden: unauthorized: not licensed to use Copilot",
+              "statusCode": 403
+            }
+          }
+        },
+        "parts": []
+      }
+      """.trimIndent()
+
+    val dto = json.decodeFromString<MessageDto>(raw)
+    val message = adapter.toMessage(dto)
+
+    assertEquals(MessageRole.Assistant, message.role)
+    assertEquals("Forbidden: unauthorized: not licensed to use Copilot", message.text)
+  }
 }

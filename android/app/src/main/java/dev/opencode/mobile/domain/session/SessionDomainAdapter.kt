@@ -20,8 +20,8 @@ class SessionDomainAdapter {
       updatedAtEpochMs = dto.time?.updated,
     )
 
-  fun toSessionSummary(session: Session): SessionSummary =
-    SessionSummary(id = session.id, title = session.title)
+  fun toSessionSummary(session: Session, statusLabel: String? = null): SessionSummary =
+    SessionSummary(id = session.id, title = session.title, statusLabel = statusLabel)
 
   fun toSessionStatus(sessionId: String, dto: JsonObject): SessionStatus =
     SessionStatus(

@@ -3,16 +3,19 @@ package dev.opencode.mobile.data.remote
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.network.applyDirectory
+import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
 import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.Json
 
 class MessagesApi(
   private val httpClient: HttpClient,
+  private val json: Json,
 ) {
   suspend fun listMessages(sessionId: String, directory: String? = null): List<MessageDto> =
     httpClient.get("session/$sessionId/message") {
@@ -31,17 +34,19 @@ class MessagesApi(
   ): MessageDto =
     httpClient.post("session/$sessionId/message") {
       applyDirectory(directory)
-      setBody(body)
+      setJsonBody(json, body)
     }.body()
 
   suspend fun sendPromptAsync(sessionId: String, body: SendMessageRequestDto, directory: String? = null) {
-    val response: HttpResponse =
+    val response =
       httpClient.post("session/$sessionId/prompt_async") {
         applyDirectory(directory)
-        setBody(body)
+        setJsonBody(json, body)
       }
     if (!response.status.isSuccess()) {
-      error("prompt_async failed with status ${response.status.value}")
+      throw ResponseException(response, "prompt_async failed with status ${response.status.value}")
     }
+    // Release the 204 response body so OkHttp can reuse the connection.
+    response.bodyAsText()
   }
 }

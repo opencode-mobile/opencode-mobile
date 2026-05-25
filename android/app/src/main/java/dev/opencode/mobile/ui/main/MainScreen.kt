@@ -166,7 +166,8 @@ internal fun MainScreen(
     OpenCodeBottomSheet(visible = true, title = sheet.projectName, onDismissRequest = onDismissSeeAll) {
       sheet.sessions.forEach { session ->
         OpenCodeBottomSheetEntry(
-          title = session.title,
+          title =
+            session.statusLabel?.let { label -> "${session.title} · $label" } ?: session.title,
           onClick = {
             onDismissSeeAll()
             onSessionClick(SessionOpenTarget(session.id, session.title, sheet.worktree))
@@ -275,6 +276,7 @@ private fun ProjectSection(
       section.previewSessions.forEach { session ->
         OpenCodeListItem(
           title = session.title,
+          subtitle = session.statusLabel,
           onClick = { onSessionClick(SessionOpenTarget(session.id, session.title, section.worktree)) },
         )
       }
