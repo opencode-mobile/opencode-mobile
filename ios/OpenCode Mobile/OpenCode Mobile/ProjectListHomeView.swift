@@ -20,7 +20,9 @@ struct ProjectListHomeView: View {
                 showDivider: true
             )
             content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundPrimary)
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
@@ -73,6 +75,7 @@ struct ProjectListHomeView: View {
                 Task { await viewModel.retryProbe() }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(24)
     }
 

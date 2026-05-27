@@ -14,6 +14,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             Container.shared.foregroundEventStream().start()
