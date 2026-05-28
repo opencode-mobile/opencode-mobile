@@ -13,6 +13,7 @@
 
 # Android (see also android/.gitignore)
 **/.gradle/
+**/.kotlin/
 **/local.properties
 **/*.hprof
 **/.cxx/
