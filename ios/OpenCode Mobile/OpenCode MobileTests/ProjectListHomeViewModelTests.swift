@@ -4,11 +4,8 @@ import Testing
 @MainActor
 struct ProjectListHomeViewModelTests {
     @Test func refresh_probeFailed() async {
-        let viewModel = ProjectListHomeViewModel(
-            projectRepository: FakeProjectRepository(shouldFailProbe: true),
-            sessionRepository: FakeSessionRepository(),
-            connectionProfileStore: FakeConnectionProfileStore(),
-            foregroundEventStream: FakeForegroundEventStream()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(shouldFailProbe: true)
         )
         await viewModel.refresh()
         guard case .probeFailed = viewModel.state else {
@@ -19,11 +16,9 @@ struct ProjectListHomeViewModelTests {
 
     @Test func refresh_seedsBootWorktree() async {
         let store = FakeConnectionProfileStore()
-        let viewModel = ProjectListHomeViewModel(
+        let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(bootWorktree: "/boot"),
-            sessionRepository: FakeSessionRepository(),
-            connectionProfileStore: store,
-            foregroundEventStream: FakeForegroundEventStream()
+            connectionProfileStore: store
         )
         await viewModel.refresh()
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/boot"))
@@ -38,11 +33,10 @@ struct ProjectListHomeViewModelTests {
         let sessions = (1 ... 7).map {
             Session(id: "\($0)", title: "S\($0)", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: Int64($0))
         }
-        let viewModel = ProjectListHomeViewModel(
+        let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: FakeSessionRepository(sessions: sessions),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            foregroundEventStream: FakeForegroundEventStream()
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
         guard case let .loaded(sections, _, _, _) = viewModel.state else {
@@ -54,11 +48,10 @@ struct ProjectListHomeViewModelTests {
     }
 
     @Test func refresh_preservesAddedWorktreeOrder() async {
-        let viewModel = ProjectListHomeViewModel(
+        let viewModel = makeViewModel(
             projectRepository: SlowFirstProjectRepository(),
             sessionRepository: SlowFirstSessionRepository(),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"]),
-            foregroundEventStream: FakeForegroundEventStream()
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"])
         )
         await viewModel.refresh()
         guard case let .loaded(sections, _, _, _) = viewModel.state else {
@@ -67,6 +60,29 @@ struct ProjectListHomeViewModelTests {
         }
         #expect(sections.map(\.worktree) == ["/slow", "/fast"])
     }
+}
+
+@MainActor
+private func makeViewModel(
+    projectRepository: any ProjectRepository,
+    sessionRepository: any SessionRepository = FakeSessionRepository(),
+    connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
+    foregroundEventStream: FakeForegroundEventStream = FakeForegroundEventStream()
+) -> ProjectListHomeViewModel {
+    let manager = ActiveConnectionManager()
+    manager.apply(ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
+    let coordinator = ConnectionSessionCoordinator(
+        activeConnectionManager: manager,
+        connectionProfileStore: connectionProfileStore
+    )
+    return ProjectListHomeViewModel(
+        projectRepository: projectRepository,
+        sessionRepository: sessionRepository,
+        connectionProfileStore: connectionProfileStore,
+        activeConnectionManager: manager,
+        foregroundEventStream: foregroundEventStream,
+        connectionSessionCoordinator: coordinator
+    )
 }
 
 private struct FakeProjectRepository: ProjectRepository {
@@ -95,6 +111,12 @@ private final class FakeConnectionProfileStore: ConnectionProfileStore, @uncheck
     init(initial: [String] = []) {
         self.added = initial
     }
+
+    func activeProfile() async -> ConnectionProfile? {
+        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+    }
+
+    func saveProfile(_ profile: ConnectionProfile) async {}
 
     func addedWorktrees(serverBaseURL: String) async -> [String] { added }
 

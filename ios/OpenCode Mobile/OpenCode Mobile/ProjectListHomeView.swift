@@ -5,6 +5,8 @@ struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
     @State private var showComponentGallery = false
     @State private var selectedSession: SessionListItem?
+    @State private var showConnectionSetupSheet = false
+    @State private var connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: nil)
 
     init(viewModel: ProjectListHomeViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -15,6 +17,7 @@ struct ProjectListHomeView: View {
             OpenCodeTopBar(
                 title: "OpenCode Mobile",
                 actions: [
+                    .icon(.edit, accessibilityLabel: "Edit connection", action: { presentConnectionSetup() }),
                     .icon(.widgets, accessibilityLabel: "Developer components", action: { showComponentGallery = true }),
                 ],
                 showDivider: true
@@ -45,6 +48,17 @@ struct ProjectListHomeView: View {
         .sheet(item: seeAllSheetBinding) { sheet in
             seeAllSheet(sheet)
         }
+        .openCodeBottomSheet(isPresented: $showConnectionSetupSheet, title: "Connect to server") {
+            ConnectionSetupSheetView(viewModel: connectionSetupViewModel, isPresented: $showConnectionSetupSheet)
+        }
+    }
+
+    private func presentConnectionSetup() {
+        Task {
+            let profile = await Container.shared.connectionProfileStore().activeProfile()
+            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile)
+            showConnectionSetupSheet = true
+        }
     }
 
     @ViewBuilder
@@ -73,6 +87,9 @@ struct ProjectListHomeView: View {
                 .multilineTextAlignment(.center)
             OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
                 Task { await viewModel.retryProbe() }
+            }
+            OpenCodeButton(variant: .fullWidthText(title: "Edit connection")) {
+                presentConnectionSetup()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -249,16 +266,28 @@ extension SeeAllSessionsSheetState: Identifiable {
 
 #Preview {
     NavigationStack {
-        ProjectListHomeView(
-            viewModel: ProjectListHomeViewModel(
-                projectRepository: PreviewProjectRepository(),
-                sessionRepository: PreviewSessionRepository(),
-                connectionProfileStore: PreviewConnectionProfileStore(),
-                foregroundEventStream: PreviewForegroundEventStream()
-            )
-        )
+        ProjectListHomeView(viewModel: previewProjectListHomeViewModel())
     }
     .openCodeTheme()
+}
+
+@MainActor
+private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
+    let manager = ActiveConnectionManager()
+    manager.apply(ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
+    let store = PreviewConnectionProfileStore()
+    let coordinator = ConnectionSessionCoordinator(
+        activeConnectionManager: manager,
+        connectionProfileStore: store
+    )
+    return ProjectListHomeViewModel(
+        projectRepository: PreviewProjectRepository(),
+        sessionRepository: PreviewSessionRepository(),
+        connectionProfileStore: store,
+        activeConnectionManager: manager,
+        foregroundEventStream: PreviewForegroundEventStream(),
+        connectionSessionCoordinator: coordinator
+    )
 }
 
 private struct PreviewProjectRepository: ProjectRepository {
@@ -270,6 +299,10 @@ private struct PreviewProjectRepository: ProjectRepository {
 }
 
 private struct PreviewConnectionProfileStore: ConnectionProfileStore {
+    func activeProfile() async -> ConnectionProfile? {
+        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+    }
+    func saveProfile(_ profile: ConnectionProfile) async {}
     func addedWorktrees(serverBaseURL: String) async -> [String] { ["/demo"] }
     func addWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}

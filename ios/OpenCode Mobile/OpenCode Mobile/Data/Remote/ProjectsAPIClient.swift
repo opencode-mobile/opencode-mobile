@@ -3,11 +3,20 @@ import Foundation
 enum ProjectsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
+    case noActiveConnection
 }
 
 struct ProjectsAPIClient: Sendable {
-    let connection: ServerConnection
+    private let connectionProvider: () -> ServerConnection?
     private let decoder = JSONDecoder()
+
+    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+        self.connectionProvider = connectionProvider
+    }
+
+    init(fixedConnection: ServerConnection) {
+        self.connectionProvider = { fixedConnection }
+    }
 
     func listProjects() async throws -> [ProjectDTO] {
         try await get(path: "project")
@@ -22,6 +31,9 @@ struct ProjectsAPIClient: Sendable {
     }
 
     private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
+        guard let connection = connectionProvider() else {
+            throw ProjectsAPIError.noActiveConnection
+        }
         let data = try await data(for: connection.authorizedRequest(path: path, directory: directory))
         return try decoder.decode(T.self, from: data)
     }

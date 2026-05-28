@@ -6,17 +6,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -52,19 +58,44 @@ fun OpenCodeBottomSheet(
   title: String,
   onDismissRequest: () -> Unit,
   modifier: Modifier = Modifier,
+  keyboardAware: Boolean = false,
   content: @Composable ColumnScope.() -> Unit,
 ) {
   if (!visible) return
 
+  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = keyboardAware)
+
+  if (keyboardAware) {
+    LaunchedEffect(Unit) {
+      sheetState.expand()
+    }
+  }
+
   ModalBottomSheet(
     onDismissRequest = onDismissRequest,
+    sheetState = sheetState,
     modifier = modifier,
     shape = BottomSheetShape,
     containerColor = MaterialTheme.colorScheme.surface,
     contentColor = MaterialTheme.colorScheme.onSurface,
     dragHandle = null,
+    contentWindowInsets = {
+      if (keyboardAware) WindowInsets(0) else BottomSheetDefaults.windowInsets
+    },
   ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = BottomSheetContentBottomPadding)) {
+    val bodyModifier =
+      Modifier
+        .fillMaxWidth()
+        .padding(bottom = BottomSheetContentBottomPadding)
+        .then(
+          if (keyboardAware) {
+            Modifier.navigationBarsPadding().imePadding()
+          } else {
+            Modifier
+          },
+        )
+
+    Column(modifier = bodyModifier) {
       Row(
         modifier =
           Modifier.fillMaxWidth()

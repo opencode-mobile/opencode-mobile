@@ -2,12 +2,40 @@ import Factory
 import Foundation
 
 extension Container {
-    var serverConnection: Factory<ServerConnection> {
-        self { ServerConnection.fromAppConfig() }.singleton
+    var activeConnectionManager: Factory<ActiveConnectionManager> {
+        self { ActiveConnectionManager() }.singleton
+    }
+
+    var connectionProfileStore: Factory<any ConnectionProfileStore> {
+        self { UserDefaultsConnectionProfileStore() }.singleton
+    }
+
+    var connectionSessionCoordinator: Factory<ConnectionSessionCoordinator> {
+        self { @MainActor in
+            ConnectionSessionCoordinator(
+                activeConnectionManager: self.activeConnectionManager(),
+                connectionProfileStore: self.connectionProfileStore()
+            )
+        }.singleton
+    }
+
+    var connectionProbeService: Factory<ConnectionProbeService> {
+        self { ConnectionProbeService() }.singleton
+    }
+
+    var connectionProbing: Factory<any ConnectionProbing> {
+        self { self.connectionProbeService() }.singleton
+    }
+
+    private var connectionProvider: Factory<@Sendable () -> ServerConnection?> {
+        self {
+            let manager = self.activeConnectionManager()
+            return { manager.connection }
+        }.singleton
     }
 
     var sessionsAPIClient: Factory<SessionsAPIClient> {
-        self { SessionsAPIClient(connection: self.serverConnection()) }.singleton
+        self { SessionsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var sessionDomainAdapter: Factory<SessionDomainAdapter> {
@@ -15,7 +43,7 @@ extension Container {
     }
 
     var projectsAPIClient: Factory<ProjectsAPIClient> {
-        self { ProjectsAPIClient(connection: self.serverConnection()) }.singleton
+        self { ProjectsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var projectDomainAdapter: Factory<ProjectDomainAdapter> {
@@ -31,10 +59,6 @@ extension Container {
         }.singleton
     }
 
-    var connectionProfileStore: Factory<any ConnectionProfileStore> {
-        self { UserDefaultsConnectionProfileStore() }.singleton
-    }
-
     var sessionRepository: Factory<any SessionRepository> {
         self {
             DefaultSessionRepository(
@@ -45,7 +69,7 @@ extension Container {
     }
 
     var messagesAPIClient: Factory<MessagesAPIClient> {
-        self { MessagesAPIClient(connection: self.serverConnection()) }.singleton
+        self { MessagesAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
@@ -62,7 +86,7 @@ extension Container {
     }
 
     var eventsAPIClient: Factory<EventsAPIClient> {
-        self { EventsAPIClient(connection: self.serverConnection()) }.singleton
+        self { EventsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var eventDomainAdapter: Factory<EventDomainAdapter> {
@@ -78,13 +102,35 @@ extension Container {
         }.singleton
     }
 
+    var appRootViewModel: Factory<AppRootViewModel> {
+        self { @MainActor in
+            AppRootViewModel(
+                connectionProfileStore: self.connectionProfileStore(),
+                activeConnectionManager: self.activeConnectionManager(),
+                connectionSessionCoordinator: self.connectionSessionCoordinator(),
+                foregroundEventStream: self.foregroundEventStream()
+            )
+        }
+    }
+
+    var connectionSetupViewModel: Factory<ConnectionSetupViewModel> {
+        self { @MainActor in
+            ConnectionSetupViewModel(
+                connectionProbeService: self.connectionProbing(),
+                connectionSessionCoordinator: self.connectionSessionCoordinator()
+            )
+        }
+    }
+
     var projectListHomeViewModel: Factory<ProjectListHomeViewModel> {
         self { @MainActor in
             ProjectListHomeViewModel(
                 projectRepository: self.projectRepository(),
                 sessionRepository: self.sessionRepository(),
                 connectionProfileStore: self.connectionProfileStore(),
-                foregroundEventStream: self.foregroundEventStream()
+                activeConnectionManager: self.activeConnectionManager(),
+                foregroundEventStream: self.foregroundEventStream(),
+                connectionSessionCoordinator: self.connectionSessionCoordinator()
             )
         }
     }
@@ -104,6 +150,18 @@ extension Container {
 }
 
 extension Container {
+    @MainActor
+    static func makeAppRootViewModel() -> AppRootViewModel {
+        shared.appRootViewModel()
+    }
+
+    @MainActor
+    static func makeConnectionSetupViewModel(initialProfile: ConnectionProfile?) -> ConnectionSetupViewModel {
+        let viewModel = shared.connectionSetupViewModel()
+        viewModel.configure(initialProfile: initialProfile)
+        return viewModel
+    }
+
     @MainActor
     static func makeProjectListHomeViewModel() -> ProjectListHomeViewModel {
         shared.projectListHomeViewModel()

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
@@ -13,7 +14,7 @@ import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
-import dev.opencode.mobile.network.ServerConnection
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
@@ -39,18 +40,25 @@ constructor(
   private val sessionDomainAdapter: SessionDomainAdapter,
   private val eventDomainAdapter: EventDomainAdapter,
   private val foregroundEventStream: ForegroundEventStream,
-  private val serverConnection: ServerConnection,
+  private val activeConnectionManager: ActiveConnectionManager,
+  private val connectionSessionCoordinator: ConnectionSessionCoordinator,
 ) : ViewModel() {
   private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
-  private val serverBaseUrl: String get() = serverConnection.baseUrl
+  private val serverBaseUrl: String
+    get() = activeConnectionManager.current()?.baseUrl.orEmpty()
   private var homeRefreshJob: Job? = null
   private var statusRefreshJob: Job? = null
 
   init {
     refresh()
     observeForegroundEvents()
+    viewModelScope.launch {
+      connectionSessionCoordinator.profileSaved.collect {
+        refresh()
+      }
+    }
   }
 
   fun refresh() {
@@ -59,6 +67,12 @@ constructor(
 
   fun retryProbe() {
     refresh()
+  }
+
+  fun requestEditConnection(onProfileReady: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit) {
+    viewModelScope.launch {
+      onProfileReady(connectionProfileStore.activeProfile())
+    }
   }
 
   fun showAddProjectSheet() {

@@ -42,10 +42,19 @@ does not provide that transport.
 
 A saved mobile configuration for one reachable opencode server.
 
-A Connection Profile includes the server base URL, authentication fields, the
-result of a health check, and an ordered list of **added project** worktree paths
-the user chose to show on home. It represents how the mobile client reaches
-opencode, not a user account.
+A Connection Profile includes the server base URL, username, password (stored in
+platform secure storage), and an ordered list of **added project** worktree
+paths the user chose to show on home. It represents how the mobile client reaches
+opencode, not a user account. v1 supports one active Connection Profile at a
+time.
+
+### Connection onboarding
+
+The first-run screen shown when no Connection Profile is saved.
+
+Connection onboarding explains that the app needs an opencode server and offers
+a primary action to open the connection setup flow. It is not shown when a
+profile exists but the server is temporarily unreachable.
 
 ### Added project
 

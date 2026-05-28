@@ -12,6 +12,8 @@ clear title, an explicit close affordance, and one or more tappable entries.
 - States:
   - sheet: presented, dismissed.
   - entries: enabled, disabled.
+- Android-only option: `keyboardAware` for multi-field form content inside the
+  sheet (see Behavior).
 - Required content: sheet `title`, close action, and entry `title`.
 - Optional content:
   - entry start decorator: `none` or `icon`.
@@ -41,6 +43,11 @@ behavior should remain available.
 
 Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
+
+On Android, pass `keyboardAware = true` when the sheet hosts text fields rather
+than action entries. That mode skips partial expansion, clears default sheet
+window insets, and applies `imePadding()` to the sheet body so the keyboard
+lifts form content without nested scrolling inside `ModalBottomSheet`.
 
 Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
 `OpenCodeIcons` on Android). Icons are decorative when the

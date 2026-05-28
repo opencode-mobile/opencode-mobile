@@ -21,7 +21,7 @@ struct ProjectDomainAdapter: Sendable {
         }
         if let apiError = error as? ProjectsAPIError {
             switch apiError {
-            case .invalidResponse:
+            case .invalidResponse, .noActiveConnection:
                 return .transport("Invalid response")
             case let .httpStatus(code, message):
                 return .http(statusCode: code, message: message)

@@ -3,11 +3,11 @@
 ## Use hardcoded endpoint temporarily
 
 - Date: 2026-05-06
+- Status: **Superseded** (2026-05-27) by [Server Connection](../server-connection/decisions.md).
 - Decision: show `http://127.0.0.1:4096/` as the active server context for
   session list screens on both platforms.
 - Reason: unblock home-screen flow and reusable list-row work before connection
   profile infrastructure exists.
-- Revisit when: connection mechanism and profile persistence are implemented.
 
 ## Android emulator reaches host via 10.0.2.2
 

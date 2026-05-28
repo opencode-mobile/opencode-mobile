@@ -49,10 +49,14 @@ final class ProjectListHomeViewModel {
     private let projectRepository: any ProjectRepository
     private let sessionRepository: any SessionRepository
     private let connectionProfileStore: any ConnectionProfileStore
+    private let activeConnectionManager: ActiveConnectionManager
+    private let connectionSessionCoordinator: ConnectionSessionCoordinator
     private let foregroundEventStream: any ForegroundEventStream
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
-    private let serverBaseURL: String
+    private var serverBaseURL: String {
+        activeConnectionManager.connection?.baseURL.absoluteString ?? ""
+    }
     private var homeRefreshTask: Task<Void, Never>?
     private var statusRefreshTask: Task<Void, Never>?
     private var eventObservationTask: Task<Void, Never>?
@@ -61,14 +65,21 @@ final class ProjectListHomeViewModel {
         projectRepository: any ProjectRepository,
         sessionRepository: any SessionRepository,
         connectionProfileStore: any ConnectionProfileStore,
+        activeConnectionManager: ActiveConnectionManager,
         foregroundEventStream: any ForegroundEventStream,
-        serverBaseURL: String = AppConfig.serverBaseURL.absoluteString
+        connectionSessionCoordinator: ConnectionSessionCoordinator
     ) {
         self.projectRepository = projectRepository
         self.sessionRepository = sessionRepository
         self.connectionProfileStore = connectionProfileStore
+        self.activeConnectionManager = activeConnectionManager
         self.foregroundEventStream = foregroundEventStream
-        self.serverBaseURL = serverBaseURL
+        self.connectionSessionCoordinator = connectionSessionCoordinator
+        connectionSessionCoordinator.onProfileSaved { [weak self] in
+            Task { @MainActor in
+                await self?.refresh()
+            }
+        }
         observeForegroundEvents()
     }
 

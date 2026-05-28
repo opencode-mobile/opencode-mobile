@@ -87,4 +87,5 @@ dependencies {
   implementation(libs.ktor.client.auth)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.androidx.datastore.preferences)
+  implementation(libs.androidx.security.crypto)
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,7 +78,7 @@ fun SessionChatScreen(
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
 
-  Box(modifier = modifier.fillMaxSize()) {
+  Box(modifier = modifier.fillMaxSize().imePadding()) {
     Column(modifier = Modifier.fillMaxSize()) {
       OpenCodeTopBar(
         title = "Session",

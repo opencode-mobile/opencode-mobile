@@ -1,6 +1,6 @@
 package dev.opencode.mobile.data.remote
 
-import io.ktor.client.HttpClient
+import dev.opencode.mobile.network.OpencodeSseHttpClient
 import io.ktor.client.request.accept
 import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
@@ -11,10 +11,10 @@ import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.CancellationException
 
 class EventsApi(
-  private val httpClient: HttpClient,
+  private val httpClient: OpencodeSseHttpClient,
 ) {
   suspend fun streamGlobalEvents(onDataLine: suspend (String) -> Unit) {
-    httpClient.prepareGet("global/event") {
+    httpClient.get().prepareGet("global/event") {
       accept(ContentType.Text.EventStream)
       header(HttpHeaders.CacheControl, "no-cache")
     }.execute { response ->

@@ -1,7 +1,7 @@
 package dev.opencode.mobile
 
 object AppConfig {
-  /** Host machine URL; emulators rewrite loopback to `10.0.2.2` in [resolveDevServerBaseUrl]. */
+/** Default dev URL for connection setup form only; runtime uses saved Connection Profile. */
   const val SERVER_BASE_URL = "http://127.0.0.1:4096/"
 
   /** Optional Basic Auth password (`OPENCODE_SERVER_PASSWORD`). */

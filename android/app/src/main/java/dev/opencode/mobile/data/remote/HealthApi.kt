@@ -1,12 +1,12 @@
 package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.HealthDto
-import io.ktor.client.HttpClient
+import dev.opencode.mobile.network.OpencodeHttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 
 class HealthApi(
-  private val httpClient: HttpClient,
+  private val httpClient: OpencodeHttpClient,
 ) {
-  suspend fun getHealth(): HealthDto = httpClient.get("global/health").body()
+  suspend fun getHealth(): HealthDto = httpClient.get().get("global/health").body()
 }

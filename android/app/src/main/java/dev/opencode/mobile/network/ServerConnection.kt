@@ -1,23 +1,22 @@
 package dev.opencode.mobile.network
 
-import android.content.Context
-import dev.opencode.mobile.AppConfig
+import dev.opencode.mobile.data.local.ServerConnectionDefaults
+import dev.opencode.mobile.domain.connection.ConnectionProfile
 
 data class ServerConnection(
   val baseUrl: String,
-  val username: String = DEFAULT_USERNAME,
+  val username: String = ServerConnectionDefaults.USERNAME,
   val password: String? = null,
 ) {
   val apiBaseUrl: String =
     baseUrl.trimEnd('/') + '/'
 
   companion object {
-    const val DEFAULT_USERNAME: String = "opencode"
-
-    fun fromAppConfig(context: Context): ServerConnection =
+    fun fromProfile(profile: ConnectionProfile): ServerConnection =
       ServerConnection(
-        baseUrl = resolveDevServerBaseUrl(context),
-        password = AppConfig.SERVER_PASSWORD,
+        baseUrl = profile.baseUrl,
+        username = profile.username.ifBlank { ServerConnectionDefaults.USERNAME },
+        password = profile.password.takeIf { it.isNotEmpty() },
       )
   }
 }

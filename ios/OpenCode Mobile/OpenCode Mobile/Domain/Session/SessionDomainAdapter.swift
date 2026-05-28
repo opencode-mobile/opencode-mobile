@@ -39,7 +39,7 @@ struct SessionDomainAdapter: Sendable {
         }
         if let apiError = error as? SessionsAPIError {
             switch apiError {
-            case .invalidResponse:
+            case .invalidResponse, .noActiveConnection:
                 return .transport("Invalid response")
             case let .httpStatus(code, message):
                 return .http(statusCode: code, message: message)

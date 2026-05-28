@@ -1,0 +1,44 @@
+import Foundation
+import Security
+
+struct KeychainCredentialStore: SecureCredentialStore, Sendable {
+    private let service = "dev.opencode.mobile.connection"
+
+    func readPassword(serverBaseURL: String) -> String? {
+        var query = baseQuery(account: account(for: serverBaseURL))
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    func writePassword(serverBaseURL: String, password: String) {
+        let account = account(for: serverBaseURL)
+        deletePassword(serverBaseURL: serverBaseURL)
+
+        var query = baseQuery(account: account)
+        query[kSecValueData as String] = Data(password.utf8)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    func deletePassword(serverBaseURL: String) {
+        let query = baseQuery(account: account(for: serverBaseURL))
+        SecItemDelete(query as CFDictionary)
+    }
+
+    private func account(for serverBaseURL: String) -> String {
+        "connection.password.\(serverBaseURL)"
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+}

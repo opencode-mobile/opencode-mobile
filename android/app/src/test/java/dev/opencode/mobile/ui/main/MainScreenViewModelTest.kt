@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -10,6 +12,9 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.network.OpencodeHttpClient
+import dev.opencode.mobile.network.OpencodeSseHttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -17,6 +22,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -27,6 +34,7 @@ import org.junit.Test
 class MainScreenViewModelTest {
   private val testDispatcher = StandardTestDispatcher()
   private val serverUrl = "http://127.0.0.1:4096/"
+  private val json = Json { ignoreUnknownKeys = true }
 
   @Before
   fun setUp() {
@@ -96,16 +104,30 @@ class MainScreenViewModelTest {
     bootWorktree: String = "/boot/project",
     sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
     foregroundEventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
-  ): MainScreenViewModel =
-    MainScreenViewModel(
+  ): MainScreenViewModel {
+    val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+    runBlocking {
+      activeConnectionManager.applyProfile(
+        ConnectionProfile(baseUrl = serverUrl, username = "opencode", password = ""),
+      )
+    }
+    val coordinator =
+      ConnectionSessionCoordinator(
+        activeConnectionManager = activeConnectionManager,
+        httpClient = OpencodeHttpClient(json, activeConnectionManager),
+        sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+      )
+    return MainScreenViewModel(
       projectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
       sessionRepository = FakeSessionRepository(sessionsByWorktree),
       connectionProfileStore = connectionProfileStore,
       sessionDomainAdapter = SessionDomainAdapter(),
-      eventDomainAdapter = EventDomainAdapter(kotlinx.serialization.json.Json { ignoreUnknownKeys = true }),
+      eventDomainAdapter = EventDomainAdapter(json),
       foregroundEventStream = foregroundEventStream,
-      serverConnection = dev.opencode.mobile.network.ServerConnection(baseUrl = serverUrl),
+      activeConnectionManager = activeConnectionManager,
+      connectionSessionCoordinator = coordinator,
     )
+  }
 }
 
 private class FakeProjectRepository(
@@ -190,11 +212,16 @@ private class FakeConnectionProfileStore(
 
   init {
     if (initial.isNotEmpty()) {
-      data["http://127.0.0.1:4096/"] = initial
+      data[serverUrlKey()] = initial
     }
   }
 
   fun added(serverBaseUrl: String): List<String> = data[serverBaseUrl].orEmpty()
+
+  override suspend fun activeProfile(): ConnectionProfile? =
+    ConnectionProfile(baseUrl = serverUrlKey(), username = "opencode", password = "")
+
+  override suspend fun saveProfile(profile: ConnectionProfile) = Unit
 
   override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = data[serverBaseUrl].orEmpty()
 
@@ -208,4 +235,6 @@ private class FakeConnectionProfileStore(
   override suspend fun setAddedWorktrees(serverBaseUrl: String, worktrees: List<String>) {
     data[serverBaseUrl] = worktrees
   }
+
+  private fun serverUrlKey(): String = "http://127.0.0.1:4096/"
 }

@@ -3,12 +3,24 @@ import Foundation
 enum SessionsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
+    case noActiveConnection
 }
 
 struct SessionsAPIClient: Sendable {
-    let connection: ServerConnection
+    private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
+
+    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+        self.connectionProvider = connectionProvider
+    }
+
+    private func requireConnection() throws -> ServerConnection {
+        guard let connection = connectionProvider() else {
+            throw SessionsAPIError.noActiveConnection
+        }
+        return connection
+    }
 
     func listSessions(directory: String? = nil) async throws -> [SessionDTO] {
         try await get(path: "session", directory: directory)
@@ -19,7 +31,7 @@ struct SessionsAPIClient: Sendable {
     }
 
     func getAllSessionStatuses(directory: String? = nil) async throws -> [String: [String: String]] {
-        let data = try await data(for: connection.authorizedRequest(path: "session/status", directory: directory))
+        let data = try await data(for: try requireConnection().authorizedRequest(path: "session/status", directory: directory))
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             return [:]
         }
@@ -65,7 +77,7 @@ struct SessionsAPIClient: Sendable {
     }
 
     func unshareSession(id: String, directory: String? = nil) async throws -> SessionDTO {
-        var request = connection.authorizedRequest(path: "session/\(id)/share", method: "DELETE", directory: directory)
+        var request = try requireConnection().authorizedRequest(path: "session/\(id)/share", method: "DELETE", directory: directory)
         return try await send(request)
     }
 
@@ -101,19 +113,19 @@ struct SessionsAPIClient: Sendable {
     private struct EmptyBody: Codable {}
 
     private func get<T: Decodable>(path: String, directory: String? = nil) async throws -> T {
-        let data = try await data(for: connection.authorizedRequest(path: path, directory: directory))
+        let data = try await data(for: try requireConnection().authorizedRequest(path: path, directory: directory))
         return try decoder.decode(T.self, from: data)
     }
 
     private func post<T: Decodable, B: Encodable>(path: String, body: B, directory: String? = nil) async throws -> T {
-        var request = connection.authorizedRequest(path: path, method: "POST", directory: directory)
+        var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         return try await send(request)
     }
 
     private func postEmpty<B: Encodable>(path: String, body: B, directory: String? = nil) async throws -> Bool {
-        var request = connection.authorizedRequest(path: path, method: "POST", directory: directory)
+        var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         let data = try await data(for: request)
@@ -124,14 +136,14 @@ struct SessionsAPIClient: Sendable {
     }
 
     private func patch<T: Decodable, B: Encodable>(path: String, body: B, directory: String? = nil) async throws -> T {
-        var request = connection.authorizedRequest(path: path, method: "PATCH", directory: directory)
+        var request = try requireConnection().authorizedRequest(path: path, method: "PATCH", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         return try await send(request)
     }
 
     private func delete(path: String, directory: String? = nil) async throws -> Bool {
-        let request = connection.authorizedRequest(path: path, method: "DELETE", directory: directory)
+        let request = try requireConnection().authorizedRequest(path: path, method: "DELETE", directory: directory)
         let data = try await data(for: request)
         if let value = try? decoder.decode(Bool.self, from: data) {
             return value

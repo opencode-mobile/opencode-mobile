@@ -1,23 +1,26 @@
 import Foundation
 
 struct ServerConnection: Sendable {
-    static let defaultUsername = "opencode"
+    static let defaultUsername = ServerConnectionDefaults.username
 
     let baseURL: URL
     let username: String
     let password: String?
 
-    var apiBaseURL: URL {
-        baseURL
+    var apiBaseURL: URL { baseURL }
+
+    init(profile: ConnectionProfile) {
+        let normalized = profile.normalizedBaseURL
+        self.baseURL = URL(string: normalized) ?? AppConfig.serverBaseURL
+        let trimmedUsername = profile.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.username = trimmedUsername.isEmpty ? Self.defaultUsername : trimmedUsername
+        self.password = profile.password.isEmpty ? nil : profile.password
     }
 
-    static func fromAppConfig() -> ServerConnection {
-        let password = ProcessInfo.processInfo.environment["OPENCODE_SERVER_PASSWORD"]
-        return ServerConnection(
-            baseURL: AppConfig.serverBaseURL,
-            username: Self.defaultUsername,
-            password: password?.isEmpty == false ? password : nil
-        )
+    init(baseURL: URL, username: String = Self.defaultUsername, password: String?) {
+        self.baseURL = baseURL
+        self.username = username
+        self.password = password
     }
 
     func authorizedRequest(path: String, method: String = "GET", directory: String? = nil) -> URLRequest {

@@ -1,13 +1,16 @@
 import Foundation
 
 final class EventsAPIClient: Sendable {
-    private let connection: ServerConnection
+    private let connectionProvider: @Sendable () -> ServerConnection?
 
-    init(connection: ServerConnection) {
-        self.connection = connection
+    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+        self.connectionProvider = connectionProvider
     }
 
     func streamGlobalEvents(onDataLine: @escaping @Sendable (String) async -> Void) async throws {
+        guard let connection = connectionProvider() else {
+            throw EventsAPIError.noActiveConnection
+        }
         var request = connection.authorizedRequest(path: "global/event")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
@@ -42,4 +45,5 @@ final class EventsAPIClient: Sendable {
 
 enum EventsAPIError: Error {
     case invalidResponse
+    case noActiveConnection
 }

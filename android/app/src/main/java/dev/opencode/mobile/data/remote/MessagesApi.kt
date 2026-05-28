@@ -4,7 +4,7 @@ import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.setJsonBody
-import io.ktor.client.HttpClient
+import dev.opencode.mobile.network.OpencodeHttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
@@ -14,16 +14,16 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 
 class MessagesApi(
-  private val httpClient: HttpClient,
+  private val httpClient: OpencodeHttpClient,
   private val json: Json,
 ) {
   suspend fun listMessages(sessionId: String, directory: String? = null): List<MessageDto> =
-    httpClient.get("session/$sessionId/message") {
+    httpClient.get().get("session/$sessionId/message") {
       applyDirectory(directory)
     }.body()
 
   suspend fun getMessage(sessionId: String, messageId: String, directory: String? = null): MessageDto =
-    httpClient.get("session/$sessionId/message/$messageId") {
+    httpClient.get().get("session/$sessionId/message/$messageId") {
       applyDirectory(directory)
     }.body()
 
@@ -32,14 +32,14 @@ class MessagesApi(
     body: SendMessageRequestDto,
     directory: String? = null,
   ): MessageDto =
-    httpClient.post("session/$sessionId/message") {
+    httpClient.get().post("session/$sessionId/message") {
       applyDirectory(directory)
       setJsonBody(json, body)
     }.body()
 
   suspend fun sendPromptAsync(sessionId: String, body: SendMessageRequestDto, directory: String? = null) {
     val response =
-      httpClient.post("session/$sessionId/prompt_async") {
+      httpClient.get().post("session/$sessionId/prompt_async") {
         applyDirectory(directory)
         setJsonBody(json, body)
       }

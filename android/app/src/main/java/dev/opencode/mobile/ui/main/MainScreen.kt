@@ -41,6 +41,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 fun MainScreen(
   onDeveloperComponentsClick: () -> Unit,
   onSessionClick: (SessionOpenTarget) -> Unit,
+  onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
   modifier: Modifier = Modifier,
   viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
@@ -50,6 +51,7 @@ fun MainScreen(
     onDeveloperComponentsClick = onDeveloperComponentsClick,
     onSessionClick = onSessionClick,
     onRetryProbe = viewModel::retryProbe,
+    onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
     onRefresh = viewModel::refresh,
     onAddProjectClick = viewModel::showAddProjectSheet,
     onDismissAddProject = viewModel::dismissAddProjectSheet,
@@ -67,6 +69,7 @@ internal fun MainScreen(
   uiState: MainScreenUiState,
   onDeveloperComponentsClick: () -> Unit,
   onSessionClick: (SessionOpenTarget) -> Unit,
+  onEditConnection: () -> Unit,
   onRetryProbe: () -> Unit,
   onRefresh: () -> Unit,
   onAddProjectClick: () -> Unit,
@@ -108,6 +111,11 @@ internal fun MainScreen(
         actions =
           listOf(
             OpenCodeTopBarAction.Icon(
+              imageVector = OpenCodeIcons.Edit,
+              contentDescription = "Edit connection",
+              onClick = onEditConnection,
+            ),
+            OpenCodeTopBarAction.Icon(
               imageVector = OpenCodeIcons.Widgets,
               contentDescription = "Developer components",
               onClick = onDeveloperComponentsClick,
@@ -124,7 +132,12 @@ internal fun MainScreen(
           }
         }
         is MainScreenUiState.ProbeFailed -> {
-          ProbeFailedContent(message = uiState.message, onRetry = onRetryProbe, modifier = Modifier.fillMaxSize())
+          ProbeFailedContent(
+            message = uiState.message,
+            onRetry = onRetryProbe,
+            onEditConnection = onEditConnection,
+            modifier = Modifier.fillMaxSize(),
+          )
         }
         is MainScreenUiState.Empty,
         is MainScreenUiState.Loaded,
@@ -179,7 +192,12 @@ internal fun MainScreen(
 }
 
 @Composable
-private fun ProbeFailedContent(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+private fun ProbeFailedContent(
+  message: String,
+  onRetry: () -> Unit,
+  onEditConnection: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
   Column(
     modifier = modifier.padding(24.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -195,6 +213,10 @@ private fun ProbeFailedContent(message: String, onRetry: () -> Unit, modifier: M
     OpenCodeButton(
       variant = OpenCodeButtonVariant.FullWidthText("Retry"),
       onClick = onRetry,
+    )
+    OpenCodeButton(
+      variant = OpenCodeButtonVariant.FullWidthText("Edit connection"),
+      onClick = onEditConnection,
     )
   }
 }
@@ -321,6 +343,7 @@ fun MainScreenPreview() {
         ),
       onDeveloperComponentsClick = {},
       onSessionClick = {},
+      onEditConnection = {},
       onRetryProbe = {},
       onRefresh = {},
       onAddProjectClick = {},

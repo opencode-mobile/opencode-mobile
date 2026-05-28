@@ -37,6 +37,10 @@ if [[ -z "$EMULATOR" && -n "$SDK" && -x "$SDK/emulator/emulator" ]]; then
   EMULATOR="$SDK/emulator/emulator"
 fi
 
+find_physical_device() {
+  "$ADB" devices | awk '$1 !~ /^emulator-/ && $2 == "device" { print $1; exit }'
+}
+
 find_running_emulator() {
   "$ADB" devices | awk '$1 ~ /^emulator-/ && $2 == "device" { print $1; exit }'
 }
@@ -84,7 +88,10 @@ start_emulator() {
 if [[ -n "${ANDROID_SERIAL:-}" ]]; then
   DEVICE="$ANDROID_SERIAL"
 else
-  DEVICE="$(find_running_emulator)"
+  DEVICE="$(find_physical_device)"
+  if [[ -z "${DEVICE:-}" ]]; then
+    DEVICE="$(find_running_emulator)"
+  fi
 fi
 
 if [[ -z "${DEVICE:-}" ]]; then
