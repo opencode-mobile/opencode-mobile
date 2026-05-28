@@ -19,82 +19,82 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 
 @Composable
 fun ConnectionSetupSheetContent(
-  uiState: ConnectionSetupUiState,
-  onBaseUrlChanged: (String) -> Unit,
-  onUsernameChanged: (String) -> Unit,
-  onPasswordChanged: (String) -> Unit,
-  onTestConnection: () -> Unit,
-  onSave: () -> Unit,
-  modifier: Modifier = Modifier,
+    uiState: ConnectionSetupUiState,
+    onBaseUrlChanged: (String) -> Unit,
+    onUsernameChanged: (String) -> Unit,
+    onPasswordChanged: (String) -> Unit,
+    onTestConnection: () -> Unit,
+    onSave: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  Column(modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-    ConnectionField(
-      label = "Server URL",
-      value = uiState.baseUrl,
-      onValueChange = onBaseUrlChanged,
-    )
-    Spacer(modifier = Modifier.height(12.dp))
-    ConnectionField(
-      label = "Username",
-      value = uiState.username,
-      onValueChange = onUsernameChanged,
-    )
-    Spacer(modifier = Modifier.height(12.dp))
-    ConnectionField(
-      label = "Password",
-      value = uiState.password,
-      onValueChange = onPasswordChanged,
-      secure = true,
-    )
-    if (uiState.testResultMessage != null) {
-      Spacer(modifier = Modifier.height(12.dp))
-      Text(
-        text = uiState.testResultMessage,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        ConnectionField(
+            label = "Server URL",
+            value = uiState.baseUrl,
+            onValueChange = onBaseUrlChanged,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ConnectionField(
+            label = "Username",
+            value = uiState.username,
+            onValueChange = onUsernameChanged,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ConnectionField(
+            label = "Password",
+            value = uiState.password,
+            onValueChange = onPasswordChanged,
+            secure = true,
+        )
+        if (uiState.testResultMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = uiState.testResultMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Test connection"),
+            enabled = !uiState.isTesting && !uiState.isSaving,
+            onClick = onTestConnection,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Save"),
+            enabled = uiState.canSave && !uiState.isSaving,
+            onClick = onSave,
+        )
     }
-    Spacer(modifier = Modifier.height(16.dp))
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.FullWidthText("Test connection"),
-      enabled = !uiState.isTesting && !uiState.isSaving,
-      onClick = onTestConnection,
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.FullWidthText("Save"),
-      enabled = uiState.canSave && !uiState.isSaving,
-      onClick = onSave,
-    )
-  }
 }
 
 @Composable
 private fun ConnectionField(
-  label: String,
-  value: String,
-  onValueChange: (String) -> Unit,
-  secure: Boolean = false,
-  modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    secure: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
-  Column(modifier = modifier.fillMaxWidth()) {
-    Text(
-      text = label,
-      style = MaterialTheme.typography.labelMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(modifier = Modifier.height(6.dp))
-    OutlinedTextField(
-      value = value,
-      onValueChange = onValueChange,
-      modifier = Modifier.fillMaxWidth(),
-      singleLine = true,
-      visualTransformation = if (secure) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-      keyboardOptions =
-        KeyboardOptions(
-          keyboardType = if (secure) KeyboardType.Password else KeyboardType.Uri,
-          autoCorrectEnabled = false,
-        ),
-    )
-  }
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = if (secure) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = if (secure) KeyboardType.Password else KeyboardType.Uri,
+                    autoCorrectEnabled = false,
+                ),
+        )
+    }
 }

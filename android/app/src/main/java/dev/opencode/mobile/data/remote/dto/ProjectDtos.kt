@@ -4,13 +4,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class HealthDto(
-  val healthy: Boolean,
-  val version: String? = null,
+    val healthy: Boolean,
+    val version: String? = null,
 )
 
 @Serializable
 data class ProjectDto(
-  val id: String,
-  val worktree: String,
-  val vcs: String? = null,
+    val id: String,
+    val worktree: String,
+    val vcs: String? = null,
 )

@@ -13,13 +13,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class MessageModule {
-  @Binds
-  @Singleton
-  abstract fun bindMessageRepository(impl: DefaultMessageRepository): MessageRepository
-
-  companion object {
-    @Provides
+    @Binds
     @Singleton
-    fun provideMessageDomainAdapter(): MessageDomainAdapter = MessageDomainAdapter()
-  }
+    abstract fun bindMessageRepository(impl: DefaultMessageRepository): MessageRepository
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideMessageDomainAdapter(): MessageDomainAdapter = MessageDomainAdapter()
+    }
 }

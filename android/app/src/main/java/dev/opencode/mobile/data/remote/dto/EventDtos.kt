@@ -5,13 +5,13 @@ import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class EventEnvelopeDto(
-  val payload: EventPayloadDto? = null,
-  val type: String? = null,
-  val properties: JsonObject? = null,
+    val payload: EventPayloadDto? = null,
+    val type: String? = null,
+    val properties: JsonObject? = null,
 )
 
 @Serializable
 data class EventPayloadDto(
-  val type: String,
-  val properties: JsonObject = JsonObject(emptyMap()),
+    val type: String,
+    val properties: JsonObject = JsonObject(emptyMap()),
 )

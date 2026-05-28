@@ -27,287 +27,378 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionChatViewModelTest {
-  private val testDispatcher = StandardTestDispatcher()
+    private val testDispatcher = StandardTestDispatcher()
 
-  @Before
-  fun setUp() {
-    Dispatchers.setMain(testDispatcher)
-  }
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+    }
 
-  @After
-  fun tearDown() {
-    Dispatchers.resetMain()
-  }
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
-  @Test
-  fun loadMessages_success() = runTest {
-    val viewModel = createViewModel(FakeMessageRepository())
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun loadMessages_success() =
+        runTest {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    val state = viewModel.uiState.value
-    assertEquals(TimelineState.Ready, state.timeline)
-    assertEquals(1, state.messages.size)
-    assertEquals("Hello", state.messages.first().text)
-  }
+            val state = viewModel.uiState.value
+            assertEquals(TimelineState.Ready, state.timeline)
+            assertEquals(1, state.messages.size)
+            assertEquals("Hello", state.messages.first().text)
+        }
 
-  @Test
-  fun loadMessages_empty() = runTest {
-    val viewModel = createViewModel(FakeMessageRepository(messages = emptyList()))
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun loadMessages_empty() =
+        runTest {
+            val viewModel = createViewModel(FakeMessageRepository(messages = emptyList()))
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    assertEquals(TimelineState.Empty, viewModel.uiState.value.timeline)
-  }
+            assertEquals(TimelineState.Empty, viewModel.uiState.value.timeline)
+        }
 
-  @Test
-  fun loadMessages_error() = runTest {
-    val viewModel = createViewModel(FakeMessageRepository(shouldFailLoad = true))
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun loadMessages_error() =
+        runTest {
+            val viewModel = createViewModel(FakeMessageRepository(shouldFailLoad = true))
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    assertEquals(TimelineState.Error, viewModel.uiState.value.timeline)
-  }
+            assertEquals(TimelineState.Error, viewModel.uiState.value.timeline)
+        }
 
-  @Test
-  fun sendPrompt_success_reloadsMessages() = runTest {
-    val repository = FakeMessageRepository()
-    val viewModel = createViewModel(repository)
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun sendPrompt_success_reloadsMessages() =
+        runTest {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    viewModel.updateComposerText("New prompt")
-    viewModel.sendPrompt()
-    advanceUntilIdle()
+            viewModel.updateComposerText("New prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
 
-    assertEquals(false, viewModel.uiState.value.isSending)
-    assertTrue(repository.sendPromptAsyncCalled)
-    assertEquals("Hello", viewModel.uiState.value.messages.single().text)
-  }
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals(
+                "Hello",
+                viewModel.uiState.value.messages
+                    .single()
+                    .text,
+            )
+        }
 
-  @Test
-  fun loadMessages_sortsOldestToNewest() = runTest {
-    val viewModel =
-      createViewModel(
-        FakeMessageRepository(
-          messages =
-            listOf(
-              Message(id = "msg-2", role = MessageRole.User, text = "Later", sentAtEpochMs = 2_000L),
-              Message(id = "msg-1", role = MessageRole.User, text = "Earlier", sentAtEpochMs = 1_000L),
-            ),
-        ),
-      )
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun loadMessages_sortsOldestToNewest() =
+        runTest {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(id = "msg-2", role = MessageRole.User, text = "Later", sentAtEpochMs = 2_000L),
+                                Message(id = "msg-1", role = MessageRole.User, text = "Earlier", sentAtEpochMs = 1_000L),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    assertEquals(listOf("Earlier", "Later"), viewModel.uiState.value.messages.map { it.text })
-  }
+            assertEquals(
+                listOf("Earlier", "Later"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
+        }
 
-  @Test
-  fun sendPrompt_failure_removesOptimisticMessage() = runTest {
-    val repository = FakeMessageRepository(shouldFailSend = true)
-    val viewModel = createViewModel(repository)
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun sendPrompt_failure_removesOptimisticMessage() =
+        runTest {
+            val repository = FakeMessageRepository(shouldFailSend = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    viewModel.updateComposerText("Fail me")
-    viewModel.sendPrompt()
-    advanceUntilIdle()
+            viewModel.updateComposerText("Fail me")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
 
-    assertTrue(repository.sendPromptAsyncCalled)
-    assertEquals(false, viewModel.uiState.value.isSending)
-    assertFalse(viewModel.uiState.value.messages.any { it.text == "Fail me" })
-    assertEquals("send failed", viewModel.uiState.value.errorMessage)
-  }
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertFalse(
+                viewModel.uiState.value.messages
+                    .any { it.text == "Fail me" },
+            )
+            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+        }
 
-  @Test
-  fun messageUpdatedEvent_reloadsMessages() = runTest {
-    val repository = FakeMessageRepository()
-    val viewModel = createViewModel(repository)
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun messageUpdatedEvent_reloadsMessages() =
+        runTest {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    repository.messages =
-      listOf(
-        Message(id = "msg-2", role = MessageRole.Assistant, text = "Updated"),
-      )
-    repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
-    advanceTimeBy(350)
-    advanceUntilIdle()
+            repository.messages =
+                listOf(
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Updated"),
+                )
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
 
-    assertEquals("Updated", viewModel.uiState.value.messages.single().text)
-  }
+            assertEquals(
+                "Updated",
+                viewModel.uiState.value.messages
+                    .single()
+                    .text,
+            )
+        }
 
-  @Test
-  fun sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() = runTest {
-    val repository = FakeMessageRepository(failListMessagesAfterSend = true)
-    val viewModel = createViewModel(repository)
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() =
+        runTest {
+            val repository = FakeMessageRepository(failListMessagesAfterSend = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    viewModel.updateComposerText("New prompt")
-    viewModel.sendPrompt()
-    advanceUntilIdle()
+            viewModel.updateComposerText("New prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
 
-    assertTrue(repository.sendPromptAsyncCalled)
-    assertEquals(null, viewModel.uiState.value.errorMessage)
-    assertTrue(viewModel.uiState.value.messages.any { it.text == "New prompt" && it.isPending })
-  }
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "New prompt" && it.isPending },
+            )
+        }
 
-  @Test
-  fun messageUpdatedEvent_clearsStaleErrorBanner() = runTest {
-    val repository = FakeMessageRepository(failListMessagesAfterSend = true)
-    val viewModel = createViewModel(repository)
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun messageUpdatedEvent_clearsStaleErrorBanner() =
+        runTest {
+            val repository = FakeMessageRepository(failListMessagesAfterSend = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    viewModel.updateComposerText("New prompt")
-    viewModel.sendPrompt()
-    advanceUntilIdle()
-    assertEquals(null, viewModel.uiState.value.errorMessage)
+            viewModel.updateComposerText("New prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.errorMessage)
 
-    repository.failListMessagesAfterSend = false
-    repository.messages =
-      listOf(
-        Message(id = "msg-1", role = MessageRole.User, text = "New prompt"),
-        Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
-      )
-    repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
-    advanceTimeBy(350)
-    advanceUntilIdle()
+            repository.failListMessagesAfterSend = false
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "New prompt"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
 
-    assertEquals(null, viewModel.uiState.value.errorMessage)
-    assertEquals(2, viewModel.uiState.value.messages.size)
-  }
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+            assertEquals(2, viewModel.uiState.value.messages.size)
+        }
 
-  @Test
-  fun quietRefreshDuringSend_keepsPendingMessageAndSendingFlag() = runTest {
-    val sendGate = CompletableDeferred<Unit>()
-    val repository = FakeMessageRepository(holdSendUntil = sendGate)
-    val viewModel = createViewModel(repository)
-    viewModel.bind("ses-1", "Title", "/repo")
-    advanceUntilIdle()
+    @Test
+    fun quietRefreshDuringSend_keepsPendingMessageAndSendingFlag() =
+        runTest {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
-    viewModel.updateComposerText("New prompt")
-    viewModel.sendPrompt()
-    advanceUntilIdle()
+            viewModel.updateComposerText("New prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
 
-    assertTrue(viewModel.uiState.value.isSending)
-    assertTrue(viewModel.uiState.value.messages.any { it.text == "New prompt" && it.isPending })
+            assertTrue(viewModel.uiState.value.isSending)
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "New prompt" && it.isPending },
+            )
 
-    repository.messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
-    repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
-    advanceTimeBy(350)
-    advanceUntilIdle()
+            repository.messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
 
-    assertTrue(viewModel.uiState.value.isSending)
-    assertTrue(viewModel.uiState.value.messages.any { it.text == "New prompt" && it.isPending })
+            assertTrue(viewModel.uiState.value.isSending)
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "New prompt" && it.isPending },
+            )
 
-    sendGate.complete(Unit)
-    advanceUntilIdle()
-  }
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+        }
 
-  private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel =
-    SessionChatViewModel(
-      messageRepository = repository,
-      sessionRepository = FakeSessionRepository(),
-      foregroundEventStream = repository.eventStream,
-      eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
-    )
+    private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel =
+        SessionChatViewModel(
+            messageRepository = repository,
+            sessionRepository = FakeSessionRepository(),
+            foregroundEventStream = repository.eventStream,
+            eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+        )
 }
 
 private class FakeMessageRepository(
-  var messages: List<Message> =
-    listOf(
-      Message(
-        id = "msg-1",
-        role = MessageRole.User,
-        text = "Hello",
-      ),
-    ),
-  private val shouldFailLoad: Boolean = false,
-  private val shouldFailSend: Boolean = false,
-  var failListMessagesAfterSend: Boolean = false,
-  private val holdSendUntil: CompletableDeferred<Unit>? = null,
+    var messages: List<Message> =
+        listOf(
+            Message(
+                id = "msg-1",
+                role = MessageRole.User,
+                text = "Hello",
+            ),
+        ),
+    private val shouldFailLoad: Boolean = false,
+    private val shouldFailSend: Boolean = false,
+    var failListMessagesAfterSend: Boolean = false,
+    private val holdSendUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
-  val eventStream = FakeForegroundEventStream()
-  var sendPromptAsyncCalled: Boolean = false
-  private var listMessagesCallCount = 0
+    val eventStream = FakeForegroundEventStream()
+    var sendPromptAsyncCalled: Boolean = false
+    private var listMessagesCallCount = 0
 
-  override suspend fun listMessages(sessionId: String, directory: String?): List<Message> {
-    listMessagesCallCount += 1
-    if (shouldFailLoad) error("load failed")
-    if (failListMessagesAfterSend && listMessagesCallCount > 1) error("reload failed")
-    return messages
-  }
+    override suspend fun listMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<Message> {
+        listMessagesCallCount += 1
+        if (shouldFailLoad) error("load failed")
+        if (failListMessagesAfterSend && listMessagesCallCount > 1) error("reload failed")
+        return messages
+    }
 
-  override suspend fun getMessage(sessionId: String, messageId: String, directory: String?): Message = error("unused")
+    override suspend fun getMessage(
+        sessionId: String,
+        messageId: String,
+        directory: String?,
+    ): Message = error("unused")
 
-  override suspend fun sendMessage(sessionId: String, text: String, directory: String?): Message = error("unused")
+    override suspend fun sendMessage(
+        sessionId: String,
+        text: String,
+        directory: String?,
+    ): Message = error("unused")
 
-  override suspend fun sendPromptAsync(sessionId: String, text: String, directory: String?) {
-    sendPromptAsyncCalled = true
-    if (shouldFailSend) error("send failed")
-    holdSendUntil?.await()
-  }
+    override suspend fun sendPromptAsync(
+        sessionId: String,
+        text: String,
+        directory: String?,
+    ) {
+        sendPromptAsyncCalled = true
+        if (shouldFailSend) error("send failed")
+        holdSendUntil?.await()
+    }
 }
 
 private class FakeSessionRepository : SessionRepository {
-  override suspend fun listSessions(directory: String?) = error("unused")
+    override suspend fun listSessions(directory: String?) = error("unused")
 
-  override suspend fun createSession(parentId: String?, title: String?, directory: String?) = error("unused")
+    override suspend fun createSession(
+        parentId: String?,
+        title: String?,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun getAllSessionStatuses(directory: String?) =
-    listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy")))
+    override suspend fun getAllSessionStatuses(directory: String?) =
+        listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy")))
 
-  override suspend fun getSession(id: String, directory: String?) = error("unused")
+    override suspend fun getSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun updateSession(id: String, title: String?, directory: String?) = error("unused")
+    override suspend fun updateSession(
+        id: String,
+        title: String?,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun deleteSession(id: String, directory: String?) = error("unused")
+    override suspend fun deleteSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun listChildSessions(id: String, directory: String?) = error("unused")
+    override suspend fun listChildSessions(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun listSessionTodos(id: String, directory: String?) = error("unused")
+    override suspend fun listSessionTodos(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun initializeSessionAgents(
-    id: String,
-    messageId: String,
-    providerId: String,
-    modelId: String,
-    directory: String?,
-  ) = error("unused")
+    override suspend fun initializeSessionAgents(
+        id: String,
+        messageId: String,
+        providerId: String,
+        modelId: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun forkSession(id: String, atMessageId: String?, directory: String?) = error("unused")
+    override suspend fun forkSession(
+        id: String,
+        atMessageId: String?,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun abortSession(id: String, directory: String?) = error("unused")
+    override suspend fun abortSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun shareSession(id: String, directory: String?) = error("unused")
+    override suspend fun shareSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun unshareSession(id: String, directory: String?) = error("unused")
+    override suspend fun unshareSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun getSessionDiff(id: String, messageId: String?, directory: String?) = error("unused")
+    override suspend fun getSessionDiff(
+        id: String,
+        messageId: String?,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun summarizeSession(
-    id: String,
-    providerId: String,
-    modelId: String,
-    directory: String?,
-  ) = error("unused")
+    override suspend fun summarizeSession(
+        id: String,
+        providerId: String,
+        modelId: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun revertSession(
-    id: String,
-    messageId: String,
-    partId: String?,
-    directory: String?,
-  ) = error("unused")
+    override suspend fun revertSession(
+        id: String,
+        messageId: String,
+        partId: String?,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun unrevertSession(id: String, directory: String?) = error("unused")
+    override suspend fun unrevertSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
-  override suspend fun respondToPermission(
-    sessionId: String,
-    permissionId: String,
-    decision: dev.opencode.mobile.domain.session.PermissionDecision,
-    directory: String?,
-  ) = error("unused")
+    override suspend fun respondToPermission(
+        sessionId: String,
+        permissionId: String,
+        decision: dev.opencode.mobile.domain.session.PermissionDecision,
+        directory: String?,
+    ) = error("unused")
 }

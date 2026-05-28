@@ -10,22 +10,22 @@ import javax.inject.Singleton
 
 @Singleton
 class ForegroundEventLifecycleCoordinator
-@Inject
-constructor(
-  private val foregroundEventStream: ForegroundEventStream,
-  private val activeConnectionManager: ActiveConnectionManager,
-) : DefaultLifecycleObserver {
-  fun register() {
-    ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-  }
+    @Inject
+    constructor(
+        private val foregroundEventStream: ForegroundEventStream,
+        private val activeConnectionManager: ActiveConnectionManager,
+    ) : DefaultLifecycleObserver {
+        fun register() {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        }
 
-  override fun onStart(owner: LifecycleOwner) {
-    if (activeConnectionManager.current() != null) {
-      foregroundEventStream.start()
+        override fun onStart(owner: LifecycleOwner) {
+            if (activeConnectionManager.current() != null) {
+                foregroundEventStream.start()
+            }
+        }
+
+        override fun onStop(owner: LifecycleOwner) {
+            foregroundEventStream.stop()
+        }
     }
-  }
-
-  override fun onStop(owner: LifecycleOwner) {
-    foregroundEventStream.stop()
-  }
-}

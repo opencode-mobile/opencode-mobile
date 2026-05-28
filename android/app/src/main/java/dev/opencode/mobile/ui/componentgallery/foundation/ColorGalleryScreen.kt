@@ -58,69 +58,84 @@ import dev.opencode.mobile.theme.LightTextPrimary
 import dev.opencode.mobile.theme.LightTextSecondary
 import dev.opencode.mobile.theme.LightTextTertiary
 
-private data class ColorToken(val name: String, val light: Color, val lightHex: String, val dark: Color, val darkHex: String)
+private data class ColorToken(
+    val name: String,
+    val light: Color,
+    val lightHex: String,
+    val dark: Color,
+    val darkHex: String,
+)
 
 private val ColorTokens =
-  listOf(
-    ColorToken("background.primary", LightBackgroundPrimary, "#F8F8F8", DarkBackgroundPrimary, "#121212"),
-    ColorToken("background.secondary", LightBackgroundSecondary, "#F3F3F3", DarkBackgroundSecondary, "#191919"),
-    ColorToken("background.elevated", LightBackgroundElevated, "#FCFCFC", DarkBackgroundElevated, "#151515"),
-    ColorToken("surface.primary", LightSurfacePrimary, "#FFFFFF", DarkSurfacePrimary, "#1C1C1C"),
-    ColorToken("surface.secondary", LightSurfaceSecondary, "#F3F3F3", DarkSurfaceSecondary, "#282727"),
-    ColorToken("surface.inset", LightSurfaceInset, "#F0F0F0", DarkSurfaceInset, "#202020"),
-    ColorToken("text.primary", LightTextPrimary, "#171717", DarkTextPrimary, "#EDEDED"),
-    ColorToken("text.secondary", LightTextSecondary, "#6F6F6F", DarkTextSecondary, "#A0A0A0"),
-    ColorToken("text.tertiary", LightTextTertiary, "#8F8F8F", DarkTextTertiary, "#707070"),
-    ColorToken("text.disabled", LightTextDisabled, "#C7C7C7", DarkTextDisabled, "#505050"),
-    ColorToken("text.interactive", LightTextInteractive, "#034CFF", DarkTextInteractive, "#C0D4FB"),
-    ColorToken("border.subtle", LightBorderSubtle, "#E5E5E5", DarkBorderSubtle, "#282828"),
-    ColorToken("border.default", LightBorderDefault, "#00000029", DarkBorderDefault, "#4D4C4A"),
-    ColorToken("icon.default", LightIconDefault, "#8F8F8F", DarkIconDefault, "#7E7E7E"),
-    ColorToken("icon.strong", LightIconStrong, "#171717", DarkIconStrong, "#EDE8E4"),
-    ColorToken("interactive.accent", LightTextInteractive, "#034CFF", DarkInteractiveAccent, "#1456F7"),
-    ColorToken("status.success", LightStatusSuccess, "#12C905", DarkStatusSuccess, "#089B00"),
-    ColorToken("status.warning", LightStatusWarning, "#FBDD46", DarkStatusWarning, "#C78B05"),
-    ColorToken("status.error", LightStatusError, "#FC533A", DarkStatusError, "#CB321C"),
-    ColorToken("status.info", LightStatusInfo, "#A753AE", DarkStatusInfo, "#CD73D5"),
-  )
+    listOf(
+        ColorToken("background.primary", LightBackgroundPrimary, "#F8F8F8", DarkBackgroundPrimary, "#121212"),
+        ColorToken("background.secondary", LightBackgroundSecondary, "#F3F3F3", DarkBackgroundSecondary, "#191919"),
+        ColorToken("background.elevated", LightBackgroundElevated, "#FCFCFC", DarkBackgroundElevated, "#151515"),
+        ColorToken("surface.primary", LightSurfacePrimary, "#FFFFFF", DarkSurfacePrimary, "#1C1C1C"),
+        ColorToken("surface.secondary", LightSurfaceSecondary, "#F3F3F3", DarkSurfaceSecondary, "#282727"),
+        ColorToken("surface.inset", LightSurfaceInset, "#F0F0F0", DarkSurfaceInset, "#202020"),
+        ColorToken("text.primary", LightTextPrimary, "#171717", DarkTextPrimary, "#EDEDED"),
+        ColorToken("text.secondary", LightTextSecondary, "#6F6F6F", DarkTextSecondary, "#A0A0A0"),
+        ColorToken("text.tertiary", LightTextTertiary, "#8F8F8F", DarkTextTertiary, "#707070"),
+        ColorToken("text.disabled", LightTextDisabled, "#C7C7C7", DarkTextDisabled, "#505050"),
+        ColorToken("text.interactive", LightTextInteractive, "#034CFF", DarkTextInteractive, "#C0D4FB"),
+        ColorToken("border.subtle", LightBorderSubtle, "#E5E5E5", DarkBorderSubtle, "#282828"),
+        ColorToken("border.default", LightBorderDefault, "#00000029", DarkBorderDefault, "#4D4C4A"),
+        ColorToken("icon.default", LightIconDefault, "#8F8F8F", DarkIconDefault, "#7E7E7E"),
+        ColorToken("icon.strong", LightIconStrong, "#171717", DarkIconStrong, "#EDE8E4"),
+        ColorToken("interactive.accent", LightTextInteractive, "#034CFF", DarkInteractiveAccent, "#1456F7"),
+        ColorToken("status.success", LightStatusSuccess, "#12C905", DarkStatusSuccess, "#089B00"),
+        ColorToken("status.warning", LightStatusWarning, "#FBDD46", DarkStatusWarning, "#C78B05"),
+        ColorToken("status.error", LightStatusError, "#FC533A", DarkStatusError, "#CB321C"),
+        ColorToken("status.info", LightStatusInfo, "#A753AE", DarkStatusInfo, "#CD73D5"),
+    )
 
 @Composable
 fun ColorGalleryScreen(modifier: Modifier = Modifier) {
-  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Text(text = "Semantic Tokens", style = MaterialTheme.typography.titleMedium)
-    ColorTokens.forEach { token -> ColorTokenRow(token) }
-  }
-}
-
-@Composable
-private fun ColorTokenRow(token: ColorToken, modifier: Modifier = Modifier) {
-  Surface(
-    modifier = modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    color = MaterialTheme.colorScheme.surface,
-    tonalElevation = 0.dp,
-  ) {
-    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(text = "color.${token.name}", style = MaterialTheme.typography.labelLarge)
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        ColorSwatch(label = "Light", color = token.light, hex = token.lightHex, modifier = Modifier.weight(1f))
-        ColorSwatch(label = "Dark", color = token.dark, hex = token.darkHex, modifier = Modifier.weight(1f))
-      }
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(text = "Semantic Tokens", style = MaterialTheme.typography.titleMedium)
+        ColorTokens.forEach { token -> ColorTokenRow(token) }
     }
-  }
 }
 
 @Composable
-private fun ColorSwatch(label: String, color: Color, hex: String, modifier: Modifier = Modifier) {
-  Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-    Box(
-      modifier =
-        Modifier.fillMaxWidth()
-          .height(44.dp)
-          .background(color = color, shape = RoundedCornerShape(8.dp))
-          .border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = RoundedCornerShape(8.dp)),
-    )
-    Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(text = hex, style = MaterialTheme.typography.bodySmall)
-  }
+private fun ColorTokenRow(
+    token: ColorToken,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = "color.${token.name}", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                ColorSwatch(label = "Light", color = token.light, hex = token.lightHex, modifier = Modifier.weight(1f))
+                ColorSwatch(label = "Dark", color = token.dark, hex = token.darkHex, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatch(
+    label: String,
+    color: Color,
+    hex: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .background(color = color, shape = RoundedCornerShape(8.dp))
+                    .border(width = 1.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = RoundedCornerShape(8.dp)),
+        )
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = hex, style = MaterialTheme.typography.bodySmall)
+    }
 }

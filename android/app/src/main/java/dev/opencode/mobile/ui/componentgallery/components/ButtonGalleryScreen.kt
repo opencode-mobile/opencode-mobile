@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-
-
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,82 +20,82 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryButtonVariant {
-  FullWidthText,
-  CompactText,
-  IconSquare,
-  IconCircle,
+    FullWidthText,
+    CompactText,
+    IconSquare,
+    IconCircle,
 }
 
 @Composable
 fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
-  var variantName by rememberSaveable { mutableStateOf(GalleryButtonVariant.FullWidthText.name) }
-  var contrastName by rememberSaveable { mutableStateOf(OpenCodeButtonContrast.High.name) }
-  var enabled by rememberSaveable { mutableStateOf(true) }
+    var variantName by rememberSaveable { mutableStateOf(GalleryButtonVariant.FullWidthText.name) }
+    var contrastName by rememberSaveable { mutableStateOf(OpenCodeButtonContrast.High.name) }
+    var enabled by rememberSaveable { mutableStateOf(true) }
 
-  val variantSelection =
-    try {
-      GalleryButtonVariant.valueOf(variantName)
-    } catch (_: IllegalArgumentException) {
-      GalleryButtonVariant.FullWidthText
-    }
-
-  val variant: OpenCodeButtonVariant =
-    when (variantSelection) {
-      GalleryButtonVariant.FullWidthText -> OpenCodeButtonVariant.FullWidthText("Run")
-      GalleryButtonVariant.CompactText -> OpenCodeButtonVariant.CompactText("Build")
-      GalleryButtonVariant.IconSquare -> OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send")
-      GalleryButtonVariant.IconCircle -> OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send")
-    }
-  val contrastSelection =
-    try {
-      OpenCodeButtonContrast.valueOf(contrastName)
-    } catch (_: IllegalArgumentException) {
-      OpenCodeButtonContrast.High
-    }
-
-  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(text = "Button", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        GalleryButtonVariant.entries.forEach { option ->
-          OpenCodeChoiceBadge(
-            label =
-              when (option) {
-                GalleryButtonVariant.FullWidthText -> "Full width"
-                GalleryButtonVariant.CompactText -> "Compact"
-                GalleryButtonVariant.IconSquare -> "Icon"
-                GalleryButtonVariant.IconCircle -> "Circle"
-              },
-            selected = option == variantSelection,
-            onClick = { variantName = option.name },
-          )
+    val variantSelection =
+        try {
+            GalleryButtonVariant.valueOf(variantName)
+        } catch (_: IllegalArgumentException) {
+            GalleryButtonVariant.FullWidthText
         }
-      }
-    }
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
-    }
+    val variant: OpenCodeButtonVariant =
+        when (variantSelection) {
+            GalleryButtonVariant.FullWidthText -> OpenCodeButtonVariant.FullWidthText("Run")
+            GalleryButtonVariant.CompactText -> OpenCodeButtonVariant.CompactText("Build")
+            GalleryButtonVariant.IconSquare -> OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send")
+            GalleryButtonVariant.IconCircle -> OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send")
+        }
+    val contrastSelection =
+        try {
+            OpenCodeButtonContrast.valueOf(contrastName)
+        } catch (_: IllegalArgumentException) {
+            OpenCodeButtonContrast.High
+        }
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OpenCodeButtonContrast.entries.forEach { option ->
-        OpenCodeChoiceBadge(
-          label =
-            when (option) {
-              OpenCodeButtonContrast.High -> "High contrast"
-              OpenCodeButtonContrast.Low -> "Low contrast"
-            },
-          selected = option == contrastSelection,
-          onClick = { contrastName = option.name },
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = "Button", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GalleryButtonVariant.entries.forEach { option ->
+                    OpenCodeChoiceBadge(
+                        label =
+                            when (option) {
+                                GalleryButtonVariant.FullWidthText -> "Full width"
+                                GalleryButtonVariant.CompactText -> "Compact"
+                                GalleryButtonVariant.IconSquare -> "Icon"
+                                GalleryButtonVariant.IconCircle -> "Circle"
+                            },
+                        selected = option == variantSelection,
+                        onClick = { variantName = option.name },
+                    )
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpenCodeButtonContrast.entries.forEach { option ->
+                OpenCodeChoiceBadge(
+                    label =
+                        when (option) {
+                            OpenCodeButtonContrast.High -> "High contrast"
+                            OpenCodeButtonContrast.Low -> "Low contrast"
+                        },
+                    selected = option == contrastSelection,
+                    onClick = { contrastName = option.name },
+                )
+            }
+        }
+
+        OpenCodeButton(
+            variant = variant,
+            enabled = enabled,
+            contrast = contrastSelection,
+            onClick = {},
         )
-      }
     }
-
-    OpenCodeButton(
-      variant = variant,
-      enabled = enabled,
-      contrast = contrastSelection,
-      onClick = {},
-    )
-  }
 }

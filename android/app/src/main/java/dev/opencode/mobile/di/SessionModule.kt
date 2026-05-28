@@ -13,13 +13,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class SessionModule {
-  @Binds
-  @Singleton
-  abstract fun bindSessionRepository(impl: DefaultSessionRepository): SessionRepository
-
-  companion object {
-    @Provides
+    @Binds
     @Singleton
-    fun provideSessionDomainAdapter(): SessionDomainAdapter = SessionDomainAdapter()
-  }
+    abstract fun bindSessionRepository(impl: DefaultSessionRepository): SessionRepository
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideSessionDomainAdapter(): SessionDomainAdapter = SessionDomainAdapter()
+    }
 }

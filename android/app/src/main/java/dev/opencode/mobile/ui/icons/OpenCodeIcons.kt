@@ -10,354 +10,444 @@ import androidx.compose.ui.graphics.vector.group
 import androidx.compose.ui.unit.dp
 
 object OpenCodeIcons {
-private var _add: ImageVector? = null
-private var _arrow_back: ImageVector? = null
-private var _arrow_upward: ImageVector? = null
-private var _check: ImageVector? = null
-private var _chevron_right: ImageVector? = null
-private var _close: ImageVector? = null
-private var _content_copy: ImageVector? = null
-private var _collapse_content: ImageVector? = null
-private var _description: ImageVector? = null
-private var _edit: ImageVector? = null
-private var _expand_content: ImageVector? = null
-private var _folder: ImageVector? = null
-private var _more_vert: ImageVector? = null
-private var _search: ImageVector? = null
-private var _stop_circle: ImageVector? = null
-private var _undo: ImageVector? = null
-private var _widgets: ImageVector? = null
+    private var _add: ImageVector? = null
+    private var _arrow_back: ImageVector? = null
+    private var _arrow_upward: ImageVector? = null
+    private var _check: ImageVector? = null
+    private var _chevron_right: ImageVector? = null
+    private var _close: ImageVector? = null
+    private var _content_copy: ImageVector? = null
+    private var _collapse_content: ImageVector? = null
+    private var _description: ImageVector? = null
+    private var _edit: ImageVector? = null
+    private var _expand_content: ImageVector? = null
+    private var _folder: ImageVector? = null
+    private var _more_vert: ImageVector? = null
+    private var _search: ImageVector? = null
+    private var _stop_circle: ImageVector? = null
+    private var _undo: ImageVector? = null
+    private var _widgets: ImageVector? = null
 
-  val Add: ImageVector
-    get() {
-      if (_add != null) return _add!!
-      _add = ImageVector.Builder(
-        name = "Add",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _add!!
-    }
+    val Add: ImageVector
+        get() {
+            if (_add != null) return _add!!
+            _add =
+                ImageVector
+                    .Builder(
+                        name = "Add",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData = PathParser().parsePathString("M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z").toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _add!!
+        }
 
-  val ArrowBack: ImageVector
-    get() {
-      if (_arrow_back != null) return _arrow_back!!
-      _arrow_back = ImageVector.Builder(
-        name = "ArrowBack",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _arrow_back!!
-    }
+    val ArrowBack: ImageVector
+        get() {
+            if (_arrow_back != null) return _arrow_back!!
+            _arrow_back =
+                ImageVector
+                    .Builder(
+                        name = "ArrowBack",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _arrow_back!!
+        }
 
-  val ArrowUpward: ImageVector
-    get() {
-      if (_arrow_upward != null) return _arrow_upward!!
-      _arrow_upward = ImageVector.Builder(
-        name = "ArrowUpward",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("m4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _arrow_upward!!
-    }
+    val ArrowUpward: ImageVector
+        get() {
+            if (_arrow_upward != null) return _arrow_upward!!
+            _arrow_upward =
+                ImageVector
+                    .Builder(
+                        name = "ArrowUpward",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "m4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _arrow_upward!!
+        }
 
-  val Check: ImageVector
-    get() {
-      if (_check != null) return _check!!
-      _check = ImageVector.Builder(
-        name = "Check",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _check!!
-    }
+    val Check: ImageVector
+        get() {
+            if (_check != null) return _check!!
+            _check =
+                ImageVector
+                    .Builder(
+                        name = "Check",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData = PathParser().parsePathString("M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z").toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _check!!
+        }
 
-  val ChevronRight: ImageVector
-    get() {
-      if (_chevron_right != null) return _chevron_right!!
-      _chevron_right = ImageVector.Builder(
-        name = "ChevronRight",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _chevron_right!!
-    }
+    val ChevronRight: ImageVector
+        get() {
+            if (_chevron_right != null) return _chevron_right!!
+            _chevron_right =
+                ImageVector
+                    .Builder(
+                        name = "ChevronRight",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData = PathParser().parsePathString("M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z").toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _chevron_right!!
+        }
 
-  val Close: ImageVector
-    get() {
-      if (_close != null) return _close!!
-      _close = ImageVector.Builder(
-        name = "Close",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _close!!
-    }
+    val Close: ImageVector
+        get() {
+            if (_close != null) return _close!!
+            _close =
+                ImageVector
+                    .Builder(
+                        name = "Close",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _close!!
+        }
 
-  val ContentCopy: ImageVector
-    get() {
-      if (_content_copy != null) return _content_copy!!
-      _content_copy = ImageVector.Builder(
-        name = "ContentCopy",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _content_copy!!
-    }
+    val ContentCopy: ImageVector
+        get() {
+            if (_content_copy != null) return _content_copy!!
+            _content_copy =
+                ImageVector
+                    .Builder(
+                        name = "ContentCopy",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _content_copy!!
+        }
 
-  val CollapseContent: ImageVector
-    get() {
-      if (_collapse_content != null) return _collapse_content!!
-      _collapse_content = ImageVector.Builder(
-        name = "CollapseContent",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 960f,
-        viewportHeight = 960f,
-      ).apply {
-    group(
-      translationX = 0f,
-      translationY = 960f,
-    ) {
-    addPath(
-      pathData = PathParser().parsePathString("M440-440v240h-80v-160H200v-80h240Zm160-320v160h160v80H520v-240h80Z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-    }
-      }.build()
-      return _collapse_content!!
-    }
+    val CollapseContent: ImageVector
+        get() {
+            if (_collapse_content != null) return _collapse_content!!
+            _collapse_content =
+                ImageVector
+                    .Builder(
+                        name = "CollapseContent",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 960f,
+                        viewportHeight = 960f,
+                    ).apply {
+                        group(
+                            translationX = 0f,
+                            translationY = 960f,
+                        ) {
+                            addPath(
+                                pathData =
+                                    PathParser()
+                                        .parsePathString(
+                                            "M440-440v240h-80v-160H200v-80h240Zm160-320v160h160v80H520v-240h80Z",
+                                        ).toNodes(),
+                                fill = SolidColor(Color.Black),
+                                pathFillType = PathFillType.NonZero,
+                            )
+                        }
+                    }.build()
+            return _collapse_content!!
+        }
 
-  val Description: ImageVector
-    get() {
-      if (_description != null) return _description!!
-      _description = ImageVector.Builder(
-        name = "Description",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _description!!
-    }
+    val Description: ImageVector
+        get() {
+            if (_description != null) return _description!!
+            _description =
+                ImageVector
+                    .Builder(
+                        name = "Description",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _description!!
+        }
 
-  val Edit: ImageVector
-    get() {
-      if (_edit != null) return _edit!!
-      _edit = ImageVector.Builder(
-        name = "Edit",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _edit!!
-    }
+    val Edit: ImageVector
+        get() {
+            if (_edit != null) return _edit!!
+            _edit =
+                ImageVector
+                    .Builder(
+                        name = "Edit",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _edit!!
+        }
 
-  val ExpandContent: ImageVector
-    get() {
-      if (_expand_content != null) return _expand_content!!
-      _expand_content = ImageVector.Builder(
-        name = "ExpandContent",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 960f,
-        viewportHeight = 960f,
-      ).apply {
-    group(
-      translationX = 0f,
-      translationY = 960f,
-    ) {
-    addPath(
-      pathData = PathParser().parsePathString("M200-200v-240h80v160h160v80H200Zm480-320v-160H520v-80h240v240h-80Z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-    }
-      }.build()
-      return _expand_content!!
-    }
+    val ExpandContent: ImageVector
+        get() {
+            if (_expand_content != null) return _expand_content!!
+            _expand_content =
+                ImageVector
+                    .Builder(
+                        name = "ExpandContent",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 960f,
+                        viewportHeight = 960f,
+                    ).apply {
+                        group(
+                            translationX = 0f,
+                            translationY = 960f,
+                        ) {
+                            addPath(
+                                pathData =
+                                    PathParser()
+                                        .parsePathString(
+                                            "M200-200v-240h80v160h160v80H200Zm480-320v-160H520v-80h240v240h-80Z",
+                                        ).toNodes(),
+                                fill = SolidColor(Color.Black),
+                                pathFillType = PathFillType.NonZero,
+                            )
+                        }
+                    }.build()
+            return _expand_content!!
+        }
 
-  val Folder: ImageVector
-    get() {
-      if (_folder != null) return _folder!!
-      _folder = ImageVector.Builder(
-        name = "Folder",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _folder!!
-    }
+    val Folder: ImageVector
+        get() {
+            if (_folder != null) return _folder!!
+            _folder =
+                ImageVector
+                    .Builder(
+                        name = "Folder",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _folder!!
+        }
 
-  val MoreVert: ImageVector
-    get() {
-      if (_more_vert != null) return _more_vert!!
-      _more_vert = ImageVector.Builder(
-        name = "MoreVert",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _more_vert!!
-    }
+    val MoreVert: ImageVector
+        get() {
+            if (_more_vert != null) return _more_vert!!
+            _more_vert =
+                ImageVector
+                    .Builder(
+                        name = "MoreVert",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _more_vert!!
+        }
 
-  val Search: ImageVector
-    get() {
-      if (_search != null) return _search!!
-      _search = ImageVector.Builder(
-        name = "Search",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _search!!
-    }
+    val Search: ImageVector
+        get() {
+            if (_search != null) return _search!!
+            _search =
+                ImageVector
+                    .Builder(
+                        name = "Search",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _search!!
+        }
 
-  val StopCircle: ImageVector
-    get() {
-      if (_stop_circle != null) return _stop_circle!!
-      _stop_circle = ImageVector.Builder(
-        name = "StopCircle",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 14H8V8h8v8z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _stop_circle!!
-    }
+    val StopCircle: ImageVector
+        get() {
+            if (_stop_circle != null) return _stop_circle!!
+            _stop_circle =
+                ImageVector
+                    .Builder(
+                        name = "StopCircle",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 14H8V8h8v8z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _stop_circle!!
+        }
 
-  val Undo: ImageVector
-    get() {
-      if (_undo != null) return _undo!!
-      _undo = ImageVector.Builder(
-        name = "Undo",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _undo!!
-    }
+    val Undo: ImageVector
+        get() {
+            if (_undo != null) return _undo!!
+            _undo =
+                ImageVector
+                    .Builder(
+                        name = "Undo",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _undo!!
+        }
 
-  val Widgets: ImageVector
-    get() {
-      if (_widgets != null) return _widgets!!
-      _widgets = ImageVector.Builder(
-        name = "Widgets",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-      ).apply {
-    addPath(
-      pathData = PathParser().parsePathString("M13 13v8h8v-8h-8zM3 21h8v-8H3v8zM3 3v8h8V3H3zm13.66-1.31L11 7.34 16.66 13l5.66-5.66-5.66-5.65z").toNodes(),
-      fill = SolidColor(Color.Black),
-      pathFillType = PathFillType.NonZero,
-    )
-      }.build()
-      return _widgets!!
-    }
+    val Widgets: ImageVector
+        get() {
+            if (_widgets != null) return _widgets!!
+            _widgets =
+                ImageVector
+                    .Builder(
+                        name = "Widgets",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "M13 13v8h8v-8h-8zM3 21h8v-8H3v8zM3 3v8h8V3H3zm13.66-1.31L11 7.34 16.66 13l5.66-5.66-5.66-5.65z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _widgets!!
+        }
 }

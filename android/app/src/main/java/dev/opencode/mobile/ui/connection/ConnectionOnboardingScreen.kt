@@ -17,32 +17,32 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 
 @Composable
 fun ConnectionOnboardingScreen(
-  onConnectClick: () -> Unit,
-  modifier: Modifier = Modifier,
+    onConnectClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  Column(
-    modifier = modifier.fillMaxSize().padding(24.dp),
-    horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    Spacer(modifier = Modifier.weight(1f))
-    Text(
-      text = "Connect to your server",
-      style = MaterialTheme.typography.titleLarge,
-      textAlign = TextAlign.Center,
-    )
-    Spacer(modifier = Modifier.height(12.dp))
-    Text(
-      text =
-        "OpenCode Mobile controls sessions on an opencode server running on your development machine.",
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      textAlign = TextAlign.Center,
-    )
-    Spacer(modifier = Modifier.height(24.dp))
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.FullWidthText("Connect to server"),
-      onClick = onConnectClick,
-    )
-    Spacer(modifier = Modifier.weight(1f))
-  }
+    Column(
+        modifier = modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = "Connect to your server",
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text =
+                "OpenCode Mobile controls sessions on an opencode server running on your development machine.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Connect to server"),
+            onClick = onConnectClick,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+    }
 }

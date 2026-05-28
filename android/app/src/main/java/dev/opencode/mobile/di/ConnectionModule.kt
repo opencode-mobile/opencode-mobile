@@ -16,20 +16,20 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ConnectionModule {
-  @Binds
-  @Singleton
-  abstract fun bindConnectionProfileStore(impl: DataStoreConnectionProfileStore): ConnectionProfileStore
-
-  @Binds
-  @Singleton
-  abstract fun bindSecureCredentialStore(impl: EncryptedSecureCredentialStore): SecureCredentialStore
-
-  companion object {
-    @Provides
+    @Binds
     @Singleton
-    fun provideConnectionProbeService(
-      json: kotlinx.serialization.json.Json,
-      adapter: ProjectDomainAdapter,
-    ): ConnectionProbeService = ConnectionProbeService(json, adapter)
-  }
+    abstract fun bindConnectionProfileStore(impl: DataStoreConnectionProfileStore): ConnectionProfileStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSecureCredentialStore(impl: EncryptedSecureCredentialStore): SecureCredentialStore
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideConnectionProbeService(
+            json: kotlinx.serialization.json.Json,
+            adapter: ProjectDomainAdapter,
+        ): ConnectionProbeService = ConnectionProbeService(json, adapter)
+    }
 }

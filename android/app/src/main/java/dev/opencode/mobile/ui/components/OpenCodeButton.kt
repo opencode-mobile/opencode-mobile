@@ -32,184 +32,188 @@ private val OpenCodeButtonIconCircleSize = 40.dp
 private val OpenCodeButtonIconSize = 18.dp
 
 sealed interface OpenCodeButtonVariant {
-  data class FullWidthText(val title: String) : OpenCodeButtonVariant
+    data class FullWidthText(
+        val title: String,
+    ) : OpenCodeButtonVariant
 
-  data class CompactText(val title: String) : OpenCodeButtonVariant
+    data class CompactText(
+        val title: String,
+    ) : OpenCodeButtonVariant
 
-  data class IconSquare(
-    val imageVector: ImageVector,
-    val contentDescription: String? = null,
-  ) : OpenCodeButtonVariant
+    data class IconSquare(
+        val imageVector: ImageVector,
+        val contentDescription: String? = null,
+    ) : OpenCodeButtonVariant
 
-  data class IconCircle(
-    val imageVector: ImageVector,
-    val contentDescription: String? = null,
-  ) : OpenCodeButtonVariant
+    data class IconCircle(
+        val imageVector: ImageVector,
+        val contentDescription: String? = null,
+    ) : OpenCodeButtonVariant
 }
 
 enum class OpenCodeButtonContrast {
-  High,
-  Low,
+    High,
+    Low,
 }
 
 @Composable
 fun OpenCodeButton(
-  variant: OpenCodeButtonVariant,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-  enabled: Boolean = true,
-  contrast: OpenCodeButtonContrast = OpenCodeButtonContrast.High,
+    variant: OpenCodeButtonVariant,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contrast: OpenCodeButtonContrast = OpenCodeButtonContrast.High,
 ) {
-  val containerColor =
-    when {
-      !enabled -> MaterialTheme.colorScheme.surfaceVariant
-      contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
-      else -> MaterialTheme.colorScheme.onSurface
-    }
-  val borderColor =
-    when {
-      !enabled -> MaterialTheme.colorScheme.outlineVariant
-      contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
-      else -> MaterialTheme.colorScheme.onSurface
-    }
-  val contentColor =
-    when {
-      !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-      contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
-      else -> MaterialTheme.colorScheme.surface
-    }
+    val containerColor =
+        when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant
+            contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+    val borderColor =
+        when {
+            !enabled -> MaterialTheme.colorScheme.outlineVariant
+            contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+    val contentColor =
+        when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
+            else -> MaterialTheme.colorScheme.surface
+        }
 
-  val variantModifier =
-    when (variant) {
-      is OpenCodeButtonVariant.FullWidthText -> Modifier.fillMaxWidth().defaultMinSize(minHeight = OpenCodeButtonFullMinHeight)
-      is OpenCodeButtonVariant.CompactText -> Modifier.defaultMinSize(minHeight = OpenCodeButtonCompactMinHeight)
-      is OpenCodeButtonVariant.IconSquare -> Modifier.size(OpenCodeButtonIconSquareSize)
-      is OpenCodeButtonVariant.IconCircle -> Modifier.size(OpenCodeButtonIconCircleSize)
-    }
-  val shape =
-    when (variant) {
-      is OpenCodeButtonVariant.IconCircle -> CircleShape
-      else -> OpenCodeButtonCornerRadius
-    }
+    val variantModifier =
+        when (variant) {
+            is OpenCodeButtonVariant.FullWidthText -> Modifier.fillMaxWidth().defaultMinSize(minHeight = OpenCodeButtonFullMinHeight)
+            is OpenCodeButtonVariant.CompactText -> Modifier.defaultMinSize(minHeight = OpenCodeButtonCompactMinHeight)
+            is OpenCodeButtonVariant.IconSquare -> Modifier.size(OpenCodeButtonIconSquareSize)
+            is OpenCodeButtonVariant.IconCircle -> Modifier.size(OpenCodeButtonIconCircleSize)
+        }
+    val shape =
+        when (variant) {
+            is OpenCodeButtonVariant.IconCircle -> CircleShape
+            else -> OpenCodeButtonCornerRadius
+        }
 
-  Surface(
-    onClick = onClick,
-    enabled = enabled,
-    modifier = modifier.then(variantModifier),
-    shape = shape,
-    color = containerColor,
-    contentColor = contentColor,
-    border = BorderStroke(OpenCodeButtonBorderWidth, borderColor),
-  ) {
-    when (variant) {
-      is OpenCodeButtonVariant.FullWidthText ->
-        Box(
-          modifier =
-            Modifier.padding(
-              horizontal = OpenCodeButtonTextHorizontalPadding,
-              vertical = OpenCodeButtonTextVerticalPadding,
-            ),
-          contentAlignment = Alignment.Center,
-        ) {
-          Text(text = variant.title, style = MaterialTheme.typography.labelLarge)
-        }
-      is OpenCodeButtonVariant.CompactText ->
-        Box(
-          modifier =
-            Modifier.padding(
-              horizontal = OpenCodeButtonTextHorizontalPadding,
-              vertical = OpenCodeButtonTextVerticalPadding,
-            ),
-          contentAlignment = Alignment.Center,
-        ) {
-          Text(text = variant.title, style = MaterialTheme.typography.labelLarge)
-        }
-      is OpenCodeButtonVariant.IconSquare ->
-        Box(contentAlignment = Alignment.Center) {
-          Icon(
-            imageVector = variant.imageVector,
-            contentDescription = variant.contentDescription,
-            modifier = Modifier.size(OpenCodeButtonIconSize),
-            tint = contentColor,
-          )
-        }
-      is OpenCodeButtonVariant.IconCircle ->
-        Box(contentAlignment = Alignment.Center) {
-          Icon(
-            imageVector = variant.imageVector,
-            contentDescription = variant.contentDescription,
-            modifier = Modifier.size(OpenCodeButtonIconSize),
-            tint = contentColor,
-          )
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.then(variantModifier),
+        shape = shape,
+        color = containerColor,
+        contentColor = contentColor,
+        border = BorderStroke(OpenCodeButtonBorderWidth, borderColor),
+    ) {
+        when (variant) {
+            is OpenCodeButtonVariant.FullWidthText ->
+                Box(
+                    modifier =
+                        Modifier.padding(
+                            horizontal = OpenCodeButtonTextHorizontalPadding,
+                            vertical = OpenCodeButtonTextVerticalPadding,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = variant.title, style = MaterialTheme.typography.labelLarge)
+                }
+            is OpenCodeButtonVariant.CompactText ->
+                Box(
+                    modifier =
+                        Modifier.padding(
+                            horizontal = OpenCodeButtonTextHorizontalPadding,
+                            vertical = OpenCodeButtonTextVerticalPadding,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = variant.title, style = MaterialTheme.typography.labelLarge)
+                }
+            is OpenCodeButtonVariant.IconSquare ->
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = variant.imageVector,
+                        contentDescription = variant.contentDescription,
+                        modifier = Modifier.size(OpenCodeButtonIconSize),
+                        tint = contentColor,
+                    )
+                }
+            is OpenCodeButtonVariant.IconCircle ->
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = variant.imageVector,
+                        contentDescription = variant.contentDescription,
+                        modifier = Modifier.size(OpenCodeButtonIconSize),
+                        tint = contentColor,
+                    )
+                }
         }
     }
-  }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeButtonFullWidthPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.FullWidthText("Run"),
-      onClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Run"),
+            onClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeButtonCompactPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.CompactText("Build"),
-      onClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("Build"),
+            onClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeButtonIconPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send"),
-      onClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send"),
+            onClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeButtonIconCirclePreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send"),
-      onClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send"),
+            onClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeButtonLowContrastPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Attach context"),
-      contrast = OpenCodeButtonContrast.Low,
-      onClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Attach context"),
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeButtonDisabledPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeButton(
-      variant = OpenCodeButtonVariant.FullWidthText("Run"),
-      enabled = false,
-      onClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Run"),
+            enabled = false,
+            onClick = {},
+        )
+    }
 }

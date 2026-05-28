@@ -17,28 +17,28 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 
 @Composable
 fun ChoiceBadgeGalleryScreen(modifier: Modifier = Modifier) {
-  var selection by rememberSaveable { mutableStateOf("Alpha") }
+    var selection by rememberSaveable { mutableStateOf("Alpha") }
 
-  Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
-    Text(
-      text = "Tap a badge to select it.",
-      style = MaterialTheme.typography.bodySmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      listOf("Alpha", "Beta", "Gamma").forEach { option ->
-        OpenCodeChoiceBadge(
-          label = option,
-          selected = selection == option,
-          onClick = { selection = option },
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "Tap a badge to select it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-      }
-    }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Alpha", "Beta", "Gamma").forEach { option ->
+                OpenCodeChoiceBadge(
+                    label = option,
+                    selected = selection == option,
+                    onClick = { selection = option },
+                )
+            }
+        }
 
-    Text(text = "Disabled", style = MaterialTheme.typography.titleMedium)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OpenCodeChoiceBadge(label = "Unavailable", selected = false, enabled = false, onClick = {})
+        Text(text = "Disabled", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpenCodeChoiceBadge(label = "Unavailable", selected = false, enabled = false, onClick = {})
+        }
     }
-  }
 }

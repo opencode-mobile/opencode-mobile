@@ -11,35 +11,37 @@ import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.CancellationException
 
 class EventsApi(
-  private val httpClient: OpencodeSseHttpClient,
+    private val httpClient: OpencodeSseHttpClient,
 ) {
-  suspend fun streamGlobalEvents(onDataLine: suspend (String) -> Unit) {
-    httpClient.get().prepareGet("global/event") {
-      accept(ContentType.Text.EventStream)
-      header(HttpHeaders.CacheControl, "no-cache")
-    }.execute { response ->
-      val channel = response.bodyAsChannel()
-      val dataBuffer = StringBuilder()
-      try {
-        while (!channel.isClosedForRead) {
-          val line = channel.readUTF8Line() ?: break
-          when {
-            line.isEmpty() -> {
-              if (dataBuffer.isNotEmpty()) {
-                onDataLine(dataBuffer.toString())
-                dataBuffer.clear()
-              }
+    suspend fun streamGlobalEvents(onDataLine: suspend (String) -> Unit) {
+        httpClient
+            .get()
+            .prepareGet("global/event") {
+                accept(ContentType.Text.EventStream)
+                header(HttpHeaders.CacheControl, "no-cache")
+            }.execute { response ->
+                val channel = response.bodyAsChannel()
+                val dataBuffer = StringBuilder()
+                try {
+                    while (!channel.isClosedForRead) {
+                        val line = channel.readUTF8Line() ?: break
+                        when {
+                            line.isEmpty() -> {
+                                if (dataBuffer.isNotEmpty()) {
+                                    onDataLine(dataBuffer.toString())
+                                    dataBuffer.clear()
+                                }
+                            }
+                            line.startsWith("data:") -> {
+                                val payload = line.removePrefix("data:").trimStart()
+                                if (dataBuffer.isNotEmpty()) dataBuffer.append('\n')
+                                dataBuffer.append(payload)
+                            }
+                        }
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                }
             }
-            line.startsWith("data:") -> {
-              val payload = line.removePrefix("data:").trimStart()
-              if (dataBuffer.isNotEmpty()) dataBuffer.append('\n')
-              dataBuffer.append(payload)
-            }
-          }
-        }
-      } catch (error: CancellationException) {
-        throw error
-      }
     }
-  }
 }

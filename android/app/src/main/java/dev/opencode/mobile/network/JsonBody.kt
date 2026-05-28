@@ -10,7 +10,10 @@ import kotlinx.serialization.json.Json
 /**
  * Encodes [@Serializable] bodies without Kotlin reflection, which is unavailable on Android.
  */
-inline fun <reified T> HttpRequestBuilder.setJsonBody(json: Json, body: T) {
-  contentType(ContentType.Application.Json)
-  setBody(json.encodeToString(body))
+inline fun <reified T> HttpRequestBuilder.setJsonBody(
+    json: Json,
+    body: T,
+) {
+    contentType(ContentType.Application.Json)
+    setBody(json.encodeToString(body))
 }

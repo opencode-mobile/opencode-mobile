@@ -11,35 +11,38 @@ import javax.inject.Singleton
 
 @Singleton
 class EncryptedSecureCredentialStore
-@Inject
-constructor(
-  @ApplicationContext context: Context,
-) : SecureCredentialStore {
-  private val preferences: SharedPreferences =
-    EncryptedSharedPreferences.create(
-      context,
-      PREFS_NAME,
-      MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-      EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-      EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+    ) : SecureCredentialStore {
+        private val preferences: SharedPreferences =
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
 
-  override fun readPassword(serverBaseUrl: String): String? {
-    val value = preferences.getString(passwordKey(serverBaseUrl), null)
-    return value?.takeIf { it.isNotEmpty() }
-  }
+        override fun readPassword(serverBaseUrl: String): String? {
+            val value = preferences.getString(passwordKey(serverBaseUrl), null)
+            return value?.takeIf { it.isNotEmpty() }
+        }
 
-  override fun writePassword(serverBaseUrl: String, password: String) {
-    preferences.edit().putString(passwordKey(serverBaseUrl), password).apply()
-  }
+        override fun writePassword(
+            serverBaseUrl: String,
+            password: String,
+        ) {
+            preferences.edit().putString(passwordKey(serverBaseUrl), password).apply()
+        }
 
-  override fun deletePassword(serverBaseUrl: String) {
-    preferences.edit().remove(passwordKey(serverBaseUrl)).apply()
-  }
+        override fun deletePassword(serverBaseUrl: String) {
+            preferences.edit().remove(passwordKey(serverBaseUrl)).apply()
+        }
 
-  private fun passwordKey(serverBaseUrl: String): String = "connection.password.$serverBaseUrl"
+        private fun passwordKey(serverBaseUrl: String): String = "connection.password.$serverBaseUrl"
 
-  private companion object {
-    const val PREFS_NAME = "secure_connection_credentials"
-  }
-}
+        private companion object {
+            const val PREFS_NAME = "secure_connection_credentials"
+        }
+    }

@@ -10,13 +10,13 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-  @Inject lateinit var foregroundEventLifecycleCoordinator: ForegroundEventLifecycleCoordinator
+    @Inject lateinit var foregroundEventLifecycleCoordinator: ForegroundEventLifecycleCoordinator
 
-  override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    foregroundEventLifecycleCoordinator.register()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        foregroundEventLifecycleCoordinator.register()
 
-    enableEdgeToEdge()
-    setContent { MainNavigation() }
-  }
+        enableEdgeToEdge()
+        setContent { MainNavigation() }
+    }
 }

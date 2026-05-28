@@ -6,7 +6,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 
 class HealthApi(
-  private val httpClient: OpencodeHttpClient,
+    private val httpClient: OpencodeHttpClient,
 ) {
-  suspend fun getHealth(): HealthDto = httpClient.get().get("global/health").body()
+    suspend fun getHealth(): HealthDto = httpClient.get().get("global/health").body()
 }

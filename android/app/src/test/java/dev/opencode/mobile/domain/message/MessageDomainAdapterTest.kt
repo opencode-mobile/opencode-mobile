@@ -8,75 +8,75 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MessageDomainAdapterTest {
-  private val adapter = MessageDomainAdapter()
-  private val json = Json { ignoreUnknownKeys = true }
+    private val adapter = MessageDomainAdapter()
+    private val json = Json { ignoreUnknownKeys = true }
 
-  @Test
-  fun toMessage_mapsUserTextParts() {
-    val dto =
-      MessageDto(
-        info =
-          MessageInfoDto(
-            id = "msg-1",
-            sessionId = "ses-1",
-            role = "user",
-            agent = "build",
-            model = null,
-            time = null,
-          ),
-        parts = listOf(MessagePartDto(type = "text", text = "Hello")),
-      )
+    @Test
+    fun toMessage_mapsUserTextParts() {
+        val dto =
+            MessageDto(
+                info =
+                    MessageInfoDto(
+                        id = "msg-1",
+                        sessionId = "ses-1",
+                        role = "user",
+                        agent = "build",
+                        model = null,
+                        time = null,
+                    ),
+                parts = listOf(MessagePartDto(type = "text", text = "Hello")),
+            )
 
-    val message = adapter.toMessage(dto)
+        val message = adapter.toMessage(dto)
 
-    assertEquals(MessageRole.User, message.role)
-    assertEquals("Hello", message.text)
-    assertEquals("build", message.mode)
-  }
+        assertEquals(MessageRole.User, message.role)
+        assertEquals("Hello", message.text)
+        assertEquals("build", message.mode)
+    }
 
-  @Test
-  fun toMessage_toolPartsProduceFallbackText() {
-    val raw =
-      """
-      {
-        "info": { "id": "msg-2", "role": "assistant" },
-        "parts": [
-          { "type": "tool", "tool": "glob" }
-        ]
-      }
-      """.trimIndent()
-
-    val dto = json.decodeFromString<MessageDto>(raw)
-    val message = adapter.toMessage(dto)
-
-    assertEquals(MessageRole.Assistant, message.role)
-    assertEquals("Tool: glob", message.text)
-  }
-
-  @Test
-  fun toMessage_mapsAssistantErrorWhenPartsEmpty() {
-    val raw =
-      """
-      {
-        "info": {
-          "id": "msg-3",
-          "role": "assistant",
-          "error": {
-            "name": "APIError",
-            "data": {
-              "message": "Forbidden: unauthorized: not licensed to use Copilot",
-              "statusCode": 403
+    @Test
+    fun toMessage_toolPartsProduceFallbackText() {
+        val raw =
+            """
+            {
+              "info": { "id": "msg-2", "role": "assistant" },
+              "parts": [
+                { "type": "tool", "tool": "glob" }
+              ]
             }
-          }
-        },
-        "parts": []
-      }
-      """.trimIndent()
+            """.trimIndent()
 
-    val dto = json.decodeFromString<MessageDto>(raw)
-    val message = adapter.toMessage(dto)
+        val dto = json.decodeFromString<MessageDto>(raw)
+        val message = adapter.toMessage(dto)
 
-    assertEquals(MessageRole.Assistant, message.role)
-    assertEquals("Forbidden: unauthorized: not licensed to use Copilot", message.text)
-  }
+        assertEquals(MessageRole.Assistant, message.role)
+        assertEquals("Tool: glob", message.text)
+    }
+
+    @Test
+    fun toMessage_mapsAssistantErrorWhenPartsEmpty() {
+        val raw =
+            """
+            {
+              "info": {
+                "id": "msg-3",
+                "role": "assistant",
+                "error": {
+                  "name": "APIError",
+                  "data": {
+                    "message": "Forbidden: unauthorized: not licensed to use Copilot",
+                    "statusCode": 403
+                  }
+                }
+              },
+              "parts": []
+            }
+            """.trimIndent()
+
+        val dto = json.decodeFromString<MessageDto>(raw)
+        val message = adapter.toMessage(dto)
+
+        assertEquals(MessageRole.Assistant, message.role)
+        assertEquals("Forbidden: unauthorized: not licensed to use Copilot", message.text)
+    }
 }

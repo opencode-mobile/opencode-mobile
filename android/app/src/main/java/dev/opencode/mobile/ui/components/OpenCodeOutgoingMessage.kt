@@ -36,8 +36,8 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private const val OutgoingMessageCollapsedLineCount = 5
-private const val OutgoingMessageMaxWidthFraction = 0.84f
+private const val OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT = 5
+private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.84f
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
 private val OutgoingMessagePaddingHorizontal = 18.dp
 private val OutgoingMessagePaddingVertical = 14.dp
@@ -50,186 +50,189 @@ private val OutgoingMessageChevronIconSize = 16.dp
 
 @Composable
 fun OpenCodeOutgoingMessage(
-  text: String,
-  metadataLabel: String,
-  onRestoreClick: () -> Unit,
-  modifier: Modifier = Modifier,
-  initiallyExpanded: Boolean = false,
+    text: String,
+    metadataLabel: String,
+    onRestoreClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    initiallyExpanded: Boolean = false,
 ) {
-  var expanded by rememberSaveable(text) { mutableStateOf(initiallyExpanded) }
-  var expandable by rememberSaveable(text) { mutableStateOf(false) }
-  val context = LocalContext.current
+    var expanded by rememberSaveable(text) { mutableStateOf(initiallyExpanded) }
+    var expandable by rememberSaveable(text) { mutableStateOf(false) }
+    val context = LocalContext.current
 
-  BoxWithConstraints(
-    modifier = modifier,
-    contentAlignment = Alignment.CenterEnd,
-  ) {
-    Column(
-      modifier = Modifier.width(maxWidth * OutgoingMessageMaxWidthFraction),
-      horizontalAlignment = Alignment.End,
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.CenterEnd,
     ) {
-      Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = OutgoingMessageShape,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-      ) {
         Column(
-          modifier =
-            Modifier.padding(
-              horizontal = OutgoingMessagePaddingHorizontal,
-              vertical = OutgoingMessagePaddingVertical,
-            ),
-          horizontalAlignment = Alignment.End,
+            modifier = Modifier.width(maxWidth * OUTGOING_MESSAGE_MAX_WIDTH_FRACTION),
+            horizontalAlignment = Alignment.End,
         ) {
-          Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = if (expanded) Int.MAX_VALUE else OutgoingMessageCollapsedLineCount,
-            overflow = TextOverflow.Clip,
-            onTextLayout = { result ->
-              expandable =
-                if (expanded) {
-                  result.lineCount > OutgoingMessageCollapsedLineCount
-                } else {
-                  result.hasVisualOverflow || result.lineCount > OutgoingMessageCollapsedLineCount
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = OutgoingMessageShape,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ) {
+                Column(
+                    modifier =
+                        Modifier.padding(
+                            horizontal = OutgoingMessagePaddingHorizontal,
+                            vertical = OutgoingMessagePaddingVertical,
+                        ),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = if (expanded) Int.MAX_VALUE else OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT,
+                        overflow = TextOverflow.Clip,
+                        onTextLayout = { result ->
+                            expandable =
+                                if (expanded) {
+                                    result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
+                                } else {
+                                    result.hasVisualOverflow || result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
+                                }
+                        },
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageContentSpacing),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (expandable) {
+                            OutgoingMessageIconButton(
+                                contentDescription = if (expanded) "Collapse message" else "Expand message",
+                                onClick = { expanded = !expanded },
+                            ) {
+                                Icon(
+                                    imageVector = if (expanded) OpenCodeIcons.CollapseContent else OpenCodeIcons.ExpandContent,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(OutgoingMessageChevronIconSize),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        OutgoingMessageIconButton(
+                            contentDescription = "Restore message to composer",
+                            onClick = onRestoreClick,
+                            modifier = Modifier.padding(start = OutgoingMessageControlItemSpacing),
+                        ) {
+                            Icon(
+                                imageVector = OpenCodeIcons.Undo,
+                                contentDescription = null,
+                                modifier = Modifier.size(OutgoingMessageActionIconSize),
+                            )
+                        }
+                        OutgoingMessageIconButton(
+                            contentDescription = "Copy message",
+                            onClick = {
+                                val clipboardManager =
+                                    context.getSystemService(
+                                        Context.CLIPBOARD_SERVICE,
+                                    ) as android.content.ClipboardManager
+                                clipboardManager.setPrimaryClip(ClipData.newPlainText("Message", text))
+                            },
+                            modifier = Modifier.padding(start = OutgoingMessageControlItemSpacing),
+                        ) {
+                            Icon(
+                                imageVector = OpenCodeIcons.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(OutgoingMessageActionIconSize),
+                            )
+                        }
+                    }
                 }
-            },
-          )
+            }
 
-          Row(
-            modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageContentSpacing),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            if (expandable) {
-              OutgoingMessageIconButton(
-                contentDescription = if (expanded) "Collapse message" else "Expand message",
-                onClick = { expanded = !expanded },
-              ) {
-                Icon(
-                  imageVector = if (expanded) OpenCodeIcons.CollapseContent else OpenCodeIcons.ExpandContent,
-                  contentDescription = null,
-                  modifier = Modifier.size(OutgoingMessageChevronIconSize),
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageFooterSpacing),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = metadataLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f),
                 )
-              }
             }
-            Spacer(modifier = Modifier.weight(1f))
-            OutgoingMessageIconButton(
-              contentDescription = "Restore message to composer",
-              onClick = onRestoreClick,
-              modifier = Modifier.padding(start = OutgoingMessageControlItemSpacing),
-            ) {
-              Icon(
-                imageVector = OpenCodeIcons.Undo,
-                contentDescription = null,
-                modifier = Modifier.size(OutgoingMessageActionIconSize),
-              )
-            }
-            OutgoingMessageIconButton(
-              contentDescription = "Copy message",
-              onClick = {
-                val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                clipboardManager.setPrimaryClip(ClipData.newPlainText("Message", text))
-              },
-              modifier = Modifier.padding(start = OutgoingMessageControlItemSpacing),
-            ) {
-              Icon(
-                imageVector = OpenCodeIcons.ContentCopy,
-                contentDescription = null,
-                modifier = Modifier.size(OutgoingMessageActionIconSize),
-              )
-            }
-          }
         }
-      }
-
-      Row(
-        modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageFooterSpacing),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Text(
-          text = metadataLabel,
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          textAlign = TextAlign.End,
-          modifier = Modifier.weight(1f),
-        )
-      }
     }
-  }
 }
 
 @Composable
 private fun OutgoingMessageIconButton(
-  contentDescription: String,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-  content: @Composable () -> Unit,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
 ) {
-  Surface(
-    onClick = onClick,
-    modifier =
-      modifier
-        .size(OutgoingMessageActionIconTouchTarget)
-        .semantics {
-          role = Role.Button
-          this.contentDescription = contentDescription
-        },
-    shape = CircleShape,
-    color = MaterialTheme.colorScheme.tertiaryContainer,
-    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-  ) {
-    Box(contentAlignment = Alignment.Center) {
-      Box(modifier = Modifier.semantics { }) {
-        content()
-      }
+    Surface(
+        onClick = onClick,
+        modifier =
+            modifier
+                .size(OutgoingMessageActionIconTouchTarget)
+                .semantics {
+                    role = Role.Button
+                    this.contentDescription = contentDescription
+                },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.semantics { }) {
+                content()
+            }
+        }
     }
-  }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeOutgoingMessageShortPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeOutgoingMessage(
-      text = "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
-      metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-      onRestoreClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeOutgoingMessage(
+            text = "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            onRestoreClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeOutgoingMessageCollapsedPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeOutgoingMessage(
-      text = OutgoingMessageLongPreviewText,
-      metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-      onRestoreClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeOutgoingMessage(
+            text = OutgoingMessageLongPreviewText,
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            onRestoreClick = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeOutgoingMessageExpandedPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeOutgoingMessage(
-      text = OutgoingMessageLongPreviewText,
-      metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-      initiallyExpanded = true,
-      onRestoreClick = {},
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeOutgoingMessage(
+            text = OutgoingMessageLongPreviewText,
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            initiallyExpanded = true,
+            onRestoreClick = {},
+        )
+    }
 }
 
 private val OutgoingMessageLongPreviewText =
-  """
-  Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options.
-  Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it.
-  Keep the answer practical and note where pricing depends on the booking channel or destination.
-  Then summarize the recommendation in one concise sentence for a mobile chat user.
-  """.trimIndent()
+    """
+    Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options.
+    Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it.
+    Keep the answer practical and note where pricing depends on the booking channel or destination.
+    Then summarize the recommendation in one concise sentence for a mobile chat user.
+    """.trimIndent()

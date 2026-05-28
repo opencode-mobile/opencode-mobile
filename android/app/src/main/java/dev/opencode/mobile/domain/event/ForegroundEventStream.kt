@@ -4,10 +4,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface ForegroundEventStream {
-  val connectionState: StateFlow<EventStreamConnectionState>
-  val events: SharedFlow<OpencodeEvent>
+    val connectionState: StateFlow<EventStreamConnectionState>
+    val events: SharedFlow<OpencodeEvent>
 
-  fun start()
+    fun start()
 
-  fun stop()
+    fun stop()
 }

@@ -46,184 +46,188 @@ private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
 
 sealed class BottomSheetEntryDecorator {
-  data object None : BottomSheetEntryDecorator()
+    data object None : BottomSheetEntryDecorator()
 
-  data class Icon(val imageVector: ImageVector, val contentDescription: String? = null) : BottomSheetEntryDecorator()
+    data class Icon(
+        val imageVector: ImageVector,
+        val contentDescription: String? = null,
+    ) : BottomSheetEntryDecorator()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenCodeBottomSheet(
-  visible: Boolean,
-  title: String,
-  onDismissRequest: () -> Unit,
-  modifier: Modifier = Modifier,
-  keyboardAware: Boolean = false,
-  content: @Composable ColumnScope.() -> Unit,
+    visible: Boolean,
+    title: String,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    keyboardAware: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
-  if (!visible) return
+    if (!visible) return
 
-  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = keyboardAware)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = keyboardAware)
 
-  if (keyboardAware) {
-    LaunchedEffect(Unit) {
-      sheetState.expand()
+    if (keyboardAware) {
+        LaunchedEffect(Unit) {
+            sheetState.expand()
+        }
     }
-  }
 
-  ModalBottomSheet(
-    onDismissRequest = onDismissRequest,
-    sheetState = sheetState,
-    modifier = modifier,
-    shape = BottomSheetShape,
-    containerColor = MaterialTheme.colorScheme.surface,
-    contentColor = MaterialTheme.colorScheme.onSurface,
-    dragHandle = null,
-    contentWindowInsets = {
-      if (keyboardAware) WindowInsets(0) else BottomSheetDefaults.windowInsets
-    },
-  ) {
-    val bodyModifier =
-      Modifier
-        .fillMaxWidth()
-        .padding(bottom = BottomSheetContentBottomPadding)
-        .then(
-          if (keyboardAware) {
-            Modifier.navigationBarsPadding().imePadding()
-          } else {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        modifier = modifier,
+        shape = BottomSheetShape,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        dragHandle = null,
+        contentWindowInsets = {
+            if (keyboardAware) WindowInsets(0) else BottomSheetDefaults.windowInsets
+        },
+    ) {
+        val bodyModifier =
             Modifier
-          },
-        )
+                .fillMaxWidth()
+                .padding(bottom = BottomSheetContentBottomPadding)
+                .then(
+                    if (keyboardAware) {
+                        Modifier.navigationBarsPadding().imePadding()
+                    } else {
+                        Modifier
+                    },
+                )
 
-    Column(modifier = bodyModifier) {
-      Row(
-        modifier =
-          Modifier.fillMaxWidth()
-            .padding(
-              start = BottomSheetHeaderHorizontalPadding,
-              end = BottomSheetHeaderHorizontalPadding,
-              top = BottomSheetHeaderTopPadding,
-              bottom = BottomSheetHeaderBottomPadding,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-      ) {
-        Text(
-          text = title,
-          modifier = Modifier.weight(1f),
-          style = MaterialTheme.typography.titleMedium,
-          color = MaterialTheme.colorScheme.onSurface,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-        OpenCodeButton(
-          variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
-          contrast = OpenCodeButtonContrast.Low,
-          onClick = onDismissRequest,
-        )
-      }
+        Column(modifier = bodyModifier) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = BottomSheetHeaderHorizontalPadding,
+                            end = BottomSheetHeaderHorizontalPadding,
+                            top = BottomSheetHeaderTopPadding,
+                            bottom = BottomSheetHeaderBottomPadding,
+                        ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = onDismissRequest,
+                )
+            }
 
-      content()
+            content()
+        }
     }
-  }
 }
 
 @Composable
 fun OpenCodeBottomSheetEntry(
-  title: String,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-  enabled: Boolean = true,
-  startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
-  endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
+    endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
 ) {
-  val contentColor =
-    if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-  val iconColor =
-    if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    val contentColor =
+        if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    val iconColor =
+        if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
 
-  Row(
-    modifier =
-      modifier.fillMaxWidth()
-        .defaultMinSize(minHeight = BottomSheetEntryMinHeight)
-        .clickable(enabled = enabled, onClick = onClick)
-        .padding(
-          horizontal = BottomSheetEntryHorizontalPadding,
-          vertical = BottomSheetEntryVerticalPadding,
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = BottomSheetEntryMinHeight)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(
+                    horizontal = BottomSheetEntryHorizontalPadding,
+                    vertical = BottomSheetEntryVerticalPadding,
+                ).then(if (enabled) Modifier else Modifier.alpha(0.7f)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BottomSheetEntryDecoration(decorator = startDecorator, tint = iconColor)
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        .then(if (enabled) Modifier else Modifier.alpha(0.7f)),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    BottomSheetEntryDecoration(decorator = startDecorator, tint = iconColor)
-    Text(
-      text = title,
-      modifier = Modifier.weight(1f),
-      style = MaterialTheme.typography.bodyLarge,
-      color = contentColor,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-    BottomSheetEntryDecoration(decorator = endDecorator, tint = iconColor)
-  }
+        BottomSheetEntryDecoration(decorator = endDecorator, tint = iconColor)
+    }
 }
 
 @Composable
 private fun BottomSheetEntryDecoration(
-  decorator: BottomSheetEntryDecorator,
-  tint: Color,
+    decorator: BottomSheetEntryDecorator,
+    tint: Color,
 ) {
-  when (decorator) {
-    BottomSheetEntryDecorator.None -> Unit
-    is BottomSheetEntryDecorator.Icon ->
-      Box(modifier = Modifier.size(BottomSheetEntryDecoratorSize), contentAlignment = Alignment.Center) {
-        Icon(
-          imageVector = decorator.imageVector,
-          contentDescription = decorator.contentDescription,
-          modifier = Modifier.size(BottomSheetEntryIconSize),
-          tint = tint,
-        )
-      }
-  }
+    when (decorator) {
+        BottomSheetEntryDecorator.None -> Unit
+        is BottomSheetEntryDecorator.Icon ->
+            Box(modifier = Modifier.size(BottomSheetEntryDecoratorSize), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = decorator.imageVector,
+                    contentDescription = decorator.contentDescription,
+                    modifier = Modifier.size(BottomSheetEntryIconSize),
+                    tint = tint,
+                )
+            }
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeBottomSheetLightPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeBottomSheet(visible = true, title = "Session actions", onDismissRequest = {}) {
-      OpenCodeBottomSheetEntry(
-        title = "New session",
-        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "New session"),
-        onClick = {},
-      )
-      OpenCodeBottomSheetEntry(
-        title = "Open project",
-        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Open project"),
-        endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
-        onClick = {},
-      )
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeBottomSheet(visible = true, title = "Session actions", onDismissRequest = {}) {
+            OpenCodeBottomSheetEntry(
+                title = "New session",
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "New session"),
+                onClick = {},
+            )
+            OpenCodeBottomSheetEntry(
+                title = "Open project",
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Open project"),
+                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
+                onClick = {},
+            )
+        }
     }
-  }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeBottomSheetDarkPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeBottomSheet(visible = true, title = "Session actions", onDismissRequest = {}) {
-      OpenCodeBottomSheetEntry(title = "Rename session", onClick = {})
-      OpenCodeBottomSheetEntry(
-        title = "Fork session",
-        endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
-        onClick = {},
-      )
-      OpenCodeBottomSheetEntry(
-        title = "Delete session",
-        enabled = false,
-        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, "Delete session"),
-        onClick = {},
-      )
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeBottomSheet(visible = true, title = "Session actions", onDismissRequest = {}) {
+            OpenCodeBottomSheetEntry(title = "Rename session", onClick = {})
+            OpenCodeBottomSheetEntry(
+                title = "Fork session",
+                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
+                onClick = {},
+            )
+            OpenCodeBottomSheetEntry(
+                title = "Delete session",
+                enabled = false,
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, "Delete session"),
+                onClick = {},
+            )
+        }
     }
-  }
 }

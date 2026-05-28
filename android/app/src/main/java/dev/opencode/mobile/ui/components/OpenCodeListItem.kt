@@ -37,186 +37,190 @@ private val ListItemLetterBadgeCornerRadius = 4.dp
 private val ListItemCornerRadius = 8.dp
 
 enum class OpenCodeListItemStyle {
-  Plain,
-  Card,
+    Plain,
+    Card,
 }
 
 @Composable
 fun OpenCodeListItem(
-  title: String,
-  subtitle: String? = null,
-  selected: Boolean = false,
-  enabled: Boolean = true,
-  style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
-  startDecorator: StartDecorator = StartDecorator.None,
-  onClick: (() -> Unit)? = null,
-  modifier: Modifier = Modifier,
-  trailing: (@Composable () -> Unit)? = null,
+    title: String,
+    subtitle: String? = null,
+    selected: Boolean = false,
+    enabled: Boolean = true,
+    style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
+    startDecorator: StartDecorator = StartDecorator.None,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
-  val containerColor =
-    when {
-      style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
-      style == OpenCodeListItemStyle.Card -> MaterialTheme.colorScheme.surface
-      selected -> MaterialTheme.colorScheme.surfaceVariant
-      else -> MaterialTheme.colorScheme.background
-    }
-  val contentColor =
-    if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-
-  Surface(
-    modifier =
-      modifier.then(
-        if (onClick != null) {
-          Modifier.clickable(enabled = enabled, onClick = onClick)
-        } else {
-          Modifier
+    val containerColor =
+        when {
+            style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
+            style == OpenCodeListItemStyle.Card -> MaterialTheme.colorScheme.surface
+            selected -> MaterialTheme.colorScheme.surfaceVariant
+            else -> MaterialTheme.colorScheme.background
         }
-      ),
-    shape = RoundedCornerShape(ListItemCornerRadius),
-    color = containerColor,
-    contentColor = contentColor,
-    border =
-      if (style == OpenCodeListItemStyle.Card) {
-        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-      } else {
-        null
-      },
-  ) {
-    Row(
-      modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(12.dp),
+    val contentColor =
+        if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Surface(
+        modifier =
+            modifier.then(
+                if (onClick != null) {
+                    Modifier.clickable(enabled = enabled, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
+        shape = RoundedCornerShape(ListItemCornerRadius),
+        color = containerColor,
+        contentColor = contentColor,
+        border =
+            if (style == OpenCodeListItemStyle.Card) {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            } else {
+                null
+            },
     ) {
-      ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
 
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-          text = title,
-          style = MaterialTheme.typography.titleMedium,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-        if (subtitle != null) {
-          Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (trailing != null) {
+                Box(contentAlignment = Alignment.Center) { trailing() }
+            }
         }
-      }
-      if (trailing != null) {
-        Box(contentAlignment = Alignment.Center) { trailing() }
-      }
     }
-  }
 }
 
 @Composable
-private fun ListItemStartDecoration(decorator: StartDecorator, enabled: Boolean) {
-  if (decorator is StartDecorator.None) return
-  val dark = isSystemInDarkTheme()
-  val emphasize =
-    Modifier.then(
-      if (enabled) Modifier else Modifier.alpha(0.7f)
-    )
-  when (decorator) {
-    is StartDecorator.Letter -> {
-      val (fill, tint) = decorator.accent.badgeColors(dark)
-      Box(
-        modifier =
-          Modifier.size(ListItemStartDecoratorSize)
-            .clip(RoundedCornerShape(ListItemLetterBadgeCornerRadius))
-            .background(fill)
-            .semantics { hideFromAccessibility() }
-            .then(emphasize),
-        contentAlignment = Alignment.Center,
-      ) {
-        Text(
-          text = normalizedBadgeLetter(decorator.character),
-          style = MaterialTheme.typography.labelMedium,
-          fontWeight = FontWeight.SemiBold,
-          color = tint,
-          textAlign = TextAlign.Center,
-          maxLines = 1,
+private fun ListItemStartDecoration(
+    decorator: StartDecorator,
+    enabled: Boolean,
+) {
+    if (decorator is StartDecorator.None) return
+    val dark = isSystemInDarkTheme()
+    val emphasize =
+        Modifier.then(
+            if (enabled) Modifier else Modifier.alpha(0.7f),
         )
-      }
-    }
-    is StartDecorator.Icon -> {
-      val tint =
-        if (enabled) {
-          MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-          MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    when (decorator) {
+        is StartDecorator.Letter -> {
+            val (fill, tint) = decorator.accent.badgeColors(dark)
+            Box(
+                modifier =
+                    Modifier
+                        .size(ListItemStartDecoratorSize)
+                        .clip(RoundedCornerShape(ListItemLetterBadgeCornerRadius))
+                        .background(fill)
+                        .semantics { hideFromAccessibility() }
+                        .then(emphasize),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = normalizedBadgeLetter(decorator.character),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tint,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
-      Icon(
-        imageVector = decorator.imageVector,
-        contentDescription = decorator.contentDescription,
-        modifier = Modifier.size(ListItemStartDecoratorSize).then(emphasize),
-        tint = tint,
-      )
+        is StartDecorator.Icon -> {
+            val tint =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                }
+            Icon(
+                imageVector = decorator.imageVector,
+                contentDescription = decorator.contentDescription,
+                modifier = Modifier.size(ListItemStartDecoratorSize).then(emphasize),
+                tint = tint,
+            )
+        }
+        is StartDecorator.None -> Unit
     }
-    is StartDecorator.None -> Unit
-  }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeListItem(
-      title = "Material Design Icons integration plan",
-      subtitle = "http://127.0.0.1:4096/",
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeListItem(
+            title = "Material Design Icons integration plan",
+            subtitle = "http://127.0.0.1:4096/",
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemLetterPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeListItem(
-      title = "Purple accent",
-      subtitle = "Letter badge",
-      startDecorator = StartDecorator.Letter('m', LetterAccent.Violet),
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeListItem(
+            title = "Purple accent",
+            subtitle = "Letter badge",
+            startDecorator = StartDecorator.Letter('m', LetterAccent.Violet),
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemSelectedPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeListItem(
-      title = "iOS color palette and typography screens",
-      subtitle = "http://127.0.0.1:4096/",
-      selected = true,
-    )
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeListItem(
+            title = "iOS color palette and typography screens",
+            subtitle = "http://127.0.0.1:4096/",
+            selected = true,
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemDisabledPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeListItem(
-      title = "Update agents.md with notes on screenshot",
-      subtitle = "Unavailable",
-      enabled = false,
-      startDecorator = StartDecorator.Letter('x', LetterAccent.Teal),
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeListItem(
+            title = "Update agents.md with notes on screenshot",
+            subtitle = "Unavailable",
+            enabled = false,
+            startDecorator = StartDecorator.Letter('x', LetterAccent.Teal),
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemCardPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeListItem(
-      title = "Card style with border",
-      subtitle = "http://127.0.0.1:4096/",
-      style = OpenCodeListItemStyle.Card,
-    )
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeListItem(
+            title = "Card style with border",
+            subtitle = "http://127.0.0.1:4096/",
+            style = OpenCodeListItemStyle.Card,
+        )
+    }
 }

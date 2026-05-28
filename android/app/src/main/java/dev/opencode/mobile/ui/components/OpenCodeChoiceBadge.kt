@@ -22,73 +22,73 @@ private val ChoiceBadgePaddingVertical = 8.dp
 
 @Composable
 fun OpenCodeChoiceBadge(
-  label: String,
-  selected: Boolean,
-  enabled: Boolean = true,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  val containerColor =
-    when {
-      !enabled -> MaterialTheme.colorScheme.surfaceVariant
-      selected -> MaterialTheme.colorScheme.surfaceVariant
-      else -> MaterialTheme.colorScheme.surface
-    }
-  val borderColor =
-    when {
-      !enabled -> MaterialTheme.colorScheme.outlineVariant
-      selected -> MaterialTheme.colorScheme.outline
-      else -> MaterialTheme.colorScheme.outlineVariant
-    }
-  val contentColor =
-    when {
-      !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-      else -> MaterialTheme.colorScheme.onSurface
-    }
+    val containerColor =
+        when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant
+            selected -> MaterialTheme.colorScheme.surfaceVariant
+            else -> MaterialTheme.colorScheme.surface
+        }
+    val borderColor =
+        when {
+            !enabled -> MaterialTheme.colorScheme.outlineVariant
+            selected -> MaterialTheme.colorScheme.outline
+            else -> MaterialTheme.colorScheme.outlineVariant
+        }
+    val contentColor =
+        when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.onSurface
+        }
 
-  Surface(
-    modifier =
-      modifier
-        .clip(ChoiceBadgeShape)
-        .semantics { this.selected = selected }
-        .clickable(enabled = enabled, onClick = onClick),
-    shape = ChoiceBadgeShape,
-    color = containerColor,
-    contentColor = contentColor,
-    border = BorderStroke(1.dp, borderColor),
-  ) {
-    Text(
-      text = label,
-      style = MaterialTheme.typography.labelMedium,
-      modifier =
-        Modifier.padding(
-          horizontal = ChoiceBadgePaddingHorizontal,
-          vertical = ChoiceBadgePaddingVertical,
-        ),
-    )
-  }
+    Surface(
+        modifier =
+            modifier
+                .clip(ChoiceBadgeShape)
+                .semantics { this.selected = selected }
+                .clickable(enabled = enabled, onClick = onClick),
+        shape = ChoiceBadgeShape,
+        color = containerColor,
+        contentColor = contentColor,
+        border = BorderStroke(1.dp, borderColor),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            modifier =
+                Modifier.padding(
+                    horizontal = ChoiceBadgePaddingHorizontal,
+                    vertical = ChoiceBadgePaddingVertical,
+                ),
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeChoiceBadgeDefaultPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeChoiceBadge(label = "Label", selected = false, onClick = {})
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeChoiceBadge(label = "Label", selected = false, onClick = {})
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeChoiceBadgeSelectedPreview() {
-  OpenCodeTheme(darkTheme = false) {
-    OpenCodeChoiceBadge(label = "Label", selected = true, onClick = {})
-  }
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeChoiceBadge(label = "Label", selected = true, onClick = {})
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeChoiceBadgeDisabledPreview() {
-  OpenCodeTheme(darkTheme = true) {
-    OpenCodeChoiceBadge(label = "Label", selected = false, enabled = false, onClick = {})
-  }
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeChoiceBadge(label = "Label", selected = false, enabled = false, onClick = {})
+    }
 }

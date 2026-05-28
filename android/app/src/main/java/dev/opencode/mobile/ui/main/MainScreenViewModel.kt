@@ -18,392 +18,395 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
-import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @HiltViewModel
 class MainScreenViewModel
-@Inject
-constructor(
-  private val projectRepository: ProjectRepository,
-  private val sessionRepository: SessionRepository,
-  private val connectionProfileStore: ConnectionProfileStore,
-  private val sessionDomainAdapter: SessionDomainAdapter,
-  private val eventDomainAdapter: EventDomainAdapter,
-  private val foregroundEventStream: ForegroundEventStream,
-  private val activeConnectionManager: ActiveConnectionManager,
-  private val connectionSessionCoordinator: ConnectionSessionCoordinator,
-) : ViewModel() {
-  private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
-  val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
+    @Inject
+    constructor(
+        private val projectRepository: ProjectRepository,
+        private val sessionRepository: SessionRepository,
+        private val connectionProfileStore: ConnectionProfileStore,
+        private val sessionDomainAdapter: SessionDomainAdapter,
+        private val eventDomainAdapter: EventDomainAdapter,
+        private val foregroundEventStream: ForegroundEventStream,
+        private val activeConnectionManager: ActiveConnectionManager,
+        private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+    ) : ViewModel() {
+        private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
+        val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
-  private val serverBaseUrl: String
-    get() = activeConnectionManager.current()?.baseUrl.orEmpty()
-  private var homeRefreshJob: Job? = null
-  private var statusRefreshJob: Job? = null
+        private val serverBaseUrl: String
+            get() = activeConnectionManager.current()?.baseUrl.orEmpty()
+        private var homeRefreshJob: Job? = null
+        private var statusRefreshJob: Job? = null
 
-  init {
-    refresh()
-    observeForegroundEvents()
-    viewModelScope.launch {
-      connectionSessionCoordinator.profileSaved.collect {
-        refresh()
-      }
-    }
-  }
+        init {
+            refresh()
+            observeForegroundEvents()
+            viewModelScope.launch {
+                connectionSessionCoordinator.profileSaved.collect {
+                    refresh()
+                }
+            }
+        }
 
-  fun refresh() {
-    viewModelScope.launch { runHomeLoad() }
-  }
+        fun refresh() {
+            viewModelScope.launch { runHomeLoad() }
+        }
 
-  fun retryProbe() {
-    refresh()
-  }
+        fun retryProbe() {
+            refresh()
+        }
 
-  fun requestEditConnection(onProfileReady: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit) {
-    viewModelScope.launch {
-      onProfileReady(connectionProfileStore.activeProfile())
-    }
-  }
+        fun requestEditConnection(onProfileReady: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit) {
+            viewModelScope.launch {
+                onProfileReady(connectionProfileStore.activeProfile())
+            }
+        }
 
-  fun showAddProjectSheet() {
-    viewModelScope.launch { loadAddProjectCandidates() }
-  }
+        fun showAddProjectSheet() {
+            viewModelScope.launch { loadAddProjectCandidates() }
+        }
 
-  fun dismissAddProjectSheet() {
-    _uiState.update { state ->
-      when (state) {
-        is MainScreenUiState.Empty -> state.copy(showAddProjectSheet = false, addProjectCandidates = emptyList())
-        is MainScreenUiState.Loaded -> state.copy(showAddProjectSheet = false, addProjectCandidates = emptyList())
-        else -> state
-      }
-    }
-  }
+        fun dismissAddProjectSheet() {
+            _uiState.update { state ->
+                when (state) {
+                    is MainScreenUiState.Empty -> state.copy(showAddProjectSheet = false, addProjectCandidates = emptyList())
+                    is MainScreenUiState.Loaded -> state.copy(showAddProjectSheet = false, addProjectCandidates = emptyList())
+                    else -> state
+                }
+            }
+        }
 
-  fun addProject(worktree: String) {
-    viewModelScope.launch {
-      connectionProfileStore.addWorktree(serverBaseUrl, worktree)
-      dismissAddProjectSheet()
-      runHomeLoad(skipProbe = true)
-    }
-  }
+        fun addProject(worktree: String) {
+            viewModelScope.launch {
+                connectionProfileStore.addWorktree(serverBaseUrl, worktree)
+                dismissAddProjectSheet()
+                runHomeLoad(skipProbe = true)
+            }
+        }
 
-  fun showSeeAllSessions(worktree: String) {
-    val state = _uiState.value as? MainScreenUiState.Loaded ?: return
-    val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
-    _uiState.value =
-      state.copy(
-        seeAllSessions =
-          SeeAllSessionsSheet(
-            worktree = worktree,
-            projectName = section.displayName,
-            sessions = section.allSessions,
-          ),
-      )
-  }
-
-  fun dismissSeeAllSessions() {
-    _uiState.update { state ->
-      if (state is MainScreenUiState.Loaded) state.copy(seeAllSessions = null) else state
-    }
-  }
-
-  fun createSession(worktree: String) {
-    viewModelScope.launch {
-      runCatching { sessionRepository.createSession(directory = worktree) }
-        .onSuccess { session ->
-          _uiState.update { state ->
-            when (state) {
-              is MainScreenUiState.Loaded ->
+        fun showSeeAllSessions(worktree: String) {
+            val state = _uiState.value as? MainScreenUiState.Loaded ?: return
+            val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
+            _uiState.value =
                 state.copy(
-                  pendingOpenSession =
-                    SessionOpenTarget(
-                      sessionId = session.id,
-                      title = session.title,
-                      worktree = worktree,
-                    ),
+                    seeAllSessions =
+                        SeeAllSessionsSheet(
+                            worktree = worktree,
+                            projectName = section.displayName,
+                            sessions = section.allSessions,
+                        ),
                 )
-              else -> state
+        }
+
+        fun dismissSeeAllSessions() {
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.copy(seeAllSessions = null) else state
             }
-          }
         }
-    }
-  }
 
-  fun consumePendingOpenSession() {
-    _uiState.update { state ->
-      if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
-    }
-  }
-
-  private suspend fun runHomeLoad(skipProbe: Boolean = false) {
-    if (!skipProbe) {
-      _uiState.value = MainScreenUiState.Probing
-      try {
-        projectRepository.probeServer()
-      } catch (error: ServerProbeError) {
-        _uiState.value = MainScreenUiState.ProbeFailed(probeErrorMessage(error))
-        return
-      } catch (error: Throwable) {
-        _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to reach the server")
-        return
-      }
-    }
-
-    _uiState.value = MainScreenUiState.Loading
-    try {
-      var worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
-      if (worktrees.isEmpty()) {
-        val bootProject = projectRepository.getCurrentProject(directory = null)
-        connectionProfileStore.addWorktree(serverBaseUrl, bootProject.worktree)
-        worktrees = listOf(bootProject.worktree)
-      }
-
-      if (worktrees.isEmpty()) {
-        _uiState.value = MainScreenUiState.Empty()
-        return
-      }
-
-      val sections = loadProjectSections(worktrees)
-      _uiState.value =
-        if (sections.isEmpty()) {
-          MainScreenUiState.Empty()
-        } else {
-          MainScreenUiState.Loaded(sections = sections)
+        fun createSession(worktree: String) {
+            viewModelScope.launch {
+                runCatching { sessionRepository.createSession(directory = worktree) }
+                    .onSuccess { session ->
+                        _uiState.update { state ->
+                            when (state) {
+                                is MainScreenUiState.Loaded ->
+                                    state.copy(
+                                        pendingOpenSession =
+                                            SessionOpenTarget(
+                                                sessionId = session.id,
+                                                title = session.title,
+                                                worktree = worktree,
+                                            ),
+                                    )
+                                else -> state
+                            }
+                        }
+                    }
+            }
         }
-    } catch (error: Throwable) {
-      _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
-    }
-  }
 
-  private suspend fun loadProjectSections(worktrees: List<String>): List<ProjectSectionUi> =
-    coroutineScope {
-      worktrees.map { worktree ->
-        async {
-          runCatching { loadSection(worktree) }
-            .getOrElse { throwable ->
-              ProjectSectionUi(
+        fun consumePendingOpenSession() {
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
+            }
+        }
+
+        private suspend fun runHomeLoad(skipProbe: Boolean = false) {
+            if (!skipProbe) {
+                _uiState.value = MainScreenUiState.Probing
+                try {
+                    projectRepository.probeServer()
+                } catch (error: ServerProbeError) {
+                    _uiState.value = MainScreenUiState.ProbeFailed(probeErrorMessage(error))
+                    return
+                } catch (error: Throwable) {
+                    _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to reach the server")
+                    return
+                }
+            }
+
+            _uiState.value = MainScreenUiState.Loading
+            try {
+                var worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
+                if (worktrees.isEmpty()) {
+                    val bootProject = projectRepository.getCurrentProject(directory = null)
+                    connectionProfileStore.addWorktree(serverBaseUrl, bootProject.worktree)
+                    worktrees = listOf(bootProject.worktree)
+                }
+
+                if (worktrees.isEmpty()) {
+                    _uiState.value = MainScreenUiState.Empty()
+                    return
+                }
+
+                val sections = loadProjectSections(worktrees)
+                _uiState.value =
+                    if (sections.isEmpty()) {
+                        MainScreenUiState.Empty()
+                    } else {
+                        MainScreenUiState.Loaded(sections = sections)
+                    }
+            } catch (error: Throwable) {
+                _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
+            }
+        }
+
+        private suspend fun loadProjectSections(worktrees: List<String>): List<ProjectSectionUi> =
+            coroutineScope {
+                worktrees
+                    .map { worktree ->
+                        async {
+                            runCatching { loadSection(worktree) }
+                                .getOrElse { throwable ->
+                                    ProjectSectionUi(
+                                        worktree = worktree,
+                                        displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
+                                        pathSubtitle = worktree,
+                                        letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
+                                        letterAccent = letterAccentForWorktree(worktree),
+                                        previewSessions = emptyList(),
+                                        allSessions = emptyList(),
+                                        totalSessionCount = 0,
+                                        loadError = throwable.message ?: "Unable to load sessions",
+                                    )
+                                }
+                        }
+                    }.awaitAll()
+            }
+
+        private suspend fun loadSection(worktree: String): ProjectSectionUi {
+            val project = projectRepository.getCurrentProject(directory = worktree)
+            val sessions =
+                sessionRepository
+                    .listSessions(directory = worktree)
+                    .sortedByDescending { it.updatedAtEpochMs ?: 0L }
+            val statusBySessionId =
+                runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
+                    .getOrDefault(emptyList())
+                    .associateBy { it.sessionId }
+            val summaries =
+                sessions.map { session ->
+                    sessionDomainAdapter.toSessionSummary(
+                        session,
+                        statusLabel = statusBySessionId[session.id]?.let(eventDomainAdapter::statusLabel),
+                    )
+                }
+            return ProjectSectionUi(
                 worktree = worktree,
-                displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
-                pathSubtitle = worktree,
-                letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
+                displayName = project.displayName,
+                pathSubtitle = project.worktree,
+                letter = letterCharacterForProject(project.displayName),
                 letterAccent = letterAccentForWorktree(worktree),
-                previewSessions = emptyList(),
-                allSessions = emptyList(),
-                totalSessionCount = 0,
-                loadError = throwable.message ?: "Unable to load sessions",
-              )
+                previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
+                allSessions = summaries,
+                totalSessionCount = summaries.size,
+                loadError = null,
+            )
+        }
+
+        private suspend fun loadAddProjectCandidates() {
+            try {
+                val added = connectionProfileStore.addedWorktrees(serverBaseUrl).toSet()
+                val candidates =
+                    projectRepository
+                        .listProjects()
+                        .filter { it.worktree !in added }
+                        .map { project ->
+                            AddProjectCandidateUi(
+                                worktree = project.worktree,
+                                displayName = project.displayName,
+                                pathSubtitle = project.worktree,
+                                letter = letterCharacterForProject(project.displayName),
+                                letterAccent = letterAccentForWorktree(project.worktree),
+                            )
+                        }
+                _uiState.update { state ->
+                    when (state) {
+                        is MainScreenUiState.Empty ->
+                            state.copy(showAddProjectSheet = true, addProjectCandidates = candidates)
+                        is MainScreenUiState.Loaded ->
+                            state.copy(showAddProjectSheet = true, addProjectCandidates = candidates)
+                        else -> state
+                    }
+                }
+            } catch (error: Throwable) {
+                _uiState.update { state ->
+                    when (state) {
+                        is MainScreenUiState.Empty -> state.copy(addProjectError = error.message)
+                        is MainScreenUiState.Loaded -> state.copy(addProjectError = error.message)
+                        else -> state
+                    }
+                }
             }
         }
-      }.awaitAll()
-    }
 
-  private suspend fun loadSection(worktree: String): ProjectSectionUi {
-    val project = projectRepository.getCurrentProject(directory = worktree)
-    val sessions =
-      sessionRepository
-        .listSessions(directory = worktree)
-        .sortedByDescending { it.updatedAtEpochMs ?: 0L }
-    val statusBySessionId =
-      runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
-        .getOrDefault(emptyList())
-        .associateBy { it.sessionId }
-    val summaries =
-      sessions.map { session ->
-        sessionDomainAdapter.toSessionSummary(
-          session,
-          statusLabel = statusBySessionId[session.id]?.let(eventDomainAdapter::statusLabel),
-        )
-      }
-    return ProjectSectionUi(
-      worktree = worktree,
-      displayName = project.displayName,
-      pathSubtitle = project.worktree,
-      letter = letterCharacterForProject(project.displayName),
-      letterAccent = letterAccentForWorktree(worktree),
-      previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
-      allSessions = summaries,
-      totalSessionCount = summaries.size,
-      loadError = null,
-    )
-  }
+        private fun probeErrorMessage(error: ServerProbeError): String =
+            when (error) {
+                is ServerProbeError.Transport -> "Unable to reach the server"
+                is ServerProbeError.Http -> error.message ?: "Server returned ${error.statusCode}"
+                is ServerProbeError.Unhealthy -> "Server reported unhealthy"
+            }
 
-  private suspend fun loadAddProjectCandidates() {
-    try {
-      val added = connectionProfileStore.addedWorktrees(serverBaseUrl).toSet()
-      val candidates =
-        projectRepository
-          .listProjects()
-          .filter { it.worktree !in added }
-          .map { project ->
-            AddProjectCandidateUi(
-              worktree = project.worktree,
-              displayName = project.displayName,
-              pathSubtitle = project.worktree,
-              letter = letterCharacterForProject(project.displayName),
-              letterAccent = letterAccentForWorktree(project.worktree),
+        private fun observeForegroundEvents() {
+            viewModelScope.launch {
+                foregroundEventStream.events.collect { event ->
+                    when {
+                        event.type == "stream.reconnected" -> runHomeLoad(skipProbe = true)
+                        event.triggersHomeRefresh -> scheduleHomeRefresh()
+                        event.triggersStatusRefresh -> scheduleStatusRefresh()
+                    }
+                }
+            }
+        }
+
+        private fun scheduleHomeRefresh() {
+            homeRefreshJob?.cancel()
+            homeRefreshJob =
+                viewModelScope.launch {
+                    delay(HOME_REFRESH_DEBOUNCE_MS)
+                    runHomeLoad(skipProbe = true)
+                }
+        }
+
+        private fun scheduleStatusRefresh() {
+            statusRefreshJob?.cancel()
+            statusRefreshJob =
+                viewModelScope.launch {
+                    delay(STATUS_REFRESH_DEBOUNCE_MS)
+                    refreshSessionStatuses()
+                }
+        }
+
+        private suspend fun refreshSessionStatuses() {
+            val state = _uiState.value as? MainScreenUiState.Loaded ?: return
+            val updatedSections =
+                state.sections.map { section ->
+                    runCatching {
+                        val statusBySessionId =
+                            sessionRepository
+                                .getAllSessionStatuses(directory = section.worktree)
+                                .associateBy(SessionStatus::sessionId)
+                        section.copy(
+                            previewSessions = section.previewSessions.map { applyStatus(it, statusBySessionId) },
+                            allSessions = section.allSessions.map { applyStatus(it, statusBySessionId) },
+                        )
+                    }.getOrDefault(section)
+                }
+            val updatedSeeAll =
+                state.seeAllSessions?.let { sheet ->
+                    val statusBySessionId =
+                        runCatching {
+                            sessionRepository
+                                .getAllSessionStatuses(directory = sheet.worktree)
+                                .associateBy(SessionStatus::sessionId)
+                        }.getOrElse { emptyMap() }
+                    sheet.copy(sessions = sheet.sessions.map { applyStatus(it, statusBySessionId) })
+                }
+            _uiState.value = state.copy(sections = updatedSections, seeAllSessions = updatedSeeAll)
+        }
+
+        private fun applyStatus(
+            summary: SessionSummary,
+            statusBySessionId: Map<String, SessionStatus>,
+        ): SessionSummary =
+            summary.copy(
+                statusLabel = statusBySessionId[summary.id]?.let(eventDomainAdapter::statusLabel),
             )
-          }
-      _uiState.update { state ->
-        when (state) {
-          is MainScreenUiState.Empty ->
-            state.copy(showAddProjectSheet = true, addProjectCandidates = candidates)
-          is MainScreenUiState.Loaded ->
-            state.copy(showAddProjectSheet = true, addProjectCandidates = candidates)
-          else -> state
+
+        private companion object {
+            const val PREVIEW_SESSION_LIMIT = 3
+            const val HOME_REFRESH_DEBOUNCE_MS = 500L
+            const val STATUS_REFRESH_DEBOUNCE_MS = 300L
         }
-      }
-    } catch (error: Throwable) {
-      _uiState.update { state ->
-        when (state) {
-          is MainScreenUiState.Empty -> state.copy(addProjectError = error.message)
-          is MainScreenUiState.Loaded -> state.copy(addProjectError = error.message)
-          else -> state
-        }
-      }
     }
-  }
-
-  private fun probeErrorMessage(error: ServerProbeError): String =
-    when (error) {
-      is ServerProbeError.Transport -> "Unable to reach the server"
-      is ServerProbeError.Http -> error.message ?: "Server returned ${error.statusCode}"
-      is ServerProbeError.Unhealthy -> "Server reported unhealthy"
-    }
-
-  private fun observeForegroundEvents() {
-    viewModelScope.launch {
-      foregroundEventStream.events.collect { event ->
-        when {
-          event.type == "stream.reconnected" -> runHomeLoad(skipProbe = true)
-          event.triggersHomeRefresh -> scheduleHomeRefresh()
-          event.triggersStatusRefresh -> scheduleStatusRefresh()
-        }
-      }
-    }
-  }
-
-  private fun scheduleHomeRefresh() {
-    homeRefreshJob?.cancel()
-    homeRefreshJob =
-      viewModelScope.launch {
-        delay(HOME_REFRESH_DEBOUNCE_MS)
-        runHomeLoad(skipProbe = true)
-      }
-  }
-
-  private fun scheduleStatusRefresh() {
-    statusRefreshJob?.cancel()
-    statusRefreshJob =
-      viewModelScope.launch {
-        delay(STATUS_REFRESH_DEBOUNCE_MS)
-        refreshSessionStatuses()
-      }
-  }
-
-  private suspend fun refreshSessionStatuses() {
-    val state = _uiState.value as? MainScreenUiState.Loaded ?: return
-    val updatedSections =
-      state.sections.map { section ->
-        runCatching {
-          val statusBySessionId =
-            sessionRepository
-              .getAllSessionStatuses(directory = section.worktree)
-              .associateBy(SessionStatus::sessionId)
-          section.copy(
-            previewSessions = section.previewSessions.map { applyStatus(it, statusBySessionId) },
-            allSessions = section.allSessions.map { applyStatus(it, statusBySessionId) },
-          )
-        }.getOrDefault(section)
-      }
-    val updatedSeeAll =
-      state.seeAllSessions?.let { sheet ->
-        val statusBySessionId =
-          runCatching {
-            sessionRepository
-              .getAllSessionStatuses(directory = sheet.worktree)
-              .associateBy(SessionStatus::sessionId)
-          }.getOrElse { emptyMap() }
-        sheet.copy(sessions = sheet.sessions.map { applyStatus(it, statusBySessionId) })
-      }
-    _uiState.value = state.copy(sections = updatedSections, seeAllSessions = updatedSeeAll)
-  }
-
-  private fun applyStatus(
-    summary: SessionSummary,
-    statusBySessionId: Map<String, SessionStatus>,
-  ): SessionSummary =
-    summary.copy(
-      statusLabel = statusBySessionId[summary.id]?.let(eventDomainAdapter::statusLabel),
-    )
-
-  private companion object {
-    const val PREVIEW_SESSION_LIMIT = 3
-    const val HOME_REFRESH_DEBOUNCE_MS = 500L
-    const val STATUS_REFRESH_DEBOUNCE_MS = 300L
-  }
-}
 
 sealed interface MainScreenUiState {
-  data object Probing : MainScreenUiState
+    data object Probing : MainScreenUiState
 
-  data class ProbeFailed(val message: String) : MainScreenUiState
+    data class ProbeFailed(
+        val message: String,
+    ) : MainScreenUiState
 
-  data object Loading : MainScreenUiState
+    data object Loading : MainScreenUiState
 
-  data class Empty(
-    val showAddProjectSheet: Boolean = false,
-    val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
-    val addProjectError: String? = null,
-  ) : MainScreenUiState
+    data class Empty(
+        val showAddProjectSheet: Boolean = false,
+        val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
+        val addProjectError: String? = null,
+    ) : MainScreenUiState
 
-  data class Loaded(
-    val sections: List<ProjectSectionUi>,
-    val showAddProjectSheet: Boolean = false,
-    val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
-    val addProjectError: String? = null,
-    val seeAllSessions: SeeAllSessionsSheet? = null,
-    val pendingOpenSession: SessionOpenTarget? = null,
-  ) : MainScreenUiState
+    data class Loaded(
+        val sections: List<ProjectSectionUi>,
+        val showAddProjectSheet: Boolean = false,
+        val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
+        val addProjectError: String? = null,
+        val seeAllSessions: SeeAllSessionsSheet? = null,
+        val pendingOpenSession: SessionOpenTarget? = null,
+    ) : MainScreenUiState
 }
 
 data class ProjectSectionUi(
-  val worktree: String,
-  val displayName: String,
-  val pathSubtitle: String,
-  val letter: Char,
-  val letterAccent: LetterAccent,
-  val previewSessions: List<SessionSummary>,
-  val allSessions: List<SessionSummary>,
-  val totalSessionCount: Int,
-  val loadError: String? = null,
+    val worktree: String,
+    val displayName: String,
+    val pathSubtitle: String,
+    val letter: Char,
+    val letterAccent: LetterAccent,
+    val previewSessions: List<SessionSummary>,
+    val allSessions: List<SessionSummary>,
+    val totalSessionCount: Int,
+    val loadError: String? = null,
 )
 
 data class AddProjectCandidateUi(
-  val worktree: String,
-  val displayName: String,
-  val pathSubtitle: String,
-  val letter: Char,
-  val letterAccent: LetterAccent,
+    val worktree: String,
+    val displayName: String,
+    val pathSubtitle: String,
+    val letter: Char,
+    val letterAccent: LetterAccent,
 )
 
 data class SeeAllSessionsSheet(
-  val worktree: String,
-  val projectName: String,
-  val sessions: List<SessionSummary>,
+    val worktree: String,
+    val projectName: String,
+    val sessions: List<SessionSummary>,
 )
 
 data class SessionOpenTarget(
-  val sessionId: String,
-  val title: String,
-  val worktree: String,
+    val sessionId: String,
+    val title: String,
+    val worktree: String,
 )

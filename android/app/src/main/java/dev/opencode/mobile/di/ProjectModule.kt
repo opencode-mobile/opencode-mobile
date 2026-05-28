@@ -16,45 +16,45 @@ import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
-import javax.inject.Singleton
 import kotlinx.serialization.json.Json
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ProjectModule {
-  @Binds
-  @Singleton
-  abstract fun bindProjectRepository(impl: DefaultProjectRepository): ProjectRepository
-
-  companion object {
-    @Provides
+    @Binds
     @Singleton
-    fun provideHealthApi(httpClient: OpencodeHttpClient): HealthApi = HealthApi(httpClient)
+    abstract fun bindProjectRepository(impl: DefaultProjectRepository): ProjectRepository
 
-    @Provides
-    @Singleton
-    fun provideProjectsApi(httpClient: OpencodeHttpClient): ProjectsApi = ProjectsApi(httpClient)
+    companion object {
+        @Provides
+        @Singleton
+        fun provideHealthApi(httpClient: OpencodeHttpClient): HealthApi = HealthApi(httpClient)
 
-    @Provides
-    @Singleton
-    fun provideProjectDomainAdapter(): ProjectDomainAdapter = ProjectDomainAdapter()
-  }
+        @Provides
+        @Singleton
+        fun provideProjectsApi(httpClient: OpencodeHttpClient): ProjectsApi = ProjectsApi(httpClient)
+
+        @Provides
+        @Singleton
+        fun provideProjectDomainAdapter(): ProjectDomainAdapter = ProjectDomainAdapter()
+    }
 }
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class EventStreamModule {
-  @Binds
-  @Singleton
-  abstract fun bindForegroundEventStream(impl: DefaultForegroundEventStream): ForegroundEventStream
-
-  companion object {
-    @Provides
+    @Binds
     @Singleton
-    fun provideEventsApi(sseHttpClient: OpencodeSseHttpClient): EventsApi = EventsApi(sseHttpClient)
+    abstract fun bindForegroundEventStream(impl: DefaultForegroundEventStream): ForegroundEventStream
 
-    @Provides
-    @Singleton
-    fun provideEventDomainAdapter(json: Json): EventDomainAdapter = EventDomainAdapter(json)
-  }
+    companion object {
+        @Provides
+        @Singleton
+        fun provideEventsApi(sseHttpClient: OpencodeSseHttpClient): EventsApi = EventsApi(sseHttpClient)
+
+        @Provides
+        @Singleton
+        fun provideEventDomainAdapter(json: Json): EventDomainAdapter = EventDomainAdapter(json)
+    }
 }
