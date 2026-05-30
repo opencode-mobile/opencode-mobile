@@ -22,6 +22,13 @@ data class ModelSelectionOption(
     val providerLabel: String = providerName.ifBlank { providerId }
     val displayLabel: String = "$modelLabel · $providerLabel"
     val supportsVariants: Boolean = variants.isNotEmpty()
+
+    fun matchesFilter(query: String): Boolean {
+        val needle = query.trim()
+        if (needle.isEmpty()) return true
+        return listOf(displayLabel, modelId, providerId, modelName, providerName)
+            .any { it.contains(needle, ignoreCase = true) }
+    }
 }
 
 data class ModelSelection(

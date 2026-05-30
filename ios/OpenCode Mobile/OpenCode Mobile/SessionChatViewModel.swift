@@ -519,4 +519,5 @@ final class SessionChatViewModel {
 
 enum SessionChatPickers {
     static let modes = ["Build", "Plan"]
+    static let modelFilterThreshold = 10
 }

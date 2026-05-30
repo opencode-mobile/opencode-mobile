@@ -24,6 +24,14 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
     var providerLabel: String { providerName.isEmpty ? providerID : providerName }
     var displayLabel: String { "\(modelLabel) · \(providerLabel)" }
     var supportsVariants: Bool { !variants.isEmpty }
+
+    func matchesFilter(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+
+        let haystacks = [displayLabel, modelID, providerID, modelName, providerName]
+        return haystacks.contains { $0.localizedCaseInsensitiveContains(trimmed) }
+    }
 }
 
 struct ModelSelection: Equatable, Sendable {

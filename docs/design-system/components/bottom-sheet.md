@@ -61,15 +61,16 @@ accessibility label or description using the platform convention.
 
 ## Platform Notes
 
-- iOS: presented with SwiftUI `.sheet` and native dismissal. Sheet content is
-  measured from the visible sheet root and applied as a single
-  `presentationDetents` height (no `.large` detent). The sheet starts from an
-  estimated content height, then updates to the measured height after layout.
-  The container uses `fixedSize(horizontal: false, vertical: true)` so its own
-  layout stays intrinsic instead of expanding to the proposed sheet height.
+- iOS: presented with SwiftUI `.sheet` and native dismissal. Short entry lists use
+  a measured compact height detent. Longer lists switch to a fixed 55% height
+  detent with an internal `ScrollView`. Scrollable sheets disable interactive
+  swipe-to-dismiss so list scrolling does not close the sheet; use the close
+  button instead. Short compact sheets keep the default swipe-to-dismiss behavior.
 - Android: presented with a full-window Compose popup so the component can use
   its own bottom-sheet motion timing while preserving close, scrim tap, back
-  press, and downward drag dismissal.
+  press, and downward drag dismissal. Short entry lists wrap to content height.
+  Longer lists cap at 55% of screen height and scroll inside the sheet body.
+  Drag-to-dismiss is limited to the header so list scrolling is not blocked.
 
 ## Previews
 

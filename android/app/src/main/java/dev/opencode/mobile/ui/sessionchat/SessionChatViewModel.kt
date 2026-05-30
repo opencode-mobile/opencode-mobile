@@ -377,6 +377,7 @@ class SessionChatViewModel
         companion object {
             private const val TAG = "SessionChat"
             val AvailableModes = listOf("Build", "Plan")
+            const val ModelFilterThreshold = 10
             private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
         }
     }

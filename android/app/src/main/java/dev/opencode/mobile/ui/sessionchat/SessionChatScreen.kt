@@ -19,6 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import dev.opencode.mobile.ui.components.LocalBottomSheetScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -54,6 +59,7 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlin.math.roundToInt
 
 private enum class ComposerPickerKind(
     val sheetTitle: String,
@@ -79,6 +85,13 @@ fun SessionChatScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
+    var modelFilterText by remember { mutableStateOf("") }
+
+    LaunchedEffect(activePicker) {
+        if (activePicker != ComposerPickerKind.Model) {
+            modelFilterText = ""
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -209,25 +222,36 @@ fun SessionChatScreen(
         OpenCodeBottomSheet(
             visible = activePicker != null,
             title = activePicker?.sheetTitle ?: "",
-            onDismissRequest = { activePicker = null },
+            onDismissRequest = {
+                activePicker = null
+                modelFilterText = ""
+            },
+            keyboardAware =
+                activePicker == ComposerPickerKind.Model &&
+                    uiState.modelOptions.size > SessionChatViewModel.ModelFilterThreshold,
+            pinnedContent = {
+                if (activePicker == ComposerPickerKind.Model &&
+                    uiState.modelOptions.size > SessionChatViewModel.ModelFilterThreshold
+                ) {
+                    ModelPickerFilterField(
+                        value = modelFilterText,
+                        onValueChange = { modelFilterText = it },
+                    )
+                }
+            },
         ) {
             when (activePicker) {
                 ComposerPickerKind.Model ->
-                    uiState.modelOptions.forEach { model ->
-                        OpenCodeBottomSheetEntry(
-                            title = model.displayLabel,
-                            endDecorator =
-                                if (model == uiState.selectedModel?.option) {
-                                    BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                                } else {
-                                    BottomSheetEntryDecorator.None
-                                },
-                            onClick = {
-                                viewModel.selectModel(model)
-                                activePicker = null
-                            },
-                        )
-                    }
+                    ModelPickerSheetContent(
+                        modelOptions = uiState.modelOptions,
+                        selectedModel = uiState.selectedModel?.option,
+                        filterText = modelFilterText,
+                        onSelectModel = { model ->
+                            viewModel.selectModel(model)
+                            activePicker = null
+                            modelFilterText = ""
+                        },
+                    )
                 ComposerPickerKind.Mode ->
                     SessionChatViewModel.AvailableModes.forEach { mode ->
                         OpenCodeBottomSheetEntry(
@@ -264,6 +288,86 @@ fun SessionChatScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ModelPickerSheetContent(
+    modelOptions: List<ModelSelectionOption>,
+    selectedModel: ModelSelectionOption?,
+    filterText: String,
+    onSelectModel: (ModelSelectionOption) -> Unit,
+) {
+    val scrollState = LocalBottomSheetScrollState.current
+    var selectedOffset by remember { mutableIntStateOf(-1) }
+    val filteredModels = modelOptions.filter { it.matchesFilter(filterText) }
+
+    LaunchedEffect(selectedOffset, scrollState) {
+        val state = scrollState ?: return@LaunchedEffect
+        if (selectedOffset < 0) return@LaunchedEffect
+        state.scrollTo(selectedOffset.coerceIn(0, state.maxValue))
+    }
+
+    if (filteredModels.isEmpty()) {
+        OpenCodeBottomSheetEntry(
+            title = "No models match your filter",
+            enabled = false,
+            onClick = {},
+        )
+    } else {
+        filteredModels.forEach { model ->
+            OpenCodeBottomSheetEntry(
+                title = model.displayLabel,
+                endDecorator =
+                    if (model == selectedModel) {
+                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                    } else {
+                        BottomSheetEntryDecorator.None
+                    },
+                onClick = { onSelectModel(model) },
+                modifier =
+                    if (model == selectedModel) {
+                        Modifier.onGloballyPositioned { coordinates ->
+                            selectedOffset = coordinates.positionInParent().y.roundToInt()
+                        }
+                    } else {
+                        Modifier
+                    },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelPickerFilterField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 8.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        decorationBox = { innerTextField ->
+            Box {
+                if (value.isBlank()) {
+                    Text(
+                        text = "Filter models...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
 }
 
 @Composable

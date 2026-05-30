@@ -46,6 +46,7 @@ struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
+    @State private var modelFilterText = ""
     @State private var scrollPosition: String?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
@@ -96,11 +97,19 @@ struct SessionChatView: View {
         .openCodeBottomSheet(
             isPresented: pickerPresentedBinding,
             title: activePicker?.sheetTitle ?? "",
-            content: { pickerSheetEntries },
+            scrollTargetID: modelPickerScrollTargetID,
+            pinnedContent: { modelPickerPinnedContent },
+            content: { pickerSheetEntries }
         )
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear {
+        .task {
             viewModel.startObserving()
+            await viewModel.loadMessages()
+        }
+        .onChange(of: activePicker) { _, picker in
+            if picker != .model {
+                modelFilterText = ""
+            }
         }
         .onDisappear {
             viewModel.stopObserving()
@@ -319,17 +328,48 @@ struct SessionChatView: View {
         Binding(
             get: { activePicker != nil },
             set: { presented in
-                if !presented { activePicker = nil }
+                if !presented {
+                    activePicker = nil
+                    modelFilterText = ""
+                }
             },
         )
     }
 
-    @ViewBuilder
-    private var pickerSheetEntries: some View {
+    private func filteredModelOptions(from options: [ModelSelectionOption]) -> [ModelSelectionOption] {
+        options.filter { $0.matchesFilter(modelFilterText) }
+    }
+
+    private var modelPickerScrollTargetID: String? {
+        guard activePicker == .model else { return nil }
         let composer = viewModel.state.composer
-        switch activePicker {
-        case .model:
-            ForEach(composer.modelOptions) { model in
+        guard let selected = composer.selectedModel?.option else { return nil }
+        let filtered = filteredModelOptions(from: composer.modelOptions)
+        guard filtered.contains(where: { $0.id == selected.id }) else { return nil }
+        return selected.id
+    }
+
+    @ViewBuilder
+    private var modelPickerPinnedContent: some View {
+        if activePicker == .model {
+            let composer = viewModel.state.composer
+            if composer.modelOptions.count > SessionChatPickers.modelFilterThreshold {
+                ModelPickerFilterField(text: $modelFilterText)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modelPickerEntries(composer: SessionChatComposerState) -> some View {
+        let filtered = filteredModelOptions(from: composer.modelOptions)
+        if filtered.isEmpty {
+            OpenCodeBottomSheetEntry(
+                title: "No models match your filter",
+                enabled: false,
+                action: {}
+            )
+        } else {
+            ForEach(filtered) { model in
                 OpenCodeBottomSheetEntry(
                     title: model.displayLabel,
                     endDecorator: model == composer.selectedModel?.option
@@ -338,9 +378,20 @@ struct SessionChatView: View {
                     action: {
                         viewModel.selectModel(model)
                         activePicker = nil
+                        modelFilterText = ""
                     },
                 )
+                .id(model.id)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var pickerSheetEntries: some View {
+        let composer = viewModel.state.composer
+        switch activePicker {
+        case .model:
+            modelPickerEntries(composer: composer)
         case .mode:
             ForEach(SessionChatPickers.modes, id: \.self) { mode in
                 OpenCodeBottomSheetEntry(
@@ -370,6 +421,21 @@ struct SessionChatView: View {
         case .none:
             EmptyView()
         }
+    }
+}
+
+private struct ModelPickerFilterField: View {
+    @Binding var text: String
+
+    var body: some View {
+        TextField("Filter models...", text: $text)
+            .font(OpenCodeTypography.body)
+            .foregroundStyle(OpenCodeColors.textPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
     }
 }
 

@@ -23,18 +23,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,9 +53,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
@@ -74,6 +87,18 @@ private val BottomSheetEntryHorizontalPadding = 20.dp
 private val BottomSheetEntryVerticalPadding = 12.dp
 private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
+private const val BottomSheetScrollableHeightFraction = 0.55f
+private val BottomSheetCompactMaxHeight = 360.dp
+private val BottomSheetEstimatedHeaderHeight =
+    BottomSheetHeaderTopPadding + BottomSheetHeaderBottomPadding + 40.dp
+
+private enum class BottomSheetLayoutMode {
+    Measuring,
+    Compact,
+    Scrollable,
+}
+
+internal val LocalBottomSheetScrollState = compositionLocalOf<ScrollState?> { null }
 
 sealed class BottomSheetEntryDecorator {
     data object None : BottomSheetEntryDecorator()
@@ -91,6 +116,7 @@ fun OpenCodeBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     keyboardAware: Boolean = false,
+    pinnedContent: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var shouldRender by remember { mutableStateOf(visible) }
@@ -179,17 +205,6 @@ fun OpenCodeBottomSheet(
                         modifier
                             .fillMaxWidth()
                             .offset { IntOffset(x = 0, y = dragOffsetPx.roundToInt()) }
-                            .draggable(
-                                orientation = Orientation.Vertical,
-                                state = dragState,
-                                onDragStopped = { velocity ->
-                                    if (dragOffsetPx >= dragDismissThresholdPx || velocity >= BottomSheetDragDismissVelocity) {
-                                        dismissWithAnimation()
-                                    } else {
-                                        dragOffsetPx = 0f
-                                    }
-                                },
-                            )
                             .clickable(
                                 interactionSource = sheetInteractionSource,
                                 indication = null,
@@ -203,6 +218,19 @@ fun OpenCodeBottomSheet(
                         title = title,
                         keyboardAware = keyboardAware,
                         onDismissRequest = ::dismissWithAnimation,
+                        headerDragModifier =
+                            Modifier.draggable(
+                                orientation = Orientation.Vertical,
+                                state = dragState,
+                                onDragStopped = { velocity ->
+                                    if (dragOffsetPx >= dragDismissThresholdPx || velocity >= BottomSheetDragDismissVelocity) {
+                                        dismissWithAnimation()
+                                    } else {
+                                        dragOffsetPx = 0f
+                                    }
+                                },
+                            ),
+                        pinnedContent = pinnedContent,
                         content = content,
                     )
                 }
@@ -216,8 +244,41 @@ private fun BottomSheetContent(
     title: String,
     keyboardAware: Boolean,
     onDismissRequest: () -> Unit,
+    headerDragModifier: Modifier,
+    pinnedContent: @Composable ColumnScope.() -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val maxSheetHeight = configuration.screenHeightDp.dp * BottomSheetScrollableHeightFraction
+    var contentHeight by remember { mutableStateOf(0.dp) }
+    var headerHeight by remember { mutableStateOf(0.dp) }
+    var pinnedContentHeight by remember { mutableStateOf(0.dp) }
+    val scrollState = rememberScrollState()
+
+    val layoutMode =
+        remember(contentHeight, headerHeight) {
+            if (contentHeight == 0.dp) {
+                BottomSheetLayoutMode.Measuring
+            } else {
+                val resolvedHeader =
+                    if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
+                val total =
+                    resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
+                if (total <= BottomSheetCompactMaxHeight) {
+                    BottomSheetLayoutMode.Compact
+                } else {
+                    BottomSheetLayoutMode.Scrollable
+                }
+            }
+        }
+
+    val resolvedHeaderHeight =
+        if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
+    val scrollBodyMaxHeight =
+        (maxSheetHeight - resolvedHeaderHeight - pinnedContentHeight - BottomSheetContentBottomPadding)
+            .coerceAtLeast(BottomSheetEntryMinHeight)
+
     val bodyModifier =
         Modifier
             .fillMaxWidth()
@@ -225,38 +286,129 @@ private fun BottomSheetContent(
             .navigationBarsPadding()
             .then(if (keyboardAware) Modifier.imePadding() else Modifier)
 
-    Column(modifier = bodyModifier) {
-        Row(
+    Box(modifier = bodyModifier) {
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(
-                        start = BottomSheetHeaderHorizontalPadding,
-                        end = BottomSheetHeaderHorizontalPadding,
-                        top = BottomSheetHeaderTopPadding,
-                        bottom = BottomSheetHeaderBottomPadding,
+                    .then(
+                        when (layoutMode) {
+                            BottomSheetLayoutMode.Compact -> Modifier.wrapContentHeight()
+                            else -> Modifier.heightIn(max = maxSheetHeight)
+                        },
                     ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            BottomSheetHeader(
+                title = title,
+                onDismissRequest = onDismissRequest,
+                modifier =
+                    headerDragModifier.onSizeChanged {
+                        headerHeight = with(density) { it.height.toDp() }
+                    },
             )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
-                contrast = OpenCodeButtonContrast.Low,
-                onClick = onDismissRequest,
-            )
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged {
+                            pinnedContentHeight = with(density) { it.height.toDp() }
+                        },
+            ) {
+                pinnedContent()
+            }
+
+            when (layoutMode) {
+                BottomSheetLayoutMode.Compact -> {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        content()
+                    }
+                }
+                BottomSheetLayoutMode.Measuring,
+                BottomSheetLayoutMode.Scrollable,
+                -> {
+                    CompositionLocalProvider(LocalBottomSheetScrollState provides scrollState) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = scrollBodyMaxHeight)
+                                    .verticalScroll(scrollState),
+                        ) {
+                            content()
+                        }
+                    }
+                }
+            }
         }
 
-        content()
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .measureContentHeight(density) { measured ->
+                        if (contentHeight != measured) {
+                            contentHeight = measured
+                        }
+                    },
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                content()
+            }
+        }
     }
 }
+
+@Composable
+private fun BottomSheetHeader(
+    title: String,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    start = BottomSheetHeaderHorizontalPadding,
+                    end = BottomSheetHeaderHorizontalPadding,
+                    top = BottomSheetHeaderTopPadding,
+                    bottom = BottomSheetHeaderBottomPadding,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = onDismissRequest,
+        )
+    }
+}
+
+private fun Modifier.measureContentHeight(
+    density: Density,
+    onHeight: (Dp) -> Unit,
+): Modifier =
+    layout { measurable, constraints ->
+        val placeable =
+            measurable.measure(
+                constraints.copy(
+                    minHeight = 0,
+                    maxHeight = Constraints.Infinity,
+                ),
+            )
+        onHeight(with(density) { placeable.height.toDp() })
+        layout(0, 0) {}
+    }
 
 @Composable
 fun OpenCodeBottomSheetEntry(
@@ -314,6 +466,21 @@ private fun BottomSheetEntryDecoration(
                     tint = tint,
                 )
             }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeBottomSheetScrollablePreview() {
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeBottomSheet(visible = true, title = "Model", onDismissRequest = {}) {
+            repeat(24) { index ->
+                OpenCodeBottomSheetEntry(
+                    title = "Model ${index + 1} · Provider",
+                    onClick = {},
+                )
+            }
+        }
     }
 }
 
