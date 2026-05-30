@@ -16,7 +16,7 @@ in both native apps.
   terms, state names, errors, permission behavior, and design-system usage.
 - Use existing design-system components first.
 - If a feature needs new reusable UI, pause feature implementation and use
-  `.cursor/skills/design-system-component/SKILL.md`.
+  `.agents/design-system-component/SKILL.md`.
 - Use custom feature-local UI only after checking for an existing component and
   considering whether the missing UI should become a reusable component.
   Document the reason when custom local UI remains the right choice.
