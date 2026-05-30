@@ -116,13 +116,19 @@ A user, assistant, command, or tool-related item inside a session.
 The mobile client treats messages as the main way to understand what happened in
 a session and as the vehicle for sending new prompts.
 
+### Model Selection
+
+The user's selected provider/model pair and optional server-provided Variant
+for the next prompt.
+
+The mobile client loads Model Selection options from the opencode server for the
+current project. `Default` Variant is a mobile UI label meaning no explicit
+variant is sent.
+
 ### Thinking Effort
 
-The user's selected reasoning-effort preference for the next prompt.
-
-The mobile client may expose values such as Default, Low, Medium, and High when
-the connected model or server supports that control. The term describes user
-intent and should not be coupled to a specific provider's internal naming.
+Legacy planning term for a reasoning-effort preference. In Session Chat, the
+server-backed user-facing selector is **Variant**.
 
 ### permission request
 

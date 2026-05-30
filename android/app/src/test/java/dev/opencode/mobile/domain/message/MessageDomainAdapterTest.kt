@@ -79,4 +79,36 @@ class MessageDomainAdapterTest {
         assertEquals(MessageRole.Assistant, message.role)
         assertEquals("Forbidden: unauthorized: not licensed to use Copilot", message.text)
     }
+
+    @Test
+    fun toSendRequest_includesModelAndNonDefaultVariant() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "anthropic", modelId = "claude-sonnet"),
+                    variant = "high",
+                ),
+            )
+
+        assertEquals(listOf("Hello"), body.parts.map { it.text })
+        assertEquals("anthropic", body.model?.providerId)
+        assertEquals("claude-sonnet", body.model?.modelId)
+        assertEquals("high", body.variant)
+    }
+
+    @Test
+    fun toSendRequest_omitsDefaultVariant() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "anthropic", modelId = "claude-sonnet"),
+                    variant = null,
+                ),
+            )
+
+        assertEquals("anthropic", body.model?.providerId)
+        assertEquals(null, body.variant)
+    }
 }

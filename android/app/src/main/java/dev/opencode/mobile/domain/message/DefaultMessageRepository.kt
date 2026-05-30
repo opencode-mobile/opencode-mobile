@@ -35,10 +35,10 @@ class DefaultMessageRepository
 
         override suspend fun sendPromptAsync(
             sessionId: String,
-            text: String,
+            options: PromptSendOptions,
             directory: String?,
         ) {
-            runCatching { api.sendPromptAsync(sessionId, adapter.toSendRequest(text), directory) }
+            runCatching { api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory) }
                 .getOrElse { throw adapter.mapError(it) }
         }
     }

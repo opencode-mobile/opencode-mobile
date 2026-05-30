@@ -10,16 +10,6 @@
 - **Next action:** Add components when message UX is defined.
 - **Status:** Temporary.
 
-## Composer selectors mock
-
-- **Intent:** User can pick model, agent mode, and Thinking Effort before send.
-- **iOS:** Local chip state only; not sent to server.
-- **Android:** Local chip state only; not sent to server.
-- **Area:** Behavior.
-- **Reason:** Text-only send in this slice; server option lists deferred.
-- **Next action:** Map chips to request body when server lists exist.
-- **Status:** Temporary.
-
 ## No live assistant streaming
 
 - **Intent:** Timeline updates as the assistant works.

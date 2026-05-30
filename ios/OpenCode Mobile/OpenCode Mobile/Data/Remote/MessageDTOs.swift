@@ -14,6 +14,7 @@ struct MessageInfoDTO: Codable, Sendable {
     let model: MessageModelRefDTO?
     let modelID: String?
     let providerID: String?
+    let variant: String?
     let time: MessageTimeDTO?
     let error: MessageErrorInfoDTO?
 }
@@ -47,6 +48,19 @@ struct MessagePartDTO: Codable, Sendable {
 
 struct SendMessageRequestDTO: Codable, Sendable {
     let parts: [SendMessagePartDTO]
+    let model: SendPromptModelDTO?
+    let variant: String?
+
+    init(parts: [SendMessagePartDTO], model: SendPromptModelDTO? = nil, variant: String? = nil) {
+        self.parts = parts
+        self.model = model
+        self.variant = variant
+    }
+}
+
+struct SendPromptModelDTO: Codable, Sendable {
+    let providerID: String
+    let modelID: String
 }
 
 struct SendMessagePartDTO: Codable, Sendable {

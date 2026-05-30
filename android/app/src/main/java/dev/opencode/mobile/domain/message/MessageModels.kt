@@ -5,8 +5,22 @@ data class Message(
     val role: MessageRole,
     val text: String,
     val model: String? = null,
+    val modelProviderId: String? = null,
+    val modelId: String? = null,
+    val variant: String? = null,
     val mode: String? = null,
     val sentAtEpochMs: Long? = null,
+)
+
+data class PromptSendOptions(
+    val text: String,
+    val model: PromptModelSelection? = null,
+    val variant: String? = null,
+)
+
+data class PromptModelSelection(
+    val providerId: String,
+    val modelId: String,
 )
 
 enum class MessageRole {

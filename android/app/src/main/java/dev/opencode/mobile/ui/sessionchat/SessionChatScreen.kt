@@ -60,7 +60,7 @@ private enum class ComposerPickerKind(
 ) {
     Model("Model"),
     Mode("Agent mode"),
-    Thinking("Thinking level"),
+    Variant("Variant"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,6 +94,15 @@ fun SessionChatScreen(
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            uiState.modelNotice?.let { notice ->
+                Text(
+                    text = notice,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -183,14 +192,15 @@ fun SessionChatScreen(
 
             SessionComposer(
                 composerText = uiState.composerText,
-                selectedModel = uiState.selectedModel,
+                selectedModel = uiState.selectedModelLabel,
                 selectedMode = uiState.selectedMode,
-                selectedThinkingEffort = uiState.selectedThinkingEffort,
-                sendEnabled = uiState.composerText.isNotBlank() && !uiState.isSending,
+                selectedVariant = uiState.selectedVariantLabel,
+                showVariant = uiState.canSelectVariant,
+                sendEnabled = uiState.composerText.isNotBlank() && uiState.selectedModel != null && !uiState.isSending,
                 onTextChange = viewModel::updateComposerText,
                 onModelClick = { activePicker = ComposerPickerKind.Model },
                 onModeClick = { activePicker = ComposerPickerKind.Mode },
-                onThinkingEffortClick = { activePicker = ComposerPickerKind.Thinking },
+                onVariantClick = { activePicker = ComposerPickerKind.Variant },
                 onAttachClick = {},
                 onSendClick = viewModel::sendPrompt,
             )
@@ -203,11 +213,11 @@ fun SessionChatScreen(
         ) {
             when (activePicker) {
                 ComposerPickerKind.Model ->
-                    SessionChatViewModel.AvailableModels.forEach { model ->
+                    uiState.modelOptions.forEach { model ->
                         OpenCodeBottomSheetEntry(
-                            title = model,
+                            title = model.displayLabel,
                             endDecorator =
-                                if (model == uiState.selectedModel) {
+                                if (model == uiState.selectedModel?.option) {
                                     BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                                 } else {
                                     BottomSheetEntryDecorator.None
@@ -234,18 +244,18 @@ fun SessionChatScreen(
                             },
                         )
                     }
-                ComposerPickerKind.Thinking ->
-                    SessionChatViewModel.AvailableThinkingEfforts.forEach { effort ->
+                ComposerPickerKind.Variant ->
+                    uiState.variantOptions.forEach { variant ->
                         OpenCodeBottomSheetEntry(
-                            title = effort,
+                            title = variant,
                             endDecorator =
-                                if (effort == uiState.selectedThinkingEffort) {
+                                if (variant == uiState.selectedVariantLabel) {
                                     BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                                 } else {
                                     BottomSheetEntryDecorator.None
                                 },
                             onClick = {
-                                viewModel.selectThinkingEffort(effort)
+                                viewModel.selectVariant(variant)
                                 activePicker = null
                             },
                         )
@@ -354,12 +364,13 @@ private fun SessionComposer(
     composerText: String,
     selectedModel: String,
     selectedMode: String,
-    selectedThinkingEffort: String,
+    selectedVariant: String,
+    showVariant: Boolean,
     sendEnabled: Boolean,
     onTextChange: (String) -> Unit,
     onModelClick: () -> Unit,
     onModeClick: () -> Unit,
-    onThinkingEffortClick: () -> Unit,
+    onVariantClick: () -> Unit,
     onAttachClick: () -> Unit,
     onSendClick: () -> Unit,
 ) {
@@ -401,7 +412,9 @@ private fun SessionComposer(
         ) {
             OpenCodeChoiceBadge(label = selectedModel, selected = false, onClick = onModelClick)
             OpenCodeChoiceBadge(label = selectedMode, selected = false, onClick = onModeClick)
-            OpenCodeChoiceBadge(label = selectedThinkingEffort, selected = false, onClick = onThinkingEffortClick)
+            if (showVariant) {
+                OpenCodeChoiceBadge(label = selectedVariant, selected = false, onClick = onVariantClick)
+            }
         }
 
         Row(

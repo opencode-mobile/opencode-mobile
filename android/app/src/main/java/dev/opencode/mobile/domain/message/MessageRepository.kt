@@ -22,5 +22,15 @@ interface MessageRepository {
         sessionId: String,
         text: String,
         directory: String? = null,
+    ) = sendPromptAsync(
+        sessionId = sessionId,
+        options = PromptSendOptions(text = text),
+        directory = directory,
+    )
+
+    suspend fun sendPromptAsync(
+        sessionId: String,
+        options: PromptSendOptions,
+        directory: String? = null,
     )
 }

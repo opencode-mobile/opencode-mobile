@@ -11,6 +11,12 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PromptModelSelection
+import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelSelection
+import dev.opencode.mobile.domain.model.ModelSelectionCatalog
+import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -32,6 +38,7 @@ class SessionChatViewModel
     @Inject
     constructor(
         private val messageRepository: MessageRepository,
+        private val modelRepository: ModelRepository,
         private val sessionRepository: SessionRepository,
         private val messageLiveStore: MessageLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
@@ -86,8 +93,12 @@ class SessionChatViewModel
             val worktree = boundWorktree ?: return
             viewModelScope.launch {
                 _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
-                runCatching { messageRepository.listMessages(sessionId, worktree) }
-                    .onSuccess { messages -> applyLoadedMessages(messages) }
+                runCatching {
+                    val messages = messageRepository.listMessages(sessionId, worktree)
+                    runCatching { modelRepository.listModelOptions(worktree) }
+                        .onSuccess { catalog -> applyModelCatalog(catalog, messages) }
+                    messages
+                }.onSuccess { messages -> applyLoadedMessages(messages) }
                     .onFailure { throwable -> applyLoadError(throwable) }
             }
         }
@@ -115,8 +126,19 @@ class SessionChatViewModel
         }
 
         fun selectModel(model: String) {
-            if (model in AvailableModels) {
-                _uiState.update { it.copy(selectedModel = model) }
+            val option = _uiState.value.modelOptions.firstOrNull { it.id == model } ?: return
+            selectModel(option)
+        }
+
+        fun selectModel(option: ModelSelectionOption) {
+            _uiState.update { state ->
+                val previousVariant = state.selectedVariant
+                val variant = previousVariant?.takeIf { it in option.variants }
+                state.copy(
+                    selectedModel = ModelSelection(option, variant),
+                    selectedVariant = variant,
+                    modelNotice = null,
+                )
             }
         }
 
@@ -126,9 +148,20 @@ class SessionChatViewModel
             }
         }
 
-        fun selectThinkingEffort(effort: String) {
-            if (effort in AvailableThinkingEfforts) {
-                _uiState.update { it.copy(selectedThinkingEffort = effort) }
+        fun selectVariant(variant: String) {
+            _uiState.update { state ->
+                if (variant == ModelSelection.DefaultVariantLabel) {
+                    return@update state.copy(
+                        selectedModel = state.selectedModel?.copy(selectedVariant = null),
+                        selectedVariant = null,
+                    )
+                }
+                val selectedModel = state.selectedModel ?: return@update state
+                if (variant !in selectedModel.option.variants) return@update state
+                state.copy(
+                    selectedModel = selectedModel.copy(selectedVariant = variant),
+                    selectedVariant = variant,
+                )
             }
         }
 
@@ -140,6 +173,7 @@ class SessionChatViewModel
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
             val prompt = _uiState.value.composerText.trim()
+            val selectedModel = _uiState.value.selectedModel ?: return
             if (prompt.isEmpty() || _uiState.value.isSending) return
 
             val optimistic =
@@ -162,7 +196,16 @@ class SessionChatViewModel
                     )
                 }
                 try {
-                    messageRepository.sendPromptAsync(sessionId, prompt, worktree)
+                    messageRepository.sendPromptAsync(
+                        sessionId = sessionId,
+                        options =
+                            PromptSendOptions(
+                                text = prompt,
+                                model = PromptModelSelection(selectedModel.option.providerId, selectedModel.option.modelId),
+                                variant = _uiState.value.selectedVariant,
+                            ),
+                        directory = worktree,
+                    )
                     refreshSessionStatus()
                     try {
                         val messages = messageRepository.listMessages(sessionId, worktree)
@@ -250,14 +293,59 @@ class SessionChatViewModel
 
         private fun metadataLabel(message: Message): String {
             val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
-            return listOfNotNull(message.mode, message.model, timeLabel).joinToString(" · ")
+            return listOfNotNull(message.mode, message.model, message.variant, timeLabel).joinToString(" · ")
         }
 
         private fun composerMetadataLabel(): String {
             val state = _uiState.value
-            return listOfNotNull(state.selectedMode, state.selectedModel, formatSentTime(System.currentTimeMillis()))
+            return listOfNotNull(
+                state.selectedMode,
+                state.selectedModel?.modelLabel,
+                state.selectedVariant,
+                formatSentTime(System.currentTimeMillis()),
+            )
                 .joinToString(" · ")
         }
+
+        private fun applyModelCatalog(
+            catalog: ModelSelectionCatalog,
+            messages: List<Message>,
+        ) {
+            if (catalog.options.isEmpty()) return
+            _uiState.update { state ->
+                val latestModelMessage =
+                    messages
+                        .sortedWith(compareByDescending<Message> { it.sentAtEpochMs ?: Long.MIN_VALUE }.thenByDescending { it.id })
+                        .firstOrNull { it.modelProviderId != null && it.modelId != null }
+                val currentOption =
+                    state.selectedModel?.let { catalog.option(it.option.providerId, it.option.modelId) }
+                val desired =
+                    currentOption ?: latestModelMessage?.let { message ->
+                        catalog.option(message.modelProviderId.orEmpty(), message.modelId.orEmpty())
+                    }
+                val fallback = desired ?: catalog.serverDefault ?: catalog.options.first()
+                val notice =
+                    if (state.selectedModel != null &&
+                        catalog.option(state.selectedModel.option.providerId, state.selectedModel.option.modelId) == null
+                    ) {
+                        "Selected model is unavailable. Using ${fallback.modelLabel}."
+                    } else {
+                        null
+                    }
+                val variant = resolvedVariant(state.selectedVariant ?: latestModelMessage?.variant, fallback)
+                state.copy(
+                    modelOptions = catalog.options,
+                    selectedModel = ModelSelection(fallback, variant),
+                    selectedVariant = variant,
+                    modelNotice = notice,
+                )
+            }
+        }
+
+        private fun resolvedVariant(
+            remembered: String?,
+            option: ModelSelectionOption,
+        ): String? = remembered?.takeIf { it.isNotBlank() && it in option.variants }
 
         private fun formatSentTime(epochMs: Long): String =
             Instant
@@ -288,9 +376,7 @@ class SessionChatViewModel
 
         companion object {
             private const val TAG = "SessionChat"
-            val AvailableModels = listOf("DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet")
             val AvailableModes = listOf("Build", "Plan")
-            val AvailableThinkingEfforts = listOf("Default", "Low", "Medium", "High")
             private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
         }
     }
@@ -301,9 +387,11 @@ data class SessionChatUiState(
     val timeline: TimelineState,
     val messages: List<SessionChatMessageItem>,
     val composerText: String,
-    val selectedModel: String,
+    val selectedModel: ModelSelection?,
+    val modelOptions: List<ModelSelectionOption>,
     val selectedMode: String,
-    val selectedThinkingEffort: String,
+    val selectedVariant: String?,
+    val modelNotice: String?,
     val isSending: Boolean = false,
     val isRefreshing: Boolean = false,
     val sessionStatusLabel: String? = null,
@@ -320,11 +408,25 @@ data class SessionChatUiState(
                 timeline = TimelineState.Loading,
                 messages = emptyList(),
                 composerText = "",
-                selectedModel = SessionChatViewModel.AvailableModels.first(),
+                selectedModel = null,
+                modelOptions = emptyList(),
                 selectedMode = SessionChatViewModel.AvailableModes.first(),
-                selectedThinkingEffort = SessionChatViewModel.AvailableThinkingEfforts.first(),
+                selectedVariant = null,
+                modelNotice = null,
             )
     }
+
+    val selectedModelLabel: String
+        get() = selectedModel?.modelLabel ?: "Model"
+
+    val selectedVariantLabel: String
+        get() = selectedVariant ?: ModelSelection.DefaultVariantLabel
+
+    val variantOptions: List<String>
+        get() = listOf(ModelSelection.DefaultVariantLabel) + selectedModel?.option?.variants.orEmpty()
+
+    val canSelectVariant: Boolean
+        get() = selectedModel?.option?.supportsVariants == true
 }
 
 enum class TimelineState {

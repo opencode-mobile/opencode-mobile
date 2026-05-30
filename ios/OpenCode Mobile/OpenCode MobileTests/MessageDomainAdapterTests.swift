@@ -31,4 +31,32 @@ struct MessageDomainAdapterTests {
         let message = adapter.message(from: dto)
         #expect(message.text == "Forbidden: unauthorized: not licensed to use Copilot")
     }
+
+    @Test func sendRequest_includesModelAndNonDefaultVariant() throws {
+        let body = adapter.sendRequest(
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "anthropic", modelID: "claude-sonnet"),
+                variant: "high"
+            )
+        )
+
+        #expect(body.parts.map(\.text) == ["Hello"])
+        #expect(body.model?.providerID == "anthropic")
+        #expect(body.model?.modelID == "claude-sonnet")
+        #expect(body.variant == "high")
+    }
+
+    @Test func sendRequest_omitsDefaultVariant() throws {
+        let body = adapter.sendRequest(
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "anthropic", modelID: "claude-sonnet"),
+                variant: nil
+            )
+        )
+
+        #expect(body.model?.providerID == "anthropic")
+        #expect(body.variant == nil)
+    }
 }

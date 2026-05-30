@@ -14,6 +14,10 @@ import kotlinx.coroutines.FlowPreview
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelSelectionCatalog
+import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.coroutines.CompletableDeferred
@@ -96,12 +100,44 @@ class SessionChatViewModelTest {
 
             assertEquals(false, viewModel.uiState.value.isSending)
             assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("anthropic", repository.sentOptions?.model?.providerId)
+            assertEquals("claude-sonnet", repository.sentOptions?.model?.modelId)
+            assertEquals(null, repository.sentOptions?.variant)
             assertEquals(
                 "Hello",
                 viewModel.uiState.value.messages
                     .single()
                     .text,
             )
+        }
+
+    @Test
+    fun loadMessages_initializesModelFromLatestMessage() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    model = "claude-sonnet",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    variant = "high",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("anthropic", viewModel.uiState.value.selectedModel?.option?.providerId)
+            assertEquals("claude-sonnet", viewModel.uiState.value.selectedModel?.option?.modelId)
+            assertEquals("high", viewModel.uiState.value.selectedVariant)
         }
 
     @Test
@@ -261,6 +297,7 @@ class SessionChatViewModelTest {
         val messageLiveStore = EventDrivenFakeMessageLiveStore(repository)
         return SessionChatViewModel(
             messageRepository = repository,
+            modelRepository = FakeModelRepository(),
             sessionRepository = sessionRepository,
             messageLiveStore = messageLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
@@ -310,6 +347,7 @@ private class FakeMessageRepository(
 ) : MessageRepository {
     val eventStream = FakeForegroundEventStream()
     var sendPromptAsyncCalled: Boolean = false
+    var sentOptions: PromptSendOptions? = null
     private var listMessagesCallCount = 0
 
     override suspend fun listMessages(
@@ -336,12 +374,27 @@ private class FakeMessageRepository(
 
     override suspend fun sendPromptAsync(
         sessionId: String,
-        text: String,
+        options: PromptSendOptions,
         directory: String?,
     ) {
         sendPromptAsyncCalled = true
+        sentOptions = options
         if (shouldFailSend) error("send failed")
         holdSendUntil?.await()
+    }
+}
+
+private class FakeModelRepository : ModelRepository {
+    override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
+        val option =
+            ModelSelectionOption(
+                providerId = "anthropic",
+                providerName = "Anthropic",
+                modelId = "claude-sonnet",
+                modelName = "Claude Sonnet",
+                variants = listOf("low", "high"),
+            )
+        return ModelSelectionCatalog(options = listOf(option), serverDefault = option)
     }
 }
 

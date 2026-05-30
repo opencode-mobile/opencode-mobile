@@ -16,7 +16,6 @@ and refresh manually when assistant work finishes later.
 ## Out Of Scope
 
 - Foreground SSE / live assistant streaming.
-- Server-backed composer option lists; model/mode/Thinking Effort request mapping.
 - Dedicated command/tool message UI components.
 - Attachment upload, permissions, abort, diff from chat.
 - Connection Profile Keychain storage.

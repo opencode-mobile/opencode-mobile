@@ -83,10 +83,22 @@ components:
       type: object
       required: [parts]
       properties:
+        model:
+          $ref: "#/components/schemas/SendPromptModel"
+        variant:
+          type: string
         parts:
           type: array
           items:
             $ref: "#/components/schemas/MessagePartInput"
+    SendPromptModel:
+      type: object
+      required: [providerID, modelID]
+      properties:
+        providerID:
+          type: string
+        modelID:
+          type: string
     MessagePartInput:
       type: object
       required: [type, text]
@@ -125,6 +137,8 @@ components:
         modelID:
           type: string
         providerID:
+          type: string
+        variant:
           type: string
         parentID:
           type: string

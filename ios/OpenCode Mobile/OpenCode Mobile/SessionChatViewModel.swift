@@ -11,9 +11,27 @@ struct SessionChatRow: Identifiable, Equatable {
 
 struct SessionChatComposerState: Equatable {
     var text: String
-    var selectedModel: String
+    var selectedModel: ModelSelection?
+    var modelOptions: [ModelSelectionOption]
     var selectedMode: String
-    var selectedThinkingEffort: String
+    var selectedVariant: String?
+    var modelNotice: String?
+
+    var selectedModelLabel: String {
+        selectedModel?.modelLabel ?? "Model"
+    }
+
+    var selectedVariantLabel: String {
+        selectedVariant ?? ModelSelection.defaultVariantLabel
+    }
+
+    var variantOptions: [String] {
+        [ModelSelection.defaultVariantLabel] + (selectedModel?.option.variants ?? [])
+    }
+
+    var canSelectVariant: Bool {
+        selectedModel?.option.supportsVariants == true
+    }
 }
 
 enum SessionChatTimelineState: Equatable {
@@ -67,6 +85,7 @@ final class SessionChatViewModel {
     private let sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
+    private let modelRepository: any ModelRepository
     private let sessionRepository: any SessionRepository
     private let messageLiveStore: any MessageLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
@@ -79,6 +98,7 @@ final class SessionChatViewModel {
         sessionTitle: String,
         worktree: String,
         messageRepository: any MessageRepository,
+        modelRepository: any ModelRepository,
         sessionRepository: any SessionRepository,
         messageLiveStore: any MessageLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore
@@ -86,6 +106,7 @@ final class SessionChatViewModel {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
+        self.modelRepository = modelRepository
         self.sessionRepository = sessionRepository
         self.messageLiveStore = messageLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
@@ -116,7 +137,12 @@ final class SessionChatViewModel {
         state = .loading(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
 
         do {
-            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+            async let messagesLoad = messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+            async let modelsLoad = modelRepository.listModelOptions(directory: worktree)
+            let messages = try await messagesLoad
+            if let catalog = try? await modelsLoad {
+                applyModelCatalog(catalog, messages: messages)
+            }
             applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
             await refreshSessionStatus()
         } catch {
@@ -163,9 +189,16 @@ final class SessionChatViewModel {
         updateComposer { $0.text = text }
     }
 
-    func selectModel(_ model: String) {
-        guard SessionChatPickers.models.contains(model) else { return }
-        updateComposer { $0.selectedModel = model }
+    func selectModel(_ option: ModelSelectionOption) {
+        updateComposer { composer in
+            let previousVariant = composer.selectedVariant
+            composer.selectedModel = ModelSelection(
+                option: option,
+                selectedVariant: previousVariant.flatMap { option.variants.contains($0) ? $0 : nil }
+            )
+            composer.selectedVariant = composer.selectedModel?.selectedVariant
+            composer.modelNotice = nil
+        }
     }
 
     func selectMode(_ mode: String) {
@@ -173,9 +206,17 @@ final class SessionChatViewModel {
         updateComposer { $0.selectedMode = mode }
     }
 
-    func selectThinkingEffort(_ effort: String) {
-        guard SessionChatPickers.thinkingEfforts.contains(effort) else { return }
-        updateComposer { $0.selectedThinkingEffort = effort }
+    func selectVariant(_ variant: String) {
+        updateComposer { composer in
+            if variant == ModelSelection.defaultVariantLabel {
+                composer.selectedVariant = nil
+                composer.selectedModel = composer.selectedModel.map { ModelSelection(option: $0.option, selectedVariant: nil) }
+                return
+            }
+            guard composer.selectedModel?.option.variants.contains(variant) == true else { return }
+            composer.selectedVariant = variant
+            composer.selectedModel = composer.selectedModel.map { ModelSelection(option: $0.option, selectedVariant: variant) }
+        }
     }
 
     func restoreComposerText(_ text: String) {
@@ -185,6 +226,7 @@ final class SessionChatViewModel {
     func sendPrompt() async {
         let trimmed = state.composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard let selectedModel = state.composer.selectedModel else { return }
 
         let sessionID = state.sessionID
         let sessionTitle = state.sessionTitle
@@ -195,7 +237,7 @@ final class SessionChatViewModel {
             id: "pending-\(UUID().uuidString)",
             role: .user,
             text: trimmed,
-            metadataLabel: metadataLabel(mode: composer.selectedMode, model: composer.selectedModel),
+            metadataLabel: metadataLabel(mode: composer.selectedMode, model: composer.selectedModel?.modelLabel, variant: composer.selectedVariant),
             isPending: true
         )
 
@@ -211,7 +253,18 @@ final class SessionChatViewModel {
         )
 
         do {
-            try await messageRepository.sendPromptAsync(sessionID: sessionID, text: trimmed, directory: worktree)
+            try await messageRepository.sendPromptAsync(
+                sessionID: sessionID,
+                options: PromptSendOptions(
+                    text: trimmed,
+                    model: PromptModelSelection(
+                        providerID: selectedModel.option.providerID,
+                        modelID: selectedModel.option.modelID
+                    ),
+                    variant: composer.selectedVariant
+                ),
+                directory: worktree
+            )
             await refreshSessionStatus()
             do {
                 let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
@@ -357,15 +410,56 @@ final class SessionChatViewModel {
             metadataLabel: metadataLabel(
                 mode: message.mode,
                 model: message.model,
+                variant: message.variant,
                 sentAtEpochMs: message.sentAtEpochMs
             ),
             isPending: false
         )
     }
 
-    private func metadataLabel(mode: String?, model: String?, sentAtEpochMs: Int64? = nil) -> String {
+    private func applyModelCatalog(_ catalog: ModelSelectionCatalog, messages: [Message]) {
+        guard !catalog.options.isEmpty else { return }
+        let latestModelMessage = messages
+            .sorted {
+                let leftTime = $0.sentAtEpochMs ?? Int64.min
+                let rightTime = $1.sentAtEpochMs ?? Int64.min
+                if leftTime != rightTime { return leftTime > rightTime }
+                return $0.id > $1.id
+            }
+            .first { $0.modelProviderID != nil && $0.modelID != nil }
+        let current = state.composer.selectedModel
+        let currentOption = current.flatMap {
+            catalog.option(providerID: $0.option.providerID, modelID: $0.option.modelID)
+        }
+        let desired = currentOption ?? latestModelMessage.flatMap { message in
+            guard let providerID = message.modelProviderID, let modelID = message.modelID else { return nil }
+            return catalog.option(providerID: providerID, modelID: modelID)
+        }
+        let fallback = desired ?? catalog.serverDefault ?? catalog.options[0]
+        let notice: String? = {
+            guard let current, catalog.option(providerID: current.option.providerID, modelID: current.option.modelID) == nil else { return nil }
+            return "Selected model is unavailable. Using \(fallback.modelLabel)."
+        }()
+        let variant = resolvedVariant(
+            remembered: state.composer.selectedVariant ?? latestModelMessage?.variant,
+            for: fallback
+        )
+        updateComposer { composer in
+            composer.modelOptions = catalog.options
+            composer.selectedModel = ModelSelection(option: fallback, selectedVariant: variant)
+            composer.selectedVariant = variant
+            composer.modelNotice = notice
+        }
+    }
+
+    private func resolvedVariant(remembered: String?, for option: ModelSelectionOption) -> String? {
+        guard let remembered, !remembered.isEmpty else { return nil }
+        return option.variants.contains(remembered) ? remembered : nil
+    }
+
+    private func metadataLabel(mode: String?, model: String?, variant: String? = nil, sentAtEpochMs: Int64? = nil) -> String {
         let timeLabel = sentAtEpochMs.map { sentTimeFormatter.string(from: Date(timeIntervalSince1970: TimeInterval($0) / 1000)) }
-        return [mode, model, timeLabel].compactMap { $0 }.joined(separator: " · ")
+        return [mode, model, variant, timeLabel].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func messagesFromCurrentState() -> [SessionChatRow] {
@@ -408,9 +502,11 @@ final class SessionChatViewModel {
     private static func defaultComposer() -> SessionChatComposerState {
         SessionChatComposerState(
             text: "",
-            selectedModel: SessionChatPickers.models[0],
+            selectedModel: nil,
+            modelOptions: [],
             selectedMode: SessionChatPickers.modes[0],
-            selectedThinkingEffort: SessionChatPickers.thinkingEfforts[0]
+            selectedVariant: nil,
+            modelNotice: nil
         )
     }
 
@@ -422,7 +518,5 @@ final class SessionChatViewModel {
 }
 
 enum SessionChatPickers {
-    static let models = ["DeepSeek V4 Flash", "GPT-5 Preview", "Claude Sonnet"]
     static let modes = ["Build", "Plan"]
-    static let thinkingEfforts = ["Default", "Low", "Medium", "High"]
 }

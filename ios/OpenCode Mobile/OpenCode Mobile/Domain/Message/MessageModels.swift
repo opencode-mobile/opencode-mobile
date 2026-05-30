@@ -5,8 +5,22 @@ struct Message: Equatable, Sendable, Identifiable {
     let role: MessageRole
     let text: String
     let model: String?
+    let modelProviderID: String? = nil
+    let modelID: String? = nil
+    let variant: String? = nil
     let mode: String?
     let sentAtEpochMs: Int64?
+}
+
+struct PromptSendOptions: Equatable, Sendable {
+    let text: String
+    let model: PromptModelSelection?
+    let variant: String?
+}
+
+struct PromptModelSelection: Equatable, Sendable {
+    let providerID: String
+    let modelID: String
 }
 
 enum MessageRole: String, Sendable {

@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.Session
@@ -336,7 +337,7 @@ private class FakeMessageRepository(
 
     override suspend fun sendPromptAsync(
         sessionId: String,
-        text: String,
+        options: PromptSendOptions,
         directory: String?,
     ) = Unit
 }

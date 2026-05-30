@@ -4,7 +4,14 @@ protocol MessageRepository: Sendable {
     func listMessages(sessionID: String, directory: String?) async throws -> [Message]
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws
+}
+
+extension MessageRepository {
+    func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
+        try await sendPromptAsync(sessionID: sessionID, options: PromptSendOptions(text: text, model: nil, variant: nil), directory: directory)
+    }
 }
 
 struct DefaultMessageRepository: MessageRepository, Sendable {
@@ -38,11 +45,11 @@ struct DefaultMessageRepository: MessageRepository, Sendable {
         }
     }
 
-    func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         try await run {
             try await api.sendPromptAsync(
                 sessionID: sessionID,
-                body: adapter.sendRequest(text: text),
+                body: adapter.sendRequest(options: options),
                 directory: directory
             )
         }

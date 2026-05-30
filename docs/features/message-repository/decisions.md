@@ -20,7 +20,9 @@ When `parts` are empty but `info.error` is present, `MessageDomainAdapter` maps 
 
 ## Prompt payload
 
-Text-only `parts: [{ type: "text", text }]` for send routes. Composer model/mode/Thinking Effort chips stay mock/local until a follow-up slice.
+Prompt payloads keep text parts unchanged and may include `model:
+{ providerID, modelID }` plus a non-default top-level `variant` from the
+Session Chat Model Selection slice.
 
 ## Domain vs UI
 

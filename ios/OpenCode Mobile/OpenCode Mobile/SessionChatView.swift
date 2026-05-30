@@ -5,7 +5,7 @@ import UIKit
 private enum ComposerPickerKind {
     case model
     case mode
-    case thinking
+    case variant
 
     var sheetTitle: String {
         switch self {
@@ -13,8 +13,8 @@ private enum ComposerPickerKind {
             "Model"
         case .mode:
             "Agent mode"
-        case .thinking:
-            "Thinking level"
+        case .variant:
+            "Variant"
         }
     }
 }
@@ -75,6 +75,15 @@ struct SessionChatView: View {
                 Text(statusLabel)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textInteractive)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
+            if let notice = viewModel.state.composer.modelNotice {
+                Text(notice)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -257,14 +266,16 @@ struct SessionChatView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: composer.selectedModel, selected: false) {
+                    OpenCodeChoiceBadge(label: composer.selectedModelLabel, selected: false) {
                         activePicker = .model
                     }
                     OpenCodeChoiceBadge(label: composer.selectedMode, selected: false) {
                         activePicker = .mode
                     }
-                    OpenCodeChoiceBadge(label: composer.selectedThinkingEffort, selected: false) {
-                        activePicker = .thinking
+                    if composer.canSelectVariant {
+                        OpenCodeChoiceBadge(label: composer.selectedVariantLabel, selected: false) {
+                            activePicker = .variant
+                        }
                     }
                 }
             }
@@ -279,7 +290,7 @@ struct SessionChatView: View {
 
                 OpenCodeButton(
                     variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
-                    enabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending,
+                    enabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,
                     contrast: .low
                 ) {
                     Task { await viewModel.sendPrompt() }
@@ -318,10 +329,10 @@ struct SessionChatView: View {
         let composer = viewModel.state.composer
         switch activePicker {
         case .model:
-            ForEach(SessionChatPickers.models, id: \.self) { model in
+            ForEach(composer.modelOptions) { model in
                 OpenCodeBottomSheetEntry(
-                    title: model,
-                    endDecorator: model == composer.selectedModel
+                    title: model.displayLabel,
+                    endDecorator: model == composer.selectedModel?.option
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
@@ -343,15 +354,15 @@ struct SessionChatView: View {
                     },
                 )
             }
-        case .thinking:
-            ForEach(SessionChatPickers.thinkingEfforts, id: \.self) { level in
+        case .variant:
+            ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
                     title: level,
-                    endDecorator: level == composer.selectedThinkingEffort
+                    endDecorator: level == composer.selectedVariantLabel
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
-                        viewModel.selectThinkingEffort(level)
+                        viewModel.selectVariant(level)
                         activePicker = nil
                     },
                 )

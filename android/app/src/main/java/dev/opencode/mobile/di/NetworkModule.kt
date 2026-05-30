@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.data.remote.ModelsApi
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.network.OpencodeHttpClient
 import kotlinx.serialization.json.Json
@@ -35,4 +36,11 @@ object NetworkModule {
         httpClient: OpencodeHttpClient,
         json: Json,
     ): MessagesApi = MessagesApi(httpClient, json)
+
+    @Provides
+    @Singleton
+    fun provideModelsApi(
+        httpClient: OpencodeHttpClient,
+        json: Json,
+    ): ModelsApi = ModelsApi(httpClient, json)
 }
