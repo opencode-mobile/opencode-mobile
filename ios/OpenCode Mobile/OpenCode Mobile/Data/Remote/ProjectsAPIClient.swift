@@ -7,7 +7,7 @@ enum ProjectsAPIError: Error {
 }
 
 struct ProjectsAPIClient: Sendable {
-    private let connectionProvider: () -> ServerConnection?
+    private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
 
     init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
