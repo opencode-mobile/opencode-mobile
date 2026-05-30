@@ -1,0 +1,53 @@
+name: iOS Checks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios/OpenCode Mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Swift Package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile"
+
+      - name: Select iOS Simulator
+        id: simulator
+        run: bash ../../.github/scripts/select-ios-simulator.sh
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile" \
+            -configuration Debug \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run static analyzer
+        run: |
+          xcodebuild analyze \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile" \
+            -configuration Debug \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile" \
+            -configuration Debug \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            -only-testing:"OpenCode MobileTests" \
+            CODE_SIGNING_ALLOWED=NO

@@ -1,0 +1,30 @@
+name: iOS Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios/OpenCode Mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Swift Package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile"
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
