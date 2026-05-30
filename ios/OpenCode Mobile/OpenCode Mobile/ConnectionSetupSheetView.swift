@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ConnectionSetupSheetView: View {
     @Bindable var viewModel: ConnectionSetupViewModel
-    @Binding var isPresented: Bool
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -31,7 +31,7 @@ struct ConnectionSetupSheetView: View {
             ) {
                 Task {
                     if await viewModel.saveConnection() {
-                        isPresented = false
+                        onDismiss()
                     }
                 }
             }

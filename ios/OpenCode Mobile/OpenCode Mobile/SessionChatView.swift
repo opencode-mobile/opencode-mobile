@@ -47,7 +47,6 @@ struct SessionChatView: View {
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
     @State private var scrollPosition: String?
-    @State private var observationStopTask: Task<Void, Never>?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -92,35 +91,16 @@ struct SessionChatView: View {
         )
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            cancelScheduledStopObserving()
             viewModel.startObserving()
         }
         .onDisappear {
-            scheduleStopObserving()
-        }
-        .task {
-            await viewModel.loadMessages()
+            viewModel.stopObserving()
         }
     }
 
     private func leaveSession() {
-        cancelScheduledStopObserving()
         viewModel.stopObserving()
         dismiss()
-    }
-
-    private func cancelScheduledStopObserving() {
-        observationStopTask?.cancel()
-        observationStopTask = nil
-    }
-
-    private func scheduleStopObserving() {
-        cancelScheduledStopObserving()
-        observationStopTask = Task {
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            viewModel.stopObserving()
-        }
     }
 
     @ViewBuilder

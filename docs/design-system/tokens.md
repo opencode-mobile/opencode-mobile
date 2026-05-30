@@ -194,6 +194,10 @@ entries.
 | `bottomSheet.entry.paddingVertical` | 12 (logical px) |
 | `bottomSheet.entry.decorator.size` | 24 (logical px) |
 | `bottomSheet.entry.decorator.iconSize` | 20 (logical px) |
+| `bottomSheet.motion.enterDuration` | 320 ms |
+| `bottomSheet.motion.exitDuration` | 280 ms |
+| `bottomSheet.scrim.alpha` | 0.32 |
+| `bottomSheet.drag.dismissThreshold` | 96 (logical px) |
 
 ### Outgoing message
 

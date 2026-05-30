@@ -26,6 +26,15 @@ class ActiveConnectionManager
 
         fun current(): ServerConnection? = connection
 
+        fun currentProfile(): ConnectionProfile? =
+            current()?.let { connection ->
+                ConnectionProfile(
+                    baseUrl = connection.baseUrl,
+                    username = connection.username,
+                    password = connection.password.orEmpty(),
+                )
+            }
+
         fun requireConnection(): ServerConnection = connection ?: error("No active server connection")
 
         suspend fun applyProfile(profile: ConnectionProfile) {

@@ -38,16 +38,21 @@ subtitle content, selected state, or a larger list treatment.
 ## Behavior
 
 The component owns modal presentation and dismissal. The close button dismisses
-the sheet, and platform-native outside-tap, drag, and accessibility dismissal
-behavior should remain available.
+the sheet, and outside-tap, drag, back, and accessibility dismissal behavior
+should remain available.
+
+On Android, presentation and dismissal use the component motion tokens: 320 ms
+for entering, 280 ms for exiting, and a scrim alpha of 0.32. The close button,
+scrim tap, and back press call `onDismissRequest`; parent-driven `visible =
+false` changes run the same exit animation after the caller has already cleared
+presentation state.
 
 Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
 
 On Android, pass `keyboardAware = true` when the sheet hosts text fields rather
-than action entries. That mode skips partial expansion, clears default sheet
-window insets, and applies `imePadding()` to the sheet body so the keyboard
-lifts form content without nested scrolling inside `ModalBottomSheet`.
+than action entries. That mode applies `imePadding()` to the sheet body so the
+keyboard lifts form content.
 
 Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
 `OpenCodeIcons` on Android). Icons are decorative when the
@@ -62,7 +67,9 @@ accessibility label or description using the platform convention.
   estimated content height, then updates to the measured height after layout.
   The container uses `fixedSize(horizontal: false, vertical: true)` so its own
   layout stays intrinsic instead of expanding to the proposed sheet height.
-- Android: presented with Material 3 `ModalBottomSheet`.
+- Android: presented with a full-window Compose popup so the component can use
+  its own bottom-sheet motion timing while preserving close, scrim tap, back
+  press, and downward drag dismissal.
 
 ## Previews
 

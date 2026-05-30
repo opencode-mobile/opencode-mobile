@@ -37,6 +37,13 @@ class EventsApi(
                                 if (dataBuffer.isNotEmpty()) dataBuffer.append('\n')
                                 dataBuffer.append(payload)
                             }
+                            line.startsWith("{") -> {
+                                if (dataBuffer.isNotEmpty()) {
+                                    onDataLine(dataBuffer.toString())
+                                    dataBuffer.clear()
+                                }
+                                onDataLine(line)
+                            }
                         }
                     }
                 } catch (error: CancellationException) {

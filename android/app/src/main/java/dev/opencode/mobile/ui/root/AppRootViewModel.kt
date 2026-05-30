@@ -62,6 +62,7 @@ class AppRootViewModel
             httpClient.rebuild()
             sseHttpClient.rebuild()
             _state.value = AppRootState.Home
+            foregroundEventStream.stop()
             foregroundEventStream.start()
         }
     }

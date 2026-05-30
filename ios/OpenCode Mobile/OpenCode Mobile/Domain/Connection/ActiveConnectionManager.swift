@@ -33,6 +33,15 @@ final class ActiveConnectionManager: @unchecked Sendable {
         _connection = connection
         lock.unlock()
     }
+
+    func currentProfile() -> ConnectionProfile? {
+        guard let connection = connection else { return nil }
+        return ConnectionProfile(
+            baseURL: connection.baseURL.absoluteString,
+            username: connection.username,
+            password: connection.password ?? ""
+        )
+    }
 }
 
 final class ConnectionSessionCoordinator: @unchecked Sendable {

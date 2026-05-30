@@ -76,6 +76,7 @@ class DefaultForegroundEventStream
         override fun stop() {
             streamJob?.cancel()
             streamJob = null
+            wasConnected = false
             _connectionState.value = EventStreamConnectionState.Idle
         }
     }

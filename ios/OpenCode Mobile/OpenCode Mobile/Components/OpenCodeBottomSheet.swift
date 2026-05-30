@@ -179,6 +179,20 @@ extension View {
             )
         )
     }
+
+    func openCodeBottomSheet<Item: Identifiable, SheetContent: View>(
+        item: Binding<Item?>,
+        title: String,
+        @ViewBuilder content: @escaping (Item) -> SheetContent
+    ) -> some View {
+        sheet(item: item) { value in
+            OpenCodeBottomSheetSheetBody(
+                title: title,
+                onDismiss: { item.wrappedValue = nil },
+                sheetContent: { content(value) }
+            )
+        }
+    }
 }
 
 #Preview("Bottom Sheet Light") {

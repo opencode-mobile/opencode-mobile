@@ -20,7 +20,9 @@ After reconnect, state is refreshed from the server.
 - Permission request UI (events consumed; UI in a follow-on slice).
 - Abort button UX.
 - Diff viewer UI.
-- Background delivery, push, polling fallback.
+- Background delivery, push, or replacing SSE with broad polling. The chat
+  timeline keeps a narrow changed-message watchdog poll as a temporary safety
+  net.
 - Connection Profile UI.
 
 ## Server APIs Involved

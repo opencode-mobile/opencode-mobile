@@ -10,11 +10,13 @@ Server sends JSON SSE data as `{ "payload": { "type", "properties" } }`. Parser 
 
 ## Refresh strategy
 
-- **Messages:** debounced full `listMessages` reload (300 ms) on `message.updated`, `message.part.updated`, `message.removed`, `session.status`, `session.idle`, `session.error` for the bound session.
-- **Busy poll:** while session status is `busy`, Session Chat also reloads messages every 2 s until status is no longer busy.
-- **Quiet refresh:** SSE-driven and busy-poll reloads in Session Chat preserve in-flight send state (pending optimistic bubble and `isSending`). See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
-- **Home:** debounced section reload (500 ms) on `session.created`, `session.updated`, `session.deleted`.
-- **Reconnect:** when connection returns from `reconnecting` to `connected`, home runs `runHomeLoad(skipProbe = true)` and open chat reloads messages + status.
+Live Stores own refresh policy while the **foreground event stream** is active:
+
+- **MessageLiveStore:** debounced full `listMessages` reload (300 ms) on `message.updated`, `message.part.updated`, `message.part.removed`, `message.removed`, `session.status`, `session.idle`, `session.error` for the bound session; 10 s changed-message watchdog poll while the chat observes that session.
+- **SessionLiveStore:** debounced `listSessions` reload (500 ms) on `session.created`, `session.updated`, `session.deleted`, and reconnect.
+- **SessionStatusLiveStore:** debounced bulk `getAllSessionStatuses` (300 ms) on `session.status`, `session.idle`, and reconnect.
+- **Reconnect:** Live Stores refresh on synthetic `stream.reconnected`; home does not run a broad section reload per SSE event. Explicit project additions can reload with `skipProbe = true`; saved profile changes run the normal probe-backed refresh path.
+- **Quiet refresh:** SSE-driven Live Store reloads in Session Chat preserve in-flight send state (pending optimistic bubble and `isSending`). See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
 
 ## Status display
 

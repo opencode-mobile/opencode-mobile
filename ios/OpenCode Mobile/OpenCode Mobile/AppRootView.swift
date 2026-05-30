@@ -48,6 +48,7 @@ final class AppRootViewModel {
 
     func enterHome() {
         state = .home
+        foregroundEventStream.stop()
         foregroundEventStream.start()
     }
 }
@@ -55,8 +56,7 @@ final class AppRootViewModel {
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
-    @State private var showSetupSheet = false
-    @State private var setupViewModel = Container.makeConnectionSetupViewModel(initialProfile: nil)
+    @State private var connectionSetupPresentation: ConnectionSetupPresentation?
 
     var body: some View {
         Group {
@@ -65,7 +65,9 @@ struct AppRootView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .onboarding:
-                ConnectionOnboardingView(showSetupSheet: $showSetupSheet)
+                ConnectionOnboardingView {
+                    connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: nil)
+                }
             case .home:
                 NavigationStack {
                     ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
@@ -77,13 +79,11 @@ struct AppRootView: View {
         .task {
             await rootViewModel.load()
         }
-        .openCodeBottomSheet(isPresented: $showSetupSheet, title: "Connect to server") {
-            ConnectionSetupSheetView(viewModel: setupViewModel, isPresented: $showSetupSheet)
-        }
-        .onChange(of: showSetupSheet) { _, isPresented in
-            if isPresented {
-                setupViewModel = Container.makeConnectionSetupViewModel(initialProfile: nil)
-            }
+        .openCodeBottomSheet(item: $connectionSetupPresentation, title: "Connect to server") { presentation in
+            ConnectionSetupSheetView(
+                viewModel: Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
+                onDismiss: { connectionSetupPresentation = nil }
+            )
         }
         .onChange(of: scenePhase) { _, phase in
             guard rootViewModel.state == .home else { return }

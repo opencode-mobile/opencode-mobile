@@ -22,10 +22,12 @@ final class ConnectionSetupViewModel {
 
     init(
         connectionProbeService: ConnectionProbing,
-        connectionSessionCoordinator: ConnectionSessionCoordinator
+        connectionSessionCoordinator: ConnectionSessionCoordinator,
+        initialProfile: ConnectionProfile? = nil
     ) {
         self.connectionProbeService = connectionProbeService
         self.connectionSessionCoordinator = connectionSessionCoordinator
+        configure(initialProfile: initialProfile)
     }
 
     func configure(initialProfile: ConnectionProfile?) {

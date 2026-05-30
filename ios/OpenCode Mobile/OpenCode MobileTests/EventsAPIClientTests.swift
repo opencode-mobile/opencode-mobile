@@ -1,0 +1,88 @@
+import Foundation
+import Testing
+@testable import OpenCode_Mobile
+
+struct EventsAPIClientTests {
+    @Test func streamGlobalEvents_parsesStandardSSEDataLines() async throws {
+        let body = "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n"
+        let client = makeClient(responseBody: body)
+        var lines: [String] = []
+        try await client.streamGlobalEvents { line in
+            lines.append(line)
+        }
+        #expect(lines.count == 1)
+        #expect(lines[0].contains("server.connected"))
+    }
+
+    @Test func streamGlobalEvents_parsesRawJSONLines() async throws {
+        let body = "{\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n"
+        let client = makeClient(responseBody: body)
+        var lines: [String] = []
+        try await client.streamGlobalEvents { line in
+            lines.append(line)
+        }
+        #expect(lines.count == 1)
+        #expect(lines[0].contains("server.connected"))
+    }
+
+    @Test func dataLineParser_flushesCompleteDataPayloadsWithoutBlankSeparators() {
+        var parser = SSEDataLineParser()
+        let connected = #"{"payload":{"type":"server.connected","properties":{}}}"#
+        let heartbeat = #"{"payload":{"type":"server.heartbeat","properties":{}}}"#
+
+        let first = parser.ingest("data: \(connected)")
+        let second = parser.ingest("data: \(heartbeat)")
+
+        #expect(first == [connected])
+        #expect(second == [heartbeat])
+    }
+
+    private func makeClient(responseBody: String) -> EventsAPIClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockSSEURLProtocol.self]
+        MockSSEURLProtocol.register(responseBody: Data(responseBody.utf8))
+        let session = URLSession(configuration: configuration)
+        let connection = ServerConnection(baseURL: URL(string: "http://127.0.0.1:4096/")!, password: "secret")
+        return EventsAPIClient(
+            connectionProvider: { connection },
+            urlSession: session
+        )
+    }
+}
+
+private final class MockSSEURLProtocol: URLProtocol {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var responseBody = Data()
+
+    static func register(responseBody: Data) {
+        lock.lock()
+        self.responseBody = responseBody
+        lock.unlock()
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.path.hasSuffix("/global/event") == true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.lock.lock()
+        let body = Self.responseBody
+        Self.lock.unlock()
+
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["Content-Type": "text/event-stream"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}

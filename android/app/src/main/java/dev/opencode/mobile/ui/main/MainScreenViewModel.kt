@@ -3,13 +3,19 @@ package dev.opencode.mobile.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
+import dev.opencode.mobile.domain.live.SessionLiveStore
+import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
@@ -22,11 +28,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,21 +47,28 @@ class MainScreenViewModel
         private val connectionProfileStore: ConnectionProfileStore,
         private val sessionDomainAdapter: SessionDomainAdapter,
         private val eventDomainAdapter: EventDomainAdapter,
+        private val sessionLiveStore: SessionLiveStore,
+        private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val foregroundEventStream: ForegroundEventStream,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
+        val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
+            foregroundEventStream.connectionState
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                    initialValue = EventStreamConnectionState.Idle,
+                )
 
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
-        private var homeRefreshJob: Job? = null
-        private var statusRefreshJob: Job? = null
+        private var liveObservationJobs: List<Job> = emptyList()
 
         init {
             refresh()
-            observeForegroundEvents()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     refresh()
@@ -69,7 +84,11 @@ class MainScreenViewModel
             refresh()
         }
 
-        fun requestEditConnection(onProfileReady: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit) {
+        fun requestEditConnection(onProfileReady: (ConnectionProfile?) -> Unit) {
+            activeConnectionManager.currentProfile()?.let { profile ->
+                onProfileReady(profile)
+                return
+            }
             viewModelScope.launch {
                 onProfileReady(connectionProfileStore.activeProfile())
             }
@@ -151,9 +170,11 @@ class MainScreenViewModel
                 try {
                     projectRepository.probeServer()
                 } catch (error: ServerProbeError) {
+                    stopLiveObservations()
                     _uiState.value = MainScreenUiState.ProbeFailed(probeErrorMessage(error))
                     return
                 } catch (error: Throwable) {
+                    stopLiveObservations()
                     _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to reach the server")
                     return
                 }
@@ -169,6 +190,7 @@ class MainScreenViewModel
                 }
 
                 if (worktrees.isEmpty()) {
+                    stopLiveObservations()
                     _uiState.value = MainScreenUiState.Empty()
                     return
                 }
@@ -176,11 +198,16 @@ class MainScreenViewModel
                 val sections = loadProjectSections(worktrees)
                 _uiState.value =
                     if (sections.isEmpty()) {
+                        stopLiveObservations()
                         MainScreenUiState.Empty()
                     } else {
                         MainScreenUiState.Loaded(sections = sections)
                     }
+                if (_uiState.value is MainScreenUiState.Loaded) {
+                    startLiveObservations(worktrees)
+                }
             } catch (error: Throwable) {
+                stopLiveObservations()
                 _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
             }
         }
@@ -281,76 +308,63 @@ class MainScreenViewModel
                 is ServerProbeError.Unhealthy -> "Server reported unhealthy"
             }
 
-        private fun observeForegroundEvents() {
-            viewModelScope.launch {
-                foregroundEventStream.events.collect { event ->
-                    when {
-                        event.type == "stream.reconnected" -> runHomeLoad(skipProbe = true)
-                        event.triggersHomeRefresh -> scheduleHomeRefresh()
-                        event.triggersStatusRefresh -> scheduleStatusRefresh()
+        private fun startLiveObservations(worktrees: List<String>) {
+            stopLiveObservations()
+            liveObservationJobs =
+                worktrees.map { worktree ->
+                    viewModelScope.launch {
+                        combine(
+                            sessionLiveStore.observeSessions(worktree),
+                            sessionStatusLiveStore.observeStatuses(worktree),
+                        ) { sessions, statuses ->
+                            sessions to statuses
+                        }.collect { (sessions, statuses) ->
+                            updateSectionFromLiveData(worktree, sessions, statuses)
+                        }
                     }
                 }
-            }
         }
 
-        private fun scheduleHomeRefresh() {
-            homeRefreshJob?.cancel()
-            homeRefreshJob =
-                viewModelScope.launch {
-                    delay(HOME_REFRESH_DEBOUNCE_MS)
-                    runHomeLoad(skipProbe = true)
-                }
+        private fun stopLiveObservations() {
+            liveObservationJobs.forEach { it.cancel() }
+            liveObservationJobs = emptyList()
         }
 
-        private fun scheduleStatusRefresh() {
-            statusRefreshJob?.cancel()
-            statusRefreshJob =
-                viewModelScope.launch {
-                    delay(STATUS_REFRESH_DEBOUNCE_MS)
-                    refreshSessionStatuses()
-                }
-        }
-
-        private suspend fun refreshSessionStatuses() {
+        private fun updateSectionFromLiveData(
+            worktree: String,
+            sessions: List<Session>,
+            statuses: Map<String, SessionStatus>,
+        ) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
-            val updatedSections =
-                state.sections.map { section ->
-                    runCatching {
-                        val statusBySessionId =
-                            sessionRepository
-                                .getAllSessionStatuses(directory = section.worktree)
-                                .associateBy(SessionStatus::sessionId)
-                        section.copy(
-                            previewSessions = section.previewSessions.map { applyStatus(it, statusBySessionId) },
-                            allSessions = section.allSessions.map { applyStatus(it, statusBySessionId) },
+            val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
+            val summaries =
+                sessions
+                    .sortedByDescending { it.updatedAtEpochMs ?: 0L }
+                    .map { session ->
+                        sessionDomainAdapter.toSessionSummary(
+                            session,
+                            statusLabel = statuses[session.id]?.let(eventDomainAdapter::statusLabel),
                         )
-                    }.getOrDefault(section)
+                    }
+            val updatedSection =
+                section.copy(
+                    previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
+                    allSessions = summaries,
+                    totalSessionCount = summaries.size,
+                )
+            val updatedSections =
+                state.sections.map { current ->
+                    if (current.worktree == worktree) updatedSection else current
                 }
             val updatedSeeAll =
-                state.seeAllSessions?.let { sheet ->
-                    val statusBySessionId =
-                        runCatching {
-                            sessionRepository
-                                .getAllSessionStatuses(directory = sheet.worktree)
-                                .associateBy(SessionStatus::sessionId)
-                        }.getOrElse { emptyMap() }
-                    sheet.copy(sessions = sheet.sessions.map { applyStatus(it, statusBySessionId) })
-                }
+                state.seeAllSessions?.takeIf { it.worktree == worktree }?.copy(
+                    sessions = summaries,
+                ) ?: state.seeAllSessions
             _uiState.value = state.copy(sections = updatedSections, seeAllSessions = updatedSeeAll)
         }
 
-        private fun applyStatus(
-            summary: SessionSummary,
-            statusBySessionId: Map<String, SessionStatus>,
-        ): SessionSummary =
-            summary.copy(
-                statusLabel = statusBySessionId[summary.id]?.let(eventDomainAdapter::statusLabel),
-            )
-
         private companion object {
             const val PREVIEW_SESSION_LIMIT = 3
-            const val HOME_REFRESH_DEBOUNCE_MS = 500L
-            const val STATUS_REFRESH_DEBOUNCE_MS = 300L
         }
     }
 

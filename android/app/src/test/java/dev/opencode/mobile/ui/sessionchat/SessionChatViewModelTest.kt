@@ -3,14 +3,24 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.live.MessageLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.LiveStoreScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.FlowPreview
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -41,7 +51,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun loadMessages_success() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
@@ -54,7 +64,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun loadMessages_empty() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository(messages = emptyList()))
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
@@ -64,7 +74,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun loadMessages_error() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository(shouldFailLoad = true))
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
@@ -74,7 +84,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun sendPrompt_success_reloadsMessages() =
-        runTest {
+        runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
@@ -96,7 +106,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun loadMessages_sortsOldestToNewest() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel =
                 createViewModel(
                     FakeMessageRepository(
@@ -119,7 +129,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun sendPrompt_failure_removesOptimisticMessage() =
-        runTest {
+        runTest(testDispatcher) {
             val repository = FakeMessageRepository(shouldFailSend = true)
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
@@ -140,7 +150,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun messageUpdatedEvent_reloadsMessages() =
-        runTest {
+        runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
@@ -164,7 +174,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() =
-        runTest {
+        runTest(testDispatcher) {
             val repository = FakeMessageRepository(failListMessagesAfterSend = true)
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
@@ -184,7 +194,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun messageUpdatedEvent_clearsStaleErrorBanner() =
-        runTest {
+        runTest(testDispatcher) {
             val repository = FakeMessageRepository(failListMessagesAfterSend = true)
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
@@ -211,7 +221,7 @@ class SessionChatViewModelTest {
 
     @Test
     fun quietRefreshDuringSend_keepsPendingMessageAndSendingFlag() =
-        runTest {
+        runTest(testDispatcher) {
             val sendGate = CompletableDeferred<Unit>()
             val repository = FakeMessageRepository(holdSendUntil = sendGate)
             val viewModel = createViewModel(repository)
@@ -243,13 +253,45 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
         }
 
-    private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel =
-        SessionChatViewModel(
+    private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel {
+        val eventStream = repository.eventStream
+        val sessionRepository = FakeSessionRepository()
+        val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
+        val messageLiveStore = EventDrivenFakeMessageLiveStore(repository)
+        return SessionChatViewModel(
             messageRepository = repository,
-            sessionRepository = FakeSessionRepository(),
-            foregroundEventStream = repository.eventStream,
+            sessionRepository = sessionRepository,
+            messageLiveStore = messageLiveStore,
+            sessionStatusLiveStore = sessionStatusLiveStore,
             eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
         )
+    }
+}
+
+@OptIn(FlowPreview::class)
+private class EventDrivenFakeMessageLiveStore(
+    private val repository: FakeMessageRepository,
+) : MessageLiveStore {
+    override fun observeMessages(
+        sessionId: String,
+        directory: String,
+    ): Flow<List<Message>> =
+        channelFlow {
+            suspend fun loadMessages(): List<Message>? =
+                runCatching { repository.listMessages(sessionId, directory) }.getOrNull()
+
+            loadMessages()?.let { send(it) }
+
+            repository.eventStream.events
+                .filter { event ->
+                    event.type == "stream.reconnected" ||
+                        (event.sessionId == sessionId && event.triggersMessageRefresh)
+                }.debounce(300)
+                .collect {
+                    loadMessages()?.let { send(it) }
+                }
+        }
 }
 
 private class FakeMessageRepository(
@@ -313,7 +355,7 @@ private class FakeSessionRepository : SessionRepository {
     ) = error("unused")
 
     override suspend fun getAllSessionStatuses(directory: String?) =
-        listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy")))
+        listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "idle")))
 
     override suspend fun getSession(
         id: String,

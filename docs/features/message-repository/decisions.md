@@ -12,7 +12,7 @@ Ship repository **and** wire Session Chat (history + async send), matching Sessi
 
 Optimistic user bubble, then full `listMessages` reload after `prompt_async` succeeds. On failure, show error and remove the optimistic row.
 
-While `isSending`, debounced SSE reloads and the busy-session poll use a **quiet refresh** path: they merge server messages with any pending optimistic row (until the server returns matching user text) and do not clear `isSending` or the error banner. Explicit load, pull-to-refresh, and the post-send reload still replace the timeline and clear the sending flag.
+While `isSending`, Live Store-driven reloads in Session Chat use a **quiet refresh** path in the Screen Model: they merge server messages with any pending optimistic row (until the server returns matching user text) and do not clear `isSending` or the error banner. Explicit load, pull-to-refresh, and the post-send reload still replace the timeline and clear the sending flag.
 
 ## Provider errors on assistant messages
 
@@ -42,4 +42,4 @@ Hand-written Ktor / URLSession clients aligned with `api/opencode-messages.opena
 
 ## Refresh without SSE
 
-Pull-to-refresh and reload when Session Chat appears. Foreground busy-session polling is owned by the [Foreground Event Stream](../foreground-event-stream/decisions.md) slice, not Message Repository.
+Pull-to-refresh and reload when Session Chat appears. The foreground changed-message watchdog poll is owned by **MessageLiveStore** (see [Foreground Event Stream](../foreground-event-stream/decisions.md)), not Message Repository.

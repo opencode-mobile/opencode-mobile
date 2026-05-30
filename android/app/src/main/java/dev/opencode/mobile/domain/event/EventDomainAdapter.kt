@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class EventDomainAdapter(
@@ -15,10 +16,18 @@ class EventDomainAdapter(
         val payload = envelope.payload
         val type = payload?.type ?: envelope.type ?: return null
         val properties = payload?.properties ?: envelope.properties ?: JsonObject(emptyMap())
-        val sessionId =
-            properties["sessionID"]?.jsonPrimitive?.contentOrNull
-                ?: properties["sessionId"]?.jsonPrimitive?.contentOrNull
-        return OpencodeEvent(type = type, sessionId = sessionId)
+        return OpencodeEvent(type = type, sessionId = sessionIdFromProperties(properties))
+    }
+
+    private fun sessionIdFromProperties(properties: JsonObject): String? {
+        fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+        return properties.string("sessionID")
+            ?: properties.string("sessionId")
+            ?: properties["info"]?.jsonObject?.string("sessionID")
+            ?: properties["info"]?.jsonObject?.string("sessionId")
+            ?: properties["part"]?.jsonObject?.string("sessionID")
+            ?: properties["part"]?.jsonObject?.string("sessionId")
     }
 
     fun statusLabel(sessionStatus: SessionStatus): String? = statusLabelFromRawKeys(sessionStatus.raw)

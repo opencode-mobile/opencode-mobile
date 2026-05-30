@@ -2,6 +2,11 @@ package dev.opencode.mobile
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -11,10 +16,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +46,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupSheetContent
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
+import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
@@ -52,19 +56,15 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 fun MainNavigation() {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
-    var showSetupSheet by rememberSaveable { mutableStateOf(false) }
+    var connectionSetupVisible by rememberSaveable { mutableStateOf(false) }
     val setupViewModel: ConnectionSetupViewModel = hiltViewModel()
-    var setupConfigured by remember { mutableStateOf(false) }
 
-    LaunchedEffect(showSetupSheet) {
-        if (showSetupSheet && !setupConfigured) {
-            setupViewModel.configure(initialProfile = null)
-            setupConfigured = true
-        }
-        if (!showSetupSheet) {
-            setupConfigured = false
-        }
+    fun presentConnectionSetup(initialProfile: ConnectionProfile?) {
+        setupViewModel.configure(initialProfile)
+        connectionSetupVisible = true
     }
+
+    val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
@@ -83,70 +83,77 @@ fun MainNavigation() {
                     AppRootState.Loading ->
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     AppRootState.Onboarding ->
-                        ConnectionOnboardingScreen(onConnectClick = { showSetupSheet = true })
+                        ConnectionOnboardingScreen(
+                            onConnectClick = { presentConnectionSetup(initialProfile = null) },
+                        )
                     AppRootState.Home ->
                         NavDisplay(
                             modifier = Modifier.safeDrawingPadding(),
                             backStack = backStack,
                             onBack = { backStack.removeLastOrNull() },
-                            transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                            popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                            predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                            transitionSpec = { forwardRouteTransition() },
+                            popTransitionSpec = { backwardRouteTransition() },
+                            predictivePopTransitionSpec = { backwardRouteTransition() },
                             entryProvider =
                                 entryProvider {
                                     entry<ProjectListHome> {
-                                        MainScreen(
-                                            onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) },
-                                            onSessionClick = { target ->
-                                                backStack.add(SessionChat(target.sessionId, target.title, target.worktree))
-                                            },
-                                            onEditConnectionClick = { profile ->
-                                                setupViewModel.configure(initialProfile = profile)
-                                                setupConfigured = true
-                                                showSetupSheet = true
-                                            },
-                                        )
+                                        RouteSurface {
+                                            MainScreen(
+                                                onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) },
+                                                onSessionClick = { target ->
+                                                    backStack.add(SessionChat(target.sessionId, target.title, target.worktree))
+                                                },
+                                                onEditConnectionClick = { profile ->
+                                                    presentConnectionSetup(initialProfile = profile)
+                                                },
+                                            )
+                                        }
                                     }
                                     entry<ComponentGalleryHome> {
-                                        ComponentGalleryScreen(onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) })
+                                        RouteSurface {
+                                            ComponentGalleryScreen(onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) })
+                                        }
                                     }
                                     entry<ComponentGalleryDetail> { key ->
-                                        val entry = ComponentGalleryEntries.first { it.id == key.entryId }
-                                        ComponentGalleryDetailScreen(
-                                            entry = entry,
-                                            themeMode = themeMode,
-                                            onThemeModeChange = { themeMode = it },
-                                        ) {
-                                            when (key.entryId) {
-                                                ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
-                                                ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
-                                                ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
-                                                ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
-                                                ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
-                                                ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
-                                                ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
-                                                ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
-                                                ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                        RouteSurface {
+                                            val entry = ComponentGalleryEntries.first { it.id == key.entryId }
+                                            ComponentGalleryDetailScreen(
+                                                entry = entry,
+                                                themeMode = themeMode,
+                                                onThemeModeChange = { themeMode = it },
+                                            ) {
+                                                when (key.entryId) {
+                                                    ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
+                                                    ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
+                                                    ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
+                                                    ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
+                                                    ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
+                                                    ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
+                                                    ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
+                                                    ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
+                                                    ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                                }
                                             }
                                         }
                                     }
                                     entry<SessionChat> { key ->
-                                        SessionChatScreen(
-                                            sessionId = key.sessionId,
-                                            sessionTitle = key.sessionTitle,
-                                            worktree = key.worktree,
-                                            onNavigateBack = { backStack.removeLastOrNull() },
-                                        )
+                                        RouteSurface {
+                                            SessionChatScreen(
+                                                sessionId = key.sessionId,
+                                                sessionTitle = key.sessionTitle,
+                                                worktree = key.worktree,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
+                                        }
                                     }
                                 },
                         )
                 }
 
-                val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
                 OpenCodeBottomSheet(
-                    visible = showSetupSheet,
+                    visible = connectionSetupVisible,
                     title = "Connect to server",
-                    onDismissRequest = { showSetupSheet = false },
+                    onDismissRequest = { connectionSetupVisible = false },
                     keyboardAware = true,
                 ) {
                     ConnectionSetupSheetContent(
@@ -157,7 +164,7 @@ fun MainNavigation() {
                         onTestConnection = setupViewModel::testConnection,
                         onSave = {
                             setupViewModel.saveConnection {
-                                showSetupSheet = false
+                                connectionSetupVisible = false
                             }
                         },
                     )
@@ -165,4 +172,41 @@ fun MainNavigation() {
             }
         }
     }
+}
+
+private const val RouteTransitionDurationMillis = 220
+
+private fun forwardRouteTransition() =
+    (
+        slideInHorizontally(
+            animationSpec = tween(RouteTransitionDurationMillis),
+            initialOffsetX = { it / 5 },
+        ) + fadeIn(animationSpec = tween(RouteTransitionDurationMillis))
+    ) togetherWith (
+        slideOutHorizontally(
+            animationSpec = tween(RouteTransitionDurationMillis),
+            targetOffsetX = { -it / 8 },
+        ) + fadeOut(animationSpec = tween(RouteTransitionDurationMillis))
+    )
+
+private fun backwardRouteTransition() =
+    (
+        slideInHorizontally(
+            animationSpec = tween(RouteTransitionDurationMillis),
+            initialOffsetX = { -it / 8 },
+        ) + fadeIn(animationSpec = tween(RouteTransitionDurationMillis))
+    ) togetherWith (
+        slideOutHorizontally(
+            animationSpec = tween(RouteTransitionDurationMillis),
+            targetOffsetX = { it / 5 },
+        ) + fadeOut(animationSpec = tween(RouteTransitionDurationMillis))
+    )
+
+@Composable
+private fun RouteSurface(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        content = content,
+    )
 }

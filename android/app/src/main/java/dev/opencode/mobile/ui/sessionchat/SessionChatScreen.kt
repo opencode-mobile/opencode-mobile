@@ -161,7 +161,13 @@ fun SessionChatScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding =
+                                PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 12.dp,
+                                    bottom = 12.dp,
+                                ),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(uiState.messages, key = { it.id }) { message ->
@@ -318,7 +324,6 @@ private fun AssistantMessageBubble(
         text = text.ifBlank { "…" },
         modifier =
             modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -337,7 +342,6 @@ private fun FallbackMessageBubble(
         text = "$roleLabel: ${text.ifBlank { "…" }}",
         modifier =
             modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         style = MaterialTheme.typography.bodySmall,
@@ -363,7 +367,8 @@ private fun SessionComposer(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 10.dp)
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(26.dp))
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(26.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp),

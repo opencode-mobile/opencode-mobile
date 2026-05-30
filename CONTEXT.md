@@ -97,6 +97,18 @@ The mobile integration layer that reads and sends **messages** for a session
 Distinct from a **message**: the repository is app infrastructure; a message is
 a single item in a session timeline.
 
+### Live Store
+
+A reactive observation layer above CRUD repositories that keeps screen data fresh
+while the **foreground event stream** is active.
+
+A Live Store listens for relevant server-sent events, applies debounced REST
+refresh policy, and exposes ongoing updates through platform streams (for
+example Kotlin `Flow` or Swift `AsyncStream`). Screen Models collect Live Store
+streams for timelines, session lists, and status labels. Mutations such as
+send, create, and delete still go through repositories directly. Optimistic send
+and quiet refresh merge stay in the Screen Model.
+
 ### message
 
 A user, assistant, command, or tool-related item inside a session.

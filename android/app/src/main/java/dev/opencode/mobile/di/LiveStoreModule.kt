@@ -1,0 +1,38 @@
+package dev.opencode.mobile.di
+
+import dagger.Binds
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.domain.live.DefaultMessageLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.MessageLiveStore
+import dev.opencode.mobile.domain.live.SessionLiveStore
+import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.live.defaultLiveStoreScope
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class LiveStoreModule {
+    @Binds
+    @Singleton
+    abstract fun bindMessageLiveStore(impl: DefaultMessageLiveStore): MessageLiveStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionStatusLiveStore(impl: DefaultSessionStatusLiveStore): SessionStatusLiveStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionLiveStore(impl: DefaultSessionLiveStore): SessionLiveStore
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideLiveStoreScope(): LiveStoreScope = defaultLiveStoreScope()
+    }
+}

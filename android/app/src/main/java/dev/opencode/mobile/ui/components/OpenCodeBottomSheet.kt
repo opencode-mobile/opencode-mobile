@@ -1,40 +1,70 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val BottomSheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+private const val BottomSheetEnterDurationMillis = 320
+private const val BottomSheetExitDurationMillis = 280
+private const val BottomSheetScrimAlpha = 0.32f
+private val BottomSheetDragDismissThreshold = 96.dp
+private const val BottomSheetDragDismissVelocity = 1_200f
 private val BottomSheetHeaderHorizontalPadding = 20.dp
 private val BottomSheetHeaderTopPadding = 12.dp
 private val BottomSheetHeaderBottomPadding = 8.dp
@@ -54,7 +84,6 @@ sealed class BottomSheetEntryDecorator {
     ) : BottomSheetEntryDecorator()
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenCodeBottomSheet(
     visible: Boolean,
@@ -64,71 +93,168 @@ fun OpenCodeBottomSheet(
     keyboardAware: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (!visible) return
+    var shouldRender by remember { mutableStateOf(visible) }
+    var sheetVisible by remember { mutableStateOf(false) }
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val dragDismissThresholdPx = with(LocalDensity.current) { BottomSheetDragDismissThreshold.toPx() }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = keyboardAware)
-
-    if (keyboardAware) {
-        LaunchedEffect(Unit) {
-            sheetState.expand()
+    LaunchedEffect(visible) {
+        if (visible) {
+            shouldRender = true
+            dragOffsetPx = 0f
+            sheetVisible = true
+        } else if (shouldRender && sheetVisible) {
+            sheetVisible = false
+            delay(BottomSheetExitDurationMillis.toLong())
+            dragOffsetPx = 0f
+            shouldRender = false
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        modifier = modifier,
-        shape = BottomSheetShape,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        dragHandle = null,
-        contentWindowInsets = {
-            if (keyboardAware) WindowInsets(0) else BottomSheetDefaults.windowInsets
-        },
-    ) {
-        val bodyModifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = BottomSheetContentBottomPadding)
-                .then(
-                    if (keyboardAware) {
-                        Modifier.navigationBarsPadding().imePadding()
-                    } else {
-                        Modifier
-                    },
-                )
+    if (!shouldRender) return
 
-        Column(modifier = bodyModifier) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = BottomSheetHeaderHorizontalPadding,
-                            end = BottomSheetHeaderHorizontalPadding,
-                            top = BottomSheetHeaderTopPadding,
-                            bottom = BottomSheetHeaderBottomPadding,
-                        ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = title,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
-                    contrast = OpenCodeButtonContrast.Low,
-                    onClick = onDismissRequest,
-                )
+    fun dismissWithAnimation() {
+        coroutineScope.launch {
+            if (sheetVisible) {
+                sheetVisible = false
+                delay(BottomSheetExitDurationMillis.toLong())
             }
-
-            content()
+            dragOffsetPx = 0f
+            shouldRender = false
+            onDismissRequest()
         }
+    }
+
+    val dragState =
+        rememberDraggableState { delta ->
+            dragOffsetPx = (dragOffsetPx + delta).coerceAtLeast(0f)
+        }
+
+    val scrimAlpha by animateFloatAsState(
+        targetValue = if (sheetVisible) BottomSheetScrimAlpha else 0f,
+        animationSpec = tween(BottomSheetExitDurationMillis),
+        label = "BottomSheetScrimAlpha",
+    )
+
+    val scrimInteractionSource = remember { MutableInteractionSource() }
+    val sheetInteractionSource = remember { MutableInteractionSource() }
+
+    Popup(
+        onDismissRequest = ::dismissWithAnimation,
+        properties =
+            PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+            ),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
+                    .clickable(
+                        interactionSource = scrimInteractionSource,
+                        indication = null,
+                        onClick = ::dismissWithAnimation,
+                    ),
+        ) {
+            AnimatedVisibility(
+                visible = sheetVisible,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter =
+                    slideInVertically(
+                        animationSpec = tween(BottomSheetEnterDurationMillis, easing = FastOutSlowInEasing),
+                        initialOffsetY = { it },
+                    ) + fadeIn(animationSpec = tween(BottomSheetEnterDurationMillis)),
+                exit =
+                    slideOutVertically(
+                        animationSpec = tween(BottomSheetExitDurationMillis, easing = FastOutLinearInEasing),
+                        targetOffsetY = { it },
+                    ) + fadeOut(animationSpec = tween(BottomSheetExitDurationMillis)),
+            ) {
+                Surface(
+                    modifier =
+                        modifier
+                            .fillMaxWidth()
+                            .offset { IntOffset(x = 0, y = dragOffsetPx.roundToInt()) }
+                            .draggable(
+                                orientation = Orientation.Vertical,
+                                state = dragState,
+                                onDragStopped = { velocity ->
+                                    if (dragOffsetPx >= dragDismissThresholdPx || velocity >= BottomSheetDragDismissVelocity) {
+                                        dismissWithAnimation()
+                                    } else {
+                                        dragOffsetPx = 0f
+                                    }
+                                },
+                            )
+                            .clickable(
+                                interactionSource = sheetInteractionSource,
+                                indication = null,
+                                onClick = {},
+                            ),
+                    shape = BottomSheetShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ) {
+                    BottomSheetContent(
+                        title = title,
+                        keyboardAware = keyboardAware,
+                        onDismissRequest = ::dismissWithAnimation,
+                        content = content,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomSheetContent(
+    title: String,
+    keyboardAware: Boolean,
+    onDismissRequest: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val bodyModifier =
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = BottomSheetContentBottomPadding)
+            .navigationBarsPadding()
+            .then(if (keyboardAware) Modifier.imePadding() else Modifier)
+
+    Column(modifier = bodyModifier) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = BottomSheetHeaderHorizontalPadding,
+                        end = BottomSheetHeaderHorizontalPadding,
+                        top = BottomSheetHeaderTopPadding,
+                        bottom = BottomSheetHeaderBottomPadding,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = onDismissRequest,
+            )
+        }
+
+        content()
     }
 }
 

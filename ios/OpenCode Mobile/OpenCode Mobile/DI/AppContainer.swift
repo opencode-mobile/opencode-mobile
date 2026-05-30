@@ -102,6 +102,33 @@ extension Container {
         }.singleton
     }
 
+    var sessionStatusLiveStore: Factory<DefaultSessionStatusLiveStore> {
+        self { @MainActor in
+            DefaultSessionStatusLiveStore(
+                sessionRepository: self.sessionRepository(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
+    var sessionLiveStore: Factory<DefaultSessionLiveStore> {
+        self { @MainActor in
+            DefaultSessionLiveStore(
+                sessionRepository: self.sessionRepository(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
+    var messageLiveStore: Factory<DefaultMessageLiveStore> {
+        self { @MainActor in
+            DefaultMessageLiveStore(
+                messageRepository: self.messageRepository(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
     var appRootViewModel: Factory<AppRootViewModel> {
         self { @MainActor in
             AppRootViewModel(
@@ -129,6 +156,8 @@ extension Container {
                 sessionRepository: self.sessionRepository(),
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
+                sessionLiveStore: self.sessionLiveStore(),
+                sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator()
             )
@@ -143,7 +172,8 @@ extension Container {
                 worktree: $0.worktree,
                 messageRepository: self.messageRepository(),
                 sessionRepository: self.sessionRepository(),
-                foregroundEventStream: self.foregroundEventStream()
+                messageLiveStore: self.messageLiveStore(),
+                sessionStatusLiveStore: self.sessionStatusLiveStore()
             )
         }
     }
@@ -157,9 +187,11 @@ extension Container {
 
     @MainActor
     static func makeConnectionSetupViewModel(initialProfile: ConnectionProfile?) -> ConnectionSetupViewModel {
-        let viewModel = shared.connectionSetupViewModel()
-        viewModel.configure(initialProfile: initialProfile)
-        return viewModel
+        ConnectionSetupViewModel(
+            connectionProbeService: shared.connectionProbing(),
+            connectionSessionCoordinator: shared.connectionSessionCoordinator(),
+            initialProfile: initialProfile
+        )
     }
 
     @MainActor

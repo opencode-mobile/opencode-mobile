@@ -5,17 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.event.EventDomainAdapter
-import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.live.MessageLiveStore
+import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -24,6 +23,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 @HiltViewModel
 class SessionChatViewModel
@@ -31,7 +33,8 @@ class SessionChatViewModel
     constructor(
         private val messageRepository: MessageRepository,
         private val sessionRepository: SessionRepository,
-        private val foregroundEventStream: ForegroundEventStream,
+        private val messageLiveStore: MessageLiveStore,
+        private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val eventDomainAdapter: EventDomainAdapter,
     ) : ViewModel() {
         private val _uiState =
@@ -40,12 +43,7 @@ class SessionChatViewModel
 
         private var boundSessionId: String? = null
         private var boundWorktree: String? = null
-        private var messageRefreshJob: Job? = null
-        private var workingPollJob: Job? = null
-
-        init {
-            observeForegroundEvents()
-        }
+        private var observeJob: Job? = null
 
         fun bind(
             sessionId: String,
@@ -55,11 +53,32 @@ class SessionChatViewModel
             if (boundSessionId == sessionId && boundWorktree == worktree && _uiState.value.sessionTitle == sessionTitle) {
                 return
             }
+            observeJob?.cancel()
             boundSessionId = sessionId
             boundWorktree = worktree
             _uiState.value = SessionChatUiState.initial(sessionId, sessionTitle)
+            startLiveObservation(sessionId, worktree)
             loadMessages()
-            refreshSessionStatus()
+        }
+
+        private fun startLiveObservation(
+            sessionId: String,
+            worktree: String,
+        ) {
+            observeJob =
+                viewModelScope.launch {
+                    combine(
+                        messageLiveStore.observeMessages(sessionId, worktree),
+                        sessionStatusLiveStore.observeStatuses(worktree).map { statuses -> statuses[sessionId] },
+                    ) { messages, status ->
+                        messages to status
+                    }.collect { (messages, status) ->
+                        applyLoadedMessages(messages, fromQuietRefresh = true)
+                        _uiState.update {
+                            it.copy(sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel))
+                        }
+                    }
+                }
         }
 
         fun loadMessages() {
@@ -149,7 +168,7 @@ class SessionChatViewModel
                         val messages = messageRepository.listMessages(sessionId, worktree)
                         applyLoadedMessages(messages)
                     } catch (_: Throwable) {
-                        // Prompt was accepted; SSE or pull-to-refresh will sync the timeline.
+                        // Prompt was accepted; live store or pull-to-refresh will sync the timeline.
                         _uiState.update { it.copy(isSending = false) }
                     }
                 } catch (throwable: Throwable) {
@@ -254,40 +273,6 @@ class SessionChatViewModel
                 else -> throwable.message ?: "Something went wrong"
             }
 
-        private fun observeForegroundEvents() {
-            viewModelScope.launch {
-                foregroundEventStream.events.collect { event ->
-                    val sessionId = boundSessionId ?: return@collect
-                    when {
-                        event.type == "stream.reconnected" -> {
-                            refreshMessagesQuietly()
-                            refreshSessionStatus()
-                        }
-                        event.triggersMessageRefresh && event.sessionId == sessionId -> scheduleMessageRefresh()
-                        event.triggersStatusRefresh && event.sessionId == sessionId -> refreshSessionStatus()
-                    }
-                }
-            }
-        }
-
-        private fun scheduleMessageRefresh() {
-            messageRefreshJob?.cancel()
-            messageRefreshJob =
-                viewModelScope.launch {
-                    delay(MESSAGE_REFRESH_DEBOUNCE_MS)
-                    refreshMessagesQuietly()
-                }
-        }
-
-        private fun refreshMessagesQuietly() {
-            val sessionId = boundSessionId ?: return
-            val worktree = boundWorktree ?: return
-            viewModelScope.launch {
-                runCatching { messageRepository.listMessages(sessionId, worktree) }
-                    .onSuccess { messages -> applyLoadedMessages(messages, fromQuietRefresh = true) }
-            }
-        }
-
         private fun refreshSessionStatus() {
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
@@ -297,24 +282,7 @@ class SessionChatViewModel
                         val status = statuses.firstOrNull { it.sessionId == sessionId }
                         val label = status?.let(eventDomainAdapter::statusLabel)
                         _uiState.update { it.copy(sessionStatusLabel = label) }
-                        updateWorkingPoll(isBusy = status?.raw?.get("type") == "busy")
                     }
-            }
-        }
-
-        private fun updateWorkingPoll(isBusy: Boolean) {
-            if (isBusy) {
-                if (workingPollJob?.isActive == true) return
-                workingPollJob =
-                    viewModelScope.launch {
-                        while (true) {
-                            delay(WORKING_POLL_INTERVAL_MS)
-                            refreshMessagesQuietly()
-                        }
-                    }
-            } else {
-                workingPollJob?.cancel()
-                workingPollJob = null
             }
         }
 
@@ -324,8 +292,6 @@ class SessionChatViewModel
             val AvailableModes = listOf("Build", "Plan")
             val AvailableThinkingEfforts = listOf("Default", "Low", "Medium", "High")
             private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-            private const val MESSAGE_REFRESH_DEBOUNCE_MS = 300L
-            private const val WORKING_POLL_INTERVAL_MS = 2_000L
         }
     }
 

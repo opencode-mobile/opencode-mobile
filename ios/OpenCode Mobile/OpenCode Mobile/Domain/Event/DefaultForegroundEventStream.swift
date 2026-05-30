@@ -9,6 +9,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
     private var streamTask: Task<Void, Never>?
     private var wasConnected = false
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
+    private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
 
     init(api: EventsAPIClient, adapter: EventDomainAdapter) {
         self.api = api
@@ -27,17 +28,32 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         }
     }
 
+    func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
+        let subscriberID = UUID()
+        return AsyncStream { continuation in
+            continuation.yield(connectionState)
+            connectionStateContinuations[subscriberID] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in
+                    self?.connectionStateContinuations.removeValue(forKey: subscriberID)
+                }
+            }
+        }
+    }
+
     func start() {
-        guard streamTask == nil else { return }
-        streamTask = Task { [weak self] in
-            await self?.runStreamLoop()
+        stop()
+        let api = api
+        let adapter = adapter
+        streamTask = Task.detached(priority: .utility) { [weak self] in
+            await self?.runStreamLoop(api: api, adapter: adapter)
         }
     }
 
     func stop() {
         streamTask?.cancel()
         streamTask = nil
-        connectionState = .idle
+        applyConnectionState(.idle)
     }
 
     private func publish(_ event: OpencodeEvent) {
@@ -46,34 +62,72 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         }
     }
 
-    private func runStreamLoop() async {
+    private func applyConnectionState(_ state: EventStreamConnectionState) {
+        connectionState = state
+        for continuation in connectionStateContinuations.values {
+            continuation.yield(state)
+        }
+    }
+
+    @discardableResult
+    private func handleStreamEvent(_ event: OpencodeEvent) -> Bool {
+        switch event.type {
+        case "server.connected":
+            applyConnectionState(.connected)
+            if wasConnected {
+                publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
+            }
+            wasConnected = true
+            return true
+        case "server.heartbeat":
+            return false
+        default:
+            publish(event)
+            return false
+        }
+    }
+
+    private func runStreamLoop(api: EventsAPIClient, adapter: EventDomainAdapter) async {
         var retryAttempt = 0
         while !Task.isCancelled {
-            connectionState = wasConnected ? .reconnecting : .connecting
+            await MainActor.run {
+                applyConnectionState(wasConnected ? .reconnecting : .connecting)
+            }
+
             do {
-                try await api.streamGlobalEvents { [weak self] dataLine in
-                    guard let self else { return }
-                    guard let event = adapter.parseEvent(dataLine: dataLine) else { return }
-                    switch event.type {
-                    case "server.connected":
-                        connectionState = .connected
-                        if wasConnected {
-                            publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
+                try await api.streamGlobalEvents(
+                    onHTTPResponse: { _ in
+                        await MainActor.run { [weak self] in
+                            guard let self else { return }
+                            if connectionState != .connected {
+                                applyConnectionState(.connecting)
+                            }
                         }
-                        wasConnected = true
-                        retryAttempt = 0
-                    case "server.heartbeat":
-                        break
-                    default:
-                        publish(event)
+                    },
+                    onDataLine: { [adapter] dataLine in
+                        guard let event = adapter.parseEvent(dataLine: dataLine) else {
+                            return
+                        }
+                        let shouldResetRetry = await MainActor.run { [weak self] in
+                            self?.handleStreamEvent(event) ?? false
+                        }
+                        if shouldResetRetry {
+                            retryAttempt = 0
+                        }
                     }
+                )
+                await MainActor.run {
+                    applyConnectionState(.disconnected)
                 }
-                connectionState = .disconnected
             } catch is CancellationError {
-                connectionState = .idle
+                await MainActor.run {
+                    applyConnectionState(.idle)
+                }
                 return
             } catch {
-                connectionState = wasConnected ? .reconnecting : .disconnected
+                await MainActor.run {
+                    applyConnectionState(wasConnected ? .reconnecting : .disconnected)
+                }
             }
 
             retryAttempt += 1

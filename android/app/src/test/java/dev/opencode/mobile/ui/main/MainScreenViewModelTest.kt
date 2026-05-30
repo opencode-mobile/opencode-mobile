@@ -6,6 +6,9 @@ import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -15,10 +18,13 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -48,7 +54,7 @@ class MainScreenViewModelTest {
 
     @Test
     fun uiState_probeFailed_whenHealthFails() =
-        runTest {
+        runTest(testDispatcher) {
             val viewModel = createViewModel(shouldFailProbe = true)
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value is MainScreenUiState.ProbeFailed)
@@ -56,7 +62,7 @@ class MainScreenViewModelTest {
 
     @Test
     fun uiState_seedsBootWorktree_whenProfileEmpty() =
-        runTest {
+        runTest(testDispatcher) {
             val store = FakeConnectionProfileStore()
             val viewModel =
                 createViewModel(connectionProfileStore = store, bootWorktree = "/boot/project")
@@ -67,7 +73,7 @@ class MainScreenViewModelTest {
 
     @Test
     fun uiState_limitsPreviewSessionsToThree() =
-        runTest {
+        runTest(testDispatcher) {
             val sessions =
                 (1..7).map { index ->
                     Session(id = "$index", title = "Session $index", updatedAtEpochMs = index.toLong())
@@ -90,21 +96,35 @@ class MainScreenViewModelTest {
 
     @Test
     fun refreshOnSessionCreatedEvent() =
-        runTest {
+        runTest(testDispatcher) {
             val eventStream = FakeForegroundEventStream()
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    foregroundEventStream = eventStream,
+                    eventStream = eventStream,
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
             val before = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().totalSessionCount
 
+            sessionsByWorktree["/repo"] =
+                listOf(
+                    Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L),
+                    Session(id = "new", title = "Session new", updatedAtEpochMs = 2L),
+                )
             eventStream.emit(OpencodeEvent(type = "session.created", sessionId = "new"))
+            advanceTimeBy(550)
             advanceUntilIdle()
 
             val after = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().totalSessionCount
-            assertTrue(after >= before)
+            assertEquals(before + 1, after)
+            assertTrue(sessionRepository.listSessionsCallCount >= 2)
         }
 
     private fun createViewModel(
@@ -112,7 +132,8 @@ class MainScreenViewModelTest {
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
         bootWorktree: String = "/boot/project",
         sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
-        foregroundEventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
+        eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
+        sessionRepository: FakeSessionRepository = FakeSessionRepository(sessionsByWorktree.toMutableMap()),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -126,13 +147,18 @@ class MainScreenViewModelTest {
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
+        val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
+        val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope)
         return MainScreenViewModel(
             projectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
-            sessionRepository = FakeSessionRepository(sessionsByWorktree),
+            sessionRepository = sessionRepository,
             connectionProfileStore = connectionProfileStore,
             sessionDomainAdapter = SessionDomainAdapter(),
             eventDomainAdapter = EventDomainAdapter(json),
-            foregroundEventStream = foregroundEventStream,
+            sessionLiveStore = sessionLiveStore,
+            sessionStatusLiveStore = sessionStatusLiveStore,
+            foregroundEventStream = eventStream,
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
         )
@@ -154,9 +180,14 @@ private class FakeProjectRepository(
 }
 
 private class FakeSessionRepository(
-    private val sessionsByWorktree: Map<String, List<Session>>,
+    private val sessionsByWorktree: MutableMap<String, List<Session>>,
 ) : SessionRepository {
-    override suspend fun listSessions(directory: String?): List<Session> = sessionsByWorktree[directory].orEmpty()
+    var listSessionsCallCount = 0
+
+    override suspend fun listSessions(directory: String?): List<Session> {
+        listSessionsCallCount += 1
+        return sessionsByWorktree[directory].orEmpty()
+    }
 
     override suspend fun createSession(
         parentId: String?,

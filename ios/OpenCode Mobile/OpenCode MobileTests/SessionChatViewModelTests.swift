@@ -185,13 +185,23 @@ struct SessionChatViewModelTests {
         messageRepository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream = FakeForegroundEventStream()
     ) -> SessionChatViewModel {
+        let sessionRepository = FakeChatSessionRepository()
+        let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
+            sessionRepository: sessionRepository,
+            eventStream: eventStream
+        )
+        let messageLiveStore = DefaultMessageLiveStore(
+            messageRepository: messageRepository,
+            eventStream: eventStream
+        )
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
             worktree: "/repo",
             messageRepository: messageRepository,
-            sessionRepository: FakeChatSessionRepository(),
-            foregroundEventStream: eventStream
+            sessionRepository: sessionRepository,
+            messageLiveStore: messageLiveStore,
+            sessionStatusLiveStore: sessionStatusLiveStore
         )
         viewModel.startObserving()
         return viewModel

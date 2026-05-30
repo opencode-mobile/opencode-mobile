@@ -51,21 +51,27 @@ final class ProjectListHomeViewModel {
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
+    private let sessionLiveStore: any SessionLiveStore
+    private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
+    private var connectionStateObservationTask: Task<Void, Never>?
+    private(set) var liveUpdatesConnectionState: EventStreamConnectionState = .idle
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
-    private var homeRefreshTask: Task<Void, Never>?
-    private var statusRefreshTask: Task<Void, Never>?
-    private var eventObservationTask: Task<Void, Never>?
+    private var liveObservationTasks: [Task<Void, Never>] = []
+    private var liveSessionsByWorktree: [String: [Session]] = [:]
+    private var liveStatusesByWorktree: [String: [String: SessionStatus]] = [:]
 
     init(
         projectRepository: any ProjectRepository,
         sessionRepository: any SessionRepository,
         connectionProfileStore: any ConnectionProfileStore,
         activeConnectionManager: ActiveConnectionManager,
+        sessionLiveStore: any SessionLiveStore,
+        sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator
     ) {
@@ -73,6 +79,8 @@ final class ProjectListHomeViewModel {
         self.sessionRepository = sessionRepository
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
+        self.sessionLiveStore = sessionLiveStore
+        self.sessionStatusLiveStore = sessionStatusLiveStore
         self.foregroundEventStream = foregroundEventStream
         self.connectionSessionCoordinator = connectionSessionCoordinator
         connectionSessionCoordinator.onProfileSaved { [weak self] in
@@ -80,7 +88,17 @@ final class ProjectListHomeViewModel {
                 await self?.refresh()
             }
         }
-        observeForegroundEvents()
+        startObservingConnectionState()
+    }
+
+    private func startObservingConnectionState() {
+        connectionStateObservationTask?.cancel()
+        liveUpdatesConnectionState = foregroundEventStream.connectionState
+        connectionStateObservationTask = Task {
+            for await state in foregroundEventStream.connectionStateUpdates() {
+                liveUpdatesConnectionState = state
+            }
+        }
     }
 
     func refresh() async {
@@ -154,9 +172,11 @@ final class ProjectListHomeViewModel {
             do {
                 try await projectRepository.probeServer()
             } catch let error as ServerProbeError {
+                stopLiveObservations()
                 state = .probeFailed(error.localizedDescription)
                 return
             } catch {
+                stopLiveObservations()
                 state = .probeFailed(error.localizedDescription)
                 return
             }
@@ -172,6 +192,7 @@ final class ProjectListHomeViewModel {
             }
 
             if worktrees.isEmpty {
+                stopLiveObservations()
                 state = .empty(showAddProjectSheet: false, candidates: [])
                 return
             }
@@ -180,7 +201,13 @@ final class ProjectListHomeViewModel {
             state = sections.isEmpty
                 ? .empty(showAddProjectSheet: false, candidates: [])
                 : .loaded(sections: sections, showAddProjectSheet: false, candidates: [], seeAllSessions: nil)
+            if case .loaded = state {
+                startLiveObservations(worktrees: worktrees)
+            } else {
+                stopLiveObservations()
+            }
         } catch {
+            stopLiveObservations()
             state = .probeFailed(error.localizedDescription)
         }
     }
@@ -278,80 +305,90 @@ final class ProjectListHomeViewModel {
     }
 
     private static let previewSessionLimit = 3
-    private static let homeRefreshDebounceMs = 500
-    private static let statusRefreshDebounceMs = 300
 
-    private func observeForegroundEvents() {
-        eventObservationTask?.cancel()
-        eventObservationTask = Task {
-            for await event in foregroundEventStream.events() {
-                switch event.type {
-                case "stream.reconnected":
-                    await runHomeLoad(skipProbe: true)
-                default:
-                    if event.triggersHomeRefresh {
-                        scheduleHomeRefresh()
-                    }
-                    if event.triggersStatusRefresh {
-                        scheduleStatusRefresh()
-                    }
+    private func startLiveObservations(worktrees: [String]) {
+        stopLiveObservations()
+        liveObservationTasks =
+            worktrees.map { worktree in
+                Task {
+                    await observeWorktree(worktree)
+                }
+            }
+    }
+
+    private func stopLiveObservations() {
+        liveObservationTasks.forEach { $0.cancel() }
+        liveObservationTasks = []
+        liveSessionsByWorktree = [:]
+        liveStatusesByWorktree = [:]
+    }
+
+    private func observeWorktree(_ worktree: String) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                for await sessions in self.sessionLiveStore.observeSessions(directory: worktree) {
+                    self.liveSessionsByWorktree[worktree] = sessions
+                    self.applyLiveUpdate(worktree: worktree)
+                }
+            }
+            group.addTask { @MainActor in
+                for await statuses in self.sessionStatusLiveStore.observeStatuses(directory: worktree) {
+                    self.liveStatusesByWorktree[worktree] = statuses
+                    self.applyLiveUpdate(worktree: worktree)
                 }
             }
         }
     }
 
-    private func scheduleHomeRefresh() {
-        homeRefreshTask?.cancel()
-        homeRefreshTask = Task {
-            try? await Task.sleep(for: .milliseconds(Self.homeRefreshDebounceMs))
-            guard !Task.isCancelled else { return }
-            await runHomeLoad(skipProbe: true)
-        }
+    private func applyLiveUpdate(worktree: String) {
+        guard let sessions = liveSessionsByWorktree[worktree] else { return }
+        let statuses = liveStatusesByWorktree[worktree] ?? [:]
+        updateSectionFromLiveData(worktree: worktree, sessions: sessions, statuses: statuses)
     }
 
-    private func scheduleStatusRefresh() {
-        statusRefreshTask?.cancel()
-        statusRefreshTask = Task {
-            try? await Task.sleep(for: .milliseconds(Self.statusRefreshDebounceMs))
-            guard !Task.isCancelled else { return }
-            await refreshSessionStatuses()
-        }
-    }
-
-    private func refreshSessionStatuses() async {
+    private func updateSectionFromLiveData(
+        worktree: String,
+        sessions: [Session],
+        statuses: [String: SessionStatus]
+    ) {
         guard case let .loaded(sections, showAdd, candidates, seeAll) = state else { return }
-        var updatedSections: [ProjectSectionItem] = []
-        for section in sections {
-            if let statuses = try? await sessionRepository.getAllSessionStatuses(directory: section.worktree) {
-                let byID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
-                updatedSections.append(
-                    ProjectSectionItem(
-                        id: section.id,
-                        worktree: section.worktree,
-                        displayName: section.displayName,
-                        pathSubtitle: section.pathSubtitle,
-                        letter: section.letter,
-                        letterAccent: section.letterAccent,
-                        previewSessions: section.previewSessions.map { applyStatus($0, byID: byID) },
-                        allSessions: section.allSessions.map { applyStatus($0, byID: byID) },
-                        totalSessionCount: section.totalSessionCount,
-                        loadError: section.loadError
+        guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
+        let items =
+            sessions
+                .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
+                .map { session in
+                    sessionAdapter.listItem(
+                        from: session,
+                        worktree: worktree,
+                        statusLabel: statuses[session.id].flatMap(eventAdapter.statusLabel)
                     )
+                }
+        let updatedSection = ProjectSectionItem(
+            id: section.id,
+            worktree: section.worktree,
+            displayName: section.displayName,
+            pathSubtitle: section.pathSubtitle,
+            letter: section.letter,
+            letterAccent: section.letterAccent,
+            previewSessions: Array(items.prefix(Self.previewSessionLimit)),
+            allSessions: items,
+            totalSessionCount: items.count,
+            loadError: section.loadError
+        )
+        let updatedSections =
+            sections.map { current in
+                current.worktree == worktree ? updatedSection : current
+            }
+        let updatedSeeAll =
+            if let seeAll, seeAll.worktree == worktree {
+                SeeAllSessionsSheetState(
+                    worktree: seeAll.worktree,
+                    projectName: seeAll.projectName,
+                    sessions: items
                 )
             } else {
-                updatedSections.append(section)
+                seeAll
             }
-        }
-        var updatedSeeAll = seeAll
-        if let seeAll,
-           let statuses = try? await sessionRepository.getAllSessionStatuses(directory: seeAll.worktree) {
-            let byID = Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
-            updatedSeeAll = SeeAllSessionsSheetState(
-                worktree: seeAll.worktree,
-                projectName: seeAll.projectName,
-                sessions: seeAll.sessions.map { applyStatus($0, byID: byID) }
-            )
-        }
         state = .loaded(
             sections: updatedSections,
             showAddProjectSheet: showAdd,
@@ -360,12 +397,4 @@ final class ProjectListHomeViewModel {
         )
     }
 
-    private func applyStatus(_ item: SessionListItem, byID: [String: SessionStatus]) -> SessionListItem {
-        SessionListItem(
-            id: item.id,
-            title: item.title,
-            worktree: item.worktree,
-            statusLabel: byID[item.id].flatMap(eventAdapter.statusLabel)
-        )
-    }
 }

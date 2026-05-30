@@ -67,7 +67,7 @@ private func makeViewModel(
     projectRepository: any ProjectRepository,
     sessionRepository: any SessionRepository = FakeSessionRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
-    foregroundEventStream: FakeForegroundEventStream = FakeForegroundEventStream()
+    eventStream: FakeForegroundEventStream = FakeForegroundEventStream()
 ) -> ProjectListHomeViewModel {
     let manager = ActiveConnectionManager()
     manager.apply(ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
@@ -75,12 +75,22 @@ private func makeViewModel(
         activeConnectionManager: manager,
         connectionProfileStore: connectionProfileStore
     )
+    let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
+        sessionRepository: sessionRepository,
+        eventStream: eventStream
+    )
+    let sessionLiveStore = DefaultSessionLiveStore(
+        sessionRepository: sessionRepository,
+        eventStream: eventStream
+    )
     return ProjectListHomeViewModel(
         projectRepository: projectRepository,
         sessionRepository: sessionRepository,
         connectionProfileStore: connectionProfileStore,
         activeConnectionManager: manager,
-        foregroundEventStream: foregroundEventStream,
+        sessionLiveStore: sessionLiveStore,
+        sessionStatusLiveStore: sessionStatusLiveStore,
+        foregroundEventStream: eventStream,
         connectionSessionCoordinator: coordinator
     )
 }

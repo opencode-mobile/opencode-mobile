@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -45,8 +46,10 @@ fun MainScreen(
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val liveUpdatesConnectionState by viewModel.liveUpdatesConnectionState.collectAsStateWithLifecycle()
     MainScreen(
         uiState = state,
+        liveUpdatesConnectionState = liveUpdatesConnectionState,
         onDeveloperComponentsClick = onDeveloperComponentsClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
@@ -66,6 +69,7 @@ fun MainScreen(
 @Composable
 internal fun MainScreen(
     uiState: MainScreenUiState,
+    liveUpdatesConnectionState: EventStreamConnectionState,
     onDeveloperComponentsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
@@ -121,6 +125,10 @@ internal fun MainScreen(
                         ),
                     ),
             )
+
+            if (showsLiveUpdatesStatus(uiState)) {
+                LiveUpdatesConnectionBanner(state = liveUpdatesConnectionState)
+            }
 
             when (uiState) {
                 MainScreenUiState.Probing,
@@ -311,6 +319,12 @@ private fun ProjectSection(
     }
 }
 
+private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
+    when (uiState) {
+        MainScreenUiState.Probing, MainScreenUiState.Loading -> false
+        else -> true
+    }
+
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
@@ -340,6 +354,7 @@ fun MainScreenPreview() {
                             ),
                         ),
                 ),
+            liveUpdatesConnectionState = EventStreamConnectionState.Connected,
             onDeveloperComponentsClick = {},
             onSessionClick = {},
             onEditConnection = {},

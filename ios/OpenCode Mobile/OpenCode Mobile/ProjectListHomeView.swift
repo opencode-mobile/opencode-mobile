@@ -5,8 +5,7 @@ struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
     @State private var showComponentGallery = false
     @State private var selectedSession: SessionListItem?
-    @State private var showConnectionSetupSheet = false
-    @State private var connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: nil)
+    @State private var connectionSetupPresentation: ConnectionSetupPresentation?
 
     init(viewModel: ProjectListHomeViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -22,6 +21,9 @@ struct ProjectListHomeView: View {
                 ],
                 showDivider: true
             )
+            if showsLiveUpdatesStatus {
+                LiveUpdatesConnectionBanner(state: viewModel.liveUpdatesConnectionState)
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -48,16 +50,31 @@ struct ProjectListHomeView: View {
         .sheet(item: seeAllSheetBinding) { sheet in
             seeAllSheet(sheet)
         }
-        .openCodeBottomSheet(isPresented: $showConnectionSetupSheet, title: "Connect to server") {
-            ConnectionSetupSheetView(viewModel: connectionSetupViewModel, isPresented: $showConnectionSetupSheet)
+        .openCodeBottomSheet(item: $connectionSetupPresentation, title: "Connect to server") { presentation in
+            ConnectionSetupSheetView(
+                viewModel: Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
+                onDismiss: { connectionSetupPresentation = nil }
+            )
         }
     }
 
     private func presentConnectionSetup() {
+        if let profile = Container.shared.activeConnectionManager().currentProfile() {
+            connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile)
+            return
+        }
         Task {
             let profile = await Container.shared.connectionProfileStore().activeProfile()
-            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile)
-            showConnectionSetupSheet = true
+            connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile)
+        }
+    }
+
+    private var showsLiveUpdatesStatus: Bool {
+        switch viewModel.state {
+        case .probing, .loading:
+            false
+        default:
+            true
         }
     }
 
@@ -280,12 +297,23 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
         activeConnectionManager: manager,
         connectionProfileStore: store
     )
+    let previewEventStream = PreviewForegroundEventStream()
+    let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
+        sessionRepository: PreviewSessionRepository(),
+        eventStream: previewEventStream
+    )
+    let sessionLiveStore = DefaultSessionLiveStore(
+        sessionRepository: PreviewSessionRepository(),
+        eventStream: previewEventStream
+    )
     return ProjectListHomeViewModel(
         projectRepository: PreviewProjectRepository(),
         sessionRepository: PreviewSessionRepository(),
         connectionProfileStore: store,
         activeConnectionManager: manager,
-        foregroundEventStream: PreviewForegroundEventStream(),
+        sessionLiveStore: sessionLiveStore,
+        sessionStatusLiveStore: sessionStatusLiveStore,
+        foregroundEventStream: previewEventStream,
         connectionSessionCoordinator: coordinator
     )
 }
@@ -333,7 +361,14 @@ private struct PreviewSessionRepository: SessionRepository {
 
 @MainActor
 private final class PreviewForegroundEventStream: ForegroundEventStream {
-    var connectionState: EventStreamConnectionState = .idle
+    var connectionState: EventStreamConnectionState = .connecting
+
+    func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> {
+        AsyncStream { continuation in
+            continuation.yield(connectionState)
+        }
+    }
+
     func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
     func start() {}
     func stop() {}

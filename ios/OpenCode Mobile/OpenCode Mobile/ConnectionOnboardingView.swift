@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConnectionOnboardingView: View {
-    @Binding var showSetupSheet: Bool
+    let onConnectClick: () -> Void
 
     var body: some View {
         VStack(spacing: 24) {
@@ -15,9 +15,7 @@ struct ConnectionOnboardingView: View {
                     .foregroundStyle(OpenCodeColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            OpenCodeButton(variant: .fullWidthText(title: "Connect to server")) {
-                showSetupSheet = true
-            }
+            OpenCodeButton(variant: .fullWidthText(title: "Connect to server"), action: onConnectClick)
             Spacer()
         }
         .padding(24)

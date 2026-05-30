@@ -21,6 +21,28 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_readsSessionIdFromMessageInfo() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"message.updated","properties":{"info":{"sessionID":"ses-1","id":"msg-1","role":"user"}}}}""",
+            )
+
+        assertEquals("message.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_readsSessionIdFromMessagePart() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"message.part.updated","properties":{"part":{"sessionID":"ses-1","id":"prt-1","type":"text"}}}}""",
+            )
+
+        assertEquals("message.part.updated", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
     fun parseEvent_readsUnwrappedPayload() {
         val event =
             adapter.parseEvent(
