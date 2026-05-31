@@ -35,4 +35,3 @@
 ## Remaining
 
 - Permission request UI slice
-- Abort UX slice
