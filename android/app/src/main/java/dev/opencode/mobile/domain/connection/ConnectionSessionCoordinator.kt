@@ -20,6 +20,8 @@ class ConnectionSessionCoordinator
         private val profileSavedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileSaved: SharedFlow<Unit> = profileSavedEvents.asSharedFlow()
 
+        fun currentProfile(): ConnectionProfile? = activeConnectionManager.currentProfile()
+
         suspend fun saveProfile(profile: ConnectionProfile) {
             activeConnectionManager.applyProfile(profile)
             httpClient.rebuild()

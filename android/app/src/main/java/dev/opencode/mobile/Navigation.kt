@@ -50,6 +50,7 @@ import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.root.AppRootState
+import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 
@@ -100,12 +101,24 @@ fun MainNavigation() {
                                     entry<ProjectListHome> {
                                         RouteSurface {
                                             MainScreen(
-                                                onDeveloperComponentsClick = { backStack.add(ComponentGalleryHome) },
+                                                onSettingsClick = { backStack.add(SettingsHome) },
                                                 onSessionClick = { target ->
                                                     backStack.add(SessionChat(target.sessionId, target.title, target.worktree))
                                                 },
                                                 onEditConnectionClick = { profile ->
                                                     presentConnectionSetup(initialProfile = profile)
+                                                },
+                                            )
+                                        }
+                                    }
+                                    entry<SettingsHome> {
+                                        RouteSurface {
+                                            SettingsScreen(
+                                                onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onConnectionSetup = {
+                                                    setupViewModel.configureFromCurrentProfile()
+                                                    connectionSetupVisible = true
                                                 },
                                             )
                                         }

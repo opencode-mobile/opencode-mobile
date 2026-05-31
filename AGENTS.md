@@ -86,6 +86,10 @@ Do not add these to v1 without revisiting the project docs:
   work happens.
 - Record intentional platform differences in the same change that introduces
   them.
+- On iOS, do not place design-system list components (OpenCodeListItem, etc.)
+  inside SwiftUI `List`. The components have their own padding, background, and
+  tap handling. Use `ScrollView` + `VStack` with manual section headers instead
+  to avoid conflicting row insets, separators, and double padding.
 
 ## API Assumptions
 
