@@ -245,9 +245,9 @@ struct SessionChatView: View {
                 .foregroundStyle(OpenCodeColors.textPrimary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
+                .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 8)
                         .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
                 )
         case .command, .tool, .unknown:
