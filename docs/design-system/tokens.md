@@ -3,84 +3,152 @@
 This document is the canonical planning source for design-system tokens before
 native app implementation exists.
 
-OpenCode web theme evidence is recorded in
-`docs/design-system/opencode-web-theme.md`. Use it as source material when
-choosing primitive palette values and semantic token mappings.
-
 The token system has four levels:
 
-1. Primitive palette
-2. Base semantic tokens
+1. Primitive palette (seed colors from the OC-2 theme JSON)
+2. Base semantic tokens (resolved from palette seeds via the theme resolver)
 3. Component tokens
 4. Platform mappings
 
-## Primitive Palette
+## Theme JSON Format
 
-Primitive palette values are raw color values and other low-level design values.
-They describe available ingredients, not product meaning.
+The canonical theme source is an OC-2 format JSON file bundled with each app:
 
-Examples:
+```json
+{
+  "$schema": "https://opencode.ai/desktop-theme.json",
+  "name": "OC-2",
+  "id": "oc-2",
+  "light": {
+    "palette": { "neutral": "#f7f7f7", "ink": "#171311", ... },
+    "overrides": { "text-strong": "#171717", ... }
+  },
+  "dark": {
+    "palette": { "neutral": "#1f1f1f", "ink": "#f1ece8", ... },
+    "overrides": { "text-strong": "#EDEDED", ... }
+  }
+}
+```
 
-- `palette.neutral.0`
-- `palette.neutral.950`
-- `palette.accent.blue.500`
-- `palette.red.600`
+Both apps load this at runtime, run the resolver, and produce the resolved token
+dictionary. Imported themes follow the same pipeline.
 
-Primitive values should not be used directly by feature screens.
+## Palette Seeds
 
-## Base Semantic Tokens
+Palette seeds are the primitive input to the resolver. Every theme must provide
+these for each mode:
 
-Base semantic tokens describe product meaning that should stay consistent across
-iOS and Android.
+| Seed | Purpose |
+|---|---|
+| `neutral` | Base color for backgrounds, surfaces, text hierarchy. Highest-impact seed. |
+| `ink` | Tunes readable foreground/body tones alongside `neutral`. |
+| `primary` | Brand seed. Generates brand surfaces, text-on-brand tokens. Not button fills. |
+| `success` | Success surfaces, borders, icons, syntax success. |
+| `warning` | Warning surfaces, borders, icons, syntax warning. |
+| `error` | Critical/error surfaces, borders, icons, syntax critical. |
+| `info` | Info surfaces, borders, icons, agent plan, syntax property/info. |
+| `interactive` | Interaction state: focus, selection, links, active inputs. |
+| `diffAdd` | Added diff surfaces, text, icons (optional; falls back to `success`). |
+| `diffDelete` | Deleted diff surfaces, text, icons (optional; falls back to `error`). |
 
-Examples:
+## Resolved Semantic Tokens
 
-- `color.background.primary`
-- `color.background.secondary`
-- `color.text.primary`
-- `color.text.secondary`
-- `color.border.subtle`
-- `color.status.error`
-- `color.status.warning`
-- `color.status.success`
+The resolver expands palette seeds into resolved tokens, then applies overrides.
+The canonical tokens match the OpenCode desktop token schema:
 
-Semantic tokens may map to different platform APIs, but the meaning should stay
-the same.
+### Background & Surface
 
-## Native Semantic Token Values
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `background-base` | `#F8F8F8` | `#1C1C1C` |
+| `surface-base` | `#F8F8F8` | `#1C1C1C` |
+| `surface-base-hover` | `#0000000A` | `#FFFFFF0D` |
+| `surface-raised-base` | `#F3F3F3` | `#232323` |
+| `surface-raised-base-hover` | `#EDEDED` | `#282828` |
+| `surface-interactive-weak` | `#F5FAFF` | `#0D172B` |
+| `surface-success-base` | `#E6FFE5` | `#022B00` |
+| `surface-critical-base` | `#FFF2F0` | `#1F0603` |
 
-This is the first native light/dark token set, derived from the OpenCode web
-theme evidence. Feature screens and reusable components should reference these
-semantic meanings through platform theme APIs instead of hard-coding raw values.
+### Text
 
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `text-strong` | `#171717` | `#EDEDED` |
+| `text-base` | `#6F6F6F` | `#A0A0A0` |
+| `text-weak` | `#8F8F8F` | `#707070` |
+| `text-weaker` | `#C7C7C7` | `#505050` |
+| `text-interactive-base` | `#034CFF` | `#8CB0FF` |
+| `text-on-brand-base` | resolved from `primary` seed | resolved from `primary` seed |
+| `icon-invert-base` | `#FFFFFF` | `#1C1C1C` |
 
-| Token                        | Light       | Dark      |
-| ---------------------------- | ----------- | --------- |
-| `color.background.primary`   | `#f8f8f8`   | `#121212` |
-| `color.background.secondary` | `#f3f3f3`   | `#191919` |
-| `color.background.elevated`  | `#fcfcfc`   | `#151515` |
-| `color.surface.primary`      | `#ffffff`   | `#1C1C1C` |
-| `color.surface.secondary`    | `#f3f3f3`   | `#282727` |
-| `color.surface.inset`        | `#f0f0f0`   | `#202020` |
-| `color.text.primary`         | `#171717`   | `#EDEDED` |
-| `color.text.secondary`       | `#6f6f6f`   | `#A0A0A0` |
-| `color.text.tertiary`        | `#8f8f8f`   | `#707070` |
-| `color.text.disabled`        | `#c7c7c7`   | `#505050` |
-| `color.text.interactive`     | `#034cff`   | `#c0d4fb` |
-| `color.border.subtle`        | `#e5e5e5`   | `#282828` |
-| `color.border.default`       | `#00000029` | `#4d4c4a` |
-| `color.icon.default`         | `#8f8f8f`   | `#7E7E7E` |
-| `color.icon.strong`          | `#171717`   | `#ede8e4` |
-| `color.status.success`       | `#12c905`   | `#089b00` |
-| `color.status.warning`       | `#fbdd46`   | `#c78b05` |
-| `color.status.error`         | `#fc533a`   | `#cb321c` |
-| `color.status.info`          | `#a753ae`   | `#cd73d5` |
+### Border
 
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `border-weak-base` | `#DBDBDB` | `#282828` |
+| `border-weaker-base` | `#E8E8E8` | `#232323` |
 
-Android maps these values into Material 3 `ColorScheme` roles in
-`android/app/src/main/java/dev/opencode/mobile/theme/Theme.kt`. iOS exposes the
-same meanings through SwiftUI colors in
-`ios/OpenCode Mobile/OpenCode Mobile/OpenCodeTheme.swift`.
+### Icon
+
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `icon-base` | `#8F8F8F` | `#7E7E7E` |
+| `icon-weak-base` | `#C7C7C7` | `#343434` |
+| `icon-strong-base` | `#171717` | `#EDEDED` |
+
+### Button
+
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `button-primary-base` | resolved from `ink` | resolved from `ink` |
+| `button-secondary-base` | resolved from `neutral` | resolved from `neutral` |
+| `button-secondary-hover` | resolved from `neutral` | resolved from `neutral` |
+
+### Semantic Status
+
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `interactive` | `#034CFF` | `#034CFF` |
+| `success` | `#12C905` | `#12C905` |
+| `warning` | `#FFDC17` | `#FCD53A` |
+| `error` | `#FC533A` | `#FC533A` |
+| `info` | `#A753AE` | `#EDB2F1` |
+| `diff-add` | `#9FF29A` | `#C8FFC4` |
+| `diff-delete` | `#FC533A` | `#FC533A` |
+
+### Syntax (code highlighting)
+
+| Token | OC-2 Light | OC-2 Dark |
+|---|---|---|
+| `syntax-comment` | `#7A7A7A` | `#8F8F8F` |
+| `syntax-keyword` | `#A753AE` | `#EDB2F1` |
+| `syntax-string` | `#00CEB9` | `#00CEB9` |
+| `syntax-primitive` | `#034CFF` | `#8CB0FF` |
+| `syntax-property` | `#A753AE` | `#FAB283` |
+| `syntax-type` | `#8A6F00` | `#FCD53A` |
+| `syntax-constant` | `#007B80` | `#93E9F6` |
+| `syntax-critical` | `#FF8C00` | `#FAB283` |
+| `syntax-diff-delete` | `#FF8C00` | `#FAB283` |
+| `syntax-diff-unknown` | `#A753AE` | `#EDB2F1` |
+
+### Markdown (rendered markdown colors)
+
+| Token | Purpose |
+|---|---|
+| `markdown-h1` | Heading 1 text |
+| `markdown-h2` | Heading 2 text |
+| `markdown-h3` | Heading 3 text |
+| `markdown-link-text` | Link text |
+| `markdown-link-underline` | Link underline |
+| `markdown-code-text` | Inline code text |
+| `markdown-code-bg` | Inline code background |
+| `markdown-quote-text` | Blockquote text |
+| `markdown-quote-bar` | Blockquote bar |
+| `markdown-list-marker` | List bullet/number |
+| `markdown-image` | Image label/title |
+| `markdown-hr` | Horizontal rule |
+| `markdown-strong` | Bold text accent |
+| `markdown-em` | Emphasized text accent |
 
 ## Component Tokens
 
@@ -103,8 +171,8 @@ states, variants, or platforms.
 The outer list-row surface (`OpenCodeListItem`) uses one shared corner radius on
 iOS and Android when the row owns a visible container. **`plain`** unselected
 rows are transparent, borderless, and cornerless. **`card`** unselected rows use
-`color.surface.primary` plus a **1px** stroke from `color.border.subtle`.
-Selected rows in either style use `color.surface.secondary` with the shared
+`surface-base` plus a **1px** stroke from `border-weaker-base`.
+Selected rows in either style use `surface-raised-base` with the shared
 corner radius.
 
 | Token | Value |
@@ -223,8 +291,8 @@ Reusable outgoing prompt card for session conversations.
 
 Platform mappings translate semantic and component tokens into native APIs:
 
-- iOS: SwiftUI colors, materials, shapes, and typography roles.
-- Android: Material 3 color roles, typography, shapes, and Compose modifiers.
+- iOS: SwiftUI colors through `OpenCodeColors` + `ThemeManager`.
+- Android: Material 3 color roles + custom tokens through `ThemeResolver`.
 
 Mappings may differ when platform conventions require it. Record intentional
 differences in `docs/design-system/divergences.md`.

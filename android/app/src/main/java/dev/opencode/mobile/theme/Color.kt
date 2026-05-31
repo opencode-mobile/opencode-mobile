@@ -1,49 +1,30 @@
 package dev.opencode.mobile.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-internal val LightBackgroundPrimary = Color(0xFFF8F8F8)
-internal val LightBackgroundSecondary = Color(0xFFF3F3F3)
-internal val LightBackgroundElevated = Color(0xFFFCFCFC)
-internal val LightSurfacePrimary = Color(0xFFFFFFFF)
-internal val LightSurfaceSecondary = Color(0xFFF3F3F3)
-internal val LightSurfaceInset = Color(0xFFF0F0F0)
-internal val LightTextPrimary = Color(0xFF171717)
-internal val LightTextSecondary = Color(0xFF6F6F6F)
-internal val LightTextTertiary = Color(0xFF8F8F8F)
-internal val LightTextDisabled = Color(0xFFC7C7C7)
-internal val LightTextInteractive = Color(0xFF034CFF)
-internal val LightBorderSubtle = Color(0xFFE5E5E5)
-internal val LightBorderDefault = Color(0x29000000)
-internal val LightIconDefault = Color(0xFF8F8F8F)
-internal val LightIconStrong = Color(0xFF171717)
-internal val LightStatusSuccess = Color(0xFF12C905)
-internal val LightStatusWarning = Color(0xFFFBDD46)
-internal val LightStatusError = Color(0xFFFC533A)
-internal val LightStatusInfo = Color(0xFFA753AE)
+/**
+ * Resolve a named semantic token from the current theme at composition time.
+ * Tokens match the OpenCode desktop theme schema (e.g. "text-strong", "surface-base").
+ */
+@Composable
+fun openCodeColor(token: String): Color {
+    val isDark = isSystemInDarkTheme()
+    val hex = if (isDark) ThemeManager.resolvedDark[token] else ThemeManager.resolvedLight[token]
+    return ThemeResolver.parseHexColor(hex)
+}
 
-internal val DarkBackgroundPrimary = Color(0xFF121212)
-internal val DarkBackgroundSecondary = Color(0xFF191919)
-internal val DarkBackgroundElevated = Color(0xFF151515)
-internal val DarkSurfacePrimary = Color(0xFF1C1C1C)
-internal val DarkSurfaceSecondary = Color(0xFF282727)
-internal val DarkSurfaceInset = Color(0xFF202020)
-internal val DarkTextPrimary = Color(0xFFEDEDED)
-internal val DarkTextSecondary = Color(0xFFA0A0A0)
-internal val DarkTextTertiary = Color(0xFF707070)
-internal val DarkTextDisabled = Color(0xFF505050)
-internal val DarkTextInteractive = Color(0xFFC0D4FB)
-internal val DarkBorderSubtle = Color(0xFF282828)
-internal val DarkBorderDefault = Color(0xFF4D4C4A)
-internal val DarkIconDefault = Color(0xFF7E7E7E)
-internal val DarkIconStrong = Color(0xFFEDE8E4)
-internal val DarkStatusSuccess = Color(0xFF089B00)
-internal val DarkStatusWarning = Color(0xFFC78B05)
-internal val DarkStatusError = Color(0xFFCB321C)
-internal val DarkStatusInfo = Color(0xFFCD73D5)
-internal val DarkInteractiveAccent = Color(0xFF1456F7)
+/**
+ * Resolve a named semantic token for a specific mode without composition.
+ */
+fun openCodeColor(token: String, isDark: Boolean): Color {
+    val hex = if (isDark) ThemeManager.resolvedDark[token] else ThemeManager.resolvedLight[token]
+    return ThemeResolver.parseHexColor(hex)
+}
 
-// List item letter badge (component tokens — listItem.startDecorator.letter.*)
+// --- Letter badge colors (no desktop equivalent, hardcoded component tokens) ---
+
 internal val LightListItemLetterVioletFill = Color(0xFF4C3D5C)
 internal val LightListItemLetterVioletTint = Color(0xFFE2D5F5)
 internal val DarkListItemLetterVioletFill = Color(0xFF3A2F47)
