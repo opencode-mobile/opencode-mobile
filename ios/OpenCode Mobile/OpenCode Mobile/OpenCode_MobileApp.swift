@@ -23,6 +23,10 @@ struct OpenCode_MobileApp: App {
         }
     }()
 
+    init() {
+        _ = ThemeManager.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

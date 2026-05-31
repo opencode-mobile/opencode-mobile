@@ -51,4 +51,4 @@
 ## Remaining Work
 
 - Server-backed history and async send: see [Message Repository](../message-repository/progress.md).
-- Add stream updates, abort behavior, and permission request handling — stream updates shipped via [Foreground Event Stream](../foreground-event-stream/progress.md).
+- Add stream updates and permission request handling — stream updates and abort behavior shipped via [Foreground Event Stream](../foreground-event-stream/progress.md).

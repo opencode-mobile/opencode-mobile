@@ -46,6 +46,15 @@ icons:
   - name: search
     style: filled
     notes: SF Symbol magnifyingglass
+  - name: settings
+    style: filled
+    notes: Gear — home top bar Settings action
+  - name: architecture
+    style: filled
+    notes: Column/blueprint — Component Gallery entry in Settings
+  - name: cloud
+    style: filled
+    notes: Cloud — Server Connection entry in Settings
   - name: stop_circle
     style: filled
     notes: SF Symbol stop.circle

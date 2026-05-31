@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object ProjectListHome : NavKey
 
+@Serializable data object SettingsHome : NavKey
+
 @Serializable data object ComponentGalleryHome : NavKey
 
 @Serializable data class ComponentGalleryDetail(

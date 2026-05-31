@@ -22,6 +22,23 @@ implementation belong in the feature's `parity-gaps.md`.
 
 ## Current Divergences
 
+## Letter badge colors
+
+- Status: intentional
+- Area: token
+- Shared intent: `OpenCodeListItem` start-decorator letter badges use the same 5
+  accent pairs (violet, teal, amber, blue, rose) on both platforms.
+- iOS behavior: `LetterAccent` enum exposes `badgeFill` and `badgeTint` as
+  hardcoded light/dark color pairs in `OpenCodeColors`.
+- Android behavior: `LetterAccent` enum exposes `badgeColors(useDarkTheme)` with
+  the same hardcoded light/dark color pairs in `Color.kt`.
+- Reason: the 5 letter-badge accent pairs have no equivalent in the OpenCode
+  desktop theme JSON schema. They are component-level tokens, not derived from
+  palette seeds, and are not expected to change when a custom theme is imported.
+  Hardcoding them avoids unnecessary resolver complexity.
+- Review trigger: if a future theme JSON schema adds letter-badge accent seeds,
+  migrate these to the resolver.
+
 ## Material icon platform types
 
 - Status: intentional

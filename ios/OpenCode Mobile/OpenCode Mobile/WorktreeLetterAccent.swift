@@ -1,7 +1,8 @@
 import Foundation
 
 func letterAccent(for worktree: String) -> LetterAccent {
-    let index = abs(worktree.hashValue) % LetterAccent.allCases.count
+    let hash = worktree.utf8.reduce(5381) { ($0 << 5) &+ $0 &+ Int($1) }
+    let index = abs(hash) % LetterAccent.allCases.count
     return LetterAccent.allCases[index]
 }
 

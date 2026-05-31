@@ -39,7 +39,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun MainScreen(
-    onDeveloperComponentsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     modifier: Modifier = Modifier,
@@ -50,7 +50,7 @@ fun MainScreen(
     MainScreen(
         uiState = state,
         liveUpdatesConnectionState = liveUpdatesConnectionState,
-        onDeveloperComponentsClick = onDeveloperComponentsClick,
+        onSettingsClick = onSettingsClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
         onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
@@ -71,7 +71,7 @@ fun MainScreen(
 internal fun MainScreen(
     uiState: MainScreenUiState,
     liveUpdatesConnectionState: EventStreamConnectionState,
-    onDeveloperComponentsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
     onRetryProbe: () -> Unit,
@@ -116,14 +116,9 @@ internal fun MainScreen(
                 actions =
                     listOf(
                         OpenCodeTopBarAction.Icon(
-                            imageVector = OpenCodeIcons.Edit,
-                            contentDescription = "Edit connection",
-                            onClick = onEditConnection,
-                        ),
-                        OpenCodeTopBarAction.Icon(
-                            imageVector = OpenCodeIcons.Widgets,
-                            contentDescription = "Developer components",
-                            onClick = onDeveloperComponentsClick,
+                            imageVector = OpenCodeIcons.Settings,
+                            contentDescription = "Settings",
+                            onClick = onSettingsClick,
                         ),
                     ),
             )
@@ -337,7 +332,7 @@ fun MainScreenPreview() {
                         ),
                 ),
             liveUpdatesConnectionState = EventStreamConnectionState.Connected,
-            onDeveloperComponentsClick = {},
+            onSettingsClick = {},
             onSessionClick = {},
             onEditConnection = {},
             onRetryProbe = {},

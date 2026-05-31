@@ -9,6 +9,9 @@ enum class LetterAccent {
     Amber,
     Blue,
     Rose,
+    Red,
+    Green,
+    Indigo,
 }
 
 /** Returns [fill, tint] for the letter badge for the current theme. */
@@ -43,5 +46,23 @@ fun LetterAccent.badgeColors(useDarkTheme: Boolean): Pair<Color, Color> =
                 DarkListItemLetterRoseFill to DarkListItemLetterRoseTint
             } else {
                 LightListItemLetterRoseFill to LightListItemLetterRoseTint
+            }
+        LetterAccent.Red ->
+            if (useDarkTheme) {
+                DarkListItemLetterRedFill to DarkListItemLetterRedTint
+            } else {
+                LightListItemLetterRedFill to LightListItemLetterRedTint
+            }
+        LetterAccent.Green ->
+            if (useDarkTheme) {
+                DarkListItemLetterGreenFill to DarkListItemLetterGreenTint
+            } else {
+                LightListItemLetterGreenFill to LightListItemLetterGreenTint
+            }
+        LetterAccent.Indigo ->
+            if (useDarkTheme) {
+                DarkListItemLetterIndigoFill to DarkListItemLetterIndigoTint
+            } else {
+                LightListItemLetterIndigoFill to LightListItemLetterIndigoTint
             }
     }

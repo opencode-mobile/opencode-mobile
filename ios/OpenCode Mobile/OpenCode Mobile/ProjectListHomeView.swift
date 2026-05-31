@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
-    @State private var showComponentGallery = false
+    @State private var showSettings = false
     @State private var selectedSession: SessionListItem?
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
 
@@ -16,8 +16,7 @@ struct ProjectListHomeView: View {
             OpenCodeTopBar(
                 title: "OpenCode Mobile",
                 actions: [
-                    .icon(.edit, accessibilityLabel: "Edit connection", action: { presentConnectionSetup() }),
-                    .icon(.widgets, accessibilityLabel: "Developer components", action: { showComponentGallery = true }),
+                    .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
                 ],
                 showDivider: true
             )
@@ -29,8 +28,8 @@ struct ProjectListHomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundPrimary)
-        .navigationDestination(isPresented: $showComponentGallery) {
-            ComponentGalleryHomeView()
+        .navigationDestination(isPresented: $showSettings) {
+            SettingsView(onConnectionSetup: presentConnectionSetup)
         }
         .navigationDestination(item: $selectedSession) { session in
             SessionChatView(session: session)
@@ -342,7 +341,7 @@ private struct PreviewSessionRepository: SessionRepository {
     func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func forkSession(id: String, atMessageID: String?) async throws -> Session { fatalError() }
-    func abortSession(id: String) async throws -> Bool { fatalError() }
+    func abortSession(id: String, directory: String?) async throws -> Bool { fatalError() }
     func shareSession(id: String) async throws -> Session { fatalError() }
     func unshareSession(id: String) async throws -> Session { fatalError() }
     func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] { fatalError() }

@@ -58,7 +58,7 @@ struct OpenCodeOutgoingMessage: View {
         .background {
             measurementText
         }
-        .background(OpenCodeColors.surfaceInset, in: RoundedRectangle(cornerRadius: 8))
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 

@@ -227,6 +227,23 @@ class SessionChatViewModel
             }
         }
 
+        fun abort() {
+            val sessionId = boundSessionId ?: return
+            val worktree = boundWorktree ?: return
+            viewModelScope.launch {
+                _uiState.update { it.copy(isAborting = true) }
+                runCatching { sessionRepository.abortSession(sessionId, directory = worktree) }
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(isAborting = false, errorMessage = errorMessage(throwable))
+                        }
+                    }
+                    .onSuccess {
+                        _uiState.update { it.copy(isAborting = false) }
+                    }
+            }
+        }
+
         private fun logSendFailure(throwable: Throwable) {
             runCatching { Log.e(TAG, "sendPromptAsync failed", throwable) }
         }
@@ -395,6 +412,7 @@ data class SessionChatUiState(
     val modelNotice: String?,
     val isSending: Boolean = false,
     val isRefreshing: Boolean = false,
+    val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
     val errorMessage: String? = null,
 ) {

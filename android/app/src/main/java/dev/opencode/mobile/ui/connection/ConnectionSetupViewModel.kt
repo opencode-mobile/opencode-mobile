@@ -64,6 +64,10 @@ class ConnectionSetupViewModel
                 }
         }
 
+        fun configureFromCurrentProfile() {
+            configure(connectionSessionCoordinator.currentProfile())
+        }
+
         fun onBaseUrlChanged(value: String) {
             updateFields(baseUrl = value)
         }
