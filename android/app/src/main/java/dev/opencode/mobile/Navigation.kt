@@ -125,7 +125,10 @@ fun MainNavigation() {
                                     }
                                     entry<ComponentGalleryHome> {
                                         RouteSurface {
-                                            ComponentGalleryScreen(onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) })
+                                            ComponentGalleryScreen(
+                                                onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
                                         }
                                     }
                                     entry<ComponentGalleryDetail> { key ->
@@ -135,6 +138,7 @@ fun MainNavigation() {
                                                 entry = entry,
                                                 themeMode = themeMode,
                                                 onThemeModeChange = { themeMode = it },
+                                                onNavigateBack = { backStack.removeLastOrNull() },
                                             ) {
                                                 when (key.entryId) {
                                                     ComponentGalleryEntryId.Colors -> ColorGalleryScreen()

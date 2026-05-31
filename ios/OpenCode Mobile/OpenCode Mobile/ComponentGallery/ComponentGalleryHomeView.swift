@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ComponentGalleryHomeView: View {
     @State private var themeMode: ComponentGalleryThemeMode = .system
+    @Environment(\.dismiss) private var dismiss
 
     /// Matches Android: foundations first, then components (declaration order), not alphabetical by label.
     private var entriesByCategory: [(ComponentGalleryCategory, [ComponentGalleryEntry])] {
@@ -13,43 +14,39 @@ struct ComponentGalleryHomeView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Component Gallery")
-                        .font(OpenCodeTypography.display)
-                        .foregroundStyle(OpenCodeColors.textPrimary)
-                    Text("Developer-only review surface for design-system foundations and reusable components.")
-                        .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textSecondary)
-                }
-                .listRowBackground(OpenCodeColors.surfacePrimary)
-            }
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: "Component Gallery",
+                leading: .back(action: { dismiss() }),
+                showDivider: true
+            )
 
-            ForEach(entriesByCategory, id: \.0) { category, entries in
-                Section(category.rawValue) {
-                    ForEach(entries) { entry in
-                        NavigationLink {
-                            ComponentGalleryDetailView(entry: entry, themeMode: $themeMode)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(entry.title)
-                                    .font(OpenCodeTypography.heading)
-                                    .foregroundStyle(OpenCodeColors.textPrimary)
-                                Text(entry.description)
-                                    .font(OpenCodeTypography.bodySecondary)
-                                    .foregroundStyle(OpenCodeColors.textSecondary)
+            List {
+                ForEach(entriesByCategory, id: \.0) { category, entries in
+                    Section(category.rawValue) {
+                        ForEach(entries) { entry in
+                            NavigationLink {
+                                ComponentGalleryDetailView(entry: entry, themeMode: $themeMode)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(entry.title)
+                                        .font(OpenCodeTypography.heading)
+                                        .foregroundStyle(OpenCodeColors.textPrimary)
+                                    Text(entry.description)
+                                        .font(OpenCodeTypography.bodySecondary)
+                                        .foregroundStyle(OpenCodeColors.textSecondary)
+                                }
+                                .padding(.vertical, 4)
                             }
-                            .padding(.vertical, 4)
+                            .listRowBackground(OpenCodeColors.surfacePrimary)
                         }
-                        .listRowBackground(OpenCodeColors.surfacePrimary)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
         }
-        .navigationTitle("Gallery")
-        .scrollContentBackground(.hidden)
         .background(OpenCodeColors.backgroundPrimary)
+        .navigationBarHidden(true)
         .preferredColorScheme(themeMode.colorScheme)
     }
 }
