@@ -44,7 +44,36 @@ struct SessionChatViewModelTests {
         }
         #expect(isSending == false)
         #expect(repository.sendPromptAsyncCalled)
+        #expect(repository.sentOptions?.model?.providerID == "anthropic")
+        #expect(repository.sentOptions?.model?.modelID == "claude-sonnet")
+        #expect(repository.sentOptions?.variant == nil)
         #expect(messages.contains { $0.text == "Hello" })
+    }
+
+    @Test func loadMessages_initializesModelFromLatestMessage() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-2",
+                        role: .assistant,
+                        text: "Reply",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: "high",
+                        mode: nil,
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.state.composer.selectedModel?.option.providerID == "anthropic")
+        #expect(viewModel.state.composer.selectedModel?.option.modelID == "claude-sonnet")
+        #expect(viewModel.state.composer.selectedVariant == "high")
     }
 
     @Test func loadMessages_sortsOldestToNewest() async {
@@ -199,6 +228,7 @@ struct SessionChatViewModelTests {
             sessionTitle: "Title",
             worktree: "/repo",
             messageRepository: messageRepository,
+            modelRepository: FakeModelRepository(),
             sessionRepository: sessionRepository,
             messageLiveStore: messageLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore
@@ -215,6 +245,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let failListMessagesAfterSend: Bool
     let holdSend: Bool
     var sendPromptAsyncCalled = false
+    var sentOptions: PromptSendOptions?
     private var listMessagesCallCount = 0
     private var sendContinuation: CheckedContinuation<Void, Never>?
 
@@ -258,14 +289,28 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         fatalError()
     }
 
-    func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         sendPromptAsyncCalled = true
+        sentOptions = options
         if shouldFailSend {
             throw MessageError.transport("send failed")
         }
         if holdSend {
             await withCheckedContinuation { sendContinuation = $0 }
         }
+    }
+}
+
+private struct FakeModelRepository: ModelRepository {
+    func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
+        let option = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: ["low", "high"]
+        )
+        return ModelSelectionCatalog(options: [option], serverDefault: option)
     }
 }
 

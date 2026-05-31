@@ -9,6 +9,9 @@ struct MessageDomainAdapter: Sendable {
             role: role(from: info.role),
             text: partText.isEmpty ? errorText(from: info.error) : partText,
             model: info.model?.modelID ?? info.modelID,
+            modelProviderID: info.model?.providerID ?? info.providerID,
+            modelID: info.model?.modelID ?? info.modelID,
+            variant: info.variant,
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created
         )
@@ -16,6 +19,14 @@ struct MessageDomainAdapter: Sendable {
 
     func sendRequest(text: String) -> SendMessageRequestDTO {
         SendMessageRequestDTO(parts: [SendMessagePartDTO(type: "text", text: text)])
+    }
+
+    func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
+        SendMessageRequestDTO(
+            parts: [SendMessagePartDTO(type: "text", text: options.text)],
+            model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) },
+            variant: options.variant
+        )
     }
 
     func mapError(_ error: Error) -> MessageError {

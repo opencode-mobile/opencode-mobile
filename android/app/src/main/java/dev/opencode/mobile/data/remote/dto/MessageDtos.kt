@@ -20,6 +20,7 @@ data class MessageInfoDto(
     val model: MessageModelRefDto? = null,
     @SerialName("modelID") val modelId: String? = null,
     @SerialName("providerID") val providerId: String? = null,
+    val variant: String? = null,
     val time: MessageTimeDto? = null,
     val error: MessageErrorInfoDto? = null,
 )
@@ -60,6 +61,14 @@ data class MessagePartDto(
 @Serializable
 data class SendMessageRequestDto(
     val parts: List<SendMessagePartDto>,
+    val model: SendPromptModelDto? = null,
+    val variant: String? = null,
+)
+
+@Serializable
+data class SendPromptModelDto(
+    @SerialName("providerID") val providerId: String,
+    @SerialName("modelID") val modelId: String,
 )
 
 @Serializable

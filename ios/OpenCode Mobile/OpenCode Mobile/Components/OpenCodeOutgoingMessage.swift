@@ -36,14 +36,12 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 6) {
-                bubble
-                footer
-            }
-            .containerRelativeFrame(.horizontal, count: 100, span: 84, spacing: 0, alignment: .trailing)
+        VStack(alignment: .trailing, spacing: 6) {
+            bubble
+            footer
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.leading, 56)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 

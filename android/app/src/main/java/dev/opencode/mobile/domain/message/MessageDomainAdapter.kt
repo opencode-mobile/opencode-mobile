@@ -5,6 +5,7 @@ import dev.opencode.mobile.data.remote.dto.MessageErrorInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
+import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -16,6 +17,9 @@ class MessageDomainAdapter {
             role = toRole(info.role),
             text = displayText(dto.parts).ifBlank { errorText(info.error) },
             model = info.model?.modelId ?: info.modelId,
+            modelProviderId = info.model?.providerId ?: info.providerId,
+            modelId = info.model?.modelId ?: info.modelId,
+            variant = info.variant,
             mode = info.mode ?: info.agent,
             sentAtEpochMs = info.time?.created,
         )
@@ -23,6 +27,13 @@ class MessageDomainAdapter {
 
     fun toSendRequest(text: String): SendMessageRequestDto =
         SendMessageRequestDto(parts = listOf(SendMessagePartDto(type = "text", text = text)))
+
+    fun toSendRequest(options: PromptSendOptions): SendMessageRequestDto =
+        SendMessageRequestDto(
+            parts = listOf(SendMessagePartDto(type = "text", text = options.text)),
+            model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
+            variant = options.variant,
+        )
 
     fun mapError(throwable: Throwable): MessageError =
         when (throwable) {

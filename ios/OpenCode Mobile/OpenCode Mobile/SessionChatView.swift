@@ -5,7 +5,7 @@ import UIKit
 private enum ComposerPickerKind {
     case model
     case mode
-    case thinking
+    case variant
 
     var sheetTitle: String {
         switch self {
@@ -13,8 +13,8 @@ private enum ComposerPickerKind {
             "Model"
         case .mode:
             "Agent mode"
-        case .thinking:
-            "Thinking level"
+        case .variant:
+            "Variant"
         }
     }
 }
@@ -46,7 +46,8 @@ struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
-    @State private var scrollPosition: String?
+    @State private var modelFilterText = ""
+    @State private var hasInitializedTimelineScroll = false
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -80,6 +81,15 @@ struct SessionChatView: View {
                     .padding(.bottom, 8)
             }
 
+            if let notice = viewModel.state.composer.modelNotice {
+                Text(notice)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             timeline
             composer
         }
@@ -87,11 +97,19 @@ struct SessionChatView: View {
         .openCodeBottomSheet(
             isPresented: pickerPresentedBinding,
             title: activePicker?.sheetTitle ?? "",
-            content: { pickerSheetEntries },
+            scrollTargetID: modelPickerScrollTargetID,
+            pinnedContent: { modelPickerPinnedContent },
+            content: { pickerSheetEntries }
         )
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear {
+        .task {
             viewModel.startObserving()
+            await viewModel.loadMessages()
+        }
+        .onChange(of: activePicker) { _, picker in
+            if picker != .model {
+                modelFilterText = ""
+            }
         }
         .onDisappear {
             viewModel.stopObserving()
@@ -134,42 +152,45 @@ struct SessionChatView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                 }
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(messages) { message in
-                            HStack {
-                                if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                                    messageRow(message)
-                                    Spacer(minLength: 0)
-                                } else {
-                                    Spacer(minLength: 0)
-                                    messageRow(message)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(messages) { message in
+                                HStack {
+                                    if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                                        messageRow(message)
+                                        Spacer(minLength: 0)
+                                    } else {
+                                        Spacer(minLength: 0)
+                                        messageRow(message)
+                                    }
                                 }
+                                .id(message.id)
                             }
-                            .id(message.id)
+                            Color.clear
+                                .frame(height: 1)
+                                .id(TimelineScrollAnchor.bottom)
                         }
-                        Color.clear
-                            .frame(height: 1)
-                            .id(TimelineScrollAnchor.bottom)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .scrollTargetLayout()
-                }
-                .defaultScrollAnchor(.bottom)
-                .scrollPosition(id: $scrollPosition, anchor: .bottom)
-                .onChange(of: sessionID) { _, _ in
-                    scrollPosition = nil
-                }
-                .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
-                    await scrollTimelineToBottom(animated: scrollPosition != nil)
-                }
-                .refreshable {
-                    await viewModel.refreshMessages()
-                }
-                .overlay {
-                    if isRefreshing {
-                        ProgressView()
+                    .onChange(of: sessionID) { _, _ in
+                        hasInitializedTimelineScroll = false
+                    }
+                    .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
+                        await scrollTimelineToBottom(
+                            using: proxy,
+                            animated: hasInitializedTimelineScroll
+                        )
+                        hasInitializedTimelineScroll = true
+                    }
+                    .refreshable {
+                        await viewModel.refreshMessages()
+                    }
+                    .overlay {
+                        if isRefreshing {
+                            ProgressView()
+                        }
                     }
                 }
             }
@@ -182,23 +203,23 @@ struct SessionChatView: View {
     }
 
     @MainActor
-    private func scrollTimelineToBottom(animated: Bool) async {
+    private func scrollTimelineToBottom(using proxy: ScrollViewProxy, animated: Bool) async {
         guard !messagesFromLoadedState().isEmpty else { return }
         if animated {
             withAnimation {
-                scrollPosition = TimelineScrollAnchor.bottom
+                proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
             }
         } else {
-            scrollPosition = TimelineScrollAnchor.bottom
+            proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
         }
         await Task.yield()
         try? await Task.sleep(for: .milliseconds(50))
         if animated {
             withAnimation {
-                scrollPosition = TimelineScrollAnchor.bottom
+                proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
             }
         } else {
-            scrollPosition = TimelineScrollAnchor.bottom
+            proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
         }
     }
 
@@ -257,14 +278,16 @@ struct SessionChatView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: composer.selectedModel, selected: false) {
+                    OpenCodeChoiceBadge(label: composer.selectedModelLabel, selected: false) {
                         activePicker = .model
                     }
                     OpenCodeChoiceBadge(label: composer.selectedMode, selected: false) {
                         activePicker = .mode
                     }
-                    OpenCodeChoiceBadge(label: composer.selectedThinkingEffort, selected: false) {
-                        activePicker = .thinking
+                    if composer.canSelectVariant {
+                        OpenCodeChoiceBadge(label: composer.selectedVariantLabel, selected: false) {
+                            activePicker = .variant
+                        }
                     }
                 }
             }
@@ -279,7 +302,7 @@ struct SessionChatView: View {
 
                 OpenCodeButton(
                     variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
-                    enabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSending,
+                    enabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,
                     contrast: .low
                 ) {
                     Task { await viewModel.sendPrompt() }
@@ -308,9 +331,62 @@ struct SessionChatView: View {
         Binding(
             get: { activePicker != nil },
             set: { presented in
-                if !presented { activePicker = nil }
+                if !presented {
+                    activePicker = nil
+                    modelFilterText = ""
+                }
             },
         )
+    }
+
+    private func filteredModelOptions(from options: [ModelSelectionOption]) -> [ModelSelectionOption] {
+        options.filter { $0.matchesFilter(modelFilterText) }
+    }
+
+    private var modelPickerScrollTargetID: String? {
+        guard activePicker == .model else { return nil }
+        let composer = viewModel.state.composer
+        guard let selected = composer.selectedModel?.option else { return nil }
+        let filtered = filteredModelOptions(from: composer.modelOptions)
+        guard filtered.contains(where: { $0.id == selected.id }) else { return nil }
+        return selected.id
+    }
+
+    @ViewBuilder
+    private var modelPickerPinnedContent: some View {
+        if activePicker == .model {
+            let composer = viewModel.state.composer
+            if composer.modelOptions.count > SessionChatPickers.modelFilterThreshold {
+                ModelPickerFilterField(text: $modelFilterText)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modelPickerEntries(composer: SessionChatComposerState) -> some View {
+        let filtered = filteredModelOptions(from: composer.modelOptions)
+        if filtered.isEmpty {
+            OpenCodeBottomSheetEntry(
+                title: "No models match your filter",
+                enabled: false,
+                action: {}
+            )
+        } else {
+            ForEach(filtered) { model in
+                OpenCodeBottomSheetEntry(
+                    title: model.displayLabel,
+                    endDecorator: model == composer.selectedModel?.option
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        viewModel.selectModel(model)
+                        activePicker = nil
+                        modelFilterText = ""
+                    },
+                )
+                .id(model.id)
+            }
+        }
     }
 
     @ViewBuilder
@@ -318,18 +394,7 @@ struct SessionChatView: View {
         let composer = viewModel.state.composer
         switch activePicker {
         case .model:
-            ForEach(SessionChatPickers.models, id: \.self) { model in
-                OpenCodeBottomSheetEntry(
-                    title: model,
-                    endDecorator: model == composer.selectedModel
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        viewModel.selectModel(model)
-                        activePicker = nil
-                    },
-                )
-            }
+            modelPickerEntries(composer: composer)
         case .mode:
             ForEach(SessionChatPickers.modes, id: \.self) { mode in
                 OpenCodeBottomSheetEntry(
@@ -343,15 +408,15 @@ struct SessionChatView: View {
                     },
                 )
             }
-        case .thinking:
-            ForEach(SessionChatPickers.thinkingEfforts, id: \.self) { level in
+        case .variant:
+            ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
                     title: level,
-                    endDecorator: level == composer.selectedThinkingEffort
+                    endDecorator: level == composer.selectedVariantLabel
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
-                        viewModel.selectThinkingEffort(level)
+                        viewModel.selectVariant(level)
                         activePicker = nil
                     },
                 )
@@ -359,6 +424,21 @@ struct SessionChatView: View {
         case .none:
             EmptyView()
         }
+    }
+}
+
+private struct ModelPickerFilterField: View {
+    @Binding var text: String
+
+    var body: some View {
+        TextField("Filter models...", text: $text)
+            .font(OpenCodeTypography.body)
+            .foregroundStyle(OpenCodeColors.textPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
     }
 }
 

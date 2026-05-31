@@ -8,7 +8,7 @@ protocol ConnectionProfileStore: Sendable {
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async
 }
 
-struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, Sendable {
+struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
     private let defaults: UserDefaults
     private let secureCredentialStore: SecureCredentialStore
     private let worktreePrefix = "addedProjectWorktrees."

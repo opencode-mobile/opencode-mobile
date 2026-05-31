@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -60,7 +61,7 @@ private enum class ComposerPickerKind(
 ) {
     Model("Model"),
     Mode("Agent mode"),
-    Thinking("Thinking level"),
+    Variant("Variant"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,6 +80,13 @@ fun SessionChatScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
+    var modelFilterText by remember { mutableStateOf("") }
+
+    LaunchedEffect(activePicker) {
+        if (activePicker != ComposerPickerKind.Model) {
+            modelFilterText = ""
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -94,6 +102,15 @@ fun SessionChatScreen(
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            uiState.modelNotice?.let { notice ->
+                Text(
+                    text = notice,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -183,14 +200,15 @@ fun SessionChatScreen(
 
             SessionComposer(
                 composerText = uiState.composerText,
-                selectedModel = uiState.selectedModel,
+                selectedModel = uiState.selectedModelLabel,
                 selectedMode = uiState.selectedMode,
-                selectedThinkingEffort = uiState.selectedThinkingEffort,
-                sendEnabled = uiState.composerText.isNotBlank() && !uiState.isSending,
+                selectedVariant = uiState.selectedVariantLabel,
+                showVariant = uiState.canSelectVariant,
+                sendEnabled = uiState.composerText.isNotBlank() && uiState.selectedModel != null && !uiState.isSending,
                 onTextChange = viewModel::updateComposerText,
                 onModelClick = { activePicker = ComposerPickerKind.Model },
                 onModeClick = { activePicker = ComposerPickerKind.Mode },
-                onThinkingEffortClick = { activePicker = ComposerPickerKind.Thinking },
+                onVariantClick = { activePicker = ComposerPickerKind.Variant },
                 onAttachClick = {},
                 onSendClick = viewModel::sendPrompt,
             )
@@ -199,25 +217,36 @@ fun SessionChatScreen(
         OpenCodeBottomSheet(
             visible = activePicker != null,
             title = activePicker?.sheetTitle ?: "",
-            onDismissRequest = { activePicker = null },
+            onDismissRequest = {
+                activePicker = null
+                modelFilterText = ""
+            },
+            keyboardAware =
+                activePicker == ComposerPickerKind.Model &&
+                    uiState.modelOptions.size > SessionChatViewModel.ModelFilterThreshold,
+            pinnedContent = {
+                if (activePicker == ComposerPickerKind.Model &&
+                    uiState.modelOptions.size > SessionChatViewModel.ModelFilterThreshold
+                ) {
+                    ModelPickerFilterField(
+                        value = modelFilterText,
+                        onValueChange = { modelFilterText = it },
+                    )
+                }
+            },
         ) {
             when (activePicker) {
                 ComposerPickerKind.Model ->
-                    SessionChatViewModel.AvailableModels.forEach { model ->
-                        OpenCodeBottomSheetEntry(
-                            title = model,
-                            endDecorator =
-                                if (model == uiState.selectedModel) {
-                                    BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                                } else {
-                                    BottomSheetEntryDecorator.None
-                                },
-                            onClick = {
-                                viewModel.selectModel(model)
-                                activePicker = null
-                            },
-                        )
-                    }
+                    ModelPickerSheetContent(
+                        modelOptions = uiState.modelOptions,
+                        selectedModel = uiState.selectedModel?.option,
+                        filterText = modelFilterText,
+                        onSelectModel = { model ->
+                            viewModel.selectModel(model)
+                            activePicker = null
+                            modelFilterText = ""
+                        },
+                    )
                 ComposerPickerKind.Mode ->
                     SessionChatViewModel.AvailableModes.forEach { mode ->
                         OpenCodeBottomSheetEntry(
@@ -234,18 +263,18 @@ fun SessionChatScreen(
                             },
                         )
                     }
-                ComposerPickerKind.Thinking ->
-                    SessionChatViewModel.AvailableThinkingEfforts.forEach { effort ->
+                ComposerPickerKind.Variant ->
+                    uiState.variantOptions.forEach { variant ->
                         OpenCodeBottomSheetEntry(
-                            title = effort,
+                            title = variant,
                             endDecorator =
-                                if (effort == uiState.selectedThinkingEffort) {
+                                if (variant == uiState.selectedVariantLabel) {
                                     BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                                 } else {
                                     BottomSheetEntryDecorator.None
                                 },
                             onClick = {
-                                viewModel.selectThinkingEffort(effort)
+                                viewModel.selectVariant(variant)
                                 activePicker = null
                             },
                         )
@@ -254,6 +283,70 @@ fun SessionChatScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ModelPickerSheetContent(
+    modelOptions: List<ModelSelectionOption>,
+    selectedModel: ModelSelectionOption?,
+    filterText: String,
+    onSelectModel: (ModelSelectionOption) -> Unit,
+) {
+    val filteredModels = modelOptions.filter { it.matchesFilter(filterText) }
+
+    if (filteredModels.isEmpty()) {
+        OpenCodeBottomSheetEntry(
+            title = "No models match your filter",
+            enabled = false,
+            onClick = {},
+        )
+    } else {
+        filteredModels.forEach { model ->
+            OpenCodeBottomSheetEntry(
+                title = model.displayLabel,
+                endDecorator =
+                    if (model == selectedModel) {
+                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                    } else {
+                        BottomSheetEntryDecorator.None
+                    },
+                onClick = { onSelectModel(model) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelPickerFilterField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 8.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        decorationBox = { innerTextField ->
+            Box {
+                if (value.isBlank()) {
+                    Text(
+                        text = "Filter models...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
 }
 
 @Composable
@@ -354,12 +447,13 @@ private fun SessionComposer(
     composerText: String,
     selectedModel: String,
     selectedMode: String,
-    selectedThinkingEffort: String,
+    selectedVariant: String,
+    showVariant: Boolean,
     sendEnabled: Boolean,
     onTextChange: (String) -> Unit,
     onModelClick: () -> Unit,
     onModeClick: () -> Unit,
-    onThinkingEffortClick: () -> Unit,
+    onVariantClick: () -> Unit,
     onAttachClick: () -> Unit,
     onSendClick: () -> Unit,
 ) {
@@ -401,7 +495,9 @@ private fun SessionComposer(
         ) {
             OpenCodeChoiceBadge(label = selectedModel, selected = false, onClick = onModelClick)
             OpenCodeChoiceBadge(label = selectedMode, selected = false, onClick = onModeClick)
-            OpenCodeChoiceBadge(label = selectedThinkingEffort, selected = false, onClick = onThinkingEffortClick)
+            if (showVariant) {
+                OpenCodeChoiceBadge(label = selectedVariant, selected = false, onClick = onVariantClick)
+            }
         }
 
         Row(

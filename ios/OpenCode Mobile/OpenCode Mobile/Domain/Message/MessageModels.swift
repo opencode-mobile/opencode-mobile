@@ -5,8 +5,44 @@ struct Message: Equatable, Sendable, Identifiable {
     let role: MessageRole
     let text: String
     let model: String?
+    let modelProviderID: String?
+    let modelID: String?
+    let variant: String?
     let mode: String?
     let sentAtEpochMs: Int64?
+
+    init(
+        id: String,
+        role: MessageRole,
+        text: String,
+        model: String?,
+        modelProviderID: String? = nil,
+        modelID: String? = nil,
+        variant: String? = nil,
+        mode: String?,
+        sentAtEpochMs: Int64?
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.model = model
+        self.modelProviderID = modelProviderID
+        self.modelID = modelID
+        self.variant = variant
+        self.mode = mode
+        self.sentAtEpochMs = sentAtEpochMs
+    }
+}
+
+struct PromptSendOptions: Equatable, Sendable {
+    let text: String
+    let model: PromptModelSelection?
+    let variant: String?
+}
+
+struct PromptModelSelection: Equatable, Sendable {
+    let providerID: String
+    let modelID: String
 }
 
 enum MessageRole: String, Sendable {

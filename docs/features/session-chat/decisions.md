@@ -18,8 +18,8 @@
   place.
 - Reason: the composer needs to reserve the product shape for next-prompt
   controls while keeping this slice server-independent.
-- Revisit when: server-backed prompt sending defines supported model, mode, and
-  Thinking Effort option sources and request fields.
+- Revisited: 2026-05-30 by [Model Selection](../model-selection/plan.md).
+  Model and Variant are now server-backed; agent mode remains a local selector.
 
 ## Keep attachment as visual affordance only
 

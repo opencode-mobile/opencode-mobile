@@ -46,7 +46,7 @@
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
-  Thinking Effort; attachment remains a no-op.
+  Variant; attachment remains a no-op.
 
 ## Remaining Work
 

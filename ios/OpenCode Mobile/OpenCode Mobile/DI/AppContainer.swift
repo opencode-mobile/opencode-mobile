@@ -85,6 +85,23 @@ extension Container {
         }.singleton
     }
 
+    var modelsAPIClient: Factory<ModelsAPIClient> {
+        self { ModelsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var modelDomainAdapter: Factory<ModelDomainAdapter> {
+        self { ModelDomainAdapter() }.singleton
+    }
+
+    var modelRepository: Factory<any ModelRepository> {
+        self {
+            DefaultModelRepository(
+                api: self.modelsAPIClient(),
+                adapter: self.modelDomainAdapter()
+            )
+        }.singleton
+    }
+
     var eventsAPIClient: Factory<EventsAPIClient> {
         self { EventsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
@@ -171,6 +188,7 @@ extension Container {
                 sessionTitle: $0.sessionTitle,
                 worktree: $0.worktree,
                 messageRepository: self.messageRepository(),
+                modelRepository: self.modelRepository(),
                 sessionRepository: self.sessionRepository(),
                 messageLiveStore: self.messageLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore()
