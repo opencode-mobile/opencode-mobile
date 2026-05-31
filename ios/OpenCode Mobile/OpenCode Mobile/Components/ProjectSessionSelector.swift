@@ -188,15 +188,9 @@ struct ProjectSessionSelector: View {
 }
 
 private struct ProjectSessionSelectorTile: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     let project: ProjectSessionSelectorProject
     let selected: Bool
     let action: () -> Void
-
-    private var selectedOutlineColor: Color {
-        colorScheme == .dark ? .white : OpenCodeColors.borderDefault
-    }
 
     var body: some View {
         Button(action: action) {
@@ -209,7 +203,7 @@ private struct ProjectSessionSelectorTile: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(selected ? selectedOutlineColor : Color.clear, lineWidth: 3)
+                            .stroke(selected ? project.letterAccent.badgeTint : Color.clear, lineWidth: 3)
                     )
             }
         }

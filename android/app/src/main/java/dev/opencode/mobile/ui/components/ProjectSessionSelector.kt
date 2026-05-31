@@ -148,7 +148,6 @@ private fun ProjectSessionSelectorTile(
 ) {
     val dark = isSystemInDarkTheme()
     val (fill, tint) = project.letterAccent.badgeColors(dark)
-    val selectedColor = if (dark) Color.White else MaterialTheme.colorScheme.outline
     Box(
         modifier =
             Modifier
@@ -168,7 +167,7 @@ private fun ProjectSessionSelectorTile(
                     .background(fill)
                     .then(
                         if (selected) {
-                            Modifier.border(3.dp, selectedColor, RoundedCornerShape(12.dp))
+                            Modifier.border(3.dp, tint, RoundedCornerShape(12.dp))
                         } else {
                             Modifier
                         },
