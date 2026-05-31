@@ -3,17 +3,18 @@
 ## Intent
 
 Provide a reusable row treatment for selectable project and session lists with a
-consistent rounded surface, title-first hierarchy, optional **start decorator**
-(letter badge or icon), and optional trailing accessory.
+title-first hierarchy, optional **start decorator** (letter badge or icon), and
+optional trailing accessory.
 
 ## Public API
 
 - **Container style** (`OpenCodeListItemStyle`, default **`plain`**):
-  - **`plain`**: no outer stroke; unselected rows use `color.background.primary` so
-    they blend with scrollable lists. Selected rows use `color.surface.secondary`.
+  - **`plain`**: unselected rows are transparent, borderless, and cornerless so
+    they blend with scrollable lists. Selected rows use `color.surface.secondary`
+    with the shared row corner radius.
   - **`card`**: unselected rows use `color.surface.primary` plus a **1px** stroke
     from `color.border.subtle`; selected rows use `color.surface.secondary` and the
-    same stroke.
+    same stroke and corner radius.
 - Variants: default, selected.
 - States: enabled, disabled.
 - Required content: `title`.
@@ -34,8 +35,7 @@ separate public typography override.
 
 ## Token Usage
 
-- Semantic tokens: `color.background.primary`, `color.surface.primary`,
-  `color.surface.secondary`,
+- Semantic tokens: `color.surface.primary`, `color.surface.secondary`,
   `color.text.primary`, `color.text.secondary`, `color.text.disabled`,
   `color.border.subtle`, `color.icon.default`.
 - Component tokens: outer row corner radius — `listItem.cornerRadius` in
@@ -49,9 +49,9 @@ The component supports tap/click actions when a handler is provided. Selected
 rows use the secondary surface token. Disabled rows reduce emphasis and do not
 run actions. Long title/subtitle strings truncate to one line.
 
-`card` style adds the elevated surface fill and subtle border. `plain` omits the
-border and uses the page background when unselected. Corner radius is unchanged
-between styles.
+`card` style adds the elevated surface fill and subtle border. Unselected
+`plain` rows do not draw an outer container. Selected `plain` rows and all
+`card` rows use the shared row corner radius.
 
 The letter badge is treated as **decorative** for accessibility when the title
 already identifies the row; icons require explicit descriptions on Android and

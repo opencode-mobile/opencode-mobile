@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeButtonSize
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -29,6 +30,7 @@ private enum class GalleryButtonVariant {
 @Composable
 fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
     var variantName by rememberSaveable { mutableStateOf(GalleryButtonVariant.FullWidthText.name) }
+    var sizeName by rememberSaveable { mutableStateOf(OpenCodeButtonSize.Medium.name) }
     var contrastName by rememberSaveable { mutableStateOf(OpenCodeButtonContrast.High.name) }
     var enabled by rememberSaveable { mutableStateOf(true) }
 
@@ -51,6 +53,13 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeButtonContrast.valueOf(contrastName)
         } catch (_: IllegalArgumentException) {
             OpenCodeButtonContrast.High
+        }
+
+    val sizeSelection =
+        try {
+            OpenCodeButtonSize.valueOf(sizeName)
+        } catch (_: IllegalArgumentException) {
+            OpenCodeButtonSize.Large
         }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -91,10 +100,25 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpenCodeButtonSize.entries.forEach { option ->
+                OpenCodeChoiceBadge(
+                    label =
+                        when (option) {
+                            OpenCodeButtonSize.Large -> "Large"
+                            OpenCodeButtonSize.Medium -> "Medium"
+                        },
+                    selected = option == sizeSelection,
+                    onClick = { sizeName = option.name },
+                )
+            }
+        }
+
         OpenCodeButton(
             variant = variant,
             enabled = enabled,
             contrast = contrastSelection,
+            size = sizeSelection,
             onClick = {},
         )
     }

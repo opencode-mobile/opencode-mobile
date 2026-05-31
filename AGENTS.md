@@ -113,8 +113,8 @@ Do not add these to v1 without revisiting the project docs:
 
 Tooling-specific paths are symlinks:
 
-- `.cursor/skills` -> `.agents`
-- `.claude/skills` -> `.agents`
+- `.cursor/skills` -> `.agents/skills`
+- `.claude/skills` -> `.agents/skills`
 - `CLAUDE.md` -> `AGENTS.md`
 
 After cloning or when links are missing, run:
@@ -123,20 +123,21 @@ After cloning or when links are missing, run:
 ./scripts/sync-agent-links.sh
 ```
 
-Add or edit skills only under `.agents/<skill-name>/SKILL.md`. Do not create
-real directories at `.cursor/skills` or `.claude/skills`.
+Add or edit skills only under `.agents/skills/<skill-name>/SKILL.md`. Do not
+create real directories at `.cursor/skills` or `.claude/skills`.
 
 ## Skill Usage
 
-Project skills live under `.agents/` so any agent tooling can discover them.
+Project skills live under `.agents/skills/` so any agent tooling can discover
+them.
 
-- Use `.agents/design-system-component/SKILL.md` when adding or changing
+- Use `.agents/skills/design-system-component/SKILL.md` when adding or changing
   design-system tokens, typography, reusable components, component variants,
   previews, or gallery entries.
-- Use `.agents/synced-native-feature/SKILL.md` when planning or implementing a
-  feature that should exist in both native apps.
-- Use `.agents/run-github-actions/SKILL.md` when triggering GitHub Actions,
-  checking workflow status, or troubleshooting failed CI runs.
+- Use `.agents/skills/synced-native-feature/SKILL.md` when planning or
+  implementing a feature that should exist in both native apps.
+- Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
+  Actions, checking workflow status, or troubleshooting failed CI runs.
 
 ## Documentation Rules
 

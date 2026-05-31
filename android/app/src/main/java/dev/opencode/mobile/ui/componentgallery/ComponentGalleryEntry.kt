@@ -20,6 +20,7 @@ enum class ComponentGalleryEntryId {
     ListItem,
     ChoiceBadge,
     Button,
+    ProjectSessionSelector,
 }
 
 data class ComponentGalleryEntry(
@@ -83,6 +84,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Button,
             title = "Button",
             description = "Reusable action component with text and icon variants.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ProjectSessionSelector,
+            title = "Project Session Selector",
+            description = "Project-scoped session picker with project tiles and session actions.",
             category = ComponentGalleryCategory.Components,
         ),
     )

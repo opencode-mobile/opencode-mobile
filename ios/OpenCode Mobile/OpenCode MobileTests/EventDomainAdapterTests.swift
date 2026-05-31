@@ -69,7 +69,9 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
             continuation.yield(connectionState)
             connectionStateContinuations[id] = continuation
             continuation.onTermination = { [weak self] _ in
-                self?.connectionStateContinuations.removeValue(forKey: id)
+                Task { @MainActor [weak self] in
+                    self?.connectionStateContinuations.removeValue(forKey: id)
+                }
             }
         }
     }
@@ -79,7 +81,9 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
         return AsyncStream { continuation in
             continuations[id] = continuation
             continuation.onTermination = { [weak self] _ in
-                self?.continuations.removeValue(forKey: id)
+                Task { @MainActor [weak self] in
+                    self?.continuations.removeValue(forKey: id)
+                }
             }
         }
     }

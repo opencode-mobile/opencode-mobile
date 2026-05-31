@@ -28,13 +28,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -66,6 +66,8 @@ class MainScreenViewModel
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
+        private var requestedFocusWorktree: String? = null
+        private var homeFocusedWorktree: String? = null
 
         init {
             refresh()
@@ -111,8 +113,20 @@ class MainScreenViewModel
         fun addProject(worktree: String) {
             viewModelScope.launch {
                 connectionProfileStore.addWorktree(serverBaseUrl, worktree)
+                requestedFocusWorktree = worktree
                 dismissAddProjectSheet()
                 runHomeLoad(skipProbe = true)
+            }
+        }
+
+        fun focusProject(worktree: String) {
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded && state.sections.any { it.worktree == worktree }) {
+                    homeFocusedWorktree = worktree
+                    state.copy(focusedWorktree = worktree, projectSessionCreateError = null)
+                } else {
+                    state
+                }
             }
         }
 
@@ -138,23 +152,27 @@ class MainScreenViewModel
 
         fun createSession(worktree: String) {
             viewModelScope.launch {
-                runCatching { sessionRepository.createSession(directory = worktree) }
-                    .onSuccess { session ->
-                        _uiState.update { state ->
-                            when (state) {
-                                is MainScreenUiState.Loaded ->
-                                    state.copy(
-                                        pendingOpenSession =
-                                            SessionOpenTarget(
-                                                sessionId = session.id,
-                                                title = session.title,
-                                                worktree = worktree,
-                                            ),
-                                    )
-                                else -> state
-                            }
+                clearProjectSessionCreateError()
+                val createResult = runCatching { sessionRepository.createSession(directory = worktree) }
+                createResult.onSuccess { session ->
+                    _uiState.update { state ->
+                        if (state is MainScreenUiState.Loaded) {
+                            state.copy(
+                                pendingOpenSession =
+                                    SessionOpenTarget(
+                                        sessionId = session.id,
+                                        title = session.title,
+                                        worktree = worktree,
+                                    ),
+                            )
+                        } else {
+                            state
                         }
                     }
+                }
+                createResult.onFailure { error ->
+                    setProjectSessionCreateError(error.message ?: "Unable to create session")
+                }
             }
         }
 
@@ -191,18 +209,22 @@ class MainScreenViewModel
 
                 if (worktrees.isEmpty()) {
                     stopLiveObservations()
+                    homeFocusedWorktree = null
                     _uiState.value = MainScreenUiState.Empty()
                     return
                 }
 
                 val sections = loadProjectSections(worktrees)
+                val focusedWorktree = resolvedFocusedWorktree(sections)
+                homeFocusedWorktree = focusedWorktree
                 _uiState.value =
                     if (sections.isEmpty()) {
                         stopLiveObservations()
                         MainScreenUiState.Empty()
                     } else {
-                        MainScreenUiState.Loaded(sections = sections)
+                        MainScreenUiState.Loaded(sections = sections, focusedWorktree = focusedWorktree)
                     }
+                requestedFocusWorktree = null
                 if (_uiState.value is MainScreenUiState.Loaded) {
                     startLiveObservations(worktrees)
                 }
@@ -363,6 +385,28 @@ class MainScreenViewModel
             _uiState.value = state.copy(sections = updatedSections, seeAllSessions = updatedSeeAll)
         }
 
+        private fun resolvedFocusedWorktree(sections: List<ProjectSectionUi>): String? {
+            val requested = requestedFocusWorktree
+            if (requested != null && sections.any { it.worktree == requested }) return requested
+            val current = homeFocusedWorktree
+            if (current != null && sections.any { it.worktree == current }) return current
+            return sections.firstOrNull()?.worktree
+        }
+
+        private fun clearProjectSessionCreateError() {
+            setProjectSessionCreateError(null)
+        }
+
+        private fun setProjectSessionCreateError(message: String?) {
+            _uiState.update { state ->
+                when (state) {
+                    is MainScreenUiState.Empty -> state.copy(projectSessionCreateError = message)
+                    is MainScreenUiState.Loaded -> state.copy(projectSessionCreateError = message)
+                    else -> state
+                }
+            }
+        }
+
         private companion object {
             const val PREVIEW_SESSION_LIMIT = 3
         }
@@ -381,6 +425,7 @@ sealed interface MainScreenUiState {
         val showAddProjectSheet: Boolean = false,
         val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
         val addProjectError: String? = null,
+        val projectSessionCreateError: String? = null,
     ) : MainScreenUiState
 
     data class Loaded(
@@ -390,6 +435,8 @@ sealed interface MainScreenUiState {
         val addProjectError: String? = null,
         val seeAllSessions: SeeAllSessionsSheet? = null,
         val pendingOpenSession: SessionOpenTarget? = null,
+        val focusedWorktree: String? = null,
+        val projectSessionCreateError: String? = null,
     ) : MainScreenUiState
 }
 

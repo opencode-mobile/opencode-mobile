@@ -87,10 +87,10 @@ struct ProjectListHomeView: View {
             Spacer()
         case let .probeFailed(message):
             probeFailed(message)
-        case let .empty(_, _):
-            homeProjectsList(sections: [])
-        case let .loaded(sections, _, _, _):
-            homeProjectsList(sections: sections)
+        case let .empty(_, _, createError):
+            homeProjectsList(sections: [], focusedWorktree: nil, createError: createError)
+        case let .loaded(sections, _, _, _, focusedWorktree, createError):
+            homeProjectsList(sections: sections, focusedWorktree: focusedWorktree, createError: createError)
         }
     }
 
@@ -113,74 +113,40 @@ struct ProjectListHomeView: View {
         .padding(24)
     }
 
-    private func homeProjectsList(sections: [ProjectSectionItem]) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                browseProjectsListItem
-                if sections.isEmpty {
-                    Text("Add a project to see recent sessions.")
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textSecondary)
-                        .padding(.horizontal, 16)
+    private func homeProjectsList(
+        sections: [ProjectSectionItem],
+        focusedWorktree: String?,
+        createError: String?
+    ) -> some View {
+        GeometryReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ProjectSessionSelector(
+                        projects: sections.map(\.projectSessionSelectorProject),
+                        selectedWorktree: focusedWorktree,
+                        createError: createError,
+                        onProjectSelected: { viewModel.focusProject(worktree: $0) },
+                        onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                        onSessionSelected: { project, session in
+                            selectedSession = SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                        },
+                        onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
+                        onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
-                ForEach(sections) { section in
-                    projectSection(section)
-                }
+                .frame(minHeight: proxy.size.height, alignment: .bottom)
             }
-            .padding(.bottom, 16)
         }
         .background(OpenCodeColors.backgroundPrimary)
-    }
-
-    private var browseProjectsListItem: some View {
-        OpenCodeListItem(
-            title: "Browse projects",
-            startDecorator: .icon(.add, accessibilityLabel: "Browse projects"),
-            action: { Task { await viewModel.showAddProjectSheet() } }
-        )
-    }
-
-    private func projectSection(_ section: ProjectSectionItem) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            OpenCodeListItem(
-                title: section.displayName,
-                subtitle: section.pathSubtitle,
-                startDecorator: .letter(section.letter, section.letterAccent)
-            )
-            if let error = section.loadError {
-                Text(error)
-                    .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textSecondary)
-                    .padding(.leading, 16)
-            }
-            if section.previewSessions.isEmpty, section.loadError == nil {
-                OpenCodeListItem(
-                    title: "New Session",
-                    action: { Task { await viewModel.createSession(in: section.worktree) } }
-                )
-            } else {
-                ForEach(section.previewSessions) { session in
-                    OpenCodeListItem(
-                        title: session.title,
-                        subtitle: session.statusLabel,
-                        action: { selectedSession = session }
-                    )
-                }
-            }
-            if section.totalSessionCount > section.previewSessions.count {
-                OpenCodeListItem(
-                    title: "See all...",
-                    action: { viewModel.showSeeAllSessions(worktree: section.worktree) }
-                )
-            }
-        }
     }
 
     private var addProjectSheetBinding: Binding<Bool> {
         Binding(
             get: {
                 switch viewModel.state {
-                case let .empty(show, _), let .loaded(_, show, _, _):
+                case let .empty(show, _, _), let .loaded(_, show, _, _, _, _):
                     show
                 default:
                     false
@@ -196,7 +162,7 @@ struct ProjectListHomeView: View {
     private var addProjectSheet: some View {
         let candidates: [AddProjectCandidateItem] = {
             switch viewModel.state {
-            case let .empty(_, items), let .loaded(_, _, items, _):
+            case let .empty(_, items, _), let .loaded(_, _, items, _, _, _):
                 items
             default:
                 []
@@ -234,7 +200,7 @@ struct ProjectListHomeView: View {
     private var seeAllSheetBinding: Binding<SeeAllSessionsSheetState?> {
         Binding(
             get: {
-                if case let .loaded(_, _, _, sheet) = viewModel.state { sheet }
+                if case let .loaded(_, _, _, sheet, _, _) = viewModel.state { sheet }
                 else { nil }
             },
             set: { _ in viewModel.dismissSeeAllSessions() }
@@ -268,12 +234,39 @@ struct SessionListItem: Identifiable, Hashable {
     let title: String
     let worktree: String
     let statusLabel: String?
+    let updatedAtLabel: String?
 
-    init(id: String, title: String, worktree: String, statusLabel: String? = nil) {
+    init(id: String, title: String, worktree: String, statusLabel: String? = nil, updatedAtLabel: String? = nil) {
         self.id = id
         self.title = title
         self.worktree = worktree
         self.statusLabel = statusLabel
+        self.updatedAtLabel = updatedAtLabel
+    }
+}
+
+private extension ProjectSectionItem {
+    var projectSessionSelectorProject: ProjectSessionSelectorProject {
+        ProjectSessionSelectorProject(
+            worktree: worktree,
+            displayName: displayName,
+            pathSubtitle: pathSubtitle,
+            letter: letter,
+            letterAccent: letterAccent,
+            previewSessions: previewSessions.map(\.projectSessionSelectorSession),
+            totalSessionCount: totalSessionCount,
+            loadError: loadError
+        )
+    }
+}
+
+private extension SessionListItem {
+    var projectSessionSelectorSession: ProjectSessionSelectorSession {
+        ProjectSessionSelectorSession(
+            id: id,
+            title: title,
+            subtitle: updatedAtLabel ?? statusLabel
+        )
     }
 }
 

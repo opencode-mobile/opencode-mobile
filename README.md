@@ -11,7 +11,7 @@ This repository holds both app shells, shared product docs, design-system planni
 | `android/` | Kotlin, Jetpack Compose, Material 3 app |
 | `ios/OpenCode Mobile/` | SwiftUI app |
 | `docs/` | Architecture, feasibility, design system, feature slices |
-| `.agents/` | Shared agent skills (source of truth) |
+| `.agents/` | Shared agent guidance and canonical skills under `.agents/skills/` |
 | `scripts/` | Icon sync, OpenAPI fetch/generate, agent symlink setup |
 | `AGENTS.md` | Agent and contributor guide |
 
@@ -84,13 +84,13 @@ After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing
 
 ## Agent skills
 
-Skills live in `.agents/` and are symlinked for Cursor and Claude:
+Skills live in `.agents/skills/` and are symlinked for Cursor and Claude:
 
 ```bash
 ./scripts/sync-agent-links.sh
 ```
 
-`AGENTS.md` and `CLAUDE.md` share the same content. Edit skills under `.agents/<skill-name>/SKILL.md` only.
+`AGENTS.md` and `CLAUDE.md` share the same content. Edit skills under `.agents/skills/<skill-name>/SKILL.md` only.
 
 ## V1 scope (summary)
 

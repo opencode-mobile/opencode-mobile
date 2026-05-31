@@ -39,6 +39,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
@@ -132,6 +133,8 @@ fun MainNavigation() {
                                                     ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                     ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                     ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                                    ComponentGalleryEntryId.ProjectSessionSelector ->
+                                                        ProjectSessionSelectorGalleryScreen()
                                                 }
                                             }
                                         }

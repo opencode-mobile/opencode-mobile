@@ -14,6 +14,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case edit = "md_edit"
     case expandContent = "md_expand_content"
     case folder = "md_folder"
+    case list = "md_list"
     case moreVert = "md_more_vert"
     case search = "md_search"
     case stopCircle = "md_stop_circle"

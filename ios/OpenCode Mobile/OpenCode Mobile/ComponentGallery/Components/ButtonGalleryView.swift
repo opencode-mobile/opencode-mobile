@@ -20,6 +20,7 @@ private enum GalleryButtonVariant: String, CaseIterable, Identifiable {
 
 struct ButtonGalleryView: View {
     @State private var selectedVariant: GalleryButtonVariant = .fullWidth
+    @State private var selectedSize: OpenCodeButtonSize = .medium
     @State private var contrast: OpenCodeButtonContrast = .high
     @State private var enabled = true
 
@@ -74,7 +75,20 @@ struct ButtonGalleryView: View {
                 )
             }
 
-            OpenCodeButton(variant: variant, enabled: enabled, contrast: contrast, action: {})
+            HStack(spacing: 8) {
+                OpenCodeChoiceBadge(
+                    label: "Large",
+                    selected: selectedSize == .large,
+                    action: { selectedSize = .large }
+                )
+                OpenCodeChoiceBadge(
+                    label: "Medium",
+                    selected: selectedSize == .medium,
+                    action: { selectedSize = .medium }
+                )
+            }
+
+            OpenCodeButton(variant: variant, size: selectedSize, enabled: enabled, contrast: contrast, action: {})
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,10 +30,11 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
-import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.ProjectSessionSelector
+import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
+import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -56,6 +56,7 @@ fun MainScreen(
         onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
         onRefresh = viewModel::refresh,
         onAddProjectClick = viewModel::showAddProjectSheet,
+        onFocusProject = viewModel::focusProject,
         onDismissAddProject = viewModel::dismissAddProjectSheet,
         onSelectAddProject = viewModel::addProject,
         onSeeAllSessions = viewModel::showSeeAllSessions,
@@ -76,6 +77,7 @@ internal fun MainScreen(
     onRetryProbe: () -> Unit,
     onRefresh: () -> Unit,
     onAddProjectClick: () -> Unit,
+    onFocusProject: (String) -> Unit,
     onDismissAddProject: () -> Unit,
     onSelectAddProject: (String) -> Unit,
     onSeeAllSessions: (String) -> Unit,
@@ -154,9 +156,19 @@ internal fun MainScreen(
                             is MainScreenUiState.Loaded -> uiState.sections
                             else -> emptyList()
                         }
+                    val focusedWorktree = (uiState as? MainScreenUiState.Loaded)?.focusedWorktree
+                    val projectSessionCreateError =
+                        when (uiState) {
+                            is MainScreenUiState.Empty -> uiState.projectSessionCreateError
+                            is MainScreenUiState.Loaded -> uiState.projectSessionCreateError
+                            else -> null
+                        }
                     HomeProjectsContent(
                         sections = sections,
+                        focusedWorktree = focusedWorktree,
+                        projectSessionCreateError = projectSessionCreateError,
                         onBrowseProjectsClick = onAddProjectClick,
+                        onFocusProject = onFocusProject,
                         onSessionClick = onSessionClick,
                         onSeeAllSessions = onSeeAllSessions,
                         onNewSession = onNewSession,
@@ -229,18 +241,12 @@ private fun ProbeFailedContent(
 }
 
 @Composable
-private fun BrowseProjectsListItem(onClick: () -> Unit) {
-    OpenCodeListItem(
-        title = "Browse projects",
-        startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, contentDescription = "Browse projects"),
-        onClick = onClick,
-    )
-}
-
-@Composable
 private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
+    focusedWorktree: String?,
+    projectSessionCreateError: String?,
     onBrowseProjectsClick: () -> Unit,
+    onFocusProject: (String) -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onSeeAllSessions: (String) -> Unit,
     onNewSession: (String) -> Unit,
@@ -249,75 +255,50 @@ private fun HomeProjectsContent(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.Bottom,
     ) {
-        item(key = "browse-projects") {
-            BrowseProjectsListItem(onClick = onBrowseProjectsClick)
-        }
-        if (sections.isEmpty()) {
-            item(key = "empty-hint") {
-                Text(
-                    text = "Add a project to see recent sessions.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-        }
-        items(sections, key = { it.worktree }) { section ->
-            ProjectSection(
-                section = section,
-                onSessionClick = onSessionClick,
-                onSeeAllSessions = { onSeeAllSessions(section.worktree) },
+        item(key = "project-session-selector") {
+            ProjectSessionSelector(
+                projects = sections.map(ProjectSectionUi::toProjectSessionSelectorProject),
+                selectedWorktree = focusedWorktree,
+                createError = projectSessionCreateError,
+                onProjectSelected = onFocusProject,
+                onBrowseProjects = onBrowseProjectsClick,
+                onSessionSelected = { project, session ->
+                    onSessionClick(
+                        SessionOpenTarget(
+                            sessionId = session.id,
+                            title = session.title,
+                            worktree = project.worktree,
+                        ),
+                    )
+                },
+                onShowAllSessions = onSeeAllSessions,
                 onNewSession = onNewSession,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
     }
 }
 
-@Composable
-private fun ProjectSection(
-    section: ProjectSectionUi,
-    onSessionClick: (SessionOpenTarget) -> Unit,
-    onSeeAllSessions: () -> Unit,
-    onNewSession: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier) {
-        OpenCodeListItem(
-            title = section.displayName,
-            subtitle = section.pathSubtitle,
-            startDecorator = StartDecorator.Letter(section.letter, section.letterAccent),
-        )
-        section.loadError?.let { error ->
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = 16.dp),
-            )
-        }
-        if (section.previewSessions.isEmpty() && section.loadError == null) {
-            OpenCodeListItem(
-                title = "New Session",
-                onClick = { onNewSession(section.worktree) },
-            )
-        } else {
-            section.previewSessions.forEach { session ->
-                OpenCodeListItem(
-                    title = session.title,
-                    subtitle = session.statusLabel,
-                    onClick = { onSessionClick(SessionOpenTarget(session.id, session.title, section.worktree)) },
-                )
-            }
-        }
-        if (section.totalSessionCount > section.previewSessions.size) {
-            OpenCodeListItem(
-                title = "See all...",
-                onClick = onSeeAllSessions,
-            )
-        }
-    }
-}
+private fun ProjectSectionUi.toProjectSessionSelectorProject(): ProjectSessionSelectorProject =
+    ProjectSessionSelectorProject(
+        worktree = worktree,
+        displayName = displayName,
+        pathSubtitle = pathSubtitle,
+        letter = letter,
+        letterAccent = letterAccent,
+        previewSessions = previewSessions.map(SessionSummary::toProjectSessionSelectorSession),
+        totalSessionCount = totalSessionCount,
+        loadError = loadError,
+    )
+
+private fun SessionSummary.toProjectSessionSelectorSession(): ProjectSessionSelectorSession =
+    ProjectSessionSelectorSession(
+        id = id,
+        title = title,
+        subtitle = updatedAtLabel ?: statusLabel,
+    )
 
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
     when (uiState) {
@@ -332,6 +313,7 @@ fun MainScreenPreview() {
         MainScreen(
             uiState =
                 MainScreenUiState.Loaded(
+                    focusedWorktree = "/Users/demo/opencode-mobile",
                     sections =
                         listOf(
                             ProjectSectionUi(
@@ -361,6 +343,7 @@ fun MainScreenPreview() {
             onRetryProbe = {},
             onRefresh = {},
             onAddProjectClick = {},
+            onFocusProject = {},
             onDismissAddProject = {},
             onSelectAddProject = {},
             onSeeAllSessions = {},

@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +60,13 @@ fun OpenCodeListItem(
             style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
             style == OpenCodeListItemStyle.Card -> MaterialTheme.colorScheme.surface
             selected -> MaterialTheme.colorScheme.surfaceVariant
-            else -> MaterialTheme.colorScheme.background
+            else -> Color.Transparent
+        }
+    val containerShape =
+        if (style == OpenCodeListItemStyle.Plain && !selected) {
+            RectangleShape
+        } else {
+            RoundedCornerShape(ListItemCornerRadius)
         }
     val contentColor =
         if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
@@ -72,7 +80,7 @@ fun OpenCodeListItem(
                     Modifier
                 },
             ),
-        shape = RoundedCornerShape(ListItemCornerRadius),
+        shape = containerShape,
         color = containerColor,
         contentColor = contentColor,
         border =

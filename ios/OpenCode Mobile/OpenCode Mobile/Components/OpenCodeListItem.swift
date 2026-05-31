@@ -76,25 +76,29 @@ struct OpenCodeListItem<Trailing: View>: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(containerBackground)
+        .background {
+            containerBackground
+        }
         .overlay {
             if style == .card {
                 RoundedRectangle(cornerRadius: listItemCornerRadius)
                     .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: listItemCornerRadius))
         .opacity(enabled ? 1 : 0.7)
     }
 
-    private var containerBackground: Color {
+    @ViewBuilder
+    private var containerBackground: some View {
         switch (style, selected) {
         case (.plain, false):
-            OpenCodeColors.backgroundPrimary
+            Color.clear
         case (.plain, true), (.card, true):
-            OpenCodeColors.surfaceSecondary
+            RoundedRectangle(cornerRadius: listItemCornerRadius)
+                .fill(OpenCodeColors.surfaceSecondary)
         case (.card, false):
-            OpenCodeColors.surfacePrimary
+            RoundedRectangle(cornerRadius: listItemCornerRadius)
+                .fill(OpenCodeColors.surfacePrimary)
         }
     }
 

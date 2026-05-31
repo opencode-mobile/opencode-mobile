@@ -15,6 +15,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case listItem
     case choiceBadge
     case button
+    case projectSessionSelector
 }
 
 struct ComponentGalleryEntry: Identifiable, Hashable {
@@ -77,6 +78,12 @@ let componentGalleryEntries = [
         id: .button,
         title: "Button",
         description: "Reusable action component with text and icon variants.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .projectSessionSelector,
+        title: "Project Session Selector",
+        description: "Project-scoped session picker with project tiles and session actions.",
         category: .components
     ),
 ]
