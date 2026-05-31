@@ -212,8 +212,9 @@ struct SessionChatViewModelTests {
 
     private func makeViewModel(
         messageRepository: FakeMessageRepository,
-        eventStream: FakeForegroundEventStream = FakeForegroundEventStream()
+        eventStream: FakeForegroundEventStream? = nil
     ) -> SessionChatViewModel {
+        let eventStream = eventStream ?? FakeForegroundEventStream()
         let sessionRepository = FakeChatSessionRepository()
         let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
             sessionRepository: sessionRepository,

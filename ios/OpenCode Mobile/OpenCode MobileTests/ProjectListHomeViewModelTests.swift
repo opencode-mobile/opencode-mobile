@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
@@ -22,11 +23,12 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/boot"))
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(!sections.isEmpty)
+        #expect(focusedWorktree == "/boot")
     }
 
     @Test func refresh_limitsPreviewSessionsToThree() async {
@@ -39,12 +41,13 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(sections.first?.previewSessions.count == 3)
         #expect(sections.first?.totalSessionCount == 7)
+        #expect(focusedWorktree == "/repo")
     }
 
     @Test func refresh_preservesAddedWorktreeOrder() async {
@@ -54,11 +57,80 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"])
         )
         await viewModel.refresh()
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
         }
         #expect(sections.map(\.worktree) == ["/slow", "/fast"])
+        #expect(focusedWorktree == "/slow")
+    }
+
+    @Test func focusProject_updatesHomeFocusOnly() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one", "/two"])
+        )
+        await viewModel.refresh()
+        viewModel.focusProject(worktree: "/two")
+        guard case let .loaded(sections, _, _, _, focusedWorktree, createError) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.map(\.worktree) == ["/one", "/two"])
+        #expect(focusedWorktree == "/two")
+        #expect(createError == nil)
+    }
+
+    @Test func addProject_focusesNewProject() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let projectRepository = FakeProjectRepository(projects: [
+            Project(id: "two", worktree: "/two", displayName: "two"),
+        ])
+        let viewModel = makeViewModel(
+            projectRepository: projectRepository,
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.addProject(worktree: "/two")
+        guard case let .loaded(_, _, _, _, focusedWorktree, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(focusedWorktree == "/two")
+    }
+
+    @Test func createSession_usesFocusedWorktreeAndClearsError() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        await viewModel.createSession(in: "/repo")
+        #expect(sessionRepository.createdDirectories == ["/repo"])
+        #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
+        guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(createError == nil)
+    }
+
+    @Test func createSession_failureStoresInlineError() async {
+        let sessionRepository = FakeSessionRepository(createError: TestError.message("nope"))
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        await viewModel.createSession(in: "/repo")
+        guard case let .loaded(_, _, _, _, _, createError) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(createError == "nope")
     }
 }
 
@@ -67,8 +139,9 @@ private func makeViewModel(
     projectRepository: any ProjectRepository,
     sessionRepository: any SessionRepository = FakeSessionRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
-    eventStream: FakeForegroundEventStream = FakeForegroundEventStream()
+    eventStream: FakeForegroundEventStream? = nil
 ) -> ProjectListHomeViewModel {
+    let eventStream = eventStream ?? FakeForegroundEventStream()
     let manager = ActiveConnectionManager()
     manager.apply(ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
     let coordinator = ConnectionSessionCoordinator(
@@ -98,17 +171,19 @@ private func makeViewModel(
 private struct FakeProjectRepository: ProjectRepository {
     let shouldFailProbe: Bool
     let bootWorktree: String
+    let projects: [Project]
 
-    init(shouldFailProbe: Bool = false, bootWorktree: String = "/boot") {
+    init(shouldFailProbe: Bool = false, bootWorktree: String = "/boot", projects: [Project] = []) {
         self.shouldFailProbe = shouldFailProbe
         self.bootWorktree = bootWorktree
+        self.projects = projects
     }
 
     func probeServer() async throws {
         if shouldFailProbe { throw ServerProbeError.transport("down") }
     }
 
-    func listProjects() async throws -> [Project] { [] }
+    func listProjects() async throws -> [Project] { projects }
 
     func getCurrentProject(directory: String?) async throws -> Project {
         Project(id: "p1", worktree: directory ?? bootWorktree, displayName: "demo")
@@ -194,16 +269,26 @@ private struct SlowFirstSessionRepository: SessionRepository {
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool { fatalError() }
 }
 
-private struct FakeSessionRepository: SessionRepository {
+private final class FakeSessionRepository: SessionRepository, @unchecked Sendable {
     let sessions: [Session]
+    let createError: Error?
+    private(set) var createdDirectories: [String?] = []
 
-    init(sessions: [Session] = [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: nil, parentID: nil, updatedAtEpochMs: 1)]) {
+    init(
+        sessions: [Session] = [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: nil, parentID: nil, updatedAtEpochMs: 1)],
+        createError: Error? = nil
+    ) {
         self.sessions = sessions
+        self.createError = createError
     }
 
     func listSessions(directory: String?) async throws -> [Session] { sessions }
 
-    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
+        createdDirectories.append(directory)
+        if let createError { throw createError }
+        return Session(id: "created", title: "New Session", slug: nil, projectID: nil, directory: directory, parentID: parentID, updatedAtEpochMs: 10)
+    }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
@@ -220,4 +305,15 @@ private struct FakeSessionRepository: SessionRepository {
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
     func unrevertSession(id: String) async throws -> Bool { fatalError() }
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool { fatalError() }
+}
+
+private enum TestError: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .message(message):
+            message
+        }
+    }
 }

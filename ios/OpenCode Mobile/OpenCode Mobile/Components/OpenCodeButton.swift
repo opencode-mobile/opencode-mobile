@@ -12,19 +12,27 @@ enum OpenCodeButtonContrast {
     case low
 }
 
+enum OpenCodeButtonSize {
+    case large
+    case medium
+}
+
 struct OpenCodeButton: View {
     let variant: OpenCodeButtonVariant
+    let size: OpenCodeButtonSize
     let enabled: Bool
     let contrast: OpenCodeButtonContrast
     let action: () -> Void
 
     init(
         variant: OpenCodeButtonVariant,
+        size: OpenCodeButtonSize = .medium,
         enabled: Bool = true,
         contrast: OpenCodeButtonContrast = .high,
         action: @escaping () -> Void
     ) {
         self.variant = variant
+        self.size = size
         self.enabled = enabled
         self.contrast = contrast
         self.action = action
@@ -34,7 +42,7 @@ struct OpenCodeButton: View {
         Button(action: action) {
             label
         }
-        .buttonStyle(OpenCodeButtonStyle(variant: variant, enabled: enabled, contrast: contrast))
+        .buttonStyle(OpenCodeButtonStyle(variant: variant, size: size, enabled: enabled, contrast: contrast))
         .disabled(!enabled)
     }
 
@@ -63,6 +71,7 @@ struct OpenCodeButton: View {
 
 private struct OpenCodeButtonStyle: ButtonStyle {
     let variant: OpenCodeButtonVariant
+    let size: OpenCodeButtonSize
     let enabled: Bool
     let contrast: OpenCodeButtonContrast
 
@@ -70,9 +79,10 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let isPressed = configuration.isPressed && enabled
         let maxWidth: CGFloat? = variant.isFullWidth ? .infinity : nil
-        let minWidth: CGFloat? = variant.isIconOnly ? 40 : nil
-        let fixedWidth: CGFloat? = variant.isIconOnly ? 40 : nil
-        let fixedHeight: CGFloat? = variant.isIconOnly ? 40 : nil
+        let iconSize: CGFloat = size == .large ? 48 : 40
+        let minWidth: CGFloat? = variant.isIconOnly ? iconSize : nil
+        let fixedWidth: CGFloat? = variant.isIconOnly ? iconSize : nil
+        let fixedHeight: CGFloat? = variant.isIconOnly ? iconSize : nil
         if variant.isIconCircle {
             baseLabel(
                 configuration: configuration,
@@ -127,12 +137,10 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     }
 
     private var minHeight: CGFloat {
-        switch variant {
-        case .fullWidthText:
+        switch size {
+        case .large:
             return 48
-        case .compactText:
-            return 40
-        case .iconSquare, .iconCircle:
+        case .medium:
             return 40
         }
     }

@@ -56,6 +56,11 @@ enum class OpenCodeButtonContrast {
     Low,
 }
 
+enum class OpenCodeButtonSize {
+    Large,
+    Medium,
+}
+
 @Composable
 fun OpenCodeButton(
     variant: OpenCodeButtonVariant,
@@ -63,6 +68,7 @@ fun OpenCodeButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     contrast: OpenCodeButtonContrast = OpenCodeButtonContrast.High,
+    size: OpenCodeButtonSize = OpenCodeButtonSize.Medium,
 ) {
     val containerColor =
         when {
@@ -83,12 +89,22 @@ fun OpenCodeButton(
             else -> MaterialTheme.colorScheme.surface
         }
 
+    val variantMinHeight =
+        when (size) {
+            OpenCodeButtonSize.Large -> OpenCodeButtonFullMinHeight
+            OpenCodeButtonSize.Medium -> OpenCodeButtonCompactMinHeight
+        }
+    val iconSize =
+        when (size) {
+            OpenCodeButtonSize.Large -> 48.dp
+            OpenCodeButtonSize.Medium -> 40.dp
+        }
     val variantModifier =
         when (variant) {
-            is OpenCodeButtonVariant.FullWidthText -> Modifier.fillMaxWidth().defaultMinSize(minHeight = OpenCodeButtonFullMinHeight)
-            is OpenCodeButtonVariant.CompactText -> Modifier.defaultMinSize(minHeight = OpenCodeButtonCompactMinHeight)
-            is OpenCodeButtonVariant.IconSquare -> Modifier.size(OpenCodeButtonIconSquareSize)
-            is OpenCodeButtonVariant.IconCircle -> Modifier.size(OpenCodeButtonIconCircleSize)
+            is OpenCodeButtonVariant.FullWidthText -> Modifier.fillMaxWidth().defaultMinSize(minHeight = variantMinHeight)
+            is OpenCodeButtonVariant.CompactText -> Modifier.defaultMinSize(minHeight = variantMinHeight)
+            is OpenCodeButtonVariant.IconSquare -> Modifier.size(iconSize)
+            is OpenCodeButtonVariant.IconCircle -> Modifier.size(iconSize)
         }
     val shape =
         when (variant) {

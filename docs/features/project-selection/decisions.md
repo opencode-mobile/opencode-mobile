@@ -52,3 +52,18 @@ display name. A project with no sessions offers **New Session** instead of previ
 Project list rows use the first letter of the display name and a letter accent
 color derived deterministically from the worktree path so the same project keeps
 the same accent across launches.
+
+## Project focus prototype
+
+Home keeps the existing project/session list as the source of truth and appends
+a feature-local **Project focus** prototype at the bottom of the same scroll.
+
+Project focus is local home UI state only. It chooses which added project's
+sessions appear in the prototype card and which worktree the prototype **New
+session** action uses. It does not switch the server's current project, mutate
+the Connection Profile beyond adding projects, or persist across app launches.
+
+Fresh home loads focus the first added project by insertion order. Adding a
+project through **Browse projects** focuses the newly added worktree. The
+prototype remains feature-local and is not part of the Component Collection or
+Component Gallery until the pattern proves reusable.

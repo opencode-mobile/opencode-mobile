@@ -14,7 +14,13 @@ struct SessionDomainAdapter: Sendable {
     }
 
     func listItem(from session: Session, worktree: String, statusLabel: String? = nil) -> SessionListItem {
-        SessionListItem(id: session.id, title: session.title, worktree: worktree, statusLabel: statusLabel)
+        SessionListItem(
+            id: session.id,
+            title: session.title,
+            worktree: worktree,
+            statusLabel: statusLabel,
+            updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel)
+        )
     }
 
     func sessionStatus(sessionID: String, raw: [String: String]) -> SessionStatus {
@@ -49,5 +55,15 @@ struct SessionDomainAdapter: Sendable {
             return .decoding(error.localizedDescription)
         }
         return .transport(error.localizedDescription)
+    }
+}
+
+private extension SessionDomainAdapter {
+    nonisolated static func updatedAtLabel(epochMs: Int64) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM d • h:mm a"
+        return formatter.string(from: date)
     }
 }

@@ -37,6 +37,9 @@ icons:
   - name: folder
     style: filled
     notes: SF Symbol folder.fill
+  - name: list
+    style: filled
+    notes: SF Symbol list.bullet
   - name: more_vert
     style: filled
     notes: SF Symbol ellipsis

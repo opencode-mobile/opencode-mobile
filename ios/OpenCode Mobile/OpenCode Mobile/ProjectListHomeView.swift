@@ -87,10 +87,10 @@ struct ProjectListHomeView: View {
             Spacer()
         case let .probeFailed(message):
             probeFailed(message)
-        case let .empty(_, _):
-            homeProjectsList(sections: [])
-        case let .loaded(sections, _, _, _):
-            homeProjectsList(sections: sections)
+        case let .empty(_, _, createError):
+            homeProjectsList(sections: [], focusedWorktree: nil, createError: createError)
+        case let .loaded(sections, _, _, _, focusedWorktree, createError):
+            homeProjectsList(sections: sections, focusedWorktree: focusedWorktree, createError: createError)
         }
     }
 
@@ -113,7 +113,11 @@ struct ProjectListHomeView: View {
         .padding(24)
     }
 
-    private func homeProjectsList(sections: [ProjectSectionItem]) -> some View {
+    private func homeProjectsList(
+        sections: [ProjectSectionItem],
+        focusedWorktree: String?,
+        createError: String?
+    ) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 browseProjectsListItem
@@ -126,8 +130,19 @@ struct ProjectListHomeView: View {
                 ForEach(sections) { section in
                     projectSection(section)
                 }
+                ProjectFocusSection(
+                    sections: sections,
+                    focusedWorktree: focusedWorktree,
+                    createError: createError,
+                    onFocusProject: { viewModel.focusProject(worktree: $0) },
+                    onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                    onSessionSelected: { selectedSession = $0 },
+                    onShowAll: { viewModel.showSeeAllSessions(worktree: $0) },
+                    onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(.bottom, 16)
         }
         .background(OpenCodeColors.backgroundPrimary)
     }
@@ -180,7 +195,7 @@ struct ProjectListHomeView: View {
         Binding(
             get: {
                 switch viewModel.state {
-                case let .empty(show, _), let .loaded(_, show, _, _):
+                case let .empty(show, _, _), let .loaded(_, show, _, _, _, _):
                     show
                 default:
                     false
@@ -196,7 +211,7 @@ struct ProjectListHomeView: View {
     private var addProjectSheet: some View {
         let candidates: [AddProjectCandidateItem] = {
             switch viewModel.state {
-            case let .empty(_, items), let .loaded(_, _, items, _):
+            case let .empty(_, items, _), let .loaded(_, _, items, _, _, _):
                 items
             default:
                 []
@@ -234,7 +249,7 @@ struct ProjectListHomeView: View {
     private var seeAllSheetBinding: Binding<SeeAllSessionsSheetState?> {
         Binding(
             get: {
-                if case let .loaded(_, _, _, sheet) = viewModel.state { sheet }
+                if case let .loaded(_, _, _, sheet, _, _) = viewModel.state { sheet }
                 else { nil }
             },
             set: { _ in viewModel.dismissSeeAllSessions() }
@@ -263,17 +278,214 @@ struct ProjectListHomeView: View {
     }
 }
 
+private struct ProjectFocusSection: View {
+    let sections: [ProjectSectionItem]
+    let focusedWorktree: String?
+    let createError: String?
+    let onFocusProject: (String) -> Void
+    let onBrowseProjects: () -> Void
+    let onSessionSelected: (SessionListItem) -> Void
+    let onShowAll: (String) -> Void
+    let onNewSession: (String) -> Void
+
+    private let horizontalSpacing: CGFloat = 12
+
+    private var focusedSection: ProjectSectionItem? {
+        if let focusedWorktree,
+           let section = sections.first(where: { $0.worktree == focusedWorktree }) {
+            return section
+        }
+        return sections.first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            projectTiles
+
+            if let focusedSection {
+                projectHeader(focusedSection)
+                Divider().overlay(OpenCodeColors.borderSubtle)
+                sessionPreview(focusedSection)
+                Divider().overlay(OpenCodeColors.borderSubtle)
+                footer(focusedSection)
+            }
+        }
+        .background(OpenCodeColors.backgroundSecondary, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private var projectTiles: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: horizontalSpacing) {
+                ForEach(sections) { section in
+                    ProjectFocusTile(
+                        section: section,
+                        focused: section.worktree == focusedSection?.worktree,
+                        action: { onFocusProject(section.worktree) }
+                    )
+                }
+                AddProjectFocusTile(action: onBrowseProjects)
+            }
+            .padding(.horizontal, horizontalSpacing)
+            .padding(.vertical, 20)
+        }
+    }
+
+    private func projectHeader(_ section: ProjectSectionItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 4) {
+                OpenCodeIconImage(icon: .folder)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(OpenCodeColors.textInteractive)
+                    .accessibilityHidden(true)
+                Text(section.displayName)
+                    .font(OpenCodeTypography.heading.weight(.bold))
+                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text(compactHomePath(section.pathSubtitle))
+                .font(OpenCodeTypography.code)
+                .foregroundStyle(OpenCodeColors.textSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, horizontalSpacing)
+        .padding(.bottom, 16)
+    }
+
+    private func sessionPreview(_ section: ProjectSectionItem) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let error = section.loadError {
+                Text(error)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.statusError)
+                    .lineLimit(2)
+                    .padding(.horizontal, horizontalSpacing)
+                    .padding(.vertical, 14)
+            } else if !section.previewSessions.isEmpty {
+                ForEach(section.previewSessions) { session in
+                    OpenCodeListItem(
+                        title: session.title,
+                        subtitle: session.projectFocusSubtitle,
+                        action: { onSessionSelected(session) }
+                    )
+                }
+            }
+        }
+    }
+
+    private func footer(_ section: ProjectSectionItem) -> some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 8) {
+                OpenCodeButton(
+                    variant: .iconSquare(.list, accessibilityLabel: "Show all"),
+                    action: { onShowAll(section.worktree) }
+                )
+                OpenCodeButton(
+                    variant: .fullWidthText(title: "New session"),
+                    action: { onNewSession(section.worktree) }
+                )
+            }
+            if let createError {
+                Text(createError)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.statusError)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.top, 12)
+        .padding(.horizontal, horizontalSpacing)
+        .padding(.bottom, 16)
+    }
+}
+
+private struct ProjectFocusTile: View {
+    let section: ProjectSectionItem
+    let focused: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Text(String(section.letter).uppercased())
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(focused ? OpenCodeColors.textInteractive : section.letterAccent.badgeTint)
+                    .frame(width: 48, height: 48)
+                    .background(focused ? OpenCodeColors.backgroundSecondary : section.letterAccent.badgeFill)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(focused ? OpenCodeColors.textInteractive : Color.clear, lineWidth: 3)
+                    )
+                if focused {
+                    Circle()
+                        .fill(OpenCodeColors.textPrimary)
+                        .frame(width: 12, height: 12)
+                        .offset(x: 3, y: -3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(section.displayName), \(compactHomePath(section.pathSubtitle))")
+        .accessibilityValue(focused ? "Focused" : "Not focused")
+    }
+}
+
+private struct AddProjectFocusTile: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            OpenCodeIconImage(icon: .add)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(OpenCodeColors.textSecondary)
+                .frame(width: 48, height: 48)
+                .background(OpenCodeColors.surfaceInset, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            OpenCodeColors.borderDefault,
+                            style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Browse projects")
+    }
+}
+
+private func compactHomePath(_ path: String) -> String {
+    let home = NSHomeDirectory()
+    if path == home { return "~" }
+    if path.hasPrefix(home + "/") {
+        return "~" + path.dropFirst(home.count)
+    }
+    return path
+}
+
 struct SessionListItem: Identifiable, Hashable {
     let id: String
     let title: String
     let worktree: String
     let statusLabel: String?
+    let updatedAtLabel: String?
 
-    init(id: String, title: String, worktree: String, statusLabel: String? = nil) {
+    init(id: String, title: String, worktree: String, statusLabel: String? = nil, updatedAtLabel: String? = nil) {
         self.id = id
         self.title = title
         self.worktree = worktree
         self.statusLabel = statusLabel
+        self.updatedAtLabel = updatedAtLabel
+    }
+}
+
+private extension SessionListItem {
+    var projectFocusSubtitle: String? {
+        updatedAtLabel ?? statusLabel
     }
 }
 
@@ -285,6 +497,64 @@ extension SeeAllSessionsSheetState: Identifiable {
     NavigationStack {
         ProjectListHomeView(viewModel: previewProjectListHomeViewModel())
     }
+    .openCodeTheme()
+}
+
+#Preview("Project Focus Overflow") {
+    ProjectFocusSection(
+        sections: previewProjectFocusSections(sessionCount: 5),
+        focusedWorktree: "/Users/demo/opencode-mobile",
+        createError: nil,
+        onFocusProject: { _ in },
+        onBrowseProjects: {},
+        onSessionSelected: { _ in },
+        onShowAll: { _ in },
+        onNewSession: { _ in }
+    )
+    .padding(.vertical, 24)
+    .openCodeTheme()
+}
+
+#Preview("Project Focus Empty") {
+    ProjectFocusSection(
+        sections: [
+            ProjectSectionItem(
+                id: "/Users/demo/empty",
+                worktree: "/Users/demo/empty",
+                displayName: "empty",
+                pathSubtitle: "/Users/demo/empty",
+                letter: "E",
+                letterAccent: .teal,
+                previewSessions: [],
+                allSessions: [],
+                totalSessionCount: 0,
+                loadError: nil
+            ),
+        ],
+        focusedWorktree: "/Users/demo/empty",
+        createError: nil,
+        onFocusProject: { _ in },
+        onBrowseProjects: {},
+        onSessionSelected: { _ in },
+        onShowAll: { _ in },
+        onNewSession: { _ in }
+    )
+    .padding(.vertical, 24)
+    .openCodeTheme()
+}
+
+#Preview("Project Focus Add Tile") {
+    ProjectFocusSection(
+        sections: [],
+        focusedWorktree: nil,
+        createError: nil,
+        onFocusProject: { _ in },
+        onBrowseProjects: {},
+        onSessionSelected: { _ in },
+        onShowAll: { _ in },
+        onNewSession: { _ in }
+    )
+    .padding(.vertical, 24)
     .openCodeTheme()
 }
 
@@ -324,6 +594,43 @@ private struct PreviewProjectRepository: ProjectRepository {
     func getCurrentProject(directory: String?) async throws -> Project {
         Project(id: "1", worktree: "/demo", displayName: "demo")
     }
+}
+
+private func previewProjectFocusSections(sessionCount: Int) -> [ProjectSectionItem] {
+    let sessions = (1 ... sessionCount).map { index in
+        SessionListItem(
+            id: "\(index)",
+            title: ["Refactor Navigation", "Bug: Header Clipping", "Add Dark Mode Assets", "Review Session List", "Polish Connection Flow"][index - 1],
+            worktree: "/Users/demo/opencode-mobile",
+            updatedAtLabel: ["Oct 24 • 2:30 PM", "Oct 23 • 11:45 AM", "Oct 22 • 4:15 PM", "Oct 21 • 10:05 AM", "Oct 20 • 9:20 AM"][index - 1]
+        )
+    }
+    return [
+        ProjectSectionItem(
+            id: "/Users/demo/opencode-mobile",
+            worktree: "/Users/demo/opencode-mobile",
+            displayName: "opencode-mobile",
+            pathSubtitle: "/Users/demo/opencode-mobile",
+            letter: "O",
+            letterAccent: .violet,
+            previewSessions: Array(sessions.prefix(3)),
+            allSessions: sessions,
+            totalSessionCount: sessions.count,
+            loadError: nil
+        ),
+        ProjectSectionItem(
+            id: "/Users/demo/playground",
+            worktree: "/Users/demo/playground",
+            displayName: "playground",
+            pathSubtitle: "/Users/demo/playground",
+            letter: "P",
+            letterAccent: .amber,
+            previewSessions: [],
+            allSessions: [],
+            totalSessionCount: 0,
+            loadError: nil
+        ),
+    ]
 }
 
 private struct PreviewConnectionProfileStore: ConnectionProfileStore {

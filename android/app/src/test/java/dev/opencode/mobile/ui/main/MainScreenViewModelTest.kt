@@ -32,6 +32,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -68,7 +69,8 @@ class MainScreenViewModelTest {
                 createViewModel(connectionProfileStore = store, bootWorktree = "/boot/project")
             advanceUntilIdle()
             assertEquals(listOf("/boot/project"), store.added(serverUrl))
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/boot/project", loaded.focusedWorktree)
         }
 
     @Test
@@ -92,6 +94,93 @@ class MainScreenViewModelTest {
                     .previewSessions.size,
             )
             assertEquals(7, loaded.sections.single().totalSessionCount)
+            assertEquals("/repo", loaded.focusedWorktree)
+        }
+
+    @Test
+    fun focusProject_updatesHomeFocusOnly() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one", "/two")),
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.focusProject("/two")
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/one", "/two"), loaded.sections.map { it.worktree })
+            assertEquals("/two", loaded.focusedWorktree)
+            assertNull(loaded.projectFocusCreateError)
+        }
+
+    @Test
+    fun refresh_preservesFocusedWorktree() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one", "/two")),
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.focusProject("/two")
+            viewModel.refresh()
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/two", loaded.focusedWorktree)
+        }
+
+    @Test
+    fun addProject_focusesNewProject() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.addProject("/two")
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/two", loaded.focusedWorktree)
+        }
+
+    @Test
+    fun createSession_usesFocusedWorktreeAndClearsError() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            viewModel.createSession("/repo")
+            advanceUntilIdle()
+            assertEquals(listOf("/repo"), sessionRepository.createdDirectories)
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/repo", loaded.pendingOpenSession?.worktree)
+            assertNull(loaded.projectFocusCreateError)
+        }
+
+    @Test
+    fun createSession_failureStoresInlineError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionsByWorktree = mutableMapOf("/repo" to emptyList()),
+                    createError = IllegalStateException("nope"),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            viewModel.createSession("/repo")
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("nope", loaded.projectFocusCreateError)
         }
 
     @Test
@@ -181,8 +270,10 @@ private class FakeProjectRepository(
 
 private class FakeSessionRepository(
     private val sessionsByWorktree: MutableMap<String, List<Session>>,
+    private val createError: Throwable? = null,
 ) : SessionRepository {
     var listSessionsCallCount = 0
+    val createdDirectories = mutableListOf<String?>()
 
     override suspend fun listSessions(directory: String?): List<Session> {
         listSessionsCallCount += 1
@@ -193,7 +284,11 @@ private class FakeSessionRepository(
         parentId: String?,
         title: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        createdDirectories += directory
+        createError?.let { throw it }
+        return Session(id = "created", title = "New Session", directory = directory, parentId = parentId, updatedAtEpochMs = 10L)
+    }
 
     override suspend fun getAllSessionStatuses(directory: String?) = emptyList<dev.opencode.mobile.domain.session.SessionStatus>()
 
