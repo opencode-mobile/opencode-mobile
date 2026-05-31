@@ -49,3 +49,18 @@ internal val LightListItemLetterRoseFill = Color(0xFF5C2D3D)
 internal val LightListItemLetterRoseTint = Color(0xFFFFB8D4)
 internal val DarkListItemLetterRoseFill = Color(0xFF4A2533)
 internal val DarkListItemLetterRoseTint = Color(0xFFFFA8CC)
+
+internal val LightListItemLetterRedFill = Color(0xFF5C2D2D)
+internal val LightListItemLetterRedTint = Color(0xFFFFC8C8)
+internal val DarkListItemLetterRedFill = Color(0xFF4A2424)
+internal val DarkListItemLetterRedTint = Color(0xFFFFB8B8)
+
+internal val LightListItemLetterGreenFill = Color(0xFF2D4A3D)
+internal val LightListItemLetterGreenTint = Color(0xFFB8F5D8)
+internal val DarkListItemLetterGreenFill = Color(0xFF243832)
+internal val DarkListItemLetterGreenTint = Color(0xFFA8EDC8)
+
+internal val LightListItemLetterIndigoFill = Color(0xFF2D3D5C)
+internal val LightListItemLetterIndigoTint = Color(0xFFB8C8FF)
+internal val DarkListItemLetterIndigoFill = Color(0xFF24304A)
+internal val DarkListItemLetterIndigoTint = Color(0xFFA8B8FF)

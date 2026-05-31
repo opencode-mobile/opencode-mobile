@@ -117,6 +117,12 @@ enum OpenCodeColors {
     static let listItemLetterBlueTint = dynamic(light: 0xA8D4FF, dark: 0x9EC8FF)
     static let listItemLetterRoseFill = dynamic(light: 0x5C2D3D, dark: 0x4A2533)
     static let listItemLetterRoseTint = dynamic(light: 0xFFB8D4, dark: 0xFFA8CC)
+    static let listItemLetterRedFill = dynamic(light: 0x5C2D2D, dark: 0x4A2424)
+    static let listItemLetterRedTint = dynamic(light: 0xFFC8C8, dark: 0xFFB8B8)
+    static let listItemLetterGreenFill = dynamic(light: 0x2D4A3D, dark: 0x243832)
+    static let listItemLetterGreenTint = dynamic(light: 0xB8F5D8, dark: 0xA8EDC8)
+    static let listItemLetterIndigoFill = dynamic(light: 0x2D3D5C, dark: 0x24304A)
+    static let listItemLetterIndigoTint = dynamic(light: 0xB8C8FF, dark: 0xA8B8FF)
 
     // MARK: - Resolver
 

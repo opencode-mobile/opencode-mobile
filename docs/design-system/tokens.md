@@ -199,6 +199,12 @@ badge without revisiting the design-system docs.
 | `listItem.startDecorator.letter.accent.blue.tint` | `#a8d4ff` | `#9ec8ff` |
 | `listItem.startDecorator.letter.accent.rose.fill` | `#5c2d3d` | `#4a2533` |
 | `listItem.startDecorator.letter.accent.rose.tint` | `#ffb8d4` | `#ffa8cc` |
+| `listItem.startDecorator.letter.accent.red.fill` | `#5c2d2d` | `#4a2424` |
+| `listItem.startDecorator.letter.accent.red.tint` | `#ffc8c8` | `#ffb8b8` |
+| `listItem.startDecorator.letter.accent.green.fill` | `#2d4a3d` | `#243832` |
+| `listItem.startDecorator.letter.accent.green.tint` | `#b8f5d8` | `#a8edc8` |
+| `listItem.startDecorator.letter.accent.indigo.fill` | `#2d3d5c` | `#24304a` |
+| `listItem.startDecorator.letter.accent.indigo.tint` | `#b8c8ff` | `#a8b8ff` |
 
 ### Choice badge
 

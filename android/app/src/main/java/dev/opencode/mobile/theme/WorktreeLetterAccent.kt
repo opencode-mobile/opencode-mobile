@@ -1,7 +1,8 @@
 package dev.opencode.mobile.theme
 
 fun letterAccentForWorktree(worktree: String): LetterAccent {
-    val index = (worktree.hashCode() and Int.MAX_VALUE) % LetterAccent.entries.size
+    val hash = worktree.encodeToByteArray().fold(5381L) { acc, b -> (acc shl 5) + acc + b }
+    val index = (hash and Int.MAX_VALUE.toLong()).toInt() % LetterAccent.entries.size
     return LetterAccent.entries[index]
 }
 
