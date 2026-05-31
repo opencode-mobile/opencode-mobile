@@ -110,7 +110,7 @@ class MainScreenViewModelTest {
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/two"), loaded.sections.map { it.worktree })
             assertEquals("/two", loaded.focusedWorktree)
-            assertNull(loaded.projectFocusCreateError)
+            assertNull(loaded.projectSessionCreateError)
         }
 
     @Test
@@ -160,7 +160,7 @@ class MainScreenViewModelTest {
             assertEquals(listOf("/repo"), sessionRepository.createdDirectories)
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
-            assertNull(loaded.projectFocusCreateError)
+            assertNull(loaded.projectSessionCreateError)
         }
 
     @Test
@@ -180,7 +180,7 @@ class MainScreenViewModelTest {
             viewModel.createSession("/repo")
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("nope", loaded.projectFocusCreateError)
+            assertEquals("nope", loaded.projectSessionCreateError)
         }
 
     @Test

@@ -36,7 +36,7 @@ enum ProjectListHomeState: Equatable {
     case empty(
         showAddProjectSheet: Bool,
         candidates: [AddProjectCandidateItem],
-        projectFocusCreateError: String?
+        projectSessionCreateError: String?
     )
     case loaded(
         sections: [ProjectSectionItem],
@@ -44,7 +44,7 @@ enum ProjectListHomeState: Equatable {
         candidates: [AddProjectCandidateItem],
         seeAllSessions: SeeAllSessionsSheetState?,
         focusedWorktree: String?,
-        projectFocusCreateError: String?
+        projectSessionCreateError: String?
     )
 }
 
@@ -124,7 +124,7 @@ final class ProjectListHomeViewModel {
     func dismissAddProjectSheet() {
         switch state {
         case let .empty(_, candidates, createError):
-            state = .empty(showAddProjectSheet: false, candidates: candidates, projectFocusCreateError: createError)
+            state = .empty(showAddProjectSheet: false, candidates: candidates, projectSessionCreateError: createError)
         case let .loaded(sections, _, candidates, seeAll, focused, createError):
             state = .loaded(
                 sections: sections,
@@ -132,7 +132,7 @@ final class ProjectListHomeViewModel {
                 candidates: candidates,
                 seeAllSessions: seeAll,
                 focusedWorktree: focused,
-                projectFocusCreateError: createError
+                projectSessionCreateError: createError
             )
         default:
             break
@@ -157,7 +157,7 @@ final class ProjectListHomeViewModel {
             candidates: candidates,
             seeAllSessions: seeAll,
             focusedWorktree: worktree,
-            projectFocusCreateError: nil
+            projectSessionCreateError: nil
         )
     }
 
@@ -174,7 +174,7 @@ final class ProjectListHomeViewModel {
                 sessions: section.allSessions
             ),
             focusedWorktree: focused,
-            projectFocusCreateError: createError
+            projectSessionCreateError: createError
         )
     }
 
@@ -186,18 +186,18 @@ final class ProjectListHomeViewModel {
             candidates: candidates,
             seeAllSessions: nil,
             focusedWorktree: focused,
-            projectFocusCreateError: createError
+            projectSessionCreateError: createError
         )
     }
 
     func createSession(in worktree: String) async {
-        setProjectFocusCreateError(nil)
+        setProjectSessionCreateError(nil)
         do {
             let session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: worktree)
             pendingSessionOpen =
                 SessionListItem(id: session.id, title: session.title, worktree: worktree)
         } catch {
-            setProjectFocusCreateError(error.localizedDescription)
+            setProjectSessionCreateError(error.localizedDescription)
         }
     }
 
@@ -235,7 +235,7 @@ final class ProjectListHomeViewModel {
             if worktrees.isEmpty {
                 stopLiveObservations()
                 homeFocusedWorktree = nil
-                state = .empty(showAddProjectSheet: false, candidates: [], projectFocusCreateError: nil)
+                state = .empty(showAddProjectSheet: false, candidates: [], projectSessionCreateError: nil)
                 return
             }
 
@@ -243,14 +243,14 @@ final class ProjectListHomeViewModel {
             let focusedWorktree = resolvedFocusedWorktree(in: sections)
             homeFocusedWorktree = focusedWorktree
             state = sections.isEmpty
-                ? .empty(showAddProjectSheet: false, candidates: [], projectFocusCreateError: nil)
+                ? .empty(showAddProjectSheet: false, candidates: [], projectSessionCreateError: nil)
                 : .loaded(
                     sections: sections,
                     showAddProjectSheet: false,
                     candidates: [],
                     seeAllSessions: nil,
                     focusedWorktree: focusedWorktree,
-                    projectFocusCreateError: nil
+                    projectSessionCreateError: nil
                 )
             requestedFocusWorktree = nil
             if case .loaded = state {
@@ -345,7 +345,7 @@ final class ProjectListHomeViewModel {
                     }
             switch state {
             case let .empty(_, _, createError):
-                state = .empty(showAddProjectSheet: true, candidates: candidates, projectFocusCreateError: createError)
+                state = .empty(showAddProjectSheet: true, candidates: candidates, projectSessionCreateError: createError)
             case let .loaded(sections, _, _, seeAll, focused, createError):
                 state = .loaded(
                     sections: sections,
@@ -353,7 +353,7 @@ final class ProjectListHomeViewModel {
                     candidates: candidates,
                     seeAllSessions: seeAll,
                     focusedWorktree: focused,
-                    projectFocusCreateError: createError
+                    projectSessionCreateError: createError
                 )
             default:
                 break
@@ -454,7 +454,7 @@ final class ProjectListHomeViewModel {
             candidates: candidates,
             seeAllSessions: updatedSeeAll,
             focusedWorktree: focused,
-            projectFocusCreateError: createError
+            projectSessionCreateError: createError
         )
     }
 
@@ -470,10 +470,10 @@ final class ProjectListHomeViewModel {
         return sections.first?.worktree
     }
 
-    private func setProjectFocusCreateError(_ message: String?) {
+    private func setProjectSessionCreateError(_ message: String?) {
         switch state {
         case let .empty(showAdd, candidates, _):
-            state = .empty(showAddProjectSheet: showAdd, candidates: candidates, projectFocusCreateError: message)
+            state = .empty(showAddProjectSheet: showAdd, candidates: candidates, projectSessionCreateError: message)
         case let .loaded(sections, showAdd, candidates, seeAll, focused, _):
             state = .loaded(
                 sections: sections,
@@ -481,7 +481,7 @@ final class ProjectListHomeViewModel {
                 candidates: candidates,
                 seeAllSessions: seeAll,
                 focusedWorktree: focused,
-                projectFocusCreateError: message
+                projectSessionCreateError: message
             )
         default:
             break

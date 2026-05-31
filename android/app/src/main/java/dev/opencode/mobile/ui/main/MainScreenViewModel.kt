@@ -123,7 +123,7 @@ class MainScreenViewModel
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded && state.sections.any { it.worktree == worktree }) {
                     homeFocusedWorktree = worktree
-                    state.copy(focusedWorktree = worktree, projectFocusCreateError = null)
+                    state.copy(focusedWorktree = worktree, projectSessionCreateError = null)
                 } else {
                     state
                 }
@@ -152,7 +152,7 @@ class MainScreenViewModel
 
         fun createSession(worktree: String) {
             viewModelScope.launch {
-                clearProjectFocusCreateError()
+                clearProjectSessionCreateError()
                 val createResult = runCatching { sessionRepository.createSession(directory = worktree) }
                 createResult.onSuccess { session ->
                     _uiState.update { state ->
@@ -171,7 +171,7 @@ class MainScreenViewModel
                     }
                 }
                 createResult.onFailure { error ->
-                    setProjectFocusCreateError(error.message ?: "Unable to create session")
+                    setProjectSessionCreateError(error.message ?: "Unable to create session")
                 }
             }
         }
@@ -393,15 +393,15 @@ class MainScreenViewModel
             return sections.firstOrNull()?.worktree
         }
 
-        private fun clearProjectFocusCreateError() {
-            setProjectFocusCreateError(null)
+        private fun clearProjectSessionCreateError() {
+            setProjectSessionCreateError(null)
         }
 
-        private fun setProjectFocusCreateError(message: String?) {
+        private fun setProjectSessionCreateError(message: String?) {
             _uiState.update { state ->
                 when (state) {
-                    is MainScreenUiState.Empty -> state.copy(projectFocusCreateError = message)
-                    is MainScreenUiState.Loaded -> state.copy(projectFocusCreateError = message)
+                    is MainScreenUiState.Empty -> state.copy(projectSessionCreateError = message)
+                    is MainScreenUiState.Loaded -> state.copy(projectSessionCreateError = message)
                     else -> state
                 }
             }
@@ -425,7 +425,7 @@ sealed interface MainScreenUiState {
         val showAddProjectSheet: Boolean = false,
         val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
         val addProjectError: String? = null,
-        val projectFocusCreateError: String? = null,
+        val projectSessionCreateError: String? = null,
     ) : MainScreenUiState
 
     data class Loaded(
@@ -436,7 +436,7 @@ sealed interface MainScreenUiState {
         val seeAllSessions: SeeAllSessionsSheet? = null,
         val pendingOpenSession: SessionOpenTarget? = null,
         val focusedWorktree: String? = null,
-        val projectFocusCreateError: String? = null,
+        val projectSessionCreateError: String? = null,
     ) : MainScreenUiState
 }
 

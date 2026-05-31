@@ -1,48 +1,22 @@
 package dev.opencode.mobile.ui.main
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,19 +26,16 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
-import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonSize
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
-import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.ProjectSessionSelector
+import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
+import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-
-private val projectFocusHorizontalSpacing = 12.dp
 
 @Composable
 fun MainScreen(
@@ -186,16 +157,16 @@ internal fun MainScreen(
                             else -> emptyList()
                         }
                     val focusedWorktree = (uiState as? MainScreenUiState.Loaded)?.focusedWorktree
-                    val projectFocusCreateError =
+                    val projectSessionCreateError =
                         when (uiState) {
-                            is MainScreenUiState.Empty -> uiState.projectFocusCreateError
-                            is MainScreenUiState.Loaded -> uiState.projectFocusCreateError
+                            is MainScreenUiState.Empty -> uiState.projectSessionCreateError
+                            is MainScreenUiState.Loaded -> uiState.projectSessionCreateError
                             else -> null
                         }
                     HomeProjectsContent(
                         sections = sections,
                         focusedWorktree = focusedWorktree,
-                        projectFocusCreateError = projectFocusCreateError,
+                        projectSessionCreateError = projectSessionCreateError,
                         onBrowseProjectsClick = onAddProjectClick,
                         onFocusProject = onFocusProject,
                         onSessionClick = onSessionClick,
@@ -270,19 +241,10 @@ private fun ProbeFailedContent(
 }
 
 @Composable
-private fun BrowseProjectsListItem(onClick: () -> Unit) {
-    OpenCodeListItem(
-        title = "Browse projects",
-        startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, contentDescription = "Browse projects"),
-        onClick = onClick,
-    )
-}
-
-@Composable
 private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
     focusedWorktree: String?,
-    projectFocusCreateError: String?,
+    projectSessionCreateError: String?,
     onBrowseProjectsClick: () -> Unit,
     onFocusProject: (String) -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
@@ -293,37 +255,25 @@ private fun HomeProjectsContent(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.Bottom,
     ) {
-        item(key = "browse-projects") {
-            BrowseProjectsListItem(onClick = onBrowseProjectsClick)
-        }
-        if (sections.isEmpty()) {
-            item(key = "empty-hint") {
-                Text(
-                    text = "Add a project to see recent sessions.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-        }
-        items(sections, key = { it.worktree }) { section ->
-            ProjectSection(
-                section = section,
-                onSessionClick = onSessionClick,
-                onSeeAllSessions = { onSeeAllSessions(section.worktree) },
-                onNewSession = onNewSession,
-            )
-        }
-        item(key = "project-focus") {
-            ProjectFocusSection(
-                sections = sections,
-                focusedWorktree = focusedWorktree,
-                createError = projectFocusCreateError,
-                onFocusProject = onFocusProject,
+        item(key = "project-session-selector") {
+            ProjectSessionSelector(
+                projects = sections.map(ProjectSectionUi::toProjectSessionSelectorProject),
+                selectedWorktree = focusedWorktree,
+                createError = projectSessionCreateError,
+                onProjectSelected = onFocusProject,
                 onBrowseProjects = onBrowseProjectsClick,
-                onSessionClick = onSessionClick,
-                onSeeAllSessions = onSeeAllSessions,
+                onSessionSelected = { project, session ->
+                    onSessionClick(
+                        SessionOpenTarget(
+                            sessionId = session.id,
+                            title = session.title,
+                            worktree = project.worktree,
+                        ),
+                    )
+                },
+                onShowAllSessions = onSeeAllSessions,
                 onNewSession = onNewSession,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
@@ -331,361 +281,24 @@ private fun HomeProjectsContent(
     }
 }
 
-@Composable
-private fun ProjectSection(
-    section: ProjectSectionUi,
-    onSessionClick: (SessionOpenTarget) -> Unit,
-    onSeeAllSessions: () -> Unit,
-    onNewSession: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier) {
-        OpenCodeListItem(
-            title = section.displayName,
-            subtitle = section.pathSubtitle,
-            startDecorator = StartDecorator.Letter(section.letter, section.letterAccent),
-        )
-        section.loadError?.let { error ->
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = 16.dp),
-            )
-        }
-        if (section.previewSessions.isEmpty() && section.loadError == null) {
-            OpenCodeListItem(
-                title = "New Session",
-                onClick = { onNewSession(section.worktree) },
-            )
-        } else {
-            section.previewSessions.forEach { session ->
-                OpenCodeListItem(
-                    title = session.title,
-                    subtitle = session.statusLabel,
-                    onClick = { onSessionClick(SessionOpenTarget(session.id, session.title, section.worktree)) },
-                )
-            }
-        }
-        if (section.totalSessionCount > section.previewSessions.size) {
-            OpenCodeListItem(
-                title = "See all...",
-                onClick = onSeeAllSessions,
-            )
-        }
-    }
-}
+private fun ProjectSectionUi.toProjectSessionSelectorProject(): ProjectSessionSelectorProject =
+    ProjectSessionSelectorProject(
+        worktree = worktree,
+        displayName = displayName,
+        pathSubtitle = pathSubtitle,
+        letter = letter,
+        letterAccent = letterAccent,
+        previewSessions = previewSessions.map(SessionSummary::toProjectSessionSelectorSession),
+        totalSessionCount = totalSessionCount,
+        loadError = loadError,
+    )
 
-@Composable
-private fun ProjectFocusSection(
-    sections: List<ProjectSectionUi>,
-    focusedWorktree: String?,
-    createError: String?,
-    onFocusProject: (String) -> Unit,
-    onBrowseProjects: () -> Unit,
-    onSessionClick: (SessionOpenTarget) -> Unit,
-    onSeeAllSessions: (String) -> Unit,
-    onNewSession: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val focusedSection =
-        sections.firstOrNull { it.worktree == focusedWorktree } ?: sections.firstOrNull()
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Column {
-                ProjectFocusTiles(
-                    sections = sections,
-                    focusedWorktree = focusedSection?.worktree,
-                    onFocusProject = onFocusProject,
-                    onBrowseProjects = onBrowseProjects,
-                )
-                if (focusedSection != null) {
-                    ProjectFocusHeader(section = focusedSection)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    ProjectFocusSessionPreview(
-                        section = focusedSection,
-                        onSessionClick = onSessionClick,
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    ProjectFocusFooter(
-                        section = focusedSection,
-                        createError = createError,
-                        onSeeAllSessions = onSeeAllSessions,
-                        onNewSession = onNewSession,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProjectFocusTiles(
-    sections: List<ProjectSectionUi>,
-    focusedWorktree: String?,
-    onFocusProject: (String) -> Unit,
-    onBrowseProjects: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = projectFocusHorizontalSpacing, vertical = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(projectFocusHorizontalSpacing),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        sections.forEach { section ->
-            ProjectFocusTile(
-                section = section,
-                focused = section.worktree == focusedWorktree,
-                onClick = { onFocusProject(section.worktree) },
-            )
-        }
-        AddProjectFocusTile(onClick = onBrowseProjects)
-    }
-}
-
-@Composable
-private fun ProjectFocusTile(
-    section: ProjectSectionUi,
-    focused: Boolean,
-    onClick: () -> Unit,
-) {
-    val dark = isSystemInDarkTheme()
-    val (fill, tint) = section.letterAccent.badgeColors(dark)
-    Box(
-        modifier =
-            Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .semantics {
-                    contentDescription = "${section.displayName}, ${compactHomePath(section.pathSubtitle)}"
-                    stateDescription = if (focused) "Focused" else "Not focused"
-                }.clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (focused) MaterialTheme.colorScheme.surface else fill)
-                    .then(
-                        if (focused) {
-                            Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-                        } else {
-                            Modifier
-                        },
-                    ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = section.letter.uppercaseChar().toString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (focused) MaterialTheme.colorScheme.primary else tint,
-                maxLines = 1,
-            )
-        }
-        if (focused) {
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .size(12.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.onSurface),
-            )
-        }
-    }
-}
-
-@Composable
-private fun AddProjectFocusTile(onClick: () -> Unit) {
-    val border = MaterialTheme.colorScheme.outline
-    Box(
-        modifier =
-            Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .semantics { contentDescription = "Browse projects" }
-                .clickable(
-                    role = Role.Button,
-                    onClick = onClick,
-                ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .drawBehind {
-                        drawRoundRect(
-                            color = border,
-                            style =
-                                Stroke(
-                                    width = 1.5.dp.toPx(),
-                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
-                                ),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
-                        )
-                    },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = OpenCodeIcons.Add,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProjectFocusHeader(section: ProjectSectionUi) {
-    Column(
-        modifier =
-            Modifier.padding(
-                start = projectFocusHorizontalSpacing,
-                end = projectFocusHorizontalSpacing,
-                bottom = 16.dp,
-            ),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(
-                imageVector = OpenCodeIcons.Folder,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = section.displayName,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Text(
-            text = compactHomePath(section.pathSubtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun ProjectFocusSessionPreview(
-    section: ProjectSectionUi,
-    onSessionClick: (SessionOpenTarget) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        when {
-            section.loadError != null -> {
-                Text(
-                    text = section.loadError,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = projectFocusHorizontalSpacing, vertical = 14.dp),
-                )
-            }
-            !section.previewSessions.isEmpty() -> {
-                section.previewSessions.forEach { session ->
-                    OpenCodeListItem(
-                        title = session.title,
-                        subtitle = session.projectFocusSubtitle,
-                        onClick = {
-                            onSessionClick(
-                                SessionOpenTarget(
-                                    sessionId = session.id,
-                                    title = session.title,
-                                    worktree = section.worktree,
-                                ),
-                            )
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProjectFocusFooter(
-    section: ProjectSectionUi,
-    createError: String?,
-    onSeeAllSessions: (String) -> Unit,
-    onNewSession: (String) -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 16.dp)
-                .padding(horizontal = projectFocusHorizontalSpacing),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.List, "Show all"),
-                onClick = { onSeeAllSessions(section.worktree) },
-            )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("New session"),
-                size = OpenCodeButtonSize.Medium,
-                onClick = { onNewSession(section.worktree) },
-                modifier = Modifier.weight(1f),
-            )
-        }
-        createError?.let { error ->
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-private fun compactHomePath(path: String): String {
-    val home = System.getProperty("user.home").orEmpty()
-    return when {
-        home.isNotEmpty() && path == home -> "~"
-        home.isNotEmpty() && path.startsWith("$home/") -> "~" + path.removePrefix(home)
-        else -> path
-    }
-}
-
-private val SessionSummary.projectFocusSubtitle: String?
-    get() = updatedAtLabel ?: statusLabel
+private fun SessionSummary.toProjectSessionSelectorSession(): ProjectSessionSelectorSession =
+    ProjectSessionSelectorSession(
+        id = id,
+        title = title,
+        subtitle = updatedAtLabel ?: statusLabel,
+    )
 
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
     when (uiState) {
@@ -739,102 +352,4 @@ fun MainScreenPreview() {
             onConsumePendingOpenSession = {},
         )
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun ProjectFocusOverflowPreview() {
-    OpenCodeTheme(darkTheme = false) {
-        ProjectFocusSection(
-            sections = previewProjectFocusSections(),
-            focusedWorktree = "/Users/demo/opencode-mobile",
-            createError = null,
-            onFocusProject = {},
-            onBrowseProjects = {},
-            onSessionClick = {},
-            onSeeAllSessions = {},
-            onNewSession = {},
-            modifier = Modifier.padding(vertical = 24.dp),
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun ProjectFocusEmptyPreview() {
-    OpenCodeTheme(darkTheme = true) {
-        ProjectFocusSection(
-            sections =
-                listOf(
-                    ProjectSectionUi(
-                        worktree = "/Users/demo/empty",
-                        displayName = "empty",
-                        pathSubtitle = "/Users/demo/empty",
-                        letter = 'E',
-                        letterAccent = LetterAccent.Teal,
-                        previewSessions = emptyList(),
-                        allSessions = emptyList(),
-                        totalSessionCount = 0,
-                    ),
-                ),
-            focusedWorktree = "/Users/demo/empty",
-            createError = null,
-            onFocusProject = {},
-            onBrowseProjects = {},
-            onSessionClick = {},
-            onSeeAllSessions = {},
-            onNewSession = {},
-            modifier = Modifier.padding(vertical = 24.dp),
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun ProjectFocusAddTilePreview() {
-    OpenCodeTheme(darkTheme = false) {
-        ProjectFocusSection(
-            sections = emptyList(),
-            focusedWorktree = null,
-            createError = null,
-            onFocusProject = {},
-            onBrowseProjects = {},
-            onSessionClick = {},
-            onSeeAllSessions = {},
-            onNewSession = {},
-            modifier = Modifier.padding(vertical = 24.dp),
-        )
-    }
-}
-
-private fun previewProjectFocusSections(): List<ProjectSectionUi> {
-    val sessions =
-        listOf(
-            SessionSummary(id = "1", title = "Refactor Navigation", updatedAtLabel = "Oct 24 • 2:30 PM"),
-            SessionSummary(id = "2", title = "Bug: Header Clipping", updatedAtLabel = "Oct 23 • 11:45 AM"),
-            SessionSummary(id = "3", title = "Add Dark Mode Assets", updatedAtLabel = "Oct 22 • 4:15 PM"),
-            SessionSummary(id = "4", title = "Review Session List"),
-        )
-    return listOf(
-        ProjectSectionUi(
-            worktree = "/Users/demo/opencode-mobile",
-            displayName = "opencode-mobile",
-            pathSubtitle = "/Users/demo/opencode-mobile",
-            letter = 'O',
-            letterAccent = LetterAccent.Violet,
-            previewSessions = sessions.take(3),
-            allSessions = sessions,
-            totalSessionCount = sessions.size,
-        ),
-        ProjectSectionUi(
-            worktree = "/Users/demo/playground",
-            displayName = "playground",
-            pathSubtitle = "/Users/demo/playground",
-            letter = 'P',
-            letterAccent = LetterAccent.Amber,
-            previewSessions = emptyList(),
-            allSessions = emptyList(),
-            totalSessionCount = 0,
-        ),
-    )
 }

@@ -56,6 +56,8 @@ struct ComponentGalleryDetailView: View {
             ChoiceBadgeGalleryView()
         case .button:
             ButtonGalleryView()
+        case .projectSessionSelector:
+            ProjectSessionSelectorGalleryView()
         }
     }
 }

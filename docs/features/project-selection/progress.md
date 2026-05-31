@@ -21,8 +21,9 @@
   previews; **See all...** sheet; per-section **New Session** when empty
 - [x] `widgets` icon for developer Component Gallery entry (replaced `edit` on home)
 - [x] iOS stable home section order (insertion order; fixed Set save + task-group reorder)
-- [x] Feature-local **Project focus** prototype appended to home scroll on iOS and
-  Android, fully wired to existing added-project/session data and actions
+- [x] Shared **Project Session Selector** is the only project/session selector
+  on home on iOS and Android, fully wired to existing added-project/session
+  data and actions and available in the Component Gallery
 
 ## Manual
 

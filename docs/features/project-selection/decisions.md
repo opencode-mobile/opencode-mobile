@@ -42,10 +42,9 @@ empty catalog shows **No more projects on this server**.
 
 ## Home empty and session previews
 
-When no projects are added, show hint **Add a project to see recent sessions.**
-below the browse row. Each added project section shows up to three recent
-sessions; overflow uses **See all...** in a bottom sheet titled with the project
-display name. A project with no sessions offers **New Session** instead of previews.
+The original home list showed **Browse projects**, an empty hint, and repeated
+project sections with up to three recent sessions. The **Project Session
+Selector** replaces that list on home.
 
 ## Worktree-stable letter accent
 
@@ -53,17 +52,19 @@ Project list rows use the first letter of the display name and a letter accent
 color derived deterministically from the worktree path so the same project keeps
 the same accent across launches.
 
-## Project focus prototype
+## Project Session Selector
 
-Home keeps the existing project/session list as the source of truth and appends
-a feature-local **Project focus** prototype at the bottom of the same scroll.
+Home uses the shared Component Collection **Project Session Selector** as the
+primary project and session selector. The legacy **Browse projects** row and
+repeated project/session sections are removed from home; browsing remains
+available from the selector add tile.
 
-Project focus is local home UI state only. It chooses which added project's
-sessions appear in the prototype card and which worktree the prototype **New
+Project selection is local home UI state only. It chooses which added project's
+sessions appear in the selector card and which worktree the selector **New
 session** action uses. It does not switch the server's current project, mutate
 the Connection Profile beyond adding projects, or persist across app launches.
 
 Fresh home loads focus the first added project by insertion order. Adding a
 project through **Browse projects** focuses the newly added worktree. The
-prototype remains feature-local and is not part of the Component Collection or
-Component Gallery until the pattern proves reusable.
+selector is available in the Component Gallery with normal, empty, load-error,
+create-error, and selected-project scenarios for isolated iteration.
