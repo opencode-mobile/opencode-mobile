@@ -54,3 +54,24 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: If product design later calls for a distinct branded app
   chrome that intentionally overrides native alignment expectations on both
   platforms, revisit this divergence.
+
+## Outgoing message width measurement
+
+- Status: intentional
+- Area: component
+- Shared intent: outgoing prompt cards should render as a stable trailing
+  column that visually matches the `outgoingMessage.maxWidthFraction` width
+  intent without shifting when new messages are appended.
+- iOS behavior: `OpenCodeOutgoingMessage` uses a fixed leading gutter to produce
+  the trailing column. This avoids SwiftUI `containerRelativeFrame` remeasurement
+  during the send/auto-scroll update, which could shift the visible message-list
+  padding.
+- Android behavior: `OpenCodeOutgoingMessage` uses the shared
+  `outgoingMessage.maxWidthFraction` value directly with Compose layout
+  modifiers.
+- Reason: the shared fractional width semantics remain visually aligned, but
+  SwiftUI's relative container measurement was unstable in the session timeline
+  after an optimistic send.
+- Review trigger: revisit if the iOS timeline stops using lazy scroll
+  relayout/auto-scroll, or if a stable shared row-width primitive replaces the
+  current platform-specific measurement.

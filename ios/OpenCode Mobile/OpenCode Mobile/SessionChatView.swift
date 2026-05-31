@@ -47,7 +47,7 @@ struct SessionChatView: View {
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
     @State private var modelFilterText = ""
-    @State private var scrollPosition: String?
+    @State private var hasInitializedTimelineScroll = false
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -152,42 +152,45 @@ struct SessionChatView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                 }
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(messages) { message in
-                            HStack {
-                                if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                                    messageRow(message)
-                                    Spacer(minLength: 0)
-                                } else {
-                                    Spacer(minLength: 0)
-                                    messageRow(message)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(messages) { message in
+                                HStack {
+                                    if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                                        messageRow(message)
+                                        Spacer(minLength: 0)
+                                    } else {
+                                        Spacer(minLength: 0)
+                                        messageRow(message)
+                                    }
                                 }
+                                .id(message.id)
                             }
-                            .id(message.id)
+                            Color.clear
+                                .frame(height: 1)
+                                .id(TimelineScrollAnchor.bottom)
                         }
-                        Color.clear
-                            .frame(height: 1)
-                            .id(TimelineScrollAnchor.bottom)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .scrollTargetLayout()
-                }
-                .defaultScrollAnchor(.bottom)
-                .scrollPosition(id: $scrollPosition, anchor: .bottom)
-                .onChange(of: sessionID) { _, _ in
-                    scrollPosition = nil
-                }
-                .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
-                    await scrollTimelineToBottom(animated: scrollPosition != nil)
-                }
-                .refreshable {
-                    await viewModel.refreshMessages()
-                }
-                .overlay {
-                    if isRefreshing {
-                        ProgressView()
+                    .onChange(of: sessionID) { _, _ in
+                        hasInitializedTimelineScroll = false
+                    }
+                    .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
+                        await scrollTimelineToBottom(
+                            using: proxy,
+                            animated: hasInitializedTimelineScroll
+                        )
+                        hasInitializedTimelineScroll = true
+                    }
+                    .refreshable {
+                        await viewModel.refreshMessages()
+                    }
+                    .overlay {
+                        if isRefreshing {
+                            ProgressView()
+                        }
                     }
                 }
             }
@@ -200,23 +203,23 @@ struct SessionChatView: View {
     }
 
     @MainActor
-    private func scrollTimelineToBottom(animated: Bool) async {
+    private func scrollTimelineToBottom(using proxy: ScrollViewProxy, animated: Bool) async {
         guard !messagesFromLoadedState().isEmpty else { return }
         if animated {
             withAnimation {
-                scrollPosition = TimelineScrollAnchor.bottom
+                proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
             }
         } else {
-            scrollPosition = TimelineScrollAnchor.bottom
+            proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
         }
         await Task.yield()
         try? await Task.sleep(for: .milliseconds(50))
         if animated {
             withAnimation {
-                scrollPosition = TimelineScrollAnchor.bottom
+                proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
             }
         } else {
-            scrollPosition = TimelineScrollAnchor.bottom
+            proxy.scrollTo(TimelineScrollAnchor.bottom, anchor: .bottom)
         }
     }
 

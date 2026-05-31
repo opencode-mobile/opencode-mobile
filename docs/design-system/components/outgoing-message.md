@@ -40,12 +40,12 @@ separate treatment before they become reusable design-system components.
 ## Behavior
 
 Messages render trailing aligned in their parent conversation row. The rounded
-bubble always uses `outgoingMessage.maxWidthFraction` of the available row width,
-even when the message text is short. The message text is shown without a role
-prefix; alignment communicates that the message is outgoing. The bubble uses
-`color.surface.inset` so it remains distinct from the page background in light
-mode without introducing a component-only raw color. Bubble corners match
-`listItem.cornerRadius`.
+bubble uses the shared width intent from `outgoingMessage.maxWidthFraction` so
+outgoing prompts read as a consistent column, even when the message text is
+short. The message text is shown without a role prefix; alignment communicates
+that the message is outgoing. The bubble uses `color.surface.inset` so it
+remains distinct from the page background in light mode without introducing a
+component-only raw color. Bubble corners match `listItem.cornerRadius`.
 
 By default, content longer than five rendered lines is collapsed to five lines.
 Expandable messages show an expand/collapse control inside the bubble in the bottom
@@ -70,7 +70,9 @@ action must not delete or resend the original message. The controls expose
 - iOS: implemented with SwiftUI text line limiting and catalog icon buttons inside
   the rounded message surface (`OpenCodeIcon.expandContent` /
   `OpenCodeIcon.collapseContent` from Material Symbols; `undo` and `content_copy`
-  from the shared catalog).
+  from the shared catalog). The trailing column uses a stable leading gutter
+  instead of SwiftUI `containerRelativeFrame`; see
+  `../divergences.md#outgoing-message-width-measurement`.
 - Android: implemented with Compose text line limiting and icon buttons inside a
   Material 3 surface (`OpenCodeIcons.ExpandContent`, `OpenCodeIcons.CollapseContent`,
   `OpenCodeIcons.Undo`, `OpenCodeIcons.ContentCopy`).
@@ -90,5 +92,5 @@ action must not delete or resend the original message. The controls expose
 ## Parity And Divergence
 
 Shared semantics for layout, overflow behavior, and chevron accessibility are
-aligned across iOS and Android. No intentional divergence is defined for this
-component.
+aligned across iOS and Android. Width measurement has one intentional iOS
+implementation divergence documented in `../divergences.md`.
