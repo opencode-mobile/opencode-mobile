@@ -19,10 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
-import dev.opencode.mobile.ui.components.LocalBottomSheetScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,7 +55,6 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import kotlin.math.roundToInt
 
 private enum class ComposerPickerKind(
     val sheetTitle: String,
@@ -297,15 +292,7 @@ private fun ModelPickerSheetContent(
     filterText: String,
     onSelectModel: (ModelSelectionOption) -> Unit,
 ) {
-    val scrollState = LocalBottomSheetScrollState.current
-    var selectedOffset by remember { mutableIntStateOf(-1) }
     val filteredModels = modelOptions.filter { it.matchesFilter(filterText) }
-
-    LaunchedEffect(selectedOffset, scrollState) {
-        val state = scrollState ?: return@LaunchedEffect
-        if (selectedOffset < 0) return@LaunchedEffect
-        state.scrollTo(selectedOffset.coerceIn(0, state.maxValue))
-    }
 
     if (filteredModels.isEmpty()) {
         OpenCodeBottomSheetEntry(
@@ -324,14 +311,6 @@ private fun ModelPickerSheetContent(
                         BottomSheetEntryDecorator.None
                     },
                 onClick = { onSelectModel(model) },
-                modifier =
-                    if (model == selectedModel) {
-                        Modifier.onGloballyPositioned { coordinates ->
-                            selectedOffset = coordinates.positionInParent().y.roundToInt()
-                        }
-                    } else {
-                        Modifier
-                    },
             )
         }
     }

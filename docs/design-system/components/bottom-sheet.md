@@ -16,6 +16,8 @@ clear title, an explicit close affordance, and one or more tappable entries.
   sheet (see Behavior).
 - Required content: sheet `title`, close action, and entry `title`.
 - Optional content:
+  - sheet pinned content: fixed content rendered between the header and the
+    scrollable body, such as a filter field.
   - entry start decorator: `none` or `icon`.
   - entry end decorator: `none` or `icon`.
 
@@ -51,8 +53,13 @@ Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
 
 On Android, pass `keyboardAware = true` when the sheet hosts text fields rather
-than action entries. That mode applies `imePadding()` to the sheet body so the
-keyboard lifts form content.
+than action entries. That mode applies `imePadding()` inside the sheet content
+area so the keyboard lifts form content without shifting the full sheet by the
+IME height.
+
+On Android, the component owns vertical scrolling for long content. Feature
+content inside the sheet body should not add its own vertical scroll container.
+Use pinned content for fixed controls above the scrollable body when needed.
 
 Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
 `OpenCodeIcons` on Android). Icons are decorative when the

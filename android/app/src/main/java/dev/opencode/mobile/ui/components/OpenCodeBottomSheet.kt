@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,9 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -97,8 +94,6 @@ private enum class BottomSheetLayoutMode {
     Compact,
     Scrollable,
 }
-
-internal val LocalBottomSheetScrollState = compositionLocalOf<ScrollState?> { null }
 
 sealed class BottomSheetEntryDecorator {
     data object None : BottomSheetEntryDecorator()
@@ -257,7 +252,7 @@ private fun BottomSheetContent(
     val scrollState = rememberScrollState()
 
     val layoutMode =
-        remember(contentHeight, headerHeight) {
+        remember(contentHeight, headerHeight, pinnedContentHeight) {
             if (contentHeight == 0.dp) {
                 BottomSheetLayoutMode.Measuring
             } else {
@@ -284,7 +279,6 @@ private fun BottomSheetContent(
             .fillMaxWidth()
             .padding(bottom = BottomSheetContentBottomPadding)
             .navigationBarsPadding()
-            .then(if (keyboardAware) Modifier.imePadding() else Modifier)
 
     Box(modifier = bodyModifier) {
         Column(
@@ -320,23 +314,27 @@ private fun BottomSheetContent(
 
             when (layoutMode) {
                 BottomSheetLayoutMode.Compact -> {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(if (keyboardAware) Modifier.imePadding() else Modifier),
+                    ) {
                         content()
                     }
                 }
                 BottomSheetLayoutMode.Measuring,
                 BottomSheetLayoutMode.Scrollable,
                 -> {
-                    CompositionLocalProvider(LocalBottomSheetScrollState provides scrollState) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = scrollBodyMaxHeight)
-                                    .verticalScroll(scrollState),
-                        ) {
-                            content()
-                        }
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = scrollBodyMaxHeight)
+                                .then(if (keyboardAware) Modifier.imePadding() else Modifier)
+                                .verticalScroll(scrollState),
+                    ) {
+                        content()
                     }
                 }
             }

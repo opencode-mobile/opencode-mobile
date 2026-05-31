@@ -154,7 +154,7 @@ fun MainNavigation() {
                     visible = connectionSetupVisible,
                     title = "Connect to server",
                     onDismissRequest = { connectionSetupVisible = false },
-                    keyboardAware = true,
+                    keyboardAware = false,
                 ) {
                     ConnectionSetupSheetContent(
                         uiState = setupUiState,
