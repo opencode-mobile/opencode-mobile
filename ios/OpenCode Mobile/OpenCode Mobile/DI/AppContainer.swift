@@ -14,9 +14,14 @@ extension Container {
         self { @MainActor in
             ConnectionSessionCoordinator(
                 activeConnectionManager: self.activeConnectionManager(),
-                connectionProfileStore: self.connectionProfileStore()
+                connectionProfileStore: self.connectionProfileStore(),
+                secureCredentialStore: self.secureCredentialStore()
             )
         }.singleton
+    }
+
+    var secureCredentialStore: Factory<any SecureCredentialStore> {
+        self { KeychainCredentialStore() }.singleton
     }
 
     var connectionProbeService: Factory<ConnectionProbeService> {
@@ -220,5 +225,16 @@ extension Container {
     @MainActor
     static func makeSessionChatViewModel(sessionID: String, sessionTitle: String, worktree: String) -> SessionChatViewModel {
         shared.sessionChatViewModel((sessionID: sessionID, sessionTitle: sessionTitle, worktree: worktree))
+    }
+
+    @MainActor
+    static func clearAllData() {
+        Task {
+            await shared.connectionSessionCoordinator().clearConnectionData()
+            shared.sessionLiveStore().clearCache()
+            shared.sessionStatusLiveStore().clearCache()
+            shared.messageLiveStore().clearCache()
+            ThemeManager.shared.clearAll()
+        }
     }
 }

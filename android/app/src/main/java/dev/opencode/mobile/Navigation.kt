@@ -44,13 +44,13 @@ import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupSheetContent
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.settings.SettingsScreen
+import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 
@@ -60,6 +60,7 @@ fun MainNavigation() {
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
     var connectionSetupVisible by rememberSaveable { mutableStateOf(false) }
     val setupViewModel: ConnectionSetupViewModel = hiltViewModel()
+    val settingsViewModel: SettingsViewModel = hiltViewModel()
 
     fun presentConnectionSetup(initialProfile: ConnectionProfile?) {
         setupViewModel.configure(initialProfile)
@@ -84,10 +85,6 @@ fun MainNavigation() {
                 when (rootState) {
                     AppRootState.Loading ->
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    AppRootState.Onboarding ->
-                        ConnectionOnboardingScreen(
-                            onConnectClick = { presentConnectionSetup(initialProfile = null) },
-                        )
                     AppRootState.Home ->
                         NavDisplay(
                             modifier = Modifier.safeDrawingPadding(),
@@ -108,6 +105,7 @@ fun MainNavigation() {
                                                 onEditConnectionClick = { profile ->
                                                     presentConnectionSetup(initialProfile = profile)
                                                 },
+                                                onConnectClick = { presentConnectionSetup(initialProfile = null) },
                                             )
                                         }
                                     }
@@ -120,6 +118,7 @@ fun MainNavigation() {
                                                     setupViewModel.configureFromCurrentProfile()
                                                     connectionSetupVisible = true
                                                 },
+                                                onClearData = settingsViewModel::clearAllData,
                                             )
                                         }
                                     }

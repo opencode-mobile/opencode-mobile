@@ -1,3 +1,4 @@
+import Factory
 import SwiftUI
 
 private struct SectionHeader: View {
@@ -21,6 +22,7 @@ struct SettingsView: View {
     let onConnectionSetup: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
+    @State private var showClearConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,6 +51,13 @@ struct SettingsView: View {
                         startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
                         action: { showComponentGallery = true }
                     )
+
+                    OpenCodeListItem(
+                        title: "Clear All Data",
+                        subtitle: "Remove connection, cache, and imported themes",
+                        startDecorator: .icon(.close, accessibilityLabel: "Clear All Data"),
+                        action: { showClearConfirmation = true }
+                    )
                 }
             }
         }
@@ -57,6 +66,14 @@ struct SettingsView: View {
         .background(OpenCodeColors.backgroundPrimary)
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
+        }
+        .alert("Clear all data?", isPresented: $showClearConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                Container.clearAllData()
+            }
+        } message: {
+            Text("This cannot be undone.")
         }
     }
 }

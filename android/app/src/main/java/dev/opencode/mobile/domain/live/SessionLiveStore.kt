@@ -5,4 +5,5 @@ import kotlinx.coroutines.flow.Flow
 
 interface SessionLiveStore {
     fun observeSessions(directory: String): Flow<List<Session>>
+    fun clearCache()
 }

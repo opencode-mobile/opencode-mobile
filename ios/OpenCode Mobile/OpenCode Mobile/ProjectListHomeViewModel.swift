@@ -30,6 +30,7 @@ struct SeeAllSessionsSheetState: Equatable {
 }
 
 enum ProjectListHomeState: Equatable {
+    case disconnected
     case probing
     case probeFailed(String)
     case loading
@@ -94,6 +95,12 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 await self?.refresh()
+            }
+        }
+        connectionSessionCoordinator.onProfileCleared { [weak self] in
+            Task { @MainActor in
+                self?.stopLiveObservations()
+                self?.state = .disconnected
             }
         }
         startObservingConnectionState()
@@ -208,6 +215,11 @@ final class ProjectListHomeViewModel {
     }
 
     private func runHomeLoad(skipProbe: Bool = false) async {
+        guard activeConnectionManager.connection != nil else {
+            stopLiveObservations()
+            state = .disconnected
+            return
+        }
         if !skipProbe {
             state = .probing
             do {

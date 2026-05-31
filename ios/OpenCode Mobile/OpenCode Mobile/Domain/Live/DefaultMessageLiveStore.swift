@@ -101,6 +101,10 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         }
     }
 
+    func clearCache() {
+        cache.removeAll()
+    }
+
     private func loadMessages(sessionID: String, directory: String) async -> [Message]? {
         do {
             return try await messageRepository.listMessages(sessionID: sessionID, directory: directory)

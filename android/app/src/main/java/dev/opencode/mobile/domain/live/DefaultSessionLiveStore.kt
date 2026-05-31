@@ -28,6 +28,10 @@ class DefaultSessionLiveStore
     ) : SessionLiveStore {
         private val cache = ConcurrentHashMap<String, SharedFlow<List<Session>>>()
 
+        override fun clearCache() {
+            cache.clear()
+        }
+
         override fun observeSessions(directory: String): Flow<List<Session>> =
             cache.getOrPut(directory) { buildSharedFlow(directory) }
 

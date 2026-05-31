@@ -30,6 +30,10 @@ class DefaultMessageLiveStore
     ) : MessageLiveStore {
         private val cache = ConcurrentHashMap<MessageObservationKey, SharedFlow<List<Message>>>()
 
+        override fun clearCache() {
+            cache.clear()
+        }
+
         override fun observeMessages(
             sessionId: String,
             directory: String,

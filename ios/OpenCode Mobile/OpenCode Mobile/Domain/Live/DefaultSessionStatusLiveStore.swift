@@ -42,6 +42,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         }
     }
 
+    func clearCache() {
+        cache.removeAll()
+    }
+
     private func loadStatuses(directory: String) async -> [String: SessionStatus]? {
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: directory) else {
             return nil

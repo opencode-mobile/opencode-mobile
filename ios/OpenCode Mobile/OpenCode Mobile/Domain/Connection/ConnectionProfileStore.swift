@@ -6,6 +6,7 @@ protocol ConnectionProfileStore: Sendable {
     func addedWorktrees(serverBaseURL: String) async -> [String]
     func addWorktree(serverBaseURL: String, worktree: String) async
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async
+    func clearAll() async
 }
 
 struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
@@ -59,6 +60,15 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         var seen = Set<String>()
         let ordered = worktrees.filter { seen.insert($0).inserted }
         defaults.set(ordered, forKey: worktreePrefix + normalizedKey(serverBaseURL))
+    }
+
+    func clearAll() async {
+        defaults.removeObject(forKey: activeBaseURLKey)
+        defaults.removeObject(forKey: activeUsernameKey)
+        let allKeys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(worktreePrefix) }
+        for key in allKeys {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     private func normalizedKey(_ serverBaseURL: String) -> String {

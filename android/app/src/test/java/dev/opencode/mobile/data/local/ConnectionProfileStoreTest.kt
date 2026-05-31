@@ -81,6 +81,11 @@ private class InMemoryConnectionProfileStore(
         data[normalize(serverBaseUrl)] = worktrees.distinct()
     }
 
+    override suspend fun clearAll() {
+        data.clear()
+        activeProfile = null
+    }
+
     private fun normalize(baseUrl: String): String = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
 }
 

@@ -16,4 +16,6 @@ interface ConnectionProfileStore {
         serverBaseUrl: String,
         worktrees: List<String>,
     )
+
+    suspend fun clearAll()
 }

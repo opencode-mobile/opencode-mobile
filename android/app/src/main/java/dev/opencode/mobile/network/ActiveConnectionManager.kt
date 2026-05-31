@@ -35,6 +35,10 @@ class ActiveConnectionManager
                 )
             }
 
+        fun disconnect() {
+            connection = null
+        }
+
         fun requireConnection(): ServerConnection = connection ?: error("No active server connection")
 
         suspend fun applyProfile(profile: ConnectionProfile) {
