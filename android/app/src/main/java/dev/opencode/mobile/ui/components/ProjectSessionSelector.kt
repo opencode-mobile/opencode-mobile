@@ -148,7 +148,7 @@ private fun ProjectSessionSelectorTile(
 ) {
     val dark = isSystemInDarkTheme()
     val (fill, tint) = project.letterAccent.badgeColors(dark)
-    val selectedColor = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
+    val selectedColor = if (dark) Color.White else MaterialTheme.colorScheme.outline
     Box(
         modifier =
             Modifier
@@ -232,9 +232,6 @@ private fun AddProjectSessionSelectorTile(onClick: () -> Unit) {
 
 @Composable
 private fun ProjectSessionSelectorHeader(project: ProjectSessionSelectorProject) {
-    val dark = isSystemInDarkTheme()
-    val interactiveColor =
-        if (dark) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary
     Column(
         modifier =
             Modifier.padding(
@@ -253,7 +250,7 @@ private fun ProjectSessionSelectorHeader(project: ProjectSessionSelectorProject)
                 imageVector = OpenCodeIcons.Folder,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = interactiveColor,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = project.displayName,

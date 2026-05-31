@@ -108,7 +108,7 @@ struct ProjectSessionSelector: View {
             HStack(spacing: 4) {
                 OpenCodeIconImage(icon: .folder)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.textInteractive)
+                    .foregroundStyle(OpenCodeColors.iconDefault)
                     .accessibilityHidden(true)
                 Text(project.displayName)
                     .font(OpenCodeTypography.bodySecondary)
@@ -195,7 +195,7 @@ private struct ProjectSessionSelectorTile: View {
     let action: () -> Void
 
     private var selectedOutlineColor: Color {
-        colorScheme == .dark ? .white : OpenCodeColors.textPrimary
+        colorScheme == .dark ? .white : OpenCodeColors.borderDefault
     }
 
     var body: some View {
