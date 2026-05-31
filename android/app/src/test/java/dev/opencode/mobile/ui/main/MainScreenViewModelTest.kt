@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.main
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -233,6 +234,8 @@ class MainScreenViewModelTest {
         val coordinator =
             ConnectionSessionCoordinator(
                 activeConnectionManager = activeConnectionManager,
+                connectionProfileStore = connectionProfileStore,
+                secureCredentialStore = FakeSecureCredentialStore(),
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
@@ -417,5 +420,23 @@ private class FakeConnectionProfileStore(
         data[serverBaseUrl] = worktrees
     }
 
+    override suspend fun clearAll() {
+        data.clear()
+    }
+
     private fun serverUrlKey(): String = "http://127.0.0.1:4096/"
+}
+
+private class FakeSecureCredentialStore : SecureCredentialStore {
+    private val passwords = mutableMapOf<String, String>()
+
+    override fun readPassword(serverBaseUrl: String): String? = passwords[serverBaseUrl]
+
+    override fun writePassword(serverBaseUrl: String, password: String) {
+        passwords[serverBaseUrl] = password
+    }
+
+    override fun deletePassword(serverBaseUrl: String) {
+        passwords.remove(serverBaseUrl)
+    }
 }

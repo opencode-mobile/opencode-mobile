@@ -35,6 +35,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.ProjectSessionSelector
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
+import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -42,6 +43,7 @@ fun MainScreen(
     onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
+    onConnectClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
@@ -54,6 +56,7 @@ fun MainScreen(
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
         onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
+        onConnectClick = onConnectClick,
         onRefresh = viewModel::refresh,
         onAddProjectClick = viewModel::showAddProjectSheet,
         onFocusProject = viewModel::focusProject,
@@ -74,6 +77,7 @@ internal fun MainScreen(
     onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
+    onConnectClick: () -> Unit,
     onRetryProbe: () -> Unit,
     onRefresh: () -> Unit,
     onAddProjectClick: () -> Unit,
@@ -128,6 +132,11 @@ internal fun MainScreen(
             }
 
             when (uiState) {
+                is MainScreenUiState.Disconnected -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        ConnectionOnboardingScreen(onConnectClick = onConnectClick)
+                    }
+                }
                 MainScreenUiState.Probing,
                 MainScreenUiState.Loading,
                 -> {
@@ -297,7 +306,7 @@ private fun SessionSummary.toProjectSessionSelectorSession(): ProjectSessionSele
 
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
     when (uiState) {
-        MainScreenUiState.Probing, MainScreenUiState.Loading -> false
+        MainScreenUiState.Disconnected, MainScreenUiState.Probing, MainScreenUiState.Loading -> false
         else -> true
     }
 
@@ -335,6 +344,7 @@ fun MainScreenPreview() {
             onSettingsClick = {},
             onSessionClick = {},
             onEditConnection = {},
+            onConnectClick = {},
             onRetryProbe = {},
             onRefresh = {},
             onAddProjectClick = {},

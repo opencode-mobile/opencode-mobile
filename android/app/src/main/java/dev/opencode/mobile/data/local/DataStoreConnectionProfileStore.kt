@@ -69,6 +69,12 @@ class DataStoreConnectionProfileStore
             }
         }
 
+        override suspend fun clearAll() {
+            context.connectionProfileDataStore.edit { prefs ->
+                prefs.clear()
+            }
+        }
+
         private fun normalizeBaseUrl(baseUrl: String): String {
             val trimmed = baseUrl.trim()
             return if (trimmed.endsWith('/')) trimmed else "$trimmed/"

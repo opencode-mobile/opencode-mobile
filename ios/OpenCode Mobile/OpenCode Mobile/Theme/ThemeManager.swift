@@ -106,4 +106,10 @@ final class ThemeManager {
     private func saveSelectedThemeID(_ id: String) {
         defaults.set(id, forKey: "selectedThemeID")
     }
+
+    func clearAll() {
+        defaults.removeObject(forKey: "importedThemes")
+        defaults.removeObject(forKey: "selectedThemeID")
+        loadBundledTheme()
+    }
 }

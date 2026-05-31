@@ -310,6 +310,8 @@ class SessionChatViewModelTest {
 private class EventDrivenFakeMessageLiveStore(
     private val repository: FakeMessageRepository,
 ) : MessageLiveStore {
+    override fun clearCache() = Unit
+
     override fun observeMessages(
         sessionId: String,
         directory: String,

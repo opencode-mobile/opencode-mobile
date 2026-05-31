@@ -6,6 +6,7 @@ struct ProjectListHomeView: View {
     @State private var showSettings = false
     @State private var selectedSession: SessionListItem?
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
+    @State private var connectionSetupViewModel: ConnectionSetupViewModel?
 
     init(viewModel: ProjectListHomeViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -51,26 +52,31 @@ struct ProjectListHomeView: View {
         }
         .openCodeBottomSheet(item: $connectionSetupPresentation, title: "Connect to server") { presentation in
             ConnectionSetupSheetView(
-                viewModel: Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
-                onDismiss: { connectionSetupPresentation = nil }
+                viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
+                onDismiss: {
+                    connectionSetupPresentation = nil
+                    connectionSetupViewModel = nil
+                }
             )
         }
     }
 
     private func presentConnectionSetup() {
         if let profile = Container.shared.activeConnectionManager().currentProfile() {
+            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile)
             connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile)
             return
         }
         Task {
             let profile = await Container.shared.connectionProfileStore().activeProfile()
+            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile)
             connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile)
         }
     }
 
     private var showsLiveUpdatesStatus: Bool {
         switch viewModel.state {
-        case .probing, .loading:
+        case .disconnected, .probing, .loading:
             false
         default:
             true
@@ -84,6 +90,8 @@ struct ProjectListHomeView: View {
             Spacer()
             ProgressView()
             Spacer()
+        case .disconnected:
+            ConnectionOnboardingView(onConnectClick: presentConnectionSetup)
         case let .probeFailed(message):
             probeFailed(message)
         case let .empty(_, _, createError):
@@ -326,6 +334,7 @@ private struct PreviewConnectionProfileStore: ConnectionProfileStore {
     func addedWorktrees(serverBaseURL: String) async -> [String] { ["/demo"] }
     func addWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
+    func clearAll() async {}
 }
 
 private struct PreviewSessionRepository: SessionRepository {

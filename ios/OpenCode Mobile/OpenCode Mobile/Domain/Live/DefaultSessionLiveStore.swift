@@ -42,6 +42,10 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         }
     }
 
+    func clearCache() {
+        cache.removeAll()
+    }
+
     private func loadSessions(directory: String) async -> [Session]? {
         try? await sessionRepository.listSessions(directory: directory)
     }

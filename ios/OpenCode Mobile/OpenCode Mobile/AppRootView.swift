@@ -4,7 +4,6 @@ import SwiftUI
 
 enum AppRootState: Equatable {
     case loading
-    case onboarding
     case home
 }
 
@@ -38,12 +37,7 @@ final class AppRootViewModel {
 
     func load() async {
         await activeConnectionManager.ensureLoaded(from: connectionProfileStore)
-        if activeConnectionManager.connection != nil {
-            enterHome()
-        } else {
-            foregroundEventStream.stop()
-            state = .onboarding
-        }
+        enterHome()
     }
 
     func enterHome() {
@@ -56,7 +50,6 @@ final class AppRootViewModel {
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
-    @State private var connectionSetupPresentation: ConnectionSetupPresentation?
 
     var body: some View {
         Group {
@@ -64,10 +57,6 @@ struct AppRootView: View {
             case .loading:
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .onboarding:
-                ConnectionOnboardingView {
-                    connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: nil)
-                }
             case .home:
                 NavigationStack {
                     ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
@@ -78,12 +67,6 @@ struct AppRootView: View {
         .background(OpenCodeColors.backgroundPrimary)
         .task {
             await rootViewModel.load()
-        }
-        .openCodeBottomSheet(item: $connectionSetupPresentation, title: "Connect to server") { presentation in
-            ConnectionSetupSheetView(
-                viewModel: Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
-                onDismiss: { connectionSetupPresentation = nil }
-            )
         }
         .onChange(of: scenePhase) { _, phase in
             guard rootViewModel.state == .home else { return }

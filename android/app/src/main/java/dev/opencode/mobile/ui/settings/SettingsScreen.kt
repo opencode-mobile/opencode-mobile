@@ -5,9 +5,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -24,8 +30,11 @@ fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
+    onClearData: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showClearConfirmation by remember { mutableStateOf(false) }
+
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Settings",
@@ -51,7 +60,37 @@ fun SettingsScreen(
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
                 onClick = onComponentGalleryClick,
             )
+
+            OpenCodeListItem(
+                title = "Clear All Data",
+                subtitle = "Remove connection, cache, and imported themes",
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
+                onClick = { showClearConfirmation = true },
+            )
         }
+    }
+
+    if (showClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation = false },
+            title = { Text("Clear all data?") },
+            text = { Text("This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearConfirmation = false
+                        onClearData()
+                    },
+                ) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmation = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
@@ -80,6 +119,7 @@ private fun SettingsScreenLightPreview() {
             onComponentGalleryClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
+            onClearData = {},
         )
     }
 }
@@ -92,6 +132,7 @@ private fun SettingsScreenDarkPreview() {
             onComponentGalleryClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
+            onClearData = {},
         )
     }
 }

@@ -76,6 +76,11 @@ class MainScreenViewModel
                     refresh()
                 }
             }
+            viewModelScope.launch {
+                connectionSessionCoordinator.profileCleared.collect {
+                    _uiState.value = MainScreenUiState.Disconnected
+                }
+            }
         }
 
         fun refresh() {
@@ -183,6 +188,10 @@ class MainScreenViewModel
         }
 
         private suspend fun runHomeLoad(skipProbe: Boolean = false) {
+            if (activeConnectionManager.current() == null) {
+                _uiState.value = MainScreenUiState.Disconnected
+                return
+            }
             if (!skipProbe) {
                 _uiState.value = MainScreenUiState.Probing
                 try {
@@ -413,6 +422,8 @@ class MainScreenViewModel
     }
 
 sealed interface MainScreenUiState {
+    data object Disconnected : MainScreenUiState
+
     data object Probing : MainScreenUiState
 
     data class ProbeFailed(

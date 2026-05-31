@@ -17,7 +17,6 @@ import javax.inject.Inject
 
 enum class AppRootState {
     Loading,
-    Onboarding,
     Home,
 }
 
@@ -48,14 +47,9 @@ class AppRootViewModel
 
         private suspend fun loadInitialState() {
             activeConnectionManager.ensureLoaded()
-            if (activeConnectionManager.current() != null) {
-                httpClient.rebuild()
-                sseHttpClient.rebuild()
-                enterHome()
-            } else {
-                foregroundEventStream.stop()
-                _state.value = AppRootState.Onboarding
-            }
+            httpClient.rebuild()
+            sseHttpClient.rebuild()
+            enterHome()
         }
 
         private fun enterHome() {

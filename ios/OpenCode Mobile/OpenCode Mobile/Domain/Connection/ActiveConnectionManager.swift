@@ -34,6 +34,12 @@ final class ActiveConnectionManager: @unchecked Sendable {
         lock.unlock()
     }
 
+    func disconnect() {
+        lock.lock()
+        _connection = nil
+        lock.unlock()
+    }
+
     func currentProfile() -> ConnectionProfile? {
         guard let connection = connection else { return nil }
         return ConnectionProfile(
@@ -47,20 +53,30 @@ final class ActiveConnectionManager: @unchecked Sendable {
 final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: ConnectionProfileStore
+    private let secureCredentialStore: SecureCredentialStore
     private let lock = NSLock()
     private var profileSavedHandlers: [() -> Void] = []
+    private var profileClearedHandlers: [() -> Void] = []
 
     init(
         activeConnectionManager: ActiveConnectionManager,
-        connectionProfileStore: ConnectionProfileStore
+        connectionProfileStore: ConnectionProfileStore,
+        secureCredentialStore: SecureCredentialStore = KeychainCredentialStore()
     ) {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
+        self.secureCredentialStore = secureCredentialStore
     }
 
     func onProfileSaved(_ handler: @escaping () -> Void) {
         lock.lock()
         profileSavedHandlers.append(handler)
+        lock.unlock()
+    }
+
+    func onProfileCleared(_ handler: @escaping () -> Void) {
+        lock.lock()
+        profileClearedHandlers.append(handler)
         lock.unlock()
     }
 
@@ -70,6 +86,17 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         lock.lock()
         let handlers = profileSavedHandlers
         lock.unlock()
+        handlers.forEach { $0() }
+    }
+
+    func clearConnectionData() async {
+        let profile = await connectionProfileStore.activeProfile()
+        if let baseURL = profile?.baseURL {
+            secureCredentialStore.deletePassword(serverBaseURL: baseURL)
+        }
+        await connectionProfileStore.clearAll()
+        activeConnectionManager.disconnect()
+        let handlers = profileClearedHandlers
         handlers.forEach { $0() }
     }
 }

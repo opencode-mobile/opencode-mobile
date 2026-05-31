@@ -43,6 +43,12 @@ object ThemeManager {
         resolvedDark = ThemeResolver.resolve(currentTheme.dark, isDark = true)
     }
 
+    fun clearAll() {
+        currentTheme = loadBundledTheme()
+        resolve()
+        loadError = null
+    }
+
     fun importTheme(jsonData: String) {
         try {
             val theme = json.decodeFromString<OpenCodeTheme>(jsonData)
