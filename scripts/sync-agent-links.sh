@@ -31,8 +31,8 @@ link_path() {
   echo "linked: $link_path -> $target"
 }
 
-if [[ ! -d ".agents" ]]; then
-  echo "error: .agents directory is missing" >&2
+if [[ ! -d ".agents/skills" ]]; then
+  echo "error: .agents/skills directory is missing" >&2
   exit 1
 fi
 
@@ -41,8 +41,8 @@ if [[ ! -f "AGENTS.md" ]]; then
   exit 1
 fi
 
-link_path ".cursor/skills" "../.agents"
-link_path ".claude/skills" "../.agents"
+link_path ".cursor/skills" "../.agents/skills"
+link_path ".claude/skills" "../.agents/skills"
 link_path "CLAUDE.md" "AGENTS.md"
 
 echo "Agent symlinks are up to date."
