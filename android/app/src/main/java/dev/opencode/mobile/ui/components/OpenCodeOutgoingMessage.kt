@@ -71,7 +71,7 @@ fun OpenCodeOutgoingMessage(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = OutgoingMessageShape,
-                color = MaterialTheme.colorScheme.tertiaryContainer,
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
                 Column(
@@ -181,7 +181,7 @@ private fun OutgoingMessageIconButton(
                     this.contentDescription = contentDescription
                 },
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
     ) {
         Box(contentAlignment = Alignment.Center) {
