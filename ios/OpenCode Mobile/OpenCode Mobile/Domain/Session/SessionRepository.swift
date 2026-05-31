@@ -11,7 +11,7 @@ protocol SessionRepository: Sendable {
     func listSessionTodos(id: String) async throws -> [SessionTodo]
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool
     func forkSession(id: String, atMessageID: String?) async throws -> Session
-    func abortSession(id: String) async throws -> Bool
+    func abortSession(id: String, directory: String?) async throws -> Bool
     func shareSession(id: String) async throws -> Session
     func unshareSession(id: String) async throws -> Session
     func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff]
@@ -79,8 +79,8 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { adapter.session(from: try await api.forkSession(id: id, messageID: atMessageID)) }
     }
 
-    func abortSession(id: String) async throws -> Bool {
-        try await run { try await api.abortSession(id: id) }
+    func abortSession(id: String, directory: String?) async throws -> Bool {
+        try await run { try await api.abortSession(id: id, directory: directory) }
     }
 
     func shareSession(id: String) async throws -> Session {

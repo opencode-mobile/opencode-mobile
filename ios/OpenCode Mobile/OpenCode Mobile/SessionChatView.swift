@@ -300,6 +300,16 @@ struct SessionChatView: View {
 
                 Spacer(minLength: 0)
 
+                if viewModel.sessionStatusLabel != nil {
+                    OpenCodeButton(
+                        variant: .iconCircle(.stop, accessibilityLabel: "Abort active work"),
+                        enabled: !viewModel.isAborting,
+                        contrast: .low
+                    ) {
+                        Task { await viewModel.abortSession() }
+                    }
+                }
+
                 OpenCodeButton(
                     variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
                     enabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,

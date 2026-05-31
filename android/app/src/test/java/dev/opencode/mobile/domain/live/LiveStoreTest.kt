@@ -407,7 +407,7 @@ private class FakeSessionRepository(
     override suspend fun abortSession(
         id: String,
         directory: String?,
-    ): Boolean = error("unused")
+    ): Boolean = true
 
     override suspend fun shareSession(
         id: String,

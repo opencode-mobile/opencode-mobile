@@ -82,6 +82,7 @@ enum SessionChatScreenState: Equatable {
 final class SessionChatViewModel {
     private(set) var state: SessionChatScreenState
     private(set) var sessionStatusLabel: String?
+    private(set) var isAborting = false
     private let sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
@@ -296,6 +297,27 @@ final class SessionChatViewModel {
                 )
             } else {
                 applyError(error, sessionID: sessionID)
+            }
+        }
+    }
+
+    func abortSession() async {
+        isAborting = true
+        do {
+            _ = try await sessionRepository.abortSession(id: sessionID, directory: worktree)
+            isAborting = false
+        } catch {
+            isAborting = false
+            if case let .loaded(id, title, messages, composer, isSending, isRefreshing, _) = state {
+                state = .loaded(
+                    sessionID: id,
+                    sessionTitle: title,
+                    messages: messages,
+                    composer: composer,
+                    isSending: isSending,
+                    isRefreshing: isRefreshing,
+                    errorBanner: errorMessage(error)
+                )
             }
         }
     }

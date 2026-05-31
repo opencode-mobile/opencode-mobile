@@ -28,6 +28,7 @@ private var _search: ImageVector? = null
 private var _settings: ImageVector? = null
 private var _architecture: ImageVector? = null
 private var _cloud: ImageVector? = null
+private var _stop: ImageVector? = null
 private var _stop_circle: ImageVector? = null
 private var _undo: ImageVector? = null
 private var _widgets: ImageVector? = null
@@ -382,6 +383,25 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _cloud!!
+    }
+
+  val Stop: ImageVector
+    get() {
+      if (_stop != null) return _stop!!
+      _stop = ImageVector.Builder(
+        name = "Stop",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M6 6h12v12H6z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _stop!!
     }
 
   val StopCircle: ImageVector

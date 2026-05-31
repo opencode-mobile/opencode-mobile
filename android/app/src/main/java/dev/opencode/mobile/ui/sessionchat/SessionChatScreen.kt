@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -205,12 +206,15 @@ fun SessionChatScreen(
                 selectedVariant = uiState.selectedVariantLabel,
                 showVariant = uiState.canSelectVariant,
                 sendEnabled = uiState.composerText.isNotBlank() && uiState.selectedModel != null && !uiState.isSending,
+                showStop = uiState.sessionStatusLabel != null,
+                stopEnabled = !uiState.isAborting,
                 onTextChange = viewModel::updateComposerText,
                 onModelClick = { activePicker = ComposerPickerKind.Model },
                 onModeClick = { activePicker = ComposerPickerKind.Mode },
                 onVariantClick = { activePicker = ComposerPickerKind.Variant },
                 onAttachClick = {},
                 onSendClick = viewModel::sendPrompt,
+                onStopClick = viewModel::abort,
             )
         }
 
@@ -450,12 +454,15 @@ private fun SessionComposer(
     selectedVariant: String,
     showVariant: Boolean,
     sendEnabled: Boolean,
+    showStop: Boolean,
+    stopEnabled: Boolean,
     onTextChange: (String) -> Unit,
     onModelClick: () -> Unit,
     onModeClick: () -> Unit,
     onVariantClick: () -> Unit,
     onAttachClick: () -> Unit,
     onSendClick: () -> Unit,
+    onStopClick: () -> Unit,
 ) {
     Column(
         modifier =
@@ -502,7 +509,6 @@ private fun SessionComposer(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OpenCodeButton(
@@ -510,6 +516,15 @@ private fun SessionComposer(
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = onAttachClick,
             )
+            Spacer(Modifier.weight(1f))
+            if (showStop) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Stop, "Abort active work"),
+                    enabled = stopEnabled,
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = onStopClick,
+                )
+            }
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
                 enabled = sendEnabled,
