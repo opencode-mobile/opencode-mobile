@@ -3,11 +3,13 @@ import Foundation
 struct MessageDomainAdapter: Sendable {
     func message(from dto: MessageDTO) -> Message {
         let info = dto.info
-        let partText = displayText(from: dto.parts)
+        let domainParts = parseParts(from: dto.parts)
+        let flatText = displayText(from: domainParts)
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: partText.isEmpty ? errorText(from: info.error) : partText,
+            text: flatText.isEmpty ? errorText(from: info.error) : flatText,
+            parts: domainParts,
             model: info.model?.modelID ?? info.modelID,
             modelProviderID: info.model?.providerID ?? info.providerID,
             modelID: info.model?.modelID ?? info.modelID,
@@ -16,6 +18,64 @@ struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: info.time?.created,
             contextInputTokens: info.tokens?.input
         )
+    }
+
+    func message(
+        info: MessageInfoDTO,
+        domainParts: [MessagePart]
+    ) -> Message {
+        let flatText = displayText(from: domainParts)
+        return Message(
+            id: info.id,
+            role: role(from: info.role),
+            text: flatText.isEmpty ? errorText(from: info.error) : flatText,
+            parts: domainParts,
+            model: info.model?.modelID ?? info.modelID,
+            modelProviderID: info.model?.providerID ?? info.providerID,
+            modelID: info.model?.modelID ?? info.modelID,
+            variant: info.variant,
+            mode: info.mode ?? info.agent,
+            sentAtEpochMs: info.time?.created,
+            contextInputTokens: info.tokens?.input
+        )
+    }
+
+    func messagePart(from dto: MessagePartDTO) -> MessagePart? {
+        switch dto.type {
+        case "text", "reasoning":
+            guard let text = dto.text else { return nil }
+            return .text(TextPart(text: text, isStreaming: false))
+        case "tool":
+            guard let toolName = dto.tool else { return nil }
+            let statusText = toolStatusLabel(toolName: toolName, state: dto.state)
+            return .tool(ToolPart(toolName: toolName, statusText: statusText))
+        default:
+            return nil
+        }
+    }
+
+    func toolStatusLabel(toolName: String, state: MessageToolStateDTO?) -> String {
+        guard let state else { return "⌛ \(toolName)" }
+        switch state.status {
+        case "pending":
+            return "⌛ \(toolName)"
+        case "running":
+            if let title = state.title, !title.isEmpty {
+                return "⏳ \(title)"
+            }
+            return "⏳ \(toolName)"
+        case "completed":
+            return "✓ \(toolName)"
+        case "error":
+            let message = state.error ?? "failed"
+            return "✕ \(toolName): \(message)"
+        default:
+            return "\(toolName)"
+        }
+    }
+
+    func flattenedText(from parts: [MessagePart]) -> String {
+        displayText(from: parts)
     }
 
     func sendRequest(text: String) -> SendMessageRequestDTO {
@@ -48,6 +108,14 @@ struct MessageDomainAdapter: Sendable {
         return .transport(error.localizedDescription)
     }
 
+    // MARK: Part parsing
+
+    func parseParts(from dtos: [MessagePartDTO]) -> [MessagePart] {
+        dtos.compactMap { messagePart(from: $0) }
+    }
+
+    // MARK: Private
+
     private func role(from raw: String) -> MessageRole {
         switch raw.lowercased() {
         case "user":
@@ -77,24 +145,16 @@ struct MessageDomainAdapter: Sendable {
         return ""
     }
 
-    private func displayText(from parts: [MessagePartDTO]) -> String {
-        let textParts = parts
-            .filter { $0.type == "text" }
-            .compactMap(\.text)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        if !textParts.isEmpty {
-            return textParts.joined(separator: "\n")
-        }
-        let toolLabels = parts
-            .filter { $0.type == "tool" }
-            .compactMap { part -> String? in
-                guard let tool = part.tool else { return nil }
-                return "Tool: \(tool)"
+    private func displayText(from parts: [MessagePart]) -> String {
+        let segments: [String] = parts.map { part in
+            switch part {
+            case .text(let t):
+                return t.text
+            case .tool(let t):
+                return t.statusText
             }
-        if !toolLabels.isEmpty {
-            return toolLabels.joined(separator: "\n")
         }
-        return ""
+        let nonEmpty = segments.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return nonEmpty.joined(separator: "\n")
     }
 }

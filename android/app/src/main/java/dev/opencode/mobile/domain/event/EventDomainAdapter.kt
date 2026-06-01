@@ -16,7 +16,11 @@ class EventDomainAdapter(
         val payload = envelope.payload
         val type = payload?.type ?: envelope.type ?: return null
         val properties = payload?.properties ?: envelope.properties ?: JsonObject(emptyMap())
-        return OpencodeEvent(type = type, sessionId = sessionIdFromProperties(properties))
+        return OpencodeEvent(
+            type = type,
+            sessionId = sessionIdFromProperties(properties),
+            rawProperties = properties,
+        )
     }
 
     private fun sessionIdFromProperties(properties: JsonObject): String? {

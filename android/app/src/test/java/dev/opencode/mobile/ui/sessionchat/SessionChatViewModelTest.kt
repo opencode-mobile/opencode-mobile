@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.MessageLiveStore
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
@@ -36,6 +37,7 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -359,6 +361,53 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1f, viewModel.uiState.value.contextUsageFraction)
+        }
+
+    // MARK: - isStreaming propagation
+
+    @Test
+    fun toMessageItem_streamingTextPart_setsIsStreaming() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val message =
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "Hello",
+                    parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true)),
+                )
+            val item = viewModel.toMessageItem(message)
+            assertTrue(item.isStreaming)
+        }
+
+    @Test
+    fun toMessageItem_nonStreamingTextPart_setsIsStreamingFalse() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val message =
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "Done",
+                    parts = listOf(MessagePart.Text(text = "Done", isStreaming = false)),
+                )
+            val item = viewModel.toMessageItem(message)
+            assertFalse(item.isStreaming)
+        }
+
+    @Test
+    fun toMessageItem_toolPartOnly_isNotStreaming() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val message =
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "\u2713 bash",
+                    parts = listOf(MessagePart.Tool(toolName = "bash", statusText = "\u2713 bash")),
+                )
+            val item = viewModel.toMessageItem(message)
+            assertFalse(item.isStreaming)
         }
 
     @Test

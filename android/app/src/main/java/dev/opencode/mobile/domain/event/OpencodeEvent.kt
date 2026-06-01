@@ -1,8 +1,11 @@
 package dev.opencode.mobile.domain.event
 
+import kotlinx.serialization.json.JsonObject
+
 data class OpencodeEvent(
     val type: String,
     val sessionId: String? = null,
+    val rawProperties: JsonObject? = null,
 ) {
     val triggersMessageRefresh: Boolean
         get() =
@@ -16,7 +19,7 @@ data class OpencodeEvent(
         get() =
             type in STATUS_REFRESH_TYPES
 
-    private companion object {
+    companion object {
         val MESSAGE_REFRESH_TYPES =
             setOf(
                 "message.updated",

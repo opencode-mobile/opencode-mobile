@@ -7,6 +7,7 @@ struct SessionChatRow: Identifiable, Equatable {
     let text: String
     let metadataLabel: String
     let isPending: Bool
+    let isStreaming: Bool
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
@@ -266,6 +267,7 @@ final class SessionChatViewModel {
             text: trimmed,
             metadataLabel: metadataLabel(mode: composer.selectedMode, model: composer.selectedModel?.modelLabel, variant: composer.selectedVariant),
             isPending: true,
+            isStreaming: false,
             modelProviderID: nil,
             modelID: nil,
             contextInputTokens: nil
@@ -461,8 +463,11 @@ final class SessionChatViewModel {
         )
     }
 
-    private func row(from message: Message) -> SessionChatRow {
-        SessionChatRow(
+    func row(from message: Message) -> SessionChatRow {
+        let isStreaming = message.parts.contains { part in
+            if case .text(let t) = part, t.isStreaming { true } else { false }
+        }
+        return SessionChatRow(
             id: message.id,
             role: message.role,
             text: message.text,
@@ -473,6 +478,7 @@ final class SessionChatViewModel {
                 sentAtEpochMs: message.sentAtEpochMs
             ),
             isPending: false,
+            isStreaming: isStreaming,
             modelProviderID: message.modelProviderID,
             modelID: message.modelID,
             contextInputTokens: message.contextInputTokens

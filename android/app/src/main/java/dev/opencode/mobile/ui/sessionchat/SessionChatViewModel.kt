@@ -190,6 +190,7 @@ class SessionChatViewModel
                     text = prompt,
                     metadataLabel = composerMetadataLabel(),
                     isPending = true,
+                    isStreaming = false,
                 )
 
             viewModelScope.launch {
@@ -307,16 +308,19 @@ class SessionChatViewModel
             }
         }
 
-        private fun toMessageItem(message: Message): SessionChatMessageItem =
-            SessionChatMessageItem(
+        internal fun toMessageItem(message: Message): SessionChatMessageItem {
+            val isStreaming = message.parts.any { it is dev.opencode.mobile.domain.message.MessagePart.Text && it.isStreaming }
+            return SessionChatMessageItem(
                 id = message.id,
                 role = message.role,
                 text = message.text,
                 metadataLabel = metadataLabel(message),
+                isStreaming = isStreaming,
                 modelProviderId = message.modelProviderId,
                 modelId = message.modelId,
                 contextInputTokens = message.contextInputTokens,
             )
+        }
 
         private fun contextUsageFraction(
             messages: List<SessionChatMessageItem>,
@@ -524,6 +528,7 @@ data class SessionChatMessageItem(
     val text: String,
     val metadataLabel: String,
     val isPending: Boolean = false,
+    val isStreaming: Boolean = false,
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,

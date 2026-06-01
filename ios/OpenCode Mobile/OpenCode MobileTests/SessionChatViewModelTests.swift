@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
@@ -158,17 +159,16 @@ struct SessionChatViewModelTests {
     }
 
     @Test func startObserving_afterStop_resumesEventReloads() async {
-        let repository = FakeMessageRepository()
-        let eventStream = FakeForegroundEventStream()
-        let viewModel = makeViewModel(messageRepository: repository, eventStream: eventStream)
+        let liveStore = FakeMessageLiveStore()
+        let viewModel = makeViewModel(overridingLiveStore: liveStore)
         await viewModel.loadMessages()
         viewModel.stopObserving()
         viewModel.startObserving()
         try? await Task.sleep(for: .milliseconds(50))
-        repository.messages = [
+        let updated = [
             Message(id: "msg-2", role: .assistant, text: "Resumed", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
-        eventStream.emit(OpencodeEvent(type: "message.updated", sessionID: "ses-1"))
+        liveStore.emit(updated)
         try? await Task.sleep(for: .milliseconds(500))
         guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded state")
@@ -193,15 +193,14 @@ struct SessionChatViewModelTests {
     }
 
     @Test func messageUpdatedEvent_reloadsMessages() async {
-        let repository = FakeMessageRepository()
-        let eventStream = FakeForegroundEventStream()
-        let viewModel = makeViewModel(messageRepository: repository, eventStream: eventStream)
+        let liveStore = FakeMessageLiveStore()
+        let viewModel = makeViewModel(overridingLiveStore: liveStore)
         await viewModel.loadMessages()
         try? await Task.sleep(for: .milliseconds(50))
-        repository.messages = [
+        let updated = [
             Message(id: "msg-2", role: .assistant, text: "Updated", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
-        eventStream.emit(OpencodeEvent(type: "message.updated", sessionID: "ses-1"))
+        liveStore.emit(updated)
         try? await Task.sleep(for: .milliseconds(500))
         guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded state")
@@ -216,6 +215,53 @@ struct SessionChatViewModelTests {
         #expect(SessionConnectionStatus(connectionState: .reconnecting) == .connecting)
         #expect(SessionConnectionStatus(connectionState: .idle) == .offline)
         #expect(SessionConnectionStatus(connectionState: .disconnected) == .offline)
+    }
+
+    // MARK: - isStreaming propagation
+
+    @Test func rowFromMessage_streamingTextPart_setsIsStreaming() {
+        let message = Message(
+            id: "msg-1",
+            role: .assistant,
+            text: "Hello",
+            parts: [.text(TextPart(text: "Hello", isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let viewModel = makeViewModel()
+        let row = viewModel.row(from: message)
+        #expect(row.isStreaming == true)
+    }
+
+    @Test func rowFromMessage_nonStreamingTextPart_setsIsStreamingFalse() {
+        let message = Message(
+            id: "msg-1",
+            role: .assistant,
+            text: "Done",
+            parts: [.text(TextPart(text: "Done", isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let viewModel = makeViewModel()
+        let row = viewModel.row(from: message)
+        #expect(row.isStreaming == false)
+    }
+
+    @Test func rowFromMessage_toolPartOnly_isNotStreaming() {
+        let message = Message(
+            id: "msg-1",
+            role: .assistant,
+            text: "\u{2713} bash",
+            parts: [.tool(ToolPart(toolName: "bash", statusText: "\u{2713} bash"))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let viewModel = makeViewModel()
+        let row = viewModel.row(from: message)
+        #expect(row.isStreaming == false)
     }
 
     @Test func contextUsageFraction_usesLatestAssistantTokensAndModelLimit() async {
@@ -309,8 +355,9 @@ struct SessionChatViewModelTests {
     }
 
     private func makeViewModel(
-        messageRepository: FakeMessageRepository,
-        eventStream: FakeForegroundEventStream? = nil
+        messageRepository: FakeMessageRepository = FakeMessageRepository(),
+        eventStream: FakeForegroundEventStream? = nil,
+        overridingLiveStore: (any MessageLiveStore)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         let sessionRepository = FakeChatSessionRepository()
@@ -318,10 +365,15 @@ struct SessionChatViewModelTests {
             sessionRepository: sessionRepository,
             eventStream: eventStream
         )
-        let messageLiveStore = DefaultMessageLiveStore(
-            messageRepository: messageRepository,
-            eventStream: eventStream
-        )
+        let messageLiveStore: any MessageLiveStore
+        if let overridingLiveStore {
+            messageLiveStore = overridingLiveStore
+        } else {
+            messageLiveStore = DefaultMessageLiveStore(
+                messageRepository: messageRepository,
+                eventStream: eventStream
+            )
+        }
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
@@ -336,6 +388,31 @@ struct SessionChatViewModelTests {
         viewModel.startObserving()
         return viewModel
     }
+}
+
+@MainActor
+private final class FakeMessageLiveStore: MessageLiveStore, @unchecked Sendable {
+    private var continuations: [UUID: AsyncStream<[Message]>.Continuation] = [:]
+
+    func observeMessages(sessionID: String, directory: String) -> AsyncStream<[Message]> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in
+                    self?.continuations.removeValue(forKey: id)
+                }
+            }
+        }
+    }
+
+    func emit(_ messages: [Message]) {
+        for continuation in continuations.values {
+            continuation.yield(messages)
+        }
+    }
+
+    func clearCache() {}
 }
 
 private final class FakeMessageRepository: MessageRepository, @unchecked Sendable {

@@ -13,8 +13,9 @@ struct EventDomainAdapter: Sendable {
 
         let properties = payload?["properties"] as? [String: Any] ?? json["properties"] as? [String: Any]
         let sessionID = sessionID(from: properties)
+        let rawProperties = properties.map { $0.mapValues { AnySendable.from($0) ?? .null } }
 
-        return OpencodeEvent(type: type, sessionID: sessionID)
+        return OpencodeEvent(type: type, sessionID: sessionID, rawProperties: rawProperties)
     }
 
     private func sessionID(from properties: [String: Any]?) -> String? {

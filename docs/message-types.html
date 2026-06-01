@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>opencode session message types</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-hover: #1c2333;
+    --bg-inset: #0d1117;
+    --border: #30363d;
+    --border-bright: #58a6ff;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --text-dim: #484f58;
+    --blue: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --cyan: #39d2c0;
+    --pink: #f778ba;
+    --yellow: #e3b341;
+    --user-role: #58a6ff;
+    --assistant-role: #3fb950;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font: system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.6;
+    padding: 0;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Layout */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  .hero {
+    padding: 64px 0 48px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .hero .subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto 32px;
+  }
+  .hero .meta {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
+  .hero .meta span { display: flex; align-items: center; gap: 6px; }
+
+  /* Section */
+  section { padding: 48px 0; border-bottom: 1px solid var(--border); }
+  section:last-of-type { border-bottom: none; }
+  .section-header {
+    margin-bottom: 28px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .section-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .section-header .badge {
+    font-size: 0.75rem;
+    font-family: var(--mono);
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .section-desc {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+  }
+
+  /* Message Binary */
+  .message-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 24px;
+  }
+  @media (max-width: 700px) { .message-row { grid-template-columns: 1fr; } }
+  .msg-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .msg-card-header {
+    padding: 16px 20px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .msg-card-header .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .msg-card-body { padding: 20px; }
+  .msg-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(48,54,61,0.4);
+    font-size: 0.85rem;
+  }
+  .msg-field:last-child { border-bottom: none; }
+  .msg-field .key {
+    font-family: var(--mono);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+  .msg-field .val {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    text-align: right;
+    max-width: 55%;
+    word-break: break-all;
+  }
+  .msg-field .val.unique { color: var(--cyan); }
+  .msg-field .val.dim { color: var(--text-dim); }
+  .diff-badge {
+    display: inline-flex;
+    gap: 4px;
+    font-size: 0.75rem;
+  }
+
+  /* Part Grid */
+  .part-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .part-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .part-card:hover { border-color: var(--border-bright); }
+  .part-card summary {
+    padding: 14px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    list-style: none;
+    user-select: none;
+  }
+  .part-card summary::-webkit-details-marker { display: none; }
+  .part-card summary .icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .part-card summary .tag {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    background: var(--bg-inset);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .part-detail {
+    padding: 0 16px 14px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .part-detail code {
+    font-family: var(--mono);
+    background: var(--bg-inset);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    color: var(--cyan);
+  }
+  .part-detail .field-table {
+    margin-top: 8px;
+    width: 100%;
+    font-size: 0.78rem;
+    border-collapse: collapse;
+  }
+  .part-detail .field-table td {
+    padding: 3px 6px;
+    font-family: var(--mono);
+    vertical-align: top;
+  }
+  .part-detail .field-table td:first-child {
+    color: var(--text-dim);
+    width: 1%;
+    white-space: nowrap;
+    padding-right: 12px;
+  }
+  .part-detail .field-table td:last-child { color: var(--text); word-break: break-word; }
+
+  /* Tool State Machine */
+  .tool-fsm {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 600px) { .tool-fsm { grid-template-columns: 1fr; } }
+  .tool-state-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+  }
+  .tool-state-card .state-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .tool-state-card .state-fields {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+  .tool-state-card .state-fields .opt { opacity: 0.6; }
+  .tool-state-card .state-fields .req { color: var(--text); }
+  .arrow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  .arrow-row .arrow { color: var(--border-bright); font-size: 1.2rem; }
+  .arrow-row .label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    background: var(--bg-card);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* Event Grid */
+  .event-category { margin-bottom: 28px; }
+  .event-category h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+  }
+  .event-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+  }
+  .event-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: border-color 0.15s;
+  }
+  .event-item:hover { border-color: var(--border-bright); }
+  .event-item .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .event-item.highlight {
+    border-color: var(--border-bright);
+    background: linear-gradient(135deg, rgba(88,166,255,0.08), transparent);
+  }
+
+  /* Wire Example */
+  .wire-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .wire-box .wire-header {
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .wire-box pre {
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: var(--text);
+    tab-size: 2;
+  }
+  .wire-box pre .kw { color: var(--purple); }
+  .wire-box pre .str { color: var(--green); }
+  .wire-box pre .num { color: var(--orange); }
+  .wire-box pre .key { color: var(--cyan); }
+  .wire-box pre .cmt { color: var(--text-dim); }
+  .wire-box pre .tag { color: var(--blue); }
+  .wire-box pre .dim { color: var(--text-dim); }
+
+  /* Status Row */
+  .status-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 600px) { .status-row { grid-template-columns: 1fr; } }
+  .status-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+  }
+  .status-card .emoji { font-size: 1.8rem; margin-bottom: 8px; }
+  .status-card .name {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .status-card .desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* Nav */
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+  }
+  .sticky-nav .nav-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    gap: 4px;
+    padding: 8px 0;
+    overflow-x: auto;
+  }
+  .sticky-nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.82rem;
+    padding: 6px 14px;
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .sticky-nav a:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 32px 24px;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+  footer a { color: var(--blue); text-decoration: none; }
+
+  /* Rendering table */
+  .render-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+  }
+  .render-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
+    font-family: var(--mono);
+  }
+  .render-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .render-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .render-table .type-badge {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .render-loop {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.8;
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+  .render-loop .kw { color: var(--purple); }
+  .render-loop .fn { color: var(--blue); }
+  .render-loop .str { color: var(--green); }
+  .render-loop .cmt { color: var(--text-dim); }
+  .render-loop .op { color: var(--orange); }
+
+  .flow-arrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    margin: 4px 0;
+  }
+  .flow-arrow .arr { color: var(--blue); font-size: 1.1rem; }
+
+  /* Misc helpers */
+  .color-user { color: var(--user-role); }
+  .color-assistant { color: var(--assistant-role); }
+  .bg-user { background: rgba(88,166,255,0.15); }
+  .bg-assistant { background: rgba(63,185,80,0.15); }
+  .bg-purple { background: rgba(188,140,255,0.15); }
+  .bg-orange { background: rgba(210,153,34,0.15); }
+  .bg-cyan { background: rgba(57,210,192,0.15); }
+  .bg-pink { background: rgba(247,120,186,0.15); }
+  .bg-yellow { background: rgba(227,179,65,0.15); }
+  .bg-red { background: rgba(248,81,73,0.12); }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mt-24 { margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<nav class="sticky-nav">
+  <div class="nav-inner">
+    <a href="#message-binary">Messages</a>
+    <a href="#parts">Parts</a>
+    <a href="#tool-fsm">Tool State Machine</a>
+    <a href="#session-status">Session Status</a>
+    <a href="#events">Events</a>
+    <a href="#rendering">Rendering</a>
+    <a href="#wire">Wire Protocol</a>
+  </div>
+</nav>
+
+<div class="container">
+
+<div class="hero">
+  <h1>opencode session message types</h1>
+  <p class="subtitle">A deep-dive into the message architecture powering opencode sessions — part types, tool state machines, events, and the full wire protocol.</p>
+  <div class="meta">
+    <span>⚡ Server v1.14.24</span>
+    <span>📦 12 Part Types</span>
+    <span>🔔 31 Event Types</span>
+    <span>🤖 opencode-go / deepseek-v4-flash</span>
+  </div>
+</div>
+
+<!-- Message Binary -->
+<section id="message-binary">
+  <div class="section-header">
+    <h2>Message Binary</h2>
+    <span class="badge">UserMessage | AssistantMessage</span>
+  </div>
+  <p class="section-desc">
+    Every message in a session is one of two shapes. They share <code>id</code>, <code>sessionID</code>, and <code>time.created</code>, but diverge on almost everything else.
+  </p>
+  <div class="message-row">
+    <div class="msg-card">
+      <div class="msg-card-header">
+        <span class="dot" style="background:var(--user-role)"></span>
+        <span style="color:var(--user-role)">UserMessage</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">role: "user"</span>
+      </div>
+      <div class="msg-card-body">
+        <div class="msg-field"><span class="key">id</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">sessionID</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">role</span><span class="val" style="color:var(--user-role)">"user"</span></div>
+        <div class="msg-field"><span class="key">time.created</span><span class="val dim">number (ms)</span></div>
+        <div class="msg-field"><span class="key">agent</span><span class="val unique">string</span></div>
+        <div class="msg-field"><span class="key">model</span><span class="val" style="font-size:0.72rem">{ providerID, modelID }</span></div>
+        <div class="msg-field"><span class="key">system?</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">tools?</span><span class="val dim">{ [key]: boolean }</span></div>
+        <div class="msg-field"><span class="key">summary?</span><span class="val" style="color:var(--yellow)">{ title?, body?, diffs[] }</span></div>
+      </div>
+    </div>
+    <div class="msg-card">
+      <div class="msg-card-header">
+        <span class="dot" style="background:var(--assistant-role)"></span>
+        <span style="color:var(--assistant-role)">AssistantMessage</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">role: "assistant"</span>
+      </div>
+      <div class="msg-card-body">
+        <div class="msg-field"><span class="key">id</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">sessionID</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">role</span><span class="val" style="color:var(--assistant-role)">"assistant"</span></div>
+        <div class="msg-field"><span class="key">parentID</span><span class="val unique">← links to user message</span></div>
+        <div class="msg-field"><span class="key">time</span><span class="val dim">{ created, completed? }</span></div>
+        <div class="msg-field"><span class="key">error?</span><span class="val" style="color:var(--red)">5 error types</span></div>
+        <div class="msg-field"><span class="key">modelID</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">providerID</span><span class="val dim">string</span></div>
+        <div class="msg-field"><span class="key">mode</span><span class="val unique">"plan" | "explore" | ...</span></div>
+        <div class="msg-field"><span class="key">path</span><span class="val dim">{ cwd, root }</span></div>
+        <div class="msg-field"><span class="key">cost</span><span class="val dim">number</span></div>
+        <div class="msg-field"><span class="key">tokens</span><span class="val" style="font-size:0.72rem">{ input, output, reasoning, cache }</span></div>
+        <div class="msg-field"><span class="key">finish?</span><span class="val" style="color:var(--cyan)">"stop" | "tool-calls"</span></div>
+        <div class="msg-field"><span class="key">summary?</span><span class="val dim">boolean</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Parts -->
+<section id="parts">
+  <div class="section-header">
+    <h2>Part Types</h2>
+    <span class="badge">12 variants</span>
+  </div>
+  <p class="section-desc">
+    Each message carries an ordered <code>Part[]</code>. Parts are the content units — text, tool calls, reasoning traces, file patches, and more. Click to expand fields.
+  </p>
+
+  <h3 style="font-size:0.9rem;color:var(--text-muted);margin-bottom:12px;">📝 Content</h3>
+  <div class="part-grid mb-16">
+    <details class="part-card">
+      <summary><span class="icon bg-user" style="color:var(--user-role)">T</span> TextPart<span class="tag">"text"</span></summary>
+      <div class="part-detail">
+        Free-form text output or user input. The most common part.
+        <table class="field-table">
+          <tr><td>text</td><td>string</td></tr>
+          <tr><td>synthetic?</td><td>boolean — auto-generated (e.g. context injection)</td></tr>
+          <tr><td>ignored?</td><td>boolean — hidden from model</td></tr>
+          <tr><td>time?</td><td>{ start, end? }</td></tr>
+          <tr><td>metadata?</td><td>{ [key]: unknown }</td></tr>
+        </table>
+        <div style="margin-top:6px;">Streams via <code>delta</code> on <code>message.part.updated</code>.</div>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon bg-orange" style="color:var(--orange)">⟐</span> ReasoningPart<span class="tag">"reasoning"</span></summary>
+      <div class="part-detail">
+        Model chain-of-thought. Not shown to the user by default.
+        <table class="field-table">
+          <tr><td>text</td><td>string</td></tr>
+          <tr><td>time</td><td>{ start, end? }</td></tr>
+          <tr><td>metadata?</td><td>{ [key]: unknown }</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon bg-purple" style="color:var(--purple)">🖼</span> FilePart<span class="tag">"file"</span></summary>
+      <div class="part-detail">
+        File attachment — image, PDF, or other media.
+        <table class="field-table">
+          <tr><td>mime</td><td>string e.g. <code>"image/png"</code></td></tr>
+          <tr><td>filename?</td><td>string</td></tr>
+          <tr><td>url</td><td>string (data URL or path)</td></tr>
+          <tr><td>source?</td><td>FileSource | SymbolSource</td></tr>
+        </table>
+        Source can be <code>FileSource { text, type:"file", path }</code> or <code>SymbolSource { text, type:"symbol", path, range, name, kind }</code>.
+      </div>
+    </details>
+  </div>
+
+  <h3 style="font-size:0.9rem;color:var(--text-muted);margin-bottom:12px;">⚙️ Execution</h3>
+  <div class="part-grid mb-16">
+    <details class="part-card">
+      <summary><span class="icon bg-cyan" style="color:var(--cyan)">◈</span> ToolPart<span class="tag">"tool"</span></summary>
+      <div class="part-detail">
+        Tool call with a 4-state lifecycle.
+        <table class="field-table">
+          <tr><td>callID</td><td>string — unique per tool call</td></tr>
+          <tr><td>tool</td><td>string — e.g. <code>"webfetch"</code>, <code>"bash"</code>, <code>"edit"</code></td></tr>
+          <tr><td>state</td><td>ToolState — see machine below</td></tr>
+          <tr><td>metadata?</td><td>{ [key]: unknown }</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon" style="background:var(--bg-hover);color:var(--text-muted)">▶</span> StepStartPart<span class="tag">"step-start"</span></summary>
+      <div class="part-detail">
+        Marks the beginning of a reasoning episode.
+        <table class="field-table">
+          <tr><td>snapshot?</td><td>string — filesystem state hash</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon" style="background:var(--bg-hover);color:var(--text-muted)">⏹</span> StepFinishPart<span class="tag">"step-finish"</span></summary>
+      <div class="part-detail">
+        Marks the end of a reasoning step. Includes token accounting.
+        <table class="field-table">
+          <tr><td>reason</td><td>string — e.g. <code>"stop"</code>, <code>"tool-calls"</code></td></tr>
+          <tr><td>snapshot?</td><td>string</td></tr>
+          <tr><td>cost</td><td>number</td></tr>
+          <tr><td>tokens</td><td>{ input, output, reasoning, cache }</td></tr>
+        </table>
+      </div>
+    </details>
+  </div>
+
+  <h3 style="font-size:0.9rem;color:var(--text-muted);margin-bottom:12px;">🔧 System / History</h3>
+  <div class="part-grid">
+    <details class="part-card">
+      <summary><span class="icon bg-yellow" style="color:var(--yellow)">◎</span> SnapshotPart<span class="tag">"snapshot"</span></summary>
+      <div class="part-detail">
+        A point-in-time filesystem snapshot.
+        <table class="field-table">
+          <tr><td>snapshot</td><td>string — hash</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon bg-pink" style="color:var(--pink)">⊕</span> PatchPart<span class="tag">"patch"</span></summary>
+      <div class="part-detail">
+        A diff patch applied during the session.
+        <table class="field-table">
+          <tr><td>hash</td><td>string</td></tr>
+          <tr><td>files</td><td>string[] — affected file paths</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon bg-assistant" style="color:var(--assistant-role)">⊞</span> AgentPart<span class="tag">"agent"</span></summary>
+      <div class="part-detail">
+        Subagent delegation — forks to another agent.
+        <table class="field-table">
+          <tr><td>name</td><td>string — e.g. <code>"explore"</code></td></tr>
+          <tr><td>source?</td><td>{ value, start, end }</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon bg-red" style="color:var(--red)">↻</span> RetryPart<span class="tag">"retry"</span></summary>
+      <div class="part-detail">
+        LLM API retry record.
+        <table class="field-table">
+          <tr><td>attempt</td><td>number</td></tr>
+          <tr><td>error</td><td>ApiError</td></tr>
+          <tr><td>time</td><td>{ created }</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon" style="background:var(--bg-hover);color:var(--text-dim)">▤</span> CompactionPart<span class="tag">"compaction"</span></summary>
+      <div class="part-detail">
+        History compressed to reduce context.
+        <table class="field-table">
+          <tr><td>auto</td><td>boolean</td></tr>
+        </table>
+      </div>
+    </details>
+    <details class="part-card">
+      <summary><span class="icon" style="background:var(--bg-hover);color:var(--text-dim)">◈</span> SubtaskPart<span class="tag">"subtask"</span></summary>
+      <div class="part-detail">
+        Subagent task prompt — inline (no named type).
+        <table class="field-table">
+          <tr><td>prompt</td><td>string</td></tr>
+          <tr><td>description</td><td>string</td></tr>
+          <tr><td>agent</td><td>string</td></tr>
+        </table>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- Tool State Machine -->
+<section id="tool-fsm">
+  <div class="section-header">
+    <h2>Tool State Machine</h2>
+    <span class="badge">4 states</span>
+  </div>
+  <p class="section-desc">
+    Each <code>ToolPart</code> cycles through a deterministic lifecycle. Every <code>EventMessagePartUpdated</code> for a tool replaces the full state — not a delta.
+  </p>
+
+  <div class="arrow-row">
+    <span class="label">pending</span>
+    <span class="arrow">→</span>
+    <span class="label">running</span>
+    <span class="arrow">→</span>
+    <span class="label" style="color:var(--green)">completed</span>
+    <span style="color:var(--text-dim);margin:0 4px;">or</span>
+    <span class="label" style="color:var(--red)">error</span>
+  </div>
+
+  <div class="tool-fsm">
+    <div class="tool-state-card" style="border-color:rgba(210,153,34,0.4)">
+      <div class="state-label"><span style="color:var(--orange)">◌</span> Pending</div>
+      <div class="state-fields">
+        <span class="req">status: "pending"</span><br>
+        <span class="req">input: { [key]: unknown }</span><br>
+        <span class="req">raw: string</span>
+        <div style="color:var(--text-dim);margin-top:6px;font-size:0.75rem">Tool call created by the model. Hasn't started executing yet.</div>
+      </div>
+    </div>
+
+    <div class="tool-state-card" style="border-color:rgba(88,166,255,0.4)">
+      <div class="state-label"><span style="color:var(--blue)">◉</span> Running</div>
+      <div class="state-fields">
+        <span class="req">status: "running"</span><br>
+        <span class="req">input: { [key]: unknown }</span><br>
+        <span class="opt">title?: string</span><br>
+        <span class="opt">metadata?: { [key]: unknown }</span><br>
+        <span class="req">time: { start }</span>
+        <div style="color:var(--text-dim);margin-top:6px;font-size:0.75rem">Tool is executing. The UI can show a spinner or progress.</div>
+      </div>
+    </div>
+
+    <div class="tool-state-card" style="border-color:rgba(63,185,80,0.4)">
+      <div class="state-label"><span style="color:var(--green)">✓</span> Completed</div>
+      <div class="state-fields">
+        <span class="req">status: "completed"</span><br>
+        <span class="req">input: { [key]: unknown }</span><br>
+        <span class="req">output: string</span><br>
+        <span class="req">title: string</span><br>
+        <span class="req">metadata: { [key]: unknown }</span><br>
+        <span class="req">time: { start, end, compacted? }</span><br>
+        <span class="opt">attachments?: FilePart[]</span>
+        <div style="color:var(--text-dim);margin-top:6px;font-size:0.75rem">Tool finished with a result. <code>attachments</code> appears for file reads.</div>
+      </div>
+    </div>
+
+    <div class="tool-state-card" style="border-color:rgba(248,81,73,0.4)">
+      <div class="state-label"><span style="color:var(--red)">✕</span> Error</div>
+      <div class="state-fields">
+        <span class="req">status: "error"</span><br>
+        <span class="req">input: { [key]: unknown }</span><br>
+        <span class="req">error: string</span><br>
+        <span class="opt">metadata?: { [key]: unknown }</span><br>
+        <span class="req">time: { start, end }</span>
+        <div style="color:var(--text-dim);margin-top:6px;font-size:0.75rem">Tool failed. Error message in <code>error</code> field.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Session Status -->
+<section id="session-status">
+  <div class="section-header">
+    <h2>Session Status</h2>
+    <span class="badge">SessionStatus</span>
+  </div>
+  <p class="section-desc">
+    Every session has a status. Poll <code>GET /session/status</code> for a map of all sessions, or watch <code>session.status</code> and <code>session.idle</code> SSE events.
+  </p>
+  <div class="status-row">
+    <div class="status-card">
+      <div class="emoji">◌</div>
+      <div class="name" style="color:var(--text-muted)">idle</div>
+      <div class="desc">Session is waiting. No active work.</div>
+    </div>
+    <div class="status-card" style="border-color:rgba(88,166,255,0.3)">
+      <div class="emoji">⏳</div>
+      <div class="name" style="color:var(--blue)">busy</div>
+      <div class="desc">Session is actively processing. Streaming updates incoming.</div>
+    </div>
+    <div class="status-card" style="border-color:rgba(210,153,34,0.3)">
+      <div class="emoji">↻</div>
+      <div class="name" style="color:var(--orange)">retry</div>
+      <div class="desc">LLM call failed; retrying. <code>{ attempt, message, next }</code></div>
+    </div>
+  </div>
+</section>
+
+<!-- Events -->
+<section id="events">
+  <div class="section-header">
+    <h2>Event Stream</h2>
+    <span class="badge">31 types</span>
+  </div>
+  <p class="section-desc">
+    All events arrive on <code>GET /event?directory=&lt;path&gt;</code> as SSE, wrapped in <code>GlobalEvent { directory, payload: Event }</code>. The first event is always <code>server.connected</code>.
+  </p>
+
+  <div class="event-category">
+    <h3>💬 Message Lifecycle <span style="font-weight:400;color:var(--text-dim);font-size:0.8rem">— core for UI rendering</span></h3>
+    <div class="event-grid">
+      <div class="event-item highlight"><span class="dot" style="background:var(--blue)"></span> message.updated</div>
+      <div class="event-item highlight"><span class="dot" style="background:var(--red)"></span> message.removed</div>
+      <div class="event-item highlight"><span class="dot" style="background:var(--green)"></span> message.part.updated</div>
+      <div class="event-item highlight"><span class="dot" style="background:var(--red)"></span> message.part.removed</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>🗂 Session Lifecycle</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--green)"></span> session.created</div>
+      <div class="event-item"><span class="dot" style="background:var(--blue)"></span> session.updated</div>
+      <div class="event-item"><span class="dot" style="background:var(--red)"></span> session.deleted</div>
+      <div class="event-item"><span class="dot" style="background:var(--cyan)"></span> session.status</div>
+      <div class="event-item"><span class="dot" style="background:var(--green)"></span> session.idle</div>
+      <div class="event-item"><span class="dot" style="background:var(--orange)"></span> session.compacted</div>
+      <div class="event-item"><span class="dot" style="background:var(--yellow)"></span> session.diff</div>
+      <div class="event-item"><span class="dot" style="background:var(--red)"></span> session.error</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>🔑 Permission</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--orange)"></span> permission.updated</div>
+      <div class="event-item"><span class="dot" style="background:var(--green)"></span> permission.replied</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>📁 File &amp; VCS</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--blue)"></span> file.edited</div>
+      <div class="event-item"><span class="dot" style="background:var(--blue)"></span> file.watcher.updated</div>
+      <div class="event-item"><span class="dot" style="background:var(--purple)"></span> vcs.branch.updated</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>📋 Todo &amp; Command</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--cyan)"></span> todo.updated</div>
+      <div class="event-item"><span class="dot" style="background:var(--orange)"></span> command.executed</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>🖥 TUI (optional compatibility)</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--text-dim)"></span> tui.prompt.append</div>
+      <div class="event-item"><span class="dot" style="background:var(--text-dim)"></span> tui.command.execute</div>
+      <div class="event-item"><span class="dot" style="background:var(--text-dim)"></span> tui.toast.show</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>🖥 PTY (terminal sessions)</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--green)"></span> pty.created</div>
+      <div class="event-item"><span class="dot" style="background:var(--blue)"></span> pty.updated</div>
+      <div class="event-item"><span class="dot" style="background:var(--red)"></span> pty.exited</div>
+      <div class="event-item"><span class="dot" style="background:var(--red)"></span> pty.deleted</div>
+    </div>
+  </div>
+
+  <div class="event-category">
+    <h3>🔧 Installation &amp; LSP</h3>
+    <div class="event-grid">
+      <div class="event-item"><span class="dot" style="background:var(--green)"></span> server.connected</div>
+      <div class="event-item"><span class="dot" style="background:var(--orange)"></span> server.instance.disposed</div>
+      <div class="event-item"><span class="dot" style="background:var(--green)"></span> installation.updated</div>
+      <div class="event-item"><span class="dot" style="background:var(--yellow)"></span> installation.update-available</div>
+      <div class="event-item"><span class="dot" style="background:var(--cyan)"></span> lsp.client.diagnostics</div>
+      <div class="event-item"><span class="dot" style="background:var(--blue)"></span> lsp.updated</div>
+    </div>
+  </div>
+</section>
+
+<!-- Rendering Parts -->
+<section id="rendering">
+  <div class="section-header">
+    <h2>Rendering Parts</h2>
+    <span class="badge">type switch</span>
+  </div>
+  <p class="section-desc">
+    Parts are <strong>not concatenated</strong> into a single text blob. Each part is a distinct visual component rendered in order. The renderer switches on <code>type</code>:
+  </p>
+
+  <table class="render-table">
+    <thead>
+      <tr><th>part.type</th><th>Render as</th><th>Streaming behavior</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--user-role)">text</span></td>
+        <td>Chat bubble with markdown rendering</td>
+        <td><code style="color:var(--green)">delta</code> — append to <code>.text</code> char by char</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--orange)">reasoning</span></td>
+        <td>Collapsible &ldquo;thought&rdquo; section (hidden by default)</td>
+        <td>Entire part arrives at once</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--cyan)">tool</span></td>
+        <td>Status card: spinner → result/error, icon per tool name</td>
+        <td>Full <code>state</code> replacement on each event</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--text-muted)">step-start</span></td>
+        <td>Invisible boundary (or episode divider)</td>
+        <td>Entire part arrives at once</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--text-muted)">step-finish</span></td>
+        <td>Token &amp; cost footer</td>
+        <td>Entire part arrives at once</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--purple)">file</span></td>
+        <td>Rendered image / attachment thumbnail</td>
+        <td>Entire part arrives at once</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--assistant-role)">agent</span></td>
+        <td>Subagent delegation badge</td>
+        <td>Entire part arrives at once</td>
+      </tr>
+      <tr>
+        <td><span class="type-badge" style="border-color:var(--text-dim)">subtask</span></td>
+        <td>Subagent task block</td>
+        <td>Entire part arrives at once</td>
+      </tr>
+      <tr>
+        <td><span style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">snapshot</span></td>
+        <td rowspan="4" style="color:var(--text-muted)">System metadata — typically hidden or compact</td>
+        <td rowspan="4">Entire part arrives at once</td>
+      </tr>
+      <tr><td><span style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">patch</span></td></tr>
+      <tr><td><span style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">compaction</span></td></tr>
+      <tr><td><span style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">retry</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="font-size:1rem;font-weight:600;margin-bottom:8px;">Rendering loop</h3>
+  <p class="section-desc" style="margin-bottom:12px;">
+    Pseudocode for the client-side render loop. Each part is independently rendered.
+  </p>
+  <div class="render-loop">
+<span class="kw">for each</span> msg <span class="kw">in</span> messages:<br>
+&nbsp;&nbsp;<span class="fn">render</span>(MessageHeader(msg.info))<br><br>
+&nbsp;&nbsp;<span class="kw">for each</span> part <span class="kw">in</span> msg.parts:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">switch</span> part.type:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"text"</span>       → <span class="fn">TextBubble</span>(part.text, streaming: delta)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"reasoning"</span>   → <span class="fn">CollapsibleThought</span>(part.text)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"tool"</span>        → <span class="fn">ToolCard</span>(part.tool, part.state)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"file"</span>        → <span class="fn">FileAttachment</span>(part.url, part.mime)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"step-start"</span>  → <span class="fn">EpisodeDivider</span>()<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"step-finish"</span> → <span class="fn">TokenFooter</span>(part.tokens)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"agent"</span>       → <span class="fn">AgentBadge</span>(part.name)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"subtask"</span>     → <span class="fn">SubtaskBlock</span>(part.description)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">default</span>       → <span class="cmt">// snapshot, patch, compaction, retry — hidden or compact</span>
+  </div>
+
+  <h3 style="font-size:1rem;font-weight:600;margin-bottom:8px;">Streaming &amp; state replacement</h3>
+  <p class="section-desc">
+    <code>EventMessagePartUpdated</code> carries either:
+  </p>
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;display:flex;align-items:flex-start;gap:12px;">
+      <span style="background:var(--green);color:#000;border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:0.7rem;font-weight:600;flex-shrink:0;">delta</span>
+      <div>
+        <div style="font-family:var(--mono);font-size:0.82rem;margin-bottom:4px;"><span class="key">delta</span>: string</div>
+        <div style="font-size:0.82rem;color:var(--text-muted);">Append to an existing <code>text</code> part. Character-by-character streaming of response text.</div>
+      </div>
+    </div>
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;display:flex;align-items:flex-start;gap:12px;">
+      <span style="background:var(--orange);color:#000;border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:0.7rem;font-weight:600;flex-shrink:0;">replace</span>
+      <div>
+        <div style="font-family:var(--mono);font-size:0.82rem;margin-bottom:4px;"><span class="key">part</span>: ToolPart <span class="cmt">// full state</span></div>
+        <div style="font-size:0.82rem;color:var(--text-muted);">Full state replacement for <code>ToolPart</code>. The <code>state</code> object transitions <code>pending → running → completed|error</code>. Replace the entire part in-place in your local array.</div>
+      </div>
+    </div>
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;display:flex;align-items:flex-start;gap:12px;">
+      <span style="background:var(--purple);color:#fff;border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:0.7rem;font-weight:600;flex-shrink:0;">new</span>
+      <div>
+        <div style="font-family:var(--mono);font-size:0.82rem;margin-bottom:4px;"><span class="key">part</span>: Part <span class="cmt">// no delta</span></div>
+        <div style="font-size:0.82rem;color:var(--text-muted);">A new part appeared — e.g. a <code>reasoning</code> or <code>step-finish</code> lands. Append it to the message's parts array.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:1rem;font-weight:600;margin:20px 0 8px;">Typical part progression</h3>
+  <p class="section-desc">
+    How a single assistant response unfolds on the wire:
+  </p>
+  <div class="flow-arrow">
+    <span class="arr">step-start</span>
+    <span>→</span>
+    <span>reasoning</span>
+    <span>→</span>
+    <span>tool</span>
+    <span class="arr"> (pending) </span>
+    <span>→</span>
+    <span>tool</span>
+    <span class="arr"> (running) </span>
+    <span>→</span>
+    <span>text</span>
+    <span class="arr"> (delta…) </span>
+    <span>→</span>
+    <span>tool</span>
+    <span class="arr"> (completed) </span>
+    <span>→</span>
+    <span class="arr">step-finish</span>
+  </div>
+  <div style="font-size:0.82rem;color:var(--text-dim);margin-top:8px;">
+    Each arrow corresponds to an <code>EventMessagePartUpdated</code> SSE event. The client appends/replaces parts in order as they arrive.
+  </div>
+</section>
+
+<!-- Wire Protocol -->
+<section id="wire">
+  <div class="section-header">
+    <h2>Wire Protocol</h2>
+    <span class="badge">live data</span>
+  </div>
+  <p class="section-desc">
+    Real message data from the running server. This is what a completed assistant message looks like on the wire.
+  </p>
+
+  <div class="wire-box">
+    <div class="wire-header">
+      <span>GET /session/:id/message?limit=1</span>
+      <span style="font-weight:400">AssistantMessage · finish: "stop"</span>
+    </div>
+    <pre>[
+  {
+    <span class="key">"info"</span>: {
+      <span class="key">"role"</span>: <span class="str">"assistant"</span>,
+      <span class="key">"mode"</span>: <span class="str">"plan"</span>,
+      <span class="key">"parentID"</span>: <span class="str">"msg_e8004dcc7001wxcV1ce7qxcwwC"</span>,
+      <span class="key">"agent"</span>: <span class="str">"plan"</span>,
+      <span class="key">"modelID"</span>: <span class="str">"deepseek-v4-flash"</span>,
+      <span class="key">"providerID"</span>: <span class="str">"opencode-go"</span>,
+      <span class="key">"path"</span>: {
+        <span class="key">"cwd"</span>: <span class="str">"/Users/ivanfenenko/Projects/opencode-mobile"</span>,
+        <span class="key">"root"</span>: <span class="str">"/Users/ivanfenenko/Projects/opencode-mobile"</span>
+      },
+      <span class="key">"cost"</span>: <span class="num">0.0007798112</span>,
+      <span class="key">"tokens"</span>: {
+        <span class="key">"total"</span>: <span class="num">32033</span>,
+        <span class="key">"input"</span>: <span class="num">3246</span>,
+        <span class="key">"output"</span>: <span class="num">773</span>,
+        <span class="key">"reasoning"</span>: <span class="num">110</span>,
+        <span class="key">"cache"</span>: { <span class="key">"write"</span>: <span class="num">0</span>, <span class="key">"read"</span>: <span class="num">27904</span> }
+      },
+      <span class="key">"time"</span>: {
+        <span class="key">"created"</span>: <span class="num">1780264331399</span>,
+        <span class="key">"completed"</span>: <span class="num">1780264340597</span>
+      },
+      <span class="key">"finish"</span>: <span class="str">"stop"</span>,
+      <span class="key">"id"</span>: <span class="str">"msg_e8005e887002vliBipXiK1oU9n"</span>,
+      <span class="key">"sessionID"</span>: <span class="str">"ses_1800ac654ffekDR1PNZANMde4m"</span>
+    },
+    <span class="key">"parts"</span>: [
+      { <span class="key">"type"</span>: <span class="str">"step-start"</span>, <span class="key">"snapshot"</span>: <span class="str">"62e0d84f..."</span> },
+      {
+        <span class="key">"type"</span>: <span class="str">"reasoning"</span>,
+        <span class="key">"text"</span>: <span class="str">"Now I have a comprehensive picture..."</span>,
+        <span class="key">"time"</span>: { <span class="key">"start"</span>: <span class="num">1780264332713</span>, <span class="key">"end"</span>: <span class="num">1780264333600</span> }
+      },
+      {
+        <span class="key">"type"</span>: <span class="str">"text"</span>,
+        <span class="key">"text"</span>: <span class="str">"Here's the effort breakdown for Tree-sitter..."</span>,
+        <span class="key">"time"</span>: { <span class="key">"start"</span>: <span class="num">1780264333602</span>, <span class="key">"end"</span>: <span class="num">1780264340527</span> }
+      },
+      {
+        <span class="key">"type"</span>: <span class="str">"step-finish"</span>,
+        <span class="key">"reason"</span>: <span class="str">"stop"</span>,
+        <span class="key">"cost"</span>: <span class="num">0.0007798112</span>,
+        <span class="key">"tokens"</span>: { <span class="key">"input"</span>: <span class="num">3246</span>, <span class="key">"output"</span>: <span class="num">773</span>, <span class="key">"reasoning"</span>: <span class="num">110</span> }
+      }
+    ]
+  }
+]</pre>
+  </div>
+
+  <div class="section-header mt-24">
+    <h2 style="font-size:1.1rem;">API Surface</h2>
+  </div>
+  <div class="wire-box">
+    <div class="wire-header"><span>Message endpoints on the server</span></div>
+    <pre>
+<span class="key">GET</span>    <span class="kw">/session/:id/message</span>        <span class="cmt"># list messages (query: limit?)</span>
+<span class="key">GET</span>    <span class="kw">/session/:id/message/:msgID</span> <span class="cmt"># single message detail</span>
+<span class="key">POST</span>   <span class="kw">/session/:id/message</span>        <span class="cmt"># send + wait for response</span>
+<span class="key">POST</span>   <span class="kw">/session/:id/prompt_async</span>   <span class="cmt"># fire-and-forget (204)</span>
+<span class="key">POST</span>   <span class="kw">/session/:id/command</span>        <span class="cmt"># slash command</span>
+<span class="key">POST</span>   <span class="kw">/session/:id/shell</span>          <span class="cmt"># shell command</span></pre>
+  </div>
+</section>
+
+<footer>
+  opencode-mobile research · Generated from <a href="http://192.168.0.99:4096">live server v1.14.24</a> ·
+  <a href="https://opencode.ai/docs/server/">Server docs</a> ·
+  <a href="https://github.com/anomalyco/opencode/blob/dev/packages/sdk/js/src/gen/types.gen.ts">SDK types</a>
+</footer>
+
+</div>
+</body>
+</html>
