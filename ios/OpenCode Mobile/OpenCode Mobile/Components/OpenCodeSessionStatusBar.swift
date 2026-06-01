@@ -92,7 +92,7 @@ private struct ContextUsageRing: View {
     }
 
     private func contextUsageColor(for fraction: Double) -> Color {
-        if fraction >= 0.9 {
+        if fraction >= 0.85 {
             return OpenCodeColors.error
         }
         if fraction >= 0.7 {

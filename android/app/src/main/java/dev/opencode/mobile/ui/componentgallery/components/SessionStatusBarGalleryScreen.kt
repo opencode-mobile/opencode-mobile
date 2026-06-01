@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +22,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 fun SessionStatusBarGalleryScreen(modifier: Modifier = Modifier) {
     var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var contextAvailable by rememberSaveable { mutableStateOf(true) }
-    var contextUsagePercent by rememberSaveable { mutableStateOf(42f) }
+    var contextUsagePercent by rememberSaveable { mutableStateOf(50) }
     val status =
         runCatching { OpenCodeSessionConnectionStatus.valueOf(statusName) }
             .getOrDefault(OpenCodeSessionConnectionStatus.Live)
@@ -67,19 +66,14 @@ fun SessionStatusBarGalleryScreen(modifier: Modifier = Modifier) {
             }
 
             ControlGroup(title = "Context usage") {
-                Text(
-                    text = "${contextUsagePercent.toInt()}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Slider(
-                    value = contextUsagePercent,
-                    onValueChange = { contextUsagePercent = it },
-                    valueRange = 0f..100f,
-                    steps = 99,
-                    enabled = contextAvailable,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                listOf(0, 50, 70, 85).forEach { percent ->
+                    OpenCodeChoiceBadge(
+                        label = "$percent%",
+                        selected = contextUsagePercent == percent,
+                        enabled = contextAvailable,
+                        onClick = { contextUsagePercent = percent },
+                    )
+                }
             }
         }
 

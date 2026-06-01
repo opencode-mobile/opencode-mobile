@@ -173,7 +173,7 @@ private fun OpenCodeSessionConnectionStatus.dotColor(): Color =
 private fun contextUsageColor(fraction: Float?): Color =
     when {
         fraction == null -> Color.Transparent
-        fraction >= 0.9f -> openCodeColor("error")
+        fraction >= 0.85f -> openCodeColor("error")
         fraction >= 0.7f -> openCodeColor("warning")
         else -> openCodeColor("icon-strong-base")
     }
