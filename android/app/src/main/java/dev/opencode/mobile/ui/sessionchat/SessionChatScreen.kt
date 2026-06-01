@@ -1,10 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import android.content.ClipData
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,8 +49,11 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
+import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class ComposerPickerKind(
@@ -82,6 +81,7 @@ fun SessionChatScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -96,7 +96,14 @@ fun SessionChatScreen(
                 leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
                 showDivider = true,
             )
-            SessionIdRow(sessionId = uiState.sessionId)
+            SessionStatusBar(
+                sessionId = uiState.sessionId,
+                connectionStatus = uiState.connectionStatus,
+                contextUsageFraction = uiState.contextUsageFraction,
+                onCopySessionId = { copySessionIdToClipboard(context, uiState.sessionId) },
+                onConnectionClick = {},
+                onContextClick = {},
+            )
             uiState.sessionStatusLabel?.let { statusLabel ->
                 Text(
                     text = statusLabel,
@@ -354,32 +361,32 @@ private fun ModelPickerFilterField(
 }
 
 @Composable
-private fun SessionIdRow(
+private fun SessionStatusBar(
     sessionId: String,
+    connectionStatus: SessionConnectionStatus,
+    contextUsageFraction: Float?,
+    onCopySessionId: () -> Unit,
+    onConnectionClick: () -> Unit,
+    onContextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    Text(
-        text = "Session ID: $sessionId",
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .clickable { copySessionId(context, sessionId) }
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.MiddleEllipsis,
+    OpenCodeSessionStatusBar(
+        sessionId = sessionId,
+        connectionStatus = connectionStatus.toOpenCodeSessionConnectionStatus(),
+        contextUsageFraction = contextUsageFraction,
+        onCopySessionId = onCopySessionId,
+        onConnectionClick = onConnectionClick,
+        onContextClick = onContextClick,
+        modifier = modifier,
     )
 }
 
-private fun copySessionId(
-    context: Context,
-    sessionId: String,
-) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("Session ID", sessionId))
-}
+private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
+    when (this) {
+        SessionConnectionStatus.Live -> OpenCodeSessionConnectionStatus.Live
+        SessionConnectionStatus.Connecting -> OpenCodeSessionConnectionStatus.Connecting
+        SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
+    }
 
 @Composable
 private fun MessageRow(

@@ -7,6 +7,9 @@ struct SessionChatRow: Identifiable, Equatable {
     let text: String
     let metadataLabel: String
     let isPending: Bool
+    let modelProviderID: String?
+    let modelID: String?
+    let contextInputTokens: Int64?
 }
 
 struct SessionChatComposerState: Equatable {
@@ -77,11 +80,30 @@ enum SessionChatScreenState: Equatable {
     }
 }
 
+enum SessionConnectionStatus: String, Equatable, Sendable {
+    case live
+    case connecting
+    case offline
+
+    init(connectionState: EventStreamConnectionState) {
+        switch connectionState {
+        case .connected:
+            self = .live
+        case .connecting, .reconnecting:
+            self = .connecting
+        case .idle, .disconnected:
+            self = .offline
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class SessionChatViewModel {
     private(set) var state: SessionChatScreenState
     private(set) var sessionStatusLabel: String?
+    private(set) var connectionStatus: SessionConnectionStatus = .offline
+    private(set) var contextUsageFraction: Double?
     private(set) var isAborting = false
     private let sessionID: String
     private let worktree: String
@@ -90,6 +112,7 @@ final class SessionChatViewModel {
     private let sessionRepository: any SessionRepository
     private let messageLiveStore: any MessageLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
+    private let foregroundEventStream: any ForegroundEventStream
     private let eventAdapter = EventDomainAdapter()
     private let sentTimeFormatter: DateFormatter
     private var liveObservationTask: Task<Void, Never>?
@@ -102,7 +125,8 @@ final class SessionChatViewModel {
         modelRepository: any ModelRepository,
         sessionRepository: any SessionRepository,
         messageLiveStore: any MessageLiveStore,
-        sessionStatusLiveStore: any SessionStatusLiveStore
+        sessionStatusLiveStore: any SessionStatusLiveStore,
+        foregroundEventStream: any ForegroundEventStream
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -111,6 +135,7 @@ final class SessionChatViewModel {
         self.sessionRepository = sessionRepository
         self.messageLiveStore = messageLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
+        self.foregroundEventStream = foregroundEventStream
         self.state = .loading(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -127,7 +152,8 @@ final class SessionChatViewModel {
         liveObservationTask = Task {
             async let messageLoop: Void = observeMessages()
             async let statusLoop: Void = observeStatuses()
-            _ = await (messageLoop, statusLoop)
+            async let connectionLoop: Void = observeConnectionState()
+            _ = await (messageLoop, statusLoop, connectionLoop)
         }
     }
 
@@ -239,7 +265,10 @@ final class SessionChatViewModel {
             role: .user,
             text: trimmed,
             metadataLabel: metadataLabel(mode: composer.selectedMode, model: composer.selectedModel?.modelLabel, variant: composer.selectedVariant),
-            isPending: true
+            isPending: true,
+            modelProviderID: nil,
+            modelID: nil,
+            contextInputTokens: nil
         )
 
         let existing = messagesFromCurrentState()
@@ -345,6 +374,13 @@ final class SessionChatViewModel {
         }
     }
 
+    private func observeConnectionState() async {
+        connectionStatus = SessionConnectionStatus(connectionState: foregroundEventStream.connectionState)
+        for await state in foregroundEventStream.connectionStateUpdates() {
+            connectionStatus = SessionConnectionStatus(connectionState: state)
+        }
+    }
+
     private func applyLoadedMessages(
         _ messages: [Message],
         sessionID: String,
@@ -383,6 +419,7 @@ final class SessionChatViewModel {
                 errorBanner: fromQuietRefresh ? errorBanner : nil
             )
         }
+        refreshContextUsage()
     }
 
     private func mergeWithPending(_ serverRows: [SessionChatRow], _ pendingRows: [SessionChatRow]) -> [SessionChatRow] {
@@ -435,7 +472,10 @@ final class SessionChatViewModel {
                 variant: message.variant,
                 sentAtEpochMs: message.sentAtEpochMs
             ),
-            isPending: false
+            isPending: false,
+            modelProviderID: message.modelProviderID,
+            modelID: message.modelID,
+            contextInputTokens: message.contextInputTokens
         )
     }
 
@@ -512,6 +552,33 @@ final class SessionChatViewModel {
         case let .error(id, title, message, _):
             state = .error(sessionID: id, sessionTitle: title, message: message, composer: composer)
         }
+        refreshContextUsage()
+    }
+
+    private func refreshContextUsage() {
+        contextUsageFraction = Self.contextUsageFraction(
+            messages: messagesFromCurrentState(),
+            modelOptions: state.composer.modelOptions,
+            selectedModel: state.composer.selectedModel
+        )
+    }
+
+    static func contextUsageFraction(
+        messages: [SessionChatRow],
+        modelOptions: [ModelSelectionOption],
+        selectedModel: ModelSelection?
+    ) -> Double? {
+        guard let latest = messages.reversed().first(where: { $0.role == .assistant && $0.contextInputTokens != nil }),
+              let inputTokens = latest.contextInputTokens
+        else { return nil }
+        let messageHasModel = latest.modelProviderID != nil && latest.modelID != nil
+        let messageLimit = modelOptions.first {
+            $0.providerID == latest.modelProviderID && $0.modelID == latest.modelID
+        }?.contextLimitTokens
+        guard let contextLimit = messageLimit ?? (messageHasModel ? nil : selectedModel?.option.contextLimitTokens),
+              contextLimit > 0
+        else { return nil }
+        return min(max(Double(inputTokens) / Double(contextLimit), 0), 1)
     }
 
     private func errorMessage(_ error: Error) -> String {

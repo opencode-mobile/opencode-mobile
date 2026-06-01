@@ -39,6 +39,7 @@ import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
@@ -149,6 +150,8 @@ fun MainNavigation() {
                                                     ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                     ComponentGalleryEntryId.ProjectSessionSelector ->
                                                         ProjectSessionSelectorGalleryScreen()
+                                                    ComponentGalleryEntryId.SessionStatusBar ->
+                                                        SessionStatusBarGalleryScreen()
                                                 }
                                             }
                                         }

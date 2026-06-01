@@ -84,3 +84,4 @@ List intentional differences or link to `../divergences.md`.
 - `list-item.md`
 - `button.md`
 - `project-session-selector.md`
+- `session-status-bar.md`

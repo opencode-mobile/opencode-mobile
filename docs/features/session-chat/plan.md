@@ -8,7 +8,8 @@ Chat screen with visible messages and a composer ready for new prompts.
 ## In Scope
 
 - Open Session Chat when a session row is tapped on iOS and Android.
-- Show session context (title and id) at the top of Session Chat.
+- Show session context, live-update connection state, and context usage at the
+  top of Session Chat.
 - Render a local/mock message timeline.
 - Render a bottom composer with a text field, selector controls, an
   attachment affordance, and a primary Send action.
@@ -45,6 +46,8 @@ Chat screen with visible messages and a composer ready for new prompts.
 - Empty composer.
 - Composer with pending text input.
 - Composer selector changes for model, mode, and Variant.
+- Session status bar showing session id copy, SSE state (`live`, `connecting`,
+  `offline`), and context usage when token and model-limit data are available.
 
 ## Error States
 
@@ -67,9 +70,26 @@ Chat screen with visible messages and a composer ready for new prompts.
 - The attachment `+` is visually present as an `Attach context` affordance but
   remains a no-op in this scaffold slice.
 
+## Session Status Bar
+
+- The bar sits directly under `OpenCodeTopBar` and has a fixed 36 dp/pt height.
+- The left side shows `Session: <last 9 characters>` plus a tiny copy icon. Only
+  the copy icon is tappable, uses a circular pressed/ripple effect, and copies
+  the raw full session id.
+- The SSE indicator maps foreground event-stream state to lowercase product
+  labels: `Connected` -> `live`, `Connecting`/`Reconnecting` -> `connecting`,
+  and `Idle`/`Disconnected` -> `offline`.
+- The context ring uses the latest assistant input token count divided by the
+  selected or message model's context limit. If either value is unavailable, the
+  ring renders as unavailable rather than as 0%.
+- Context ring color uses `icon-strong-base` below 70%, `warning` from 70%,
+  and `error` from 85%.
+
 ## Design-System Components Needed
 
 - Reuse existing `OpenCodeListItem` on home for session rows.
 - Use existing theme tokens and typography for Session Chat scaffold.
+- Use the shared **`OpenCodeSessionStatusBar`** component for session identity,
+  foreground SSE state, and context usage.
 - Reuse **`OpenCodeBottomSheet`** for composer option pickers (model, mode,
   Variant).

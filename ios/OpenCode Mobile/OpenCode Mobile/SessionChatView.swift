@@ -23,25 +23,6 @@ private enum TimelineScrollAnchor {
     static let bottom = "session-chat-timeline-bottom"
 }
 
-private struct SessionIdRow: View {
-    let sessionID: String
-
-    var body: some View {
-        Text("Session ID: \(sessionID)")
-            .font(OpenCodeTypography.caption)
-            .foregroundStyle(OpenCodeColors.textSecondary)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                UIPasteboard.general.string = sessionID
-            }
-    }
-}
-
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
@@ -70,7 +51,16 @@ struct SessionChatView: View {
                 showDivider: true
             )
 
-            SessionIdRow(sessionID: viewModel.state.sessionID)
+            OpenCodeSessionStatusBar(
+                sessionID: viewModel.state.sessionID,
+                connectionStatus: viewModel.connectionStatus.openCodeStatus,
+                contextUsageFraction: viewModel.contextUsageFraction,
+                onCopySessionID: {
+                    UIPasteboard.general.string = viewModel.state.sessionID
+                },
+                onConnectionClick: {},
+                onContextClick: {}
+            )
 
             if let statusLabel = viewModel.sessionStatusLabel {
                 Text(statusLabel)
@@ -449,6 +439,19 @@ private struct ModelPickerFilterField: View {
             .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
+    }
+}
+
+private extension SessionConnectionStatus {
+    var openCodeStatus: OpenCodeSessionConnectionStatus {
+        switch self {
+        case .live:
+            .live
+        case .connecting:
+            .connecting
+        case .offline:
+            .offline
+        }
     }
 }
 

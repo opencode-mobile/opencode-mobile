@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
@@ -299,6 +300,110 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
         }
 
+    @Test
+    fun connectionState_mapsToSessionConnectionStatus() =
+        runTest(testDispatcher) {
+            assertEquals(SessionConnectionStatus.Live, EventStreamConnectionState.Connected.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.Connecting, EventStreamConnectionState.Connecting.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.Connecting, EventStreamConnectionState.Reconnecting.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.Offline, EventStreamConnectionState.Idle.toSessionConnectionStatus())
+            assertEquals(SessionConnectionStatus.Offline, EventStreamConnectionState.Disconnected.toSessionConnectionStatus())
+        }
+
+    @Test
+    fun contextUsageFraction_usesLatestAssistantTokensAndModelLimit() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(id = "msg-1", role = MessageRole.Assistant, text = "Earlier", contextInputTokens = 10_000),
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Latest",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    contextInputTokens = 32_000,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(0.25f, viewModel.uiState.value.contextUsageFraction)
+        }
+
+    @Test
+    fun contextUsageFraction_clampsAboveOne() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.Assistant,
+                                    text = "Too much",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    contextInputTokens = 160_000,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(1f, viewModel.uiState.value.contextUsageFraction)
+        }
+
+    @Test
+    fun contextUsageFraction_unavailableWhenTokensOrLimitMissing() =
+        runTest(testDispatcher) {
+            val noTokens =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.Assistant,
+                                    text = "No tokens",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                ),
+                            ),
+                    ),
+                )
+            noTokens.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(null, noTokens.uiState.value.contextUsageFraction)
+
+            val noLimit =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.Assistant,
+                                    text = "No limit",
+                                    modelProviderId = "missing",
+                                    modelId = "model",
+                                    contextInputTokens = 12_000,
+                                ),
+                            ),
+                    ),
+                )
+            noLimit.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(null, noLimit.uiState.value.contextUsageFraction)
+        }
+
     private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
@@ -311,6 +416,7 @@ class SessionChatViewModelTest {
             sessionRepository = sessionRepository,
             messageLiveStore = messageLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
+            foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
         )
     }
@@ -404,6 +510,7 @@ private class FakeModelRepository : ModelRepository {
                 modelId = "claude-sonnet",
                 modelName = "Claude Sonnet",
                 variants = listOf("low", "high"),
+                contextLimitTokens = 128_000,
             )
         return ModelSelectionCatalog(options = listOf(option), serverDefault = option)
     }

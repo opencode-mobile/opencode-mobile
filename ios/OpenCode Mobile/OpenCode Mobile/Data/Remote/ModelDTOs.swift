@@ -17,6 +17,12 @@ struct ProviderModelDTO: Codable, Sendable {
     let status: String?
     let disabled: Bool?
     let variants: [String: JSONValueDTO]?
+    let limit: ProviderModelLimitDTO?
+}
+
+struct ProviderModelLimitDTO: Codable, Sendable {
+    let context: Int64?
+    let output: Int64?
 }
 
 enum JSONValueDTO: Codable, Sendable, Equatable {

@@ -19,6 +19,23 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
     let modelID: String
     let modelName: String
     let variants: [String]
+    let contextLimitTokens: Int64?
+
+    init(
+        providerID: String,
+        providerName: String,
+        modelID: String,
+        modelName: String,
+        variants: [String],
+        contextLimitTokens: Int64? = nil
+    ) {
+        self.providerID = providerID
+        self.providerName = providerName
+        self.modelID = modelID
+        self.modelName = modelName
+        self.variants = variants
+        self.contextLimitTokens = contextLimitTokens
+    }
 
     var modelLabel: String { modelName.isEmpty ? modelID : modelName }
     var providerLabel: String { providerName.isEmpty ? providerID : providerName }

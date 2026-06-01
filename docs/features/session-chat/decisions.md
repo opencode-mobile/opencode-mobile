@@ -44,3 +44,32 @@
   order is usually chronological but the apps enforce sort and scroll explicitly.
 - Revisit when: read-position preservation is needed while the user has scrolled
   up into history (only auto-scroll when already near the bottom).
+
+## Promote Session status bar to Component Collection
+
+- Date: 2026-06-01
+- Decision: Session Chat uses the shared `OpenCodeSessionStatusBar` component
+  for copyable session id, foreground SSE status, and context usage.
+- Reason: the status cluster is needed on both platforms, has three explicit
+  actions, and is likely to recur on future session-scoped screens.
+- Revisit when: another screen needs a materially different status arrangement.
+
+## Derive context usage from best available data
+
+- Date: 2026-06-01
+- Decision: context usage uses explicit server usage if available in the future;
+  otherwise it is derived from latest assistant input tokens divided by the
+  relevant model context limit. Missing data renders as unavailable, not 0%.
+- Reason: current app models can expose token counts and provider model context
+  limits, but not every server/model response is guaranteed to include both.
+- Revisit when: opencode exposes a dedicated session context-usage field.
+
+## Use status thresholds for context pressure
+
+- Date: 2026-06-01
+- Decision: the context usage ring uses neutral icon tokens below 70%, warning at
+  70%, and error at 85%.
+- Reason: the status bar needs an at-a-glance pressure signal while keeping low
+  usage visually quiet.
+- Revisit when: product analytics or opencode server semantics define different
+  context pressure bands.

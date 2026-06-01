@@ -11,7 +11,8 @@ struct ModelDomainAdapter: Sendable {
                         providerName: provider.name ?? provider.id,
                         modelID: model.id ?? key,
                         modelName: model.name ?? model.id ?? key,
-                        variants: variantKeys(from: model)
+                        variants: variantKeys(from: model),
+                        contextLimitTokens: model.limit?.context
                     )
                 }
                 .sorted { $0.modelLabel.localizedCaseInsensitiveCompare($1.modelLabel) == .orderedAscending }

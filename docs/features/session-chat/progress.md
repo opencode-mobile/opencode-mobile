@@ -11,7 +11,13 @@
 - Session Chat scaffold uses existing platform theme tokens and typography.
 - Screen chrome uses **`OpenCodeTopBar`**: title **Session**, leading **back**
   (pops the navigation stack), optional bottom divider; session identity stays in
-  body copy as **Session ID** under the bar (not in the top-bar title).
+  a 36 dp/pt status bar under the top bar (not in the top-bar title).
+- Session status bar shows copyable session id, foreground SSE state, and a
+  context-usage ring when token and model-limit data are available.
+- Session status bar is promoted to the shared Component Collection as
+  **`OpenCodeSessionStatusBar`**.
+- Session status bar Component Gallery entries include connection, availability,
+  and context usage presets (`0%`, `50%`, `70%`, `85%`) for threshold review.
 - Composer chips use `OpenCodeChoiceBadge`; tapping a chip opens the shared
   design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
   (checkmark on the current selection). Circular actions use the reusable
@@ -22,6 +28,9 @@
 - Added session-chat navigation key and destination.
 - Wired session row tap from `MainScreen` to Session Chat route.
 - Added Session Chat scaffold with local message list and composer send behavior.
+- Replaced the standalone Session ID row with the 36 dp status bar.
+- Added Session Chat Screen Model state for foreground event-stream connection
+  status and context usage.
 - Refined composer into prompt input, local selector chips, attachment
   affordance, and Send action rows.
 - Composer selector chips open **`OpenCodeBottomSheet`** pickers instead of
@@ -34,6 +43,9 @@
   `navigationDestination(item:)` so **`List` does not show disclosure chevrons**
   (SwiftUI adds chevrons for `NavigationLink` rows by default).
 - Added local message list and composer send behavior in Session Chat.
+- Replaced the standalone Session ID row with the 36 pt status bar.
+- Added Session Chat Screen Model state for foreground event-stream connection
+  status and context usage.
 - Refined composer to match Android's prompt input, local selector chips,
   attachment affordance, and Send action rows.
 - Composer selector chips open **`openCodeBottomSheet`** pickers instead of
@@ -41,8 +53,10 @@
 
 ## Validation Status
 
-- Android `:app:compileDebugKotlin` passed on 2026-05-10.
-- iOS simulator debug build passed on 2026-05-10.
+- Android `:app:compileDebugKotlin` passed on 2026-06-01.
+- Android `:app:testDebugUnitTest` passed on 2026-06-01.
+- iOS simulator debug build passed on 2026-06-01.
+- iOS `OpenCode Mobile` test action passed on 2026-06-01.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
@@ -50,5 +64,4 @@
 
 ## Remaining Work
 
-- Server-backed history and async send: see [Message Repository](../message-repository/progress.md).
-- Add stream updates and permission request handling — stream updates and abort behavior shipped via [Foreground Event Stream](../foreground-event-stream/progress.md).
+- Permission request handling remains tracked outside this status-bar slice.

@@ -16,6 +16,7 @@ data class ModelSelectionOption(
     val modelId: String,
     val modelName: String,
     val variants: List<String> = emptyList(),
+    val contextLimitTokens: Long? = null,
 ) {
     val id: String = "$providerId:$modelId"
     val modelLabel: String = modelName.ifBlank { modelId }

@@ -24,7 +24,7 @@ struct ComponentGalleryDetailView: View {
                     ComponentGalleryControls(themeMode: $themeMode)
                         .padding(.horizontal, horizontalPadding)
 
-                    if entry.id == .topBar {
+                    if entry.id == .topBar || entry.id == .sessionStatusBar {
                         content
                     } else {
                         content
@@ -62,6 +62,8 @@ struct ComponentGalleryDetailView: View {
             ButtonGalleryView()
         case .projectSessionSelector:
             ProjectSessionSelectorGalleryView()
+        case .sessionStatusBar:
+            SessionStatusBarGalleryView()
         }
     }
 }
