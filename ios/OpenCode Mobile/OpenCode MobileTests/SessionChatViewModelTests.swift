@@ -210,6 +210,104 @@ struct SessionChatViewModelTests {
         #expect(messages.contains { $0.text == "Updated" })
     }
 
+    @Test func connectionState_mapsToSessionConnectionStatus() {
+        #expect(SessionConnectionStatus(connectionState: .connected) == .live)
+        #expect(SessionConnectionStatus(connectionState: .connecting) == .connecting)
+        #expect(SessionConnectionStatus(connectionState: .reconnecting) == .connecting)
+        #expect(SessionConnectionStatus(connectionState: .idle) == .offline)
+        #expect(SessionConnectionStatus(connectionState: .disconnected) == .offline)
+    }
+
+    @Test func contextUsageFraction_usesLatestAssistantTokensAndModelLimit() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(id: "msg-1", role: .assistant, text: "Earlier", model: nil, mode: nil, sentAtEpochMs: nil, contextInputTokens: 10_000),
+                    Message(
+                        id: "msg-2",
+                        role: .assistant,
+                        text: "Latest",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        mode: nil,
+                        sentAtEpochMs: nil,
+                        contextInputTokens: 32_000
+                    ),
+                ]
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.contextUsageFraction == 0.25)
+    }
+
+    @Test func contextUsageFraction_clampsAboveOne() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "Too much",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        mode: nil,
+                        sentAtEpochMs: nil,
+                        contextInputTokens: 160_000
+                    ),
+                ]
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.contextUsageFraction == 1)
+    }
+
+    @Test func contextUsageFraction_unavailableWhenTokensOrLimitMissing() async {
+        let noTokens = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "No tokens",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ]
+            )
+        )
+        await noTokens.loadMessages()
+        #expect(noTokens.contextUsageFraction == nil)
+
+        let noLimit = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "No limit",
+                        model: "unknown",
+                        modelProviderID: "missing",
+                        modelID: "model",
+                        mode: nil,
+                        sentAtEpochMs: nil,
+                        contextInputTokens: 12_000
+                    ),
+                ]
+            )
+        )
+        await noLimit.loadMessages()
+        #expect(noLimit.contextUsageFraction == nil)
+    }
+
     private func makeViewModel(
         messageRepository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream? = nil
@@ -232,7 +330,8 @@ struct SessionChatViewModelTests {
             modelRepository: FakeModelRepository(),
             sessionRepository: sessionRepository,
             messageLiveStore: messageLiveStore,
-            sessionStatusLiveStore: sessionStatusLiveStore
+            sessionStatusLiveStore: sessionStatusLiveStore,
+            foregroundEventStream: eventStream
         )
         viewModel.startObserving()
         return viewModel
@@ -309,7 +408,8 @@ private struct FakeModelRepository: ModelRepository {
             providerName: "Anthropic",
             modelID: "claude-sonnet",
             modelName: "Claude Sonnet",
-            variants: ["low", "high"]
+            variants: ["low", "high"],
+            contextLimitTokens: 128_000
         )
         return ModelSelectionCatalog(options: [option], serverDefault: option)
     }

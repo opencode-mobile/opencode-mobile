@@ -14,16 +14,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -35,8 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -96,7 +103,11 @@ fun SessionChatScreen(
                 leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
                 showDivider = true,
             )
-            SessionIdRow(sessionId = uiState.sessionId)
+            SessionStatusBar(
+                sessionId = uiState.sessionId,
+                connectionStatus = uiState.connectionStatus,
+                contextUsageFraction = uiState.contextUsageFraction,
+            )
             uiState.sessionStatusLabel?.let { statusLabel ->
                 Text(
                     text = statusLabel,
@@ -354,24 +365,101 @@ private fun ModelPickerFilterField(
 }
 
 @Composable
-private fun SessionIdRow(
+private fun SessionStatusBar(
     sessionId: String,
+    connectionStatus: SessionConnectionStatus,
+    contextUsageFraction: Float?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    Text(
-        text = "Session ID: $sessionId",
+    Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable { copySessionId(context, sessionId) }
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.MiddleEllipsis,
+                .height(24.dp)
+                .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .clickable { copySessionId(context, sessionId) }
+                    .semantics { contentDescription = "Copy session ID" },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Session ID: $sessionId",
+                modifier = Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
+            Icon(
+                imageVector = OpenCodeIcons.ContentCopy,
+                contentDescription = null,
+                modifier = Modifier.padding(start = 4.dp).size(13.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Row(
+            modifier =
+                Modifier
+                    .padding(start = 12.dp)
+                    .semantics { contentDescription = "Live updates ${connectionStatus.label}" },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(6.dp)
+                        .background(connectionStatus.dotColor(), CircleShape),
+            )
+            Text(
+                text = connectionStatus.label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+
+        ContextUsageIndicator(
+            fraction = contextUsageFraction,
+            modifier = Modifier.padding(start = 10.dp),
+        )
+    }
+}
+
+@Composable
+private fun ContextUsageIndicator(
+    fraction: Float?,
+    modifier: Modifier = Modifier,
+) {
+    val description =
+        fraction?.let { "Context usage ${(it * 100).toInt()} percent" }
+            ?: "Context usage unavailable"
+    CircularProgressIndicator(
+        progress = { fraction ?: 0f },
+        modifier =
+            modifier
+                .size(14.dp)
+                .semantics { contentDescription = description },
+        color = if (fraction == null) Color.Transparent else MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.outlineVariant,
+        strokeWidth = 1.5.dp,
     )
 }
+
+@Composable
+private fun SessionConnectionStatus.dotColor(): Color =
+    when (this) {
+        SessionConnectionStatus.Live -> MaterialTheme.colorScheme.primary
+        SessionConnectionStatus.Connecting -> MaterialTheme.colorScheme.tertiary
+        SessionConnectionStatus.Offline -> MaterialTheme.colorScheme.outline
+    }
 
 private fun copySessionId(
     context: Context,

@@ -23,6 +23,21 @@ data class MessageInfoDto(
     val variant: String? = null,
     val time: MessageTimeDto? = null,
     val error: MessageErrorInfoDto? = null,
+    val tokens: MessageTokensDto? = null,
+)
+
+@Serializable
+data class MessageTokensDto(
+    val input: Long? = null,
+    val output: Long? = null,
+    val reasoning: Long? = null,
+    val cache: MessageTokenCacheDto? = null,
+)
+
+@Serializable
+data class MessageTokenCacheDto(
+    val read: Long? = null,
+    val write: Long? = null,
 )
 
 @Serializable

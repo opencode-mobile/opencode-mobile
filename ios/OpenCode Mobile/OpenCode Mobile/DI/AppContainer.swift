@@ -196,7 +196,8 @@ extension Container {
                 modelRepository: self.modelRepository(),
                 sessionRepository: self.sessionRepository(),
                 messageLiveStore: self.messageLiveStore(),
-                sessionStatusLiveStore: self.sessionStatusLiveStore()
+                sessionStatusLiveStore: self.sessionStatusLiveStore(),
+                foregroundEventStream: self.foregroundEventStream()
             )
         }
     }

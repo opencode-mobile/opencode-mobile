@@ -13,7 +13,8 @@ struct MessageDomainAdapter: Sendable {
             modelID: info.model?.modelID ?? info.modelID,
             variant: info.variant,
             mode: info.mode ?? info.agent,
-            sentAtEpochMs: info.time?.created
+            sentAtEpochMs: info.time?.created,
+            contextInputTokens: info.tokens?.input
         )
     }
 

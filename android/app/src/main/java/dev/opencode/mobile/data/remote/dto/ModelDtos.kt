@@ -23,4 +23,11 @@ data class ProviderModelDto(
     val status: String? = null,
     val disabled: Boolean? = null,
     val variants: Map<String, JsonElement>? = null,
+    val limit: ProviderModelLimitDto? = null,
+)
+
+@Serializable
+data class ProviderModelLimitDto(
+    val context: Long? = null,
+    val output: Long? = null,
 )

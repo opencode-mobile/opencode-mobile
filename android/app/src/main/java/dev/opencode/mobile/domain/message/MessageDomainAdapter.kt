@@ -22,6 +22,7 @@ class MessageDomainAdapter {
             variant = info.variant,
             mode = info.mode ?: info.agent,
             sentAtEpochMs = info.time?.created,
+            contextInputTokens = info.tokens?.input,
         )
     }
 

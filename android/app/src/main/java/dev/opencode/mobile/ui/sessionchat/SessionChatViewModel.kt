@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.MessageLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.Message
@@ -42,6 +44,7 @@ class SessionChatViewModel
         private val sessionRepository: SessionRepository,
         private val messageLiveStore: MessageLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
+        private val foregroundEventStream: ForegroundEventStream,
         private val eventDomainAdapter: EventDomainAdapter,
     ) : ViewModel() {
         private val _uiState =
@@ -77,12 +80,16 @@ class SessionChatViewModel
                     combine(
                         messageLiveStore.observeMessages(sessionId, worktree),
                         sessionStatusLiveStore.observeStatuses(worktree).map { statuses -> statuses[sessionId] },
-                    ) { messages, status ->
-                        messages to status
-                    }.collect { (messages, status) ->
+                        foregroundEventStream.connectionState,
+                    ) { messages, status, connectionState ->
+                        Triple(messages, status, connectionState)
+                    }.collect { (messages, status, connectionState) ->
                         applyLoadedMessages(messages, fromQuietRefresh = true)
                         _uiState.update {
-                            it.copy(sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel))
+                            it.copy(
+                                sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
+                                connectionStatus = connectionState.toSessionConnectionStatus(),
+                            )
                         }
                     }
                 }
@@ -265,6 +272,7 @@ class SessionChatViewModel
                     messages = merged,
                     isSending = if (fromQuietRefresh) state.isSending else false,
                     isRefreshing = isRefreshing,
+                    contextUsageFraction = contextUsageFraction(merged, state.modelOptions, state.selectedModel),
                     errorMessage = if (fromQuietRefresh) state.errorMessage else null,
                 )
             }
@@ -305,7 +313,41 @@ class SessionChatViewModel
                 role = message.role,
                 text = message.text,
                 metadataLabel = metadataLabel(message),
+                modelProviderId = message.modelProviderId,
+                modelId = message.modelId,
+                contextInputTokens = message.contextInputTokens,
             )
+
+        private fun contextUsageFraction(
+            messages: List<SessionChatMessageItem>,
+            modelOptions: List<ModelSelectionOption>,
+            selectedModel: ModelSelection?,
+        ): Float? {
+            val latestAssistantWithUsage =
+                messages
+                    .asReversed()
+                    .firstOrNull { it.role == MessageRole.Assistant && it.contextInputTokens != null }
+                    ?: return null
+            val inputTokens = latestAssistantWithUsage.contextInputTokens ?: return null
+            val messageHasModel = latestAssistantWithUsage.modelProviderId != null && latestAssistantWithUsage.modelId != null
+            val contextLimit: Long =
+                modelLimit(modelOptions, latestAssistantWithUsage)
+                    ?: (if (messageHasModel) null else selectedModel?.option?.contextLimitTokens)
+                    ?: return null
+            if (contextLimit <= 0L) return null
+            return (inputTokens.toFloat() / contextLimit.toFloat()).coerceIn(0f, 1f)
+        }
+
+        private fun modelLimit(
+            modelOptions: List<ModelSelectionOption>,
+            message: SessionChatMessageItem,
+        ): Long? {
+            val providerId = message.modelProviderId ?: return null
+            val modelId = message.modelId ?: return null
+            return modelOptions
+                .firstOrNull { it.providerId == providerId && it.modelId == modelId }
+                ?.contextLimitTokens
+        }
 
         private fun metadataLabel(message: Message): String {
             val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
@@ -353,6 +395,7 @@ class SessionChatViewModel
                     selectedModel = ModelSelection(fallback, variant),
                     selectedVariant = variant,
                     modelNotice = notice,
+                    contextUsageFraction = contextUsageFraction(state.messages, catalog.options, ModelSelection(fallback, variant)),
                 )
             }
         }
@@ -413,6 +456,8 @@ data class SessionChatUiState(
     val isRefreshing: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
+    val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+    val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
 ) {
     companion object {
@@ -447,6 +492,25 @@ data class SessionChatUiState(
         get() = selectedModel?.option?.supportsVariants == true
 }
 
+enum class SessionConnectionStatus(
+    val label: String,
+) {
+    Live("live"),
+    Connecting("connecting"),
+    Offline("offline"),
+}
+
+fun EventStreamConnectionState.toSessionConnectionStatus(): SessionConnectionStatus =
+    when (this) {
+        EventStreamConnectionState.Connected -> SessionConnectionStatus.Live
+        EventStreamConnectionState.Connecting,
+        EventStreamConnectionState.Reconnecting,
+        -> SessionConnectionStatus.Connecting
+        EventStreamConnectionState.Idle,
+        EventStreamConnectionState.Disconnected,
+        -> SessionConnectionStatus.Offline
+    }
+
 enum class TimelineState {
     Loading,
     Empty,
@@ -460,6 +524,9 @@ data class SessionChatMessageItem(
     val text: String,
     val metadataLabel: String,
     val isPending: Boolean = false,
+    val modelProviderId: String? = null,
+    val modelId: String? = null,
+    val contextInputTokens: Long? = null,
 )
 
 fun MessageRole.displayLabel(): String =

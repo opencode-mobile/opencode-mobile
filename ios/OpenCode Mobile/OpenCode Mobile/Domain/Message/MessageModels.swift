@@ -10,6 +10,7 @@ struct Message: Equatable, Sendable, Identifiable {
     let variant: String?
     let mode: String?
     let sentAtEpochMs: Int64?
+    let contextInputTokens: Int64?
 
     init(
         id: String,
@@ -20,7 +21,8 @@ struct Message: Equatable, Sendable, Identifiable {
         modelID: String? = nil,
         variant: String? = nil,
         mode: String?,
-        sentAtEpochMs: Int64?
+        sentAtEpochMs: Int64?,
+        contextInputTokens: Int64? = nil
     ) {
         self.id = id
         self.role = role
@@ -31,6 +33,7 @@ struct Message: Equatable, Sendable, Identifiable {
         self.variant = variant
         self.mode = mode
         self.sentAtEpochMs = sentAtEpochMs
+        self.contextInputTokens = contextInputTokens
     }
 }
 

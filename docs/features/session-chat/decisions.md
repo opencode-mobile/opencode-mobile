@@ -44,3 +44,24 @@
   order is usually chronological but the apps enforce sort and scroll explicitly.
 - Revisit when: read-position preservation is needed while the user has scrolled
   up into history (only auto-scroll when already near the bottom).
+
+## Keep Session status bar feature-local
+
+- Date: 2026-06-01
+- Decision: Session Chat uses a feature-local 24 dp/pt status bar for copyable
+  session id, foreground SSE status, and context usage instead of promoting it
+  into the Component Collection.
+- Reason: the bar combines Session Chat-specific identity, live stream state, and
+  context usage. It should become reusable only if another screen needs the same
+  combined behavior.
+- Revisit when: a second screen needs this exact status cluster.
+
+## Derive context usage from best available data
+
+- Date: 2026-06-01
+- Decision: context usage uses explicit server usage if available in the future;
+  otherwise it is derived from latest assistant input tokens divided by the
+  relevant model context limit. Missing data renders as unavailable, not 0%.
+- Reason: current app models can expose token counts and provider model context
+  limits, but not every server/model response is guaranteed to include both.
+- Revisit when: opencode exposes a dedicated session context-usage field.

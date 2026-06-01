@@ -17,6 +17,19 @@ struct MessageInfoDTO: Codable, Sendable {
     let variant: String?
     let time: MessageTimeDTO?
     let error: MessageErrorInfoDTO?
+    let tokens: MessageTokensDTO?
+}
+
+struct MessageTokensDTO: Codable, Sendable {
+    let input: Int64?
+    let output: Int64?
+    let reasoning: Int64?
+    let cache: MessageTokenCacheDTO?
+}
+
+struct MessageTokenCacheDTO: Codable, Sendable {
+    let read: Int64?
+    let write: Int64?
 }
 
 struct MessageErrorInfoDTO: Codable, Sendable {
