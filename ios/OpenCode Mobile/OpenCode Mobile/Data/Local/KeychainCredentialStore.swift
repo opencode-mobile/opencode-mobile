@@ -30,15 +30,24 @@ struct KeychainCredentialStore: SecureCredentialStore, Sendable {
         SecItemDelete(query as CFDictionary)
     }
 
+    func clearAll() {
+        SecItemDelete(serviceQuery() as CFDictionary)
+    }
+
     private func account(for serverBaseURL: String) -> String {
         "connection.password.\(serverBaseURL)"
     }
 
-    private func baseQuery(account: String) -> [String: Any] {
+    private func serviceQuery() -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
         ]
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
+        var query = serviceQuery()
+        query[kSecAttrAccount as String] = account
+        return query
     }
 }

@@ -42,15 +42,17 @@ data class PaletteSeeds(
 class SchemaSerializer : KSerializer<String?> {
     override val descriptor = PrimitiveSerialDescriptor("schema", PrimitiveKind.STRING)
 
-    override fun deserialize(decoder: Decoder): String? {
-        return try {
+    override fun deserialize(decoder: Decoder): String? =
+        try {
             decoder.decodeString()
         } catch (_: Exception) {
             null
         }
-    }
 
-    override fun serialize(encoder: Encoder, value: String?) {
+    override fun serialize(
+        encoder: Encoder,
+        value: String?,
+    ) {
         if (value != null) encoder.encodeString(value)
     }
 }

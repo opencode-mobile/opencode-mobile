@@ -90,10 +90,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     }
 
     func clearConnectionData() async {
-        let profile = await connectionProfileStore.activeProfile()
-        if let baseURL = profile?.baseURL {
-            secureCredentialStore.deletePassword(serverBaseURL: baseURL)
-        }
+        secureCredentialStore.clearAll()
         await connectionProfileStore.clearAll()
         activeConnectionManager.disconnect()
         let handlers = profileClearedHandlers

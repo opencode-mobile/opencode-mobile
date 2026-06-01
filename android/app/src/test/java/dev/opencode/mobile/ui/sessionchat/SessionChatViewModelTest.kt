@@ -3,14 +3,9 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
-import dev.opencode.mobile.domain.live.MessageLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.FlowPreview
+import dev.opencode.mobile.domain.live.MessageLiveStore
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
@@ -24,7 +19,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -135,8 +135,18 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals("anthropic", viewModel.uiState.value.selectedModel?.option?.providerId)
-            assertEquals("claude-sonnet", viewModel.uiState.value.selectedModel?.option?.modelId)
+            assertEquals(
+                "anthropic",
+                viewModel.uiState.value.selectedModel
+                    ?.option
+                    ?.providerId,
+            )
+            assertEquals(
+                "claude-sonnet",
+                viewModel.uiState.value.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
             assertEquals("high", viewModel.uiState.value.selectedVariant)
         }
 
@@ -317,8 +327,7 @@ private class EventDrivenFakeMessageLiveStore(
         directory: String,
     ): Flow<List<Message>> =
         channelFlow {
-            suspend fun loadMessages(): List<Message>? =
-                runCatching { repository.listMessages(sessionId, directory) }.getOrNull()
+            suspend fun loadMessages(): List<Message>? = runCatching { repository.listMessages(sessionId, directory) }.getOrNull()
 
             loadMessages()?.let { send(it) }
 

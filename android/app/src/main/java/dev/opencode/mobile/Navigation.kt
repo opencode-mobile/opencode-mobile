@@ -1,12 +1,10 @@
 package dev.opencode.mobile
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -27,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
@@ -46,13 +45,12 @@ import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScree
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.connection.ConnectionSetupSheetContent
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
-import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.root.AppRootState
-import dev.opencode.mobile.ui.settings.SettingsScreen
-import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
+import dev.opencode.mobile.ui.settings.SettingsScreen
+import dev.opencode.mobile.ui.settings.SettingsViewModel
 
 @Composable
 fun MainNavigation() {
@@ -193,6 +191,7 @@ fun MainNavigation() {
     }
 }
 
+@Suppress("ktlint:standard:property-naming")
 private const val RouteTransitionDurationMillis = 220
 
 private fun forwardRouteTransition() =

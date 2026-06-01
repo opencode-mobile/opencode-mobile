@@ -3,8 +3,10 @@ package dev.opencode.mobile.theme
 import androidx.compose.ui.graphics.Color
 
 object ThemeResolver {
-
-    fun resolve(variant: ThemeVariant, isDark: Boolean): ResolvedTokens {
+    fun resolve(
+        variant: ThemeVariant,
+        isDark: Boolean,
+    ): ResolvedTokens {
         val p = variant.palette
         val overrides = variant.overrides ?: emptyMap()
         val neutral = p.neutral.normalizedHex()
@@ -89,7 +91,11 @@ object ThemeResolver {
         return if (trimmed.startsWith("#")) trimmed else "#$trimmed"
     }
 
-    private data class Rgb(val r: Float, val g: Float, val b: Float)
+    private data class Rgb(
+        val r: Float,
+        val g: Float,
+        val b: Float,
+    )
 
     private fun hexToRgb(hex: String): Rgb {
         val clean = hex.normalizedHex().removePrefix("#").take(6)
@@ -102,12 +108,20 @@ object ThemeResolver {
         )
     }
 
-    private fun rgbToHex(r: Float, g: Float, b: Float): String {
+    private fun rgbToHex(
+        r: Float,
+        g: Float,
+        b: Float,
+    ): String {
         val clamp: (Float) -> Int = { (it.coerceIn(0f, 255f)).toInt() }
         return "#${String.format("%02X%02X%02X", clamp(r), clamp(g), clamp(b))}"
     }
 
-    private fun mix(a: String, b: String, amount: Float): String {
+    private fun mix(
+        a: String,
+        b: String,
+        amount: Float,
+    ): String {
         val (r1, g1, b1) = hexToRgb(a)
         val (r2, g2, b2) = hexToRgb(b)
         return rgbToHex(
@@ -125,36 +139,50 @@ object ThemeResolver {
 
     // --- Generation helpers ---
 
-    private fun textStrong(ink: String, isDark: Boolean): String =
-        mix(ink, if (isDark) "#FFFFFF" else "#000000", if (isDark) 0.04f else 0.02f)
+    private fun textStrong(
+        ink: String,
+        isDark: Boolean,
+    ): String = mix(ink, if (isDark) "#FFFFFF" else "#000000", if (isDark) 0.04f else 0.02f)
 
-    private fun surfaceBase(neutral: String, isDark: Boolean): String =
-        mix(neutral, if (isDark) "#000000" else "#FFFFFF", if (isDark) 0.10f else 0.22f)
+    private fun surfaceBase(
+        neutral: String,
+        isDark: Boolean,
+    ): String = mix(neutral, if (isDark) "#000000" else "#FFFFFF", if (isDark) 0.10f else 0.22f)
 
-    private fun surfaceRaisedBase(neutral: String, isDark: Boolean): String =
-        mix(neutral, if (isDark) "#FFFFFF" else "#000000", if (isDark) 0.02f else 0.03f)
+    private fun surfaceRaisedBase(
+        neutral: String,
+        isDark: Boolean,
+    ): String = mix(neutral, if (isDark) "#FFFFFF" else "#000000", if (isDark) 0.02f else 0.03f)
 
-    private fun surfaceRaisedBaseHover(neutral: String, isDark: Boolean): String =
-        mix(neutral, if (isDark) "#FFFFFF" else "#000000", if (isDark) 0.05f else 0.07f)
+    private fun surfaceRaisedBaseHover(
+        neutral: String,
+        isDark: Boolean,
+    ): String = mix(neutral, if (isDark) "#FFFFFF" else "#000000", if (isDark) 0.05f else 0.07f)
 
-    private fun surfaceInteractiveWeak(interactive: String, neutral: String, isDark: Boolean): String =
-        mix(interactive, if (isDark) neutral else "#FFFFFF", if (isDark) 0.78f else 0.94f)
+    private fun surfaceInteractiveWeak(
+        interactive: String,
+        neutral: String,
+        isDark: Boolean,
+    ): String = mix(interactive, if (isDark) neutral else "#FFFFFF", if (isDark) 0.78f else 0.94f)
 
-    private fun surfaceStatusBase(color: String, neutral: String, isDark: Boolean): String =
-        mix(color, if (isDark) neutral else "#FFFFFF", if (isDark) 0.82f else 0.86f)
+    private fun surfaceStatusBase(
+        color: String,
+        neutral: String,
+        isDark: Boolean,
+    ): String = mix(color, if (isDark) neutral else "#FFFFFF", if (isDark) 0.82f else 0.86f)
 
     // --- Public hex-to-Compose-Color utilities ---
 
     fun parseHexColor(hex: String): Color {
         val h = hex.trim().removePrefix("#")
         return when (h.length) {
-            6 -> Color(("FF${h}").toLong(16))
+            6 -> Color(("FF$h").toLong(16))
             8 -> {
                 val r = h.substring(0, 2)
                 val g = h.substring(2, 4)
                 val b = h.substring(4, 6)
                 val a = h.substring(6, 8)
-                Color(("${a}${r}${g}${b}").toLong(16))
+                Color(("${a}${r}${g}$b").toLong(16))
             }
             else -> Color.Black
         }

@@ -53,6 +53,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
     func stop() {
         streamTask?.cancel()
         streamTask = nil
+        wasConnected = false
         applyConnectionState(.idle)
     }
 

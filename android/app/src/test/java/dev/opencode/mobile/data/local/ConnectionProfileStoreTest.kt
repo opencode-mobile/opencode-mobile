@@ -104,4 +104,8 @@ private class InMemorySecureCredentialStore : SecureCredentialStore {
     override fun deletePassword(serverBaseUrl: String) {
         passwords.remove(serverBaseUrl)
     }
+
+    override fun clearAll() {
+        passwords.clear()
+    }
 }

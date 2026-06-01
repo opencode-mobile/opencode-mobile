@@ -229,7 +229,8 @@ extension Container {
 
     @MainActor
     static func clearAllData() {
-        Task {
+        Task { @MainActor in
+            shared.foregroundEventStream().stop()
             await shared.connectionSessionCoordinator().clearConnectionData()
             shared.sessionLiveStore().clearCache()
             shared.sessionStatusLiveStore().clearCache()

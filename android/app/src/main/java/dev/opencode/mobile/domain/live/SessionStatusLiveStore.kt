@@ -5,5 +5,6 @@ import kotlinx.coroutines.flow.Flow
 
 interface SessionStatusLiveStore {
     fun observeStatuses(directory: String): Flow<Map<String, SessionStatus>>
+
     fun clearCache()
 }

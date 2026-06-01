@@ -9,4 +9,6 @@ interface SecureCredentialStore {
     )
 
     fun deletePassword(serverBaseUrl: String)
+
+    fun clearAll()
 }

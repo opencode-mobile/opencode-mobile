@@ -8,7 +8,6 @@ import androidx.compose.runtime.setValue
 import kotlinx.serialization.json.Json
 
 object ThemeManager {
-
     private val json = Json { ignoreUnknownKeys = true }
 
     var currentTheme: OpenCodeTheme by mutableStateOf(createFallbackTheme())
@@ -65,19 +64,21 @@ object ThemeManager {
     private fun validate(theme: OpenCodeTheme) {
         val required = listOf("neutral", "ink", "primary", "success", "warning", "error", "info")
         for (variant in listOf(theme.light, theme.dark)) {
-            val missing = required.filter { key ->
-                val value = when (key) {
-                    "neutral" -> variant.palette.neutral
-                    "ink" -> variant.palette.ink
-                    "primary" -> variant.palette.primary
-                    "success" -> variant.palette.success
-                    "warning" -> variant.palette.warning
-                    "error" -> variant.palette.error
-                    "info" -> variant.palette.info
-                    else -> return@filter true
+            val missing =
+                required.filter { key ->
+                    val value =
+                        when (key) {
+                            "neutral" -> variant.palette.neutral
+                            "ink" -> variant.palette.ink
+                            "primary" -> variant.palette.primary
+                            "success" -> variant.palette.success
+                            "warning" -> variant.palette.warning
+                            "error" -> variant.palette.error
+                            "info" -> variant.palette.info
+                            else -> return@filter true
+                        }
+                    value.isBlank()
                 }
-                value.isBlank()
-            }
             if (missing.isNotEmpty()) {
                 throw ThemeValidationException("Missing required palette seeds: ${missing.joinToString(", ")}")
             }
@@ -101,26 +102,28 @@ object ThemeManager {
     }
 
     private fun createFallbackTheme(): OpenCodeTheme {
-        val lightPalette = PaletteSeeds(
-            neutral = "#f7f7f7",
-            ink = "#171311",
-            primary = "#dcde8d",
-            success = "#12c905",
-            warning = "#ffdc17",
-            error = "#fc533a",
-            info = "#a753ae",
-            interactive = "#034cff",
-        )
-        val darkPalette = PaletteSeeds(
-            neutral = "#1f1f1f",
-            ink = "#f1ece8",
-            primary = "#fab283",
-            success = "#12c905",
-            warning = "#fcd53a",
-            error = "#fc533a",
-            info = "#edb2f1",
-            interactive = "#034cff",
-        )
+        val lightPalette =
+            PaletteSeeds(
+                neutral = "#f7f7f7",
+                ink = "#171311",
+                primary = "#dcde8d",
+                success = "#12c905",
+                warning = "#ffdc17",
+                error = "#fc533a",
+                info = "#a753ae",
+                interactive = "#034cff",
+            )
+        val darkPalette =
+            PaletteSeeds(
+                neutral = "#1f1f1f",
+                ink = "#f1ece8",
+                primary = "#fab283",
+                success = "#12c905",
+                warning = "#fcd53a",
+                error = "#fc533a",
+                info = "#edb2f1",
+                interactive = "#034cff",
+            )
         return OpenCodeTheme(
             name = "OC-2 (Fallback)",
             id = "oc-2-fallback",
@@ -130,4 +133,6 @@ object ThemeManager {
     }
 }
 
-class ThemeValidationException(message: String) : Exception(message)
+class ThemeValidationException(
+    message: String,
+) : Exception(message)

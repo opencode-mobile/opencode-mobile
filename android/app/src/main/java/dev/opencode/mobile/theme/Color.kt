@@ -18,7 +18,10 @@ fun openCodeColor(token: String): Color {
 /**
  * Resolve a named semantic token for a specific mode without composition.
  */
-fun openCodeColor(token: String, isDark: Boolean): Color {
+fun openCodeColor(
+    token: String,
+    isDark: Boolean,
+): Color {
     val hex = if (isDark) ThemeManager.resolvedDark[token] else ThemeManager.resolvedLight[token]
     return ThemeResolver.parseHexColor(hex)
 }

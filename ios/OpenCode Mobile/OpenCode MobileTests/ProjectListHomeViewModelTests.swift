@@ -213,6 +213,10 @@ private final class FakeConnectionProfileStore: ConnectionProfileStore, @uncheck
         var seen = Set<String>()
         added = worktrees.filter { seen.insert($0).inserted }
     }
+
+    func clearAll() async {
+        added.removeAll()
+    }
 }
 
 private struct SlowFirstProjectRepository: ProjectRepository {

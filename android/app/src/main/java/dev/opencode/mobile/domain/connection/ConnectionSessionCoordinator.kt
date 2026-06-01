@@ -35,10 +35,7 @@ class ConnectionSessionCoordinator
         }
 
         suspend fun clearConnectionData() {
-            val profile = activeConnectionManager.currentProfile()
-            if (profile != null) {
-                secureCredentialStore.deletePassword(profile.baseUrl)
-            }
+            secureCredentialStore.clearAll()
             connectionProfileStore.clearAll()
             activeConnectionManager.disconnect()
             httpClient.rebuild()

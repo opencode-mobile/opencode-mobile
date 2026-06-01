@@ -19,6 +19,9 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -29,9 +32,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 @HiltViewModel
 class SessionChatViewModel
@@ -237,8 +237,7 @@ class SessionChatViewModel
                         _uiState.update {
                             it.copy(isAborting = false, errorMessage = errorMessage(throwable))
                         }
-                    }
-                    .onSuccess {
+                    }.onSuccess {
                         _uiState.update { it.copy(isAborting = false) }
                     }
             }
@@ -320,8 +319,7 @@ class SessionChatViewModel
                 state.selectedModel?.modelLabel,
                 state.selectedVariant,
                 formatSentTime(System.currentTimeMillis()),
-            )
-                .joinToString(" · ")
+            ).joinToString(" · ")
         }
 
         private fun applyModelCatalog(
@@ -391,6 +389,7 @@ class SessionChatViewModel
             }
         }
 
+        @Suppress("ktlint:standard:property-naming")
         companion object {
             private const val TAG = "SessionChat"
             val AvailableModes = listOf("Build", "Plan")

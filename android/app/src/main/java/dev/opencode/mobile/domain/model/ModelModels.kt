@@ -39,6 +39,7 @@ data class ModelSelection(
     val modelDisplayLabel: String = option.displayLabel
     val variantLabel: String = selectedVariant ?: DefaultVariantLabel
 
+    @Suppress("ktlint:standard:property-naming")
     companion object {
         const val DefaultVariantLabel = "Default"
     }
