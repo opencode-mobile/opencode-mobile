@@ -27,7 +27,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
@@ -43,7 +42,10 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
+@Suppress("ktlint:standard:property-naming")
 private val projectSessionSelectorHorizontalSpacing = 12.dp
+
+@Suppress("ktlint:standard:property-naming")
 private const val ProjectSessionSelectorPreviewSlotCount = 3
 
 data class ProjectSessionSelectorProject(

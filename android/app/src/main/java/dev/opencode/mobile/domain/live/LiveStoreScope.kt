@@ -8,5 +8,4 @@ class LiveStoreScope(
     val coroutineScope: CoroutineScope,
 )
 
-fun defaultLiveStoreScope(): LiveStoreScope =
-    LiveStoreScope(CoroutineScope(SupervisorJob() + Dispatchers.Default))
+fun defaultLiveStoreScope(): LiveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + Dispatchers.Default))

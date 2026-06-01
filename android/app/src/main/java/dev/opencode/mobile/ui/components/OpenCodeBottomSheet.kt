@@ -69,11 +69,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+@Suppress("ktlint:standard:property-naming")
 private val BottomSheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+
+@Suppress("ktlint:standard:property-naming")
 private const val BottomSheetEnterDurationMillis = 320
+
+@Suppress("ktlint:standard:property-naming")
 private const val BottomSheetExitDurationMillis = 280
+
+@Suppress("ktlint:standard:property-naming")
 private const val BottomSheetScrimAlpha = 0.32f
+
+@Suppress("ktlint:standard:property-naming")
 private val BottomSheetDragDismissThreshold = 96.dp
+
+@Suppress("ktlint:standard:property-naming")
 private const val BottomSheetDragDismissVelocity = 1_200f
 private val BottomSheetHeaderHorizontalPadding = 20.dp
 private val BottomSheetHeaderTopPadding = 12.dp
@@ -84,7 +95,10 @@ private val BottomSheetEntryHorizontalPadding = 20.dp
 private val BottomSheetEntryVerticalPadding = 12.dp
 private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
+
+@Suppress("ktlint:standard:property-naming")
 private const val BottomSheetScrollableHeightFraction = 0.55f
+
 private val BottomSheetCompactMaxHeight = 360.dp
 private val BottomSheetEstimatedHeaderHeight =
     BottomSheetHeaderTopPadding + BottomSheetHeaderBottomPadding + 40.dp

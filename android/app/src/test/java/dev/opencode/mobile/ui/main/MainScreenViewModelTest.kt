@@ -432,7 +432,10 @@ private class FakeSecureCredentialStore : SecureCredentialStore {
 
     override fun readPassword(serverBaseUrl: String): String? = passwords[serverBaseUrl]
 
-    override fun writePassword(serverBaseUrl: String, password: String) {
+    override fun writePassword(
+        serverBaseUrl: String,
+        password: String,
+    ) {
         passwords[serverBaseUrl] = password
     }
 

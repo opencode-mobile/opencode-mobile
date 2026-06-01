@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +16,6 @@ import kotlinx.coroutines.flow.shareIn
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.FlowPreview
 
 @OptIn(FlowPreview::class)
 @Singleton
@@ -32,8 +32,7 @@ class DefaultSessionLiveStore
             cache.clear()
         }
 
-        override fun observeSessions(directory: String): Flow<List<Session>> =
-            cache.getOrPut(directory) { buildSharedFlow(directory) }
+        override fun observeSessions(directory: String): Flow<List<Session>> = cache.getOrPut(directory) { buildSharedFlow(directory) }
 
         private fun buildSharedFlow(directory: String): SharedFlow<List<Session>> =
             buildSessionFlow(directory)

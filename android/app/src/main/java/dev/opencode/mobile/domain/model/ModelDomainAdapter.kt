@@ -17,7 +17,11 @@ class ModelDomainAdapter {
                             providerName = provider.name ?: provider.id,
                             modelId = model.id ?: key,
                             modelName = model.name ?: model.id ?: key,
-                            variants = model.variants?.keys?.sortedWith(String.CASE_INSENSITIVE_ORDER).orEmpty(),
+                            variants =
+                                model.variants
+                                    ?.keys
+                                    ?.sortedWith(String.CASE_INSENSITIVE_ORDER)
+                                    .orEmpty(),
                         )
                     }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.modelLabel })
             }
@@ -35,8 +39,7 @@ class ModelDomainAdapter {
             else -> ModelSelectionError.Transport(throwable)
         }
 
-    private fun isUsable(model: ProviderModelDto): Boolean =
-        model.disabled != true && model.status?.lowercase() != "deprecated"
+    private fun isUsable(model: ProviderModelDto): Boolean = model.disabled != true && model.status?.lowercase() != "deprecated"
 
     private fun defaultOption(
         defaults: Map<String, String>,
