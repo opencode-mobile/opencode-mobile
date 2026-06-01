@@ -38,13 +38,13 @@ struct OpenCodeSessionStatusBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: onConnectionClick) {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(connectionStatus.dotColor)
-                        .frame(width: 6, height: 6)
+                HStack(alignment: .center, spacing: 4) {
                     Text(connectionStatus.rawValue)
                         .font(OpenCodeTypography.caption)
                         .lineLimit(1)
+                    Circle()
+                        .fill(connectionStatus.dotColor)
+                        .frame(width: 6, height: 6)
                 }
                 .frame(height: Self.touchSize)
                 .padding(.horizontal, 6)
@@ -61,7 +61,7 @@ struct OpenCodeSessionStatusBar: View {
             .accessibilityLabel(contextAccessibilityLabel)
             .padding(.leading, 6)
         }
-        .frame(height: 24)
+        .frame(height: 36)
         .padding(.horizontal, 16)
     }
 
@@ -142,4 +142,3 @@ private extension OpenCodeSessionConnectionStatus {
     )
     .openCodeTheme()
 }
-

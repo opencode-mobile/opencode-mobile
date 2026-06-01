@@ -31,7 +31,7 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private const val VisibleSessionIdCharacters = 9
-private val SessionStatusBarHeight = 24.dp
+private val SessionStatusBarHeight = 36.dp
 private val SessionStatusTouchSize = 22.dp
 private val SessionStatusIconSize = 13.dp
 private val SessionStatusDotSize = 6.dp
@@ -113,16 +113,17 @@ fun OpenCodeSessionStatusBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(SessionStatusDotSize)
-                            .background(connectionStatus.dotColor(), CircleShape),
-                )
                 Text(
                     text = connectionStatus.label,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .size(SessionStatusDotSize)
+                            .align(Alignment.CenterVertically)
+                            .background(connectionStatus.dotColor(), CircleShape),
                 )
             }
         }
@@ -186,4 +187,3 @@ private fun OpenCodeSessionStatusBarPreview() {
         )
     }
 }
-

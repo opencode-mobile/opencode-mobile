@@ -72,7 +72,7 @@ Chat screen with visible messages and a composer ready for new prompts.
 
 ## Session Status Bar
 
-- The bar sits directly under `OpenCodeTopBar` and has a fixed 24 dp/pt height.
+- The bar sits directly under `OpenCodeTopBar` and has a fixed 36 dp/pt height.
 - The left side shows `Session: <last 9 characters>` plus a tiny copy icon. Only
   the copy icon is tappable, uses a circular pressed/ripple effect, and copies
   the raw full session id.

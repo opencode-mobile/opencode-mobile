@@ -20,7 +20,7 @@ usage in one stable row.
 - Semantic tokens: `text-base`, `icon-base`, `icon-weak-base`,
   `text-interactive-base`, `border-weak-base`, `surface-base-hover`, `success`,
   `warning`, `interactive`.
-- Component tokens: fixed 24 logical px height, 22 logical px action targets, 14
+- Component tokens: fixed 36 logical px height, 22 logical px action targets, 14
   logical px context ring, 6 logical px connection dot.
 - Typography roles: `type.caption`.
 
@@ -28,7 +28,8 @@ usage in one stable row.
 
 - The visible id label is `Session: <last 9 characters>`.
 - Only the copy icon copies the raw full session id.
-- The connection dot and label are one clickable target for connection details.
+- The connection label and trailing dot are one clickable target for connection
+  details, with 4 logical px horizontal spacing.
 - The context ring is one clickable target for context details.
 - Pressed feedback is circular for icon/ring actions and capsule-shaped for the
   connection action.
@@ -56,4 +57,3 @@ usage in one stable row.
 ## Parity And Divergence
 
 No intentional divergence.
-

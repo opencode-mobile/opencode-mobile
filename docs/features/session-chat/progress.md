@@ -11,7 +11,7 @@
 - Session Chat scaffold uses existing platform theme tokens and typography.
 - Screen chrome uses **`OpenCodeTopBar`**: title **Session**, leading **back**
   (pops the navigation stack), optional bottom divider; session identity stays in
-  a 24 dp/pt status bar under the top bar (not in the top-bar title).
+  a 36 dp/pt status bar under the top bar (not in the top-bar title).
 - Session status bar shows copyable session id, foreground SSE state, and a
   context-usage ring when token and model-limit data are available.
 - Session status bar is promoted to the shared Component Collection as
@@ -26,7 +26,7 @@
 - Added session-chat navigation key and destination.
 - Wired session row tap from `MainScreen` to Session Chat route.
 - Added Session Chat scaffold with local message list and composer send behavior.
-- Replaced the standalone Session ID row with the 24 dp status bar.
+- Replaced the standalone Session ID row with the 36 dp status bar.
 - Added Session Chat Screen Model state for foreground event-stream connection
   status and context usage.
 - Refined composer into prompt input, local selector chips, attachment
@@ -41,7 +41,7 @@
   `navigationDestination(item:)` so **`List` does not show disclosure chevrons**
   (SwiftUI adds chevrons for `NavigationLink` rows by default).
 - Added local message list and composer send behavior in Session Chat.
-- Replaced the standalone Session ID row with the 24 pt status bar.
+- Replaced the standalone Session ID row with the 36 pt status bar.
 - Added Session Chat Screen Model state for foreground event-stream connection
   status and context usage.
 - Refined composer to match Android's prompt input, local selector chips,
