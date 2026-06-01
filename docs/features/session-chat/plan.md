@@ -82,6 +82,8 @@ Chat screen with visible messages and a composer ready for new prompts.
 - The context ring uses the latest assistant input token count divided by the
   selected or message model's context limit. If either value is unavailable, the
   ring renders as unavailable rather than as 0%.
+- Context ring color uses `icon-strong-base` below 70%, `warning` from 70%,
+  and `error` from 85%.
 
 ## Design-System Components Needed
 

@@ -16,6 +16,8 @@
   context-usage ring when token and model-limit data are available.
 - Session status bar is promoted to the shared Component Collection as
   **`OpenCodeSessionStatusBar`**.
+- Session status bar Component Gallery entries include connection, availability,
+  and context usage presets (`0%`, `50%`, `70%`, `85%`) for threshold review.
 - Composer chips use `OpenCodeChoiceBadge`; tapping a chip opens the shared
   design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
   (checkmark on the current selection). Circular actions use the reusable
@@ -51,8 +53,10 @@
 
 ## Validation Status
 
-- Android `:app:compileDebugKotlin` passed on 2026-05-10.
-- iOS simulator debug build passed on 2026-05-10.
+- Android `:app:compileDebugKotlin` passed on 2026-06-01.
+- Android `:app:testDebugUnitTest` passed on 2026-06-01.
+- iOS simulator debug build passed on 2026-06-01.
+- iOS `OpenCode Mobile` test action passed on 2026-06-01.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
@@ -60,5 +64,4 @@
 
 ## Remaining Work
 
-- Server-backed history and async send: see [Message Repository](../message-repository/progress.md).
-- Add stream updates and permission request handling — stream updates and abort behavior shipped via [Foreground Event Stream](../foreground-event-stream/progress.md).
+- Permission request handling remains tracked outside this status-bar slice.

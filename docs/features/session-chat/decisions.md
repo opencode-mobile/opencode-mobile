@@ -63,3 +63,13 @@
 - Reason: current app models can expose token counts and provider model context
   limits, but not every server/model response is guaranteed to include both.
 - Revisit when: opencode exposes a dedicated session context-usage field.
+
+## Use status thresholds for context pressure
+
+- Date: 2026-06-01
+- Decision: the context usage ring uses neutral icon tokens below 70%, warning at
+  70%, and error at 85%.
+- Reason: the status bar needs an at-a-glance pressure signal while keeping low
+  usage visually quiet.
+- Revisit when: product analytics or opencode server semantics define different
+  context pressure bands.
