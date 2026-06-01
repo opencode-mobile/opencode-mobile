@@ -73,8 +73,9 @@ Chat screen with visible messages and a composer ready for new prompts.
 ## Session Status Bar
 
 - The bar sits directly under `OpenCodeTopBar` and has a fixed 24 dp/pt height.
-- The left side shows `Session ID: <id>` with middle truncation plus a tiny copy
-  icon; tapping copies the raw session id.
+- The left side shows `Session: <last 9 characters>` plus a tiny copy icon. Only
+  the copy icon is tappable, uses a circular pressed/ripple effect, and copies
+  the raw full session id.
 - The SSE indicator maps foreground event-stream state to lowercase product
   labels: `Connected` -> `live`, `Connecting`/`Reconnecting` -> `connecting`,
   and `Idle`/`Disconnected` -> `offline`.
@@ -86,7 +87,7 @@ Chat screen with visible messages and a composer ready for new prompts.
 
 - Reuse existing `OpenCodeListItem` on home for session rows.
 - Use existing theme tokens and typography for Session Chat scaffold.
-- Keep the Session status bar feature-local because it combines Session Chat
-  identity, foreground SSE state, and context usage.
+- Use the shared **`OpenCodeSessionStatusBar`** component for session identity,
+  foreground SSE state, and context usage.
 - Reuse **`OpenCodeBottomSheet`** for composer option pickers (model, mode,
   Variant).

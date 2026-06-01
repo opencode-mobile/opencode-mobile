@@ -14,6 +14,8 @@
   a 24 dp/pt status bar under the top bar (not in the top-bar title).
 - Session status bar shows copyable session id, foreground SSE state, and a
   context-usage ring when token and model-limit data are available.
+- Session status bar is promoted to the shared Component Collection as
+  **`OpenCodeSessionStatusBar`**.
 - Composer chips use `OpenCodeChoiceBadge`; tapping a chip opens the shared
   design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
   (checkmark on the current selection). Circular actions use the reusable

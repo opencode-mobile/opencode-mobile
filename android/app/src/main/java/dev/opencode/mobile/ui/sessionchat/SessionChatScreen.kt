@@ -1,10 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import android.content.ClipData
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,20 +11,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -39,12 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -60,8 +49,11 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
+import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class ComposerPickerKind(
@@ -89,6 +81,7 @@ fun SessionChatScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -107,6 +100,9 @@ fun SessionChatScreen(
                 sessionId = uiState.sessionId,
                 connectionStatus = uiState.connectionStatus,
                 contextUsageFraction = uiState.contextUsageFraction,
+                onCopySessionId = { copySessionIdToClipboard(context, uiState.sessionId) },
+                onConnectionClick = {},
+                onContextClick = {},
             )
             uiState.sessionStatusLabel?.let { statusLabel ->
                 Text(
@@ -369,105 +365,28 @@ private fun SessionStatusBar(
     sessionId: String,
     connectionStatus: SessionConnectionStatus,
     contextUsageFraction: Float?,
+    onCopySessionId: () -> Unit,
+    onConnectionClick: () -> Unit,
+    onContextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(24.dp)
-                .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .clickable { copySessionId(context, sessionId) }
-                    .semantics { contentDescription = "Copy session ID" },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Session ID: $sessionId",
-                modifier = Modifier.weight(1f, fill = false),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
-            )
-            Icon(
-                imageVector = OpenCodeIcons.ContentCopy,
-                contentDescription = null,
-                modifier = Modifier.padding(start = 4.dp).size(13.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Row(
-            modifier =
-                Modifier
-                    .padding(start = 12.dp)
-                    .semantics { contentDescription = "Live updates ${connectionStatus.label}" },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(6.dp)
-                        .background(connectionStatus.dotColor(), CircleShape),
-            )
-            Text(
-                text = connectionStatus.label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
-
-        ContextUsageIndicator(
-            fraction = contextUsageFraction,
-            modifier = Modifier.padding(start = 10.dp),
-        )
-    }
-}
-
-@Composable
-private fun ContextUsageIndicator(
-    fraction: Float?,
-    modifier: Modifier = Modifier,
-) {
-    val description =
-        fraction?.let { "Context usage ${(it * 100).toInt()} percent" }
-            ?: "Context usage unavailable"
-    CircularProgressIndicator(
-        progress = { fraction ?: 0f },
-        modifier =
-            modifier
-                .size(14.dp)
-                .semantics { contentDescription = description },
-        color = if (fraction == null) Color.Transparent else MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.outlineVariant,
-        strokeWidth = 1.5.dp,
+    OpenCodeSessionStatusBar(
+        sessionId = sessionId,
+        connectionStatus = connectionStatus.toOpenCodeSessionConnectionStatus(),
+        contextUsageFraction = contextUsageFraction,
+        onCopySessionId = onCopySessionId,
+        onConnectionClick = onConnectionClick,
+        onContextClick = onContextClick,
+        modifier = modifier,
     )
 }
 
-@Composable
-private fun SessionConnectionStatus.dotColor(): Color =
+private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
     when (this) {
-        SessionConnectionStatus.Live -> MaterialTheme.colorScheme.primary
-        SessionConnectionStatus.Connecting -> MaterialTheme.colorScheme.tertiary
-        SessionConnectionStatus.Offline -> MaterialTheme.colorScheme.outline
+        SessionConnectionStatus.Live -> OpenCodeSessionConnectionStatus.Live
+        SessionConnectionStatus.Connecting -> OpenCodeSessionConnectionStatus.Connecting
+        SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
     }
-
-private fun copySessionId(
-    context: Context,
-    sessionId: String,
-) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("Session ID", sessionId))
-}
 
 @Composable
 private fun MessageRow(

@@ -23,92 +23,6 @@ private enum TimelineScrollAnchor {
     static let bottom = "session-chat-timeline-bottom"
 }
 
-private struct SessionStatusBar: View {
-    let sessionID: String
-    let connectionStatus: SessionConnectionStatus
-    let contextUsageFraction: Double?
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Button {
-                UIPasteboard.general.string = sessionID
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Session ID: \(sessionID)")
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Image(OpenCodeIcon.contentCopy.rawValue)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(OpenCodeColors.iconBase)
-                        .frame(width: 13, height: 13)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Copy session ID")
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(connectionStatus.dotColor)
-                    .frame(width: 6, height: 6)
-                Text(connectionStatus.rawValue)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .lineLimit(1)
-            }
-            .padding(.leading, 12)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Live updates \(connectionStatus.rawValue)")
-
-            ContextUsageRing(fraction: contextUsageFraction)
-                .padding(.leading, 10)
-        }
-            .frame(height: 24)
-            .padding(.horizontal, 16)
-    }
-}
-
-private struct ContextUsageRing: View {
-    let fraction: Double?
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(OpenCodeColors.borderWeakBase, lineWidth: 1.5)
-            if let fraction {
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(OpenCodeColors.textInteractiveBase, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-        }
-        .frame(width: 14, height: 14)
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var accessibilityLabel: String {
-        guard let fraction else { return "Context usage unavailable" }
-        return "Context usage \(Int(fraction * 100)) percent"
-    }
-}
-
-private extension SessionConnectionStatus {
-    var dotColor: Color {
-        switch self {
-        case .live:
-            OpenCodeColors.success
-        case .connecting:
-            OpenCodeColors.warning
-        case .offline:
-            OpenCodeColors.iconWeakBase
-        }
-    }
-}
-
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
@@ -137,10 +51,15 @@ struct SessionChatView: View {
                 showDivider: true
             )
 
-            SessionStatusBar(
+            OpenCodeSessionStatusBar(
                 sessionID: viewModel.state.sessionID,
-                connectionStatus: viewModel.connectionStatus,
-                contextUsageFraction: viewModel.contextUsageFraction
+                connectionStatus: viewModel.connectionStatus.openCodeStatus,
+                contextUsageFraction: viewModel.contextUsageFraction,
+                onCopySessionID: {
+                    UIPasteboard.general.string = viewModel.state.sessionID
+                },
+                onConnectionClick: {},
+                onContextClick: {}
             )
 
             if let statusLabel = viewModel.sessionStatusLabel {
@@ -520,6 +439,19 @@ private struct ModelPickerFilterField: View {
             .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
+    }
+}
+
+private extension SessionConnectionStatus {
+    var openCodeStatus: OpenCodeSessionConnectionStatus {
+        switch self {
+        case .live:
+            .live
+        case .connecting:
+            .connecting
+        case .offline:
+            .offline
+        }
     }
 }
 

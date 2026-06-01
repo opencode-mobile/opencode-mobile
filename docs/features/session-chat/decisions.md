@@ -45,16 +45,14 @@
 - Revisit when: read-position preservation is needed while the user has scrolled
   up into history (only auto-scroll when already near the bottom).
 
-## Keep Session status bar feature-local
+## Promote Session status bar to Component Collection
 
 - Date: 2026-06-01
-- Decision: Session Chat uses a feature-local 24 dp/pt status bar for copyable
-  session id, foreground SSE status, and context usage instead of promoting it
-  into the Component Collection.
-- Reason: the bar combines Session Chat-specific identity, live stream state, and
-  context usage. It should become reusable only if another screen needs the same
-  combined behavior.
-- Revisit when: a second screen needs this exact status cluster.
+- Decision: Session Chat uses the shared `OpenCodeSessionStatusBar` component
+  for copyable session id, foreground SSE status, and context usage.
+- Reason: the status cluster is needed on both platforms, has three explicit
+  actions, and is likely to recur on future session-scoped screens.
+- Revisit when: another screen needs a materially different status arrangement.
 
 ## Derive context usage from best available data
 

@@ -53,7 +53,7 @@ fun ComponentGalleryDetailScreen(
                 )
             }
             item {
-                if (entry.id == ComponentGalleryEntryId.TopBar) {
+                if (entry.id == ComponentGalleryEntryId.TopBar || entry.id == ComponentGalleryEntryId.SessionStatusBar) {
                     content()
                 } else {
                     Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
