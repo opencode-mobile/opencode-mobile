@@ -144,7 +144,7 @@ fun OpenCodeSessionStatusBar(
                 CircularProgressIndicator(
                     progress = { contextUsageFraction ?: 0f },
                     modifier = Modifier.size(SessionStatusContextRingSize),
-                    color = if (contextUsageFraction == null) Color.Transparent else openCodeColor("icon-strong-base"),
+                    color = contextUsageColor(contextUsageFraction),
                     trackColor = openCodeColor("icon-base"),
                     strokeWidth = 1.5.dp,
                 )
@@ -167,6 +167,15 @@ private fun OpenCodeSessionConnectionStatus.dotColor(): Color =
         OpenCodeSessionConnectionStatus.Live -> openCodeColor("success")
         OpenCodeSessionConnectionStatus.Connecting -> openCodeColor("warning")
         OpenCodeSessionConnectionStatus.Offline -> openCodeColor("error")
+    }
+
+@Composable
+private fun contextUsageColor(fraction: Float?): Color =
+    when {
+        fraction == null -> Color.Transparent
+        fraction >= 0.9f -> openCodeColor("error")
+        fraction >= 0.7f -> openCodeColor("warning")
+        else -> openCodeColor("icon-strong-base")
     }
 
 private fun contextUsageDescription(fraction: Float?): String =

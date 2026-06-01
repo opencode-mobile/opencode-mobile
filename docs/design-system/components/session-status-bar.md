@@ -35,6 +35,7 @@ usage in one stable row.
 - The context ring is one clickable target for context details.
 - The context ring uses `icon-strong-base` for progress and `icon-base` for
   the track.
+- Context progress switches to `warning` at 70% and `error` at 90%.
 - Pressed feedback is circular for icon/ring actions and capsule-shaped for the
   connection action.
 - Accessibility labels announce `Copy session ID`, `Live updates <state>`, and
@@ -51,7 +52,8 @@ usage in one stable row.
 
 - Light: live state with populated context usage.
 - Dark: gallery theme control.
-- Default: live, connecting, and offline states available in gallery controls.
+- Default: live, connecting, offline, context availability, and context usage
+  percentage states available in gallery controls.
 - Pressed: covered by native pressed interaction behavior.
 - Disabled: not supported; all three actions are expected to be available.
 - Loading: represented by `connecting`.

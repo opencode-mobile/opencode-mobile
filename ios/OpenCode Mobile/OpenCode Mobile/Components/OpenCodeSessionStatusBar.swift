@@ -84,11 +84,21 @@ private struct ContextUsageRing: View {
             if let fraction {
                 Circle()
                     .trim(from: 0, to: fraction)
-                    .stroke(OpenCodeColors.iconStrongBase, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(contextUsageColor(for: fraction), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
         }
         .frame(width: 14, height: 14)
+    }
+
+    private func contextUsageColor(for fraction: Double) -> Color {
+        if fraction >= 0.9 {
+            return OpenCodeColors.error
+        }
+        if fraction >= 0.7 {
+            return OpenCodeColors.warning
+        }
+        return OpenCodeColors.iconStrongBase
     }
 }
 
