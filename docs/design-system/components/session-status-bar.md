@@ -18,8 +18,8 @@ usage in one stable row.
 ## Token Usage
 
 - Semantic tokens: `text-base`, `icon-base`, `icon-weak-base`,
-  `text-interactive-base`, `border-weak-base`, `surface-base-hover`, `success`,
-  `warning`, `error`, `interactive`.
+  `icon-strong-base`, `surface-base-hover`, `success`, `warning`, `error`,
+  `interactive`.
 - Component tokens: fixed 36 logical px height, 22 logical px action targets, 14
   logical px context ring, 6 logical px connection dot.
 - Typography roles: `type.caption`.
@@ -33,6 +33,8 @@ usage in one stable row.
 - Connection dot colors map to status tokens: `live` uses `success`,
   `connecting` uses `warning`, and `offline` uses `error`.
 - The context ring is one clickable target for context details.
+- The context ring uses `icon-strong-base` for progress and `icon-base` for
+  the track.
 - Pressed feedback is circular for icon/ring actions and capsule-shaped for the
   connection action.
 - Accessibility labels announce `Copy session ID`, `Live updates <state>`, and

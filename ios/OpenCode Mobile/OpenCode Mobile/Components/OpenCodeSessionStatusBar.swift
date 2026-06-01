@@ -80,11 +80,11 @@ private struct ContextUsageRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(OpenCodeColors.borderWeakBase, lineWidth: 1.5)
+                .stroke(OpenCodeColors.iconBase, lineWidth: 1.5)
             if let fraction {
                 Circle()
                     .trim(from: 0, to: fraction)
-                    .stroke(OpenCodeColors.textInteractiveBase, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(OpenCodeColors.iconStrongBase, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
         }

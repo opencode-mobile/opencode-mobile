@@ -144,8 +144,8 @@ fun OpenCodeSessionStatusBar(
                 CircularProgressIndicator(
                     progress = { contextUsageFraction ?: 0f },
                     modifier = Modifier.size(SessionStatusContextRingSize),
-                    color = if (contextUsageFraction == null) Color.Transparent else MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.outlineVariant,
+                    color = if (contextUsageFraction == null) Color.Transparent else openCodeColor("icon-strong-base"),
+                    trackColor = openCodeColor("icon-base"),
                     strokeWidth = 1.5.dp,
                 )
             }
