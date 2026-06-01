@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private const val VisibleSessionIdCharacters = 9
@@ -163,9 +164,9 @@ fun copySessionIdToClipboard(
 @Composable
 private fun OpenCodeSessionConnectionStatus.dotColor(): Color =
     when (this) {
-        OpenCodeSessionConnectionStatus.Live -> MaterialTheme.colorScheme.primary
-        OpenCodeSessionConnectionStatus.Connecting -> MaterialTheme.colorScheme.tertiary
-        OpenCodeSessionConnectionStatus.Offline -> MaterialTheme.colorScheme.outline
+        OpenCodeSessionConnectionStatus.Live -> openCodeColor("success")
+        OpenCodeSessionConnectionStatus.Connecting -> openCodeColor("warning")
+        OpenCodeSessionConnectionStatus.Offline -> openCodeColor("error")
     }
 
 private fun contextUsageDescription(fraction: Float?): String =

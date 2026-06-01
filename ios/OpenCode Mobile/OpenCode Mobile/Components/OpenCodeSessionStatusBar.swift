@@ -126,7 +126,7 @@ private extension OpenCodeSessionConnectionStatus {
         case .connecting:
             OpenCodeColors.warning
         case .offline:
-            OpenCodeColors.iconWeakBase
+            OpenCodeColors.error
         }
     }
 }

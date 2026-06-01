@@ -19,7 +19,7 @@ usage in one stable row.
 
 - Semantic tokens: `text-base`, `icon-base`, `icon-weak-base`,
   `text-interactive-base`, `border-weak-base`, `surface-base-hover`, `success`,
-  `warning`, `interactive`.
+  `warning`, `error`, `interactive`.
 - Component tokens: fixed 36 logical px height, 22 logical px action targets, 14
   logical px context ring, 6 logical px connection dot.
 - Typography roles: `type.caption`.
@@ -30,6 +30,8 @@ usage in one stable row.
 - Only the copy icon copies the raw full session id.
 - The connection label and trailing dot are one clickable target for connection
   details, with 4 logical px horizontal spacing.
+- Connection dot colors map to status tokens: `live` uses `success`,
+  `connecting` uses `warning`, and `offline` uses `error`.
 - The context ring is one clickable target for context details.
 - Pressed feedback is circular for icon/ring actions and capsule-shaped for the
   connection action.
