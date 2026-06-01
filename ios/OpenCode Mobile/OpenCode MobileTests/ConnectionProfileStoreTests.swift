@@ -60,4 +60,8 @@ private final class InMemorySecureCredentialStore: SecureCredentialStore, @unche
     func deletePassword(serverBaseURL: String) {
         passwords.removeValue(forKey: serverBaseURL)
     }
+
+    func clearAll() {
+        passwords.removeAll()
+    }
 }

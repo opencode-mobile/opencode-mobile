@@ -40,6 +40,10 @@ class EncryptedSecureCredentialStore
             preferences.edit().remove(passwordKey(serverBaseUrl)).apply()
         }
 
+        override fun clearAll() {
+            preferences.edit().clear().apply()
+        }
+
         private fun passwordKey(serverBaseUrl: String): String = "connection.password.$serverBaseUrl"
 
         private companion object {
