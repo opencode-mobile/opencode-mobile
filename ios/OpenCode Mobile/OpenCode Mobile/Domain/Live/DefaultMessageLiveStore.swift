@@ -16,6 +16,8 @@ final class DefaultMessageLiveStore: MessageLiveStore {
     private var infoCache: [String: [String: AnySendable]] = [:]
     /// Per-session incremental cache: (messageID, partID) → domain part.
     private var partsCache: [String: [String: [String: MessagePart]]] = [:]
+    /// Per-session ordered part IDs for each message.
+    private var partOrder: [String: [String: [String]]] = [:]
     /// Per-session server-ordered list of message IDs.
     private var messageOrder: [String: [String]] = [:]
     /// Per-session fingerprint for heartbeat polling.
@@ -49,6 +51,7 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         cache.removeAll()
         infoCache.removeAll()
         partsCache.removeAll()
+        partOrder.removeAll()
         messageOrder.removeAll()
         lastFingerprint.removeAll()
     }
@@ -89,6 +92,7 @@ final class DefaultMessageLiveStore: MessageLiveStore {
     private func rebuildCache(sessionID: String, messages: [Message]) {
         infoCache[sessionID] = [:]
         partsCache[sessionID] = [:]
+        partOrder[sessionID] = [:]
         messageOrder[sessionID] = messages.map(\.id)
         baseMessages[sessionID] = messages
     }
@@ -153,6 +157,10 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         if partsCache[sessionID]?[messageID] == nil {
             partsCache[sessionID]?[messageID] = [:]
         }
+        if partOrder[sessionID] == nil { partOrder[sessionID] = [:] }
+        if partOrder[sessionID]?[messageID] == nil {
+            partOrder[sessionID]?[messageID] = []
+        }
 
         // Ensure it appears in the ordering.
         if messageOrder[sessionID] == nil { messageOrder[sessionID] = [] }
@@ -176,20 +184,22 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         // Parse the part DTO from the raw dictionary.
         guard let partDTO = decodePart(from: partDict),
               let messageID = partDTO.messageID,
-              let partID = partDTO.id,
-              let domainPart = adapter.messagePart(from: partDTO)
+              let partID = partDTO.id
         else { return }
-
-        // Accumulate delta for text parts.
-        var resolvedPart = domainPart
-        if case .text(let textPart) = resolvedPart {
-            let isStreaming = props["delta"]?.stringValue != nil
-            resolvedPart = .text(TextPart(text: textPart.text, isStreaming: isStreaming))
-        }
 
         if partsCache[sessionID] == nil { partsCache[sessionID] = [:] }
         if partsCache[sessionID]?[messageID] == nil { partsCache[sessionID]?[messageID] = [:] }
+        if partOrder[sessionID] == nil { partOrder[sessionID] = [:] }
+        if partOrder[sessionID]?[messageID] == nil { partOrder[sessionID]?[messageID] = [] }
 
+        let existingPart = partsCache[sessionID]?[messageID]?[partID]
+        guard let resolvedPart = resolvePart(partDTO: partDTO, existingPart: existingPart, delta: props["delta"]?.stringValue) else {
+            return
+        }
+
+        if partOrder[sessionID]?[messageID]?.contains(partID) != true {
+            partOrder[sessionID]?[messageID]?.append(partID)
+        }
         partsCache[sessionID]?[messageID]?[partID] = resolvedPart
 
         emitMessages(sessionID: sessionID, publish: publish)
@@ -206,6 +216,7 @@ final class DefaultMessageLiveStore: MessageLiveStore {
 
         infoCache[sessionID]?.removeValue(forKey: messageID)
         partsCache[sessionID]?.removeValue(forKey: messageID)
+        partOrder[sessionID]?.removeValue(forKey: messageID)
         messageOrder[sessionID]?.removeAll { $0 == messageID }
 
         emitMessages(sessionID: sessionID, publish: publish)
@@ -222,6 +233,7 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         else { return }
 
         partsCache[sessionID]?[messageID]?.removeValue(forKey: partID)
+        partOrder[sessionID]?[messageID]?.removeAll { $0 == partID }
 
         emitMessages(sessionID: sessionID, publish: publish)
     }
@@ -234,18 +246,21 @@ final class DefaultMessageLiveStore: MessageLiveStore {
     ) {
         let infos = infoCache[sessionID] ?? [:]
         let parts = partsCache[sessionID] ?? [:]
+        let orders = partOrder[sessionID] ?? [:]
         let order = messageOrder[sessionID] ?? []
         let base = baseMessages[sessionID] ?? []
+        let baseByID = Dictionary(uniqueKeysWithValues: base.map { ($0.id, $0) })
 
         let messages: [Message] = order.compactMap { messageID -> Message? in
             // If a cached info dict exists, build from cache (incremental path).
             if let infoValue = infos[messageID], case .dictionary(let infoDict) = infoValue,
                let info = decodeInfo(from: infoDict) {
-                let sortedParts: [MessagePart] = parts[messageID].map { Array($0.values) } ?? []
-                return adapter.message(info: info, domainParts: sortedParts)
+                let sortedParts = orderedParts(for: messageID, parts: parts, orders: orders)
+                let message = adapter.message(info: info, domainParts: sortedParts)
+                return hasRenderableContent(message) ? message : baseByID[messageID]
             }
             // Fall back to the base message from the last full reload.
-            return base.first(where: { $0.id == messageID })
+            return baseByID[messageID]
         }
 
         publish(messages)
@@ -294,6 +309,38 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         guard let data = try? JSONSerialization.data(withJSONObject: anySendableToJSON(dict)) else { return nil }
         let dto = try? decoder.decode(MessagePartDTO.self, from: data)
         return dto
+    }
+
+    private func resolvePart(partDTO: MessagePartDTO, existingPart: MessagePart?, delta: String?) -> MessagePart? {
+        if let delta, partDTO.type == "text" {
+            let existingText: String
+            if case .text(let textPart) = existingPart {
+                existingText = textPart.text
+            } else {
+                existingText = partDTO.text ?? ""
+            }
+            return .text(TextPart(text: existingText + delta, isStreaming: true))
+        }
+        return adapter.messagePart(from: partDTO)
+    }
+
+    private func orderedParts(
+        for messageID: String,
+        parts: [String: [String: MessagePart]],
+        orders: [String: [String]]
+    ) -> [MessagePart] {
+        guard let messageParts = parts[messageID] else { return [] }
+        let orderedIDs = orders[messageID] ?? []
+        let ordered = orderedIDs.compactMap { messageParts[$0] }
+        let leftovers = messageParts
+            .filter { partID, _ in !orderedIDs.contains(partID) }
+            .sorted { $0.key < $1.key }
+            .map(\.value)
+        return ordered + leftovers
+    }
+
+    private func hasRenderableContent(_ message: Message) -> Bool {
+        !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.parts.isEmpty
     }
 
     /// Convert `AnySendable` tree to JSON-compatible Foundation types.

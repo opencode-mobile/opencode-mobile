@@ -11,17 +11,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -48,15 +42,19 @@ class DefaultMessageLiveStore
         // Per-session incremental caches
         private val infoCaches = ConcurrentHashMap<String, MutableMap<String, JsonObject>>()
         private val partsCaches = ConcurrentHashMap<String, MutableMap<String, MutableMap<String, MessagePart>>>()
+        private val partOrders = ConcurrentHashMap<String, MutableMap<String, MutableList<String>>>()
         private val messageOrders = ConcurrentHashMap<String, MutableList<String>>()
         private val lastFingerprints = ConcurrentHashMap<String, String>()
+        private val baseMessages = ConcurrentHashMap<String, List<Message>>()
 
         override fun clearCache() {
             cache.clear()
             infoCaches.clear()
             partsCaches.clear()
+            partOrders.clear()
             messageOrders.clear()
             lastFingerprints.clear()
+            baseMessages.clear()
         }
 
         override fun observeMessages(
@@ -84,7 +82,7 @@ class DefaultMessageLiveStore
         ): Flow<List<Message>> =
             merge(
                 incrementalMessageFlow(sessionId, directory),
-                timelinePollFlow(sessionId, directory).map { fullReload(sessionId, directory) }.filterNotNull(),
+                timelinePollFlow(sessionId, directory),
             )
 
         /**
@@ -94,21 +92,19 @@ class DefaultMessageLiveStore
         private fun incrementalMessageFlow(
             sessionId: String,
             directory: String,
-        ): Flow<List<Message>> {
-            val mutable = MutableStateFlow<List<Message>>(emptyList())
-
-            liveStoreScope.coroutineScope.launch {
+        ): Flow<List<Message>> =
+            channelFlow {
                 // Initial seed: full REST load
                 val initial = fullReload(sessionId, directory)
                 if (initial != null) {
-                    mutable.emit(initial)
+                    send(initial)
                 }
 
                 // React to SSE events
                 eventStream.events.collect { event ->
                     if (event.type == "stream.reconnected" || event.type == "server.connected") {
                         val reloaded = fullReload(sessionId, directory)
-                        if (reloaded != null) mutable.emit(reloaded)
+                        if (reloaded != null) send(reloaded)
                         return@collect
                     }
 
@@ -123,14 +119,11 @@ class DefaultMessageLiveStore
                     }
 
                     val messages = buildMessages(sessionId)
-                    if (messages.isNotEmpty()) {
-                        mutable.emit(messages)
+                    if (messages.isNotEmpty() && markChanged(sessionId, messages)) {
+                        send(messages)
                     }
                 }
             }
-
-            return mutable.asSharedFlow()
-        }
 
         // MARK: Event handlers
 
@@ -145,6 +138,7 @@ class DefaultMessageLiveStore
             ensureCaches(sessionId)
             infoCaches[sessionId]!![messageId] = infoJson
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
+            partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
 
             val order = messageOrders[sessionId]!!
             if (messageId !in order) {
@@ -160,19 +154,17 @@ class DefaultMessageLiveStore
             val partDto = tryParsePartDto(partJson) ?: return
             val messageId = partDto.messageId ?: return
             val partId = partDto.id ?: return
-            val domainPart = adapter.toMessagePart(partDto) ?: return
 
             ensureCaches(sessionId)
             val msgParts = partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
+            val msgPartOrder = partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
 
-            // Mark as streaming if delta is present
-            val resolvedPart =
-                if (domainPart is MessagePart.Text && rawProperties.containsKey("delta")) {
-                    MessagePart.Text(text = domainPart.text, isStreaming = true)
-                } else {
-                    domainPart
-                }
+            val resolvedPart = resolvePart(partDto, msgParts[partId], rawProperties["delta"]?.jsonPrimitive?.contentOrNull)
+                ?: return
 
+            if (partId !in msgPartOrder) {
+                msgPartOrder.add(partId)
+            }
             msgParts[partId] = resolvedPart
         }
 
@@ -183,6 +175,7 @@ class DefaultMessageLiveStore
             val messageId = rawProperties?.get("messageID")?.jsonPrimitive?.contentOrNull ?: return
             infoCaches[sessionId]?.remove(messageId)
             partsCaches[sessionId]?.remove(messageId)
+            partOrders[sessionId]?.remove(messageId)
             messageOrders[sessionId]?.removeAll { it == messageId }
         }
 
@@ -193,21 +186,28 @@ class DefaultMessageLiveStore
             val messageId = rawProperties?.get("messageID")?.jsonPrimitive?.contentOrNull ?: return
             val partId = rawProperties?.get("partID")?.jsonPrimitive?.contentOrNull ?: return
             partsCaches[sessionId]?.get(messageId)?.remove(partId)
+            partOrders[sessionId]?.get(messageId)?.removeAll { it == partId }
         }
 
         // MARK: Build messages from cache
 
         private fun buildMessages(sessionId: String): List<Message> {
             val infos = infoCaches[sessionId] ?: return emptyList()
-            val parts = partsCaches[sessionId] ?: return emptyList<Message>()
+            val parts = partsCaches[sessionId] ?: return emptyList()
+            val orders = partOrders[sessionId] ?: emptyMap()
             val order = messageOrders[sessionId] ?: return emptyList()
+            val base = baseMessages[sessionId].orEmpty()
+            val baseById = base.associateBy { it.id }
 
             return order.mapNotNull { messageId ->
-                val infoJson = infos[messageId] ?: return@mapNotNull null
-                val info =
-                    tryParseInfoDto(infoJson) ?: return@mapNotNull null
-                val messageParts = parts[messageId]?.values?.toList() ?: emptyList()
-                adapter.toMessage(info, messageParts)
+                val infoJson = infos[messageId] ?: return@mapNotNull baseById[messageId]
+                val info = tryParseInfoDto(infoJson) ?: return@mapNotNull baseById[messageId]
+                val messageParts = orderedParts(messageId, parts, orders)
+                val message = adapter.toMessage(info, messageParts)
+                when {
+                    message.hasRenderableContent() -> message
+                    else -> baseById[messageId]
+                }
             }
         }
 
@@ -235,7 +235,9 @@ class DefaultMessageLiveStore
             ensureCaches(sessionId)
             infoCaches[sessionId]!!.clear()
             partsCaches[sessionId]!!.clear()
+            partOrders[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
+            baseMessages[sessionId] = messages
         }
 
         // MARK: Poll loop
@@ -243,7 +245,7 @@ class DefaultMessageLiveStore
         private fun timelinePollFlow(
             sessionId: String,
             directory: String,
-        ): Flow<List<Message>?> =
+        ): Flow<List<Message>> =
             channelFlow {
                 while (true) {
                     delay(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS)
@@ -264,7 +266,42 @@ class DefaultMessageLiveStore
         private fun ensureCaches(sessionId: String) {
             infoCaches.getOrPut(sessionId) { mutableMapOf() }
             partsCaches.getOrPut(sessionId) { mutableMapOf() }
+            partOrders.getOrPut(sessionId) { mutableMapOf() }
             messageOrders.getOrPut(sessionId) { mutableListOf() }
+        }
+
+        private fun resolvePart(
+            partDto: MessagePartDto,
+            existingPart: MessagePart?,
+            delta: String?,
+        ): MessagePart? {
+            if (delta != null && partDto.type == "text") {
+                val existingText =
+                    if (existingPart is MessagePart.Text) {
+                        existingPart.text
+                    } else {
+                        partDto.text.orEmpty()
+                    }
+                return MessagePart.Text(text = existingText + delta, isStreaming = true)
+            }
+            return adapter.toMessagePart(partDto)
+        }
+
+        private fun orderedParts(
+            messageId: String,
+            parts: Map<String, Map<String, MessagePart>>,
+            orders: Map<String, List<String>>,
+        ): List<MessagePart> {
+            val messageParts = parts[messageId] ?: return emptyList()
+            val orderedIds = orders[messageId].orEmpty()
+            val ordered = orderedIds.mapNotNull { messageParts[it] }
+            val leftovers =
+                messageParts
+                    .filterKeys { it !in orderedIds }
+                    .toSortedMap()
+                    .values
+                    .toList()
+            return ordered + leftovers
         }
 
         private fun tryParsePartDto(json: JsonObject): MessagePartDto? =
@@ -279,4 +316,16 @@ class DefaultMessageLiveStore
 
         private fun messageFingerprint(messages: List<Message>): String =
             messages.joinToString("|") { "${it.id}:${it.text.length}:${it.text.hashCode()}" }
+
+        private fun markChanged(
+            sessionId: String,
+            messages: List<Message>,
+        ): Boolean {
+            val fp = messageFingerprint(messages)
+            if (fp == lastFingerprints[sessionId]) return false
+            lastFingerprints[sessionId] = fp
+            return true
+        }
+
+        private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
     }

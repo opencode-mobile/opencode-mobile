@@ -122,8 +122,9 @@ with no meaningful parts (empty prompt, system-only) still has a `text` fallback
 A typed content unit within a message. Parts are ordered and rendered
 sequentially. For v1 the domain model defines two variants:
 
-- **TextPart**: user prompt text, assistant response text, or model reasoning
-  trace. May carry `isStreaming: true` while delta chunks are still arriving.
+- **TextPart**: user prompt text or assistant response text. May carry
+  `isStreaming: true` while delta chunks are still arriving. Model reasoning
+  traces are hidden from normal chat text in v1.
 - **ToolPart**: a tool call with a friendly status label such as
   `"⌛ webfetch"` (pending), `"⏳ webfetch: Searching"` (running),
   `"✓ webfetch"` (completed), or `"✕ weftch: error"` (error).

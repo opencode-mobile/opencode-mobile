@@ -187,11 +187,9 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toMessagePart_reasoningType_returnsTextPart() {
+    fun toMessagePart_reasoningType_returnsNull() {
         val dto = MessagePartDto(id = "prt-1", type = "reasoning", text = "thinking...")
-        val part = adapter.toMessagePart(dto)
-        assertTrue(part is MessagePart.Text)
-        assertEquals("thinking...", (part as MessagePart.Text).text)
+        assertNull(adapter.toMessagePart(dto))
     }
 
     @Test
@@ -206,7 +204,7 @@ class MessageDomainAdapterTest {
 
     @Test
     fun toMessagePart_hiddenTypes_returnNull() {
-        val hiddenTypes = listOf("step-start", "step-finish", "agent", "subtask", "compaction", "retry", "snapshot", "patch")
+        val hiddenTypes = listOf("reasoning", "step-start", "step-finish", "agent", "subtask", "compaction", "retry", "snapshot", "patch")
         for (type in hiddenTypes) {
             val dto = MessagePartDto(id = "prt-1", type = type)
             assertNull("$type should return null", adapter.toMessagePart(dto))

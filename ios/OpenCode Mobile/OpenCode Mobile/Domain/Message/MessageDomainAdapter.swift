@@ -42,7 +42,7 @@ struct MessageDomainAdapter: Sendable {
 
     func messagePart(from dto: MessagePartDTO) -> MessagePart? {
         switch dto.type {
-        case "text", "reasoning":
+        case "text":
             guard let text = dto.text else { return nil }
             return .text(TextPart(text: text, isStreaming: false))
         case "tool":

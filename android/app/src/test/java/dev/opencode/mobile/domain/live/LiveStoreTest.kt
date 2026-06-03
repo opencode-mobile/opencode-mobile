@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.live
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
@@ -12,6 +13,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +43,30 @@ class MessageLiveStoreTest {
             val messages = store.observeMessages("ses-1", "/repo").first()
 
             assertEquals("Hello", messages.single().text)
+        }
+
+    @Test
+    fun observeMessages_doesNotEmitEmptyBeforeInitialLoadCompletes() =
+        runTest(testDispatcher) {
+            val initialLoadGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdLoadUntil = initialLoadGate)
+            val store = createMessageStore(repository, FakeForegroundEventStream())
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceTimeBy(1)
+
+            assertEquals(emptyList<List<Message>>(), emissions)
+
+            initialLoadGate.complete(Unit)
+            advanceTimeBy(1)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS + 1)
+
+            assertEquals(1, emissions.size)
+            assertEquals("Hello", emissions.single().single().text)
         }
 
     @Test
@@ -157,7 +183,7 @@ class MessageLiveStoreTest {
         }
 
     @Test
-    fun observeMessages_messageUpdatedWithInfo_emitsNewSlot() =
+    fun observeMessages_messageUpdatedWithInfo_suppressesEmptyNewSlot() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -184,8 +210,8 @@ class MessageLiveStoreTest {
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
-            assertEquals(2, emissions.size)
-            assertEquals("msg-2", emissions.last().last().id)
+            assertEquals(1, emissions.size)
+            assertEquals(listOf("msg-1"), emissions.last().map { it.id })
         }
 
     @Test
@@ -237,10 +263,70 @@ class MessageLiveStoreTest {
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
-            assertEquals(3, emissions.size)
+            assertEquals(2, emissions.size)
             val last = emissions.last()
+            assertEquals(listOf("msg-1", "msg-2"), last.map { it.id })
             val msg2 = last.first { it.id == "msg-2" }
             assertTrue(msg2.text.contains("Hello from part"))
+        }
+
+    @Test
+    fun observeMessages_messagePartUpdatedWithTextDelta_appendsToExistingPart() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageStore(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+
+            eventStream.emit(textDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hel"))
+            eventStream.emit(textDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "lo"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val msg2 = emissions.last().first { it.id == "msg-2" }
+            assertEquals(listOf("msg-1", "msg-2"), emissions.last().map { it.id })
+            assertEquals("Hello", msg2.text)
+            val textPart = msg2.parts.single() as MessagePart.Text
+            assertTrue(textPart.isStreaming)
+        }
+
+    @Test
+    fun observeMessages_messagePartUpdated_preservesPartOrderAcrossReplacement() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageStore(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "First"))
+            eventStream.emit(toolPartEvent(partId = "prt-t1", messageId = "msg-2", tool = "bash", status = "pending"))
+            eventStream.emit(textPartEvent(partId = "prt-2", messageId = "msg-2", text = "Second"))
+            eventStream.emit(toolPartEvent(partId = "prt-t1", messageId = "msg-2", tool = "bash", status = "completed"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val msg2 = emissions.last().first { it.id == "msg-2" }
+            assertEquals(listOf("msg-1", "msg-2"), emissions.last().map { it.id })
+            assertEquals("First\n\u2713 bash\nSecond", msg2.text)
+            assertEquals(3, msg2.parts.size)
         }
 
     private fun createMessageStore(
@@ -249,6 +335,89 @@ class MessageLiveStoreTest {
     ): DefaultMessageLiveStore {
         val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         return DefaultMessageLiveStore(repository, eventStream, scope)
+    }
+
+    private fun messageUpdatedEvent(
+        messageId: String,
+        role: String,
+    ): OpencodeEvent {
+        val infoJson =
+            buildJsonObject {
+                put("id", messageId)
+                put("role", role)
+                put("sessionID", "ses-1")
+            }
+        return OpencodeEvent(
+            type = "message.updated",
+            sessionId = "ses-1",
+            rawProperties = buildJsonObject { put("info", infoJson) },
+        )
+    }
+
+    private fun textPartEvent(
+        partId: String,
+        messageId: String,
+        text: String,
+    ): OpencodeEvent {
+        val partJson =
+            buildJsonObject {
+                put("id", partId)
+                put("messageID", messageId)
+                put("sessionID", "ses-1")
+                put("type", "text")
+                put("text", text)
+            }
+        return OpencodeEvent(
+            type = "message.part.updated",
+            sessionId = "ses-1",
+            rawProperties = buildJsonObject { put("part", partJson) },
+        )
+    }
+
+    private fun textDeltaEvent(
+        partId: String,
+        messageId: String,
+        delta: String,
+    ): OpencodeEvent {
+        val partJson =
+            buildJsonObject {
+                put("id", partId)
+                put("messageID", messageId)
+                put("sessionID", "ses-1")
+                put("type", "text")
+            }
+        return OpencodeEvent(
+            type = "message.part.updated",
+            sessionId = "ses-1",
+            rawProperties =
+                buildJsonObject {
+                    put("part", partJson)
+                    put("delta", delta)
+                },
+        )
+    }
+
+    private fun toolPartEvent(
+        partId: String,
+        messageId: String,
+        tool: String,
+        status: String,
+    ): OpencodeEvent {
+        val stateJson = buildJsonObject { put("status", status) }
+        val partJson =
+            buildJsonObject {
+                put("id", partId)
+                put("messageID", messageId)
+                put("sessionID", "ses-1")
+                put("type", "tool")
+                put("tool", tool)
+                put("state", stateJson)
+            }
+        return OpencodeEvent(
+            type = "message.part.updated",
+            sessionId = "ses-1",
+            rawProperties = buildJsonObject { put("part", partJson) },
+        )
     }
 }
 
@@ -402,6 +571,7 @@ private fun testSession(
 private class FakeMessageRepository(
     var messages: List<Message> = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello")),
     var shouldFailLoad: Boolean = false,
+    private val holdLoadUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
     var listMessagesCallCount = 0
 
@@ -409,6 +579,7 @@ private class FakeMessageRepository(
         sessionId: String,
         directory: String?,
     ): List<Message> {
+        holdLoadUntil?.await()
         listMessagesCallCount += 1
         if (shouldFailLoad) error("load failed")
         return messages

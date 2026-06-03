@@ -139,14 +139,12 @@ struct MessageDomainAdapterTests {
         #expect(t.isStreaming == false)
     }
 
-    @Test func messagePart_reasoningType_returnsTextPart() throws {
+    @Test func messagePart_reasoningType_returnsNil() throws {
         let dto = try decoder.decode(
             MessagePartDTO.self,
             from: #"{"id":"prt-1","type":"reasoning","text":"thinking..."}"#.data(using: .utf8)!
         )
-        let part = adapter.messagePart(from: dto)
-        guard case .text(let t) = part else { Issue.record("Expected text part"); return }
-        #expect(t.text == "thinking...")
+        #expect(adapter.messagePart(from: dto) == nil)
     }
 
     @Test func messagePart_toolType_returnsToolPart() throws {
@@ -161,7 +159,7 @@ struct MessageDomainAdapterTests {
     }
 
     @Test func messagePart_hiddenTypes_returnNil() throws {
-        let hiddenTypes = ["step-start", "step-finish", "agent", "subtask", "compaction", "retry", "snapshot", "patch"]
+        let hiddenTypes = ["reasoning", "step-start", "step-finish", "agent", "subtask", "compaction", "retry", "snapshot", "patch"]
         for type in hiddenTypes {
             let dto = try decoder.decode(
                 MessagePartDTO.self,

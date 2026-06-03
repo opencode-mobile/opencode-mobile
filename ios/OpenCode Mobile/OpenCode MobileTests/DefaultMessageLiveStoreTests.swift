@@ -18,7 +18,7 @@ struct DefaultMessageLiveStoreTests {
         #expect(collector.latest()?.first?.text == "Hello")
     }
 
-    @Test func messageUpdated_createsSlotAndEmits() async {
+    @Test func messageUpdated_suppressesEmptyNewSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
@@ -33,8 +33,8 @@ struct DefaultMessageLiveStoreTests {
         task.cancel()
 
         let last = collector.latest()
-        #expect(last?.count == 2)
-        #expect(last?.contains(where: { $0.id == "msg-2" }) == true)
+        #expect(last?.count == 1)
+        #expect(last?.contains(where: { $0.id == "msg-2" }) == false)
     }
 
     @Test func messagePartUpdated_textPartAppendsToSlot() async {
@@ -99,6 +99,56 @@ struct DefaultMessageLiveStoreTests {
         #expect(toolParts?.first?.statusText == "\u{2713} webfetch")
     }
 
+    @Test func messagePartUpdated_textDeltaAppendsToExistingPart() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        eventStream.emit(eventWithTextDelta(partID: "prt-1", messageID: "msg-2", delta: "Hel", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextDelta(partID: "prt-1", messageID: "msg-2", delta: "lo", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(300))
+        task.cancel()
+
+        let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(msg2?.text == "Hello")
+        guard case .text(let textPart) = msg2?.parts.first else {
+            Issue.record("Expected text part")
+            return
+        }
+        #expect(textPart.isStreaming == true)
+    }
+
+    @Test func messagePartUpdated_preservesPartOrderAcrossReplacement() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "First", sessionID: "ses-1"))
+        eventStream.emit(eventWithToolPart(partID: "prt-t1", messageID: "msg-2", tool: "bash", status: "pending", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-2", messageID: "msg-2", text: "Second", sessionID: "ses-1"))
+        eventStream.emit(eventWithToolPart(partID: "prt-t1", messageID: "msg-2", tool: "bash", status: "completed", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(300))
+        task.cancel()
+
+        let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(msg2?.text == "First\n\u{2713} bash\nSecond")
+        #expect(msg2?.parts.count == 3)
+    }
+
     @Test func messageRemoved_deletesSlotAndEmits() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -147,9 +197,8 @@ struct DefaultMessageLiveStoreTests {
 
         let last = collector.latest()
         let msg2 = last?.first(where: { $0.id == "msg-2" })
-        // msg-2 should still exist but have no display text after the part was removed.
-        #expect(msg2 != nil)
-        #expect(msg2?.text.isEmpty == true)
+        // Brand-new SSE slots without renderable content stay hidden.
+        #expect(msg2 == nil)
     }
 
     @Test func streamReconnected_triggersFullReload() async {
@@ -208,6 +257,13 @@ struct DefaultMessageLiveStoreTests {
     private func eventWithTextPart(partID: String, messageID: String, text: String, sessionID: String) -> OpencodeEvent {
         let json = """
         {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"text","text":"\(text)"}}}}
+        """
+        return EventDomainAdapter().parseEvent(dataLine: json)!
+    }
+
+    private func eventWithTextDelta(partID: String, messageID: String, delta: String, sessionID: String) -> OpencodeEvent {
+        let json = """
+        {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"text"},"delta":"\(delta)"}}}
         """
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }

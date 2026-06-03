@@ -29,6 +29,7 @@ struct SessionChatView: View {
     @State private var activePicker: ComposerPickerKind?
     @State private var modelFilterText = ""
     @State private var hasInitializedTimelineScroll = false
+    @State private var followingLatest = true
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -160,14 +161,24 @@ struct SessionChatView: View {
                             Color.clear
                                 .frame(height: 1)
                                 .id(TimelineScrollAnchor.bottom)
+                                .onAppear {
+                                    followingLatest = true
+                                }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                     }
+                    .simultaneousGesture(
+                        DragGesture().onChanged { _ in
+                            followingLatest = false
+                        }
+                    )
                     .onChange(of: sessionID) { _, _ in
                         hasInitializedTimelineScroll = false
+                        followingLatest = true
                     }
                     .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
+                        guard followingLatest || !hasInitializedTimelineScroll else { return }
                         await scrollTimelineToBottom(
                             using: proxy,
                             animated: hasInitializedTimelineScroll
@@ -189,7 +200,8 @@ struct SessionChatView: View {
     }
 
     private func timelineScrollTaskID(sessionID: String, messages: [SessionChatRow]) -> String {
-        "\(sessionID)-\(messages.count)-\(messages.last?.id ?? "empty")"
+        let latest = messages.last
+        return "\(sessionID)-\(messages.count)-\(latest?.id ?? "empty")-\(latest?.text.hashValue ?? 0)"
     }
 
     @MainActor
