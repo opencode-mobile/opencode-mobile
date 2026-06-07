@@ -44,8 +44,8 @@
   jump when the latest message is unchanged.
 - Reason: chat products anchor on the most recent message at the bottom; server
   order is usually chronological but the apps enforce sort and scroll explicitly.
-- Revisit when: a visible "jump to latest" control is added for users who have
-  scrolled up into history.
+- Revisit when: read-position preservation is needed while the user has scrolled
+  up into history, or when a visible "jump to latest" control is added.
 
 ## Promote Session status bar to Component Collection
 
