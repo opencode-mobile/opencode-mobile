@@ -196,13 +196,7 @@ fun SessionChatScreen(
                         if (!isFirstScroll && !followingLatest) return@LaunchedEffect
                         try {
                             isFollowingScroll = true
-                            if (lastScrolledMessageId == null) {
-                                listState.scrollToItem(bottomIndex)
-                            } else if (lastId == lastScrolledMessageId) {
-                                listState.scrollToItem(bottomIndex)
-                            } else {
-                                listState.animateScrollToItem(bottomIndex)
-                            }
+                            listState.scrollToItem(bottomIndex)
                         } finally {
                             isFollowingScroll = false
                         }

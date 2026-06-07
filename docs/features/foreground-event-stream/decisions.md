@@ -30,3 +30,16 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 ## Heartbeats
 
 `server.connected` and `server.heartbeat` update connection state only; no UI refresh.
+
+## Logging
+
+Foreground event stream implementations log connection lifecycle, retry timing,
+and parsed SSE event type/session id. Session Chat logs the SSE events it
+observes for the bound session. Logs must not include prompt text, message
+bodies, credentials, authorization headers, or full response bodies.
+
+Quick local pulls:
+
+- Android: `adb logcat -v threadtime | rg "OpencodeApi|OpencodeSse|SessionChat"`
+- iOS simulator live: `xcrun simctl spawn booted log stream --style compact --predicate 'subsystem == "dev.opencode.mobile"'`
+- iOS simulator recent: `xcrun simctl spawn booted log show --last 10m --style compact --predicate 'subsystem == "dev.opencode.mobile"'`

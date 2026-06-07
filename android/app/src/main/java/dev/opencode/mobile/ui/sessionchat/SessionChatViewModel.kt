@@ -21,6 +21,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,6 +67,7 @@ class SessionChatViewModel
             observeJob?.cancel()
             boundSessionId = sessionId
             boundWorktree = worktree
+            logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             _uiState.value = SessionChatUiState.initial(sessionId, sessionTitle)
             startLiveObservation(sessionId, worktree)
             loadMessages()
@@ -77,19 +79,41 @@ class SessionChatViewModel
         ) {
             observeJob =
                 viewModelScope.launch {
-                    combine(
-                        messageLiveStore.observeMessages(sessionId, worktree),
-                        sessionStatusLiveStore.observeStatuses(worktree).map { statuses -> statuses[sessionId] },
-                        foregroundEventStream.connectionState,
-                    ) { messages, status, connectionState ->
-                        Triple(messages, status, connectionState)
-                    }.collect { (messages, status, connectionState) ->
-                        applyLoadedMessages(messages, fromQuietRefresh = true)
-                        _uiState.update {
-                            it.copy(
-                                sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
-                                connectionStatus = connectionState.toSessionConnectionStatus(),
-                            )
+                    coroutineScope {
+                        launch {
+                            combine(
+                                messageLiveStore.observeMessages(sessionId, worktree),
+                                sessionStatusLiveStore.observeStatuses(worktree).map { statuses -> statuses[sessionId] },
+                                foregroundEventStream.connectionState,
+                            ) { messages, status, connectionState ->
+                                Triple(messages, status, connectionState)
+                            }.collect { (messages, status, connectionState) ->
+                                logD(
+                                    "live state session=$sessionId messages=${messages.size} " +
+                                        "status=${status?.raw?.get("type") ?: "-"} connection=$connectionState",
+                                )
+                                applyLoadedMessages(messages, fromQuietRefresh = true)
+                                _uiState.update {
+                                    it.copy(
+                                        sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
+                                        connectionStatus = connectionState.toSessionConnectionStatus(),
+                                    )
+                                }
+                            }
+                        }
+                        launch {
+                            foregroundEventStream.events.collect { event ->
+                                val scope =
+                                    when (event.sessionId) {
+                                        sessionId -> "bound"
+                                        null -> "global"
+                                        else -> "other"
+                                    }
+                                logD(
+                                    "SSE event observed session=$sessionId type=${event.type} " +
+                                        "eventSession=${event.sessionId ?: "-"} scope=$scope",
+                                )
+                            }
                         }
                     }
                 }
@@ -255,6 +279,14 @@ class SessionChatViewModel
             runCatching { Log.e(TAG, "sendPromptAsync failed", throwable) }
         }
 
+        private fun logI(message: String) {
+            runCatching { Log.i(TAG, message) }
+        }
+
+        private fun logD(message: String) {
+            runCatching { Log.d(TAG, message) }
+        }
+
         private fun applyLoadedMessages(
             messages: List<Message>,
             isRefreshing: Boolean = false,
@@ -293,9 +325,16 @@ class SessionChatViewModel
 
         private fun timelineMessages(messages: List<Message>): List<SessionChatMessageItem> =
             messages
-                .sortedWith(
-                    compareBy<Message>({ it.sentAtEpochMs ?: Long.MAX_VALUE }, { it.id }),
-                ).map(::toMessageItem)
+                .withIndex()
+                .sortedWith { left, right ->
+                    val leftTime = left.value.sentAtEpochMs
+                    val rightTime = right.value.sentAtEpochMs
+                    when {
+                        leftTime != null && rightTime != null && leftTime != rightTime -> leftTime.compareTo(rightTime)
+                        leftTime != null && rightTime != null -> left.value.id.compareTo(right.value.id)
+                        else -> left.index.compareTo(right.index)
+                    }
+                }.map { toMessageItem(it.value) }
 
         private fun applyLoadError(throwable: Throwable) {
             _uiState.update {

@@ -134,6 +134,24 @@ refresh current project, session list, session status, messages, diffs, and
 permission requests from the server instead of relying on guaranteed background
 delivery.
 
+## Operational Logging
+
+Native networking and live-update work should leave useful platform logs as it
+is implemented. Log API request method/path, response status, failures,
+foreground SSE connection state, and SSE event type/session id at stable tags
+that can be filtered in Console or `adb logcat`.
+
+Do not log credentials, authorization headers, prompt bodies, message bodies, or
+full response bodies. If a feature adds a new stream, repository, or mutation
+path, add lightweight diagnostic logs in the same change so manual test reports
+can reconstruct what happened.
+
+For local debugging:
+
+- Android: `adb logcat -v threadtime | rg "OpencodeApi|OpencodeSse|SessionChat"`
+- iOS simulator live stream: `xcrun simctl spawn booted log stream --style compact --predicate 'subsystem == "dev.opencode.mobile"'`
+- iOS simulator recent history: `xcrun simctl spawn booted log show --last 10m --style compact --predicate 'subsystem == "dev.opencode.mobile"'`
+
 ## Cross-App Parity
 
 Feature work should proceed as a synchronized Feature Slice across both native

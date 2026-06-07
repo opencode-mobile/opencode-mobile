@@ -26,6 +26,7 @@ Include:
 - in-scope behavior;
 - out-of-scope behavior;
 - server APIs involved;
+- expected platform logs for API calls, live updates, and important mutations;
 - domain objects involved;
 - UI states;
 - error states;
@@ -43,6 +44,7 @@ Track:
 - iOS implementation status;
 - Android implementation status;
 - test or preview status;
+- logcat/Console evidence for network, live-update, and mutation paths;
 - remaining work.
 
 ## `parity-gaps.md`

@@ -39,10 +39,20 @@ struct ProjectsAPIClient: Sendable {
     }
 
     private func data(for request: URLRequest) async throws -> Data {
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let startedAt = OpenCodeAPITrace.start(request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
+            throw error
+        }
         guard let http = response as? HTTPURLResponse else {
+            OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
             throw ProjectsAPIError.invalidResponse
         }
+        OpenCodeAPITrace.finish(request, statusCode: http.statusCode, startedAt: startedAt)
         guard (200 ..< 300).contains(http.statusCode) else {
             let message = String(data: data, encoding: .utf8)
             throw ProjectsAPIError.httpStatus(http.statusCode, message)

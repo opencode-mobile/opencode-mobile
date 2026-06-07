@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 struct SessionChatRow: Identifiable, Equatable {
     let id: String
@@ -142,6 +143,7 @@ final class SessionChatViewModel {
             sessionTitle: sessionTitle,
             composer: Self.defaultComposer()
         )
+        OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
@@ -150,11 +152,13 @@ final class SessionChatViewModel {
 
     func startObserving() {
         liveObservationTask?.cancel()
+        OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         liveObservationTask = Task {
             async let messageLoop: Void = observeMessages()
             async let statusLoop: Void = observeStatuses()
             async let connectionLoop: Void = observeConnectionState()
-            _ = await (messageLoop, statusLoop, connectionLoop)
+            async let eventLoop: Void = observeEvents()
+            _ = await (messageLoop, statusLoop, connectionLoop, eventLoop)
         }
     }
 
@@ -354,12 +358,14 @@ final class SessionChatViewModel {
     }
 
     func stopObserving() {
+        OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
         liveObservationTask?.cancel()
         liveObservationTask = nil
     }
 
     private func observeMessages() async {
         for await messages in messageLiveStore.observeMessages(sessionID: sessionID, directory: worktree) {
+            OpenCodeLog.sessionChat.debug("live messages session=\(self.sessionID, privacy: .public) count=\(messages.count)")
             applyLoadedMessages(
                 messages,
                 sessionID: sessionID,
@@ -372,6 +378,7 @@ final class SessionChatViewModel {
     private func observeStatuses() async {
         for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
             let status = statuses[sessionID]
+            OpenCodeLog.sessionChat.debug("live status session=\(self.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)")
             sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
         }
     }
@@ -379,7 +386,24 @@ final class SessionChatViewModel {
     private func observeConnectionState() async {
         connectionStatus = SessionConnectionStatus(connectionState: foregroundEventStream.connectionState)
         for await state in foregroundEventStream.connectionStateUpdates() {
+            OpenCodeLog.sessionChat.debug("live connection session=\(self.sessionID, privacy: .public) state=\(String(describing: state), privacy: .public)")
             connectionStatus = SessionConnectionStatus(connectionState: state)
+        }
+    }
+
+    private func observeEvents() async {
+        for await event in foregroundEventStream.events() {
+            let scope =
+                if event.sessionID == sessionID {
+                    "bound"
+                } else if event.sessionID == nil {
+                    "global"
+                } else {
+                    "other"
+                }
+            OpenCodeLog.sessionChat.debug(
+                "SSE event observed session=\(self.sessionID, privacy: .public) type=\(event.type, privacy: .public) eventSession=\(event.sessionID ?? "-", privacy: .public) scope=\(scope, privacy: .public)"
+            )
         }
     }
 
@@ -395,13 +419,17 @@ final class SessionChatViewModel {
         let errorBanner = fromQuietRefresh ? errorBannerFromCurrentState() : nil
         let serverRows =
             messages
-                .sorted {
-                    let leftTime = $0.sentAtEpochMs ?? Int64.max
-                    let rightTime = $1.sentAtEpochMs ?? Int64.max
-                    if leftTime != rightTime { return leftTime < rightTime }
-                    return $0.id < $1.id
+                .enumerated()
+                .sorted { left, right in
+                    let leftTime = left.element.sentAtEpochMs
+                    let rightTime = right.element.sentAtEpochMs
+                    if let leftTime, let rightTime {
+                        if leftTime != rightTime { return leftTime < rightTime }
+                        return left.element.id < right.element.id
+                    }
+                    return left.offset < right.offset
                 }
-                .map(row(from:))
+                .map { row(from: $0.element) }
         let rows =
             if fromQuietRefresh, isSending {
                 mergeWithPending(serverRows, pendingRowsFromCurrentState())

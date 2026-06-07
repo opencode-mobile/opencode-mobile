@@ -13,13 +13,17 @@ import kotlinx.coroutines.CancellationException
 class EventsApi(
     private val httpClient: OpencodeSseHttpClient,
 ) {
-    suspend fun streamGlobalEvents(onDataLine: suspend (String) -> Unit) {
+    suspend fun streamGlobalEvents(
+        onHTTPResponse: suspend (Int) -> Unit = {},
+        onDataLine: suspend (String) -> Unit,
+    ) {
         httpClient
             .get()
             .prepareGet("global/event") {
                 accept(ContentType.Text.EventStream)
                 header(HttpHeaders.CacheControl, "no-cache")
             }.execute { response ->
+                onHTTPResponse(response.status.value)
                 val channel = response.bodyAsChannel()
                 val dataBuffer = StringBuilder()
                 try {

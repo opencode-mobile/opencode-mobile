@@ -94,6 +94,24 @@ struct SessionChatViewModelTests {
         #expect(messages.map(\.text) == ["Earlier", "Later"])
     }
 
+    @Test func loadMessages_preservesOrderWhenMessageTimestampIsMissing() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(id: "msg-1", role: .assistant, text: "Earlier", model: nil, mode: nil, sentAtEpochMs: 1_000),
+                    Message(id: "msg-2", role: .user, text: "Hydrating", model: nil, mode: nil, sentAtEpochMs: nil),
+                    Message(id: "msg-3", role: .assistant, text: "Later", model: nil, mode: nil, sentAtEpochMs: 3_000),
+                ]
+            )
+        )
+        await viewModel.loadMessages()
+        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded state")
+            return
+        }
+        #expect(messages.map(\.text) == ["Earlier", "Hydrating", "Later"])
+    }
+
     @Test func sendPrompt_failure() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository(shouldFailSend: true))
         await viewModel.loadMessages()

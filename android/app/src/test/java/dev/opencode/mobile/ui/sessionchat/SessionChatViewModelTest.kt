@@ -177,6 +177,30 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadMessages_preservesOrderWhenMessageTimestampIsMissing() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(id = "msg-1", role = MessageRole.Assistant, text = "Earlier", sentAtEpochMs = 1_000L),
+                                Message(id = "msg-2", role = MessageRole.User, text = "Hydrating"),
+                                Message(id = "msg-3", role = MessageRole.Assistant, text = "Later", sentAtEpochMs = 3_000L),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("Earlier", "Hydrating", "Later"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
+        }
+
+    @Test
     fun sendPrompt_failure_removesOptimisticMessage() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository(shouldFailSend = true)
