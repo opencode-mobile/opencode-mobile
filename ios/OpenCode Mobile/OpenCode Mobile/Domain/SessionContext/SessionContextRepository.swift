@@ -32,6 +32,10 @@ struct DefaultSessionContextRepository: SessionContextRepository, Sendable {
                 messages: messagesLoad,
                 modelCatalog: modelsLoad
             )
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw error
         } catch {
             throw SessionContextError.underlying((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
         }

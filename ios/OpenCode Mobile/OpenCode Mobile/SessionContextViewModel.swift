@@ -24,6 +24,7 @@ struct SessionContextStatItem: Equatable, Identifiable {
 final class SessionContextViewModel {
     private(set) var state: SessionContextViewState = .loading
     private(set) var isRefreshing = false
+    private(set) var refreshErrorMessage: String?
 
     private let sessionID: String
     private let worktree: String
@@ -68,11 +69,26 @@ final class SessionContextViewModel {
 
         do {
             let snapshot = try await repository.loadSessionContext(sessionID: sessionID, directory: worktree)
+            refreshErrorMessage = nil
             state = .loaded(displayState(from: snapshot))
+        } catch is CancellationError {
+            return
+        } catch let error as URLError where error.code == .cancelled {
+            return
         } catch {
-            let message = (error as? SessionContextError)?.localizedDescription ?? error.localizedDescription
-            state = .error(message.isEmpty ? "Unable to load session context" : message)
+            let message = errorMessage(error, fallback: setRefreshing ? "Unable to refresh session context" : "Unable to load session context")
+            if setRefreshing, case .loaded = state {
+                refreshErrorMessage = message
+            } else {
+                refreshErrorMessage = nil
+                state = .error(message)
+            }
         }
+    }
+
+    private func errorMessage(_ error: Error, fallback: String) -> String {
+        let message = (error as? SessionContextError)?.localizedDescription ?? error.localizedDescription
+        return message.isEmpty ? fallback : message
     }
 
     private func displayState(from snapshot: SessionContextSnapshot) -> SessionContextDisplayState {
