@@ -112,9 +112,23 @@ class DefaultMessageLiveStore
 
                     when (event.type) {
                         "message.updated" -> handleMessageUpdated(event.rawProperties, sessionId)
-                        "message.part.updated" -> handleMessagePartUpdated(event.rawProperties, sessionId)
+                        "message.part.updated" -> {
+                            if (requiresFullReloadForBaseOnlyPartUpdate(event.rawProperties, sessionId)) {
+                                val reloaded = fullReload(sessionId, directory)
+                                if (reloaded != null) send(reloaded)
+                                return@collect
+                            }
+                            handleMessagePartUpdated(event.rawProperties, sessionId)
+                        }
                         "message.removed" -> handleMessageRemoved(event.rawProperties, sessionId)
-                        "message.part.removed" -> handleMessagePartRemoved(event.rawProperties, sessionId)
+                        "message.part.removed" -> {
+                            if (requiresFullReloadForBaseOnlyPartRemoval(event.rawProperties, sessionId)) {
+                                val reloaded = fullReload(sessionId, directory)
+                                if (reloaded != null) send(reloaded)
+                                return@collect
+                            }
+                            handleMessagePartRemoved(event.rawProperties, sessionId)
+                        }
                         else -> return@collect
                     }
 
@@ -187,6 +201,38 @@ class DefaultMessageLiveStore
             val partId = rawProperties?.get("partID")?.jsonPrimitive?.contentOrNull ?: return
             partsCaches[sessionId]?.get(messageId)?.remove(partId)
             partOrders[sessionId]?.get(messageId)?.removeAll { it == partId }
+        }
+
+        private fun requiresFullReloadForBaseOnlyPartUpdate(
+            rawProperties: JsonObject?,
+            sessionId: String,
+        ): Boolean {
+            val messageId =
+                rawProperties
+                    ?.get("part")
+                    ?.jsonObject
+                    ?.get("messageID")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?: return false
+            return isBaseOnlyMessage(sessionId, messageId)
+        }
+
+        private fun requiresFullReloadForBaseOnlyPartRemoval(
+            rawProperties: JsonObject?,
+            sessionId: String,
+        ): Boolean {
+            val messageId = rawProperties?.get("messageID")?.jsonPrimitive?.contentOrNull ?: return false
+            return isBaseOnlyMessage(sessionId, messageId)
+        }
+
+        private fun isBaseOnlyMessage(
+            sessionId: String,
+            messageId: String,
+        ): Boolean {
+            val isInRestSnapshot = baseMessages[sessionId]?.any { it.id == messageId } == true
+            val hasIncrementalInfo = infoCaches[sessionId]?.containsKey(messageId) == true
+            return isInRestSnapshot && !hasIncrementalInfo
         }
 
         // MARK: Build messages from cache

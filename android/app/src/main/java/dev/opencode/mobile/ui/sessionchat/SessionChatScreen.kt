@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -170,18 +170,16 @@ fun SessionChatScreen(
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
                     var isFollowingScroll by remember(uiState.sessionId) { mutableStateOf(false) }
 
-                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
-                        snapshotFlow {
-                            val bottomIndex = uiState.messages.size
-                            val bottomVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == bottomIndex }
-                            listState.isScrollInProgress to bottomVisible
-                        }.distinctUntilChanged().collect { (isScrollInProgress, bottomVisible) ->
-                            if (bottomVisible) {
-                                followingLatest = true
-                            } else if (isScrollInProgress && !isFollowingScroll) {
-                                followingLatest = false
-                            }
-                        }
+	                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
+	                        snapshotFlow {
+	                            listState.isScrollInProgress to !listState.canScrollForward
+	                        }.distinctUntilChanged().collect { (isScrollInProgress, atBottom) ->
+	                            if (atBottom) {
+	                                followingLatest = true
+	                            } else if (isScrollInProgress && !isFollowingScroll) {
+	                                followingLatest = false
+	                            }
+	                        }
                     }
 
                     LaunchedEffect(
@@ -218,12 +216,15 @@ fun SessionChatScreen(
                                     top = 12.dp,
                                     bottom = 12.dp,
                                 ),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(uiState.messages, key = { it.id }) { message ->
+                            itemsIndexed(uiState.messages, key = { _, message -> message.id }) { index, message ->
                                 MessageRow(
                                     message = message,
                                     onRestoreClick = { viewModel.restoreComposerText(message.text) },
+                                    modifier =
+                                        Modifier.padding(
+                                            bottom = if (index == uiState.messages.lastIndex) 0.dp else 8.dp,
+                                        ),
                                 )
                             }
                             item(key = "session-chat-bottom") {

@@ -145,8 +145,8 @@ struct SessionChatView: View {
                 }
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(messages) { message in
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                 HStack {
                                     if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
                                         messageRow(message)
@@ -157,6 +157,7 @@ struct SessionChatView: View {
                                     }
                                 }
                                 .id(message.id)
+                                .padding(.bottom, index == messages.count - 1 ? 0 : 8)
                             }
                             Color.clear
                                 .frame(height: 1)

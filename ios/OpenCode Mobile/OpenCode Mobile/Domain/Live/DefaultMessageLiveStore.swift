@@ -54,6 +54,7 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         partOrder.removeAll()
         messageOrder.removeAll()
         lastFingerprint.removeAll()
+        baseMessages.removeAll()
     }
 
     // MARK: - Message Loop
@@ -125,10 +126,18 @@ final class DefaultMessageLiveStore: MessageLiveStore {
             case "message.updated":
                 handleMessageUpdated(event: event, sessionID: sessionID, publish: publish)
             case "message.part.updated":
+                if requiresFullReloadForBaseOnlyPartUpdate(event: event, sessionID: sessionID) {
+                    await fullReload(sessionID: sessionID, directory: directory, publish: publish)
+                    continue
+                }
                 handleMessagePartUpdated(event: event, sessionID: sessionID, publish: publish)
             case "message.removed":
                 handleMessageRemoved(event: event, sessionID: sessionID, publish: publish)
             case "message.part.removed":
+                if requiresFullReloadForBaseOnlyPartRemoval(event: event, sessionID: sessionID) {
+                    await fullReload(sessionID: sessionID, directory: directory, publish: publish)
+                    continue
+                }
                 handleMessagePartRemoved(event: event, sessionID: sessionID, publish: publish)
             default:
                 continue
@@ -236,6 +245,24 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         partOrder[sessionID]?[messageID]?.removeAll { $0 == partID }
 
         emitMessages(sessionID: sessionID, publish: publish)
+    }
+
+    private func requiresFullReloadForBaseOnlyPartUpdate(event: OpencodeEvent, sessionID: String) -> Bool {
+        guard let partDict = event.rawProperties?["part"]?.dictionaryValue,
+              let messageID = partDict["messageID"]?.stringValue
+        else { return false }
+        return isBaseOnlyMessage(sessionID: sessionID, messageID: messageID)
+    }
+
+    private func requiresFullReloadForBaseOnlyPartRemoval(event: OpencodeEvent, sessionID: String) -> Bool {
+        guard let messageID = event.rawProperties?["messageID"]?.stringValue else { return false }
+        return isBaseOnlyMessage(sessionID: sessionID, messageID: messageID)
+    }
+
+    private func isBaseOnlyMessage(sessionID: String, messageID: String) -> Bool {
+        let isInRestSnapshot = baseMessages[sessionID]?.contains { $0.id == messageID } == true
+        let hasIncrementalInfo = infoCache[sessionID]?[messageID] != nil
+        return isInRestSnapshot && !hasIncrementalInfo
     }
 
     // MARK: - Emit

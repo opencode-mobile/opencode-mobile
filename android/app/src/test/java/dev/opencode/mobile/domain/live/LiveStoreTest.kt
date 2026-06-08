@@ -329,6 +329,48 @@ class MessageLiveStoreTest {
             assertEquals(3, msg2.parts.size)
         }
 
+    @Test
+    fun observeMessages_partUpdateForRestSeededMessageReloadsTimeline() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeMessageRepository(
+                    messages =
+                        listOf(
+                            Message(
+                                id = "msg-1",
+                                role = MessageRole.Assistant,
+                                text = "Old",
+                                parts = listOf(MessagePart.Text("Old")),
+                            ),
+                        ),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageStore(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceTimeBy(1)
+
+            repository.messages =
+                listOf(
+                    Message(
+                        id = "msg-1",
+                        role = MessageRole.Assistant,
+                        text = "New",
+                        parts = listOf(MessagePart.Text("New")),
+                    ),
+                )
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-1", text = "New"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertEquals("New", emissions.last().single().text)
+            assertEquals(2, repository.listMessagesCallCount)
+        }
+
     private fun createMessageStore(
         repository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream,

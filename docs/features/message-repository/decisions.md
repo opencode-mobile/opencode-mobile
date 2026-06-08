@@ -57,6 +57,12 @@ Text `delta` updates append to the existing text part and mark that part as
 streaming. Tool updates replace the whole rendered tool part from the latest
 state object; tool state fields are not merged incrementally.
 
+When a part update targets a message that only exists from the last REST
+snapshot, `MessageLiveStore` performs a full message reload instead of merging
+locally. The domain message model intentionally does not expose server part IDs,
+so this keeps REST-seeded rows correct without inventing unstable local part
+identity.
+
 `message.updated` can arrive before visible parts. The Live Store may record
 that message slot internally, but Session Chat should not render a brand-new
 empty message row. The row becomes visible when a renderable text/tool part or

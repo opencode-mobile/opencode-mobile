@@ -149,6 +149,45 @@ struct DefaultMessageLiveStoreTests {
         #expect(msg2?.parts.count == 3)
     }
 
+    @Test func messagePartUpdated_forRestSeededMessageReloadsTimeline() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = [
+            Message(
+                id: "msg-1",
+                role: .assistant,
+                text: "Old",
+                parts: [.text(TextPart(text: "Old", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(300))
+
+        repo.messages = [
+            Message(
+                id: "msg-1",
+                role: .assistant,
+                text: "New",
+                parts: [.text(TextPart(text: "New", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-1", text: "New", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(500))
+        task.cancel()
+
+        #expect(collector.latest()?.first?.text == "New")
+        #expect(repo.listMessagesCallCount == 2)
+    }
+
     @Test func messageRemoved_deletesSlotAndEmits() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -299,8 +338,12 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
             .text(TextPart(text: "Hello", isStreaming: false)),
         ], model: nil, mode: nil, sentAtEpochMs: nil),
     ]
+    var listMessagesCallCount = 0
 
-    func listMessages(sessionID: String, directory: String?) async throws -> [Message] { messages }
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        listMessagesCallCount += 1
+        return messages
+    }
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
