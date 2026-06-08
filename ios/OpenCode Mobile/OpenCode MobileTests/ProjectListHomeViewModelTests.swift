@@ -256,7 +256,7 @@ private struct SlowFirstSessionRepository: SessionRepository {
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
-    func getSession(id: String) async throws -> Session { fatalError() }
+    func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String) async throws -> Bool { fatalError() }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
@@ -294,7 +294,7 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         return Session(id: "created", title: "New Session", slug: nil, projectID: nil, directory: directory, parentID: parentID, updatedAtEpochMs: 10)
     }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
-    func getSession(id: String) async throws -> Session { fatalError() }
+    func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String) async throws -> Bool { fatalError() }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }

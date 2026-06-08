@@ -18,7 +18,7 @@ struct SessionContextView: View {
             )
             content
         }
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
     }
@@ -34,7 +34,7 @@ struct SessionContextView: View {
             VStack(spacing: 12) {
                 Text(message)
                     .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textSecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .multilineTextAlignment(.center)
                 OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
                     Task { await viewModel.load() }
@@ -69,10 +69,10 @@ struct SessionContextView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(stat.label)
                         .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textSecondary)
+                        .foregroundStyle(OpenCodeColors.textBase)
                     Text(stat.value)
                         .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textPrimary)
+                        .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                 }
@@ -84,7 +84,7 @@ struct SessionContextView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Context Breakdown")
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
             GeometryReader { proxy in
                 HStack(spacing: 0) {
                     ForEach(items) { item in
@@ -99,18 +99,18 @@ struct SessionContextView: View {
             FlowLayout(spacing: 12, lineSpacing: 6) {
                 ForEach(items) { item in
                     HStack(spacing: 6) {
-                        Circle()
+                        RoundedRectangle(cornerRadius: 2)
                             .fill(color(for: item.kind))
                             .frame(width: 8, height: 8)
                         Text("\(label(for: item.kind)) \(item.displayPercent, specifier: "%.1f")%")
                             .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textSecondary)
+                            .foregroundStyle(OpenCodeColors.textBase)
                     }
                 }
             }
             Text("Approximate breakdown of input tokens. Other includes tool definitions and overhead.")
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
         }
     }
 
@@ -118,35 +118,35 @@ struct SessionContextView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Raw messages")
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
             VStack(spacing: 0) {
                 ForEach(messages) { message in
                     HStack(spacing: 8) {
                         Text(message.role.rawValue)
                             .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textPrimary)
+                            .foregroundStyle(OpenCodeColors.textStrong)
                         Text("• \(message.id)")
                             .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textSecondary)
+                            .foregroundStyle(OpenCodeColors.textBase)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 8)
                         Text(rawTime(message.createdAtEpochMs))
                             .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textSecondary)
+                            .foregroundStyle(OpenCodeColors.textBase)
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     if message.id != messages.last?.id {
-                        Divider().background(OpenCodeColors.borderSubtle)
+                        Divider().background(OpenCodeColors.borderWeakerBase)
                     }
                 }
             }
-            .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+            .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
             )
         }
     }

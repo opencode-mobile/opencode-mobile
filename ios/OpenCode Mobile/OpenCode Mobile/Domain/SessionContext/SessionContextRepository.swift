@@ -24,7 +24,7 @@ struct DefaultSessionContextRepository: SessionContextRepository, Sendable {
 
     func loadSessionContext(sessionID: String, directory: String?) async throws -> SessionContextSnapshot {
         do {
-            async let sessionLoad = sessionRepository.getSession(id: sessionID)
+            async let sessionLoad = sessionRepository.getSession(id: sessionID, directory: directory)
             async let messagesLoad = messageRepository.listMessages(sessionID: sessionID, directory: directory)
             async let modelsLoad = modelRepository.listModelOptions(directory: directory)
             return try await calculator.snapshot(

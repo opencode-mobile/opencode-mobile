@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -177,7 +176,12 @@ private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items.forEach { item ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(8.dp).background(colorFor(item.kind), CircleShape))
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(8.dp)
+                                .background(colorFor(item.kind), RoundedCornerShape(2.dp)),
+                    )
                     Text(
                         text = "${labelFor(item.kind)} ${"%.1f".format(item.displayPercent)}%",
                         style = MaterialTheme.typography.bodySmall,
