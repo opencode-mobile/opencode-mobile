@@ -4,6 +4,7 @@ data class Message(
     val id: String,
     val role: MessageRole,
     val text: String,
+    val parts: List<MessagePart> = emptyList(),
     val model: String? = null,
     val modelProviderId: String? = null,
     val modelId: String? = null,
@@ -12,6 +13,18 @@ data class Message(
     val sentAtEpochMs: Long? = null,
     val contextInputTokens: Long? = null,
 )
+
+sealed class MessagePart {
+    data class Text(
+        val text: String,
+        val isStreaming: Boolean = false,
+    ) : MessagePart()
+
+    data class Tool(
+        val toolName: String,
+        val statusText: String,
+    ) : MessagePart()
+}
 
 data class PromptSendOptions(
     val text: String,

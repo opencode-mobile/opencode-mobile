@@ -11,10 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -55,6 +57,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private enum class ComposerPickerKind(
     val sheetTitle: String,
@@ -164,16 +167,36 @@ fun SessionChatScreen(
                 TimelineState.Ready -> {
                     val listState = rememberLazyListState()
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
+                    var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
+                    var isFollowingScroll by remember(uiState.sessionId) { mutableStateOf(false) }
 
-                    LaunchedEffect(uiState.sessionId, uiState.messages.lastOrNull()?.id) {
-                        val lastIndex = uiState.messages.lastIndex
-                        if (lastIndex < 0) return@LaunchedEffect
-                        val lastId = uiState.messages[lastIndex].id
-                        if (lastId == lastScrolledMessageId) return@LaunchedEffect
-                        if (lastScrolledMessageId == null) {
-                            listState.scrollToItem(lastIndex)
-                        } else {
-                            listState.animateScrollToItem(lastIndex)
+	                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
+	                        snapshotFlow {
+	                            listState.isScrollInProgress to !listState.canScrollForward
+	                        }.distinctUntilChanged().collect { (isScrollInProgress, atBottom) ->
+	                            if (atBottom) {
+	                                followingLatest = true
+	                            } else if (isScrollInProgress && !isFollowingScroll) {
+	                                followingLatest = false
+	                            }
+	                        }
+                    }
+
+                    LaunchedEffect(
+                        uiState.sessionId,
+                        uiState.messages.lastOrNull()?.id,
+                        uiState.messages.lastOrNull()?.text,
+                    ) {
+                        val latestMessage = uiState.messages.lastOrNull() ?: return@LaunchedEffect
+                        val bottomIndex = uiState.messages.size
+                        val lastId = latestMessage.id
+                        val isFirstScroll = lastScrolledMessageId == null
+                        if (!isFirstScroll && !followingLatest) return@LaunchedEffect
+                        try {
+                            isFollowingScroll = true
+                            listState.scrollToItem(bottomIndex)
+                        } finally {
+                            isFollowingScroll = false
                         }
                         lastScrolledMessageId = lastId
                     }
@@ -193,13 +216,19 @@ fun SessionChatScreen(
                                     top = 12.dp,
                                     bottom = 12.dp,
                                 ),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(uiState.messages, key = { it.id }) { message ->
+                            itemsIndexed(uiState.messages, key = { _, message -> message.id }) { index, message ->
                                 MessageRow(
                                     message = message,
                                     onRestoreClick = { viewModel.restoreComposerText(message.text) },
+                                    modifier =
+                                        Modifier.padding(
+                                            bottom = if (index == uiState.messages.lastIndex) 0.dp else 8.dp,
+                                        ),
                                 )
+                            }
+                            item(key = "session-chat-bottom") {
+                                Spacer(Modifier.fillMaxWidth().height(1.dp))
                             }
                         }
                     }

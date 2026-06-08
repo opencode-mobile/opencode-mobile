@@ -46,10 +46,20 @@ final class EventsAPIClient: Sendable {
             request.setValue("Basic \(encoded)", forHTTPHeaderField: "Authorization")
         }
 
-        let (bytes, response) = try await urlSession.bytes(for: request)
+        let startedAt = OpenCodeAPITrace.start(request)
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await urlSession.bytes(for: request)
+        } catch {
+            OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
+            throw error
+        }
         guard let http = response as? HTTPURLResponse else {
+            OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
             throw EventsAPIError.invalidResponse
         }
+        OpenCodeAPITrace.finish(request, statusCode: http.statusCode, startedAt: startedAt)
         guard (200 ..< 300).contains(http.statusCode) else {
             throw EventsAPIError.httpStatus(http.statusCode)
         }

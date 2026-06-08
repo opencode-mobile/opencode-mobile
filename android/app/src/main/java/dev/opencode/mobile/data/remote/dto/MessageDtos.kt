@@ -67,10 +67,53 @@ data class MessageTimeDto(
 
 @Serializable
 data class MessagePartDto(
+    val id: String? = null,
+    @SerialName("sessionID") val sessionId: String? = null,
+    @SerialName("messageID") val messageId: String? = null,
     val type: String,
     val text: String? = null,
     val tool: String? = null,
+    @SerialName("callID") val callId: String? = null,
     val state: JsonObject? = null,
+    val snapshot: String? = null,
+    val reason: String? = null,
+    val name: String? = null,
+    val prompt: String? = null,
+    val description: String? = null,
+    val agent: String? = null,
+    val attempt: Int? = null,
+    val error: MessageErrorInfoDto? = null,
+    val time: MessagePartTimeDto? = null,
+    val synthetic: Boolean? = null,
+    val ignored: Boolean? = null,
+    val hash: String? = null,
+    val files: List<String>? = null,
+    val auto: Boolean? = null,
+)
+
+@Serializable
+data class MessagePartTimeDto(
+    val start: Long? = null,
+    val end: Long? = null,
+)
+
+@Serializable
+data class MessageToolStateDto(
+    val status: String,
+    val input: JsonObject? = null,
+    val raw: String? = null,
+    val title: String? = null,
+    val output: String? = null,
+    val error: String? = null,
+    val time: MessageToolTimeDto? = null,
+)
+
+@Serializable
+data class MessageToolTimeDto(
+    val start: Long? = null,
+    val end: Long? = null,
+    val compacted: Long? = null,
+    val created: Long? = null,
 )
 
 @Serializable

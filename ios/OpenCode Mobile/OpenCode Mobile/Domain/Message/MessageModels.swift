@@ -4,6 +4,7 @@ struct Message: Equatable, Sendable, Identifiable {
     let id: String
     let role: MessageRole
     let text: String
+    let parts: [MessagePart]
     let model: String?
     let modelProviderID: String?
     let modelID: String?
@@ -16,6 +17,7 @@ struct Message: Equatable, Sendable, Identifiable {
         id: String,
         role: MessageRole,
         text: String,
+        parts: [MessagePart] = [],
         model: String?,
         modelProviderID: String? = nil,
         modelID: String? = nil,
@@ -27,6 +29,7 @@ struct Message: Equatable, Sendable, Identifiable {
         self.id = id
         self.role = role
         self.text = text
+        self.parts = parts
         self.model = model
         self.modelProviderID = modelProviderID
         self.modelID = modelID
@@ -35,6 +38,21 @@ struct Message: Equatable, Sendable, Identifiable {
         self.sentAtEpochMs = sentAtEpochMs
         self.contextInputTokens = contextInputTokens
     }
+}
+
+enum MessagePart: Equatable, Sendable {
+    case text(TextPart)
+    case tool(ToolPart)
+}
+
+struct TextPart: Equatable, Sendable {
+    let text: String
+    var isStreaming: Bool
+}
+
+struct ToolPart: Equatable, Sendable {
+    let toolName: String
+    let statusText: String
 }
 
 struct PromptSendOptions: Equatable, Sendable {

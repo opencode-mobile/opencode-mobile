@@ -38,12 +38,14 @@
 - Date: 2026-05-24
 - Decision: Session Chat lists messages oldest-to-newest (`time.created` ascending,
   then message id). Opening a session or receiving a new bottom message scrolls
-  to the latest entry; pull-to-refresh does not jump when the latest message is
-  unchanged.
+  to the latest entry. **Follow Latest** keeps the viewport pinned to the bottom
+  while the viewer is already near the bottom, including while the latest
+  assistant message grows through streaming updates. Pull-to-refresh does not
+  jump when the latest message is unchanged.
 - Reason: chat products anchor on the most recent message at the bottom; server
   order is usually chronological but the apps enforce sort and scroll explicitly.
 - Revisit when: read-position preservation is needed while the user has scrolled
-  up into history (only auto-scroll when already near the bottom).
+  up into history, or when a visible "jump to latest" control is added.
 
 ## Promote Session status bar to Component Collection
 

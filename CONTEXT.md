@@ -111,10 +111,27 @@ and quiet refresh merge stay in the Screen Model.
 
 ### message
 
-A user, assistant, command, or tool-related item inside a session.
+A user, assistant, or tool-related item inside a session.
 
-The mobile client treats messages as the main way to understand what happened in
-a session and as the vehicle for sending new prompts.
+Each message has a `role` (user/assistant), a pre-computed `text` for display,
+and an ordered array of `parts` that represent the content structure. A message
+with no meaningful parts (empty prompt, system-only) still has a `text` fallback.
+
+### message part
+
+A typed content unit within a message. Parts are ordered and rendered
+sequentially. For v1 the domain model defines two variants:
+
+- **TextPart**: user prompt text or assistant response text. May carry
+  `isStreaming: true` while delta chunks are still arriving. Model reasoning
+  traces are hidden from normal chat text in v1.
+- **ToolPart**: a tool call with a friendly status label such as
+  `"⌛ webfetch"` (pending), `"⏳ webfetch: Searching"` (running),
+  `"✓ webfetch"` (completed), or `"✕ weftch: error"` (error).
+
+Server-only part types (`step-start`, `step-finish`, `agent`, `subtask`,
+`snapshot`, `patch`, `compaction`, `retry`) are consumed by the adapter but do
+not produce a visible domain part in v1.
 
 ### Model Selection
 

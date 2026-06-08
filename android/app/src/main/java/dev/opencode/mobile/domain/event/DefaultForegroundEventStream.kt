@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.event
 
+import android.util.Log
 import dev.opencode.mobile.data.remote.EventsApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,8 @@ class DefaultForegroundEventStream
         private val scope = CoroutineScope(SupervisorJob())
         private var streamJob: Job? = null
         private var wasConnected = false
+        private var currentStreamWasConnected = false
+        private var emittedReconnectForCurrentStream = false
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
@@ -35,48 +38,115 @@ class DefaultForegroundEventStream
 
         override fun start() {
             if (streamJob?.isActive == true) return
+            logI("foreground SSE stream starting")
             streamJob =
                 scope.launch {
                     var retryAttempt = 0
                     while (true) {
-                        _connectionState.value =
-                            if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Connecting
+                        currentStreamWasConnected = false
+                        emittedReconnectForCurrentStream = false
+                        setConnectionState(
+                            if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Connecting,
+                        )
                         try {
-                            eventsApi.streamGlobalEvents { dataLine ->
-                                val event = eventDomainAdapter.parseEvent(dataLine) ?: return@streamGlobalEvents
+                            eventsApi.streamGlobalEvents(
+                                onHTTPResponse = { statusCode ->
+                                    logI("GET /global/event opened status=$statusCode")
+                                    markStreamConnected()
+                                    retryAttempt = 0
+                                },
+                            ) { dataLine ->
+                                val event =
+                                    eventDomainAdapter.parseEvent(dataLine)
+                                        ?: run {
+                                            logW("SSE event parse failed")
+                                            return@streamGlobalEvents
+                                        }
+                                logD("SSE event type=${event.type} session=${event.sessionId ?: "-"}")
                                 when (event.type) {
                                     "server.connected" -> {
-                                        _connectionState.value = EventStreamConnectionState.Connected
-                                        if (wasConnected) {
-                                            _events.tryEmit(OpencodeEvent(type = "stream.reconnected"))
-                                        }
-                                        wasConnected = true
+                                        markStreamConnected()
                                         retryAttempt = 0
                                     }
                                     "server.heartbeat" -> Unit
-                                    else -> scope.launch { _events.emit(event) }
+                                    else -> {
+                                        markStreamConnected()
+                                        scope.launch { _events.emit(event) }
+                                    }
                                 }
                             }
-                            _connectionState.value = EventStreamConnectionState.Disconnected
+                            setConnectionState(EventStreamConnectionState.Disconnected)
                         } catch (_: CancellationException) {
-                            _connectionState.value = EventStreamConnectionState.Idle
+                            setConnectionState(EventStreamConnectionState.Idle)
                             return@launch
-                        } catch (_: Throwable) {
-                            _connectionState.value =
-                                if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Disconnected
+                        } catch (throwable: Throwable) {
+                            logW("foreground SSE stream failed", throwable)
+                            setConnectionState(
+                                if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Disconnected,
+                            )
                         }
 
                         retryAttempt += 1
                         val backoffMs = (1_000L * retryAttempt).coerceAtMost(10_000L)
+                        logD("foreground SSE retry in ${backoffMs}ms")
                         delay(backoffMs)
                     }
                 }
         }
 
         override fun stop() {
+            logI("foreground SSE stream stopping")
             streamJob?.cancel()
             streamJob = null
             wasConnected = false
-            _connectionState.value = EventStreamConnectionState.Idle
+            currentStreamWasConnected = false
+            emittedReconnectForCurrentStream = false
+            setConnectionState(EventStreamConnectionState.Idle)
+        }
+
+        private fun markStreamConnected() {
+            val shouldPublishReconnect = wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
+            if (_connectionState.value != EventStreamConnectionState.Connected) {
+                setConnectionState(EventStreamConnectionState.Connected)
+            }
+            if (shouldPublishReconnect) {
+                logI("foreground SSE stream reconnected")
+                _events.tryEmit(OpencodeEvent(type = "stream.reconnected"))
+                emittedReconnectForCurrentStream = true
+            }
+            currentStreamWasConnected = true
+            wasConnected = true
+        }
+
+        private fun setConnectionState(state: EventStreamConnectionState) {
+            if (_connectionState.value != state) {
+                logD("foreground SSE state ${_connectionState.value} -> $state")
+            }
+            _connectionState.value = state
+        }
+
+        private fun logI(message: String) {
+            runCatching { Log.i(TAG, message) }
+        }
+
+        private fun logD(message: String) {
+            runCatching { Log.d(TAG, message) }
+        }
+
+        private fun logW(
+            message: String,
+            throwable: Throwable? = null,
+        ) {
+            runCatching {
+                if (throwable == null) {
+                    Log.w(TAG, message)
+                } else {
+                    Log.w(TAG, message, throwable)
+                }
+            }
+        }
+
+        private companion object {
+            private const val TAG = "OpencodeSse"
         }
     }
