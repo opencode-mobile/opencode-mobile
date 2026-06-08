@@ -71,6 +71,9 @@ object ThemeResolver {
         tokens["syntax-primitive"] = if (isDark) mix(interactive, "#FFFFFF", 0.42f) else interactive
         tokens["syntax-property"] = if (isDark) primary else info
         tokens["syntax-type"] = warning
+        tokens["syntax-success"] = success
+        tokens["syntax-warning"] = warning
+        tokens["syntax-info"] = info
         tokens["syntax-constant"] = if (isDark) "#93E9F6" else "#007B80"
         tokens["syntax-critical"] = if (isDark) primary else "#FF8C00"
         tokens["syntax-diff-delete"] = if (isDark) primary else "#FF8C00"

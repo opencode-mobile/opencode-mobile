@@ -1,8 +1,10 @@
 package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
+import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
+import dev.opencode.mobile.domain.message.MessageTokenUsage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.JsonObject
@@ -21,6 +23,12 @@ class SessionDomainAdapter {
             projectId = dto.projectId,
             directory = dto.directory,
             parentId = dto.parentId,
+            cost = dto.cost,
+            tokens = toTokenUsage(dto.tokens),
+            modelProviderId = dto.model?.providerId,
+            modelId = dto.model?.id,
+            variant = dto.model?.variant,
+            createdAtEpochMs = dto.time?.created,
             updatedAtEpochMs = dto.time?.updated,
         )
 
@@ -77,5 +85,16 @@ class SessionDomainAdapter {
         val updatedAtFormatter: DateTimeFormatter =
             DateTimeFormatter
                 .ofPattern("MMM d • h:mm a", Locale.US)
+    }
+
+    private fun toTokenUsage(dto: MessageTokensDto?): MessageTokenUsage? {
+        dto ?: return null
+        return MessageTokenUsage(
+            input = dto.input ?: 0,
+            output = dto.output ?: 0,
+            reasoning = dto.reasoning ?: 0,
+            cacheRead = dto.cache?.read ?: 0,
+            cacheWrite = dto.cache?.write ?: 0,
+        )
     }
 }

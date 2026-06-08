@@ -30,6 +30,7 @@ struct SessionChatView: View {
     @State private var modelFilterText = ""
     @State private var hasInitializedTimelineScroll = false
     @State private var followingLatest = true
+    @State private var showSessionContext = false
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -60,7 +61,7 @@ struct SessionChatView: View {
                     UIPasteboard.general.string = viewModel.state.sessionID
                 },
                 onConnectionClick: {},
-                onContextClick: {}
+                onContextClick: { showSessionContext = true }
             )
 
             if let statusLabel = viewModel.sessionStatusLabel {
@@ -93,6 +94,9 @@ struct SessionChatView: View {
             content: { pickerSheetEntries }
         )
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $showSessionContext) {
+            SessionContextView(sessionID: viewModel.state.sessionID, worktree: session.worktree)
+        }
         .task {
             viewModel.startObserving()
             await viewModel.loadMessages()

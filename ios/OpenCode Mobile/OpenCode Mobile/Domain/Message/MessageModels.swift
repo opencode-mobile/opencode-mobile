@@ -5,6 +5,8 @@ struct Message: Equatable, Sendable, Identifiable {
     let role: MessageRole
     let text: String
     let parts: [MessagePart]
+    let cost: Double?
+    let tokens: MessageTokenUsage?
     let model: String?
     let modelProviderID: String?
     let modelID: String?
@@ -12,24 +14,30 @@ struct Message: Equatable, Sendable, Identifiable {
     let mode: String?
     let sentAtEpochMs: Int64?
     let contextInputTokens: Int64?
+    let contextEstimate: MessageContextEstimate
 
     init(
         id: String,
         role: MessageRole,
         text: String,
         parts: [MessagePart] = [],
+        cost: Double? = nil,
+        tokens: MessageTokenUsage? = nil,
         model: String?,
         modelProviderID: String? = nil,
         modelID: String? = nil,
         variant: String? = nil,
         mode: String?,
         sentAtEpochMs: Int64?,
-        contextInputTokens: Int64? = nil
+        contextInputTokens: Int64? = nil,
+        contextEstimate: MessageContextEstimate = MessageContextEstimate()
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.parts = parts
+        self.cost = cost
+        self.tokens = tokens
         self.model = model
         self.modelProviderID = modelProviderID
         self.modelID = modelID
@@ -37,6 +45,33 @@ struct Message: Equatable, Sendable, Identifiable {
         self.mode = mode
         self.sentAtEpochMs = sentAtEpochMs
         self.contextInputTokens = contextInputTokens
+        self.contextEstimate = contextEstimate
+    }
+}
+
+struct MessageTokenUsage: Equatable, Sendable {
+    let input: Int64
+    let output: Int64
+    let reasoning: Int64
+    let cacheRead: Int64
+    let cacheWrite: Int64
+
+    var total: Int64 {
+        input + output + reasoning + cacheRead + cacheWrite
+    }
+}
+
+struct MessageContextEstimate: Equatable, Sendable {
+    let systemCharacters: Int
+    let userCharacters: Int
+    let assistantCharacters: Int
+    let toolCharacters: Int
+
+    init(systemCharacters: Int = 0, userCharacters: Int = 0, assistantCharacters: Int = 0, toolCharacters: Int = 0) {
+        self.systemCharacters = systemCharacters
+        self.userCharacters = userCharacters
+        self.assistantCharacters = assistantCharacters
+        self.toolCharacters = toolCharacters
     }
 }
 

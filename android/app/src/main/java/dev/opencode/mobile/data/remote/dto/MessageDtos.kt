@@ -24,6 +24,7 @@ data class MessageInfoDto(
     val time: MessageTimeDto? = null,
     val error: MessageErrorInfoDto? = null,
     val tokens: MessageTokensDto? = null,
+    val cost: Double? = null,
 )
 
 @Serializable
@@ -72,6 +73,7 @@ data class MessagePartDto(
     @SerialName("messageID") val messageId: String? = null,
     val type: String,
     val text: String? = null,
+    val system: String? = null,
     val tool: String? = null,
     @SerialName("callID") val callId: String? = null,
     val state: JsonObject? = null,

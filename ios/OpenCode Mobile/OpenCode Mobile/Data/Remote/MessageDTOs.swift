@@ -18,6 +18,7 @@ struct MessageInfoDTO: Codable, Sendable {
     let time: MessageTimeDTO?
     let error: MessageErrorInfoDTO?
     let tokens: MessageTokensDTO?
+    let cost: Double?
 }
 
 struct MessageTokensDTO: Codable, Sendable {
@@ -59,6 +60,7 @@ struct MessagePartDTO: Codable, Sendable {
     let messageID: String?
     let type: String
     let text: String?
+    let system: String?
     let tool: String?
     let callID: String?
     let state: MessageToolStateDTO?

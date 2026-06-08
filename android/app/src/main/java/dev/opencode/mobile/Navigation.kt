@@ -50,6 +50,7 @@ import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
+import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 
@@ -161,6 +162,18 @@ fun MainNavigation() {
                                             SessionChatScreen(
                                                 sessionId = key.sessionId,
                                                 sessionTitle = key.sessionTitle,
+                                                worktree = key.worktree,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onSessionContextClick = {
+                                                    backStack.add(SessionContext(key.sessionId, key.worktree))
+                                                },
+                                            )
+                                        }
+                                    }
+                                    entry<SessionContext> { key ->
+                                        RouteSurface {
+                                            SessionContextScreen(
+                                                sessionId = key.sessionId,
                                                 worktree = key.worktree,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                             )

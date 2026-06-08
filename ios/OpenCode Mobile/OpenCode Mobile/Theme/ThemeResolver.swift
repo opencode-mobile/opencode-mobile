@@ -68,6 +68,9 @@ struct ThemeResolver {
         tokens["syntax-primitive"] = isDark ? mix(interactive, "#FFFFFF", 0.42) : interactive
         tokens["syntax-property"] = isDark ? primary : info
         tokens["syntax-type"] = warning
+        tokens["syntax-success"] = success
+        tokens["syntax-warning"] = warning
+        tokens["syntax-info"] = info
         tokens["syntax-constant"] = isDark ? "#93E9F6" : "#007B80"
         tokens["syntax-critical"] = isDark ? primary : "#FF8C00"
         tokens["syntax-diff-delete"] = isDark ? primary : "#FF8C00"

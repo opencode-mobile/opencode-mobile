@@ -9,6 +9,12 @@ struct SessionDomainAdapter: Sendable {
             projectID: dto.projectID,
             directory: dto.directory,
             parentID: dto.parentID,
+            cost: dto.cost,
+            tokens: tokenUsage(from: dto.tokens),
+            modelProviderID: dto.model?.providerID,
+            modelID: dto.model?.id,
+            variant: dto.model?.variant,
+            createdAtEpochMs: dto.time?.created,
             updatedAtEpochMs: dto.time?.updated
         )
     }
@@ -55,6 +61,19 @@ struct SessionDomainAdapter: Sendable {
             return .decoding(error.localizedDescription)
         }
         return .transport(error.localizedDescription)
+    }
+}
+
+private extension SessionDomainAdapter {
+    func tokenUsage(from dto: MessageTokensDTO?) -> MessageTokenUsage? {
+        guard let dto else { return nil }
+        return MessageTokenUsage(
+            input: dto.input ?? 0,
+            output: dto.output ?? 0,
+            reasoning: dto.reasoning ?? 0,
+            cacheRead: dto.cache?.read ?? 0,
+            cacheWrite: dto.cache?.write ?? 0
+        )
     }
 }
 
