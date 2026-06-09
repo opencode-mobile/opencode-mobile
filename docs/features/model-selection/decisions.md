@@ -9,3 +9,9 @@ The mobile composer uses **Variant** for the server-provided model variant keys.
 
 Model selection is remembered per open Session Chat screen only. Mobile v1 does
 not write opencode config defaults or persist a separate mobile preference.
+
+## Model Picker Uses Provider Drilldown
+
+The composer model picker uses a two-step bottom sheet: Provider list, then
+models for one Provider. If a Model Selection already exists, the sheet opens at
+that Provider's models with a `Change provider` row back to the Provider list.

@@ -142,6 +142,9 @@ The mobile client loads Model Selection options from the opencode server for the
 current project. `Default` Variant is a mobile UI label meaning no explicit
 variant is sent.
 
+When a Model Selection already exists, changing it starts from models offered by
+the selected Provider, with a way back to the Provider list.
+
 ### Thinking Effort
 
 Legacy planning term for a reasoning-effort preference. In Session Chat, the
