@@ -10,13 +10,16 @@ struct MessageDomainAdapter: Sendable {
             role: role(from: info.role),
             text: flatText.isEmpty ? errorText(from: info.error) : flatText,
             parts: domainParts,
+            cost: info.cost,
+            tokens: tokenUsage(from: info.tokens),
             model: info.model?.modelID ?? info.modelID,
             modelProviderID: info.model?.providerID ?? info.providerID,
             modelID: info.model?.modelID ?? info.modelID,
             variant: info.variant,
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created,
-            contextInputTokens: info.tokens?.input
+            contextInputTokens: info.tokens?.input,
+            contextEstimate: contextEstimate(role: info.role, parts: dto.parts)
         )
     }
 
@@ -30,13 +33,16 @@ struct MessageDomainAdapter: Sendable {
             role: role(from: info.role),
             text: flatText.isEmpty ? errorText(from: info.error) : flatText,
             parts: domainParts,
+            cost: info.cost,
+            tokens: tokenUsage(from: info.tokens),
             model: info.model?.modelID ?? info.modelID,
             modelProviderID: info.model?.providerID ?? info.providerID,
             modelID: info.model?.modelID ?? info.modelID,
             variant: info.variant,
             mode: info.mode ?? info.agent,
             sentAtEpochMs: info.time?.created,
-            contextInputTokens: info.tokens?.input
+            contextInputTokens: info.tokens?.input,
+            contextEstimate: MessageContextEstimate()
         )
     }
 
@@ -156,5 +162,74 @@ struct MessageDomainAdapter: Sendable {
         }
         let nonEmpty = segments.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         return nonEmpty.joined(separator: "\n")
+    }
+
+    private func tokenUsage(from dto: MessageTokensDTO?) -> MessageTokenUsage? {
+        guard let dto else { return nil }
+        return MessageTokenUsage(
+            input: dto.input ?? 0,
+            output: dto.output ?? 0,
+            reasoning: dto.reasoning ?? 0,
+            cacheRead: dto.cache?.read ?? 0,
+            cacheWrite: dto.cache?.write ?? 0
+        )
+    }
+
+    private func contextEstimate(role: String, parts: [MessagePartDTO]) -> MessageContextEstimate {
+        switch role.lowercased() {
+        case "user":
+            return MessageContextEstimate(
+                systemCharacters: parts.reduce(0) { $0 + ($1.system?.count ?? 0) },
+                userCharacters: parts.reduce(0) { $0 + userContextCharacters(from: $1) }
+            )
+        case "assistant":
+            let assistantCharacters = parts.reduce(0) { total, part in
+                switch part.type {
+                case "text", "reasoning":
+                    total + (part.text?.count ?? 0)
+                default:
+                    total
+                }
+            }
+            let toolCharacters = parts.reduce(0) { $0 + toolContextCharacters(from: $1) }
+            return MessageContextEstimate(assistantCharacters: assistantCharacters, toolCharacters: toolCharacters)
+        default:
+            return MessageContextEstimate()
+        }
+    }
+
+    private func userContextCharacters(from part: MessagePartDTO) -> Int {
+        switch part.type {
+        case "text":
+            return part.text?.count ?? 0
+        case "file":
+            if case let .dictionary(text)? = part.source?["text"],
+               case let .string(value)? = text["value"] {
+                return value.count
+            }
+            return 0
+        case "agent":
+            if case let .string(value)? = part.source?["value"] {
+                return value.count
+            }
+            return 0
+        default:
+            return 0
+        }
+    }
+
+    private func toolContextCharacters(from part: MessagePartDTO) -> Int {
+        guard part.type == "tool", let state = part.state else { return 0 }
+        let inputOverhead = (state.input?.keys.count ?? 0) * 16
+        switch state.status {
+        case "pending":
+            return inputOverhead + (state.raw?.count ?? 0)
+        case "completed":
+            return inputOverhead + (state.output?.count ?? 0)
+        case "error":
+            return inputOverhead + (state.error?.count ?? 0)
+        default:
+            return inputOverhead
+        }
     }
 }

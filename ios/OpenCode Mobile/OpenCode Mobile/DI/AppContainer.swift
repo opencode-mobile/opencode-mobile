@@ -151,6 +151,16 @@ extension Container {
         }.singleton
     }
 
+    var sessionContextRepository: Factory<any SessionContextRepository> {
+        self {
+            DefaultSessionContextRepository(
+                sessionRepository: self.sessionRepository(),
+                messageRepository: self.messageRepository(),
+                modelRepository: self.modelRepository()
+            )
+        }.singleton
+    }
+
     var appRootViewModel: Factory<AppRootViewModel> {
         self { @MainActor in
             AppRootViewModel(
@@ -201,6 +211,16 @@ extension Container {
             )
         }
     }
+
+    var sessionContextViewModel: ParameterFactory<(sessionID: String, worktree: String), SessionContextViewModel> {
+        self { @MainActor in
+            SessionContextViewModel(
+                sessionID: $0.sessionID,
+                worktree: $0.worktree,
+                repository: self.sessionContextRepository()
+            )
+        }
+    }
 }
 
 extension Container {
@@ -226,6 +246,11 @@ extension Container {
     @MainActor
     static func makeSessionChatViewModel(sessionID: String, sessionTitle: String, worktree: String) -> SessionChatViewModel {
         shared.sessionChatViewModel((sessionID: sessionID, sessionTitle: sessionTitle, worktree: worktree))
+    }
+
+    @MainActor
+    static func makeSessionContextViewModel(sessionID: String, worktree: String) -> SessionContextViewModel {
+        shared.sessionContextViewModel((sessionID: sessionID, worktree: worktree))
     }
 
     @MainActor

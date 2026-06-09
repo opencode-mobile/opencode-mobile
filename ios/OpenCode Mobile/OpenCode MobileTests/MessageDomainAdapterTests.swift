@@ -9,8 +9,6 @@ struct MessageDomainAdapterTests {
         return decoder
     }()
 
-    // MARK: - Error fallback
-
     @Test func mapsAssistantErrorWhenPartsEmpty() throws {
         let data =
             """
@@ -33,8 +31,6 @@ struct MessageDomainAdapterTests {
         let message = adapter.message(from: dto)
         #expect(message.text == "Forbidden: unauthorized: not licensed to use Copilot")
     }
-
-    // MARK: - Send request
 
     @Test func sendRequest_includesModelAndNonDefaultVariant() throws {
         let body = adapter.sendRequest(
@@ -63,8 +59,6 @@ struct MessageDomainAdapterTests {
         #expect(body.model?.providerID == "anthropic")
         #expect(body.variant == nil)
     }
-
-    // MARK: - Tool status labels
 
     @Test func toolStatusLabel_nilState_returnsHourglass() {
         #expect(adapter.toolStatusLabel(toolName: "webfetch", state: nil) == "\u{231B} webfetch")
@@ -126,8 +120,6 @@ struct MessageDomainAdapterTests {
         #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "webfetch")
     }
 
-    // MARK: - MessagePart parsing
-
     @Test func messagePart_textType_returnsTextPart() throws {
         let dto = try decoder.decode(
             MessagePartDTO.self,
@@ -186,8 +178,6 @@ struct MessageDomainAdapterTests {
         #expect(adapter.messagePart(from: dto) == nil)
     }
 
-    // MARK: - Flattened text
-
     @Test func flattenedText_singleTextPart() {
         let parts: [MessagePart] = [.text(TextPart(text: "Hello", isStreaming: false))]
         #expect(adapter.flattenedText(from: parts) == "Hello")
@@ -229,5 +219,62 @@ struct MessageDomainAdapterTests {
         #expect(message.text.contains("Here is the answer."))
         #expect(message.text.contains("\u{2713} bash"))
         #expect(message.parts.count == 2)
+    }
+
+    @Test func messageCountsFilePartSourceTextForContextEstimate() throws {
+        let dto = try decodeMessage(
+            """
+            {
+              "info": {"id": "msg-file", "role": "user"},
+              "parts": [
+                {
+                  "id": "prt-file",
+                  "sessionID": "ses-1",
+                  "messageID": "msg-file",
+                  "type": "file",
+                  "mime": "text/plain",
+                  "url": "file:///repo/file.txt",
+                  "source": {
+                    "type": "file",
+                    "path": "/repo/file.txt",
+                    "text": {"value": "file source text", "start": 0, "end": 16}
+                  }
+                }
+              ]
+            }
+            """
+        )
+
+        let message = adapter.message(from: dto)
+
+        #expect(message.contextEstimate.userCharacters == "file source text".count)
+    }
+
+    @Test func messageCountsAgentPartSourceTextForContextEstimate() throws {
+        let dto = try decodeMessage(
+            """
+            {
+              "info": {"id": "msg-agent", "role": "user"},
+              "parts": [
+                {
+                  "id": "prt-agent",
+                  "sessionID": "ses-1",
+                  "messageID": "msg-agent",
+                  "type": "agent",
+                  "name": "review",
+                  "source": {"value": "agent prompt text", "start": 0, "end": 17}
+                }
+              ]
+            }
+            """
+        )
+
+        let message = adapter.message(from: dto)
+
+        #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
+    }
+
+    private func decodeMessage(_ json: String) throws -> MessageDTO {
+        try decoder.decode(MessageDTO.self, from: Data(json.utf8))
     }
 }

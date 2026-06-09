@@ -14,7 +14,17 @@ data class SessionDto(
     @SerialName("parentID") val parentId: String? = null,
     val version: String? = null,
     val summary: SessionSummaryDto? = null,
+    val cost: Double? = null,
+    val tokens: MessageTokensDto? = null,
+    val model: SessionModelDto? = null,
     val time: SessionTimeDto? = null,
+)
+
+@Serializable
+data class SessionModelDto(
+    val id: String? = null,
+    @SerialName("providerID") val providerId: String? = null,
+    val variant: String? = null,
 )
 
 @Serializable

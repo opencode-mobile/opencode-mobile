@@ -5,6 +5,8 @@ data class Message(
     val role: MessageRole,
     val text: String,
     val parts: List<MessagePart> = emptyList(),
+    val cost: Double? = null,
+    val tokens: MessageTokenUsage? = null,
     val model: String? = null,
     val modelProviderId: String? = null,
     val modelId: String? = null,
@@ -12,6 +14,24 @@ data class Message(
     val mode: String? = null,
     val sentAtEpochMs: Long? = null,
     val contextInputTokens: Long? = null,
+    val contextEstimate: MessageContextEstimate = MessageContextEstimate(),
+)
+
+data class MessageTokenUsage(
+    val input: Long,
+    val output: Long,
+    val reasoning: Long,
+    val cacheRead: Long,
+    val cacheWrite: Long,
+) {
+    val total: Long = input + output + reasoning + cacheRead + cacheWrite
+}
+
+data class MessageContextEstimate(
+    val systemCharacters: Int = 0,
+    val userCharacters: Int = 0,
+    val assistantCharacters: Int = 0,
+    val toolCharacters: Int = 0,
 )
 
 sealed class MessagePart {

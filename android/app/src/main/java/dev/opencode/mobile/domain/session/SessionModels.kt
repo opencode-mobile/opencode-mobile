@@ -7,6 +7,12 @@ data class Session(
     val projectId: String? = null,
     val directory: String? = null,
     val parentId: String? = null,
+    val cost: Double? = null,
+    val tokens: dev.opencode.mobile.domain.message.MessageTokenUsage? = null,
+    val modelProviderId: String? = null,
+    val modelId: String? = null,
+    val variant: String? = null,
+    val createdAtEpochMs: Long? = null,
     val updatedAtEpochMs: Long? = null,
 )
 

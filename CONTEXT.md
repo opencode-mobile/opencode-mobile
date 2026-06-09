@@ -162,6 +162,16 @@ The set of file changes associated with a session or message.
 The mobile client may show diffs so the user can understand the result of remote
 work. In v1, diff viewing does not imply mobile file editing.
 
+### Session Context
+
+A session-scoped inspection view for the model context and message accounting
+behind a **session**.
+
+Session Context shows provider and model labels, context limit, token usage,
+message counts, cost, approximate input-token breakdown, and raw message rows.
+It is opened from the context usage control in Session Chat. It is a snapshot
+that can be manually refreshed, not a live-updating timeline.
+
 ### foreground event stream
 
 The live server-sent event connection used while the mobile app is open and

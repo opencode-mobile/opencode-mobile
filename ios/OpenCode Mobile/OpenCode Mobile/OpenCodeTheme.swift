@@ -100,6 +100,9 @@ enum OpenCodeColors {
     static var syntaxPrimitive: Color { resolve("syntax-primitive") }
     static var syntaxProperty: Color { resolve("syntax-property") }
     static var syntaxType: Color { resolve("syntax-type") }
+    static var syntaxSuccess: Color { resolve("syntax-success") }
+    static var syntaxWarning: Color { resolve("syntax-warning") }
+    static var syntaxInfo: Color { resolve("syntax-info") }
     static var syntaxConstant: Color { resolve("syntax-constant") }
     static var syntaxCritical: Color { resolve("syntax-critical") }
     static var syntaxDiffDelete: Color { resolve("syntax-diff-delete") }

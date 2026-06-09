@@ -75,6 +75,7 @@ fun SessionChatScreen(
     worktree: String,
     modifier: Modifier = Modifier,
     onNavigateBack: () -> Unit = {},
+    onSessionContextClick: () -> Unit = {},
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
     LaunchedEffect(sessionId, sessionTitle, worktree) {
@@ -105,7 +106,7 @@ fun SessionChatScreen(
                 contextUsageFraction = uiState.contextUsageFraction,
                 onCopySessionId = { copySessionIdToClipboard(context, uiState.sessionId) },
                 onConnectionClick = {},
-                onContextClick = {},
+                onContextClick = onSessionContextClick,
             )
             uiState.sessionStatusLabel?.let { statusLabel ->
                 Text(

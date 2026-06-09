@@ -516,7 +516,7 @@ private struct FakeChatSessionRepository: SessionRepository {
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
     }
-    func getSession(id: String) async throws -> Session { fatalError() }
+    func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String) async throws -> Bool { fatalError() }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }

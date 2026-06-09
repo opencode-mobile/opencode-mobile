@@ -4,6 +4,7 @@ import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageErrorInfoDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
+import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
@@ -11,8 +12,11 @@ import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class MessageDomainAdapter {
     private val json = Json { ignoreUnknownKeys = true }
@@ -25,6 +29,8 @@ class MessageDomainAdapter {
             role = toRole(info.role),
             text = flatText.ifBlank { errorText(info.error) },
             parts = domainParts,
+            cost = info.cost,
+            tokens = toTokenUsage(info.tokens),
             model = info.model?.modelId ?: info.modelId,
             modelProviderId = info.model?.providerId ?: info.providerId,
             modelId = info.model?.modelId ?: info.modelId,
@@ -32,6 +38,7 @@ class MessageDomainAdapter {
             mode = info.mode ?: info.agent,
             sentAtEpochMs = info.time?.created,
             contextInputTokens = info.tokens?.input,
+            contextEstimate = toContextEstimate(info.role, dto.parts),
         )
     }
 
@@ -45,6 +52,8 @@ class MessageDomainAdapter {
             role = toRole(info.role),
             text = flatText.ifBlank { errorText(info.error) },
             parts = domainParts,
+            cost = info.cost,
+            tokens = toTokenUsage(info.tokens),
             model = info.model?.modelId ?: info.modelId,
             modelProviderId = info.model?.providerId ?: info.providerId,
             modelId = info.model?.modelId ?: info.modelId,
@@ -52,6 +61,7 @@ class MessageDomainAdapter {
             mode = info.mode ?: info.agent,
             sentAtEpochMs = info.time?.created,
             contextInputTokens = info.tokens?.input,
+            contextEstimate = MessageContextEstimate(),
         )
     }
 
@@ -159,5 +169,70 @@ class MessageDomainAdapter {
         }
         val nonEmpty = segments.map { it.trim() }.filter { it.isNotEmpty() }
         return nonEmpty.joinToString("\n")
+    }
+
+    private fun toTokenUsage(dto: MessageTokensDto?): MessageTokenUsage? {
+        dto ?: return null
+        return MessageTokenUsage(
+            input = dto.input ?: 0,
+            output = dto.output ?: 0,
+            reasoning = dto.reasoning ?: 0,
+            cacheRead = dto.cache?.read ?: 0,
+            cacheWrite = dto.cache?.write ?: 0,
+        )
+    }
+
+    private fun toContextEstimate(
+        role: String,
+        parts: List<MessagePartDto>,
+    ): MessageContextEstimate =
+        when (role.lowercase()) {
+            "user" ->
+                MessageContextEstimate(
+                    systemCharacters = parts.sumOf { it.system?.length ?: 0 },
+                    userCharacters = parts.sumOf(::userContextCharacters),
+                )
+            "assistant" ->
+                MessageContextEstimate(
+                    assistantCharacters =
+                        parts.sumOf { part ->
+                            when (part.type) {
+                                "text", "reasoning" -> part.text?.length ?: 0
+                                else -> 0
+                            }
+                        },
+                    toolCharacters = parts.sumOf(::toolContextCharacters),
+                )
+            else -> MessageContextEstimate()
+        }
+
+    private fun userContextCharacters(part: MessagePartDto): Int =
+        when (part.type) {
+            "text" -> part.text?.length ?: 0
+            "file" -> part.source.stringAt("text", "value")?.length ?: 0
+            "agent" -> part.source.stringAt("value")?.length ?: 0
+            else -> 0
+        }
+
+    private fun toolContextCharacters(part: MessagePartDto): Int {
+        if (part.type != "tool") return 0
+        val state = parseToolState(part.state) ?: return 0
+        val inputOverhead = state.input?.keys?.size.orZero() * 16
+        return when (state.status) {
+            "pending" -> inputOverhead + (state.raw?.length ?: 0)
+            "completed" -> inputOverhead + (state.output?.length ?: 0)
+            "error" -> inputOverhead + (state.error?.length ?: 0)
+            else -> inputOverhead
+        }
+    }
+
+    private fun Int?.orZero(): Int = this ?: 0
+
+    private fun JsonObject?.stringAt(vararg path: String): String? {
+        var current: kotlinx.serialization.json.JsonElement = this ?: return null
+        for (segment in path) {
+            current = current.jsonObject[segment] ?: return null
+        }
+        return (current as? JsonPrimitive)?.jsonPrimitive?.content
     }
 }
