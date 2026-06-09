@@ -209,8 +209,8 @@ class MessageDomainAdapter {
     private fun userContextCharacters(part: MessagePartDto): Int =
         when (part.type) {
             "text" -> part.text?.length ?: 0
-            "file" -> part.state.stringAt("source", "text", "value")?.length ?: 0
-            "agent" -> part.state.stringAt("source", "value")?.length ?: 0
+            "file" -> part.source.stringAt("text", "value")?.length ?: 0
+            "agent" -> part.source.stringAt("value")?.length ?: 0
             else -> 0
         }
 

@@ -203,15 +203,13 @@ struct MessageDomainAdapter: Sendable {
         case "text":
             return part.text?.count ?? 0
         case "file":
-            if case let .dictionary(source)? = part.state?.input?["source"],
-               case let .dictionary(text)? = source["text"],
+            if case let .dictionary(text)? = part.source?["text"],
                case let .string(value)? = text["value"] {
                 return value.count
             }
             return 0
         case "agent":
-            if case let .dictionary(source)? = part.state?.input?["source"],
-               case let .string(value)? = source["value"] {
+            if case let .string(value)? = part.source?["value"] {
                 return value.count
             }
             return 0

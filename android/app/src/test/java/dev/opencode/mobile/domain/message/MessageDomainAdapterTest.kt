@@ -119,8 +119,6 @@ class MessageDomainAdapterTest {
         assertEquals(null, body.variant)
     }
 
-    // MARK: - Tool status labels
-
     @Test
     fun toolStatusLabel_nilState_returnsHourglass() {
         assertEquals("\u231B webfetch", adapter.toolStatusLabel("webfetch", null))
@@ -175,8 +173,6 @@ class MessageDomainAdapterTest {
         assertEquals("webfetch", adapter.toolStatusLabel("webfetch", parsed))
     }
 
-    // MARK: - MessagePart parsing
-
     @Test
     fun toMessagePart_textType_returnsTextPart() {
         val dto = MessagePartDto(id = "prt-1", type = "text", text = "Hello")
@@ -223,8 +219,6 @@ class MessageDomainAdapterTest {
         assertNull(adapter.toMessagePart(dto))
     }
 
-    // MARK: - Flattened text
-
     @Test
     fun flattenedText_singleTextPart() {
         val parts = listOf<MessagePart>(MessagePart.Text("Hello"))
@@ -269,5 +263,62 @@ class MessageDomainAdapterTest {
         assertTrue(message.text.contains("Here is the answer."))
         assertTrue(message.text.contains("\u2713 bash"))
         assertEquals(2, message.parts.size)
+    }
+
+    @Test
+    fun toMessage_countsFilePartSourceTextForContextEstimate() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {
+                  "info": {"id": "msg-file", "role": "user"},
+                  "parts": [
+                    {
+                      "id": "prt-file",
+                      "sessionID": "ses-1",
+                      "messageID": "msg-file",
+                      "type": "file",
+                      "mime": "text/plain",
+                      "url": "file:///repo/file.txt",
+                      "source": {
+                        "type": "file",
+                        "path": "/repo/file.txt",
+                        "text": {"value": "file source text", "start": 0, "end": 16}
+                      }
+                    }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        val message = adapter.toMessage(dto)
+
+        assertEquals("file source text".length, message.contextEstimate.userCharacters)
+    }
+
+    @Test
+    fun toMessage_countsAgentPartSourceTextForContextEstimate() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {
+                  "info": {"id": "msg-agent", "role": "user"},
+                  "parts": [
+                    {
+                      "id": "prt-agent",
+                      "sessionID": "ses-1",
+                      "messageID": "msg-agent",
+                      "type": "agent",
+                      "name": "review",
+                      "source": {"value": "agent prompt text", "start": 0, "end": 17}
+                    }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        val message = adapter.toMessage(dto)
+
+        assertEquals("agent prompt text".length, message.contextEstimate.userCharacters)
     }
 }

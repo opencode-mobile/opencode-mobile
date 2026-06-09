@@ -75,6 +75,7 @@ data class MessagePartDto(
     val text: String? = null,
     val system: String? = null,
     val tool: String? = null,
+    val source: JsonObject? = null,
     @SerialName("callID") val callId: String? = null,
     val state: JsonObject? = null,
     val snapshot: String? = null,

@@ -62,6 +62,7 @@ struct MessagePartDTO: Codable, Sendable {
     let text: String?
     let system: String?
     let tool: String?
+    let source: [String: AnyCodable]?
     let callID: String?
     let state: MessageToolStateDTO?
     let snapshot: String?

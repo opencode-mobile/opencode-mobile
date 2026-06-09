@@ -87,7 +87,7 @@ fun SessionContextScreen(
                 ) {
                     val display = uiState.display
                     if (display != null) {
-                        SessionContextContent(display = display)
+                        SessionContextContent(display = display, errorMessage = uiState.errorMessage)
                     }
                 }
         }
@@ -96,7 +96,10 @@ fun SessionContextScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SessionContextContent(display: SessionContextDisplayState) {
+private fun SessionContextContent(
+    display: SessionContextDisplayState,
+    errorMessage: String?,
+) {
     Column(
         modifier =
             Modifier
@@ -105,6 +108,13 @@ private fun SessionContextContent(display: SessionContextDisplayState) {
                 .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         StatGrid(display.stats)
         if (display.breakdown.isNotEmpty()) {
             ContextBreakdown(display.breakdown)
