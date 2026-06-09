@@ -16,6 +16,8 @@ clear title, an explicit close affordance, and one or more tappable entries.
   sheet (see Behavior).
 - Required content: sheet `title`, close action, and entry `title`.
 - Optional content:
+  - sheet leading header action: an icon button before the title for in-sheet
+    navigation such as returning to a parent level.
   - sheet pinned content: fixed content rendered between the header and the
     scrollable body, such as a filter field.
   - entry start decorator: `none` or `icon`.
@@ -42,6 +44,11 @@ subtitle content, selected state, or a larger list treatment.
 The component owns modal presentation and dismissal. The close button dismisses
 the sheet, and outside-tap, drag, back, and accessibility dismissal behavior
 should remain available.
+
+When provided, the leading header action appears before the title and performs
+caller-owned in-sheet navigation. It does not dismiss the sheet unless the
+caller action does so. Use a clear accessibility label such as
+`Back to providers` for icon-only navigation.
 
 On Android, presentation and dismissal use the component motion tokens: 320 ms
 for entering, 280 ms for exiting, and a scrim alpha of 0.32. The close button,
@@ -89,6 +96,7 @@ accessibility label or description using the platform convention.
 - Loading: not applicable for this component version.
 - Error: not applicable for this component version.
 - Decorators: start icon, end icon, and both icon positions are included.
+- Header leading action: included.
 
 ## Parity And Divergence
 

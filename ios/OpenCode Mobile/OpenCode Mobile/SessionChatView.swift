@@ -90,6 +90,7 @@ struct SessionChatView: View {
         .openCodeBottomSheet(
             isPresented: pickerPresentedBinding,
             title: modelPickerSheetTitle,
+            leadingAction: modelPickerHeaderLeadingAction,
             scrollTargetID: modelPickerScrollTargetID,
             pinnedContent: { modelPickerPinnedContent },
             content: { pickerSheetEntries }
@@ -375,6 +376,18 @@ struct SessionChatView: View {
         return activeModelProvider?.label ?? ComposerPickerKind.model.sheetTitle
     }
 
+    private var modelPickerHeaderLeadingAction: OpenCodeBottomSheetHeaderAction? {
+        guard activePicker == .model, activeModelProvider != nil else { return nil }
+        return OpenCodeBottomSheetHeaderAction(
+            icon: .arrowBack,
+            accessibilityLabel: "Back to providers",
+            action: {
+                activeModelProviderID = nil
+                modelFilterText = ""
+            }
+        )
+    }
+
     private func filteredModels(in provider: ModelSelectionProvider) -> [ModelSelectionOption] {
         provider.models.filter { $0.matchesFilter(modelFilterText) }
     }
@@ -402,13 +415,6 @@ struct SessionChatView: View {
     @ViewBuilder
     private func modelPickerEntries(composer: SessionChatComposerState) -> some View {
         if let provider = activeModelProvider {
-            OpenCodeBottomSheetEntry(
-                title: "Change provider",
-                action: {
-                    activeModelProviderID = nil
-                    modelFilterText = ""
-                }
-            )
             let filtered = filteredModels(in: provider)
             if filtered.isEmpty {
                 OpenCodeBottomSheetEntry(

@@ -47,6 +47,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -276,6 +277,19 @@ fun SessionChatScreen(
             activePicker == ComposerPickerKind.Model &&
                 activeModelProvider != null &&
                 activeModelProvider.models.size > SessionChatViewModel.ModelFilterThreshold
+        val modelHeaderLeadingAction =
+            if (activePicker == ComposerPickerKind.Model && activeModelProvider != null) {
+                OpenCodeBottomSheetHeaderAction(
+                    imageVector = OpenCodeIcons.ArrowBack,
+                    contentDescription = "Back to providers",
+                    onClick = {
+                        activeModelProviderId = null
+                        modelFilterText = ""
+                    },
+                )
+            } else {
+                null
+            }
 
         OpenCodeBottomSheet(
             visible = activePicker != null,
@@ -285,6 +299,7 @@ fun SessionChatScreen(
                 activeModelProviderId = null
                 modelFilterText = ""
             },
+            headerLeadingAction = modelHeaderLeadingAction,
             keyboardAware = showsModelFilter,
             pinnedContent = {
                 if (showsModelFilter) {
@@ -304,10 +319,6 @@ fun SessionChatScreen(
                         filterText = modelFilterText,
                         onSelectProvider = { provider ->
                             activeModelProviderId = provider.id
-                            modelFilterText = ""
-                        },
-                        onChangeProvider = {
-                            activeModelProviderId = null
                             modelFilterText = ""
                         },
                         onSelectModel = { model ->
@@ -362,7 +373,6 @@ private fun ModelPickerSheetContent(
     selectedModel: ModelSelectionOption?,
     filterText: String,
     onSelectProvider: (ModelSelectionProvider) -> Unit,
-    onChangeProvider: () -> Unit,
     onSelectModel: (ModelSelectionOption) -> Unit,
 ) {
     if (activeProvider == null) {
@@ -379,10 +389,6 @@ private fun ModelPickerSheetContent(
             )
         }
     } else {
-        OpenCodeBottomSheetEntry(
-            title = "Change provider",
-            onClick = onChangeProvider,
-        )
         val filteredModels = activeProvider.models.filter { it.matchesFilter(filterText) }
         if (filteredModels.isEmpty()) {
             OpenCodeBottomSheetEntry(

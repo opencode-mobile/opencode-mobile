@@ -52,7 +52,8 @@ from the connected opencode server's configured providers.
 - Opening the model picker with no selected model starts at the Provider list.
 - Opening the model picker with a selected model starts at that Provider's model
   list.
-- Tapping `Change provider` returns from the model list to the Provider list.
+- Tapping the header back button returns from the model list to the Provider
+  list.
 - Tapping a model selects it for the composer and dismisses the bottom sheet.
 
 ## Design-System Components

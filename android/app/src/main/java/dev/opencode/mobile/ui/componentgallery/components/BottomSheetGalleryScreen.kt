@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -30,6 +31,7 @@ private enum class GalleryBottomSheetDecoratorKind {
 fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var visible by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var showsHeaderBack by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
     var startDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.Icon.name) }
     var endDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.None.name) }
@@ -52,6 +54,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             Text(text = "Bottom sheet", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
+                OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
             }
         }
 
@@ -75,8 +78,18 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
 
     OpenCodeBottomSheet(
         visible = visible,
-        title = "Session actions",
+        title = if (showsHeaderBack) "Anthropic" else "Session actions",
         onDismissRequest = { visible = false },
+        headerLeadingAction =
+            if (showsHeaderBack) {
+                OpenCodeBottomSheetHeaderAction(
+                    imageVector = OpenCodeIcons.ArrowBack,
+                    contentDescription = "Back to providers",
+                    onClick = { showsHeaderBack = false },
+                )
+            } else {
+                null
+            },
     ) {
         OpenCodeBottomSheetEntry(
             title = "Open current project",

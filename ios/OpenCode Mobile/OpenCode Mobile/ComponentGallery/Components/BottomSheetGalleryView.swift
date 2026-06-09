@@ -17,6 +17,7 @@ private enum GalleryBottomSheetDecoratorKind: String, CaseIterable, Identifiable
 struct BottomSheetGalleryView: View {
     @State private var isPresented = false
     @State private var entryEnabled = true
+    @State private var showsHeaderBack = false
     @State private var itemCount = 2
     @State private var startDecorator: GalleryBottomSheetDecoratorKind = .icon
     @State private var endDecorator: GalleryBottomSheetDecoratorKind = .none
@@ -52,6 +53,11 @@ struct BottomSheetGalleryView: View {
                         selected: entryEnabled,
                         action: { entryEnabled.toggle() }
                     )
+                    OpenCodeChoiceBadge(
+                        label: "Header back",
+                        selected: showsHeaderBack,
+                        action: { showsHeaderBack.toggle() }
+                    )
                 }
             }
 
@@ -74,7 +80,17 @@ struct BottomSheetGalleryView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .openCodeBottomSheet(isPresented: $isPresented, title: "Session actions") {
+        .openCodeBottomSheet(
+            isPresented: $isPresented,
+            title: showsHeaderBack ? "Anthropic" : "Session actions",
+            leadingAction: showsHeaderBack
+                ? OpenCodeBottomSheetHeaderAction(
+                    icon: .arrowBack,
+                    accessibilityLabel: "Back to providers",
+                    action: { showsHeaderBack = false }
+                )
+                : nil
+        ) {
             OpenCodeBottomSheetEntry(
                 title: "Open current project",
                 enabled: entryEnabled,

@@ -20,6 +20,22 @@ enum BottomSheetEntryDecorator {
     case icon(OpenCodeIcon, accessibilityLabel: String? = nil)
 }
 
+struct OpenCodeBottomSheetHeaderAction {
+    let icon: OpenCodeIcon
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    init(
+        icon: OpenCodeIcon,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) {
+        self.icon = icon
+        self.accessibilityLabel = accessibilityLabel
+        self.action = action
+    }
+}
+
 private struct BottomSheetHeaderHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
 
@@ -43,6 +59,7 @@ private enum BottomSheetPresentationMode: Equatable {
 
 private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: View>: View {
     let title: String
+    let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
@@ -79,6 +96,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
 
             OpenCodeBottomSheetContainer(
                 title: title,
+                leadingAction: leadingAction,
                 onDismiss: onDismiss,
                 mode: mode,
                 scrollAreaHeight: scrollAreaHeight,
@@ -130,6 +148,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
 struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifier {
     @Binding var isPresented: Bool
     let title: String
+    let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
@@ -139,6 +158,7 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
             .sheet(isPresented: $isPresented) {
                 OpenCodeBottomSheetSheetBody(
                     title: title,
+                    leadingAction: leadingAction,
                     scrollTargetID: scrollTargetID,
                     onDismiss: { isPresented = false },
                     pinnedContent: pinnedContent,
@@ -195,6 +215,7 @@ struct OpenCodeBottomSheetEntry: View {
 
 private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: View>: View {
     let title: String
+    let leadingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
     let mode: BottomSheetPresentationMode
     let scrollAreaHeight: CGFloat
@@ -270,6 +291,17 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
 
     private var header: some View {
         HStack(spacing: 12) {
+            if let leadingAction {
+                OpenCodeButton(
+                    variant: .iconCircle(
+                        leadingAction.icon,
+                        accessibilityLabel: leadingAction.accessibilityLabel
+                    ),
+                    contrast: .low,
+                    action: leadingAction.action
+                )
+            }
+
             Text(title)
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textPrimary)
@@ -328,12 +360,14 @@ extension View {
     func openCodeBottomSheet<SheetContent: View>(
         isPresented: Binding<Bool>,
         title: String,
+        leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
         openCodeBottomSheet(
             isPresented: isPresented,
             title: title,
+            leadingAction: leadingAction,
             scrollTargetID: scrollTargetID,
             pinnedContent: { EmptyView() },
             content: content
@@ -343,6 +377,7 @@ extension View {
     func openCodeBottomSheet<PinnedContent: View, SheetContent: View>(
         isPresented: Binding<Bool>,
         title: String,
+        leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         @ViewBuilder pinnedContent: @escaping () -> PinnedContent,
         @ViewBuilder content: @escaping () -> SheetContent
@@ -351,6 +386,7 @@ extension View {
             OpenCodeBottomSheet(
                 isPresented: isPresented,
                 title: title,
+                leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
                 pinnedContent: pinnedContent,
                 sheetContent: content
@@ -361,12 +397,14 @@ extension View {
     func openCodeBottomSheet<Item: Identifiable, SheetContent: View>(
         item: Binding<Item?>,
         title: String,
+        leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
         sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
+                leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
                 onDismiss: { item.wrappedValue = nil },
                 pinnedContent: { EmptyView() },
@@ -378,6 +416,7 @@ extension View {
     func openCodeBottomSheet<Item: Identifiable, PinnedContent: View, SheetContent: View>(
         item: Binding<Item?>,
         title: String,
+        leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
@@ -385,6 +424,7 @@ extension View {
         sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
+                leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
                 onDismiss: { item.wrappedValue = nil },
                 pinnedContent: { pinnedContent(value) },
