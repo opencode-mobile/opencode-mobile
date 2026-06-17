@@ -17,6 +17,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case button
     case projectSessionSelector
     case sessionStatusBar
+    case renderedMarkdown
 }
 
 struct ComponentGalleryEntry: Identifiable, Hashable {
@@ -91,6 +92,12 @@ let componentGalleryEntries = [
         id: .sessionStatusBar,
         title: "Session Status Bar",
         description: "Compact session id, live-update status, and context usage strip.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .renderedMarkdown,
+        title: "Rendered Markdown",
+        description: "Safe markdown, code, and fenced diff rendering for message text.",
         category: .components
     ),
 ]

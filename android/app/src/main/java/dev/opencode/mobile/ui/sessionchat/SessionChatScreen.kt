@@ -3,8 +3,10 @@ package dev.opencode.mobile.ui.sessionchat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,10 +28,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -37,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,20 +54,29 @@ import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
+import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownDetector
+import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
+import dev.opencode.mobile.ui.components.prewarmOpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private enum class ComposerPickerKind(
     val sheetTitle: String,
@@ -68,6 +84,25 @@ private enum class ComposerPickerKind(
     Model("Model"),
     Mode("Agent mode"),
     Variant("Variant"),
+}
+
+private data class RenderedMarkdownHeightCacheKey(
+    val messageId: String,
+    val variant: String,
+    val theme: String,
+    val width: Int,
+)
+
+private fun estimateRenderedMarkdownHeight(
+    text: String,
+    variant: OpenCodeRenderedMarkdownVariant,
+): Dp {
+    val displayText = text.ifBlank { "…" }
+    val lineCount = displayText.lines().size
+    val fenceBonus = if (displayText.contains("```") || displayText.contains("~~~")) 28 else 0
+    val estimate = lineCount * 22 + 24 + fenceBonus
+    val maximum = if (variant == OpenCodeRenderedMarkdownVariant.OutgoingMessage) 180 else 320
+    return estimate.coerceIn(44, maximum).dp
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,7 +116,10 @@ fun SessionChatScreen(
     onSessionContextClick: () -> Unit = {},
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
+    val context = LocalContext.current
+
     LaunchedEffect(sessionId, sessionTitle, worktree) {
+        prewarmOpenCodeRenderedMarkdown(context)
         viewModel.bind(sessionId, sessionTitle, worktree)
     }
 
@@ -89,7 +127,6 @@ fun SessionChatScreen(
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
-    val context = LocalContext.current
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -172,26 +209,86 @@ fun SessionChatScreen(
                     }
                 TimelineState.Ready -> {
                     val listState = rememberLazyListState()
+                    val darkTheme = isSystemInDarkTheme()
+                    val renderScope = rememberCoroutineScope()
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
                     var isFollowingScroll by remember(uiState.sessionId) { mutableStateOf(false) }
+                    var renderedMarkdownLayoutVersion by remember(uiState.sessionId) { mutableIntStateOf(0) }
+                    var renderedMarkdownScrollCorrectionJob by remember(uiState.sessionId) { mutableStateOf<Job?>(null) }
+                    val renderedMarkdownHeights =
+                        remember(uiState.sessionId) {
+                            mutableStateMapOf<RenderedMarkdownHeightCacheKey, Float>()
+                        }
 
-	                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
-	                        snapshotFlow {
-	                            listState.isScrollInProgress to !listState.canScrollForward
-	                        }.distinctUntilChanged().collect { (isScrollInProgress, atBottom) ->
-	                            if (atBottom) {
-	                                followingLatest = true
-	                            } else if (isScrollInProgress && !isFollowingScroll) {
-	                                followingLatest = false
-	                            }
-	                        }
+                    fun renderedMarkdownCacheKey(
+                        messageId: String,
+                        variant: OpenCodeRenderedMarkdownVariant,
+                        width: Dp,
+                    ): RenderedMarkdownHeightCacheKey =
+                        RenderedMarkdownHeightCacheKey(
+                            messageId = messageId,
+                            variant = variant.wireName,
+                            theme = if (darkTheme) "dark" else "light",
+                            width = width.value.roundToInt().coerceAtLeast(1),
+                        )
+
+                    fun initialRenderedMarkdownHeight(
+                        messageId: String,
+                        variant: OpenCodeRenderedMarkdownVariant,
+                        width: Dp,
+                        text: String,
+                    ): Dp {
+                        val key = renderedMarkdownCacheKey(messageId, variant, width)
+                        return renderedMarkdownHeights[key]?.dp ?: estimateRenderedMarkdownHeight(text, variant)
+                    }
+
+                    fun scheduleRenderedMarkdownScrollCorrection() {
+                        renderedMarkdownScrollCorrectionJob?.cancel()
+                        renderedMarkdownScrollCorrectionJob =
+                            renderScope.launch {
+                                delay(60)
+                                renderedMarkdownLayoutVersion += 1
+                            }
+                    }
+
+                    fun recordRenderedMarkdownHeight(
+                        messageId: String,
+                        variant: OpenCodeRenderedMarkdownVariant,
+                        width: Dp,
+                        height: Dp,
+                    ) {
+                        val nextHeight = height.value.coerceAtLeast(1f)
+                        val key = renderedMarkdownCacheKey(messageId, variant, width)
+                        val previous = renderedMarkdownHeights[key]
+                        if (previous != null && abs(previous - nextHeight) <= 1f) return
+                        renderedMarkdownHeights[key] = nextHeight
+                        scheduleRenderedMarkdownScrollCorrection()
+                    }
+
+                    DisposableEffect(uiState.sessionId) {
+                        onDispose {
+                            renderedMarkdownScrollCorrectionJob?.cancel()
+                        }
+                    }
+
+                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
+                        snapshotFlow {
+                            listState.isScrollInProgress to !listState.canScrollForward
+                        }.distinctUntilChanged().collect { (isScrollInProgress, atBottom) ->
+                            if (atBottom) {
+                                followingLatest = true
+                            } else if (isScrollInProgress && !isFollowingScroll) {
+                                followingLatest = false
+                            }
+                        }
                     }
 
                     LaunchedEffect(
                         uiState.sessionId,
                         uiState.messages.lastOrNull()?.id,
                         uiState.messages.lastOrNull()?.text,
+                        renderedMarkdownLayoutVersion,
                     ) {
                         val latestMessage = uiState.messages.lastOrNull() ?: return@LaunchedEffect
                         val bottomIndex = uiState.messages.size
@@ -227,6 +324,12 @@ fun SessionChatScreen(
                                 MessageRow(
                                     message = message,
                                     onRestoreClick = { viewModel.restoreComposerText(message.text) },
+                                    initialRenderedMarkdownHeight = { variant, width ->
+                                        initialRenderedMarkdownHeight(message.id, variant, width, message.text)
+                                    },
+                                    onRenderedMarkdownHeightChange = { variant, width, height ->
+                                        recordRenderedMarkdownHeight(message.id, variant, width, height)
+                                    },
                                     modifier =
                                         Modifier.padding(
                                             bottom = if (index == uiState.messages.lastIndex) 0.dp else 8.dp,
@@ -263,9 +366,10 @@ fun SessionChatScreen(
             )
         }
 
-        val modelCatalog = remember(uiState.modelOptions) {
-            ModelSelectionCatalog(options = uiState.modelOptions, serverDefault = null)
-        }
+        val modelCatalog =
+            remember(uiState.modelOptions) {
+                ModelSelectionCatalog(options = uiState.modelOptions, serverDefault = null)
+            }
         val activeModelProvider = modelCatalog.providers.firstOrNull { it.id == activeModelProviderId }
         val modelSheetTitle =
             if (activePicker == ComposerPickerKind.Model) {
@@ -478,29 +582,61 @@ private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCod
 private fun MessageRow(
     message: SessionChatMessageItem,
     onRestoreClick: () -> Unit,
+    initialRenderedMarkdownHeight: (OpenCodeRenderedMarkdownVariant, Dp) -> Dp,
+    onRenderedMarkdownHeightChange: (OpenCodeRenderedMarkdownVariant, Dp, Dp) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment =
-            if (message.role == MessageRole.User) {
-                Alignment.End
-            } else {
-                Alignment.Start
-            },
-    ) {
-        when (message.role) {
-            MessageRole.User ->
-                OpenCodeOutgoingMessage(
-                    text = message.text,
-                    metadataLabel = message.metadataLabel,
-                    onRestoreClick = onRestoreClick,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            MessageRole.Assistant ->
-                AssistantMessageBubble(text = message.text)
-            MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
-                FallbackMessageBubble(roleLabel = message.role.displayLabel(), text = message.text)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val availableWidth = maxWidth
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment =
+                if (message.role == MessageRole.User) {
+                    Alignment.End
+                } else {
+                    Alignment.Start
+                },
+        ) {
+            when (message.role) {
+                MessageRole.User ->
+                    OpenCodeOutgoingMessage(
+                        text = message.text,
+                        metadataLabel = message.metadataLabel,
+                        onRestoreClick = onRestoreClick,
+                        initialRenderedMarkdownHeight =
+                            initialRenderedMarkdownHeight(
+                                OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                                availableWidth,
+                            ),
+                        onRenderedMarkdownHeightChange = { height ->
+                            onRenderedMarkdownHeightChange(
+                                OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                                availableWidth,
+                                height,
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                MessageRole.Assistant ->
+                    AssistantMessageBubble(
+                        text = message.text,
+                        isStreaming = message.isStreaming,
+                        initialRenderedMarkdownHeight =
+                            initialRenderedMarkdownHeight(
+                                OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                                availableWidth,
+                            ),
+                        onRenderedMarkdownHeightChange = { height ->
+                            onRenderedMarkdownHeightChange(
+                                OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                                availableWidth,
+                                height,
+                            )
+                        },
+                    )
+                MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
+                    FallbackMessageBubble(roleLabel = message.role.displayLabel(), text = message.text)
+            }
         }
     }
 }
@@ -508,18 +644,34 @@ private fun MessageRow(
 @Composable
 private fun AssistantMessageBubble(
     text: String,
+    isStreaming: Boolean,
+    initialRenderedMarkdownHeight: Dp,
+    onRenderedMarkdownHeightChange: (Dp) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = text.ifBlank { "…" },
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    val bubbleModifier =
+        modifier
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+
+    if (OpenCodeRenderedMarkdownDetector.shouldRender(text)) {
+        OpenCodeRenderedMarkdown(
+            markdown = text.ifBlank { "…" },
+            variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
+            initialHeight = initialRenderedMarkdownHeight,
+            isStreaming = isStreaming,
+            onContentHeightChange = onRenderedMarkdownHeightChange,
+            modifier = bubbleModifier,
+        )
+    } else {
+        Text(
+            text = text.ifBlank { "…" },
+            modifier = bubbleModifier,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable

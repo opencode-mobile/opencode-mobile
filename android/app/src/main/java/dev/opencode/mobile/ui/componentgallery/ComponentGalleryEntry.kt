@@ -22,6 +22,7 @@ enum class ComponentGalleryEntryId {
     Button,
     ProjectSessionSelector,
     SessionStatusBar,
+    RenderedMarkdown,
 }
 
 data class ComponentGalleryEntry(
@@ -97,6 +98,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionStatusBar,
             title = "Session Status Bar",
             description = "Compact session id, live-update status, and context usage strip.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.RenderedMarkdown,
+            title = "Rendered Markdown",
+            description = "Safe markdown, code, and fenced diff rendering for message text.",
             category = ComponentGalleryCategory.Components,
         ),
     )

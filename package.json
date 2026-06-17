@@ -6,6 +6,7 @@
     "icons:sync": "node scripts/sync-icons.mjs",
     "icons:check": "node scripts/check-icons.mjs",
     "icons:audit": "node scripts/audit-icon-usage.mjs",
+    "rendered-markdown:test": "npm --prefix rendered-markdown test",
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "node scripts/generate-api-clients.mjs",
     "api:sync": "npm run api:fetch && npm run api:generate"
