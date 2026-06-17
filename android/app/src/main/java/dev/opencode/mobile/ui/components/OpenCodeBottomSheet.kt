@@ -118,12 +118,19 @@ sealed class BottomSheetEntryDecorator {
     ) : BottomSheetEntryDecorator()
 }
 
+data class OpenCodeBottomSheetHeaderAction(
+    val imageVector: ImageVector,
+    val contentDescription: String,
+    val onClick: () -> Unit,
+)
+
 @Composable
 fun OpenCodeBottomSheet(
     visible: Boolean,
     title: String,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null,
     keyboardAware: Boolean = false,
     pinnedContent: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
@@ -225,6 +232,7 @@ fun OpenCodeBottomSheet(
                 ) {
                     BottomSheetContent(
                         title = title,
+                        headerLeadingAction = headerLeadingAction,
                         keyboardAware = keyboardAware,
                         onDismissRequest = ::dismissWithAnimation,
                         headerDragModifier =
@@ -251,6 +259,7 @@ fun OpenCodeBottomSheet(
 @Composable
 private fun BottomSheetContent(
     title: String,
+    headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
     keyboardAware: Boolean,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
@@ -308,6 +317,7 @@ private fun BottomSheetContent(
         ) {
             BottomSheetHeader(
                 title = title,
+                leadingAction = headerLeadingAction,
                 onDismissRequest = onDismissRequest,
                 modifier =
                     headerDragModifier.onSizeChanged {
@@ -374,6 +384,7 @@ private fun BottomSheetContent(
 @Composable
 private fun BottomSheetHeader(
     title: String,
+    leadingAction: OpenCodeBottomSheetHeaderAction?,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -390,6 +401,13 @@ private fun BottomSheetHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        leadingAction?.let { action ->
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(action.imageVector, action.contentDescription),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = action.onClick,
+            )
+        }
         Text(
             text = title,
             modifier = Modifier.weight(1f),

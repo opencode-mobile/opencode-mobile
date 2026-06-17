@@ -41,10 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -84,11 +87,13 @@ fun SessionChatScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
+    var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
+            activeModelProviderId = null
             modelFilterText = ""
         }
     }
@@ -246,7 +251,10 @@ fun SessionChatScreen(
                 showStop = uiState.sessionStatusLabel != null,
                 stopEnabled = !uiState.isAborting,
                 onTextChange = viewModel::updateComposerText,
-                onModelClick = { activePicker = ComposerPickerKind.Model },
+                onModelClick = {
+                    activeModelProviderId = uiState.selectedModel?.option?.providerId
+                    activePicker = ComposerPickerKind.Model
+                },
                 onModeClick = { activePicker = ComposerPickerKind.Mode },
                 onVariantClick = { activePicker = ComposerPickerKind.Variant },
                 onAttachClick = {},
@@ -255,20 +263,46 @@ fun SessionChatScreen(
             )
         }
 
+        val modelCatalog = remember(uiState.modelOptions) {
+            ModelSelectionCatalog(options = uiState.modelOptions, serverDefault = null)
+        }
+        val activeModelProvider = modelCatalog.providers.firstOrNull { it.id == activeModelProviderId }
+        val modelSheetTitle =
+            if (activePicker == ComposerPickerKind.Model) {
+                activeModelProvider?.label ?: ComposerPickerKind.Model.sheetTitle
+            } else {
+                activePicker?.sheetTitle.orEmpty()
+            }
+        val showsModelFilter =
+            activePicker == ComposerPickerKind.Model &&
+                activeModelProvider != null &&
+                activeModelProvider.models.size > SessionChatViewModel.ModelFilterThreshold
+        val modelHeaderLeadingAction =
+            if (activePicker == ComposerPickerKind.Model && activeModelProvider != null) {
+                OpenCodeBottomSheetHeaderAction(
+                    imageVector = OpenCodeIcons.ArrowBack,
+                    contentDescription = "Back to providers",
+                    onClick = {
+                        activeModelProviderId = null
+                        modelFilterText = ""
+                    },
+                )
+            } else {
+                null
+            }
+
         OpenCodeBottomSheet(
             visible = activePicker != null,
-            title = activePicker?.sheetTitle ?: "",
+            title = modelSheetTitle,
             onDismissRequest = {
                 activePicker = null
+                activeModelProviderId = null
                 modelFilterText = ""
             },
-            keyboardAware =
-                activePicker == ComposerPickerKind.Model &&
-                    uiState.modelOptions.size > SessionChatViewModel.ModelFilterThreshold,
+            headerLeadingAction = modelHeaderLeadingAction,
+            keyboardAware = showsModelFilter,
             pinnedContent = {
-                if (activePicker == ComposerPickerKind.Model &&
-                    uiState.modelOptions.size > SessionChatViewModel.ModelFilterThreshold
-                ) {
+                if (showsModelFilter) {
                     ModelPickerFilterField(
                         value = modelFilterText,
                         onValueChange = { modelFilterText = it },
@@ -279,12 +313,18 @@ fun SessionChatScreen(
             when (activePicker) {
                 ComposerPickerKind.Model ->
                     ModelPickerSheetContent(
-                        modelOptions = uiState.modelOptions,
+                        providers = modelCatalog.providers,
+                        activeProvider = activeModelProvider,
                         selectedModel = uiState.selectedModel?.option,
                         filterText = modelFilterText,
+                        onSelectProvider = { provider ->
+                            activeModelProviderId = provider.id
+                            modelFilterText = ""
+                        },
                         onSelectModel = { model ->
                             viewModel.selectModel(model)
                             activePicker = null
+                            activeModelProviderId = null
                             modelFilterText = ""
                         },
                     )
@@ -328,31 +368,47 @@ fun SessionChatScreen(
 
 @Composable
 private fun ModelPickerSheetContent(
-    modelOptions: List<ModelSelectionOption>,
+    providers: List<ModelSelectionProvider>,
+    activeProvider: ModelSelectionProvider?,
     selectedModel: ModelSelectionOption?,
     filterText: String,
+    onSelectProvider: (ModelSelectionProvider) -> Unit,
     onSelectModel: (ModelSelectionOption) -> Unit,
 ) {
-    val filteredModels = modelOptions.filter { it.matchesFilter(filterText) }
-
-    if (filteredModels.isEmpty()) {
-        OpenCodeBottomSheetEntry(
-            title = "No models match your filter",
-            enabled = false,
-            onClick = {},
-        )
-    } else {
-        filteredModels.forEach { model ->
+    if (activeProvider == null) {
+        providers.forEach { provider ->
             OpenCodeBottomSheetEntry(
-                title = model.displayLabel,
+                title = provider.label,
                 endDecorator =
-                    if (model == selectedModel) {
+                    if (provider.id == selectedModel?.providerId) {
                         BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                     } else {
                         BottomSheetEntryDecorator.None
                     },
-                onClick = { onSelectModel(model) },
+                onClick = { onSelectProvider(provider) },
             )
+        }
+    } else {
+        val filteredModels = activeProvider.models.filter { it.matchesFilter(filterText) }
+        if (filteredModels.isEmpty()) {
+            OpenCodeBottomSheetEntry(
+                title = "No models match your filter",
+                enabled = false,
+                onClick = {},
+            )
+        } else {
+            filteredModels.forEach { model ->
+                OpenCodeBottomSheetEntry(
+                    title = model.modelLabel,
+                    endDecorator =
+                        if (model == selectedModel) {
+                            BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                        } else {
+                            BottomSheetEntryDecorator.None
+                        },
+                    onClick = { onSelectModel(model) },
+                )
+            }
         }
     }
 }

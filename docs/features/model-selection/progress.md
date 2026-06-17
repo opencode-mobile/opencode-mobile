@@ -4,6 +4,8 @@
 - [x] iOS model/provider repository and parser added.
 - [x] Android model/provider repository and parser added.
 - [x] Session Chat model picker uses `/config/providers` options.
+- [x] Session Chat model picker groups options by Provider before showing
+  models.
 - [x] Variant picker replaces the prior Thinking Effort mock.
 - [x] Prompt send includes selected `model` and only sends `variant` when
   non-default.

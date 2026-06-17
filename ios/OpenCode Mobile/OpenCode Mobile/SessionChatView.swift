@@ -27,6 +27,7 @@ struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
+    @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
     @State private var hasInitializedTimelineScroll = false
     @State private var followingLatest = true
@@ -88,7 +89,8 @@ struct SessionChatView: View {
         .background(OpenCodeColors.backgroundPrimary)
         .openCodeBottomSheet(
             isPresented: pickerPresentedBinding,
-            title: activePicker?.sheetTitle ?? "",
+            title: modelPickerSheetTitle,
+            leadingAction: modelPickerHeaderLeadingAction,
             scrollTargetID: modelPickerScrollTargetID,
             pinnedContent: { modelPickerPinnedContent },
             content: { pickerSheetEntries }
@@ -103,6 +105,7 @@ struct SessionChatView: View {
         }
         .onChange(of: activePicker) { _, picker in
             if picker != .model {
+                activeModelProviderID = nil
                 modelFilterText = ""
             }
         }
@@ -286,6 +289,7 @@ struct SessionChatView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(label: composer.selectedModelLabel, selected: false) {
+                        activeModelProviderID = composer.selectedModel?.option.providerID
                         activePicker = .model
                     }
                     OpenCodeChoiceBadge(label: composer.selectedMode, selected: false) {
@@ -350,21 +354,50 @@ struct SessionChatView: View {
             set: { presented in
                 if !presented {
                     activePicker = nil
+                    activeModelProviderID = nil
                     modelFilterText = ""
                 }
             },
         )
     }
 
-    private func filteredModelOptions(from options: [ModelSelectionOption]) -> [ModelSelectionOption] {
-        options.filter { $0.matchesFilter(modelFilterText) }
+    private var modelSelectionCatalog: ModelSelectionCatalog {
+        let composer = viewModel.state.composer
+        return ModelSelectionCatalog(options: composer.modelOptions, serverDefault: nil)
+    }
+
+    private var activeModelProvider: ModelSelectionProvider? {
+        guard let activeModelProviderID else { return nil }
+        return modelSelectionCatalog.providers.first { $0.id == activeModelProviderID }
+    }
+
+    private var modelPickerSheetTitle: String {
+        guard activePicker == .model else { return activePicker?.sheetTitle ?? "" }
+        return activeModelProvider?.label ?? ComposerPickerKind.model.sheetTitle
+    }
+
+    private var modelPickerHeaderLeadingAction: OpenCodeBottomSheetHeaderAction? {
+        guard activePicker == .model, activeModelProvider != nil else { return nil }
+        return OpenCodeBottomSheetHeaderAction(
+            icon: .arrowBack,
+            accessibilityLabel: "Back to providers",
+            action: {
+                activeModelProviderID = nil
+                modelFilterText = ""
+            }
+        )
+    }
+
+    private func filteredModels(in provider: ModelSelectionProvider) -> [ModelSelectionOption] {
+        provider.models.filter { $0.matchesFilter(modelFilterText) }
     }
 
     private var modelPickerScrollTargetID: String? {
         guard activePicker == .model else { return nil }
+        guard let provider = activeModelProvider else { return nil }
         let composer = viewModel.state.composer
         guard let selected = composer.selectedModel?.option else { return nil }
-        let filtered = filteredModelOptions(from: composer.modelOptions)
+        let filtered = filteredModels(in: provider)
         guard filtered.contains(where: { $0.id == selected.id }) else { return nil }
         return selected.id
     }
@@ -372,8 +405,8 @@ struct SessionChatView: View {
     @ViewBuilder
     private var modelPickerPinnedContent: some View {
         if activePicker == .model {
-            let composer = viewModel.state.composer
-            if composer.modelOptions.count > SessionChatPickers.modelFilterThreshold {
+            if let provider = activeModelProvider,
+               provider.models.count > SessionChatPickers.modelFilterThreshold {
                 ModelPickerFilterField(text: $modelFilterText)
             }
         }
@@ -381,27 +414,43 @@ struct SessionChatView: View {
 
     @ViewBuilder
     private func modelPickerEntries(composer: SessionChatComposerState) -> some View {
-        let filtered = filteredModelOptions(from: composer.modelOptions)
-        if filtered.isEmpty {
-            OpenCodeBottomSheetEntry(
-                title: "No models match your filter",
-                enabled: false,
-                action: {}
-            )
-        } else {
-            ForEach(filtered) { model in
+        if let provider = activeModelProvider {
+            let filtered = filteredModels(in: provider)
+            if filtered.isEmpty {
                 OpenCodeBottomSheetEntry(
-                    title: model.displayLabel,
-                    endDecorator: model == composer.selectedModel?.option
+                    title: "No models match your filter",
+                    enabled: false,
+                    action: {}
+                )
+            } else {
+                ForEach(filtered) { model in
+                    OpenCodeBottomSheetEntry(
+                        title: model.modelLabel,
+                        endDecorator: model == composer.selectedModel?.option
+                            ? .icon(.check, accessibilityLabel: "Selected")
+                            : .none,
+                        action: {
+                            viewModel.selectModel(model)
+                            activePicker = nil
+                            activeModelProviderID = nil
+                            modelFilterText = ""
+                        },
+                    )
+                    .id(model.id)
+                }
+            }
+        } else {
+            ForEach(modelSelectionCatalog.providers) { provider in
+                OpenCodeBottomSheetEntry(
+                    title: provider.label,
+                    endDecorator: provider.id == composer.selectedModel?.option.providerID
                         ? .icon(.check, accessibilityLabel: "Selected")
                         : .none,
                     action: {
-                        viewModel.selectModel(model)
-                        activePicker = nil
+                        activeModelProviderID = provider.id
                         modelFilterText = ""
                     },
                 )
-                .id(model.id)
             }
         }
     }

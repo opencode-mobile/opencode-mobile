@@ -4,11 +4,35 @@ data class ModelSelectionCatalog(
     val options: List<ModelSelectionOption>,
     val serverDefault: ModelSelectionOption?,
 ) {
+    val providers: List<ModelSelectionProvider> =
+        options
+            .fold(mutableListOf<ModelSelectionProvider>()) { providers, option ->
+                val index = providers.indexOfFirst { it.id == option.providerId }
+                if (index >= 0) {
+                    val provider = providers[index]
+                    providers[index] = provider.copy(models = provider.models + option)
+                } else {
+                    providers +=
+                        ModelSelectionProvider(
+                            id = option.providerId,
+                            label = option.providerLabel,
+                            models = listOf(option),
+                        )
+                }
+                providers
+            }.toList()
+
     fun option(
         providerId: String,
         modelId: String,
     ): ModelSelectionOption? = options.firstOrNull { it.providerId == providerId && it.modelId == modelId }
 }
+
+data class ModelSelectionProvider(
+    val id: String,
+    val label: String,
+    val models: List<ModelSelectionOption>,
+)
 
 data class ModelSelectionOption(
     val providerId: String,

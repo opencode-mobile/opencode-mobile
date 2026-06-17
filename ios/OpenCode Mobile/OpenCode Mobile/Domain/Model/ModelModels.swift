@@ -6,9 +6,31 @@ struct ModelSelectionCatalog: Equatable, Sendable {
 
     var isEmpty: Bool { options.isEmpty }
 
+    var providers: [ModelSelectionProvider] {
+        options.reduce(into: []) { providers, option in
+            if let index = providers.firstIndex(where: { $0.id == option.providerID }) {
+                providers[index].models.append(option)
+            } else {
+                providers.append(
+                    ModelSelectionProvider(
+                        id: option.providerID,
+                        label: option.providerLabel,
+                        models: [option]
+                    )
+                )
+            }
+        }
+    }
+
     func option(providerID: String, modelID: String) -> ModelSelectionOption? {
         options.first { $0.providerID == providerID && $0.modelID == modelID }
     }
+}
+
+struct ModelSelectionProvider: Equatable, Sendable, Identifiable {
+    let id: String
+    let label: String
+    var models: [ModelSelectionOption]
 }
 
 struct ModelSelectionOption: Equatable, Sendable, Identifiable {

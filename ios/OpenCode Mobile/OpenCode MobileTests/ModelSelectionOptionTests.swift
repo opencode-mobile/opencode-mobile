@@ -32,4 +32,29 @@ struct ModelSelectionOptionTests {
         #expect(!option.matchesFilter("gpt"))
         #expect(!option.matchesFilter("anthropic"))
     }
+
+    @Test func catalogProviders_preserveFirstProviderOrderAndGroupModels() {
+        let secondOpenRouterModel = ModelSelectionOption(
+            providerID: "openrouter",
+            providerName: "OpenRouter",
+            modelID: "gpt-oss",
+            modelName: "GPT OSS",
+            variants: []
+        )
+        let anthropicModel = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-opus",
+            modelName: "Claude Opus",
+            variants: []
+        )
+        let catalog = ModelSelectionCatalog(
+            options: [option, anthropicModel, secondOpenRouterModel],
+            serverDefault: nil
+        )
+
+        #expect(catalog.providers.map(\.id) == ["openrouter", "anthropic"])
+        #expect(catalog.providers[0].models.map(\.modelID) == ["claude-sonnet", "gpt-oss"])
+        #expect(catalog.providers[1].models.map(\.modelID) == ["claude-opus"])
+    }
 }
