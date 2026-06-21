@@ -1,0 +1,310 @@
+# Native Rendered Markdown Decisions
+
+## Native Renderer Replaces WebView
+
+- Decision: Rendered Markdown uses native SwiftUI and Compose rendering rather
+  than local WebView islands.
+- Reason: WebView startup, measurement, and bridge lifecycle costs caused chat
+  scroll instability.
+- Date: 2026-06-20.
+
+## Shared Parser Contract
+
+- Decision: parsing and render-tree contracts live in `shared/markdown-core`.
+- Reason: the markdown subset and diagnostics should stay aligned across iOS and
+  Android while UI remains platform native.
+- Date: 2026-06-20.
+
+## iOS Uses JSON Render Tree
+
+- Decision: iOS calls `OpenCodeMarkdownCore.parseMarkdownJson` and decodes the
+  versioned render tree into Swift structs before SwiftUI rendering.
+- Reason: the JSON boundary avoids exposing Kotlin parser internals to Swift
+  while still letting `shared/markdown-core` own parsing and diagnostics.
+- Date: 2026-06-20.
+
+## Inline Markdown Uses Rendered Markdown
+
+- Decision: inline code, emphasis, and links now mount Rendered Markdown when
+  markdown markers exist.
+- Reason: after removing WebView cost, smooth chat scrolling no longer requires
+  limiting rendering to block markdown only.
+- Date: 2026-06-20.
+
+## TextMate Gate Stays Explicit
+
+- Decision: semantic fallback highlighting is allowed only as scaffold and must
+  remain documented until TextMate/Oniguruma passes the gate.
+- Reason: pretending the fallback is Shiki-level would hide the hardest part of
+  the feature.
+- Date: 2026-06-20.
+
+## Shiki Golden Fixtures Are Test Artifacts
+
+- Decision: Shiki is used only by the dev fixture generator
+  `markdown:highlighter:golden`, which writes checked-in semantic token
+  fixtures for the native highlighter gate.
+- Reason: Shiki remains the reference oracle for TextMate-style token ranges,
+  while app runtime code stays fully native and does not ship JavaScript.
+- Date: 2026-06-20.
+
+## Golden Parity Can Close Per Language
+
+- Decision: the native-vs-Shiki gate may gain active per-language subset tests
+  before the full fixture suite is unignored.
+- Reason: small exact comparisons against real bundled grammars make progress
+  visible without lowering the final bar. The Android/Joni `diff` fixture is the
+  first active subset because it exercises opencode-relevant inserted/deleted
+  highlighting with an Oniguruma-compatible backend.
+- Date: 2026-06-21.
+
+## TextMate Scopes Map Centrally
+
+- Decision: raw TextMate scopes are converted to `CodeTokenRole` in
+  `shared/markdown-core` before either native UI sees code spans.
+- Reason: SwiftUI and Compose should resolve the same semantic roles through
+  design-system tokens instead of duplicating scope parsing per platform.
+- Date: 2026-06-20.
+
+## Grammar Payloads Are Bundled Locally
+
+- Decision: the Shiki fixture generator writes TextMate grammar JSON resources
+  into `shared/markdown-core` for the Milestone 0 language set.
+- Reason: the native tokenizer must load deterministic local grammar payloads
+  and must not depend on Shiki, JavaScript modules, or network access at
+  runtime.
+- Date: 2026-06-20.
+
+## Grammar Loading Is A Shared Boundary
+
+- Decision: `shared/markdown-core` owns a `TextMateGrammarBundle` loader that
+  resolves local grammar payloads from a resource reader before tokenization.
+- Reason: the tokenizer should consume validated local JSON payloads, while
+  Android and iOS remain free to provide the final app-packaged resource source.
+- Date: 2026-06-20.
+
+## Primary Grammar Selection Prefers The Requested Language
+
+- Decision: when a manifest entry lists embedded dependency grammars before the
+  requested language grammar, `primaryGrammarFor` chooses the descriptor whose
+  name or aliases match the requested language before falling back to the first
+  loaded grammar.
+- Reason: Shiki language modules such as HTML can bundle JavaScript and CSS
+  grammars before the HTML grammar itself. Treating the first descriptor as
+  primary tokenized HTML as JavaScript and blocked HTML golden parity.
+- Date: 2026-06-21.
+
+## Grammar JSON Decodes Before Tokenization
+
+- Decision: loaded grammar payloads include both the original JSON object and a
+  typed `TextMateGrammar` tree for tokenizer-relevant fields.
+- Reason: the native tokenizer should operate on validated grammar structure
+  rather than ad hoc JSON lookups, while still leaving raw JSON available for
+  edge cases during the TextMate port.
+- Date: 2026-06-20.
+
+## Android Packages Grammar Payloads As Assets
+
+- Decision: the Android target packages `shared/markdown-core` grammar payloads
+  as library assets and mirrors them into Android unit-test resources.
+- Reason: Android runtime code can provide an asset-backed resource reader, and
+  unit tests can verify the exact bundled grammar JSON payloads decode into the
+  shared grammar model.
+- Date: 2026-06-20.
+
+## Tokenizer Scaffold Is Injectable Only
+
+- Decision: `OpenCodeTextMateNativeTokenizer` exists as an injectable shared
+  tokenizer scaffold using a replaceable regex backend; it is not the default
+  production highlighter.
+- Reason: include resolution, `match` rules, `begin`/`end` rules, captures, and
+  nested pattern behavior can be developed and tested before the
+  Oniguruma-compatible backend is ready, while the final Shiki parity gate stays
+  explicit.
+- Date: 2026-06-20.
+
+## Tokenizer State Is Line-Oriented
+
+- Decision: the tokenizer scaffold exposes `TextMateLineState` and
+  `tokenizeLine` so open `begin`/`end` rules can carry across physical lines.
+- Reason: real TextMate engines tokenize line by line with persistent rule
+  stacks; the native implementation needs this shape before it can support
+  streaming, incremental reuse, and Shiki-comparable token ranges.
+- Date: 2026-06-20.
+
+## End Patterns Resolve Begin Captures
+
+- Decision: `begin`/`end` tokenization resolves numeric back-references in
+  `end` patterns from the corresponding `begin` match captures and stores the
+  resolved end pattern in carried line state.
+- Reason: many bundled TextMate grammars use this behavior for paired
+  delimiters, including HTML closing tags and Markdown fences; without it,
+  line-state tokenization cannot converge on Shiki-compatible ranges.
+- Date: 2026-06-20.
+
+## While Rules Carry Block State
+
+- Decision: the tokenizer scaffold stores resolved `while` patterns in carried
+  line state and keeps a rule open only while each following line matches that
+  continuation pattern.
+- Reason: bundled TextMate Markdown grammars use `while` rules heavily for
+  blockquotes, lists, fenced code, paragraphs, and tables; modeling this now
+  reduces the gap between the scaffold and a Shiki-comparable tokenizer.
+- Date: 2026-06-20.
+
+## Includes Resolve Through The Grammar Bundle
+
+- Decision: `OpenCodeSyntaxHighlighter` passes the loaded
+  `TextMateGrammarBundle` into tokenizer calls, and the tokenizer expands
+  repository pattern containers plus external scope includes from that bundle.
+- Reason: the Milestone 0 grammars rely on grouped repository rules and embedded
+  scopes such as HTML including JavaScript/CSS or Markdown including fenced-code
+  language grammars. Resolving these locally is required before Shiki fixture
+  comparisons can represent real grammar behavior.
+- Date: 2026-06-20.
+
+## Capture Patterns Tokenize Nested Content
+
+- Decision: TextMate captures may run their own nested patterns inside the
+  captured range, and any uncovered parts of the range keep the capture scope.
+- Reason: bundled grammars use capture patterns for structured inline regions
+  such as Markdown links/headings and HTML attributes; preserving nested scopes
+  is required for the innermost scope mapping to approach Shiki-compatible
+  semantic roles.
+- Date: 2026-06-20.
+
+## Match Captures Preserve Parent Rule Scope
+
+- Decision: when a `match` rule emits capture tokens, uncovered parts of the
+  matched range keep the parent rule scope.
+- Reason: TextMate grammars often capture punctuation separately from the rest
+  of the semantic region. The bundled diff grammar uses this shape for
+  inserted/deleted lines; dropping parent-scope holes kept `+` and `-`
+  punctuation but lost the inserted/deleted content roles needed for Shiki
+  parity.
+- Date: 2026-06-21.
+
+## Begin And End Captures Preserve Parent Rule Scope
+
+- Decision: `begin` and `end` matches preserve the parent rule scope for
+  uncaptured ranges, using generic `captures` as a fallback when
+  `beginCaptures` or `endCaptures` are absent.
+- Reason: real grammars can use the delimiter match as semantic content, not
+  just punctuation. The bundled YAML grammar starts plain scalar values with the
+  `begin` match itself; dropping that uncaptured range lost the first character
+  and blocked YAML golden parity.
+- Date: 2026-06-21.
+
+## TextMate Scope Names Can Contain Multiple Scopes
+
+- Decision: TextMate `name` and `contentName` strings are split on whitespace
+  into ordered scope stacks before semantic role mapping.
+- Reason: bundled grammars use names such as
+  `string.json support.type.property-name.json`. Treating the whole string as
+  one scope loses the innermost property-name role and blocks JSON parity.
+- Date: 2026-06-21.
+
+## Semantic Span Merging Is Role-Aware
+
+- Decision: adjacent semantic spans with the same non-punctuation role are
+  merged after TextMate scope mapping. Adjacent punctuation spans are merged
+  only when neither side is a string delimiter punctuation token.
+- Reason: Shiki groups JSON string delimiters with their string contents but
+  keeps punctuation such as closing property quotes and colons as separate
+  tokens, while also grouping punctuation clusters such as CSS `);`, Markdown
+  `](`, and TypeScript `})`. Role-aware merging lets native output match those
+  semantics without hiding string delimiter boundaries.
+- Date: 2026-06-21.
+
+## Begin/End Content Scans Compare Child Rules With End Rules
+
+- Decision: begin/end tokenization scans child rules and the current rule's end
+  pattern together instead of precomputing the parent end before tokenizing
+  nested content.
+- Reason: parent end patterns can be zero-width lookaheads that occur inside a
+  child begin/end rule. The bundled CSS grammar's property-value rule can end
+  before `)`, while a nested `var(...)` function must consume that same `)`
+  first to match Shiki's semantic token ranges.
+- Date: 2026-06-21.
+
+## End Pattern Ordering Is Rule-Owned
+
+- Decision: begin/end rules that set `applyEndPatternLast` let child patterns
+  match before an end pattern when both start at the same offset.
+- Reason: bundled Markdown and Shell grammars use this TextMate flag to parse
+  embedded inline structures and function definitions. Treating every end
+  pattern as first-priority would prevent the native tokenizer from converging
+  on Shiki-compatible token ranges.
+- Date: 2026-06-20.
+
+## Injection Selectors Are Scope-Aware
+
+- Decision: the tokenizer scaffold supports basic TextMate injection selectors,
+  including `L:`/`R:` ordering, positive scope matching, and comma-separated
+  exclusions.
+- Reason: the bundled HTML grammar uses an injection to mark stray angle
+  brackets only in normal HTML text while excluding comments, embedded content,
+  and tag scopes. Applying injections without selectors would create noisy
+  false tokens and make Shiki parity harder to reason about.
+- Date: 2026-06-20.
+
+## Temporary Regex Backend Emits Diagnostics
+
+- Decision: tokenization through the temporary Kotlin `Regex` backend emits
+  `HighlighterBackendFallback`.
+- Reason: the scaffold is useful for developing rule/state behavior, but it is
+  not Oniguruma-compatible and must not be confused with the final highlighter
+  gate.
+- Date: 2026-06-20.
+
+## Android Uses Joni For The First Oniguruma Backend
+
+- Decision: Android uses Joni as the first Oniguruma-compatible regex backend
+  for `OpenCodeTextMateNativeTokenizer`, while iOS still requires a native
+  backend before the highlighter gate can close.
+- Reason: Joni is a JVM/Android-compatible Java port of Oniguruma, which lets
+  Android exercise real Oniguruma regex features against the shared tokenizer
+  while the iOS cinterop backend remains separate work.
+- Date: 2026-06-20.
+
+## Parser Accepts A Platform Highlighter
+
+- Decision: `OpenCodeMarkdownParser.parse` accepts an `OpenCodeCodeHighlighter`
+  parameter, Android `OpenCodeRenderedMarkdown` provides an asset-backed
+  TextMate/Joni highlighter, and the KMP JSON bridge resolves a platform
+  highlighter for Swift callers.
+- Reason: the shared parser should remain platform-neutral, while each native
+  app owns how bundled grammar resources and regex backends are loaded at
+  runtime.
+- Date: 2026-06-20.
+
+## iOS Loads Shared Grammar Resources Through The KMP Bridge
+
+- Decision: the iOS build phase copies the shared `textmate-grammars` resources
+  into the app bundle, and `iosMain` provides a bundle-scanning resource reader
+  for the KMP JSON parser bridge.
+- Reason: SwiftUI should keep calling `OpenCodeMarkdownCore.parseMarkdownJson`
+  without owning grammar loading, while KMP still consumes the same pinned
+  grammar payloads as Android. The temporary Kotlin regex backend remains
+  visible through `HighlighterBackendFallback` until the iOS Oniguruma binding
+  exists.
+- Date: 2026-06-21.
+
+## Scope Mapping Prefers Inner Scopes
+
+- Decision: TextMate scope-to-role mapping checks the scope stack from innermost
+  to outermost before applying role priority.
+- Reason: capture scopes such as string delimiters or regex groups must be able
+  to override parent scopes in the semantic role conversion used by both
+  platforms.
+- Date: 2026-06-20.
+
+## Parser Calls A Highlighter Pipeline
+
+- Decision: markdown parsing calls `OpenCodeSyntaxHighlighter`, which can use a
+  TextMate tokenizer with loaded grammar payload JSON when available and
+  otherwise emits semantic fallback spans with a `HighlighterFallback`
+  diagnostic.
+- Reason: the parser should not know whether highlighting came from the fallback
+  scaffold or the future TextMate/Oniguruma engine.
+- Date: 2026-06-20.

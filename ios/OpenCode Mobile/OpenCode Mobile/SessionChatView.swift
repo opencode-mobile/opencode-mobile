@@ -23,15 +23,7 @@ private enum TimelineScrollAnchor {
     static let bottom = "session-chat-timeline-bottom"
 }
 
-private struct RenderedMarkdownHeightCacheKey: Hashable {
-    let messageID: String
-    let variant: String
-    let theme: String
-    let width: Int
-}
-
 struct SessionChatView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: SessionChatViewModel
     @State private var activePicker: ComposerPickerKind?
@@ -39,9 +31,6 @@ struct SessionChatView: View {
     @State private var modelFilterText = ""
     @State private var hasInitializedTimelineScroll = false
     @State private var followingLatest = true
-    @State private var renderedMarkdownLayoutVersion = 0
-    @State private var renderedMarkdownHeightCache: [RenderedMarkdownHeightCacheKey: CGFloat] = [:]
-    @State private var renderedMarkdownScrollCorrectionTask: Task<Void, Never>?
     @State private var lastTimelineMessageScrollSignature: String?
     @State private var showSessionContext = false
 
@@ -112,7 +101,6 @@ struct SessionChatView: View {
             SessionContextView(sessionID: viewModel.state.sessionID, worktree: session.worktree)
         }
         .task {
-            OpenCodeRenderedMarkdown.prewarm()
             viewModel.startObserving()
             await viewModel.loadMessages()
         }
@@ -123,7 +111,6 @@ struct SessionChatView: View {
             }
         }
         .onDisappear {
-            renderedMarkdownScrollCorrectionTask?.cancel()
             viewModel.stopObserving()
         }
     }
@@ -164,18 +151,18 @@ struct SessionChatView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
                 }
-                GeometryReader { geometry in
+                GeometryReader { _ in
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 0) {
                                 ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                     HStack {
                                         if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                                            messageRow(message, availableWidth: geometry.size.width)
+                                            messageRow(message)
                                             Spacer(minLength: 0)
                                         } else {
                                             Spacer(minLength: 0)
-                                            messageRow(message, availableWidth: geometry.size.width)
+                                            messageRow(message)
                                         }
                                     }
                                     .id(message.id)
@@ -197,11 +184,11 @@ struct SessionChatView: View {
                             }
                         )
                         .onChange(of: sessionID) { _, _ in
-                            resetRenderedMarkdownLayoutState()
+                            lastTimelineMessageScrollSignature = nil
                             hasInitializedTimelineScroll = false
                             followingLatest = true
                         }
-                        .task(id: timelineScrollTaskID(sessionID: sessionID, messages: messages)) {
+                        .task(id: timelineMessageScrollSignature(sessionID: sessionID, messages: messages)) {
                             guard followingLatest || !hasInitializedTimelineScroll else { return }
                             let messageSignature = timelineMessageScrollSignature(sessionID: sessionID, messages: messages)
                             let heightOnlyCorrection = hasInitializedTimelineScroll && lastTimelineMessageScrollSignature == messageSignature
@@ -225,10 +212,6 @@ struct SessionChatView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private func timelineScrollTaskID(sessionID: String, messages: [SessionChatRow]) -> String {
-        "\(timelineMessageScrollSignature(sessionID: sessionID, messages: messages))-\(renderedMarkdownLayoutVersion)"
     }
 
     private func timelineMessageScrollSignature(sessionID: String, messages: [SessionChatRow]) -> String {
@@ -264,117 +247,19 @@ struct SessionChatView: View {
         return []
     }
 
-    private func resetRenderedMarkdownLayoutState() {
-        renderedMarkdownScrollCorrectionTask?.cancel()
-        renderedMarkdownScrollCorrectionTask = nil
-        renderedMarkdownHeightCache.removeAll()
-        renderedMarkdownLayoutVersion = 0
-        lastTimelineMessageScrollSignature = nil
-    }
-
-    private func renderedMarkdownCacheKey(
-        messageID: String,
-        variant: OpenCodeRenderedMarkdownVariant,
-        availableWidth: CGFloat
-    ) -> RenderedMarkdownHeightCacheKey {
-        RenderedMarkdownHeightCacheKey(
-            messageID: messageID,
-            variant: variant.rawValue,
-            theme: colorScheme == .dark ? "dark" : "light",
-            width: max(1, Int(availableWidth.rounded()))
-        )
-    }
-
-    private func initialRenderedMarkdownHeight(
-        messageID: String,
-        variant: OpenCodeRenderedMarkdownVariant,
-        text: String,
-        availableWidth: CGFloat
-    ) -> CGFloat {
-        let key = renderedMarkdownCacheKey(messageID: messageID, variant: variant, availableWidth: availableWidth)
-        if let cached = renderedMarkdownHeightCache[key] {
-            return cached
-        }
-        return estimatedRenderedMarkdownHeight(for: text, variant: variant)
-    }
-
-    private func estimatedRenderedMarkdownHeight(
-        for text: String,
-        variant: OpenCodeRenderedMarkdownVariant
-    ) -> CGFloat {
-        let displayText = text.isEmpty ? "…" : text
-        let lineCount = displayText.components(separatedBy: .newlines).count
-        let fenceBonus: CGFloat = displayText.contains("```") || displayText.contains("~~~") ? 28 : 0
-        let estimate = CGFloat(lineCount) * 22 + 24 + fenceBonus
-        let maximum: CGFloat = variant == .outgoingMessage ? 180 : 320
-        return min(max(44, estimate), maximum)
-    }
-
-    private func recordRenderedMarkdownHeight(
-        messageID: String,
-        variant: OpenCodeRenderedMarkdownVariant,
-        availableWidth: CGFloat,
-        height: CGFloat
-    ) {
-        let roundedHeight = max(1, height.rounded(.up))
-        let key = renderedMarkdownCacheKey(messageID: messageID, variant: variant, availableWidth: availableWidth)
-        if let previous = renderedMarkdownHeightCache[key],
-           abs(previous - roundedHeight) <= 1 {
-            return
-        }
-        renderedMarkdownHeightCache[key] = roundedHeight
-        scheduleRenderedMarkdownScrollCorrection()
-    }
-
-    private func scheduleRenderedMarkdownScrollCorrection() {
-        renderedMarkdownScrollCorrectionTask?.cancel()
-        renderedMarkdownScrollCorrectionTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(60))
-            renderedMarkdownLayoutVersion += 1
-        }
-    }
-
     @ViewBuilder
-    private func messageRow(_ message: SessionChatRow, availableWidth: CGFloat) -> some View {
+    private func messageRow(_ message: SessionChatRow) -> some View {
         switch message.role {
         case .user:
             OpenCodeOutgoingMessage(
                 text: message.text,
                 metadataLabel: message.metadataLabel,
-                initialRenderedMarkdownHeight: initialRenderedMarkdownHeight(
-                    messageID: message.id,
-                    variant: .outgoingMessage,
-                    text: message.text,
-                    availableWidth: availableWidth
-                ),
-                onRenderedMarkdownHeightChange: { height in
-                    recordRenderedMarkdownHeight(
-                        messageID: message.id,
-                        variant: .outgoingMessage,
-                        availableWidth: availableWidth,
-                        height: height
-                    )
-                },
                 onRestoreClick: { viewModel.restoreComposerText(message.text) }
             )
         case .assistant:
             AssistantMessageBubble(
                 text: message.text,
-                isStreaming: message.isStreaming,
-                initialRenderedMarkdownHeight: initialRenderedMarkdownHeight(
-                    messageID: message.id,
-                    variant: .assistantMessage,
-                    text: message.text,
-                    availableWidth: availableWidth
-                ),
-                onRenderedMarkdownHeightChange: { height in
-                    recordRenderedMarkdownHeight(
-                        messageID: message.id,
-                        variant: .assistantMessage,
-                        availableWidth: availableWidth,
-                        height: height
-                    )
-                }
+                isStreaming: message.isStreaming
             )
         case .command, .tool, .unknown:
             Text("\(message.role.displayLabel): \(message.text.isEmpty ? "…" : message.text)")
@@ -612,8 +497,6 @@ struct SessionChatView: View {
 private struct AssistantMessageBubble: View {
     let text: String
     let isStreaming: Bool
-    let initialRenderedMarkdownHeight: CGFloat
-    let onRenderedMarkdownHeightChange: (CGFloat) -> Void
 
     var body: some View {
         Group {
@@ -621,9 +504,7 @@ private struct AssistantMessageBubble: View {
                 OpenCodeRenderedMarkdown(
                     markdown: text.isEmpty ? "…" : text,
                     variant: .assistantMessage,
-                    initialHeight: initialRenderedMarkdownHeight,
-                    isStreaming: isStreaming,
-                    onHeightChange: onRenderedMarkdownHeightChange
+                    isStreaming: isStreaming
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)

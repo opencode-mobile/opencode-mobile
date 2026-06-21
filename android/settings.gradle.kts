@@ -19,3 +19,5 @@ plugins {
 
 rootProject.name = "OpenCode Mobile"
 include(":app")
+include(":markdown-core")
+project(":markdown-core").projectDir = file("../shared/markdown-core")

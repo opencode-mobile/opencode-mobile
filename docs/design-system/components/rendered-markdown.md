@@ -12,8 +12,9 @@ surfaces, not for general web content.
 - Variants: `assistantMessage`, `outgoingMessage`, `standalone`.
 - States: default, streaming, collapsed, expanded, empty.
 - Required content: raw markdown text and the variant.
-- Optional content: initial height, measured-height callback, link-tap callback,
-  streaming flag, expanded/collapsed state for outgoing messages.
+- Optional content: link-tap callback, streaming flag, expanded/collapsed state
+  for outgoing messages. Legacy initial-height callbacks are compatibility
+  shims while chat height caches are removed.
 
 ## Token Usage
 
@@ -28,32 +29,32 @@ surfaces, not for general web content.
 
 The component renders a safe GFM subset: paragraphs, headings, emphasis, links,
 lists, blockquotes, inline code, fenced code, tables, and fenced `diff` blocks.
-Chat callers should mount it only for complex block markdown, tables, fenced
-code, and fenced `diff`; inline-only markdown should stay native/plain in chat
-so scrolling remains smooth.
+Chat callers should mount it whenever markdown markers exist, including simple
+inline code, emphasis, and links. Messages with no markdown markers stay on the
+plain native text path.
 
-Raw HTML, remote images, arbitrary navigation, network loads, and broad
-JavaScript bridges are disabled. Link taps are intercepted by native code and
-only `http`/`https` URLs may leave the renderer.
+Raw HTML is not interpreted. Remote images, arbitrary navigation, network loads,
+WebView runtime, and broad JavaScript bridges are not part of the component.
+Link taps are owned by native code and only `http`/`https` URLs may leave the
+renderer.
 
 Copy and restore actions use the original raw markdown text. Per-code-block copy
 controls are intentionally deferred.
 
 ## Platform Notes
 
-- iOS: implemented with `WKWebView` inside SwiftUI. The WebView is non-scrolling,
-  transparent, uses cached local HTML and a shared process pool, and reports
-  content height through a narrow script message.
-- Android: implemented with `WebView` inside Compose. The WebView is
-  non-scrolling, transparent, supports Compose view reuse, and reports content
-  height through a narrow JavaScript interface.
+- iOS: implemented with SwiftUI text, stacks, scroll views, and attributed text.
+  It consumes `OpenCodeMarkdownCore.parseMarkdownJson` and decodes the shared
+  render tree into Swift structs.
+- Android: implemented with Compose text, stacks, scroll views, and attributed
+  strings consuming `shared/markdown-core` directly.
 
 ## Previews
 
 - Light: assistant message with heading, list, and code.
 - Dark: outgoing message with fenced code.
 - Default: markdown text.
-- Streaming: same content re-rendered through debounced updates in chat.
+- Streaming: same content re-rendered through native chat updates.
 - Empty: native placeholder remains the caller's responsibility.
 
 ## Parity And Divergence

@@ -1,5 +1,8 @@
 # Rendered Markdown Decisions
 
+> Superseded: WebView decisions here are historical. Current native decisions
+> live in [`../native-rendered-markdown/decisions.md`](../native-rendered-markdown/decisions.md).
+
 ## WebView island instead of React Native
 
 - Date: 2026-06-16

@@ -17,10 +17,10 @@ class OpenCodeRenderedMarkdownDetectorTest {
     }
 
     @Test
-    fun shouldRender_simpleInlineMarkdownAsNativeText() {
-        assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("Use `inline code` here."))
-        assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("Read [the docs](https://example.com)."))
-        assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("This is **important**."))
+    fun shouldRender_simpleInlineMarkdownWithNativeRenderer() {
+        assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("Use `inline code` here."))
+        assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("Read [the docs](https://example.com)."))
+        assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("This is **important**."))
         assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("First paragraph.\n\nSecond paragraph."))
         assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("Plain text stays native."))
     }

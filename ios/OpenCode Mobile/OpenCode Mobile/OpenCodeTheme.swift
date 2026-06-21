@@ -108,6 +108,23 @@ enum OpenCodeColors {
     static var syntaxDiffDelete: Color { resolve("syntax-diff-delete") }
     static var syntaxDiffUnknown: Color { resolve("syntax-diff-unknown") }
 
+    // MARK: - Markdown
+
+    static var markdownH1: Color { resolve("markdown-h1") }
+    static var markdownH2: Color { resolve("markdown-h2") }
+    static var markdownH3: Color { resolve("markdown-h3") }
+    static var markdownLinkText: Color { resolve("markdown-link-text") }
+    static var markdownLinkUnderline: Color { resolve("markdown-link-underline") }
+    static var markdownCodeText: Color { resolve("markdown-code-text") }
+    static var markdownCodeBackground: Color { resolve("markdown-code-bg") }
+    static var markdownQuoteText: Color { resolve("markdown-quote-text") }
+    static var markdownQuoteBar: Color { resolve("markdown-quote-bar") }
+    static var markdownListMarker: Color { resolve("markdown-list-marker") }
+    static var markdownImage: Color { resolve("markdown-image") }
+    static var markdownHr: Color { resolve("markdown-hr") }
+    static var markdownStrong: Color { resolve("markdown-strong") }
+    static var markdownEm: Color { resolve("markdown-em") }
+
     // MARK: - List item letter badge (no desktop equivalent, hardcoded)
 
     static let listItemLetterVioletFill = dynamic(light: 0x4C3D5C, dark: 0x3A2F47)

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0004: Native Rendered Markdown](0004-native-rendered-markdown.md)
 
 ## Context
 

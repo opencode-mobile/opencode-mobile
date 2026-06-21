@@ -26,7 +26,7 @@ private enum RenderedMarkdownSample: String, CaseIterable {
             - Use the renderer only for formatted text.
 
             ```swift
-            let renderer = "local WebView"
+            let renderer = "native SwiftUI"
             ```
             """
         case .outgoing:

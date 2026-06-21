@@ -6,7 +6,7 @@
     "icons:sync": "node scripts/sync-icons.mjs",
     "icons:check": "node scripts/check-icons.mjs",
     "icons:audit": "node scripts/audit-icon-usage.mjs",
-    "rendered-markdown:test": "npm --prefix rendered-markdown test",
+    "markdown:highlighter:golden": "node scripts/generate-markdown-highlighter-fixtures.mjs",
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "node scripts/generate-api-clients.mjs",
     "api:sync": "npm run api:fetch && npm run api:generate"
@@ -14,6 +14,7 @@
   "devDependencies": {
     "@material-design-icons/svg": "^0.14.15",
     "@openapitools/openapi-generator-cli": "^2.18.4",
+    "shiki": "^4.2.0",
     "yaml": "^2.8.0"
   }
 }

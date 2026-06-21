@@ -1,5 +1,9 @@
 # Rendered Markdown Progress
 
+> Superseded: the WebView implementation described here was replaced by the
+> native Rendered Markdown slice in
+> [`../native-rendered-markdown/progress.md`](../native-rendered-markdown/progress.md).
+
 ## Shared Planning
 
 - Status: implemented for Chat Markdown MVP.

@@ -1,5 +1,10 @@
 # Rendered Markdown
 
+> Superseded: runtime implementation moved to
+> [`../native-rendered-markdown/plan.md`](../native-rendered-markdown/plan.md)
+> and [ADR 0004](../../adr/0004-native-rendered-markdown.md). This page records
+> the earlier WebView spike.
+
 ## User Goal
 
 Read opencode session messages with formatted markdown, syntax-highlighted code

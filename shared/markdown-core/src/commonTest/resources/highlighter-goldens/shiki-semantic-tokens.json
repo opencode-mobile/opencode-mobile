@@ -1,0 +1,1504 @@
+{
+  "schemaVersion": 1,
+  "generator": "scripts/generate-markdown-highlighter-fixtures.mjs",
+  "shikiVersion": "4.2.0",
+  "theme": "opencode-semantic-golden",
+  "roleColors": {
+    "Plain": "#010101",
+    "Comment": "#010102",
+    "Keyword": "#010103",
+    "String": "#010104",
+    "Number": "#010105",
+    "Type": "#010106",
+    "Function": "#010107",
+    "Property": "#010108",
+    "Variable": "#010109",
+    "Constant": "#01010A",
+    "Operator": "#01010B",
+    "Punctuation": "#01010C",
+    "Tag": "#01010D",
+    "Attribute": "#01010E",
+    "Inserted": "#01010F",
+    "Deleted": "#010110",
+    "Warning": "#010111",
+    "Critical": "#010112"
+  },
+  "fixtures": [
+    {
+      "language": "kotlin",
+      "aliases": [
+        "kt"
+      ],
+      "code": "package dev.opencode.demo\n\ndata class Session(val id: String, val active: Boolean)\n\nfun render(count: Int): String {\n  return \"sessions: $count\"\n}\n",
+      "shikiLanguage": "kotlin",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 7,
+          "role": "Keyword",
+          "text": "package"
+        },
+        {
+          "start": 27,
+          "end": 31,
+          "role": "Keyword",
+          "text": "data"
+        },
+        {
+          "start": 32,
+          "end": 37,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 38,
+          "end": 45,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 46,
+          "end": 49,
+          "role": "Keyword",
+          "text": "val"
+        },
+        {
+          "start": 54,
+          "end": 60,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 62,
+          "end": 65,
+          "role": "Keyword",
+          "text": "val"
+        },
+        {
+          "start": 74,
+          "end": 81,
+          "role": "Type",
+          "text": "Boolean"
+        },
+        {
+          "start": 84,
+          "end": 87,
+          "role": "Keyword",
+          "text": "fun"
+        },
+        {
+          "start": 88,
+          "end": 94,
+          "role": "Function",
+          "text": "render"
+        },
+        {
+          "start": 102,
+          "end": 105,
+          "role": "Type",
+          "text": "Int"
+        },
+        {
+          "start": 108,
+          "end": 114,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 119,
+          "end": 125,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 126,
+          "end": 137,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 137,
+          "end": 143,
+          "role": "Variable",
+          "text": "$count"
+        },
+        {
+          "start": 143,
+          "end": 144,
+          "role": "String",
+          "text": "\""
+        }
+      ]
+    },
+    {
+      "language": "swift",
+      "aliases": [],
+      "code": "import SwiftUI\n\nstruct SessionRow: View {\n    let title: String\n    var body: some View {\n        Text(title).font(.body)\n    }\n}\n",
+      "shikiLanguage": "swift",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 6,
+          "role": "Keyword",
+          "text": "import"
+        },
+        {
+          "start": 7,
+          "end": 14,
+          "role": "Type",
+          "text": "SwiftUI"
+        },
+        {
+          "start": 16,
+          "end": 22,
+          "role": "Keyword",
+          "text": "struct"
+        },
+        {
+          "start": 23,
+          "end": 33,
+          "role": "Type",
+          "text": "SessionRow"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 40,
+          "end": 41,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 46,
+          "end": 49,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 57,
+          "end": 63,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 68,
+          "end": 71,
+          "role": "Keyword",
+          "text": "var"
+        },
+        {
+          "start": 78,
+          "end": 82,
+          "role": "Keyword",
+          "text": "some"
+        },
+        {
+          "start": 88,
+          "end": 89,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 98,
+          "end": 102,
+          "role": "Function",
+          "text": "Text"
+        },
+        {
+          "start": 102,
+          "end": 103,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 108,
+          "end": 109,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 110,
+          "end": 114,
+          "role": "Function",
+          "text": "font"
+        },
+        {
+          "start": 114,
+          "end": 115,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 116,
+          "end": 120,
+          "role": "Variable",
+          "text": "body"
+        },
+        {
+          "start": 120,
+          "end": 121,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 126,
+          "end": 127,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 128,
+          "end": 129,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "language": "typescript",
+      "aliases": [
+        "ts"
+      ],
+      "code": "type Session = { id: string; active: boolean }\n\nexport function label(session: Session): string {\n  return session.active ? \"active\" : \"idle\"\n}\n",
+      "shikiLanguage": "typescript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Keyword",
+          "text": "type"
+        },
+        {
+          "start": 5,
+          "end": 12,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 13,
+          "end": 14,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 17,
+          "end": 19,
+          "role": "Variable",
+          "text": "id"
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 21,
+          "end": 27,
+          "role": "Type",
+          "text": "string"
+        },
+        {
+          "start": 27,
+          "end": 28,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 29,
+          "end": 35,
+          "role": "Variable",
+          "text": "active"
+        },
+        {
+          "start": 35,
+          "end": 36,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 37,
+          "end": 44,
+          "role": "Type",
+          "text": "boolean"
+        },
+        {
+          "start": 45,
+          "end": 46,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 48,
+          "end": 54,
+          "role": "Keyword",
+          "text": "export"
+        },
+        {
+          "start": 55,
+          "end": 63,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 64,
+          "end": 69,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 69,
+          "end": 70,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 70,
+          "end": 77,
+          "role": "Variable",
+          "text": "session"
+        },
+        {
+          "start": 77,
+          "end": 78,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 79,
+          "end": 86,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 86,
+          "end": 87,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 87,
+          "end": 88,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 89,
+          "end": 95,
+          "role": "Type",
+          "text": "string"
+        },
+        {
+          "start": 96,
+          "end": 97,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 100,
+          "end": 106,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 107,
+          "end": 114,
+          "role": "Variable",
+          "text": "session"
+        },
+        {
+          "start": 114,
+          "end": 115,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 115,
+          "end": 121,
+          "role": "Property",
+          "text": "active"
+        },
+        {
+          "start": 122,
+          "end": 123,
+          "role": "Operator",
+          "text": "?"
+        },
+        {
+          "start": 124,
+          "end": 132,
+          "role": "String",
+          "text": "\"active\""
+        },
+        {
+          "start": 133,
+          "end": 134,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 135,
+          "end": 141,
+          "role": "String",
+          "text": "\"idle\""
+        },
+        {
+          "start": 142,
+          "end": 143,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "const answer = 42\nconsole.log({ answer, ok: true })\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 6,
+          "end": 12,
+          "role": "Variable",
+          "text": "answer"
+        },
+        {
+          "start": 13,
+          "end": 14,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 15,
+          "end": 17,
+          "role": "Number",
+          "text": "42"
+        },
+        {
+          "start": 18,
+          "end": 25,
+          "role": "Variable",
+          "text": "console"
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 26,
+          "end": 29,
+          "role": "Function",
+          "text": "log"
+        },
+        {
+          "start": 29,
+          "end": 31,
+          "role": "Punctuation",
+          "text": "({"
+        },
+        {
+          "start": 32,
+          "end": 38,
+          "role": "Variable",
+          "text": "answer"
+        },
+        {
+          "start": 38,
+          "end": 39,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 40,
+          "end": 42,
+          "role": "Property",
+          "text": "ok"
+        },
+        {
+          "start": 42,
+          "end": 43,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 44,
+          "end": 48,
+          "role": "Constant",
+          "text": "true"
+        },
+        {
+          "start": 49,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "})"
+        }
+      ]
+    },
+    {
+      "language": "json",
+      "aliases": [],
+      "code": "{\n  \"name\": \"opencode\",\n  \"enabled\": true,\n  \"limit\": 3\n}\n",
+      "shikiLanguage": "json",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "role": "Punctuation",
+          "text": "\""
+        },
+        {
+          "start": 5,
+          "end": 9,
+          "role": "Property",
+          "text": "name"
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "role": "Punctuation",
+          "text": "\""
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 12,
+          "end": 22,
+          "role": "String",
+          "text": "\"opencode\""
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "role": "Punctuation",
+          "text": "\""
+        },
+        {
+          "start": 27,
+          "end": 34,
+          "role": "Property",
+          "text": "enabled"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Punctuation",
+          "text": "\""
+        },
+        {
+          "start": 35,
+          "end": 36,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 37,
+          "end": 41,
+          "role": "Constant",
+          "text": "true"
+        },
+        {
+          "start": 41,
+          "end": 42,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 45,
+          "end": 46,
+          "role": "Punctuation",
+          "text": "\""
+        },
+        {
+          "start": 46,
+          "end": 51,
+          "role": "Property",
+          "text": "limit"
+        },
+        {
+          "start": 51,
+          "end": 52,
+          "role": "Punctuation",
+          "text": "\""
+        },
+        {
+          "start": 52,
+          "end": 53,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 54,
+          "end": 55,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "language": "markdown",
+      "aliases": [
+        "md"
+      ],
+      "code": "# Title\n\n- item with `code`\n- [link](https://example.com)\n",
+      "shikiLanguage": "markdown",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "#"
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "role": "Punctuation",
+          "text": "-"
+        },
+        {
+          "start": 21,
+          "end": 22,
+          "role": "Punctuation",
+          "text": "`"
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "role": "Punctuation",
+          "text": "`"
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "role": "Punctuation",
+          "text": "-"
+        },
+        {
+          "start": 30,
+          "end": 31,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 31,
+          "end": 35,
+          "role": "String",
+          "text": "link"
+        },
+        {
+          "start": 35,
+          "end": 37,
+          "role": "Punctuation",
+          "text": "]("
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "Punctuation",
+          "text": ")"
+        }
+      ]
+    },
+    {
+      "language": "shellscript",
+      "aliases": [
+        "shell",
+        "sh",
+        "bash"
+      ],
+      "code": "#!/usr/bin/env bash\nset -euo pipefail\necho \"building $APP_NAME\"\n",
+      "shikiLanguage": "shellscript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 19,
+          "role": "Comment",
+          "text": "#!/usr/bin/env bash"
+        },
+        {
+          "start": 20,
+          "end": 23,
+          "role": "Function",
+          "text": "set"
+        },
+        {
+          "start": 24,
+          "end": 28,
+          "role": "Constant",
+          "text": "-euo"
+        },
+        {
+          "start": 29,
+          "end": 37,
+          "role": "String",
+          "text": "pipefail"
+        },
+        {
+          "start": 38,
+          "end": 42,
+          "role": "Function",
+          "text": "echo"
+        },
+        {
+          "start": 43,
+          "end": 53,
+          "role": "String",
+          "text": "\"building "
+        },
+        {
+          "start": 53,
+          "end": 62,
+          "role": "Variable",
+          "text": "$APP_NAME"
+        },
+        {
+          "start": 62,
+          "end": 63,
+          "role": "String",
+          "text": "\""
+        }
+      ]
+    },
+    {
+      "language": "yaml",
+      "aliases": [
+        "yml"
+      ],
+      "code": "name: opencode\nsteps:\n  - run: ./gradlew test\n",
+      "shikiLanguage": "yaml",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Tag",
+          "text": "name"
+        },
+        {
+          "start": 4,
+          "end": 5,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 6,
+          "end": 14,
+          "role": "String",
+          "text": "opencode"
+        },
+        {
+          "start": 15,
+          "end": 20,
+          "role": "Tag",
+          "text": "steps"
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "role": "Punctuation",
+          "text": "-"
+        },
+        {
+          "start": 26,
+          "end": 29,
+          "role": "Tag",
+          "text": "run"
+        },
+        {
+          "start": 29,
+          "end": 30,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 31,
+          "end": 45,
+          "role": "String",
+          "text": "./gradlew test"
+        }
+      ]
+    },
+    {
+      "language": "css",
+      "aliases": [],
+      "code": ".message {\n  color: var(--text);\n  padding: 12px;\n}\n",
+      "shikiLanguage": "css",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 1,
+          "end": 8,
+          "role": "Attribute",
+          "text": "message"
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 13,
+          "end": 18,
+          "role": "Property",
+          "text": "color"
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 20,
+          "end": 23,
+          "role": "Function",
+          "text": "var"
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 24,
+          "end": 30,
+          "role": "Variable",
+          "text": "--text"
+        },
+        {
+          "start": 30,
+          "end": 32,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 35,
+          "end": 42,
+          "role": "Property",
+          "text": "padding"
+        },
+        {
+          "start": 42,
+          "end": 43,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 44,
+          "end": 46,
+          "role": "Number",
+          "text": "12"
+        },
+        {
+          "start": 46,
+          "end": 48,
+          "role": "Keyword",
+          "text": "px"
+        },
+        {
+          "start": 48,
+          "end": 49,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "language": "html",
+      "aliases": [],
+      "code": "<section class=\"message\">\n  <h1 data-kind=\"title\">Hello</h1>\n</section>\n",
+      "shikiLanguage": "html",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 1,
+          "end": 8,
+          "role": "Tag",
+          "text": "section"
+        },
+        {
+          "start": 9,
+          "end": 14,
+          "role": "Attribute",
+          "text": "class"
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "role": "Punctuation",
+          "text": "="
+        },
+        {
+          "start": 15,
+          "end": 24,
+          "role": "String",
+          "text": "\"message\""
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 29,
+          "end": 31,
+          "role": "Tag",
+          "text": "h1"
+        },
+        {
+          "start": 32,
+          "end": 41,
+          "role": "Attribute",
+          "text": "data-kind"
+        },
+        {
+          "start": 41,
+          "end": 42,
+          "role": "Punctuation",
+          "text": "="
+        },
+        {
+          "start": 42,
+          "end": 49,
+          "role": "String",
+          "text": "\"title\""
+        },
+        {
+          "start": 49,
+          "end": 50,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 55,
+          "end": 57,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 57,
+          "end": 59,
+          "role": "Tag",
+          "text": "h1"
+        },
+        {
+          "start": 59,
+          "end": 60,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 61,
+          "end": 63,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 63,
+          "end": 70,
+          "role": "Tag",
+          "text": "section"
+        },
+        {
+          "start": 70,
+          "end": 71,
+          "role": "Punctuation",
+          "text": ">"
+        }
+      ]
+    },
+    {
+      "language": "python",
+      "aliases": [
+        "py"
+      ],
+      "code": "def label(count: int) -> str:\n    return f\"sessions: {count}\"\n",
+      "shikiLanguage": "python",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "role": "Keyword",
+          "text": "def"
+        },
+        {
+          "start": 4,
+          "end": 9,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 10,
+          "end": 15,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 17,
+          "end": 20,
+          "role": "Type",
+          "text": "int"
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 22,
+          "end": 24,
+          "role": "Punctuation",
+          "text": "->"
+        },
+        {
+          "start": 25,
+          "end": 28,
+          "role": "Type",
+          "text": "str"
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 34,
+          "end": 40,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 41,
+          "end": 42,
+          "role": "Keyword",
+          "text": "f"
+        },
+        {
+          "start": 42,
+          "end": 53,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 53,
+          "end": 54,
+          "role": "Constant",
+          "text": "{"
+        },
+        {
+          "start": 59,
+          "end": 60,
+          "role": "Constant",
+          "text": "}"
+        },
+        {
+          "start": 60,
+          "end": 61,
+          "role": "String",
+          "text": "\""
+        }
+      ]
+    },
+    {
+      "language": "rust",
+      "aliases": [
+        "rs"
+      ],
+      "code": "pub fn label(count: usize) -> String {\n    format!(\"sessions: {count}\")\n}\n",
+      "shikiLanguage": "rust",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "role": "Keyword",
+          "text": "pub"
+        },
+        {
+          "start": 4,
+          "end": 6,
+          "role": "Keyword",
+          "text": "fn"
+        },
+        {
+          "start": 7,
+          "end": 12,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 13,
+          "end": 18,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 20,
+          "end": 25,
+          "role": "Type",
+          "text": "usize"
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 27,
+          "end": 29,
+          "role": "Operator",
+          "text": "->"
+        },
+        {
+          "start": 30,
+          "end": 36,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 37,
+          "end": 38,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 43,
+          "end": 50,
+          "role": "Function",
+          "text": "format!"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 51,
+          "end": 62,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 62,
+          "end": 63,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 63,
+          "end": 68,
+          "role": "String",
+          "text": "count"
+        },
+        {
+          "start": 68,
+          "end": 69,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 69,
+          "end": 70,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 70,
+          "end": 71,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 72,
+          "end": 73,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "language": "go",
+      "aliases": [],
+      "code": "package main\n\nfunc label(count int) string {\n\treturn fmt.Sprintf(\"sessions: %d\", count)\n}\n",
+      "shikiLanguage": "go",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 7,
+          "role": "Keyword",
+          "text": "package"
+        },
+        {
+          "start": 8,
+          "end": 12,
+          "role": "Type",
+          "text": "main"
+        },
+        {
+          "start": 14,
+          "end": 18,
+          "role": "Keyword",
+          "text": "func"
+        },
+        {
+          "start": 19,
+          "end": 24,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 25,
+          "end": 30,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 31,
+          "end": 34,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 36,
+          "end": 42,
+          "role": "Keyword",
+          "text": "string"
+        },
+        {
+          "start": 43,
+          "end": 44,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 46,
+          "end": 52,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 53,
+          "end": 56,
+          "role": "Variable",
+          "text": "fmt"
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 57,
+          "end": 64,
+          "role": "Function",
+          "text": "Sprintf"
+        },
+        {
+          "start": 64,
+          "end": 65,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 65,
+          "end": 76,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 76,
+          "end": 78,
+          "role": "Constant",
+          "text": "%d"
+        },
+        {
+          "start": 78,
+          "end": 79,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 79,
+          "end": 80,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 81,
+          "end": 86,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 86,
+          "end": 87,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 88,
+          "end": 89,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "language": "diff",
+      "aliases": [
+        "patch"
+      ],
+      "code": "@@ -1,3 +1,3 @@\n-old line\n+new line\n context\n",
+      "shikiLanguage": "diff",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 2,
+          "role": "Punctuation",
+          "text": "@@"
+        },
+        {
+          "start": 13,
+          "end": 15,
+          "role": "Punctuation",
+          "text": "@@"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Punctuation",
+          "text": "-"
+        },
+        {
+          "start": 17,
+          "end": 25,
+          "role": "Deleted",
+          "text": "old line"
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "role": "Punctuation",
+          "text": "+"
+        },
+        {
+          "start": 27,
+          "end": 35,
+          "role": "Inserted",
+          "text": "new line"
+        }
+      ]
+    }
+  ]
+}

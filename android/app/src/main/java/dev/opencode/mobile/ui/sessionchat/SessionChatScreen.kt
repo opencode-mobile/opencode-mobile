@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.sessionchat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,14 +27,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -69,14 +64,9 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
-import dev.opencode.mobile.ui.components.prewarmOpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 private enum class ComposerPickerKind(
     val sheetTitle: String,
@@ -84,25 +74,6 @@ private enum class ComposerPickerKind(
     Model("Model"),
     Mode("Agent mode"),
     Variant("Variant"),
-}
-
-private data class RenderedMarkdownHeightCacheKey(
-    val messageId: String,
-    val variant: String,
-    val theme: String,
-    val width: Int,
-)
-
-private fun estimateRenderedMarkdownHeight(
-    text: String,
-    variant: OpenCodeRenderedMarkdownVariant,
-): Dp {
-    val displayText = text.ifBlank { "…" }
-    val lineCount = displayText.lines().size
-    val fenceBonus = if (displayText.contains("```") || displayText.contains("~~~")) 28 else 0
-    val estimate = lineCount * 22 + 24 + fenceBonus
-    val maximum = if (variant == OpenCodeRenderedMarkdownVariant.OutgoingMessage) 180 else 320
-    return estimate.coerceIn(44, maximum).dp
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,7 +90,6 @@ fun SessionChatScreen(
     val context = LocalContext.current
 
     LaunchedEffect(sessionId, sessionTitle, worktree) {
-        prewarmOpenCodeRenderedMarkdown(context)
         viewModel.bind(sessionId, sessionTitle, worktree)
     }
 
@@ -209,68 +179,9 @@ fun SessionChatScreen(
                     }
                 TimelineState.Ready -> {
                     val listState = rememberLazyListState()
-                    val darkTheme = isSystemInDarkTheme()
-                    val renderScope = rememberCoroutineScope()
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
                     var isFollowingScroll by remember(uiState.sessionId) { mutableStateOf(false) }
-                    var renderedMarkdownLayoutVersion by remember(uiState.sessionId) { mutableIntStateOf(0) }
-                    var renderedMarkdownScrollCorrectionJob by remember(uiState.sessionId) { mutableStateOf<Job?>(null) }
-                    val renderedMarkdownHeights =
-                        remember(uiState.sessionId) {
-                            mutableStateMapOf<RenderedMarkdownHeightCacheKey, Float>()
-                        }
-
-                    fun renderedMarkdownCacheKey(
-                        messageId: String,
-                        variant: OpenCodeRenderedMarkdownVariant,
-                        width: Dp,
-                    ): RenderedMarkdownHeightCacheKey =
-                        RenderedMarkdownHeightCacheKey(
-                            messageId = messageId,
-                            variant = variant.wireName,
-                            theme = if (darkTheme) "dark" else "light",
-                            width = width.value.roundToInt().coerceAtLeast(1),
-                        )
-
-                    fun initialRenderedMarkdownHeight(
-                        messageId: String,
-                        variant: OpenCodeRenderedMarkdownVariant,
-                        width: Dp,
-                        text: String,
-                    ): Dp {
-                        val key = renderedMarkdownCacheKey(messageId, variant, width)
-                        return renderedMarkdownHeights[key]?.dp ?: estimateRenderedMarkdownHeight(text, variant)
-                    }
-
-                    fun scheduleRenderedMarkdownScrollCorrection() {
-                        renderedMarkdownScrollCorrectionJob?.cancel()
-                        renderedMarkdownScrollCorrectionJob =
-                            renderScope.launch {
-                                delay(60)
-                                renderedMarkdownLayoutVersion += 1
-                            }
-                    }
-
-                    fun recordRenderedMarkdownHeight(
-                        messageId: String,
-                        variant: OpenCodeRenderedMarkdownVariant,
-                        width: Dp,
-                        height: Dp,
-                    ) {
-                        val nextHeight = height.value.coerceAtLeast(1f)
-                        val key = renderedMarkdownCacheKey(messageId, variant, width)
-                        val previous = renderedMarkdownHeights[key]
-                        if (previous != null && abs(previous - nextHeight) <= 1f) return
-                        renderedMarkdownHeights[key] = nextHeight
-                        scheduleRenderedMarkdownScrollCorrection()
-                    }
-
-                    DisposableEffect(uiState.sessionId) {
-                        onDispose {
-                            renderedMarkdownScrollCorrectionJob?.cancel()
-                        }
-                    }
 
                     LaunchedEffect(uiState.sessionId, uiState.messages.size) {
                         snapshotFlow {
@@ -288,7 +199,6 @@ fun SessionChatScreen(
                         uiState.sessionId,
                         uiState.messages.lastOrNull()?.id,
                         uiState.messages.lastOrNull()?.text,
-                        renderedMarkdownLayoutVersion,
                     ) {
                         val latestMessage = uiState.messages.lastOrNull() ?: return@LaunchedEffect
                         val bottomIndex = uiState.messages.size
@@ -324,12 +234,8 @@ fun SessionChatScreen(
                                 MessageRow(
                                     message = message,
                                     onRestoreClick = { viewModel.restoreComposerText(message.text) },
-                                    initialRenderedMarkdownHeight = { variant, width ->
-                                        initialRenderedMarkdownHeight(message.id, variant, width, message.text)
-                                    },
-                                    onRenderedMarkdownHeightChange = { variant, width, height ->
-                                        recordRenderedMarkdownHeight(message.id, variant, width, height)
-                                    },
+                                    initialRenderedMarkdownHeight = { _, _ -> 1.dp },
+                                    onRenderedMarkdownHeightChange = { _, _, _ -> },
                                     modifier =
                                         Modifier.padding(
                                             bottom = if (index == uiState.messages.lastIndex) 0.dp else 8.dp,

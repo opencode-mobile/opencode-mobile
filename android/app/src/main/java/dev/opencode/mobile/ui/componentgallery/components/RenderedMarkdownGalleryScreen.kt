@@ -35,7 +35,7 @@ private enum class RenderedMarkdownSample(
             - Use the renderer only for formatted text.
 
             ```kotlin
-            val renderer = "local WebView"
+            val renderer = "native Compose"
             ```
             """.trimIndent(),
     ),

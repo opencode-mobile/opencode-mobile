@@ -106,6 +106,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 63369C322FA933AF002BDFFC /* Build configuration list for PBXNativeTarget "OpenCode Mobile" */;
 			buildPhases = (
+				63OCMD012FCB5000002BDFFC /* Compile OpenCodeMarkdownCore */,
 				63369C0B2FA933AE002BDFFC /* Sources */,
 				63369C0C2FA933AE002BDFFC /* Frameworks */,
 				63369C0D2FA933AE002BDFFC /* Resources */,
@@ -243,6 +244,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		63OCMD012FCB5000002BDFFC /* Compile OpenCodeMarkdownCore */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Compile OpenCodeMarkdownCore";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\ncd \"$SRCROOT/../../android\"\n./gradlew :markdown-core:embedAndSignAppleFrameworkForXcode\n\nGRAMMAR_SOURCE=\"$SRCROOT/../../shared/markdown-core/src/commonMain/resources/textmate-grammars\"\nGRAMMAR_DEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/textmate-grammars\"\nrm -rf \"$GRAMMAR_DEST\"\nmkdir -p \"$(dirname \"$GRAMMAR_DEST\")\"\ncp -R \"$GRAMMAR_SOURCE\" \"$GRAMMAR_DEST\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		63369C0B2FA933AE002BDFFC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -319,7 +342,7 @@
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -383,7 +406,7 @@
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -412,6 +435,10 @@
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../../shared/markdown-core/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -424,6 +451,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					OpenCodeMarkdownCore,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -446,6 +478,10 @@
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../../shared/markdown-core/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -458,6 +494,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					OpenCodeMarkdownCore,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
