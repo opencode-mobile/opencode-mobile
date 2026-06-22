@@ -18,6 +18,7 @@ private func outgoingMessageControlIcon(_ icon: OpenCodeIcon, size: CGFloat) -> 
 
 struct OpenCodeOutgoingMessage: View {
     let text: String
+    let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
     let onRestoreClick: () -> Void
     let initialRenderedMarkdownHeight: CGFloat
@@ -29,6 +30,7 @@ struct OpenCodeOutgoingMessage: View {
 
     init(
         text: String,
+        renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
         initiallyExpanded: Bool = false,
         initialRenderedMarkdownHeight: CGFloat = 1,
@@ -36,6 +38,7 @@ struct OpenCodeOutgoingMessage: View {
         onRestoreClick: @escaping () -> Void
     ) {
         self.text = text
+        self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
         self.initialRenderedMarkdownHeight = max(1, initialRenderedMarkdownHeight)
         self.onRenderedMarkdownHeightChange = onRenderedMarkdownHeightChange
@@ -135,9 +138,9 @@ struct OpenCodeOutgoingMessage: View {
 
     private var visibleText: some View {
         Group {
-            if usesRenderedMarkdown {
+            if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
-                    markdown: text,
+                    document: renderedMarkdown,
                     variant: .outgoingMessage,
                     initialHeight: initialRenderedMarkdownHeight,
                     onHeightChange: { height in
@@ -182,12 +185,12 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     private var usesRenderedMarkdown: Bool {
-        OpenCodeRenderedMarkdownDetector.shouldRender(text)
+        renderedMarkdown != nil
     }
 
     private var isExpandable: Bool {
-        if usesRenderedMarkdown {
-            return renderedMarkdownHeight > outgoingMessageCollapsedRenderedMarkdownHeight + 1
+        if let renderedMarkdown {
+            return renderedMarkdown.isLikelyExpandable && renderedMarkdownHeight > outgoingMessageCollapsedRenderedMarkdownHeight + 1
         }
         return fullTextHeight > collapsedTextHeight + 1
     }

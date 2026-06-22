@@ -90,6 +90,7 @@ const semanticTheme = {
 
 const fixtures = [
   {
+    id: "kotlin-basic",
     language: "kotlin",
     aliases: ["kt"],
     code: `package dev.opencode.demo
@@ -102,6 +103,7 @@ fun render(count: Int): String {
 `,
   },
   {
+    id: "swift-basic",
     language: "swift",
     aliases: [],
     code: `import SwiftUI
@@ -115,6 +117,7 @@ struct SessionRow: View {
 `,
   },
   {
+    id: "typescript-basic",
     language: "typescript",
     aliases: ["ts"],
     code: `type Session = { id: string; active: boolean }
@@ -125,6 +128,7 @@ export function label(session: Session): string {
 `,
   },
   {
+    id: "javascript-basic",
     language: "javascript",
     aliases: ["js"],
     code: `const answer = 42
@@ -132,6 +136,128 @@ console.log({ answer, ok: true })
 `,
   },
   {
+    id: "javascript-request-repro",
+    language: "javascript",
+    aliases: ["js"],
+    code: `  // Core request method
+  async request(method, path, options = {}) {
+    let config = {
+      method,
+      url: \`\${this.#baseUrl}\${path}\`,
+      headers: Object.fromEntries(this.#headers),
+      body: options.body || null,
+      params: options.params || {},
+      signal: options.signal || null,
+    };
+
+    // Apply request interceptors
+    for (const interceptor of this.#interceptors.request) {
+      config = await interceptor(config);
+    }
+`,
+  },
+  {
+    id: "javascript-http-error-repro",
+    language: "javascript",
+    aliases: ["js"],
+    code: `// Custom error class
+class HttpError extends Error {
+  constructor(status, statusText, data) {
+    super(\`HTTP \${status}: \${statusText}\`);
+    this.name = "HttpError";
+    this.status = status;
+    this.statusText = statusText;
+    this.data = data;
+  }
+}
+
+// Retry wrapper with exponential backoff
+async function withRetry(fn, options = {}) {
+  const { maxRetries = 3, baseDelay = 1000, maxDelay = 10000, retryOn = [429, 500, 502, 503] } = options;
+
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+`,
+  },
+  {
+    id: "javascript-private-field-template",
+    language: "javascript",
+    aliases: ["js"],
+    code: `class Client {
+  #baseUrl;
+  greet(path) {
+    return \`\${this.#baseUrl}\${path}\`;
+  }
+}
+`,
+  },
+  {
+    id: "javascript-event-emitter-repro",
+    language: "javascript",
+    aliases: ["js"],
+    code: `// EventEmitter - A simple pub/sub implementation
+class EventEmitter {
+  constructor() {
+    this.events = new Map();
+  }
+
+  on(event, callback) {
+    if (!this.events.has(event)) {
+      this.events.set(event, []);
+    }
+    this.events.get(event).push(callback);
+    return () => this.off(event, callback);
+  }
+
+  off(event, callback) {
+    if (!this.events.has(event)) return;
+    const callbacks = this.events.get(event);
+    const index = callbacks.indexOf(callback);
+    if (index > -1) callbacks.splice(index, 1);
+  }
+
+  emit(event, data) {
+    if (!this.events.has(event)) return;
+    this.events.get(event).forEach(callback => callback(data));
+  }
+}
+`,
+  },
+  {
+    id: "javascript-http-client-class-repro",
+    language: "javascript",
+    aliases: ["js"],
+    code: `// HTTP Client with interceptors, retry logic
+class HttpClient {
+  #baseUrl;
+  #headers;
+  #interceptors;
+  #timeout;
+
+  constructor(options = {}) {
+    this.#baseUrl = options.baseUrl || "";
+    this.#headers = new Map(Object.entries(options.headers || {}));
+    this.#interceptors = { request: [], response: [] };
+    this.#timeout = options.timeout || 30000;
+  }
+
+  addRequestInterceptor(fn) {
+    this.#interceptors.request.push(fn);
+  }
+}
+`,
+  },
+  {
+    id: "javascript-patch-path-repro",
+    language: "javascript",
+    aliases: ["js"],
+    code: `patch(path, body, options) {
+  return this.request("PATCH", path, body, options);
+}
+`,
+  },
+  {
+    id: "json-basic",
     language: "json",
     aliases: [],
     code: `{
@@ -142,6 +268,7 @@ console.log({ answer, ok: true })
 `,
   },
   {
+    id: "markdown-basic",
     language: "markdown",
     aliases: ["md"],
     code: `# Title
@@ -151,6 +278,7 @@ console.log({ answer, ok: true })
 `,
   },
   {
+    id: "shellscript-basic",
     language: "shellscript",
     aliases: ["shell", "sh", "bash"],
     code: `#!/usr/bin/env bash
@@ -159,6 +287,7 @@ echo "building $APP_NAME"
 `,
   },
   {
+    id: "yaml-basic",
     language: "yaml",
     aliases: ["yml"],
     code: `name: opencode
@@ -167,6 +296,7 @@ steps:
 `,
   },
   {
+    id: "css-basic",
     language: "css",
     aliases: [],
     code: `.message {
@@ -176,6 +306,7 @@ steps:
 `,
   },
   {
+    id: "html-basic",
     language: "html",
     aliases: [],
     code: `<section class="message">
@@ -184,6 +315,7 @@ steps:
 `,
   },
   {
+    id: "python-basic",
     language: "python",
     aliases: ["py"],
     code: `def label(count: int) -> str:
@@ -191,6 +323,7 @@ steps:
 `,
   },
   {
+    id: "rust-basic",
     language: "rust",
     aliases: ["rs"],
     code: `pub fn label(count: usize) -> String {
@@ -199,6 +332,7 @@ steps:
 `,
   },
   {
+    id: "go-basic",
     language: "go",
     aliases: [],
     code: `package main
@@ -209,6 +343,7 @@ func label(count int) string {
 `,
   },
   {
+    id: "diff-basic",
     language: "diff",
     aliases: ["patch"],
     code: `@@ -1,3 +1,3 @@
@@ -250,6 +385,7 @@ const highlightedFixtures = fixtures.map((fixture) => {
   }
 
   return {
+    id: fixture.id ?? fixture.language,
     ...fixture,
     shikiLanguage: fixture.language,
     tokens,
@@ -294,6 +430,7 @@ function renderKotlin(golden) {
 // Generated by ${golden.generator}. Do not edit by hand.
 
 data class HighlighterGoldenFixture(
+    val id: String,
     val language: String,
     val aliases: List<String>,
     val code: String,
@@ -324,6 +461,7 @@ function renderFixture(fixture) {
   const aliases = fixture.aliases.map(kotlinString).join(", ")
   const tokens = fixture.tokens.map(renderToken).join(",\n")
   return `HighlighterGoldenFixture(
+    id = ${kotlinString(fixture.id ?? fixture.language)},
     language = ${kotlinString(fixture.language)},
     aliases = listOf(${aliases}),
     code = ${kotlinString(fixture.code)},

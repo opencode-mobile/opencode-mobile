@@ -7,10 +7,20 @@
 - Android runtime: native renderer implemented and WebView asset removed.
 - iOS runtime: native SwiftUI renderer implemented and WebView asset removed.
 - Shared KMP: render-tree parser module added and wired into Android and iOS.
-- Highlighter: Android runtime now has a Joni-backed TextMate path; iOS JSON
-  parsing now loads bundled TextMate grammars and reaches the shared tokenizer
-  through the temporary Kotlin regex backend. The iOS Oniguruma backend and
-  Shiki parity gate remain open.
+- Highlighter: Android runtime now has a Joni-backed TextMate path; iOS now uses
+  the shared tokenizer with a hybrid Apple regex backend that layers explicit
+  Oniguruma anchor handling on Kotlin `Regex`. Android/Joni JavaScript regression
+  fixtures and open-rule invariants are active. Full Shiki golden parity remains
+  open.
+- Parse threading: Android and iOS now parse markdown off the UI thread,
+  keep the last rendered document visible while newer content parses, debounce
+  streaming updates, and defer TextMate highlighting until streaming completes.
+- Parse ownership: Session Chat Screen Models now produce
+  `renderedMarkdown` documents; `OpenCodeRenderedMarkdown` is render-only and
+  Component Gallery uses pre-parsed mock documents.
+- Transform-before-publish: Session Chat keeps the timeline in `Loading` until
+  the full message list is markdown-enriched, and live streaming updates use a
+  debounced enrich step before state is published (no post-publish parse jobs).
 
 ## Completed
 
@@ -96,9 +106,19 @@
 - Added a `HighlighterBackendFallback` diagnostic so tokenization through the
   temporary Kotlin `Regex` backend remains visibly distinct from the future
   Oniguruma-compatible backend.
-- Added an Android/JVM Oniguruma-compatible regex backend using Joni, with UTF-8
-  byte-to-string offset mapping and Android unit coverage for `\G`, named
-  captures, UTF-8 offsets, and backend diagnostics.
+- Added Android/Joni JavaScript regression fixtures from the HttpClient repro
+  (`javascript-request-repro`, `javascript-http-error-repro`,
+  `javascript-private-field-template`) with active regression coverage and
+  open-rule invariant tests.
+- Fixed shared TextMate tokenizer open-rule resume to use `tokenizeUntilEndPattern`
+  instead of blind `endPattern` scans, closing template-literal state leaks in
+  object literals such as `` url: `${this.#baseUrl}${path}` ``.
+- Added zero-width end-pattern cursor handling for rules such as
+  `class-declaration` `end: "(?<=})"`.
+- Added an iOS hybrid regex backend (`OpenCodeOnigurumaRegexBackend`) wired through
+  `OpenCodePlatformMarkdownHighlighter`, with limited `\\G` handling on top of Kotlin
+  `Regex`. It remains a temporary non-Oniguruma backend and continues to emit
+  `HighlighterBackendFallback` on iOS.
 - Added parser highlighter injection so platform renderers can provide a
   grammar-backed highlighter instead of always using the shared fallback.
 - Wired Android `OpenCodeRenderedMarkdown` to load bundled TextMate grammars
@@ -120,14 +140,22 @@
 - Updated detector tests so inline markdown now enters Rendered Markdown.
 - Wired iOS SwiftUI renderer to `OpenCodeMarkdownCore.parseMarkdownJson` and
   removed the temporary Swift parser/highlighter mirror.
+- Moved markdown parsing off the UI thread on Android and iOS with
+  stale-while-revalidate rendering, 40ms streaming debounce, semantic fallback
+  highlighting while `isStreaming`, and Android Joni regex compile caching.
+- Moved markdown parse ownership into Session Chat Screen Models with
+  `RenderedMarkdownMapper`, a render-only `OpenCodeRenderedMarkdown`, and gallery
+  mock documents.
+- Moved Session Chat markdown enrichment into a transform-before-publish step
+  with `RenderedMarkdownMapper.enrichRows`, removing post-publish parse jobs and
+  the interim raw-markdown chat bubble fallback.
 
 ## Remaining
 
 - Complete TextMate/Oniguruma feasibility gate and replace fallback code spans.
-- Add the iOS Oniguruma-compatible backend for bundled grammar payloads.
 - Complete the tokenizer beyond the scaffold: full TextMate rule state,
-  injections, embedded grammar behavior, and incremental reuse needed to pass
-  the Shiki golden fixtures.
+  injections, embedded grammar behavior, line-boundary ASI closure, and
+  incremental reuse needed to pass the full Shiki golden fixtures.
 - Keep iOS grammar packaging/resource-reader behavior covered as release
   packaging changes.
 - Review grammar bundle size before release; the current Milestone 0 grammar
@@ -226,3 +254,8 @@
   tokenization.
 - 2026-06-21: `./gradlew :app:compileDebugKotlin` passed after adding the
   active Android/Joni `html` Shiki golden parity subset test.
+- 2026-06-21: Moved markdown parsing off the UI thread on Android and iOS,
+  added streaming debounce and semantic fallback highlighting while streaming,
+  and Android Joni regex compilation caching.
+- 2026-06-21: Moved markdown parse ownership into Session Chat Screen Models,
+  made `OpenCodeRenderedMarkdown` render-only, and added gallery mock documents.

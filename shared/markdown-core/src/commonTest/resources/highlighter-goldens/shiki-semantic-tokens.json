@@ -25,6 +25,7 @@
   },
   "fixtures": [
     {
+      "id": "kotlin-basic",
       "language": "kotlin",
       "aliases": [
         "kt"
@@ -131,6 +132,7 @@
       ]
     },
     {
+      "id": "swift-basic",
       "language": "swift",
       "aliases": [],
       "code": "import SwiftUI\n\nstruct SessionRow: View {\n    let title: String\n    var body: some View {\n        Text(title).font(.body)\n    }\n}\n",
@@ -259,6 +261,7 @@
       ]
     },
     {
+      "id": "typescript-basic",
       "language": "typescript",
       "aliases": [
         "ts"
@@ -461,6 +464,7 @@
       ]
     },
     {
+      "id": "javascript-basic",
       "language": "javascript",
       "aliases": [
         "js"
@@ -555,6 +559,3007 @@
       ]
     },
     {
+      "id": "javascript-request-repro",
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "  // Core request method\n  async request(method, path, options = {}) {\n    let config = {\n      method,\n      url: `${this.#baseUrl}${path}`,\n      headers: Object.fromEntries(this.#headers),\n      body: options.body || null,\n      params: options.params || {},\n      signal: options.signal || null,\n    };\n\n    // Apply request interceptors\n    for (const interceptor of this.#interceptors.request) {\n      config = await interceptor(config);\n    }\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 2,
+          "role": "Punctuation",
+          "text": "  "
+        },
+        {
+          "start": 2,
+          "end": 24,
+          "role": "Comment",
+          "text": "// Core request method"
+        },
+        {
+          "start": 27,
+          "end": 32,
+          "role": "Variable",
+          "text": "async"
+        },
+        {
+          "start": 33,
+          "end": 40,
+          "role": "Function",
+          "text": "request"
+        },
+        {
+          "start": 40,
+          "end": 41,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 41,
+          "end": 47,
+          "role": "Variable",
+          "text": "method"
+        },
+        {
+          "start": 47,
+          "end": 48,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 49,
+          "end": 53,
+          "role": "Variable",
+          "text": "path"
+        },
+        {
+          "start": 53,
+          "end": 54,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 55,
+          "end": 62,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 63,
+          "end": 64,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 65,
+          "end": 68,
+          "role": "Punctuation",
+          "text": "{})"
+        },
+        {
+          "start": 69,
+          "end": 70,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 75,
+          "end": 78,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 79,
+          "end": 85,
+          "role": "Variable",
+          "text": "config"
+        },
+        {
+          "start": 86,
+          "end": 87,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 88,
+          "end": 89,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 96,
+          "end": 102,
+          "role": "Variable",
+          "text": "method"
+        },
+        {
+          "start": 102,
+          "end": 103,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 110,
+          "end": 113,
+          "role": "Property",
+          "text": "url"
+        },
+        {
+          "start": 113,
+          "end": 114,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 115,
+          "end": 116,
+          "role": "String",
+          "text": "`"
+        },
+        {
+          "start": 116,
+          "end": 118,
+          "role": "Punctuation",
+          "text": "${"
+        },
+        {
+          "start": 118,
+          "end": 122,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 122,
+          "end": 123,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 123,
+          "end": 131,
+          "role": "Property",
+          "text": "#baseUrl"
+        },
+        {
+          "start": 131,
+          "end": 134,
+          "role": "Punctuation",
+          "text": "}${"
+        },
+        {
+          "start": 134,
+          "end": 138,
+          "role": "Variable",
+          "text": "path"
+        },
+        {
+          "start": 138,
+          "end": 139,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 139,
+          "end": 140,
+          "role": "String",
+          "text": "`"
+        },
+        {
+          "start": 140,
+          "end": 141,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 148,
+          "end": 155,
+          "role": "Property",
+          "text": "headers"
+        },
+        {
+          "start": 155,
+          "end": 156,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 157,
+          "end": 163,
+          "role": "Variable",
+          "text": "Object"
+        },
+        {
+          "start": 163,
+          "end": 164,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 164,
+          "end": 175,
+          "role": "Function",
+          "text": "fromEntries"
+        },
+        {
+          "start": 175,
+          "end": 176,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 176,
+          "end": 180,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 180,
+          "end": 181,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 181,
+          "end": 189,
+          "role": "Property",
+          "text": "#headers"
+        },
+        {
+          "start": 189,
+          "end": 191,
+          "role": "Punctuation",
+          "text": "),"
+        },
+        {
+          "start": 198,
+          "end": 202,
+          "role": "Property",
+          "text": "body"
+        },
+        {
+          "start": 202,
+          "end": 203,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 204,
+          "end": 211,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 211,
+          "end": 212,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 212,
+          "end": 216,
+          "role": "Property",
+          "text": "body"
+        },
+        {
+          "start": 217,
+          "end": 219,
+          "role": "Operator",
+          "text": "||"
+        },
+        {
+          "start": 220,
+          "end": 224,
+          "role": "Constant",
+          "text": "null"
+        },
+        {
+          "start": 224,
+          "end": 225,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 232,
+          "end": 238,
+          "role": "Property",
+          "text": "params"
+        },
+        {
+          "start": 238,
+          "end": 239,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 240,
+          "end": 247,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 247,
+          "end": 248,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 248,
+          "end": 254,
+          "role": "Property",
+          "text": "params"
+        },
+        {
+          "start": 255,
+          "end": 257,
+          "role": "Operator",
+          "text": "||"
+        },
+        {
+          "start": 258,
+          "end": 261,
+          "role": "Punctuation",
+          "text": "{},"
+        },
+        {
+          "start": 268,
+          "end": 274,
+          "role": "Property",
+          "text": "signal"
+        },
+        {
+          "start": 274,
+          "end": 275,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 276,
+          "end": 283,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 283,
+          "end": 284,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 284,
+          "end": 290,
+          "role": "Property",
+          "text": "signal"
+        },
+        {
+          "start": 291,
+          "end": 293,
+          "role": "Operator",
+          "text": "||"
+        },
+        {
+          "start": 294,
+          "end": 298,
+          "role": "Constant",
+          "text": "null"
+        },
+        {
+          "start": 298,
+          "end": 299,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 304,
+          "end": 306,
+          "role": "Punctuation",
+          "text": "};"
+        },
+        {
+          "start": 308,
+          "end": 312,
+          "role": "Punctuation",
+          "text": "    "
+        },
+        {
+          "start": 312,
+          "end": 341,
+          "role": "Comment",
+          "text": "// Apply request interceptors"
+        },
+        {
+          "start": 346,
+          "end": 349,
+          "role": "Keyword",
+          "text": "for"
+        },
+        {
+          "start": 350,
+          "end": 351,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 351,
+          "end": 356,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 357,
+          "end": 368,
+          "role": "Variable",
+          "text": "interceptor"
+        },
+        {
+          "start": 369,
+          "end": 371,
+          "role": "Operator",
+          "text": "of"
+        },
+        {
+          "start": 372,
+          "end": 376,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 376,
+          "end": 377,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 377,
+          "end": 390,
+          "role": "Variable",
+          "text": "#interceptors"
+        },
+        {
+          "start": 390,
+          "end": 391,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 391,
+          "end": 398,
+          "role": "Property",
+          "text": "request"
+        },
+        {
+          "start": 398,
+          "end": 399,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 400,
+          "end": 401,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 408,
+          "end": 414,
+          "role": "Variable",
+          "text": "config"
+        },
+        {
+          "start": 415,
+          "end": 416,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 417,
+          "end": 422,
+          "role": "Keyword",
+          "text": "await"
+        },
+        {
+          "start": 423,
+          "end": 434,
+          "role": "Function",
+          "text": "interceptor"
+        },
+        {
+          "start": 434,
+          "end": 435,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 435,
+          "end": 441,
+          "role": "Variable",
+          "text": "config"
+        },
+        {
+          "start": 441,
+          "end": 443,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 448,
+          "end": 449,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "javascript-http-error-repro",
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "// Custom error class\nclass HttpError extends Error {\n  constructor(status, statusText, data) {\n    super(`HTTP ${status}: ${statusText}`);\n    this.name = \"HttpError\";\n    this.status = status;\n    this.statusText = statusText;\n    this.data = data;\n  }\n}\n\n// Retry wrapper with exponential backoff\nasync function withRetry(fn, options = {}) {\n  const { maxRetries = 3, baseDelay = 1000, maxDelay = 10000, retryOn = [429, 500, 502, 503] } = options;\n\n  let lastError;\n  for (let attempt = 0; attempt <= maxRetries; attempt++) {\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 21,
+          "role": "Comment",
+          "text": "// Custom error class"
+        },
+        {
+          "start": 22,
+          "end": 27,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 28,
+          "end": 37,
+          "role": "Type",
+          "text": "HttpError"
+        },
+        {
+          "start": 38,
+          "end": 45,
+          "role": "Keyword",
+          "text": "extends"
+        },
+        {
+          "start": 52,
+          "end": 53,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 56,
+          "end": 67,
+          "role": "Keyword",
+          "text": "constructor"
+        },
+        {
+          "start": 67,
+          "end": 68,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 68,
+          "end": 74,
+          "role": "Variable",
+          "text": "status"
+        },
+        {
+          "start": 74,
+          "end": 75,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 76,
+          "end": 86,
+          "role": "Variable",
+          "text": "statusText"
+        },
+        {
+          "start": 86,
+          "end": 87,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 88,
+          "end": 92,
+          "role": "Variable",
+          "text": "data"
+        },
+        {
+          "start": 92,
+          "end": 93,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 94,
+          "end": 95,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 100,
+          "end": 105,
+          "role": "Variable",
+          "text": "super"
+        },
+        {
+          "start": 105,
+          "end": 106,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 106,
+          "end": 112,
+          "role": "String",
+          "text": "`HTTP "
+        },
+        {
+          "start": 112,
+          "end": 114,
+          "role": "Punctuation",
+          "text": "${"
+        },
+        {
+          "start": 114,
+          "end": 120,
+          "role": "Variable",
+          "text": "status"
+        },
+        {
+          "start": 120,
+          "end": 121,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 121,
+          "end": 123,
+          "role": "String",
+          "text": ": "
+        },
+        {
+          "start": 123,
+          "end": 125,
+          "role": "Punctuation",
+          "text": "${"
+        },
+        {
+          "start": 125,
+          "end": 135,
+          "role": "Variable",
+          "text": "statusText"
+        },
+        {
+          "start": 135,
+          "end": 136,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 136,
+          "end": 137,
+          "role": "String",
+          "text": "`"
+        },
+        {
+          "start": 137,
+          "end": 139,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 144,
+          "end": 148,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 148,
+          "end": 149,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 149,
+          "end": 153,
+          "role": "Property",
+          "text": "name"
+        },
+        {
+          "start": 154,
+          "end": 155,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 156,
+          "end": 167,
+          "role": "String",
+          "text": "\"HttpError\""
+        },
+        {
+          "start": 167,
+          "end": 168,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 173,
+          "end": 177,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 177,
+          "end": 178,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 178,
+          "end": 184,
+          "role": "Property",
+          "text": "status"
+        },
+        {
+          "start": 185,
+          "end": 186,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 187,
+          "end": 193,
+          "role": "Variable",
+          "text": "status"
+        },
+        {
+          "start": 193,
+          "end": 194,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 199,
+          "end": 203,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 203,
+          "end": 204,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 204,
+          "end": 214,
+          "role": "Property",
+          "text": "statusText"
+        },
+        {
+          "start": 215,
+          "end": 216,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 217,
+          "end": 227,
+          "role": "Variable",
+          "text": "statusText"
+        },
+        {
+          "start": 227,
+          "end": 228,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 233,
+          "end": 237,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 237,
+          "end": 238,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 238,
+          "end": 242,
+          "role": "Property",
+          "text": "data"
+        },
+        {
+          "start": 243,
+          "end": 244,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 245,
+          "end": 249,
+          "role": "Variable",
+          "text": "data"
+        },
+        {
+          "start": 249,
+          "end": 250,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 253,
+          "end": 254,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 255,
+          "end": 256,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 258,
+          "end": 299,
+          "role": "Comment",
+          "text": "// Retry wrapper with exponential backoff"
+        },
+        {
+          "start": 300,
+          "end": 305,
+          "role": "Keyword",
+          "text": "async"
+        },
+        {
+          "start": 306,
+          "end": 314,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 315,
+          "end": 324,
+          "role": "Function",
+          "text": "withRetry"
+        },
+        {
+          "start": 324,
+          "end": 325,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 325,
+          "end": 327,
+          "role": "Variable",
+          "text": "fn"
+        },
+        {
+          "start": 327,
+          "end": 328,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 329,
+          "end": 336,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 337,
+          "end": 338,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 339,
+          "end": 342,
+          "role": "Punctuation",
+          "text": "{})"
+        },
+        {
+          "start": 343,
+          "end": 344,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 347,
+          "end": 352,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 353,
+          "end": 354,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 355,
+          "end": 365,
+          "role": "Variable",
+          "text": "maxRetries"
+        },
+        {
+          "start": 366,
+          "end": 367,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 368,
+          "end": 369,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 369,
+          "end": 370,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 371,
+          "end": 380,
+          "role": "Variable",
+          "text": "baseDelay"
+        },
+        {
+          "start": 381,
+          "end": 382,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 383,
+          "end": 387,
+          "role": "Number",
+          "text": "1000"
+        },
+        {
+          "start": 387,
+          "end": 388,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 389,
+          "end": 397,
+          "role": "Variable",
+          "text": "maxDelay"
+        },
+        {
+          "start": 398,
+          "end": 399,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 400,
+          "end": 405,
+          "role": "Number",
+          "text": "10000"
+        },
+        {
+          "start": 405,
+          "end": 406,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 407,
+          "end": 414,
+          "role": "Variable",
+          "text": "retryOn"
+        },
+        {
+          "start": 415,
+          "end": 416,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 417,
+          "end": 418,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 418,
+          "end": 421,
+          "role": "Number",
+          "text": "429"
+        },
+        {
+          "start": 421,
+          "end": 422,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 423,
+          "end": 426,
+          "role": "Number",
+          "text": "500"
+        },
+        {
+          "start": 426,
+          "end": 427,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 428,
+          "end": 431,
+          "role": "Number",
+          "text": "502"
+        },
+        {
+          "start": 431,
+          "end": 432,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 433,
+          "end": 436,
+          "role": "Number",
+          "text": "503"
+        },
+        {
+          "start": 436,
+          "end": 437,
+          "role": "Punctuation",
+          "text": "]"
+        },
+        {
+          "start": 438,
+          "end": 439,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 440,
+          "end": 441,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 442,
+          "end": 449,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 449,
+          "end": 450,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 454,
+          "end": 457,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 458,
+          "end": 467,
+          "role": "Variable",
+          "text": "lastError"
+        },
+        {
+          "start": 467,
+          "end": 468,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 471,
+          "end": 474,
+          "role": "Keyword",
+          "text": "for"
+        },
+        {
+          "start": 475,
+          "end": 476,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 476,
+          "end": 479,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 480,
+          "end": 487,
+          "role": "Variable",
+          "text": "attempt"
+        },
+        {
+          "start": 488,
+          "end": 489,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 490,
+          "end": 491,
+          "role": "Number",
+          "text": "0"
+        },
+        {
+          "start": 491,
+          "end": 492,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 493,
+          "end": 500,
+          "role": "Variable",
+          "text": "attempt"
+        },
+        {
+          "start": 501,
+          "end": 503,
+          "role": "Operator",
+          "text": "<="
+        },
+        {
+          "start": 504,
+          "end": 514,
+          "role": "Variable",
+          "text": "maxRetries"
+        },
+        {
+          "start": 514,
+          "end": 515,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 516,
+          "end": 523,
+          "role": "Variable",
+          "text": "attempt"
+        },
+        {
+          "start": 523,
+          "end": 525,
+          "role": "Operator",
+          "text": "++"
+        },
+        {
+          "start": 525,
+          "end": 526,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 527,
+          "end": 528,
+          "role": "Punctuation",
+          "text": "{"
+        }
+      ]
+    },
+    {
+      "id": "javascript-private-field-template",
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "class Client {\n  #baseUrl;\n  greet(path) {\n    return `${this.#baseUrl}${path}`;\n  }\n}\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 6,
+          "end": 12,
+          "role": "Type",
+          "text": "Client"
+        },
+        {
+          "start": 13,
+          "end": 14,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 17,
+          "end": 25,
+          "role": "Variable",
+          "text": "#baseUrl"
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 29,
+          "end": 34,
+          "role": "Function",
+          "text": "greet"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 35,
+          "end": 39,
+          "role": "Variable",
+          "text": "path"
+        },
+        {
+          "start": 39,
+          "end": 40,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 41,
+          "end": 42,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 47,
+          "end": 53,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 54,
+          "end": 55,
+          "role": "String",
+          "text": "`"
+        },
+        {
+          "start": 55,
+          "end": 57,
+          "role": "Punctuation",
+          "text": "${"
+        },
+        {
+          "start": 57,
+          "end": 61,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 61,
+          "end": 62,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 62,
+          "end": 70,
+          "role": "Property",
+          "text": "#baseUrl"
+        },
+        {
+          "start": 70,
+          "end": 73,
+          "role": "Punctuation",
+          "text": "}${"
+        },
+        {
+          "start": 73,
+          "end": 77,
+          "role": "Variable",
+          "text": "path"
+        },
+        {
+          "start": 77,
+          "end": 78,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 78,
+          "end": 79,
+          "role": "String",
+          "text": "`"
+        },
+        {
+          "start": 79,
+          "end": 80,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 83,
+          "end": 84,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 85,
+          "end": 86,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "javascript-event-emitter-repro",
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "// EventEmitter - A simple pub/sub implementation\nclass EventEmitter {\n  constructor() {\n    this.events = new Map();\n  }\n\n  on(event, callback) {\n    if (!this.events.has(event)) {\n      this.events.set(event, []);\n    }\n    this.events.get(event).push(callback);\n    return () => this.off(event, callback);\n  }\n\n  off(event, callback) {\n    if (!this.events.has(event)) return;\n    const callbacks = this.events.get(event);\n    const index = callbacks.indexOf(callback);\n    if (index > -1) callbacks.splice(index, 1);\n  }\n\n  emit(event, data) {\n    if (!this.events.has(event)) return;\n    this.events.get(event).forEach(callback => callback(data));\n  }\n}\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 49,
+          "role": "Comment",
+          "text": "// EventEmitter - A simple pub/sub implementation"
+        },
+        {
+          "start": 50,
+          "end": 55,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 56,
+          "end": 68,
+          "role": "Type",
+          "text": "EventEmitter"
+        },
+        {
+          "start": 69,
+          "end": 70,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 73,
+          "end": 84,
+          "role": "Keyword",
+          "text": "constructor"
+        },
+        {
+          "start": 84,
+          "end": 86,
+          "role": "Punctuation",
+          "text": "()"
+        },
+        {
+          "start": 87,
+          "end": 88,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 93,
+          "end": 97,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 97,
+          "end": 98,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 98,
+          "end": 104,
+          "role": "Property",
+          "text": "events"
+        },
+        {
+          "start": 105,
+          "end": 106,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 107,
+          "end": 110,
+          "role": "Operator",
+          "text": "new"
+        },
+        {
+          "start": 111,
+          "end": 114,
+          "role": "Function",
+          "text": "Map"
+        },
+        {
+          "start": 114,
+          "end": 117,
+          "role": "Punctuation",
+          "text": "();"
+        },
+        {
+          "start": 120,
+          "end": 121,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 125,
+          "end": 127,
+          "role": "Function",
+          "text": "on"
+        },
+        {
+          "start": 127,
+          "end": 128,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 128,
+          "end": 133,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 133,
+          "end": 134,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 135,
+          "end": 143,
+          "role": "Variable",
+          "text": "callback"
+        },
+        {
+          "start": 143,
+          "end": 144,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 145,
+          "end": 146,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 151,
+          "end": 153,
+          "role": "Keyword",
+          "text": "if"
+        },
+        {
+          "start": 154,
+          "end": 155,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 155,
+          "end": 156,
+          "role": "Operator",
+          "text": "!"
+        },
+        {
+          "start": 156,
+          "end": 160,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 160,
+          "end": 161,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 161,
+          "end": 167,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 167,
+          "end": 168,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 168,
+          "end": 171,
+          "role": "Function",
+          "text": "has"
+        },
+        {
+          "start": 171,
+          "end": 172,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 172,
+          "end": 177,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 177,
+          "end": 179,
+          "role": "Punctuation",
+          "text": "))"
+        },
+        {
+          "start": 180,
+          "end": 181,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 188,
+          "end": 192,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 192,
+          "end": 193,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 193,
+          "end": 199,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 199,
+          "end": 200,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 200,
+          "end": 203,
+          "role": "Function",
+          "text": "set"
+        },
+        {
+          "start": 203,
+          "end": 204,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 204,
+          "end": 209,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 209,
+          "end": 210,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 211,
+          "end": 215,
+          "role": "Punctuation",
+          "text": "[]);"
+        },
+        {
+          "start": 220,
+          "end": 221,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 226,
+          "end": 230,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 230,
+          "end": 231,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 231,
+          "end": 237,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 237,
+          "end": 238,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 238,
+          "end": 241,
+          "role": "Function",
+          "text": "get"
+        },
+        {
+          "start": 241,
+          "end": 242,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 242,
+          "end": 247,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 247,
+          "end": 249,
+          "role": "Punctuation",
+          "text": ")."
+        },
+        {
+          "start": 249,
+          "end": 253,
+          "role": "Function",
+          "text": "push"
+        },
+        {
+          "start": 253,
+          "end": 254,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 254,
+          "end": 262,
+          "role": "Variable",
+          "text": "callback"
+        },
+        {
+          "start": 262,
+          "end": 264,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 269,
+          "end": 275,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 276,
+          "end": 278,
+          "role": "Punctuation",
+          "text": "()"
+        },
+        {
+          "start": 279,
+          "end": 281,
+          "role": "Keyword",
+          "text": "=>"
+        },
+        {
+          "start": 282,
+          "end": 286,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 286,
+          "end": 287,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 287,
+          "end": 290,
+          "role": "Function",
+          "text": "off"
+        },
+        {
+          "start": 290,
+          "end": 291,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 291,
+          "end": 296,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 296,
+          "end": 297,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 298,
+          "end": 306,
+          "role": "Variable",
+          "text": "callback"
+        },
+        {
+          "start": 306,
+          "end": 308,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 311,
+          "end": 312,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 316,
+          "end": 319,
+          "role": "Function",
+          "text": "off"
+        },
+        {
+          "start": 319,
+          "end": 320,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 320,
+          "end": 325,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 325,
+          "end": 326,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 327,
+          "end": 335,
+          "role": "Variable",
+          "text": "callback"
+        },
+        {
+          "start": 335,
+          "end": 336,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 337,
+          "end": 338,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 343,
+          "end": 345,
+          "role": "Keyword",
+          "text": "if"
+        },
+        {
+          "start": 346,
+          "end": 347,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 347,
+          "end": 348,
+          "role": "Operator",
+          "text": "!"
+        },
+        {
+          "start": 348,
+          "end": 352,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 352,
+          "end": 353,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 353,
+          "end": 359,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 359,
+          "end": 360,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 360,
+          "end": 363,
+          "role": "Function",
+          "text": "has"
+        },
+        {
+          "start": 363,
+          "end": 364,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 364,
+          "end": 369,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 369,
+          "end": 371,
+          "role": "Punctuation",
+          "text": "))"
+        },
+        {
+          "start": 372,
+          "end": 378,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 378,
+          "end": 379,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 384,
+          "end": 389,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 390,
+          "end": 399,
+          "role": "Variable",
+          "text": "callbacks"
+        },
+        {
+          "start": 400,
+          "end": 401,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 402,
+          "end": 406,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 406,
+          "end": 407,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 407,
+          "end": 413,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 413,
+          "end": 414,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 414,
+          "end": 417,
+          "role": "Function",
+          "text": "get"
+        },
+        {
+          "start": 417,
+          "end": 418,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 418,
+          "end": 423,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 423,
+          "end": 425,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 430,
+          "end": 435,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 436,
+          "end": 441,
+          "role": "Variable",
+          "text": "index"
+        },
+        {
+          "start": 442,
+          "end": 443,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 444,
+          "end": 453,
+          "role": "Variable",
+          "text": "callbacks"
+        },
+        {
+          "start": 453,
+          "end": 454,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 454,
+          "end": 461,
+          "role": "Function",
+          "text": "indexOf"
+        },
+        {
+          "start": 461,
+          "end": 462,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 462,
+          "end": 470,
+          "role": "Variable",
+          "text": "callback"
+        },
+        {
+          "start": 470,
+          "end": 472,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 477,
+          "end": 479,
+          "role": "Keyword",
+          "text": "if"
+        },
+        {
+          "start": 480,
+          "end": 481,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 481,
+          "end": 486,
+          "role": "Variable",
+          "text": "index"
+        },
+        {
+          "start": 487,
+          "end": 488,
+          "role": "Operator",
+          "text": ">"
+        },
+        {
+          "start": 489,
+          "end": 490,
+          "role": "Operator",
+          "text": "-"
+        },
+        {
+          "start": 490,
+          "end": 491,
+          "role": "Number",
+          "text": "1"
+        },
+        {
+          "start": 491,
+          "end": 492,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 493,
+          "end": 502,
+          "role": "Variable",
+          "text": "callbacks"
+        },
+        {
+          "start": 502,
+          "end": 503,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 503,
+          "end": 509,
+          "role": "Function",
+          "text": "splice"
+        },
+        {
+          "start": 509,
+          "end": 510,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 510,
+          "end": 515,
+          "role": "Variable",
+          "text": "index"
+        },
+        {
+          "start": 515,
+          "end": 516,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 517,
+          "end": 518,
+          "role": "Number",
+          "text": "1"
+        },
+        {
+          "start": 518,
+          "end": 520,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 523,
+          "end": 524,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 528,
+          "end": 532,
+          "role": "Function",
+          "text": "emit"
+        },
+        {
+          "start": 532,
+          "end": 533,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 533,
+          "end": 538,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 538,
+          "end": 539,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 540,
+          "end": 544,
+          "role": "Variable",
+          "text": "data"
+        },
+        {
+          "start": 544,
+          "end": 545,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 546,
+          "end": 547,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 552,
+          "end": 554,
+          "role": "Keyword",
+          "text": "if"
+        },
+        {
+          "start": 555,
+          "end": 556,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 556,
+          "end": 557,
+          "role": "Operator",
+          "text": "!"
+        },
+        {
+          "start": 557,
+          "end": 561,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 561,
+          "end": 562,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 562,
+          "end": 568,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 568,
+          "end": 569,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 569,
+          "end": 572,
+          "role": "Function",
+          "text": "has"
+        },
+        {
+          "start": 572,
+          "end": 573,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 573,
+          "end": 578,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 578,
+          "end": 580,
+          "role": "Punctuation",
+          "text": "))"
+        },
+        {
+          "start": 581,
+          "end": 587,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 587,
+          "end": 588,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 593,
+          "end": 597,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 597,
+          "end": 598,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 598,
+          "end": 604,
+          "role": "Variable",
+          "text": "events"
+        },
+        {
+          "start": 604,
+          "end": 605,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 605,
+          "end": 608,
+          "role": "Function",
+          "text": "get"
+        },
+        {
+          "start": 608,
+          "end": 609,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 609,
+          "end": 614,
+          "role": "Variable",
+          "text": "event"
+        },
+        {
+          "start": 614,
+          "end": 616,
+          "role": "Punctuation",
+          "text": ")."
+        },
+        {
+          "start": 616,
+          "end": 623,
+          "role": "Function",
+          "text": "forEach"
+        },
+        {
+          "start": 623,
+          "end": 624,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 624,
+          "end": 632,
+          "role": "Variable",
+          "text": "callback"
+        },
+        {
+          "start": 633,
+          "end": 635,
+          "role": "Keyword",
+          "text": "=>"
+        },
+        {
+          "start": 636,
+          "end": 644,
+          "role": "Function",
+          "text": "callback"
+        },
+        {
+          "start": 644,
+          "end": 645,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 645,
+          "end": 649,
+          "role": "Variable",
+          "text": "data"
+        },
+        {
+          "start": 649,
+          "end": 652,
+          "role": "Punctuation",
+          "text": "));"
+        },
+        {
+          "start": 655,
+          "end": 656,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 657,
+          "end": 658,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "javascript-http-client-class-repro",
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "// HTTP Client with interceptors, retry logic\nclass HttpClient {\n  #baseUrl;\n  #headers;\n  #interceptors;\n  #timeout;\n\n  constructor(options = {}) {\n    this.#baseUrl = options.baseUrl || \"\";\n    this.#headers = new Map(Object.entries(options.headers || {}));\n    this.#interceptors = { request: [], response: [] };\n    this.#timeout = options.timeout || 30000;\n  }\n\n  addRequestInterceptor(fn) {\n    this.#interceptors.request.push(fn);\n  }\n}\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 45,
+          "role": "Comment",
+          "text": "// HTTP Client with interceptors, retry logic"
+        },
+        {
+          "start": 46,
+          "end": 51,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 52,
+          "end": 62,
+          "role": "Type",
+          "text": "HttpClient"
+        },
+        {
+          "start": 63,
+          "end": 64,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 67,
+          "end": 75,
+          "role": "Variable",
+          "text": "#baseUrl"
+        },
+        {
+          "start": 75,
+          "end": 76,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 79,
+          "end": 87,
+          "role": "Variable",
+          "text": "#headers"
+        },
+        {
+          "start": 87,
+          "end": 88,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 91,
+          "end": 104,
+          "role": "Variable",
+          "text": "#interceptors"
+        },
+        {
+          "start": 104,
+          "end": 105,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 108,
+          "end": 116,
+          "role": "Variable",
+          "text": "#timeout"
+        },
+        {
+          "start": 116,
+          "end": 117,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 121,
+          "end": 132,
+          "role": "Keyword",
+          "text": "constructor"
+        },
+        {
+          "start": 132,
+          "end": 133,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 133,
+          "end": 140,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 141,
+          "end": 142,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 143,
+          "end": 146,
+          "role": "Punctuation",
+          "text": "{})"
+        },
+        {
+          "start": 147,
+          "end": 148,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 153,
+          "end": 157,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 157,
+          "end": 158,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 158,
+          "end": 166,
+          "role": "Property",
+          "text": "#baseUrl"
+        },
+        {
+          "start": 167,
+          "end": 168,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 169,
+          "end": 176,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 176,
+          "end": 177,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 177,
+          "end": 184,
+          "role": "Property",
+          "text": "baseUrl"
+        },
+        {
+          "start": 185,
+          "end": 187,
+          "role": "Operator",
+          "text": "||"
+        },
+        {
+          "start": 188,
+          "end": 190,
+          "role": "String",
+          "text": "\"\""
+        },
+        {
+          "start": 190,
+          "end": 191,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 196,
+          "end": 200,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 200,
+          "end": 201,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 201,
+          "end": 209,
+          "role": "Property",
+          "text": "#headers"
+        },
+        {
+          "start": 210,
+          "end": 211,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 212,
+          "end": 215,
+          "role": "Operator",
+          "text": "new"
+        },
+        {
+          "start": 216,
+          "end": 219,
+          "role": "Function",
+          "text": "Map"
+        },
+        {
+          "start": 219,
+          "end": 220,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 220,
+          "end": 226,
+          "role": "Variable",
+          "text": "Object"
+        },
+        {
+          "start": 226,
+          "end": 227,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 227,
+          "end": 234,
+          "role": "Function",
+          "text": "entries"
+        },
+        {
+          "start": 234,
+          "end": 235,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 235,
+          "end": 242,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 242,
+          "end": 243,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 243,
+          "end": 250,
+          "role": "Property",
+          "text": "headers"
+        },
+        {
+          "start": 251,
+          "end": 253,
+          "role": "Operator",
+          "text": "||"
+        },
+        {
+          "start": 254,
+          "end": 259,
+          "role": "Punctuation",
+          "text": "{}));"
+        },
+        {
+          "start": 264,
+          "end": 268,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 268,
+          "end": 269,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 269,
+          "end": 282,
+          "role": "Property",
+          "text": "#interceptors"
+        },
+        {
+          "start": 283,
+          "end": 284,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 285,
+          "end": 286,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 287,
+          "end": 294,
+          "role": "Property",
+          "text": "request"
+        },
+        {
+          "start": 294,
+          "end": 295,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 296,
+          "end": 299,
+          "role": "Punctuation",
+          "text": "[],"
+        },
+        {
+          "start": 300,
+          "end": 308,
+          "role": "Property",
+          "text": "response"
+        },
+        {
+          "start": 308,
+          "end": 309,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 310,
+          "end": 312,
+          "role": "Punctuation",
+          "text": "[]"
+        },
+        {
+          "start": 313,
+          "end": 315,
+          "role": "Punctuation",
+          "text": "};"
+        },
+        {
+          "start": 320,
+          "end": 324,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 324,
+          "end": 325,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 325,
+          "end": 333,
+          "role": "Property",
+          "text": "#timeout"
+        },
+        {
+          "start": 334,
+          "end": 335,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 336,
+          "end": 343,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 343,
+          "end": 344,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 344,
+          "end": 351,
+          "role": "Property",
+          "text": "timeout"
+        },
+        {
+          "start": 352,
+          "end": 354,
+          "role": "Operator",
+          "text": "||"
+        },
+        {
+          "start": 355,
+          "end": 360,
+          "role": "Number",
+          "text": "30000"
+        },
+        {
+          "start": 360,
+          "end": 361,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 364,
+          "end": 365,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 369,
+          "end": 390,
+          "role": "Function",
+          "text": "addRequestInterceptor"
+        },
+        {
+          "start": 390,
+          "end": 391,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 391,
+          "end": 393,
+          "role": "Variable",
+          "text": "fn"
+        },
+        {
+          "start": 393,
+          "end": 394,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 395,
+          "end": 396,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 401,
+          "end": 405,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 405,
+          "end": 406,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 406,
+          "end": 419,
+          "role": "Variable",
+          "text": "#interceptors"
+        },
+        {
+          "start": 419,
+          "end": 420,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 420,
+          "end": 427,
+          "role": "Variable",
+          "text": "request"
+        },
+        {
+          "start": 427,
+          "end": 428,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 428,
+          "end": 432,
+          "role": "Function",
+          "text": "push"
+        },
+        {
+          "start": 432,
+          "end": 433,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 433,
+          "end": 435,
+          "role": "Variable",
+          "text": "fn"
+        },
+        {
+          "start": 435,
+          "end": 437,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 440,
+          "end": 441,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 442,
+          "end": 443,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "javascript-patch-path-repro",
+      "language": "javascript",
+      "aliases": [
+        "js"
+      ],
+      "code": "patch(path, body, options) {\n  return this.request(\"PATCH\", path, body, options);\n}\n",
+      "shikiLanguage": "javascript",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Function",
+          "text": "patch"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 6,
+          "end": 10,
+          "role": "Variable",
+          "text": "path"
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 12,
+          "end": 16,
+          "role": "Variable",
+          "text": "body"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 18,
+          "end": 25,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 27,
+          "end": 28,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 31,
+          "end": 37,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 38,
+          "end": 42,
+          "role": "Variable",
+          "text": "this"
+        },
+        {
+          "start": 42,
+          "end": 43,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 43,
+          "end": 50,
+          "role": "Function",
+          "text": "request"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 51,
+          "end": 58,
+          "role": "String",
+          "text": "\"PATCH\""
+        },
+        {
+          "start": 58,
+          "end": 59,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 60,
+          "end": 64,
+          "role": "Variable",
+          "text": "path"
+        },
+        {
+          "start": 64,
+          "end": 65,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 66,
+          "end": 70,
+          "role": "Variable",
+          "text": "body"
+        },
+        {
+          "start": 70,
+          "end": 71,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 72,
+          "end": 79,
+          "role": "Variable",
+          "text": "options"
+        },
+        {
+          "start": 79,
+          "end": 81,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 82,
+          "end": 83,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "json-basic",
       "language": "json",
       "aliases": [],
       "code": "{\n  \"name\": \"opencode\",\n  \"enabled\": true,\n  \"limit\": 3\n}\n",
@@ -677,6 +3682,7 @@
       ]
     },
     {
+      "id": "markdown-basic",
       "language": "markdown",
       "aliases": [
         "md"
@@ -741,6 +3747,7 @@
       ]
     },
     {
+      "id": "shellscript-basic",
       "language": "shellscript",
       "aliases": [
         "shell",
@@ -801,6 +3808,7 @@
       ]
     },
     {
+      "id": "yaml-basic",
       "language": "yaml",
       "aliases": [
         "yml"
@@ -865,6 +3873,7 @@
       ]
     },
     {
+      "id": "css-basic",
       "language": "css",
       "aliases": [],
       "code": ".message {\n  color: var(--text);\n  padding: 12px;\n}\n",
@@ -963,6 +3972,7 @@
       ]
     },
     {
+      "id": "html-basic",
       "language": "html",
       "aliases": [],
       "code": "<section class=\"message\">\n  <h1 data-kind=\"title\">Hello</h1>\n</section>\n",
@@ -1079,6 +4089,7 @@
       ]
     },
     {
+      "id": "python-basic",
       "language": "python",
       "aliases": [
         "py"
@@ -1185,6 +4196,7 @@
       ]
     },
     {
+      "id": "rust-basic",
       "language": "rust",
       "aliases": [
         "rs"
@@ -1315,6 +4327,7 @@
       ]
     },
     {
+      "id": "go-basic",
       "language": "go",
       "aliases": [],
       "code": "package main\n\nfunc label(count int) string {\n\treturn fmt.Sprintf(\"sessions: %d\", count)\n}\n",
@@ -1455,6 +4468,7 @@
       ]
     },
     {
+      "id": "diff-basic",
       "language": "diff",
       "aliases": [
         "patch"

@@ -17,72 +17,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
-import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
-
-private enum class RenderedMarkdownSample(
-    val label: String,
-    val variant: OpenCodeRenderedMarkdownVariant,
-    val markdown: String,
-) {
-    Assistant(
-        label = "Assistant",
-        variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
-        markdown =
-            """
-            ### Plan
-
-            - Keep the chat native.
-            - Use the renderer only for formatted text.
-
-            ```kotlin
-            val renderer = "native Compose"
-            ```
-            """.trimIndent(),
-    ),
-    Outgoing(
-        label = "Outgoing",
-        variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
-        markdown =
-            """
-            Please compare `main` against my branch and summarize:
-
-            | Area | Need |
-            | --- | --- |
-            | Tests | focused |
-            | Risk | low |
-            """.trimIndent(),
-    ),
-    Diff(
-        label = "Diff",
-        variant = OpenCodeRenderedMarkdownVariant.Standalone,
-        markdown =
-            """
-            ```diff
-            @@ SessionChatScreen.kt
-            -Text(message.text)
-            +OpenCodeRenderedMarkdown(markdown = message.text)
-            ```
-            """.trimIndent(),
-    ),
-}
 
 @Composable
 fun RenderedMarkdownGalleryScreen(modifier: Modifier = Modifier) {
-    var selected by rememberSaveable { mutableStateOf(RenderedMarkdownSample.Assistant) }
+    val samples = RenderedMarkdownGalleryMocks.samples
+    var selectedIndex by rememberSaveable { mutableStateOf(0) }
+    val selected = samples[selectedIndex]
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RenderedMarkdownSample.entries.forEach { sample ->
+            samples.forEachIndexed { index, sample ->
                 OpenCodeChoiceBadge(
                     label = sample.label,
-                    selected = sample == selected,
-                    onClick = { selected = sample },
+                    selected = index == selectedIndex,
+                    onClick = { selectedIndex = index },
                 )
             }
         }
 
         OpenCodeRenderedMarkdown(
-            markdown = selected.markdown,
+            document = selected.document,
             variant = selected.variant,
             modifier =
                 Modifier

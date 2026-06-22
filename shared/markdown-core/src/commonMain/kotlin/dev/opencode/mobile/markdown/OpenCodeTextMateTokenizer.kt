@@ -129,6 +129,18 @@ class OpenCodeTextMateNativeTokenizer(
         while (lineStart <= code.length) {
             val lineEnd = code.indexOf('\n', lineStart).let { index -> if (index == -1) code.length else index }
             val line = code.substring(lineStart, lineEnd)
+            val nextLineStart = lineEnd + 1
+            val nextLine =
+                if (nextLineStart < code.length) {
+                    val nextLineEnd =
+                        code.indexOf('\n', nextLineStart).let { index ->
+                            if (index == -1) code.length else index
+                        }
+                    code.substring(nextLineStart, nextLineEnd)
+                } else {
+                    ""
+                }
+            val boundarySuffix = "\n$nextLine"
             val lineResult =
                 tokenizeLine(
                     grammar = grammar,
@@ -136,6 +148,7 @@ class OpenCodeTextMateNativeTokenizer(
                     line = line,
                     lineOffset = lineStart,
                     initialState = state,
+                    boundarySuffix = boundarySuffix,
                 )
             tokens += lineResult.tokens
             state = lineResult.state
@@ -157,6 +170,7 @@ class OpenCodeTextMateNativeTokenizer(
         grammarBundle: TextMateGrammarBundle? = null,
         lineOffset: Int = 0,
         initialState: TextMateLineState = TextMateLineState.Initial,
+        boundarySuffix: String = "\n",
     ): TextMateLineTokenizationResult {
         val tokens = mutableListOf<TextMateScopeToken>()
         val lineEnd = lineOffset + line.length
@@ -206,26 +220,27 @@ class OpenCodeTextMateNativeTokenizer(
                 break
             }
 
-            val endMatch =
-                openRule.endPattern?.let { endPattern ->
-                    regexBackend.find(endPattern, line, cursor - lineOffset, line.length)
-                }
-            val contentEnd = endMatch?.start?.plus(lineOffset) ?: lineEnd
-            val nestedTokens =
-                tokenizeRange(
+            val resolvedEndPattern = openRule.endPattern ?: continue
+            val delimitedContent =
+                tokenizeUntilEndPattern(
                     grammar = openRule.grammar,
                     grammarBundle = grammarBundle,
                     patterns = openRule.pattern.patterns,
                     code = line,
                     startIndex = cursor - lineOffset,
-                    endIndex = contentEnd - lineOffset,
+                    endIndex = line.length,
                     baseScopes = openRule.contentScopes,
                     activeIncludes = openRule.activeIncludes,
                     baseGrammar = grammar.grammar,
                     offset = lineOffset,
+                    endPattern = resolvedEndPattern,
+                    applyEndPatternLast = openRule.pattern.shouldApplyEndPatternLast,
                 )
-            tokens += nestedTokens
-            tokens += scopedHoles(cursor, contentEnd, nestedTokens, openRule.contentScopes)
+            val contentStart = cursor
+            val contentEnd = delimitedContent.endMatch?.start?.plus(lineOffset) ?: lineEnd
+            tokens += delimitedContent.tokens
+            tokens += scopedHoles(contentStart, contentEnd, delimitedContent.tokens, openRule.contentScopes)
+            val endMatch = delimitedContent.endMatch
 
             if (endMatch == null) {
                 openRules += openRule
@@ -247,7 +262,7 @@ class OpenCodeTextMateNativeTokenizer(
                     baseGrammar = grammar.grammar,
                     offset = lineOffset,
                 )
-            cursor = (endMatch.end + lineOffset).coerceAtLeast(cursor + 1)
+            cursor = advancePastEndMatch(endMatch, lineOffset, cursor)
         }
 
         if (cursor < lineEnd) {
@@ -266,6 +281,43 @@ class OpenCodeTextMateNativeTokenizer(
                 )
             tokens += result.tokens
             openRules += result.openRules
+        }
+
+        if (openRules.isNotEmpty()) {
+            val stillOpen = mutableListOf<TextMateOpenRule>()
+            while (openRules.isNotEmpty()) {
+                val openRule = openRules.removeAt(openRules.lastIndex)
+                val endPattern = openRule.endPattern
+                val boundaryMatch =
+                    endPattern?.let { pattern ->
+                        findEndPattern(
+                            endPattern = pattern,
+                            code = line,
+                            startIndex = 0,
+                            endIndex = line.length,
+                            boundarySuffix = boundarySuffix,
+                        )
+                    }
+                if (boundaryMatch != null) {
+                    tokens +=
+                        tokensForCaptures(
+                            captures = openRule.pattern.endCaptures,
+                            match = boundaryMatch,
+                            code = line,
+                            baseScopes = openRule.ruleScopes,
+                            grammar = openRule.grammar,
+                            grammarBundle = grammarBundle,
+                            activeIncludes = openRule.activeIncludes,
+                            baseGrammar = grammar.grammar,
+                            offset = lineOffset,
+                        )
+                    cursor = advancePastEndMatch(boundaryMatch, lineOffset, cursor).coerceAtMost(lineEnd)
+                } else {
+                    stillOpen += openRule
+                }
+            }
+            openRules.clear()
+            openRules += stillOpen.asReversed()
         }
 
         return TextMateLineTokenizationResult(
@@ -708,6 +760,60 @@ class OpenCodeTextMateNativeTokenizer(
             tokens = tokens,
             endMatch = regexBackend.find(endPattern, code, cursor, endIndex),
         )
+    }
+
+    private fun findEndPattern(
+        endPattern: String,
+        code: String,
+        startIndex: Int,
+        endIndex: Int,
+        boundarySuffix: String,
+    ): TextMateRegexMatch? {
+        if (boundarySuffix.isEmpty()) {
+            return regexBackend.find(endPattern, code, startIndex, endIndex)
+        }
+
+        val scopedInput = code + boundarySuffix
+        val searchEnd = endIndex + boundarySuffix.length
+        val match =
+            regexBackend.find(
+                pattern = endPattern,
+                input = scopedInput,
+                startIndex = startIndex,
+                endIndex = searchEnd,
+            ) ?: return null
+
+        // A boundary suffix exists only to let zero-width, end-of-line rules see
+        // the following line. A consuming end pattern belongs to that next line.
+        if (match.start == match.end && match.start == endIndex + 1) {
+            return TextMateRegexMatch(
+                start = endIndex,
+                end = endIndex,
+                captures =
+                    match.captures.map { capture ->
+                        TextMateRegexCapture(
+                            index = capture.index,
+                            start = endIndex.coerceAtMost(capture.start),
+                            end = endIndex.coerceAtMost(capture.end),
+                        )
+                    },
+            )
+        }
+
+        return match.takeIf { it.end <= endIndex }
+    }
+
+    private fun advancePastEndMatch(
+        endMatch: TextMateRegexMatch,
+        offset: Int,
+        cursor: Int,
+    ): Int {
+        val absoluteEnd = endMatch.end + offset
+        return if (endMatch.start == endMatch.end) {
+            (endMatch.start + offset).coerceAtLeast(cursor)
+        } else {
+            absoluteEnd.coerceAtLeast(cursor + 1)
+        }
     }
 
     private fun TextMateRegexMatch.startsBefore(

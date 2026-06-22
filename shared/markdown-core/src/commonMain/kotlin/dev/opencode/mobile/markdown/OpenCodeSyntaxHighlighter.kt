@@ -30,7 +30,7 @@ data class TextMateTokenizationResult(
 class OpenCodeSyntaxHighlighter(
     private val grammarBundle: TextMateGrammarBundle? = null,
     private val textMateTokenizer: OpenCodeTextMateTokenizer? = null,
-    private val fallbackHighlighter: OpenCodeCodeHighlighter = NativeSemanticFallbackHighlighter,
+    private val fallbackHighlighter: OpenCodeCodeHighlighter = OpenCodeSemanticFallbackHighlighter,
 ) : OpenCodeCodeHighlighter {
     override fun supportsLanguage(languageOrAlias: String?): Boolean =
         normalizedLanguage(languageOrAlias)?.let { language ->
@@ -49,6 +49,9 @@ class OpenCodeSyntaxHighlighter(
                 tokenization.tokens
                     .map(OpenCodeTextMateScopeMapper::codeSpanFor)
                     .filter { it.role != CodeTokenRole.Plain && it.start < it.end }
+                    .partitionNonOverlappingSpans()
+                    .consolidateWithinIdentifiers(code)
+                    .highlightPrivateFields(code)
                     .mergeAdjacentSemanticSpans(code)
             if (spans.isNotEmpty()) {
                 return SyntaxHighlightResult(
@@ -77,6 +80,120 @@ class OpenCodeSyntaxHighlighter(
                 }
             }
 
+        private fun List<CodeSpan>.partitionNonOverlappingSpans(): List<CodeSpan> {
+            if (isEmpty()) return emptyList()
+
+            val boundaries =
+                flatMap { span -> listOf(span.start, span.end) }
+                    .distinct()
+                    .sorted()
+            if (boundaries.size < 2) return this
+
+            val result = mutableListOf<CodeSpan>()
+            for (index in 0 until boundaries.lastIndex) {
+                val segmentStart = boundaries[index]
+                val segmentEnd = boundaries[index + 1]
+                if (segmentStart >= segmentEnd) continue
+
+                val covering = filter { span -> span.start <= segmentStart && span.end >= segmentEnd }
+                if (covering.isEmpty()) continue
+
+                val winner =
+                    covering.maxWith(
+                        compareBy<CodeSpan> { span ->
+                            val overlapStart = maxOf(span.start, segmentStart)
+                            val overlapEnd = minOf(span.end, segmentEnd)
+                            overlapEnd - overlapStart
+                        }.thenByDescending { span -> span.end - span.start }
+                            .thenBy { span -> span.role.coalescePriority() },
+                    )
+                if (winner.role == CodeTokenRole.Plain) continue
+
+                result += winner.copy(start = segmentStart, end = segmentEnd)
+            }
+
+            return result
+        }
+
+        private fun List<CodeSpan>.consolidateWithinIdentifiers(code: String): List<CodeSpan> {
+            if (isEmpty()) return emptyList()
+
+            val identifierRegex = Regex("""#?[A-Za-z_][A-Za-z0-9_]*""")
+            val mutable = toMutableList()
+
+            identifierRegex.findAll(code).forEach { match ->
+                val wordStart = match.range.first
+                val wordEnd = match.range.last + 1
+                val intersecting =
+                    mutable.filter { span -> span.end > wordStart && span.start < wordEnd }
+                if (intersecting.isEmpty()) return@forEach
+
+                val hasMultipleRoles = intersecting.map { it.role }.toSet().size > 1
+                val hasCoverageGaps =
+                    (wordStart until wordEnd).any { index ->
+                        intersecting.none { span -> span.start <= index && span.end > index }
+                    }
+                if (!hasMultipleRoles && !hasCoverageGaps) return@forEach
+
+                val dominantRole =
+                    intersecting
+                        .maxWith(
+                            compareBy<CodeSpan> { span ->
+                                val overlapStart = maxOf(span.start, wordStart)
+                                val overlapEnd = minOf(span.end, wordEnd)
+                                overlapEnd - overlapStart
+                            }.thenByDescending { span -> span.end - span.start }
+                                .thenBy { span -> span.role.coalescePriority() },
+                        ).role
+
+                mutable.removeAll(intersecting.toSet())
+                mutable += CodeSpan(wordStart, wordEnd, dominantRole)
+            }
+
+            return mutable.sortedBy { it.start }
+        }
+
+        private fun List<CodeSpan>.highlightPrivateFields(code: String): List<CodeSpan> {
+            val privateFieldRegex = Regex("""#[A-Za-z_][A-Za-z0-9_]*""")
+            val mutable = toMutableList()
+
+            privateFieldRegex.findAll(code).forEach { match ->
+                val wordStart = match.range.first
+                val wordEnd = match.range.last + 1
+                val intersecting =
+                    mutable.filter { span -> span.end > wordStart && span.start < wordEnd }
+                if (intersecting.any { it.role == CodeTokenRole.String || it.role == CodeTokenRole.Comment }) {
+                    return@forEach
+                }
+                mutable.removeAll(intersecting.toSet())
+                mutable += CodeSpan(wordStart, wordEnd, CodeTokenRole.Variable)
+            }
+
+            return mutable.sortedBy { it.start }
+        }
+
+        private fun CodeTokenRole.coalescePriority(): Int =
+            when (this) {
+                CodeTokenRole.Punctuation -> 0
+                CodeTokenRole.Operator -> 1
+                CodeTokenRole.Plain -> 2
+                CodeTokenRole.Variable -> 3
+                CodeTokenRole.Property -> 4
+                CodeTokenRole.Function -> 5
+                CodeTokenRole.Number -> 6
+                CodeTokenRole.Constant -> 7
+                CodeTokenRole.String -> 8
+                CodeTokenRole.Comment -> 9
+                CodeTokenRole.Keyword -> 10
+                CodeTokenRole.Type -> 11
+                CodeTokenRole.Tag -> 12
+                CodeTokenRole.Attribute -> 13
+                CodeTokenRole.Inserted -> 14
+                CodeTokenRole.Deleted -> 15
+                CodeTokenRole.Warning -> 16
+                CodeTokenRole.Critical -> 17
+            }
+
         private fun CodeSpan.canMergeWith(
             next: CodeSpan,
             code: String,
@@ -93,7 +210,7 @@ class OpenCodeSyntaxHighlighter(
     }
 }
 
-internal object NativeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
+object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
     private val supportedLanguageAliases =
         setOf(
             "bash",

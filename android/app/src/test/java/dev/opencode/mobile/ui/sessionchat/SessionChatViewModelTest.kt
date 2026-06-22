@@ -17,6 +17,8 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
+import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +69,30 @@ class SessionChatViewModelTest {
             assertEquals(TimelineState.Ready, state.timeline)
             assertEquals(1, state.messages.size)
             assertEquals("Hello", state.messages.first().text)
+        }
+
+    @Test
+    fun loadMessages_enrichesMarkdownBeforeReady() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.Assistant,
+                                    text = "# Heading",
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(TimelineState.Ready, state.timeline)
+            assertNotNull(state.messages.single().renderedMarkdown)
         }
 
     @Test
@@ -477,6 +503,43 @@ class SessionChatViewModelTest {
             assertEquals(null, noLimit.uiState.value.contextUsageFraction)
         }
 
+    @Test
+    fun toMessageItem_preservesRenderedMarkdownWhileStreaming() {
+        val viewModel = createViewModel(FakeMessageRepository())
+        val previous =
+            SessionChatMessageItem(
+                id = "msg-1",
+                role = MessageRole.Assistant,
+                text = "# Partial",
+                metadataLabel = "Build",
+                isStreaming = true,
+                renderedMarkdown =
+                    dev.opencode.mobile.markdown.MarkdownDocument(
+                        sourceHash = "# Partial".hashCode(),
+                        blocks =
+                            listOf(
+                                dev.opencode.mobile.markdown.MarkdownBlock.Heading(
+                                    level = 1,
+                                    inlines = listOf(dev.opencode.mobile.markdown.MarkdownInline.Text("Partial")),
+                                ),
+                            ),
+                    ),
+            )
+
+        val item =
+            viewModel.toMessageItem(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "# Partial heading",
+                    parts = listOf(MessagePart.Text(text = "# Partial heading", isStreaming = true)),
+                ),
+                previous,
+            )
+
+        assertNotNull(item.renderedMarkdown)
+    }
+
     private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
@@ -491,6 +554,10 @@ class SessionChatViewModelTest {
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+            renderedMarkdownMapper =
+                RenderedMarkdownMapper(OpenCodeSyntaxHighlighter.default).apply {
+                    computationDispatcher = testDispatcher
+                },
         )
     }
 }

@@ -9,9 +9,23 @@ struct SessionChatRow: Identifiable, Equatable {
     let metadataLabel: String
     let isPending: Bool
     let isStreaming: Bool
+    let renderedMarkdown: NativeMarkdownDocument?
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+
+    static func == (lhs: SessionChatRow, rhs: SessionChatRow) -> Bool {
+        lhs.id == rhs.id &&
+            lhs.role == rhs.role &&
+            lhs.text == rhs.text &&
+            lhs.metadataLabel == rhs.metadataLabel &&
+            lhs.isPending == rhs.isPending &&
+            lhs.isStreaming == rhs.isStreaming &&
+            lhs.modelProviderID == rhs.modelProviderID &&
+            lhs.modelID == rhs.modelID &&
+            lhs.contextInputTokens == rhs.contextInputTokens &&
+            lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash
+    }
 }
 
 struct SessionChatComposerState: Equatable {
@@ -116,8 +130,10 @@ final class SessionChatViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
     private let eventAdapter = EventDomainAdapter()
+    private let renderedMarkdownMapper: RenderedMarkdownMapper
     private let sentTimeFormatter: DateFormatter
     private var liveObservationTask: Task<Void, Never>?
+    private var transformTask: Task<Void, Never>?
 
     init(
         sessionID: String,
@@ -128,7 +144,8 @@ final class SessionChatViewModel {
         sessionRepository: any SessionRepository,
         messageLiveStore: any MessageLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
-        foregroundEventStream: any ForegroundEventStream
+        foregroundEventStream: any ForegroundEventStream,
+        renderedMarkdownMapper: RenderedMarkdownMapper = .shared
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -138,6 +155,7 @@ final class SessionChatViewModel {
         self.messageLiveStore = messageLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.foregroundEventStream = foregroundEventStream
+        self.renderedMarkdownMapper = renderedMarkdownMapper
         self.state = .loading(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
@@ -175,7 +193,8 @@ final class SessionChatViewModel {
             if let catalog = try? await modelsLoad {
                 applyModelCatalog(catalog, messages: messages)
             }
-            applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
+            transformTask?.cancel()
+            await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             await refreshSessionStatus()
         } catch {
             applyError(error, sessionID: sessionID)
@@ -201,7 +220,8 @@ final class SessionChatViewModel {
 
         do {
             let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
-            applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
+            transformTask?.cancel()
+            await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
         } catch {
             if case let .loaded(_, _, messages, _, _, _, _) = state {
                 state = .loaded(
@@ -272,16 +292,19 @@ final class SessionChatViewModel {
             metadataLabel: metadataLabel(mode: composer.selectedMode, model: composer.selectedModel?.modelLabel, variant: composer.selectedVariant),
             isPending: true,
             isStreaming: false,
+            renderedMarkdown: nil,
             modelProviderID: nil,
             modelID: nil,
             contextInputTokens: nil
         )
 
         let existing = messagesFromCurrentState()
+        let enriched = await renderedMarkdownMapper.enrichRows([optimistic], previousByID: [:])
+        let optimisticMessages = existing + enriched
         state = .loaded(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
-            messages: existing + [optimistic],
+            messages: optimisticMessages,
             composer: composer,
             isSending: true,
             isRefreshing: false,
@@ -304,7 +327,8 @@ final class SessionChatViewModel {
             await refreshSessionStatus()
             do {
                 let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
-                applyLoadedMessages(messages, sessionID: sessionID, isRefreshing: false)
+                transformTask?.cancel()
+                await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             } catch {
                 // Prompt was accepted; live store or pull-to-refresh will sync the timeline.
                 if case let .loaded(id, title, messages, composer, _, _, _) = state {
@@ -413,10 +437,33 @@ final class SessionChatViewModel {
         isRefreshing: Bool,
         fromQuietRefresh: Bool = false
     ) {
+        transformTask?.cancel()
+        transformTask = Task {
+            await applyLoadedMessagesTransform(
+                messages,
+                sessionID: sessionID,
+                isRefreshing: isRefreshing,
+                fromQuietRefresh: fromQuietRefresh
+            )
+        }
+    }
+
+    private func applyLoadedMessagesTransform(
+        _ messages: [Message],
+        sessionID: String,
+        isRefreshing: Bool,
+        fromQuietRefresh: Bool = false
+    ) async {
+        if fromQuietRefresh, hasStreamingDelta(messages) {
+            try? await Task.sleep(nanoseconds: 40_000_000)
+        }
+        guard !Task.isCancelled else { return }
+
         let sessionTitle = state.sessionTitle
         let composer = state.composer
         let isSending = fromQuietRefresh ? isSendingFromCurrentState() : false
         let errorBanner = fromQuietRefresh ? errorBannerFromCurrentState() : nil
+        let previousByID = Dictionary(uniqueKeysWithValues: messagesFromCurrentState().map { ($0.id, $0) })
         let serverRows =
             messages
                 .enumerated()
@@ -429,20 +476,23 @@ final class SessionChatViewModel {
                     }
                     return left.offset < right.offset
                 }
-                .map { row(from: $0.element) }
+                .map { row(from: $0.element, previous: previousByID[$0.element.id]) }
         let rows =
             if fromQuietRefresh, isSending {
                 mergeWithPending(serverRows, pendingRowsFromCurrentState())
             } else {
                 serverRows
             }
-        if rows.isEmpty {
+        let enriched = await renderedMarkdownMapper.enrichRows(rows, previousByID: previousByID)
+        guard !Task.isCancelled else { return }
+
+        if enriched.isEmpty {
             state = .empty(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
         } else {
             state = .loaded(
                 sessionID: sessionID,
                 sessionTitle: sessionTitle,
-                messages: rows,
+                messages: enriched,
                 composer: composer,
                 isSending: fromQuietRefresh ? isSending : false,
                 isRefreshing: isRefreshing,
@@ -450,6 +500,17 @@ final class SessionChatViewModel {
             )
         }
         refreshContextUsage()
+    }
+
+    private func hasStreamingDelta(_ messages: [Message]) -> Bool {
+        messages.contains { message in
+            message.parts.contains { part in
+                if case .text(let textPart) = part {
+                    return textPart.isStreaming
+                }
+                return false
+            }
+        }
     }
 
     private func mergeWithPending(_ serverRows: [SessionChatRow], _ pendingRows: [SessionChatRow]) -> [SessionChatRow] {
@@ -491,14 +552,19 @@ final class SessionChatViewModel {
         )
     }
 
-    func row(from message: Message) -> SessionChatRow {
+    func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
         let isStreaming = message.parts.contains { part in
             if case .text(let t) = part, t.isStreaming { true } else { false }
+        }
+        let text = message.text
+        let shouldRenderMarkdown = OpenCodeRenderedMarkdownDetector.shouldRender(text)
+        let preservedMarkdown = previous?.renderedMarkdown.flatMap { document in
+            shouldRenderMarkdown && (previous?.text == text || previous?.isStreaming == true) ? document : nil
         }
         return SessionChatRow(
             id: message.id,
             role: message.role,
-            text: message.text,
+            text: text,
             metadataLabel: metadataLabel(
                 mode: message.mode,
                 model: message.model,
@@ -507,6 +573,7 @@ final class SessionChatViewModel {
             ),
             isPending: false,
             isStreaming: isStreaming,
+            renderedMarkdown: shouldRenderMarkdown ? preservedMarkdown : nil,
             modelProviderID: message.modelProviderID,
             modelID: message.modelID,
             contextInputTokens: message.contextInputTokens
@@ -637,6 +704,23 @@ final class SessionChatViewModel {
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: worktree) else { return }
         let status = statuses.first(where: { $0.sessionID == sessionID })
         sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
+    }
+}
+
+extension SessionChatRow {
+    func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatRow {
+        SessionChatRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: document,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens
+        )
     }
 }
 

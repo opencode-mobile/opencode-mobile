@@ -6,22 +6,19 @@ import org.joni.Option
 import org.joni.Regex
 import org.joni.Syntax
 import org.joni.exception.JOniException
+import java.util.concurrent.ConcurrentHashMap
 
 object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "joni-oniguruma"
 
     override val isOnigurumaCompatible: Boolean = true
 
-    override fun find(
-        pattern: String,
-        input: String,
-        startIndex: Int,
-        endIndex: Int,
-    ): TextMateRegexMatch? {
-        val indexMap = Utf8IndexMap(input)
-        val inputBytes = indexMap.bytes
+    private val regexCache = ConcurrentHashMap<String, Regex>()
+
+    private fun cachedRegex(pattern: String): Regex? {
+        regexCache[pattern]?.let { return it }
         val patternBytes = pattern.toByteArray(StandardCharsets.UTF_8)
-        val regex =
+        val compiled =
             try {
                 Regex(
                     patternBytes,
@@ -32,10 +29,22 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
                     Syntax.RUBY,
                 )
             } catch (_: JOniException) {
-                return null
+                null
             } catch (_: IllegalArgumentException) {
-                return null
+                null
             }
+        return compiled?.let { regexCache.putIfAbsent(pattern, it) ?: it }
+    }
+
+    override fun find(
+        pattern: String,
+        input: String,
+        startIndex: Int,
+        endIndex: Int,
+    ): TextMateRegexMatch? {
+        val indexMap = Utf8IndexMap(input)
+        val inputBytes = indexMap.bytes
+        val regex = cachedRegex(pattern) ?: return null
 
         val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, input.length))
         val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, input.length))

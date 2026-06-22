@@ -57,7 +57,6 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
-import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownDetector
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
@@ -507,6 +506,7 @@ private fun MessageRow(
                 MessageRole.User ->
                     OpenCodeOutgoingMessage(
                         text = message.text,
+                        renderedMarkdown = message.renderedMarkdown,
                         metadataLabel = message.metadataLabel,
                         onRestoreClick = onRestoreClick,
                         initialRenderedMarkdownHeight =
@@ -526,7 +526,7 @@ private fun MessageRow(
                 MessageRole.Assistant ->
                     AssistantMessageBubble(
                         text = message.text,
-                        isStreaming = message.isStreaming,
+                        renderedMarkdown = message.renderedMarkdown,
                         initialRenderedMarkdownHeight =
                             initialRenderedMarkdownHeight(
                                 OpenCodeRenderedMarkdownVariant.AssistantMessage,
@@ -550,7 +550,7 @@ private fun MessageRow(
 @Composable
 private fun AssistantMessageBubble(
     text: String,
-    isStreaming: Boolean,
+    renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument?,
     initialRenderedMarkdownHeight: Dp,
     onRenderedMarkdownHeightChange: (Dp) -> Unit,
     modifier: Modifier = Modifier,
@@ -561,22 +561,22 @@ private fun AssistantMessageBubble(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp)
 
-    if (OpenCodeRenderedMarkdownDetector.shouldRender(text)) {
-        OpenCodeRenderedMarkdown(
-            markdown = text.ifBlank { "…" },
-            variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
-            initialHeight = initialRenderedMarkdownHeight,
-            isStreaming = isStreaming,
-            onContentHeightChange = onRenderedMarkdownHeightChange,
-            modifier = bubbleModifier,
-        )
-    } else {
-        Text(
-            text = text.ifBlank { "…" },
-            modifier = bubbleModifier,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+    when {
+        renderedMarkdown != null ->
+            OpenCodeRenderedMarkdown(
+                document = renderedMarkdown,
+                variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                initialHeight = initialRenderedMarkdownHeight,
+                onContentHeightChange = onRenderedMarkdownHeightChange,
+                modifier = bubbleModifier,
+            )
+        else ->
+            Text(
+                text = text.ifBlank { "…" },
+                modifier = bubbleModifier,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
     }
 }
 

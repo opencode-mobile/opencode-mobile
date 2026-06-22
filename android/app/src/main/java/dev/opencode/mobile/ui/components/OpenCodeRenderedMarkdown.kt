@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
@@ -22,12 +24,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
@@ -47,14 +46,8 @@ import dev.opencode.mobile.markdown.DiffLineKind
 import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
-import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
-import dev.opencode.mobile.markdown.OpenCodeJoniRegexBackend
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
-import dev.opencode.mobile.markdown.OpenCodeTextMateGrammarBundleLoader
-import dev.opencode.mobile.markdown.OpenCodeTextMateNativeTokenizer
-import dev.opencode.mobile.markdown.OpenCodeTextMateResourceReader
+import dev.opencode.mobile.markdown.isLikelyExpandable
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import kotlin.math.roundToInt
@@ -69,28 +62,20 @@ enum class OpenCodeRenderedMarkdownVariant(
 
 object OpenCodeRenderedMarkdownDetector {
     fun shouldRender(text: String): Boolean = OpenCodeMarkdownDetector.shouldRender(text)
-
-    fun isLikelyExpandable(text: String): Boolean {
-        val document = OpenCodeMarkdownParser.parse(text)
-        return document.isLikelyExpandable()
-    }
 }
 
 @Composable
 fun OpenCodeRenderedMarkdown(
-    markdown: String,
+    document: MarkdownDocument,
     variant: OpenCodeRenderedMarkdownVariant,
     modifier: Modifier = Modifier,
     initialHeight: Dp = 1.dp,
-    isStreaming: Boolean = false,
     collapsedMaxHeight: Dp? = null,
     expanded: Boolean = true,
     onLinkTap: ((String) -> Unit)? = null,
     onExpandableChange: (Boolean) -> Unit = {},
     onContentHeightChange: (Dp) -> Unit = {},
 ) {
-    val codeHighlighter = rememberMarkdownCodeHighlighter()
-    val document = remember(markdown, codeHighlighter) { OpenCodeMarkdownParser.parse(markdown, codeHighlighter) }
     val density = LocalDensity.current
     val isExpandable = collapsedMaxHeight != null && document.isLikelyExpandable()
     val visibleModifier =
@@ -100,7 +85,7 @@ fun OpenCodeRenderedMarkdown(
             modifier
         }
 
-    LaunchedEffect(document, collapsedMaxHeight) {
+    LaunchedEffect(document, collapsedMaxHeight, isExpandable) {
         onExpandableChange(isExpandable)
     }
 
@@ -121,27 +106,6 @@ fun OpenCodeRenderedMarkdown(
                 onLinkTap = onLinkTap,
             )
         }
-    }
-}
-
-@Composable
-private fun rememberMarkdownCodeHighlighter(): OpenCodeCodeHighlighter {
-    val context = LocalContext.current.applicationContext
-    return remember(context) {
-        val bundle =
-            OpenCodeTextMateGrammarBundleLoader
-                .loadBundled(
-                    OpenCodeTextMateResourceReader { resourcePath ->
-                        runCatching {
-                            context.assets.open(resourcePath).bufferedReader().use { reader -> reader.readText() }
-                        }.getOrNull()
-                    },
-                ).bundle
-
-        OpenCodeSyntaxHighlighter(
-            grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
-        )
     }
 }
 
@@ -253,6 +217,7 @@ private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
         SelectionContainer {
             Text(
                 text = buildCodeAnnotatedString(block.code, block.spans, colors),
+                modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
                 style = CodeTextStyle,
                 softWrap = false,
             )
@@ -290,6 +255,7 @@ private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
             ) {
                 Text(
                     text = buildCodeAnnotatedString(line.text, line.spans, colors),
+                    modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
                     style = CodeTextStyle,
                     softWrap = false,
                 )
@@ -449,32 +415,51 @@ private fun AnnotatedString.Builder.appendInlines(
     }
 }
 
-private fun buildCodeAnnotatedString(
+internal fun buildCodeAnnotatedString(
     code: String,
     spans: List<CodeSpan>,
     colors: CodeColors,
 ): AnnotatedString =
     buildAnnotatedString {
-        var cursor = 0
+        append(code)
         spans
-            .sortedBy { it.start }
+            .sortedWith(
+                compareBy<CodeSpan> { it.role.stylePriority() }
+                    .thenByDescending { it.end - it.start }
+                    .thenBy { it.start },
+            )
             .forEach { span ->
                 val start = span.start.coerceIn(0, code.length)
                 val end = span.end.coerceIn(start, code.length)
-                if (cursor < start) {
-                    append(code.substring(cursor, start))
+                if (start < end) {
+                    addStyle(SpanStyle(color = colors.colorForRole(span.role)), start, end)
                 }
-                withStyle(SpanStyle(color = colors.colorForRole(span.role))) {
-                    append(code.substring(start, end))
-                }
-                cursor = end
             }
-        if (cursor < code.length) {
-            append(code.substring(cursor))
-        }
     }
 
-private data class CodeColors(
+private fun CodeTokenRole.stylePriority(): Int =
+    when (this) {
+        CodeTokenRole.Punctuation -> 0
+        CodeTokenRole.Operator -> 1
+        CodeTokenRole.Plain -> 2
+        CodeTokenRole.Variable -> 3
+        CodeTokenRole.Property -> 4
+        CodeTokenRole.Function -> 5
+        CodeTokenRole.Number -> 6
+        CodeTokenRole.Constant -> 7
+        CodeTokenRole.String -> 8
+        CodeTokenRole.Comment -> 9
+        CodeTokenRole.Keyword -> 10
+        CodeTokenRole.Type -> 11
+        CodeTokenRole.Tag -> 12
+        CodeTokenRole.Attribute -> 13
+        CodeTokenRole.Inserted -> 14
+        CodeTokenRole.Deleted -> 15
+        CodeTokenRole.Warning -> 16
+        CodeTokenRole.Critical -> 17
+    }
+
+internal data class CodeColors(
     val plain: androidx.compose.ui.graphics.Color,
     val comment: androidx.compose.ui.graphics.Color,
     val keyword: androidx.compose.ui.graphics.Color,
@@ -556,21 +541,3 @@ private fun blockSpacingFor(variant: OpenCodeRenderedMarkdownVariant): Dp =
         OpenCodeRenderedMarkdownVariant.OutgoingMessage -> 8.dp
         OpenCodeRenderedMarkdownVariant.Standalone -> 12.dp
     }
-
-private fun MarkdownDocument.isLikelyExpandable(): Boolean {
-    val visualLines =
-        blocks.sumOf { block ->
-            when (block) {
-                is MarkdownBlock.CodeBlock -> block.lines.size + 1
-                is MarkdownBlock.DiffBlock -> block.lines.size + 1
-                is MarkdownBlock.Table -> block.rows.size + 2
-                is MarkdownBlock.BulletList -> block.items.size
-                is MarkdownBlock.OrderedList -> block.items.size
-                is MarkdownBlock.BlockQuote -> 2
-                is MarkdownBlock.Heading -> 2
-                is MarkdownBlock.Paragraph -> 1
-                MarkdownBlock.ThematicBreak -> 1
-            }
-        }
-    return visualLines > 6 || blocks.any { it is MarkdownBlock.CodeBlock && it.code.length > 420 }
-}

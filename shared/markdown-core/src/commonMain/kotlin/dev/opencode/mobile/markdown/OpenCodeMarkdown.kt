@@ -215,10 +215,15 @@ object OpenCodeMarkdownJson {
 
     fun parseMarkdownJson(requestJson: String): String {
         val request = json.decodeFromString<MarkdownParseRequest>(requestJson)
+        val codeHighlighter =
+            openCodeCodeHighlighterForParse(
+                preferred = OpenCodeMarkdownHighlighterProvider.default,
+                isStreaming = request.isStreaming,
+            )
         return json.encodeToString(
             OpenCodeMarkdownParser.parse(
                 markdown = request.markdown,
-                codeHighlighter = OpenCodeMarkdownHighlighterProvider.default,
+                codeHighlighter = codeHighlighter,
             ),
         )
     }
@@ -239,10 +244,25 @@ object OpenCodeMarkdownDetector {
     fun shouldRender(text: String): Boolean = blockPattern.containsMatchIn(text) || inlinePattern.containsMatchIn(text)
 }
 
+fun openCodeCodeHighlighterForParse(
+    preferred: OpenCodeCodeHighlighter,
+    isStreaming: Boolean,
+): OpenCodeCodeHighlighter = if (isStreaming) OpenCodeSemanticFallbackHighlighter else preferred
+
 object OpenCodeMarkdownParser {
     fun parse(
         markdown: String,
         codeHighlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
+        isStreaming: Boolean = false,
+    ): MarkdownDocument =
+        parse(
+            markdown = markdown,
+            codeHighlighter = openCodeCodeHighlighterForParse(preferred = codeHighlighter, isStreaming = isStreaming),
+        )
+
+    fun parse(
+        markdown: String,
+        codeHighlighter: OpenCodeCodeHighlighter,
     ): MarkdownDocument {
         if (markdown.isBlank()) {
             return MarkdownDocument(sourceHash = markdown.hashCode(), blocks = emptyList())
@@ -607,4 +627,22 @@ object OpenCodeMarkdownParser {
     private val tableSeparatorRegex = Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""")
     private val rawHtmlRegex = Regex("""</?[A-Za-z][^>]*>""")
 
+}
+
+fun MarkdownDocument.isLikelyExpandable(): Boolean {
+    val visualLines =
+        blocks.sumOf { block ->
+            when (block) {
+                is MarkdownBlock.CodeBlock -> block.lines.size + 1
+                is MarkdownBlock.DiffBlock -> block.lines.size + 1
+                is MarkdownBlock.Table -> block.rows.size + 2
+                is MarkdownBlock.BulletList -> block.items.size
+                is MarkdownBlock.OrderedList -> block.items.size
+                is MarkdownBlock.BlockQuote -> 2
+                is MarkdownBlock.Heading -> 2
+                is MarkdownBlock.Paragraph -> 1
+                MarkdownBlock.ThematicBreak -> 1
+            }
+        }
+    return visualLines > 6 || blocks.any { it is MarkdownBlock.CodeBlock && it.code.length > 420 }
 }

@@ -56,6 +56,7 @@ fun OpenCodeOutgoingMessage(
     metadataLabel: String,
     onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier,
+    renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument? = null,
     initiallyExpanded: Boolean = false,
     initialRenderedMarkdownHeight: Dp = 1.dp,
     onRenderedMarkdownHeightChange: (Dp) -> Unit = {},
@@ -63,7 +64,6 @@ fun OpenCodeOutgoingMessage(
     var expanded by rememberSaveable(text) { mutableStateOf(initiallyExpanded) }
     var expandable by rememberSaveable(text) { mutableStateOf(false) }
     val context = LocalContext.current
-    val usesRenderedMarkdown = OpenCodeRenderedMarkdownDetector.shouldRender(text)
 
     BoxWithConstraints(
         modifier = modifier,
@@ -87,9 +87,9 @@ fun OpenCodeOutgoingMessage(
                         ),
                     horizontalAlignment = Alignment.End,
                 ) {
-                    if (usesRenderedMarkdown) {
+                    if (renderedMarkdown != null) {
                         OpenCodeRenderedMarkdown(
-                            markdown = text,
+                            document = renderedMarkdown,
                             variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
                             initialHeight = initialRenderedMarkdownHeight,
                             collapsedMaxHeight = OutgoingMessageCollapsedRenderedMarkdownHeight,

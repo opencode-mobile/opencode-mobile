@@ -253,13 +253,14 @@ struct SessionChatView: View {
         case .user:
             OpenCodeOutgoingMessage(
                 text: message.text,
+                renderedMarkdown: message.renderedMarkdown,
                 metadataLabel: message.metadataLabel,
                 onRestoreClick: { viewModel.restoreComposerText(message.text) }
             )
         case .assistant:
             AssistantMessageBubble(
                 text: message.text,
-                isStreaming: message.isStreaming
+                renderedMarkdown: message.renderedMarkdown
             )
         case .command, .tool, .unknown:
             Text("\(message.role.displayLabel): \(message.text.isEmpty ? "…" : message.text)")
@@ -496,15 +497,14 @@ struct SessionChatView: View {
 
 private struct AssistantMessageBubble: View {
     let text: String
-    let isStreaming: Bool
+    let renderedMarkdown: NativeMarkdownDocument?
 
     var body: some View {
         Group {
-            if OpenCodeRenderedMarkdownDetector.shouldRender(text) {
+            if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
-                    markdown: text.isEmpty ? "…" : text,
-                    variant: .assistantMessage,
-                    isStreaming: isStreaming
+                    document: renderedMarkdown,
+                    variant: .assistantMessage
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)

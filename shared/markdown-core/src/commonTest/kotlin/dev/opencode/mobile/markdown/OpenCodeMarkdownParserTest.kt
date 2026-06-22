@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class OpenCodeMarkdownParserTest {
@@ -140,5 +141,48 @@ class OpenCodeMarkdownParserTest {
         val diffLines = blocks[2].jsonObject.getValue("lines").jsonArray
         assertEquals("Added", diffLines[0].jsonObject.getValue("kind").jsonPrimitive.content)
         assertEquals("Deleted", diffLines[1].jsonObject.getValue("kind").jsonPrimitive.content)
+    }
+
+    @Test
+    fun openCodeCodeHighlighterForParseDefersTextMateWhileStreaming() {
+        val preferred =
+            object : OpenCodeCodeHighlighter {
+                override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+                override fun highlight(
+                    languageOrAlias: String?,
+                    code: String,
+                ): SyntaxHighlightResult =
+                    SyntaxHighlightResult(
+                        spans = listOf(CodeSpan(0, code.length, CodeTokenRole.Keyword)),
+                        diagnostics = emptyList(),
+                    )
+            }
+
+        val streamingHighlighter = openCodeCodeHighlighterForParse(preferred, isStreaming = true)
+        val finalHighlighter = openCodeCodeHighlighterForParse(preferred, isStreaming = false)
+
+        val code = "val answer = 42"
+        val streamingResult = streamingHighlighter.highlight("kotlin", code)
+        val finalResult = finalHighlighter.highlight("kotlin", code)
+
+        assertNotEquals(finalResult.spans, streamingResult.spans)
+        assertEquals(CodeTokenRole.Keyword, finalResult.spans.single().role)
+    }
+
+    @Test
+    fun streamingJsonBoundaryUsesSemanticFallbackHighlighter() {
+        val requestJson =
+            OpenCodeMarkdownJson.json.encodeToString(
+                MarkdownParseRequest(
+                    markdown = "```kotlin\nval answer = 42\n```",
+                    isStreaming = true,
+                ),
+            )
+
+        val responseJson = OpenCodeMarkdownJson.parseMarkdownJson(requestJson)
+        val document = Json.parseToJsonElement(responseJson).jsonObject
+
+        assertEquals("codeBlock", document.getValue("blocks").jsonArray.single().jsonObject.getValue("type").jsonPrimitive.content)
     }
 }

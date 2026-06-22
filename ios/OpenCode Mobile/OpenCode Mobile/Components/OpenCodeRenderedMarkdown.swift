@@ -12,45 +12,33 @@ enum OpenCodeRenderedMarkdownDetector {
     static func shouldRender(_ text: String) -> Bool {
         OpenCodeMarkdownDetector.shared.shouldRender(text: text)
     }
-
-    static func isLikelyExpandable(_ text: String) -> Bool {
-        OpenCodeRenderedMarkdownParser.parse(text).isLikelyExpandable
-    }
 }
 
 struct OpenCodeRenderedMarkdown: View {
-    let markdown: String
+    let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
     let initialHeight: CGFloat
-    let isStreaming: Bool
     let onHeightChange: (CGFloat) -> Void
     let onLinkTap: (URL) -> Void
 
     @State private var measuredHeight: CGFloat
 
     init(
-        markdown: String,
+        document: NativeMarkdownDocument,
         variant: OpenCodeRenderedMarkdownVariant,
         initialHeight: CGFloat = 1,
-        isStreaming: Bool = false,
         onHeightChange: @escaping (CGFloat) -> Void = { _ in },
         onLinkTap: @escaping (URL) -> Void = { url in UIApplication.shared.open(url) }
     ) {
-        self.markdown = markdown
+        self.document = document
         self.variant = variant
         self.initialHeight = max(1, initialHeight)
-        self.isStreaming = isStreaming
         self.onHeightChange = onHeightChange
         self.onLinkTap = onLinkTap
         _measuredHeight = State(initialValue: max(1, initialHeight))
     }
 
     var body: some View {
-        let document = OpenCodeRenderedMarkdownParser.parse(
-            markdown,
-            variant: variant,
-            isStreaming: isStreaming
-        )
         VStack(alignment: .leading, spacing: blockSpacing) {
             ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
                 blockView(block)
@@ -141,6 +129,7 @@ struct OpenCodeRenderedMarkdown: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
@@ -164,6 +153,7 @@ struct OpenCodeRenderedMarkdown: View {
             }
             .padding(.vertical, 8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
@@ -254,7 +244,7 @@ struct OpenCodeRenderedMarkdown: View {
     }
 }
 
-private enum NativeMarkdownAttributedString {
+enum NativeMarkdownAttributedString {
     static func inline(
         _ inlines: [NativeMarkdownInline],
         font: Font,
@@ -269,26 +259,47 @@ private enum NativeMarkdownAttributedString {
         _ code: String,
         spans: [NativeCodeSpan]
     ) -> AttributedString {
-        var output = AttributedString()
-        var cursor = code.startIndex
-        let sortedSpans = spans.sorted { $0.start < $1.start }
+        var output = AttributedString(code)
+        output.font = OpenCodeTypography.code
+        output.foregroundColor = OpenCodeColors.textPrimary
+
+        let sortedSpans = spans.sorted {
+            let leftPriority = stylePriority(for: $0.role)
+            let rightPriority = stylePriority(for: $1.role)
+            if leftPriority != rightPriority { return leftPriority < rightPriority }
+            let leftWidth = $0.end - $0.start
+            let rightWidth = $1.end - $1.start
+            if leftWidth != rightWidth { return leftWidth > rightWidth }
+            if $0.start != $1.start { return $0.start < $1.start }
+            return $0.end < $1.end
+        }
 
         for span in sortedSpans {
-            let start = code.index(code.startIndex, offsetBy: max(0, min(span.start, code.count)))
-            let end = code.index(code.startIndex, offsetBy: max(0, min(span.end, code.count)))
-            if cursor < start {
-                output.append(styledCode(String(code[cursor..<start]), color: OpenCodeColors.textPrimary))
+            let start = max(0, min(span.start, code.utf16.count))
+            let end = max(start, min(span.end, code.utf16.count))
+            guard start < end,
+                  let stringStart = stringIndex(in: code, utf16Offset: start),
+                  let stringEnd = stringIndex(in: code, utf16Offset: end) else {
+                continue
             }
-            if start < end {
-                output.append(styledCode(String(code[start..<end]), color: color(for: span.role)))
-            }
-            cursor = end
+
+            let startIndex = output.index(
+                output.startIndex,
+                offsetByCharacters: code.distance(from: code.startIndex, to: stringStart)
+            )
+            let endIndex = output.index(
+                output.startIndex,
+                offsetByCharacters: code.distance(from: code.startIndex, to: stringEnd)
+            )
+            output[startIndex..<endIndex].foregroundColor = color(for: span.role)
         }
 
-        if cursor < code.endIndex {
-            output.append(styledCode(String(code[cursor..<code.endIndex]), color: OpenCodeColors.textPrimary))
-        }
         return output
+    }
+
+    private static func stringIndex(in value: String, utf16Offset: Int) -> String.Index? {
+        let utf16Index = value.utf16.index(value.utf16.startIndex, offsetBy: utf16Offset)
+        return String.Index(utf16Index, within: value)
     }
 
     private static func append(
@@ -338,6 +349,45 @@ private enum NativeMarkdownAttributedString {
         color: Color
     ) -> AttributedString {
         styled(value, font: OpenCodeTypography.code, color: color)
+    }
+
+    private static func stylePriority(for role: NativeCodeTokenRole) -> Int {
+        switch role {
+        case .punctuation:
+            0
+        case .operatorToken:
+            1
+        case .plain:
+            2
+        case .variable:
+            3
+        case .property, .attribute:
+            4
+        case .function:
+            5
+        case .number:
+            6
+        case .constant:
+            7
+        case .string:
+            8
+        case .comment:
+            9
+        case .keyword:
+            10
+        case .type:
+            11
+        case .tag:
+            12
+        case .inserted:
+            14
+        case .deleted:
+            15
+        case .warning:
+            16
+        case .critical:
+            17
+        }
     }
 
     private static func color(for role: NativeCodeTokenRole) -> Color {
@@ -594,52 +644,6 @@ struct NativeMarkdownDiagnostic: Decodable {
     let message: String
 }
 
-private struct NativeMarkdownParseRequest: Encodable {
-    let markdown: String
-    let variant: String
-    let isStreaming: Bool
-}
-
-enum OpenCodeRenderedMarkdownParser {
-    private static let encoder = JSONEncoder()
-    private static let decoder = JSONDecoder()
-
-    static func parse(
-        _ markdown: String,
-        variant: OpenCodeRenderedMarkdownVariant = .standalone,
-        isStreaming: Bool = false
-    ) -> NativeMarkdownDocument {
-        do {
-            let request = NativeMarkdownParseRequest(
-                markdown: markdown,
-                variant: variant.rawValue,
-                isStreaming: isStreaming
-            )
-            let requestData = try encoder.encode(request)
-            guard let requestJson = String(data: requestData, encoding: .utf8) else {
-                return fallbackDocument(markdown)
-            }
-            let responseJson = OpenCodeMarkdownJson.shared.parseMarkdownJson(requestJson: requestJson)
-            return try decoder.decode(NativeMarkdownDocument.self, from: Data(responseJson.utf8))
-        } catch {
-            return fallbackDocument(markdown)
-        }
-    }
-
-    private static func fallbackDocument(_ markdown: String) -> NativeMarkdownDocument {
-        NativeMarkdownDocument(
-            sourceHash: markdown.hashValue,
-            blocks: markdown.isEmpty ? [] : [.paragraph([.text(markdown)])],
-            diagnostics: [
-                NativeMarkdownDiagnostic(
-                    kind: "SwiftBridgeFallback",
-                    message: "Rendered Markdown fell back to literal text after the KMP parser bridge failed."
-                )
-            ]
-        )
-    }
-}
-
 private struct RenderedMarkdownSizePreferenceKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
 
@@ -661,16 +665,7 @@ private extension View {
 
 #Preview("Rendered Markdown") {
     OpenCodeRenderedMarkdown(
-        markdown: """
-        ### Implementation
-
-        - Keep plain text native.
-        - Render code when needed.
-
-        ```swift
-        let answer = "ship it"
-        ```
-        """,
+        document: RenderedMarkdownGalleryMocks.samples[0].document,
         variant: .standalone
     )
     .padding()

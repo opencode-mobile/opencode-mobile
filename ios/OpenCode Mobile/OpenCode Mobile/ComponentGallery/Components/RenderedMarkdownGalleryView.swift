@@ -1,70 +1,24 @@
 import SwiftUI
 
-private enum RenderedMarkdownSample: String, CaseIterable {
-    case assistant = "Assistant"
-    case outgoing = "Outgoing"
-    case diff = "Diff"
-
-    var variant: OpenCodeRenderedMarkdownVariant {
-        switch self {
-        case .assistant:
-            .assistantMessage
-        case .outgoing:
-            .outgoingMessage
-        case .diff:
-            .standalone
-        }
-    }
-
-    var markdown: String {
-        switch self {
-        case .assistant:
-            """
-            ### Plan
-
-            - Keep the chat native.
-            - Use the renderer only for formatted text.
-
-            ```swift
-            let renderer = "native SwiftUI"
-            ```
-            """
-        case .outgoing:
-            """
-            Please compare `main` against my branch and summarize:
-
-            | Area | Need |
-            | --- | --- |
-            | Tests | focused |
-            | Risk | low |
-            """
-        case .diff:
-            """
-            ```diff
-            @@ SessionChatView.swift
-            -Text(message.text)
-            +OpenCodeRenderedMarkdown(markdown: message.text)
-            ```
-            """
-        }
-    }
-}
-
 struct RenderedMarkdownGalleryView: View {
-    @State private var sample: RenderedMarkdownSample = .assistant
+    @State private var sampleID = RenderedMarkdownGalleryMocks.samples[0].id
+
+    private var selectedSample: RenderedMarkdownGalleryMocks.Sample {
+        RenderedMarkdownGalleryMocks.samples.first { $0.id == sampleID } ?? RenderedMarkdownGalleryMocks.samples[0]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("Sample", selection: $sample) {
-                ForEach(RenderedMarkdownSample.allCases, id: \.self) { option in
-                    Text(option.rawValue).tag(option)
+            Picker("Sample", selection: $sampleID) {
+                ForEach(RenderedMarkdownGalleryMocks.samples) { sample in
+                    Text(sample.label).tag(sample.id)
                 }
             }
             .pickerStyle(.segmented)
 
             OpenCodeRenderedMarkdown(
-                markdown: sample.markdown,
-                variant: sample.variant
+                document: selectedSample.document,
+                variant: selectedSample.variant
             )
             .padding(12)
             .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
