@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 
@@ -11,6 +12,8 @@ data class RenderedMarkdownGalleryMock(
 )
 
 object RenderedMarkdownGalleryMocks {
+    private val codeHighlighter = OpenCodeBundledJoniMarkdownHighlighter.default()
+
     private val assistantMarkdown =
         """
         ### Plan
@@ -47,17 +50,17 @@ object RenderedMarkdownGalleryMocks {
             RenderedMarkdownGalleryMock(
                 label = "Assistant",
                 variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
-                document = OpenCodeMarkdownParser.parse(assistantMarkdown),
+                document = OpenCodeMarkdownParser.parse(assistantMarkdown, codeHighlighter = codeHighlighter),
             ),
             RenderedMarkdownGalleryMock(
                 label = "Outgoing",
                 variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
-                document = OpenCodeMarkdownParser.parse(outgoingMarkdown),
+                document = OpenCodeMarkdownParser.parse(outgoingMarkdown, codeHighlighter = codeHighlighter),
             ),
             RenderedMarkdownGalleryMock(
                 label = "Diff",
                 variant = OpenCodeRenderedMarkdownVariant.Standalone,
-                document = OpenCodeMarkdownParser.parse(diffMarkdown),
+                document = OpenCodeMarkdownParser.parse(diffMarkdown, codeHighlighter = codeHighlighter),
             ),
         )
 }

@@ -1,9 +1,9 @@
 package dev.opencode.mobile.markdown
 
 /**
- * iOS TextMate regex backend. Kotlin [Regex] handles most patterns; a small set of
- * Oniguruma-specific anchors used by bundled grammars are handled explicitly.
- * This remains a Kotlin Regex fallback until the native Oniguruma binding lands.
+ * Hybrid TextMate regex backend used on iOS. Kotlin [Regex] handles most patterns;
+ * a small set of Oniguruma-specific anchors used by bundled grammars are handled
+ * explicitly until a native Oniguruma binding lands.
  */
 object OpenCodeOnigurumaRegexBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "apple-kotlin-regex-textmate-bridge"

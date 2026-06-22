@@ -149,6 +149,12 @@
 - Moved Session Chat markdown enrichment into a transform-before-publish step
   with `RenderedMarkdownMapper.enrichRows`, removing post-publish parse jobs and
   the interim raw-markdown chat bubble fallback.
+- Unified Android highlight entry points through
+  `OpenCodeBundledJoniMarkdownHighlighter` for session chat, component gallery,
+  and the KMP platform provider; `Application.onCreate` initializes grammar
+  asset access.
+- Moved `OpenCodeOnigurumaRegexBackend` into `commonMain` and added shared
+  withCache/HttpClient regression coverage for the iOS hybrid backend.
 
 ## Remaining
 

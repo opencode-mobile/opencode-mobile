@@ -1,3 +1,4 @@
 package dev.opencode.mobile.markdown
 
-internal actual fun openCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default
+internal actual fun openCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter =
+    OpenCodeBundledJoniMarkdownHighlighter.default()

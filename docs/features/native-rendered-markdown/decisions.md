@@ -308,3 +308,24 @@
 - Reason: the parser should not know whether highlighting came from the fallback
   scaffold or the future TextMate/Oniguruma engine.
 - Date: 2026-06-20.
+
+## Android Uses One Bundled Joni Highlighter Factory
+
+- Decision: Android session chat, component gallery, and
+  `OpenCodePlatformMarkdownHighlighter` all resolve highlighting through
+  `OpenCodeBundledJoniMarkdownHighlighter`. `OpenCodeAndroidMarkdownAssets.init`
+  runs from `Application.onCreate` so asset-backed grammar loading is available to
+  gallery mocks and the KMP platform provider.
+- Reason: gallery and chat must exercise the same TextMate/Joni path during
+  manual QA and CI; a separate semantic-fallback gallery path hid iOS-only
+  tokenizer regressions.
+- Date: 2026-06-21.
+
+## iOS Hybrid Regex Backend Lives In commonMain
+
+- Decision: `OpenCodeOnigurumaRegexBackend` lives in `commonMain` so shared
+  regression tests can exercise the iOS production backend without an iOS-only
+  test target.
+- Reason: the hybrid backend is pure Kotlin and should be covered by the same
+  withCache and HttpClient regression assertions used for Joni.
+- Date: 2026-06-21.

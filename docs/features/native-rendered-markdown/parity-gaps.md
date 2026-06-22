@@ -8,13 +8,13 @@
   Oniguruma-compatible native backend and Shiki-level breadth.
 - Current iOS state: SwiftUI renderer calls the KMP JSON bridge, which loads
   bundled TextMate grammar resources from the app bundle and tokenizes through
-  the shared TextMate tokenizer with a Kotlin Regex-based bridge. It has limited
-  `\\G` anchoring support, but it is not Oniguruma-compatible and emits
+  the shared TextMate tokenizer with the hybrid `OpenCodeOnigurumaRegexBackend`
+  (`\\G` anchoring on Kotlin `Regex`). It is not Oniguruma-compatible and emits
   `HighlighterBackendFallback`.
-- Current Android state: Compose renderer loads bundled grammar assets and uses
-  the shared TextMate tokenizer with the Joni Oniguruma-compatible backend.
-  JavaScript HttpClient regression snippets now pass Joni regression coverage and
-  open-rule invariant tests after the shared tokenizer open-rule resume fix.
+- Current Android state: session chat, component gallery, and the KMP platform
+  provider all resolve the same bundled Joni TextMate highlighter through
+  `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
+  regression snippets pass Joni and iOS-hybrid backend regression coverage.
   EventEmitter-style duplicate span emission (`constconst`, doubled comment
   slashes) is deduplicated in `OpenCodeSyntaxHighlighter`, and partial-overlap
   spans (for example scattered `p`/`l` letters inside `HttpClient` or `patch`)
