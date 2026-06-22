@@ -21,6 +21,9 @@
 - Transform-before-publish: Session Chat keeps the timeline in `Loading` until
   the full message list is markdown-enriched, and live streaming updates use a
   debounced enrich step before state is published (no post-publish parse jobs).
+- Outgoing overflow: structural markdown content retains collapse/expand;
+  long wrapped inline markdown stays fully visible when no expand control can
+  be offered.
 
 ## Completed
 

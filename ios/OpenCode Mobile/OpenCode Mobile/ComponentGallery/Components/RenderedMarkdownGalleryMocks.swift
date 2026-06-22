@@ -5,27 +5,102 @@ enum RenderedMarkdownGalleryMocks {
         let id: String
         let label: String
         let variant: OpenCodeRenderedMarkdownVariant
+        let rawMarkdown: String
         let document: NativeMarkdownDocument
+        let usesOutgoingMessage: Bool
     }
 
     private static let assistantMarkdown = """
-    ### Plan
+    ### Release checklist
 
-    - Keep the chat native.
-    - Use the renderer only for formatted text.
+    The session is ready for review. Start with the **native render tree**,
+    then verify the [session status](https://example.com/session-status).
 
     ```swift
-    let renderer = "native SwiftUI"
+    let renderer = NativeMarkdownRenderer(platform: .iOS)
+    renderer.render(document)
     ```
+
+    - Preserve raw markdown for copy and restore.
+    - Keep `http` and `https` links native-owned.
     """
 
     private static let outgoingMarkdown = """
-    Please compare `main` against my branch and summarize:
+    Please review the markdown migration before merging. The response should
+    call out any regression in `SessionChat`, confirm that `diff` blocks keep
+    horizontal scrolling, and include the exact test command to rerun after
+    resolving comments. This intentionally long formatted paragraph verifies
+    that an outgoing inline-markdown message remains fully readable.
+    """
 
-    | Area | Need |
-    | --- | --- |
-    | Tests | focused |
-    | Risk | low |
+    private static let codeMarkdown = """
+    ```typescript
+    export function renderSessionMarkdown(source: string): RenderTree {
+      return parseMarkdown(source, { highlight: "textmate", allowHtml: false })
+    }
+    ```
+    """
+
+    private static let languagesMarkdown = """
+    ### Syntax language sweep
+
+    ```kotlin
+    data class Session(val id: String, val active: Boolean)
+    ```
+
+    ```swift
+    let status = sessions.first(where: \\.isActive)
+    ```
+
+    ```typescript
+    const retry = async <T>(work: () => Promise<T>): Promise<T> => work()
+    ```
+
+    ```python
+    def summarize(messages: list[str]) -> str:
+        return "\\n".join(messages)
+    ```
+
+    ```json
+    { "renderer": "native", "network": false }
+    ```
+
+    ```bash
+    ./gradlew :app:assembleDebug
+    ```
+
+    ```yaml
+    markdown:
+      renderer: native
+      streaming: debounce
+    ```
+    """
+
+    private static let richMarkdown = """
+    ## Review decision
+
+    > Ship the native renderer only when the message stays readable on a
+    > narrow screen and links remain platform-owned.
+
+    1. Verify **assistant** and _outgoing_ variants.
+    2. Check `diff` colors in light and dark themes.
+    3. Open the [release checklist](https://example.com/release-checklist).
+
+    ![Mobile session screenshot](https://example.com/session.png)
+
+    ---
+
+    The image is represented as safe alt text; no remote content is loaded.
+    """
+
+    private static let tableMarkdown = """
+    ### Verification matrix
+
+    | Surface | Expected result | Owner |
+    | --- | --- | --- |
+    | Session Chat | Native text and code blocks | Mobile |
+    | Streaming | No forced scroll after user scrolls up | Mobile |
+    | Links | Only HTTPS leaves the app | Platform |
     """
 
     private static let diffMarkdown = """
@@ -41,19 +116,57 @@ enum RenderedMarkdownGalleryMocks {
             id: "assistant",
             label: "Assistant",
             variant: .assistantMessage,
-            document: OpenCodeRenderedMarkdownParser.parse(assistantMarkdown)
+            rawMarkdown: assistantMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(assistantMarkdown),
+            usesOutgoingMessage: false
         ),
         Sample(
-            id: "outgoing",
-            label: "Outgoing",
+            id: "request",
+            label: "Request",
             variant: .outgoingMessage,
-            document: OpenCodeRenderedMarkdownParser.parse(outgoingMarkdown)
+            rawMarkdown: outgoingMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(outgoingMarkdown),
+            usesOutgoingMessage: true
+        ),
+        Sample(
+            id: "code",
+            label: "Code",
+            variant: .assistantMessage,
+            rawMarkdown: codeMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(codeMarkdown),
+            usesOutgoingMessage: false
+        ),
+        Sample(
+            id: "languages",
+            label: "Languages",
+            variant: .standalone,
+            rawMarkdown: languagesMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(languagesMarkdown),
+            usesOutgoingMessage: false
+        ),
+        Sample(
+            id: "rich",
+            label: "Rich",
+            variant: .assistantMessage,
+            rawMarkdown: richMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(richMarkdown),
+            usesOutgoingMessage: false
+        ),
+        Sample(
+            id: "table",
+            label: "Table",
+            variant: .assistantMessage,
+            rawMarkdown: tableMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(tableMarkdown),
+            usesOutgoingMessage: false
         ),
         Sample(
             id: "diff",
             label: "Diff",
             variant: .standalone,
-            document: OpenCodeRenderedMarkdownParser.parse(diffMarkdown)
+            rawMarkdown: diffMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(diffMarkdown),
+            usesOutgoingMessage: false
         ),
     ]
 }

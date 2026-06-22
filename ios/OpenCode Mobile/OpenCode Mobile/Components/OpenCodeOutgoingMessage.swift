@@ -148,7 +148,11 @@ struct OpenCodeOutgoingMessage: View {
                         onRenderedMarkdownHeightChange(min(height, outgoingMessageCollapsedRenderedMarkdownHeight))
                     }
                 )
-                .frame(height: expanded ? renderedMarkdownHeight : min(renderedMarkdownHeight, outgoingMessageCollapsedRenderedMarkdownHeight))
+                .frame(
+                    height: isExpandable && !expanded
+                        ? min(renderedMarkdownHeight, outgoingMessageCollapsedRenderedMarkdownHeight)
+                        : renderedMarkdownHeight
+                )
                 .clipped()
             } else {
                 Text(text)

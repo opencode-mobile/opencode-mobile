@@ -79,7 +79,7 @@ fun OpenCodeRenderedMarkdown(
     val density = LocalDensity.current
     val isExpandable = collapsedMaxHeight != null && document.isLikelyExpandable()
     val visibleModifier =
-        if (!expanded && collapsedMaxHeight != null) {
+        if (!expanded && collapsedMaxHeight != null && isExpandable) {
             modifier.heightIn(max = collapsedMaxHeight).clipToBounds()
         } else {
             modifier

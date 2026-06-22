@@ -41,6 +41,10 @@ renderer.
 Copy and restore actions use the original raw markdown text. Per-code-block copy
 controls are intentionally deferred.
 
+Outgoing messages clamp only when their document is structurally expandable.
+Long wrapped inline markdown that cannot expose an expand control stays fully
+visible rather than losing content below the collapsed height.
+
 ## Platform Notes
 
 - iOS: implemented with SwiftUI text, stacks, scroll views, and attributed text.
@@ -51,9 +55,14 @@ controls are intentionally deferred.
 
 ## Previews
 
-- Light: assistant message with heading, list, and code.
-- Dark: outgoing message with fenced code.
-- Default: markdown text.
+- Light: assistant release checklist with a link, inline code, and highlighted
+  Kotlin or Swift code.
+- Dark: long outgoing review request, rendered through `OpenCodeOutgoingMessage`.
+- Default: highlighted TypeScript code, a native table, and a multi-language
+  syntax sweep covering Kotlin, Swift, TypeScript, Python, JSON, Shell, and YAML.
+- Rich content: blockquote, ordered list, emphasis, link, safe image-alt label,
+  and thematic break.
+- Diff: fenced session-chat patch with added and deleted lines.
 - Streaming: same content re-rendered through native chat updates.
 - Empty: native placeholder remains the caller's responsibility.
 

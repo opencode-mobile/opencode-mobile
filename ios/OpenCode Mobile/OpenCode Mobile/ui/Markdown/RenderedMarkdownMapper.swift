@@ -5,6 +5,7 @@ final class RenderedMarkdownMapper {
 
     private let cacheLock = NSLock()
     private var cache: [CacheKey: NativeMarkdownDocument] = [:]
+    private var cacheOrder: [CacheKey] = []
     private let maxCacheEntries = 32
 
     private init() {}
@@ -21,6 +22,7 @@ final class RenderedMarkdownMapper {
         let cacheKey = CacheKey(messageID: messageID, text: text, isStreaming: isStreaming)
         cacheLock.lock()
         if let cached = cache[cacheKey] {
+            touch(cacheKey)
             cacheLock.unlock()
             return cached
         }
@@ -32,11 +34,18 @@ final class RenderedMarkdownMapper {
 
         cacheLock.lock()
         cache[cacheKey] = parsed
-        while cache.count > maxCacheEntries, let oldestKey = cache.keys.first {
+        touch(cacheKey)
+        while cacheOrder.count > maxCacheEntries {
+            let oldestKey = cacheOrder.removeFirst()
             cache.removeValue(forKey: oldestKey)
         }
         cacheLock.unlock()
         return parsed
+    }
+
+    private func touch(_ key: CacheKey) {
+        cacheOrder.removeAll { $0 == key }
+        cacheOrder.append(key)
     }
 
     func enrichRows(
