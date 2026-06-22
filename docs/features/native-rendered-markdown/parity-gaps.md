@@ -15,24 +15,34 @@
   provider all resolve the same bundled Joni TextMate highlighter through
   `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
   regression snippets pass Joni and iOS-hybrid backend regression coverage.
-  EventEmitter-style duplicate span emission (`constconst`, doubled comment
-  slashes) is deduplicated in `OpenCodeSyntaxHighlighter`, and partial-overlap
-  spans (for example scattered `p`/`l` letters inside `HttpClient` or `patch`)
-  are partitioned to non-overlapping intervals and consolidated within identifier
-  tokens (including same-role coverage gaps such as `wit` + `h` + `Cache` inside
-  `withCache`) before native render. JavaScript private fields (`#baseUrl`,
-  `#timeout`, `this.#headers`) are normalized to one `Variable` span per
-  `#identifier` when TextMate emits only `meta.class` coverage or mixed
-  `entity.name.type` / `property` roles. Both native renderers apply range styles
-  with semantic priority so overlapping input cannot cherry-pick letters.
+  A popular-languages TextMate pack (Java, C#, C/C++, Ruby, PHP, SQL, TOML,
+  XML, Scala, Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell,
+  Elixir, Erlang, R, and Zig) is bundled with Shiki golden fixtures and smoke
+  coverage; fenced blocks in those languages no longer hit semantic fallback.
+  Java method-signature lines (`void main(String[] args)`) can still miss inner
+  tokens until broader Java grammar parity lands. EventEmitter-style duplicate
+  span emission (`constconst`, doubled comment slashes) is deduplicated in
+  `OpenCodeSyntaxHighlighter`, and partial-overlap spans (for example scattered
+  `p`/`l` letters inside `HttpClient` or `patch`) are partitioned to
+  non-overlapping intervals and consolidated within identifier tokens (including
+  same-role coverage gaps such as `wit` + `h` + `Cache` inside `withCache`)
+  before native render. JavaScript private field declarations stay plain while
+  `this.#…` member access uses `Property`. Both native renderers map
+  `CodeTokenRole` values to web-aligned syntax tokens (`Variable` →
+  `text-primary`, `Function` → `syntax-primitive`, `Property` / `Constant` →
+  `syntax-constant`, `String` → `syntax-string`, `Number` → `syntax-property`,
+  punctuation → `text-primary`). Shiki assigns JVM parameter types such as
+  `String` to `Keyword` and leaves qualified names such as `System` as
+  `Variable`; the shared `storage.*` scope mapper is unchanged.
 - Reason: TextMate/Oniguruma is the feasibility-gated subsystem. Full
   byte-for-byte Shiki semantic golden parity and some line-boundary ASI cases
   (for example multi-line `const` without semicolon) remain open on both
   platforms.
 - Owner or next action: expand active Shiki golden comparisons beyond the
   Android/Joni `diff`, `json`, `yaml`, `css`, and `html` subsets, remove
-  `@Ignore` from the KMP native-vs-Shiki highlighter comparison test, and close
-  remaining JavaScript line-state parity gaps.
+  `@Ignore` from the KMP native-vs-Shiki highlighter comparison test, close
+  remaining Java method-signature token gaps, and close remaining JavaScript
+  line-state parity gaps.
 
 ## Code Block Layout
 

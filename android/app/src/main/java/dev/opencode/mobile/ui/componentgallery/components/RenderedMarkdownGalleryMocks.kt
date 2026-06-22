@@ -85,6 +85,29 @@ object RenderedMarkdownGalleryMocks {
           renderer: native
           streaming: debounce
         ```
+
+        ```java
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("hello");
+            }
+        }
+        ```
+
+        ```csharp
+        public sealed class SessionService {
+            public string Label(string id) => id;
+        }
+        ```
+
+        ```sql
+        SELECT id, label FROM sessions WHERE active = TRUE;
+        ```
+
+        ```toml
+        [markdown]
+        renderer = "native"
+        ```
         """.trimIndent()
 
     private val richMarkdown =

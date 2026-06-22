@@ -149,8 +149,14 @@ class OpenCodeSyntaxHighlighterPartitionTest {
         val code = "  #timeout;\n    this.#baseUrl"
         val result = highlighter.highlight("javascript", code)
 
-        assertEquals(CodeSpan(2, 10, CodeTokenRole.Variable), result.spans[0])
-        assertEquals(CodeSpan(21, 29, CodeTokenRole.Variable), result.spans[1])
+        assertTrue(
+            result.spans.none { span -> span.start <= 2 && span.end >= 10 },
+            "private field declarations should stay plain: ${result.spans}",
+        )
+        val thisSpan = result.spans.single { span -> code.substring(span.start, span.end) == "this" }
+        val fieldSpan = result.spans.single { span -> code.substring(span.start, span.end) == "#baseUrl" }
+        assertEquals(CodeTokenRole.Property, thisSpan.role)
+        assertEquals(CodeTokenRole.Property, fieldSpan.role)
     }
 
     @Test
@@ -179,6 +185,41 @@ class OpenCodeSyntaxHighlighterPartitionTest {
 
         assertEquals(CodeSpan(0, 10, CodeTokenRole.String), result.spans[0])
         assertEquals(CodeSpan(11, 22, CodeTokenRole.Comment), result.spans[1])
+    }
+
+    @Test
+    fun normalizeWebSyntaxRolesMapsJavaScriptThisAndExpressionKeywords() {
+        val highlighter =
+            OpenCodeSyntaxHighlighter(
+                grammarBundle = bundledGrammarBundle(),
+                textMateTokenizer =
+                    object : OpenCodeTextMateTokenizer {
+                        override fun tokenize(
+                            grammar: TextMateGrammarPayload,
+                            code: String,
+                            grammarBundle: TextMateGrammarBundle?,
+                        ): TextMateTokenizationResult =
+                            TextMateTokenizationResult(
+                                tokens =
+                                    listOf(
+                                        TextMateScopeToken(0, 4, listOf("source.js", "variable.language.this.js")),
+                                        TextMateScopeToken(5, 8, listOf("source.js", "keyword.operator.new.js")),
+                                        TextMateScopeToken(9, 20, listOf("source.js", "entity.name.type.class.js")),
+                                    ),
+                            )
+                    },
+            )
+
+        val result = highlighter.highlight("javascript", "this new constructor")
+
+        assertEquals(
+            listOf(
+                CodeSpan(0, 4, CodeTokenRole.Property),
+                CodeSpan(5, 8, CodeTokenRole.Keyword),
+                CodeSpan(9, 20, CodeTokenRole.Keyword),
+            ),
+            result.spans,
+        )
     }
 
     private fun bundledGrammarBundle(): TextMateGrammarBundle = testJavascriptGrammarBundle()

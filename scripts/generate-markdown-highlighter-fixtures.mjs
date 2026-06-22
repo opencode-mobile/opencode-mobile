@@ -352,6 +352,270 @@ func label(count int) string {
  context
 `,
   },
+  {
+    id: "java-basic",
+    language: "java",
+    aliases: [],
+    code: `public class Main {
+    public static void main(String[] args) {
+        // Create an array
+        int[] numbers = {1, 2, 3, 4, 5};
+
+        // Loop through array
+        for (int i = 0; i < numbers.length; i++) {
+            System.out.println(numbers[i]);
+        }
+
+        // Try-catch block
+        try {
+            int result = 10 / 0;
+        } catch (ArithmeticException e) {
+            System.err.println("Division by zero!");
+        }
+    }
+}
+`,
+  },
+  {
+    id: "csharp-basic",
+    language: "csharp",
+    aliases: ["cs"],
+    code: `using System;
+
+public sealed class SessionService
+{
+    public string Label(string id, int count)
+    {
+        return $"{id}: {count}";
+    }
+}
+`,
+  },
+  {
+    id: "c-basic",
+    language: "c",
+    aliases: [],
+    code: `#include <stdio.h>
+
+int main(void) {
+    // greet the caller
+    const char *name = "opencode";
+    printf("hello %s\\n", name);
+    return 0;
+}
+`,
+  },
+  {
+    id: "cpp-basic",
+    language: "cpp",
+    aliases: ["cc", "cxx"],
+    code: `#include <iostream>
+#include <string>
+
+int main() {
+    std::string label = "sessions";
+  std::cout << label << ": " << 3 << std::endl;
+    return 0;
+}
+`,
+  },
+  {
+    id: "ruby-basic",
+    language: "ruby",
+    aliases: ["rb"],
+    code: `class Session
+  def label(count)
+    "sessions: #{count}"
+  end
+end
+`,
+  },
+  {
+    id: "php-basic",
+    language: "php",
+    aliases: [],
+    code: `<?php
+
+function label(int $count): string {
+    return "sessions: {$count}";
+}
+`,
+  },
+  {
+    id: "sql-basic",
+    language: "sql",
+    aliases: [],
+    code: `-- active sessions
+SELECT id, title
+FROM sessions
+WHERE active = TRUE
+LIMIT 10;
+`,
+  },
+  {
+    id: "toml-basic",
+    language: "toml",
+    aliases: [],
+    code: `[project]
+name = "opencode"
+enabled = true
+limit = 3
+`,
+  },
+  {
+    id: "xml-basic",
+    language: "xml",
+    aliases: [],
+    code: `<?xml version="1.0" encoding="UTF-8"?>
+<session id="alpha" active="true">
+  <title>Review</title>
+</session>
+`,
+  },
+  {
+    id: "scala-basic",
+    language: "scala",
+    aliases: [],
+    code: `object Sessions {
+  def label(count: Int): String =
+    s"sessions: $count"
+}
+`,
+  },
+  {
+    id: "lua-basic",
+    language: "lua",
+    aliases: [],
+    code: `local function label(count)
+  -- format a label
+  return "sessions: " .. count
+end
+`,
+  },
+  {
+    id: "docker-basic",
+    language: "docker",
+    aliases: [],
+    code: `FROM node:22-alpine
+WORKDIR /app
+COPY package.json .
+RUN npm install --omit=dev
+CMD ["node", "server.js"]
+`,
+  },
+  {
+    id: "vue-basic",
+    language: "vue",
+    aliases: [],
+    code: `<script setup lang="ts">
+const title = "OpenCode"
+</script>
+
+<template>
+  <h1>{{ title }}</h1>
+</template>
+`,
+  },
+  {
+    id: "svelte-basic",
+    language: "svelte",
+    aliases: [],
+    code: `<script>
+  let count = 0
+</script>
+
+<p>Sessions: {count}</p>
+`,
+  },
+  {
+    id: "graphql-basic",
+    language: "graphql",
+    aliases: [],
+    code: `type Session {
+  id: ID!
+  title: String!
+  active: Boolean!
+}
+
+query ActiveSessions {
+  sessions(active: true) {
+    id
+    title
+  }
+}
+`,
+  },
+  {
+    id: "powershell-basic",
+    language: "powershell",
+    aliases: ["pwsh"],
+    code: `function Get-SessionLabel([int]$Count) {
+    # build a label
+    return "sessions: $Count"
+}
+`,
+  },
+  {
+    id: "perl-basic",
+    language: "perl",
+    aliases: [],
+    code: `sub label {
+    my ($count) = @_;
+    return "sessions: $count";
+}
+`,
+  },
+  {
+    id: "haskell-basic",
+    language: "haskell",
+    aliases: [],
+    code: `label :: Int -> String
+label count = "sessions: " ++ show count
+`,
+  },
+  {
+    id: "elixir-basic",
+    language: "elixir",
+    aliases: [],
+    code: `defmodule Sessions do
+  def label(count) do
+    "sessions: #{count}"
+  end
+end
+`,
+  },
+  {
+    id: "erlang-basic",
+    language: "erlang",
+    aliases: [],
+    code: `-module(sessions).
+-export([label/1]).
+
+label(Count) ->
+    io_lib:format("sessions: ~p", [Count]).
+`,
+  },
+  {
+    id: "r-basic",
+    language: "r",
+    aliases: [],
+    code: `label <- function(count) {
+  # format a label
+  paste0("sessions: ", count)
+}
+`,
+  },
+  {
+    id: "zig-basic",
+    language: "zig",
+    aliases: [],
+    code: `const std = @import("std");
+
+pub fn label(count: u32) []const u8 {
+    return std.fmt.allocPrint(std.heap.page_allocator, "sessions: {d}", .{count}) catch "sessions: ?";
+}
+`,
+  },
 ]
 
 const shikiLangs = [...new Set(fixtures.map((fixture) => fixture.language))]
@@ -493,12 +757,20 @@ async function buildGrammarManifest() {
       grammars: grammars.map((grammar) => {
         const resourceName = `${slugify(grammar.name ?? grammar.scopeName ?? language)}.json`
         const resourcePath = `textmate-grammars/grammars/${resourceName}`
-        resourceGrammars.set(resourcePath, grammar)
+        const name = grammar.name ?? slugify(grammar.scopeName ?? language)
+        const scopeName = grammar.scopeName ?? grammar.name ?? `source.${slugify(language)}`
+        const displayName = grammar.displayName ?? grammar.name ?? grammar.scopeName ?? language
+        resourceGrammars.set(resourcePath, {
+          ...grammar,
+          name,
+          displayName,
+          scopeName,
+        })
 
         return {
-          name: grammar.name,
-          displayName: grammar.displayName,
-          scopeName: grammar.scopeName,
+          name,
+          displayName,
+          scopeName,
           resourcePath,
           embeddedLanguages: grammar.embeddedLangs ?? [],
           aliases: grammar.aliases ?? [],
@@ -532,9 +804,9 @@ function buildGrammarResourceFixtures(manifest) {
       const json = `${JSON.stringify(grammar, null, 2)}\n`
       return {
         resourcePath,
-        name: grammar.name ?? "",
-        displayName: grammar.displayName ?? "",
-        scopeName: grammar.scopeName ?? "",
+        name: grammar.name ?? slugify(grammar.scopeName ?? ""),
+        displayName: grammar.displayName ?? grammar.name ?? grammar.scopeName ?? "",
+        scopeName: grammar.scopeName ?? grammar.name ?? "",
         byteSize: Buffer.byteLength(json, "utf8"),
       }
     })

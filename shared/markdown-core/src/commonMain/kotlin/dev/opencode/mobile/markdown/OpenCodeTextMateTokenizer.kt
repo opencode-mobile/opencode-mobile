@@ -337,6 +337,7 @@ class OpenCodeTextMateNativeTokenizer(
         activeIncludes: Set<String>,
         baseGrammar: TextMateGrammar,
         offset: Int = 0,
+        captureDepth: Int = 0,
     ): List<TextMateScopeToken> =
         tokenizeRangeWithState(
             grammar = grammar,
@@ -349,6 +350,7 @@ class OpenCodeTextMateNativeTokenizer(
             activeIncludes = activeIncludes,
             baseGrammar = baseGrammar,
             offset = offset,
+            captureDepth = captureDepth,
         ).tokens
 
     private fun tokenizeRangeWithState(
@@ -362,7 +364,12 @@ class OpenCodeTextMateNativeTokenizer(
         activeIncludes: Set<String>,
         baseGrammar: TextMateGrammar,
         offset: Int = 0,
+        captureDepth: Int = 0,
     ): RangeTokenizationResult {
+        if (captureDepth > MAX_CAPTURE_TOKENIZE_DEPTH) {
+            return RangeTokenizationResult(tokens = emptyList())
+        }
+
         val rules =
             resolveRules(
                 grammar = grammar,
@@ -403,6 +410,7 @@ class OpenCodeTextMateNativeTokenizer(
                         activeIncludes = activeIncludes,
                         baseGrammar = baseGrammar,
                         offset = offset,
+                        captureDepth = captureDepth,
                     )
                 cursor = next.match.end.coerceAtLeast(cursor + 1)
             } else if (rule.begin != null) {
@@ -418,6 +426,7 @@ class OpenCodeTextMateNativeTokenizer(
                         activeIncludes = activeIncludes,
                         baseGrammar = baseGrammar,
                         offset = offset,
+                        captureDepth = captureDepth,
                     )
                 tokens += result.tokens
                 if (result.openRule != null) {
@@ -443,6 +452,7 @@ class OpenCodeTextMateNativeTokenizer(
         activeIncludes: Set<String>,
         baseGrammar: TextMateGrammar,
         offset: Int,
+        captureDepth: Int = 0,
     ): BeginEndTokenizationResult {
         val ruleScopes = baseScopes.withScope(pattern.name)
         val tokens = mutableListOf<TextMateScopeToken>()
@@ -457,6 +467,7 @@ class OpenCodeTextMateNativeTokenizer(
                 activeIncludes = activeIncludes,
                 baseGrammar = baseGrammar,
                 offset = offset,
+                captureDepth = captureDepth,
             )
         tokens += beginTokens
         val resolvedEndPattern = pattern.end?.let { endPattern -> resolveBackReferences(endPattern, beginMatch, code) }
@@ -478,6 +489,7 @@ class OpenCodeTextMateNativeTokenizer(
                     offset = offset,
                     endPattern = resolvedEndPattern,
                     applyEndPatternLast = pattern.shouldApplyEndPatternLast,
+                    captureDepth = captureDepth,
                 )
             } else {
                 null
@@ -509,6 +521,7 @@ class OpenCodeTextMateNativeTokenizer(
                     activeIncludes = activeIncludes,
                     baseGrammar = baseGrammar,
                     offset = offset,
+                    captureDepth = captureDepth,
                 )
             } else {
                 emptyList()
@@ -529,6 +542,7 @@ class OpenCodeTextMateNativeTokenizer(
                     activeIncludes = activeIncludes,
                     baseGrammar = baseGrammar,
                     offset = offset,
+                    captureDepth = captureDepth,
                 )
         }
 
@@ -683,6 +697,7 @@ class OpenCodeTextMateNativeTokenizer(
         offset: Int,
         endPattern: String,
         applyEndPatternLast: Boolean,
+        captureDepth: Int = 0,
     ): DelimitedContentTokenizationResult {
         val rules =
             resolveRules(
@@ -730,6 +745,7 @@ class OpenCodeTextMateNativeTokenizer(
                         activeIncludes = activeIncludes,
                         baseGrammar = baseGrammar,
                         offset = offset,
+                        captureDepth = captureDepth,
                     )
                 cursor = next.match.end.coerceAtLeast(cursor + 1)
             } else if (rule.begin != null) {
@@ -745,6 +761,7 @@ class OpenCodeTextMateNativeTokenizer(
                         activeIncludes = activeIncludes,
                         baseGrammar = baseGrammar,
                         offset = offset,
+                        captureDepth = captureDepth,
                     )
                 tokens += result.tokens
                 if (result.openRule != null) {
@@ -867,6 +884,7 @@ class OpenCodeTextMateNativeTokenizer(
         activeIncludes: Set<String>,
         baseGrammar: TextMateGrammar,
         offset: Int,
+        captureDepth: Int = 0,
     ): List<TextMateScopeToken> {
         val ruleScopes = baseScopes.withScope(pattern.name)
         val captureTokens =
@@ -880,6 +898,7 @@ class OpenCodeTextMateNativeTokenizer(
                 activeIncludes = activeIncludes,
                 baseGrammar = baseGrammar,
                 offset = offset,
+                captureDepth = captureDepth,
             )
         if (captureTokens.isEmpty()) {
             return listOfNotNull(token(match.start + offset, match.end + offset, ruleScopes))
@@ -898,6 +917,7 @@ class OpenCodeTextMateNativeTokenizer(
         activeIncludes: Set<String>,
         baseGrammar: TextMateGrammar,
         offset: Int,
+        captureDepth: Int = 0,
     ): List<TextMateScopeToken> {
         val captureTokens =
             tokensForCaptures(
@@ -910,6 +930,7 @@ class OpenCodeTextMateNativeTokenizer(
                 activeIncludes = activeIncludes,
                 baseGrammar = baseGrammar,
                 offset = offset,
+                captureDepth = captureDepth,
             )
         if (captureTokens.isEmpty()) {
             return listOfNotNull(token(match.start + offset, match.end + offset, scopes))
@@ -928,6 +949,7 @@ class OpenCodeTextMateNativeTokenizer(
         activeIncludes: Set<String>,
         baseGrammar: TextMateGrammar,
         offset: Int,
+        captureDepth: Int = 0,
     ): List<TextMateScopeToken> {
         val tokens = mutableListOf<TextMateScopeToken>()
         captures.forEach { (index, capture) ->
@@ -951,6 +973,7 @@ class OpenCodeTextMateNativeTokenizer(
                         activeIncludes = activeIncludes,
                         baseGrammar = baseGrammar,
                         offset = offset,
+                        captureDepth = captureDepth + 1,
                     )
                 tokens += nestedTokens
                 tokens += scopedHoles(group.start + offset, group.end + offset, nestedTokens, captureScopes)
@@ -1119,6 +1142,7 @@ class OpenCodeTextMateNativeTokenizer(
     )
 
     private companion object {
+        const val MAX_CAPTURE_TOKENIZE_DEPTH = 48
         val backReferenceRegex = Regex("""\\([1-9][0-9]?)""")
     }
 }

@@ -8,6 +8,14 @@ import kotlin.test.assertTrue
 class OpenCodeTextMateGrammarResourceAndroidTest {
     @Test
     fun bundledTextMateGrammarResourcesLoadFromAndroidClasspath() {
+        val manifestText = readClasspathResource("textmate-grammars/manifest.json")
+        assertNotNull(manifestText, "manifest resource should be on the unit test classpath")
+
+        val decodedManifest =
+            runCatching { OpenCodeTextMateGrammarManifest.decode(manifestText) }
+                .getOrElse { error("manifest decode failed: ${it.message}") }
+        assertTrue(decodedManifest.languages.isNotEmpty())
+
         val result =
             OpenCodeTextMateGrammarBundleLoader.loadBundled(
                 reader =
@@ -15,10 +23,13 @@ class OpenCodeTextMateGrammarResourceAndroidTest {
                         readClasspathResource(resourcePath)
                     },
             )
-        val bundle = assertNotNull(result.bundle)
+        val bundle = assertNotNull(result.bundle, result.diagnostics.joinToString { it.message })
 
         assertTrue(result.diagnostics.isEmpty(), result.diagnostics.joinToString { it.message })
-        assertTrue(bundle.diagnostics.isEmpty(), bundle.diagnostics.joinToString { it.message })
+        assertTrue(
+            bundle.diagnostics.isEmpty(),
+            bundle.diagnostics.joinToString("\n") { "${it.resourcePath}: ${it.message}" },
+        )
         assertEquals(TextMateGrammarResourceFixtures.all.size, bundle.grammars.size)
 
         TextMateGrammarResourceFixtures.all.forEach { fixture ->
@@ -38,7 +49,6 @@ class OpenCodeTextMateGrammarResourceAndroidTest {
 
     private fun readClasspathResource(resourcePath: String): String? =
         javaClass.classLoader
-            ?.getResourceAsStream(resourcePath)
-            ?.bufferedReader()
-            ?.use { reader -> reader.readText() }
+            ?.getResource(resourcePath)
+            ?.readText(Charsets.UTF_8)
 }

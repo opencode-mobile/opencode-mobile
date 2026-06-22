@@ -24,8 +24,13 @@ object OpenCodeBundledJoniMarkdownHighlighter {
     fun default(): OpenCodeCodeHighlighter = lazyDefault
 
     private val lazyDefault: OpenCodeSyntaxHighlighter by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        createFromApplicationContext()
+        runCatching { createFromApplicationContext() }.getOrElse { create(classpathResourceReader()) }
     }
+
+    private fun classpathResourceReader(): OpenCodeTextMateResourceReader =
+        OpenCodeTextMateResourceReader { resourcePath ->
+            OpenCodeBundledJoniMarkdownHighlighter::class.java.classLoader?.getResource(resourcePath)?.readText()
+        }
 
     private fun assetResourceReader(context: Context): OpenCodeTextMateResourceReader =
         OpenCodeTextMateResourceReader { resourcePath ->

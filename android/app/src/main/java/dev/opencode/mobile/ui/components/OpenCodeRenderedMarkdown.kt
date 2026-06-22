@@ -498,20 +498,19 @@ private fun CodeColors.colorForRole(role: CodeTokenRole): androidx.compose.ui.gr
         CodeTokenRole.Plain -> plain
         CodeTokenRole.Comment -> comment
         CodeTokenRole.Keyword -> keyword
-        CodeTokenRole.String -> string
-        CodeTokenRole.Number,
-        CodeTokenRole.Variable,
+        CodeTokenRole.Type -> type
+        CodeTokenRole.Variable -> plain
+        CodeTokenRole.Property,
         CodeTokenRole.Constant,
         -> constant
-        CodeTokenRole.Type,
-        CodeTokenRole.Function,
-        -> type
-        CodeTokenRole.Property,
+        CodeTokenRole.Function -> primitive
+        CodeTokenRole.Number,
         CodeTokenRole.Attribute,
         -> property
+        CodeTokenRole.String -> string
         CodeTokenRole.Operator,
         CodeTokenRole.Punctuation,
-        -> primitive
+        -> plain
         CodeTokenRole.Tag -> info
         CodeTokenRole.Inserted -> inserted
         CodeTokenRole.Deleted -> deleted

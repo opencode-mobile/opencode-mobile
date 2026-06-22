@@ -3,11 +3,15 @@ package dev.opencode.mobile.markdown
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 @Serializable
 data class TextMateGrammar(
@@ -71,7 +75,10 @@ data class TextMateGrammarSummary(
 
 object OpenCodeTextMateGrammarDecoder {
     fun decode(json: JsonObject): TextMateGrammar =
-        OpenCodeMarkdownJson.json.decodeFromJsonElement(TextMateGrammar.serializer(), json)
+        OpenCodeMarkdownJson.json.decodeFromJsonElement(
+            TextMateGrammar.serializer(),
+            normalizeTextMateGrammarJson(json),
+        )
 
     fun decodeOrNull(json: JsonObject): TextMateGrammar? =
         try {
@@ -81,6 +88,45 @@ object OpenCodeTextMateGrammarDecoder {
         } catch (_: IllegalArgumentException) {
             null
         }
+
+    private fun normalizeTextMateGrammarJson(json: JsonObject): JsonObject =
+        normalizeJsonElement(json) as JsonObject
+
+    private fun normalizeJsonElement(element: JsonElement): JsonElement =
+        when (element) {
+            is JsonObject ->
+                buildJsonObject {
+                    element.forEach { (key, value) ->
+                        val normalizedValue =
+                            when (key) {
+                                "captures",
+                                "beginCaptures",
+                                "endCaptures",
+                                "whileCaptures",
+                                -> normalizeCaptureMap(value)
+                                else -> normalizeJsonElement(value)
+                            }
+                        put(key, normalizedValue)
+                    }
+                }
+            is JsonArray -> JsonArray(element.map(::normalizeJsonElement))
+            else -> element
+        }
+
+    private fun normalizeCaptureMap(element: JsonElement): JsonElement {
+        val captureMap = element as? JsonObject ?: return element
+        return buildJsonObject {
+            captureMap.forEach { (key, value) ->
+                put(
+                    key,
+                    when (value) {
+                        is JsonPrimitive -> buildJsonObject { put("name", value) }
+                        else -> normalizeJsonElement(value)
+                    },
+                )
+            }
+        }
+    }
 
     fun summarize(grammar: TextMateGrammar): TextMateGrammarSummary {
         val patterns = mutableListOf<TextMatePattern>()

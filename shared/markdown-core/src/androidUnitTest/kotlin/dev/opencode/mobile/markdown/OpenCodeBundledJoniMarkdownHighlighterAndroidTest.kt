@@ -24,7 +24,7 @@ class OpenCodeBundledJoniMarkdownHighlighterAndroidTest {
             result.diagnostics.none { it.kind == MarkdownDiagnosticKind.HighlighterBackendFallback },
             "Bundled Joni highlighter should not report backend fallback, got ${result.diagnostics}",
         )
-        HighlighterRegressionAssertions.assertPrivateFieldsUseVariableRole(
+        HighlighterRegressionAssertions.assertPrivateFieldsMatchWebRoles(
             code = fixture.code,
             spans = result.spans,
             privateFields = listOf("#baseUrl", "#headers", "#interceptors", "#timeout"),

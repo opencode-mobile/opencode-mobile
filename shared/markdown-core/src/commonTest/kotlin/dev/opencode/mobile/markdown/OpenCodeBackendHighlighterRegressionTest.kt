@@ -34,7 +34,7 @@ class OpenCodeBackendHighlighterRegressionTest {
             HighlighterGoldenFixtures.all.single { it.id == "javascript-http-client-class-repro" }
         val result = highlighter(OpenCodeOnigurumaRegexBackend).highlight(fixture.language, fixture.code)
         val privateFields = listOf("#baseUrl", "#headers", "#interceptors", "#timeout")
-        HighlighterRegressionAssertions.assertPrivateFieldsUseVariableRole(
+        HighlighterRegressionAssertions.assertPrivateFieldsMatchWebRoles(
             code = fixture.code,
             spans = result.spans,
             privateFields = privateFields,
@@ -50,6 +50,32 @@ class OpenCodeBackendHighlighterRegressionTest {
             result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterBackendFallback },
             "Expected ios hybrid backend fallback diagnostic, got ${result.diagnostics}",
         )
+    }
+
+    @Test
+    fun iosHybridBackendCoversJavaMainClassRegressionFixture() {
+        val fixture = HighlighterGoldenFixtures.all.single { it.id == "java-basic" }
+        val result = highlighter(OpenCodeOnigurumaRegexBackend).highlight(fixture.language, fixture.code)
+        HighlighterRegressionAssertions.assertTokenRoles(
+            code = fixture.code,
+            spans = result.spans,
+            expectations =
+                listOf(
+                    "public" to CodeTokenRole.Keyword,
+                    "Main" to CodeTokenRole.Type,
+                    "println" to CodeTokenRole.Function,
+                    "1" to CodeTokenRole.Number,
+                ),
+            label = "ios-hybrid-java-basic",
+        )
+        assertTrue(
+            result.spans.any { span ->
+                span.role == CodeTokenRole.String &&
+                    fixture.code.substring(span.start, span.end).contains("Division by zero")
+            },
+            "Expected catch string literal in ${result.spans}",
+        )
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges(fixture.id, result.spans)
     }
 
     private fun withCacheSnippet(): String =

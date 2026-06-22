@@ -52,6 +52,7 @@ class OpenCodeSyntaxHighlighter(
                     .partitionNonOverlappingSpans()
                     .consolidateWithinIdentifiers(code)
                     .highlightPrivateFields(code)
+                    .normalizeWebSyntaxRoles(code, languageOrAlias)
                     .mergeAdjacentSemanticSpans(code)
             if (spans.isNotEmpty()) {
                 return SyntaxHighlightResult(
@@ -115,10 +116,11 @@ class OpenCodeSyntaxHighlighter(
             return result
         }
 
+        private val identifierRegex = Regex("""#?[A-Za-z_][A-Za-z0-9_]*""")
+
         private fun List<CodeSpan>.consolidateWithinIdentifiers(code: String): List<CodeSpan> {
             if (isEmpty()) return emptyList()
 
-            val identifierRegex = Regex("""#?[A-Za-z_][A-Za-z0-9_]*""")
             val mutable = toMutableList()
 
             identifierRegex.findAll(code).forEach { match ->
@@ -153,11 +155,39 @@ class OpenCodeSyntaxHighlighter(
             return mutable.sortedBy { it.start }
         }
 
-        private fun List<CodeSpan>.highlightPrivateFields(code: String): List<CodeSpan> {
-            val privateFieldRegex = Regex("""#[A-Za-z_][A-Za-z0-9_]*""")
+        private val javaScriptLanguageAliases =
+            setOf(
+                "javascript",
+                "js",
+                "jsx",
+                "typescript",
+                "ts",
+                "tsx",
+                "mjs",
+                "cjs",
+                "mts",
+                "cts",
+            )
+
+        private val webExpressionKeywordIdentifiers =
+            setOf(
+                "new",
+                "typeof",
+                "instanceof",
+                "delete",
+                "void",
+            )
+
+        private fun List<CodeSpan>.normalizeWebSyntaxRoles(
+            code: String,
+            languageOrAlias: String?,
+        ): List<CodeSpan> {
+            val language = normalizedLanguage(languageOrAlias)
+            val isJavaScriptFamily = language != null && language in javaScriptLanguageAliases
             val mutable = toMutableList()
 
-            privateFieldRegex.findAll(code).forEach { match ->
+            identifierRegex.findAll(code).forEach { match ->
+                val word = match.value
                 val wordStart = match.range.first
                 val wordEnd = match.range.last + 1
                 val intersecting =
@@ -165,8 +195,57 @@ class OpenCodeSyntaxHighlighter(
                 if (intersecting.any { it.role == CodeTokenRole.String || it.role == CodeTokenRole.Comment }) {
                     return@forEach
                 }
+
+                val targetRole =
+                    when {
+                        word == "constructor" -> CodeTokenRole.Keyword
+                        isJavaScriptFamily && word == "this" -> CodeTokenRole.Property
+                        isJavaScriptFamily && word in webExpressionKeywordIdentifiers -> CodeTokenRole.Keyword
+                        else -> return@forEach
+                    }
+
                 mutable.removeAll(intersecting.toSet())
-                mutable += CodeSpan(wordStart, wordEnd, CodeTokenRole.Variable)
+                mutable += CodeSpan(wordStart, wordEnd, targetRole)
+            }
+
+            if (isJavaScriptFamily) {
+                Regex("""\bconstructor\s*\(\s*([a-z][A-Za-z0-9_]*)""").findAll(code).forEach { match ->
+                    val wordStart = match.groups[1]!!.range.first
+                    val wordEnd = match.groups[1]!!.range.last + 1
+                    val intersecting =
+                        mutable.filter { span -> span.end > wordStart && span.start < wordEnd }
+                    if (intersecting.any { it.role == CodeTokenRole.String || it.role == CodeTokenRole.Comment }) {
+                        return@forEach
+                    }
+                    mutable.removeAll(intersecting.toSet())
+                    mutable += CodeSpan(wordStart, wordEnd, CodeTokenRole.Variable)
+                }
+            }
+
+            return mutable.sortedBy { it.start }
+        }
+
+        private fun List<CodeSpan>.highlightPrivateFields(code: String): List<CodeSpan> {
+            val mutable = toMutableList()
+
+            Regex("""this\.(#[A-Za-z_][A-Za-z0-9_]*)""").findAll(code).forEach { match ->
+                val fieldRange = match.groups[1]!!.range
+                val fieldStart = fieldRange.first
+                val fieldEnd = fieldRange.last + 1
+                val intersecting =
+                    mutable.filter { span -> span.end > fieldStart && span.start < fieldEnd }
+                if (intersecting.any { it.role == CodeTokenRole.String || it.role == CodeTokenRole.Comment }) {
+                    return@forEach
+                }
+                mutable.removeAll(intersecting.toSet())
+                mutable += CodeSpan(fieldStart, fieldEnd, CodeTokenRole.Property)
+            }
+
+            Regex("""(?m)^\s+(#[A-Za-z_][A-Za-z0-9_]*);""").findAll(code).forEach { match ->
+                val fieldRange = match.groups[1]!!.range
+                val fieldStart = fieldRange.first
+                val fieldEnd = fieldRange.last + 1
+                mutable.removeAll { span -> span.end > fieldStart && span.start < fieldEnd }
             }
 
             return mutable.sortedBy { it.start }

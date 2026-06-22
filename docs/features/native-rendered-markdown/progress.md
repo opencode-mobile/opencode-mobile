@@ -158,6 +158,11 @@
   asset access.
 - Moved `OpenCodeOnigurumaRegexBackend` into `commonMain` and added shared
   withCache/HttpClient regression coverage for the iOS hybrid backend.
+- Added a popular-languages TextMate grammar pack (22 languages beyond Milestone
+  0) with Shiki golden fixtures, manifest/resource regeneration, XML grammar
+  capture shorthand decoding, capture-depth recursion guards for C/C++-style
+  `$self` loops, `java-basic` Joni/iOS-hybrid regression coverage, per-language
+  smoke tests, and gallery language-sweep blocks for Java, C#, SQL, and TOML.
 
 ## Remaining
 
@@ -167,8 +172,9 @@
   incremental reuse needed to pass the full Shiki golden fixtures.
 - Keep iOS grammar packaging/resource-reader behavior covered as release
   packaging changes.
-- Review grammar bundle size before release; the current Milestone 0 grammar
-  bundle is about 1.2 MB across 14 JSON files.
+- Review grammar bundle size before release; the bundled grammar set is about
+  3.6 MB across 48 JSON files (14 Milestone 0 languages plus 22 popular
+  languages).
 - Expand active Shiki golden comparisons beyond the Android/Joni `diff`, `json`,
   `yaml`, `css`, and `html` subsets and remove the ignored full native-vs-Shiki
   highlighter comparison once the native TextMate engine is in place.
@@ -178,6 +184,12 @@
 
 ## Verification
 
+- 2026-06-21: `npm run markdown:highlighter:golden` regenerated Shiki fixtures,
+  manifest, and 48 bundled grammar JSON files (~3.6 MB) for the popular-languages
+  pack.
+- 2026-06-21: `./gradlew :markdown-core:testDebugUnitTest` passed (82 tests)
+  after adding popular-language smoke tests, `java-basic` regression coverage,
+  XML capture shorthand decoding, and capture-depth recursion guards.
 - 2026-06-20: `./gradlew :markdown-core:allTests` passed.
 - 2026-06-20: `npm run markdown:highlighter:golden` regenerated Shiki semantic
   fixtures, the pinned TextMate grammar manifest, and bundled grammar JSON

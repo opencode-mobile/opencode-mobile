@@ -4513,6 +4513,3075 @@
           "text": "new line"
         }
       ]
+    },
+    {
+      "id": "java-basic",
+      "language": "java",
+      "aliases": [],
+      "code": "public class Main {\n    public static void main(String[] args) {\n        // Create an array\n        int[] numbers = {1, 2, 3, 4, 5};\n\n        // Loop through array\n        for (int i = 0; i < numbers.length; i++) {\n            System.out.println(numbers[i]);\n        }\n\n        // Try-catch block\n        try {\n            int result = 10 / 0;\n        } catch (ArithmeticException e) {\n            System.err.println(\"Division by zero!\");\n        }\n    }\n}\n",
+      "shikiLanguage": "java",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 6,
+          "role": "Keyword",
+          "text": "public"
+        },
+        {
+          "start": 7,
+          "end": 12,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 13,
+          "end": 17,
+          "role": "Type",
+          "text": "Main"
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 24,
+          "end": 30,
+          "role": "Keyword",
+          "text": "public"
+        },
+        {
+          "start": 31,
+          "end": 37,
+          "role": "Keyword",
+          "text": "static"
+        },
+        {
+          "start": 38,
+          "end": 42,
+          "role": "Keyword",
+          "text": "void"
+        },
+        {
+          "start": 43,
+          "end": 47,
+          "role": "Function",
+          "text": "main"
+        },
+        {
+          "start": 47,
+          "end": 48,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 48,
+          "end": 54,
+          "role": "Keyword",
+          "text": "String"
+        },
+        {
+          "start": 54,
+          "end": 56,
+          "role": "Punctuation",
+          "text": "[]"
+        },
+        {
+          "start": 57,
+          "end": 61,
+          "role": "Variable",
+          "text": "args"
+        },
+        {
+          "start": 61,
+          "end": 62,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 63,
+          "end": 64,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 65,
+          "end": 73,
+          "role": "Punctuation",
+          "text": "        "
+        },
+        {
+          "start": 73,
+          "end": 91,
+          "role": "Comment",
+          "text": "// Create an array"
+        },
+        {
+          "start": 100,
+          "end": 103,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 103,
+          "end": 105,
+          "role": "Punctuation",
+          "text": "[]"
+        },
+        {
+          "start": 106,
+          "end": 113,
+          "role": "Variable",
+          "text": "numbers"
+        },
+        {
+          "start": 114,
+          "end": 115,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 116,
+          "end": 117,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 117,
+          "end": 118,
+          "role": "Number",
+          "text": "1"
+        },
+        {
+          "start": 118,
+          "end": 119,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 120,
+          "end": 121,
+          "role": "Number",
+          "text": "2"
+        },
+        {
+          "start": 121,
+          "end": 122,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 123,
+          "end": 124,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 124,
+          "end": 125,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 126,
+          "end": 127,
+          "role": "Number",
+          "text": "4"
+        },
+        {
+          "start": 127,
+          "end": 128,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 129,
+          "end": 130,
+          "role": "Number",
+          "text": "5"
+        },
+        {
+          "start": 130,
+          "end": 132,
+          "role": "Punctuation",
+          "text": "};"
+        },
+        {
+          "start": 134,
+          "end": 142,
+          "role": "Punctuation",
+          "text": "        "
+        },
+        {
+          "start": 142,
+          "end": 163,
+          "role": "Comment",
+          "text": "// Loop through array"
+        },
+        {
+          "start": 172,
+          "end": 175,
+          "role": "Keyword",
+          "text": "for"
+        },
+        {
+          "start": 176,
+          "end": 177,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 177,
+          "end": 180,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 181,
+          "end": 182,
+          "role": "Variable",
+          "text": "i"
+        },
+        {
+          "start": 183,
+          "end": 184,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 185,
+          "end": 186,
+          "role": "Number",
+          "text": "0"
+        },
+        {
+          "start": 186,
+          "end": 187,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 190,
+          "end": 191,
+          "role": "Operator",
+          "text": "<"
+        },
+        {
+          "start": 192,
+          "end": 199,
+          "role": "Variable",
+          "text": "numbers"
+        },
+        {
+          "start": 199,
+          "end": 200,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 200,
+          "end": 206,
+          "role": "Variable",
+          "text": "length"
+        },
+        {
+          "start": 206,
+          "end": 207,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 209,
+          "end": 211,
+          "role": "Operator",
+          "text": "++"
+        },
+        {
+          "start": 211,
+          "end": 212,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 213,
+          "end": 214,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 227,
+          "end": 233,
+          "role": "Variable",
+          "text": "System"
+        },
+        {
+          "start": 233,
+          "end": 234,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 234,
+          "end": 237,
+          "role": "Variable",
+          "text": "out"
+        },
+        {
+          "start": 237,
+          "end": 238,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 238,
+          "end": 245,
+          "role": "Function",
+          "text": "println"
+        },
+        {
+          "start": 245,
+          "end": 246,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 253,
+          "end": 254,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 255,
+          "end": 258,
+          "role": "Punctuation",
+          "text": "]);"
+        },
+        {
+          "start": 267,
+          "end": 268,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 270,
+          "end": 278,
+          "role": "Punctuation",
+          "text": "        "
+        },
+        {
+          "start": 278,
+          "end": 296,
+          "role": "Comment",
+          "text": "// Try-catch block"
+        },
+        {
+          "start": 305,
+          "end": 308,
+          "role": "Keyword",
+          "text": "try"
+        },
+        {
+          "start": 309,
+          "end": 310,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 323,
+          "end": 326,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 327,
+          "end": 333,
+          "role": "Variable",
+          "text": "result"
+        },
+        {
+          "start": 334,
+          "end": 335,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 336,
+          "end": 338,
+          "role": "Number",
+          "text": "10"
+        },
+        {
+          "start": 339,
+          "end": 340,
+          "role": "Operator",
+          "text": "/"
+        },
+        {
+          "start": 341,
+          "end": 342,
+          "role": "Number",
+          "text": "0"
+        },
+        {
+          "start": 342,
+          "end": 343,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 352,
+          "end": 353,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 354,
+          "end": 359,
+          "role": "Keyword",
+          "text": "catch"
+        },
+        {
+          "start": 360,
+          "end": 361,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 361,
+          "end": 380,
+          "role": "Keyword",
+          "text": "ArithmeticException"
+        },
+        {
+          "start": 381,
+          "end": 382,
+          "role": "Variable",
+          "text": "e"
+        },
+        {
+          "start": 382,
+          "end": 383,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 384,
+          "end": 385,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 398,
+          "end": 404,
+          "role": "Variable",
+          "text": "System"
+        },
+        {
+          "start": 404,
+          "end": 405,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 405,
+          "end": 408,
+          "role": "Variable",
+          "text": "err"
+        },
+        {
+          "start": 408,
+          "end": 409,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 409,
+          "end": 416,
+          "role": "Function",
+          "text": "println"
+        },
+        {
+          "start": 416,
+          "end": 417,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 417,
+          "end": 436,
+          "role": "String",
+          "text": "\"Division by zero!\""
+        },
+        {
+          "start": 436,
+          "end": 438,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 447,
+          "end": 448,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 453,
+          "end": 454,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 455,
+          "end": 456,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "csharp-basic",
+      "language": "csharp",
+      "aliases": [
+        "cs"
+      ],
+      "code": "using System;\n\npublic sealed class SessionService\n{\n    public string Label(string id, int count)\n    {\n        return $\"{id}: {count}\";\n    }\n}\n",
+      "shikiLanguage": "csharp",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "using"
+        },
+        {
+          "start": 6,
+          "end": 12,
+          "role": "Type",
+          "text": "System"
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 15,
+          "end": 21,
+          "role": "Keyword",
+          "text": "public"
+        },
+        {
+          "start": 22,
+          "end": 28,
+          "role": "Keyword",
+          "text": "sealed"
+        },
+        {
+          "start": 29,
+          "end": 34,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 35,
+          "end": 49,
+          "role": "Type",
+          "text": "SessionService"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 56,
+          "end": 62,
+          "role": "Keyword",
+          "text": "public"
+        },
+        {
+          "start": 63,
+          "end": 69,
+          "role": "Keyword",
+          "text": "string"
+        },
+        {
+          "start": 70,
+          "end": 75,
+          "role": "Function",
+          "text": "Label"
+        },
+        {
+          "start": 75,
+          "end": 76,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 76,
+          "end": 82,
+          "role": "Keyword",
+          "text": "string"
+        },
+        {
+          "start": 85,
+          "end": 86,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 87,
+          "end": 90,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 96,
+          "end": 97,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 102,
+          "end": 103,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 112,
+          "end": 118,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 119,
+          "end": 121,
+          "role": "String",
+          "text": "$\""
+        },
+        {
+          "start": 121,
+          "end": 122,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 122,
+          "end": 124,
+          "role": "Variable",
+          "text": "id"
+        },
+        {
+          "start": 124,
+          "end": 125,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 125,
+          "end": 127,
+          "role": "String",
+          "text": ": "
+        },
+        {
+          "start": 127,
+          "end": 128,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 128,
+          "end": 133,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 133,
+          "end": 134,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 134,
+          "end": 135,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 135,
+          "end": 136,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 141,
+          "end": 142,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 143,
+          "end": 144,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "c-basic",
+      "language": "c",
+      "aliases": [],
+      "code": "#include <stdio.h>\n\nint main(void) {\n    // greet the caller\n    const char *name = \"opencode\";\n    printf(\"hello %s\\n\", name);\n    return 0;\n}\n",
+      "shikiLanguage": "c",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "#"
+        },
+        {
+          "start": 1,
+          "end": 8,
+          "role": "Keyword",
+          "text": "include"
+        },
+        {
+          "start": 9,
+          "end": 18,
+          "role": "String",
+          "text": "<stdio.h>"
+        },
+        {
+          "start": 20,
+          "end": 23,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 24,
+          "end": 28,
+          "role": "Function",
+          "text": "main"
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 29,
+          "end": 33,
+          "role": "Keyword",
+          "text": "void"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 35,
+          "end": 36,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 37,
+          "end": 41,
+          "role": "Punctuation",
+          "text": "    "
+        },
+        {
+          "start": 41,
+          "end": 60,
+          "role": "Comment",
+          "text": "// greet the caller"
+        },
+        {
+          "start": 65,
+          "end": 70,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 71,
+          "end": 75,
+          "role": "Keyword",
+          "text": "char"
+        },
+        {
+          "start": 76,
+          "end": 77,
+          "role": "Operator",
+          "text": "*"
+        },
+        {
+          "start": 82,
+          "end": 83,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 84,
+          "end": 94,
+          "role": "String",
+          "text": "\"opencode\""
+        },
+        {
+          "start": 94,
+          "end": 95,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 100,
+          "end": 106,
+          "role": "Function",
+          "text": "printf"
+        },
+        {
+          "start": 106,
+          "end": 107,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 107,
+          "end": 114,
+          "role": "String",
+          "text": "\"hello "
+        },
+        {
+          "start": 114,
+          "end": 118,
+          "role": "Constant",
+          "text": "%s\\n"
+        },
+        {
+          "start": 118,
+          "end": 119,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 119,
+          "end": 120,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 125,
+          "end": 127,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 132,
+          "end": 138,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 139,
+          "end": 140,
+          "role": "Number",
+          "text": "0"
+        },
+        {
+          "start": 140,
+          "end": 141,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 142,
+          "end": 143,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "cpp-basic",
+      "language": "cpp",
+      "aliases": [
+        "cc",
+        "cxx"
+      ],
+      "code": "#include <iostream>\n#include <string>\n\nint main() {\n    std::string label = \"sessions\";\n  std::cout << label << \": \" << 3 << std::endl;\n    return 0;\n}\n",
+      "shikiLanguage": "cpp",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "#"
+        },
+        {
+          "start": 1,
+          "end": 8,
+          "role": "Keyword",
+          "text": "include"
+        },
+        {
+          "start": 9,
+          "end": 19,
+          "role": "String",
+          "text": "<iostream>"
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "role": "Punctuation",
+          "text": "#"
+        },
+        {
+          "start": 21,
+          "end": 28,
+          "role": "Keyword",
+          "text": "include"
+        },
+        {
+          "start": 29,
+          "end": 37,
+          "role": "String",
+          "text": "<string>"
+        },
+        {
+          "start": 39,
+          "end": 42,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 43,
+          "end": 47,
+          "role": "Function",
+          "text": "main"
+        },
+        {
+          "start": 47,
+          "end": 49,
+          "role": "Punctuation",
+          "text": "()"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 59,
+          "end": 61,
+          "role": "Punctuation",
+          "text": "::"
+        },
+        {
+          "start": 74,
+          "end": 75,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 76,
+          "end": 86,
+          "role": "String",
+          "text": "\"sessions\""
+        },
+        {
+          "start": 86,
+          "end": 87,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 93,
+          "end": 95,
+          "role": "Punctuation",
+          "text": "::"
+        },
+        {
+          "start": 100,
+          "end": 102,
+          "role": "Operator",
+          "text": "<<"
+        },
+        {
+          "start": 109,
+          "end": 111,
+          "role": "Operator",
+          "text": "<<"
+        },
+        {
+          "start": 112,
+          "end": 116,
+          "role": "String",
+          "text": "\": \""
+        },
+        {
+          "start": 117,
+          "end": 119,
+          "role": "Operator",
+          "text": "<<"
+        },
+        {
+          "start": 120,
+          "end": 121,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 122,
+          "end": 124,
+          "role": "Operator",
+          "text": "<<"
+        },
+        {
+          "start": 128,
+          "end": 130,
+          "role": "Punctuation",
+          "text": "::"
+        },
+        {
+          "start": 134,
+          "end": 135,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 140,
+          "end": 146,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 147,
+          "end": 148,
+          "role": "Number",
+          "text": "0"
+        },
+        {
+          "start": 148,
+          "end": 149,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 150,
+          "end": 151,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "ruby-basic",
+      "language": "ruby",
+      "aliases": [
+        "rb"
+      ],
+      "code": "class Session\n  def label(count)\n    \"sessions: #{count}\"\n  end\nend\n",
+      "shikiLanguage": "ruby",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 6,
+          "end": 13,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 16,
+          "end": 19,
+          "role": "Keyword",
+          "text": "def"
+        },
+        {
+          "start": 20,
+          "end": 25,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 26,
+          "end": 31,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 31,
+          "end": 32,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 37,
+          "end": 48,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 48,
+          "end": 50,
+          "role": "Punctuation",
+          "text": "#{"
+        },
+        {
+          "start": 50,
+          "end": 55,
+          "role": "String",
+          "text": "count"
+        },
+        {
+          "start": 55,
+          "end": 56,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 60,
+          "end": 63,
+          "role": "Keyword",
+          "text": "end"
+        },
+        {
+          "start": 64,
+          "end": 67,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "php-basic",
+      "language": "php",
+      "aliases": [],
+      "code": "<?php\n\nfunction label(int $count): string {\n    return \"sessions: {$count}\";\n}\n",
+      "shikiLanguage": "php",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 2,
+          "role": "Operator",
+          "text": "<?"
+        },
+        {
+          "start": 2,
+          "end": 5,
+          "role": "Constant",
+          "text": "php"
+        },
+        {
+          "start": 7,
+          "end": 15,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 16,
+          "end": 21,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 21,
+          "end": 22,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 22,
+          "end": 25,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "role": "Punctuation",
+          "text": "$"
+        },
+        {
+          "start": 27,
+          "end": 32,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 32,
+          "end": 33,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 35,
+          "end": 41,
+          "role": "Keyword",
+          "text": "string"
+        },
+        {
+          "start": 42,
+          "end": 43,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 48,
+          "end": 54,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 55,
+          "end": 66,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 66,
+          "end": 68,
+          "role": "Punctuation",
+          "text": "{$"
+        },
+        {
+          "start": 68,
+          "end": 73,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 73,
+          "end": 74,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 74,
+          "end": 75,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 75,
+          "end": 76,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 77,
+          "end": 78,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "sql-basic",
+      "language": "sql",
+      "aliases": [],
+      "code": "-- active sessions\nSELECT id, title\nFROM sessions\nWHERE active = TRUE\nLIMIT 10;\n",
+      "shikiLanguage": "sql",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 18,
+          "role": "Comment",
+          "text": "-- active sessions"
+        },
+        {
+          "start": 19,
+          "end": 25,
+          "role": "Keyword",
+          "text": "SELECT"
+        },
+        {
+          "start": 36,
+          "end": 40,
+          "role": "Keyword",
+          "text": "FROM"
+        },
+        {
+          "start": 41,
+          "end": 49,
+          "role": "Keyword",
+          "text": "sessions"
+        },
+        {
+          "start": 50,
+          "end": 55,
+          "role": "Keyword",
+          "text": "WHERE"
+        },
+        {
+          "start": 63,
+          "end": 64,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 70,
+          "end": 75,
+          "role": "Keyword",
+          "text": "LIMIT"
+        },
+        {
+          "start": 76,
+          "end": 78,
+          "role": "Number",
+          "text": "10"
+        }
+      ]
+    },
+    {
+      "id": "toml-basic",
+      "language": "toml",
+      "aliases": [],
+      "code": "[project]\nname = \"opencode\"\nenabled = true\nlimit = 3\n",
+      "shikiLanguage": "toml",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 8,
+          "end": 9,
+          "role": "Punctuation",
+          "text": "]"
+        },
+        {
+          "start": 10,
+          "end": 14,
+          "role": "Variable",
+          "text": "name"
+        },
+        {
+          "start": 15,
+          "end": 16,
+          "role": "Punctuation",
+          "text": "="
+        },
+        {
+          "start": 17,
+          "end": 27,
+          "role": "String",
+          "text": "\"opencode\""
+        },
+        {
+          "start": 28,
+          "end": 35,
+          "role": "Variable",
+          "text": "enabled"
+        },
+        {
+          "start": 36,
+          "end": 37,
+          "role": "Punctuation",
+          "text": "="
+        },
+        {
+          "start": 38,
+          "end": 42,
+          "role": "Constant",
+          "text": "true"
+        },
+        {
+          "start": 43,
+          "end": 48,
+          "role": "Variable",
+          "text": "limit"
+        },
+        {
+          "start": 49,
+          "end": 50,
+          "role": "Punctuation",
+          "text": "="
+        },
+        {
+          "start": 51,
+          "end": 52,
+          "role": "Number",
+          "text": "3"
+        }
+      ]
+    },
+    {
+      "id": "xml-basic",
+      "language": "xml",
+      "aliases": [],
+      "code": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<session id=\"alpha\" active=\"true\">\n  <title>Review</title>\n</session>\n",
+      "shikiLanguage": "xml",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 2,
+          "role": "Punctuation",
+          "text": "<?"
+        },
+        {
+          "start": 2,
+          "end": 5,
+          "role": "Tag",
+          "text": "xml"
+        },
+        {
+          "start": 5,
+          "end": 13,
+          "role": "Attribute",
+          "text": " version"
+        },
+        {
+          "start": 14,
+          "end": 19,
+          "role": "String",
+          "text": "\"1.0\""
+        },
+        {
+          "start": 19,
+          "end": 28,
+          "role": "Attribute",
+          "text": " encoding"
+        },
+        {
+          "start": 29,
+          "end": 36,
+          "role": "String",
+          "text": "\"UTF-8\""
+        },
+        {
+          "start": 36,
+          "end": 38,
+          "role": "Punctuation",
+          "text": "?>"
+        },
+        {
+          "start": 39,
+          "end": 40,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 40,
+          "end": 47,
+          "role": "Tag",
+          "text": "session"
+        },
+        {
+          "start": 48,
+          "end": 50,
+          "role": "Attribute",
+          "text": "id"
+        },
+        {
+          "start": 51,
+          "end": 58,
+          "role": "String",
+          "text": "\"alpha\""
+        },
+        {
+          "start": 59,
+          "end": 65,
+          "role": "Attribute",
+          "text": "active"
+        },
+        {
+          "start": 66,
+          "end": 72,
+          "role": "String",
+          "text": "\"true\""
+        },
+        {
+          "start": 72,
+          "end": 73,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 76,
+          "end": 77,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 77,
+          "end": 82,
+          "role": "Tag",
+          "text": "title"
+        },
+        {
+          "start": 82,
+          "end": 83,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 89,
+          "end": 91,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 91,
+          "end": 96,
+          "role": "Tag",
+          "text": "title"
+        },
+        {
+          "start": 96,
+          "end": 97,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 98,
+          "end": 100,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 100,
+          "end": 107,
+          "role": "Tag",
+          "text": "session"
+        },
+        {
+          "start": 107,
+          "end": 108,
+          "role": "Punctuation",
+          "text": ">"
+        }
+      ]
+    },
+    {
+      "id": "scala-basic",
+      "language": "scala",
+      "aliases": [],
+      "code": "object Sessions {\n  def label(count: Int): String =\n    s\"sessions: $count\"\n}\n",
+      "shikiLanguage": "scala",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 6,
+          "role": "Keyword",
+          "text": "object"
+        },
+        {
+          "start": 7,
+          "end": 15,
+          "role": "Type",
+          "text": "Sessions"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 20,
+          "end": 23,
+          "role": "Keyword",
+          "text": "def"
+        },
+        {
+          "start": 24,
+          "end": 29,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 30,
+          "end": 35,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 37,
+          "end": 40,
+          "role": "Type",
+          "text": "Int"
+        },
+        {
+          "start": 41,
+          "end": 42,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 43,
+          "end": 49,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "Keyword",
+          "text": "s"
+        },
+        {
+          "start": 57,
+          "end": 68,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 68,
+          "end": 69,
+          "role": "Punctuation",
+          "text": "$"
+        },
+        {
+          "start": 74,
+          "end": 75,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 76,
+          "end": 77,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "lua-basic",
+      "language": "lua",
+      "aliases": [],
+      "code": "local function label(count)\n  -- format a label\n  return \"sessions: \" .. count\nend\n",
+      "shikiLanguage": "lua",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "local"
+        },
+        {
+          "start": 6,
+          "end": 14,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 15,
+          "end": 20,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 21,
+          "end": 26,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 28,
+          "end": 30,
+          "role": "Punctuation",
+          "text": "  "
+        },
+        {
+          "start": 30,
+          "end": 47,
+          "role": "Comment",
+          "text": "-- format a label"
+        },
+        {
+          "start": 50,
+          "end": 56,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 57,
+          "end": 70,
+          "role": "String",
+          "text": "\"sessions: \" "
+        },
+        {
+          "start": 70,
+          "end": 72,
+          "role": "Operator",
+          "text": ".."
+        },
+        {
+          "start": 73,
+          "end": 78,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 79,
+          "end": 82,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "docker-basic",
+      "language": "docker",
+      "aliases": [],
+      "code": "FROM node:22-alpine\nWORKDIR /app\nCOPY package.json .\nRUN npm install --omit=dev\nCMD [\"node\", \"server.js\"]\n",
+      "shikiLanguage": "docker",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Keyword",
+          "text": "FROM"
+        },
+        {
+          "start": 20,
+          "end": 27,
+          "role": "Keyword",
+          "text": "WORKDIR"
+        },
+        {
+          "start": 33,
+          "end": 37,
+          "role": "Keyword",
+          "text": "COPY"
+        },
+        {
+          "start": 53,
+          "end": 56,
+          "role": "Keyword",
+          "text": "RUN"
+        },
+        {
+          "start": 80,
+          "end": 83,
+          "role": "Keyword",
+          "text": "CMD"
+        },
+        {
+          "start": 85,
+          "end": 91,
+          "role": "String",
+          "text": "\"node\""
+        },
+        {
+          "start": 93,
+          "end": 104,
+          "role": "String",
+          "text": "\"server.js\""
+        }
+      ]
+    },
+    {
+      "id": "vue-basic",
+      "language": "vue",
+      "aliases": [],
+      "code": "<script setup lang=\"ts\">\nconst title = \"OpenCode\"\n</script>\n\n<template>\n  <h1>{{ title }}</h1>\n</template>\n",
+      "shikiLanguage": "vue",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 1,
+          "end": 7,
+          "role": "Tag",
+          "text": "script"
+        },
+        {
+          "start": 8,
+          "end": 13,
+          "role": "Attribute",
+          "text": "setup"
+        },
+        {
+          "start": 14,
+          "end": 18,
+          "role": "Attribute",
+          "text": "lang"
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "role": "Punctuation",
+          "text": "="
+        },
+        {
+          "start": 19,
+          "end": 23,
+          "role": "String",
+          "text": "\"ts\""
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 25,
+          "end": 30,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 31,
+          "end": 36,
+          "role": "Variable",
+          "text": "title"
+        },
+        {
+          "start": 37,
+          "end": 38,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 39,
+          "end": 49,
+          "role": "String",
+          "text": "\"OpenCode\""
+        },
+        {
+          "start": 50,
+          "end": 52,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 52,
+          "end": 58,
+          "role": "Tag",
+          "text": "script"
+        },
+        {
+          "start": 58,
+          "end": 59,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 61,
+          "end": 62,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 62,
+          "end": 70,
+          "role": "Tag",
+          "text": "template"
+        },
+        {
+          "start": 70,
+          "end": 71,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 74,
+          "end": 75,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 75,
+          "end": 77,
+          "role": "Tag",
+          "text": "h1"
+        },
+        {
+          "start": 77,
+          "end": 78,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 89,
+          "end": 91,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 91,
+          "end": 93,
+          "role": "Tag",
+          "text": "h1"
+        },
+        {
+          "start": 93,
+          "end": 94,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 95,
+          "end": 97,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 97,
+          "end": 105,
+          "role": "Tag",
+          "text": "template"
+        },
+        {
+          "start": 105,
+          "end": 106,
+          "role": "Punctuation",
+          "text": ">"
+        }
+      ]
+    },
+    {
+      "id": "svelte-basic",
+      "language": "svelte",
+      "aliases": [],
+      "code": "<script>\n  let count = 0\n</script>\n\n<p>Sessions: {count}</p>\n",
+      "shikiLanguage": "svelte",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 1,
+          "end": 7,
+          "role": "Tag",
+          "text": "script"
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 11,
+          "end": 14,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 15,
+          "end": 20,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 21,
+          "end": 22,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "role": "Number",
+          "text": "0"
+        },
+        {
+          "start": 25,
+          "end": 27,
+          "role": "Punctuation",
+          "text": "</"
+        },
+        {
+          "start": 27,
+          "end": 33,
+          "role": "Tag",
+          "text": "script"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 36,
+          "end": 37,
+          "role": "Punctuation",
+          "text": "<"
+        },
+        {
+          "start": 37,
+          "end": 38,
+          "role": "Tag",
+          "text": "p"
+        },
+        {
+          "start": 38,
+          "end": 39,
+          "role": "Punctuation",
+          "text": ">"
+        },
+        {
+          "start": 49,
+          "end": 50,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 50,
+          "end": 55,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 55,
+          "end": 58,
+          "role": "Punctuation",
+          "text": "}</"
+        },
+        {
+          "start": 58,
+          "end": 59,
+          "role": "Tag",
+          "text": "p"
+        },
+        {
+          "start": 59,
+          "end": 60,
+          "role": "Punctuation",
+          "text": ">"
+        }
+      ]
+    },
+    {
+      "id": "graphql-basic",
+      "language": "graphql",
+      "aliases": [],
+      "code": "type Session {\n  id: ID!\n  title: String!\n  active: Boolean!\n}\n\nquery ActiveSessions {\n  sessions(active: true) {\n    id\n    title\n  }\n}\n",
+      "shikiLanguage": "graphql",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Keyword",
+          "text": "type"
+        },
+        {
+          "start": 5,
+          "end": 12,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 13,
+          "end": 14,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 17,
+          "end": 19,
+          "role": "Variable",
+          "text": "id"
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 21,
+          "end": 23,
+          "role": "Type",
+          "text": "ID"
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "role": "Operator",
+          "text": "!"
+        },
+        {
+          "start": 27,
+          "end": 32,
+          "role": "Variable",
+          "text": "title"
+        },
+        {
+          "start": 32,
+          "end": 33,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 34,
+          "end": 40,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 40,
+          "end": 41,
+          "role": "Operator",
+          "text": "!"
+        },
+        {
+          "start": 44,
+          "end": 50,
+          "role": "Variable",
+          "text": "active"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 52,
+          "end": 59,
+          "role": "Type",
+          "text": "Boolean"
+        },
+        {
+          "start": 59,
+          "end": 60,
+          "role": "Operator",
+          "text": "!"
+        },
+        {
+          "start": 61,
+          "end": 62,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 64,
+          "end": 69,
+          "role": "Keyword",
+          "text": "query"
+        },
+        {
+          "start": 70,
+          "end": 84,
+          "role": "Function",
+          "text": "ActiveSessions"
+        },
+        {
+          "start": 85,
+          "end": 86,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 89,
+          "end": 97,
+          "role": "Variable",
+          "text": "sessions"
+        },
+        {
+          "start": 97,
+          "end": 98,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 98,
+          "end": 104,
+          "role": "Variable",
+          "text": "active"
+        },
+        {
+          "start": 104,
+          "end": 105,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 106,
+          "end": 110,
+          "role": "Constant",
+          "text": "true"
+        },
+        {
+          "start": 110,
+          "end": 111,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 112,
+          "end": 113,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 118,
+          "end": 120,
+          "role": "Variable",
+          "text": "id"
+        },
+        {
+          "start": 125,
+          "end": 130,
+          "role": "Variable",
+          "text": "title"
+        },
+        {
+          "start": 133,
+          "end": 134,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 135,
+          "end": 136,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "powershell-basic",
+      "language": "powershell",
+      "aliases": [
+        "pwsh"
+      ],
+      "code": "function Get-SessionLabel([int]$Count) {\n    # build a label\n    return \"sessions: $Count\"\n}\n",
+      "shikiLanguage": "powershell",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 8,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 9,
+          "end": 25,
+          "role": "Function",
+          "text": "Get-SessionLabel"
+        },
+        {
+          "start": 25,
+          "end": 27,
+          "role": "Punctuation",
+          "text": "(["
+        },
+        {
+          "start": 27,
+          "end": 30,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 30,
+          "end": 32,
+          "role": "Punctuation",
+          "text": "]$"
+        },
+        {
+          "start": 32,
+          "end": 37,
+          "role": "Variable",
+          "text": "Count"
+        },
+        {
+          "start": 37,
+          "end": 38,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 39,
+          "end": 40,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 45,
+          "end": 60,
+          "role": "Comment",
+          "text": "# build a label"
+        },
+        {
+          "start": 65,
+          "end": 71,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 72,
+          "end": 83,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 83,
+          "end": 84,
+          "role": "Punctuation",
+          "text": "$"
+        },
+        {
+          "start": 84,
+          "end": 89,
+          "role": "Variable",
+          "text": "Count"
+        },
+        {
+          "start": 89,
+          "end": 90,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 91,
+          "end": 92,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "perl-basic",
+      "language": "perl",
+      "aliases": [],
+      "code": "sub label {\n    my ($count) = @_;\n    return \"sessions: $count\";\n}\n",
+      "shikiLanguage": "perl",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "role": "Keyword",
+          "text": "sub"
+        },
+        {
+          "start": 4,
+          "end": 9,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 16,
+          "end": 18,
+          "role": "Keyword",
+          "text": "my"
+        },
+        {
+          "start": 20,
+          "end": 21,
+          "role": "Punctuation",
+          "text": "$"
+        },
+        {
+          "start": 21,
+          "end": 26,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 30,
+          "end": 31,
+          "role": "Punctuation",
+          "text": "@"
+        },
+        {
+          "start": 31,
+          "end": 32,
+          "role": "Variable",
+          "text": "_"
+        },
+        {
+          "start": 38,
+          "end": 44,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 45,
+          "end": 56,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "Punctuation",
+          "text": "$"
+        },
+        {
+          "start": 57,
+          "end": 62,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 62,
+          "end": 63,
+          "role": "String",
+          "text": "\""
+        }
+      ]
+    },
+    {
+      "id": "haskell-basic",
+      "language": "haskell",
+      "aliases": [],
+      "code": "label :: Int -> String\nlabel count = \"sessions: \" ++ show count\n",
+      "shikiLanguage": "haskell",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 6,
+          "end": 8,
+          "role": "Operator",
+          "text": "::"
+        },
+        {
+          "start": 9,
+          "end": 12,
+          "role": "Keyword",
+          "text": "Int"
+        },
+        {
+          "start": 13,
+          "end": 15,
+          "role": "Operator",
+          "text": "->"
+        },
+        {
+          "start": 16,
+          "end": 22,
+          "role": "Keyword",
+          "text": "String"
+        },
+        {
+          "start": 35,
+          "end": 36,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 37,
+          "end": 49,
+          "role": "String",
+          "text": "\"sessions: \""
+        },
+        {
+          "start": 50,
+          "end": 52,
+          "role": "Operator",
+          "text": "++"
+        }
+      ]
+    },
+    {
+      "id": "elixir-basic",
+      "language": "elixir",
+      "aliases": [],
+      "code": "defmodule Sessions do\n  def label(count) do\n    \"sessions: #{count}\"\n  end\nend\n",
+      "shikiLanguage": "elixir",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 9,
+          "role": "Keyword",
+          "text": "defmodule"
+        },
+        {
+          "start": 10,
+          "end": 18,
+          "role": "Type",
+          "text": "Sessions"
+        },
+        {
+          "start": 19,
+          "end": 21,
+          "role": "Keyword",
+          "text": "do"
+        },
+        {
+          "start": 24,
+          "end": 27,
+          "role": "Keyword",
+          "text": "def"
+        },
+        {
+          "start": 28,
+          "end": 33,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 39,
+          "end": 40,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 41,
+          "end": 43,
+          "role": "Keyword",
+          "text": "do"
+        },
+        {
+          "start": 48,
+          "end": 59,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 59,
+          "end": 61,
+          "role": "Punctuation",
+          "text": "#{"
+        },
+        {
+          "start": 61,
+          "end": 66,
+          "role": "String",
+          "text": "count"
+        },
+        {
+          "start": 66,
+          "end": 67,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 67,
+          "end": 68,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 71,
+          "end": 74,
+          "role": "Keyword",
+          "text": "end"
+        },
+        {
+          "start": 75,
+          "end": 78,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "erlang-basic",
+      "language": "erlang",
+      "aliases": [],
+      "code": "-module(sessions).\n-export([label/1]).\n\nlabel(Count) ->\n    io_lib:format(\"sessions: ~p\", [Count]).\n",
+      "shikiLanguage": "erlang",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "-"
+        },
+        {
+          "start": 1,
+          "end": 7,
+          "role": "Keyword",
+          "text": "module"
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 8,
+          "end": 16,
+          "role": "Type",
+          "text": "sessions"
+        },
+        {
+          "start": 16,
+          "end": 18,
+          "role": "Punctuation",
+          "text": ")."
+        },
+        {
+          "start": 19,
+          "end": 20,
+          "role": "Punctuation",
+          "text": "-"
+        },
+        {
+          "start": 20,
+          "end": 26,
+          "role": "Keyword",
+          "text": "export"
+        },
+        {
+          "start": 26,
+          "end": 28,
+          "role": "Punctuation",
+          "text": "(["
+        },
+        {
+          "start": 28,
+          "end": 33,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Punctuation",
+          "text": "/"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Number",
+          "text": "1"
+        },
+        {
+          "start": 35,
+          "end": 38,
+          "role": "Punctuation",
+          "text": "])."
+        },
+        {
+          "start": 40,
+          "end": 45,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 45,
+          "end": 46,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 46,
+          "end": 51,
+          "role": "Variable",
+          "text": "Count"
+        },
+        {
+          "start": 51,
+          "end": 52,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 53,
+          "end": 55,
+          "role": "Operator",
+          "text": "->"
+        },
+        {
+          "start": 60,
+          "end": 66,
+          "role": "Type",
+          "text": "io_lib"
+        },
+        {
+          "start": 66,
+          "end": 67,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 67,
+          "end": 73,
+          "role": "Function",
+          "text": "format"
+        },
+        {
+          "start": 73,
+          "end": 74,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 74,
+          "end": 85,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 85,
+          "end": 86,
+          "role": "Punctuation",
+          "text": "~"
+        },
+        {
+          "start": 86,
+          "end": 87,
+          "role": "Constant",
+          "text": "p"
+        },
+        {
+          "start": 87,
+          "end": 88,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 88,
+          "end": 89,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 90,
+          "end": 91,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 91,
+          "end": 96,
+          "role": "Variable",
+          "text": "Count"
+        },
+        {
+          "start": 96,
+          "end": 99,
+          "role": "Punctuation",
+          "text": "])."
+        }
+      ]
+    },
+    {
+      "id": "r-basic",
+      "language": "r",
+      "aliases": [],
+      "code": "label <- function(count) {\n  # format a label\n  paste0(\"sessions: \", count)\n}\n",
+      "shikiLanguage": "r",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Variable",
+          "text": "label"
+        },
+        {
+          "start": 6,
+          "end": 8,
+          "role": "Operator",
+          "text": "<-"
+        },
+        {
+          "start": 9,
+          "end": 17,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 18,
+          "end": 23,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 29,
+          "end": 45,
+          "role": "Comment",
+          "text": "# format a label"
+        },
+        {
+          "start": 48,
+          "end": 54,
+          "role": "Function",
+          "text": "paste0"
+        },
+        {
+          "start": 55,
+          "end": 67,
+          "role": "String",
+          "text": "\"sessions: \""
+        },
+        {
+          "start": 67,
+          "end": 68,
+          "role": "Operator",
+          "text": ","
+        },
+        {
+          "start": 69,
+          "end": 74,
+          "role": "Variable",
+          "text": "count"
+        }
+      ]
+    },
+    {
+      "id": "zig-basic",
+      "language": "zig",
+      "aliases": [],
+      "code": "const std = @import(\"std\");\n\npub fn label(count: u32) []const u8 {\n    return std.fmt.allocPrint(std.heap.page_allocator, \"sessions: {d}\", .{count}) catch \"sessions: ?\";\n}\n",
+      "shikiLanguage": "zig",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 6,
+          "end": 9,
+          "role": "Variable",
+          "text": "std"
+        },
+        {
+          "start": 10,
+          "end": 11,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 12,
+          "end": 19,
+          "role": "Function",
+          "text": "@import"
+        },
+        {
+          "start": 20,
+          "end": 25,
+          "role": "String",
+          "text": "\"std\""
+        },
+        {
+          "start": 26,
+          "end": 27,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 29,
+          "end": 32,
+          "role": "Keyword",
+          "text": "pub"
+        },
+        {
+          "start": 33,
+          "end": 35,
+          "role": "Keyword",
+          "text": "fn"
+        },
+        {
+          "start": 36,
+          "end": 41,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 42,
+          "end": 47,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 47,
+          "end": 48,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 49,
+          "end": 52,
+          "role": "Keyword",
+          "text": "u32"
+        },
+        {
+          "start": 56,
+          "end": 61,
+          "role": "Keyword",
+          "text": "const"
+        },
+        {
+          "start": 62,
+          "end": 64,
+          "role": "Keyword",
+          "text": "u8"
+        },
+        {
+          "start": 71,
+          "end": 77,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 78,
+          "end": 81,
+          "role": "Variable",
+          "text": "std"
+        },
+        {
+          "start": 81,
+          "end": 82,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 82,
+          "end": 85,
+          "role": "Variable",
+          "text": "fmt"
+        },
+        {
+          "start": 85,
+          "end": 86,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 86,
+          "end": 96,
+          "role": "Function",
+          "text": "allocPrint"
+        },
+        {
+          "start": 97,
+          "end": 100,
+          "role": "Variable",
+          "text": "std"
+        },
+        {
+          "start": 100,
+          "end": 101,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 101,
+          "end": 105,
+          "role": "Variable",
+          "text": "heap"
+        },
+        {
+          "start": 105,
+          "end": 106,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 106,
+          "end": 120,
+          "role": "Variable",
+          "text": "page_allocator"
+        },
+        {
+          "start": 120,
+          "end": 121,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 122,
+          "end": 137,
+          "role": "String",
+          "text": "\"sessions: {d}\""
+        },
+        {
+          "start": 137,
+          "end": 138,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 139,
+          "end": 140,
+          "role": "Punctuation",
+          "text": "."
+        },
+        {
+          "start": 141,
+          "end": 146,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 149,
+          "end": 154,
+          "role": "Keyword",
+          "text": "catch"
+        },
+        {
+          "start": 155,
+          "end": 168,
+          "role": "String",
+          "text": "\"sessions: ?\""
+        },
+        {
+          "start": 168,
+          "end": 169,
+          "role": "Punctuation",
+          "text": ";"
+        }
+      ]
     }
   ]
 }

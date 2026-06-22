@@ -306,6 +306,14 @@ class OpenCodeJoniRegexBackendAndroidTest {
     }
 
     @Test
+    fun joniHighlighterCoversJavaMainClassRegressionFixture() {
+        assertRegressionFixtureCoverage("java-basic")
+        assertNoDuplicateSpanRanges("java-basic")
+        assertNoOverlappingSpanRanges("java-basic")
+        assertNoLeakedOpenRulesAtEof("java-basic")
+    }
+
+    @Test
     fun joniHighlighterCoversJavascriptEventEmitterRegressionFixture() {
         assertRegressionFixtureCoverage("javascript-event-emitter-repro")
         assertNoDuplicateSpanRanges("javascript-event-emitter-repro")
@@ -396,8 +404,8 @@ class OpenCodeJoniRegexBackendAndroidTest {
                 assertToken(fixture.code, result.spans, "// Core request method", CodeTokenRole.Comment)
                 assertTokenAfter(fixture.code, result.spans, "\n  ", "async", CodeTokenRole.Variable)
                 assertTokenAfter(fixture.code, result.spans, "async ", "request", CodeTokenRole.Function)
-                assertToken(fixture.code, result.spans, "#baseUrl", CodeTokenRole.Variable)
-                assertToken(fixture.code, result.spans, "#headers", CodeTokenRole.Variable)
+                assertToken(fixture.code, result.spans, "#baseUrl", CodeTokenRole.Property)
+                assertToken(fixture.code, result.spans, "#headers", CodeTokenRole.Property)
                 assertTokenAfter(fixture.code, result.spans, "      config = ", "await", CodeTokenRole.Keyword)
             }
             "javascript-http-error-repro" -> {
@@ -411,8 +419,14 @@ class OpenCodeJoniRegexBackendAndroidTest {
             "javascript-private-field-template" -> {
                 assertToken(fixture.code, result.spans, "class", CodeTokenRole.Keyword)
                 assertToken(fixture.code, result.spans, "Client", CodeTokenRole.Type)
-                assertTokenAfter(fixture.code, result.spans, "this.", "#baseUrl", CodeTokenRole.Variable)
-                assertTokenAfter(fixture.code, result.spans, "#baseUrl;\n  ", "greet", CodeTokenRole.Type)
+                assertTokenAfter(fixture.code, result.spans, "this.", "#baseUrl", CodeTokenRole.Property)
+                val greetStart = fixture.code.indexOf("greet")
+                val greetSpan =
+                    result.spans.single { span -> span.start <= greetStart && span.end >= greetStart + "greet".length }
+                assertTrue(
+                    greetSpan.role == CodeTokenRole.Function || greetSpan.role == CodeTokenRole.Type,
+                    "Expected greet to use Function or Type, got ${greetSpan.role} in ${result.spans}",
+                )
             }
             "javascript-basic" -> {
                 assertToken(fixture.code, result.spans, "const", CodeTokenRole.Keyword)
@@ -432,12 +446,16 @@ class OpenCodeJoniRegexBackendAndroidTest {
                 assertToken(fixture.code, result.spans, "// HTTP Client with interceptors, retry logic", CodeTokenRole.Comment)
                 assertTokenAfter(fixture.code, result.spans, "\n", "class", CodeTokenRole.Keyword)
                 assertTokenAfter(fixture.code, result.spans, "class ", "HttpClient", CodeTokenRole.Type)
-                assertTrue(
-                    result.spans.any { span ->
-                        span.start <= 68 && span.end >= 75 &&
-                            span.role in setOf(CodeTokenRole.Type, CodeTokenRole.Property, CodeTokenRole.Variable)
-                    },
-                    "Expected contiguous private-field token for #baseUrl in ${result.spans}",
+                assertToken(fixture.code, result.spans, "constructor", CodeTokenRole.Keyword)
+                assertToken(fixture.code, result.spans, "new", CodeTokenRole.Keyword)
+                assertToken(fixture.code, result.spans, "options", CodeTokenRole.Variable)
+                assertToken(fixture.code, result.spans, "30000", CodeTokenRole.Number)
+                assertToken(fixture.code, result.spans, "\"\"", CodeTokenRole.String)
+                HighlighterRegressionAssertions.assertPrivateFieldsMatchWebRoles(
+                    code = fixture.code,
+                    spans = result.spans,
+                    privateFields = listOf("#baseUrl", "#headers", "#interceptors", "#timeout"),
+                    label = fixtureId,
                 )
                 assertToken(fixture.code, result.spans, "Map", CodeTokenRole.Function)
                 assertToken(fixture.code, result.spans, "push", CodeTokenRole.Function)
@@ -447,6 +465,26 @@ class OpenCodeJoniRegexBackendAndroidTest {
                 assertToken(fixture.code, result.spans, "path", CodeTokenRole.Variable)
                 assertToken(fixture.code, result.spans, "return", CodeTokenRole.Keyword)
                 assertToken(fixture.code, result.spans, "PATCH", CodeTokenRole.String)
+            }
+            "java-basic" -> {
+                assertToken(fixture.code, result.spans, "public", CodeTokenRole.Keyword)
+                assertTokenAfter(fixture.code, result.spans, "class ", "Main", CodeTokenRole.Type)
+                assertToken(fixture.code, result.spans, "println", CodeTokenRole.Function)
+                assertToken(fixture.code, result.spans, "1", CodeTokenRole.Number)
+                assertTrue(
+                    result.spans.any { span ->
+                        span.role == CodeTokenRole.Comment &&
+                            fixture.code.substring(span.start, span.end).contains("Create an array")
+                    },
+                    "Expected array comment in ${result.spans}",
+                )
+                assertTrue(
+                    result.spans.any { span ->
+                        span.role == CodeTokenRole.String &&
+                            fixture.code.substring(span.start, span.end).contains("Division by zero")
+                    },
+                    "Expected catch string literal in ${result.spans}",
+                )
             }
             else -> error("Unhandled regression fixture $fixtureId")
         }

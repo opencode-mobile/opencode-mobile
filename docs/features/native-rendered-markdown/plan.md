@@ -78,9 +78,13 @@ grammar metadata, and an Oniguruma-compatible regex backend bundled locally.
 
 Milestone 0 must prove Kotlin, Swift, TypeScript, JavaScript, JSON, Markdown,
 Shell, YAML, CSS, HTML, Python, Rust, Go, and diff highlighting on Android and
-iOS against checked-in Shiki golden fixtures. Until then, native semantic
-fallback highlighting is allowed only as an implementation scaffold and must
-emit/record a `HighlighterFallback` diagnostic in the shared render tree.
+iOS against checked-in Shiki golden fixtures. The popular-languages pack extends
+bundled TextMate coverage to Java, C#, C/C++, Ruby, PHP, SQL, TOML, XML, Scala,
+Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell, Elixir, Erlang, R,
+and Zig with smoke tests and `java-basic` regression anchors. Until full Shiki
+parity lands, native semantic fallback highlighting is allowed only as an
+implementation scaffold and must emit/record a `HighlighterFallback` diagnostic
+in the shared render tree.
 
 ## Implementation Milestones
 
@@ -128,9 +132,11 @@ emit/record a `HighlighterFallback` diagnostic in the shared render tree.
    - add native Oniguruma backend for iOS;
    - complete full TextMate rule state, injections, embedded grammars, and
      incremental reuse;
-   - add Shiki golden token tests. **Fixture coverage is active; Android/Joni
-     `diff`, `json`, `yaml`, `css`, and `html` parity are active; the full
-     native comparison is present and ignored until the engine exists.**
+   - add Shiki golden token tests. **Fixture coverage is active for Milestone 0
+     plus the popular-languages pack; Android/Joni `diff`, `json`, `yaml`,
+     `css`, and `html` parity are active; `java-basic` regression and per-language
+     smoke tests are active; the full native comparison is present and ignored
+     until the engine exists.**
 4. Chat polish:
    - tune outgoing collapse/expand thresholds;
    - verify streaming parse debounce;

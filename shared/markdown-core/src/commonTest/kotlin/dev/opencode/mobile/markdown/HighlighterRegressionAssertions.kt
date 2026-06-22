@@ -37,28 +37,40 @@ object HighlighterRegressionAssertions {
         }
     }
 
-    fun assertPrivateFieldsUseVariableRole(
+    fun assertTokenRoles(
+        code: String,
+        spans: List<CodeSpan>,
+        expectations: List<Pair<String, CodeTokenRole>>,
+        label: String = "highlight",
+    ) {
+        expectations.forEach { (text, expectedRole) ->
+            val start = code.indexOf(text)
+            assertTrue(start >= 0, "$label missing token text '$text'")
+            val end = start + text.length
+            assertTrue(
+                spans.any { span ->
+                    span.role == expectedRole && span.start <= start && span.end >= end
+                },
+                "$label expected $expectedRole for '$text' at $start..$end in $spans",
+            )
+        }
+    }
+
+    fun assertPrivateFieldsMatchWebRoles(
         code: String,
         spans: List<CodeSpan>,
         privateFields: List<String>,
         label: String = "highlight",
     ) {
         privateFields.forEach { field ->
-            val declarationStart = code.indexOf(field)
+            val declarationStart = code.indexOf("  $field;")
             assertTrue(declarationStart >= 0, "$label missing declaration for $field")
             val declarationEnd = declarationStart + field.length
-            val declarationSpan =
-                spans.singleOrNull { span ->
-                    span.start <= declarationStart && span.end >= declarationEnd && span.role != CodeTokenRole.Plain
-                }
+            val declarationCovered =
+                spans.any { span -> span.end > declarationStart && span.start < declarationEnd }
             assertTrue(
-                declarationSpan != null,
-                "$label $field declaration at $declarationStart..$declarationEnd missing span in $spans",
-            )
-            assertEquals(
-                CodeTokenRole.Variable,
-                declarationSpan.role,
-                "$label $field declaration should use Variable role",
+                !declarationCovered,
+                "$label $field declaration at $declarationStart..$declarationEnd should stay plain, got $spans",
             )
 
             val needle = "this.$field"
@@ -71,9 +83,9 @@ object HighlighterRegressionAssertions {
                     span.start <= fieldStart && span.end >= fieldEnd && span.role != CodeTokenRole.Plain
                 }
             assertEquals(
-                CodeTokenRole.Variable,
+                CodeTokenRole.Property,
                 accessSpan.role,
-                "$label $needle should use Variable role",
+                "$label $needle should use Property role",
             )
         }
     }

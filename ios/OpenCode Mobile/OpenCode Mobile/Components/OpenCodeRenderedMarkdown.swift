@@ -398,16 +398,20 @@ enum NativeMarkdownAttributedString {
             OpenCodeColors.syntaxComment
         case .keyword:
             OpenCodeColors.syntaxKeyword
+        case .type:
+            OpenCodeColors.syntaxType
+        case .variable:
+            OpenCodeColors.textPrimary
+        case .property, .constant:
+            OpenCodeColors.syntaxConstant
+        case .function:
+            OpenCodeColors.syntaxPrimitive
+        case .number, .attribute:
+            OpenCodeColors.syntaxProperty
         case .string:
             OpenCodeColors.syntaxString
-        case .number, .variable, .constant:
-            OpenCodeColors.syntaxConstant
-        case .type, .function:
-            OpenCodeColors.syntaxType
-        case .property, .attribute:
-            OpenCodeColors.syntaxProperty
         case .operatorToken, .punctuation:
-            OpenCodeColors.syntaxPrimitive
+            OpenCodeColors.textPrimary
         case .tag:
             OpenCodeColors.syntaxInfo
         case .inserted:
