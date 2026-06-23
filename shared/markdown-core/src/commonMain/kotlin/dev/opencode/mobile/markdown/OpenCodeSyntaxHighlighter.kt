@@ -72,12 +72,15 @@ class OpenCodeSyntaxHighlighter(
             languageOrAlias?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
 
         private fun List<CodeSpan>.mergeAdjacentSemanticSpans(code: String): List<CodeSpan> =
-            fold(emptyList()) { merged, span ->
-                val previous = merged.lastOrNull()
-                if (previous != null && previous.end == span.start && previous.canMergeWith(span, code)) {
-                    merged.dropLast(1) + previous.copy(end = span.end)
-                } else {
-                    merged + span
+            buildList(size) {
+                for (span in this@mergeAdjacentSemanticSpans) {
+                    val previous = lastOrNull()
+                    if (previous != null && previous.end == span.start && previous.canMergeWith(span, code)) {
+                        removeAt(lastIndex)
+                        add(previous.copy(end = span.end))
+                    } else {
+                        add(span)
+                    }
                 }
             }
 

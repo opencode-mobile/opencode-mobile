@@ -1549,6 +1549,30 @@ object HighlighterGoldenFixtures {
                     HighlighterGoldenToken(155, 168, CodeTokenRole.String, "\"sessions: ?\""),
                     HighlighterGoldenToken(168, 169, CodeTokenRole.Punctuation, ";")
                 ),
+            ),
+            HighlighterGoldenFixture(
+                id = "make-basic",
+                language = "make",
+                aliases = listOf("makefile"),
+                code = "# Makefile\n.PHONY: help build test\n\nhelp:\n\t@echo \"Available commands:\"\n\t@echo \"  make build - Build the project\"\n\t@echo \"  make test  - Run tests\"\n\nbuild:\n\t@echo \"Building project...\"\n\t@npm run build\n\ntest:\n\t@echo \"Running tests...\"\n\t@npm test\n",
+                tokens = listOf(
+                    HighlighterGoldenToken(0, 10, CodeTokenRole.Comment, "# Makefile"),
+                    HighlighterGoldenToken(11, 17, CodeTokenRole.Function, ".PHONY"),
+                    HighlighterGoldenToken(17, 18, CodeTokenRole.Punctuation, ":"),
+                    HighlighterGoldenToken(36, 40, CodeTokenRole.Function, "help"),
+                    HighlighterGoldenToken(40, 41, CodeTokenRole.Punctuation, ":"),
+                    HighlighterGoldenToken(43, 44, CodeTokenRole.Keyword, "@"),
+                    HighlighterGoldenToken(72, 73, CodeTokenRole.Keyword, "@"),
+                    HighlighterGoldenToken(114, 115, CodeTokenRole.Keyword, "@"),
+                    HighlighterGoldenToken(148, 153, CodeTokenRole.Function, "build"),
+                    HighlighterGoldenToken(153, 154, CodeTokenRole.Punctuation, ":"),
+                    HighlighterGoldenToken(156, 157, CodeTokenRole.Keyword, "@"),
+                    HighlighterGoldenToken(185, 186, CodeTokenRole.Keyword, "@"),
+                    HighlighterGoldenToken(201, 205, CodeTokenRole.Function, "test"),
+                    HighlighterGoldenToken(205, 206, CodeTokenRole.Punctuation, ":"),
+                    HighlighterGoldenToken(208, 209, CodeTokenRole.Keyword, "@"),
+                    HighlighterGoldenToken(234, 235, CodeTokenRole.Keyword, "@")
+                ),
             )
         )
 }

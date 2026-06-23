@@ -1602,6 +1602,26 @@
           "aliases": []
         }
       ]
+    },
+    {
+      "language": "make",
+      "displayName": "Makefile",
+      "aliases": [
+        "makefile"
+      ],
+      "grammarModule": "shiki/dist/langs/make.mjs",
+      "grammars": [
+        {
+          "name": "make",
+          "displayName": "Makefile",
+          "scopeName": "source.makefile",
+          "resourcePath": "textmate-grammars/grammars/make.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "makefile"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -1295,6 +1295,22 @@ object TextMateGrammarManifestFixtures {
                         aliases = listOf(),
                     )
                 ),
+            ),
+            TextMateGrammarManifestEntry(
+                language = "make",
+                displayName = "Makefile",
+                aliases = listOf("makefile"),
+                grammarModule = "shiki/dist/langs/make.mjs",
+                grammars = listOf(
+                    TextMateGrammarDescriptor(
+                        name = "make",
+                        displayName = "Makefile",
+                        scopeName = "source.makefile",
+                        resourcePath = "textmate-grammars/grammars/make.json",
+                        embeddedLanguages = listOf(),
+                        aliases = listOf("makefile"),
+                    )
+                ),
             )
         )
 }

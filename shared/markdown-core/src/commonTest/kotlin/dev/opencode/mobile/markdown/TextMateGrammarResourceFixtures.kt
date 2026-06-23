@@ -168,6 +168,13 @@ object TextMateGrammarResourceFixtures {
                 byteSize = 26902,
             ),
             TextMateGrammarResourceFixture(
+                resourcePath = "textmate-grammars/grammars/make.json",
+                name = "make",
+                displayName = "Makefile",
+                scopeName = "source.makefile",
+                byteSize = 15948,
+            ),
+            TextMateGrammarResourceFixture(
                 resourcePath = "textmate-grammars/grammars/markdown-vue.json",
                 name = "markdown-vue",
                 displayName = "markdown-vue",

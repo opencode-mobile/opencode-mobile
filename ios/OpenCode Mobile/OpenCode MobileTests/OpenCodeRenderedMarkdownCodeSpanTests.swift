@@ -134,7 +134,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(role(for: "1", in: code, spans: spans) == .number)
         #expect(
             spans.contains {
-                $0.role == .string && code[$0.start..<$0.end].contains("Division by zero")
+                $0.role == .string && utf16Text(in: code, start: $0.start, end: $0.end).contains("Division by zero")
             }
         )
     }
@@ -197,6 +197,18 @@ private func nthRange(of text: String, in code: String, occurrence: Int) -> Rang
         searchStart = range.upperBound
     }
     return nil
+}
+
+private func utf16Text(in code: String, start: Int, end: Int) -> String {
+    let lowerOffset = min(max(start, 0), code.utf16.count)
+    let upperOffset = min(max(end, lowerOffset), code.utf16.count)
+    let lower = code.utf16.index(code.utf16.startIndex, offsetBy: lowerOffset)
+    let upper = code.utf16.index(code.utf16.startIndex, offsetBy: upperOffset)
+    guard let stringLower = String.Index(lower, within: code),
+          let stringUpper = String.Index(upper, within: code) else {
+        return ""
+    }
+    return String(code[stringLower..<stringUpper])
 }
 
 private func hex(_ color: Color, traits: UITraitCollection) -> String {

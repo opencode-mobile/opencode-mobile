@@ -18,8 +18,13 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
+import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
+import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -93,6 +98,57 @@ class SessionChatViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(TimelineState.Ready, state.timeline)
             assertNotNull(state.messages.single().renderedMarkdown)
+        }
+
+    @Test
+    fun benchmark_loadMessages_longMarkdownHistory() =
+        runTest(testDispatcher) {
+            val messages = longMarkdownHistory()
+            val highlighter = OpenCodeBundledJoniMarkdownHighlighter.default()
+            val detectorMs = measureMs { messages.count { OpenCodeMarkdownDetector.shouldRender(it.text) } }
+            val parserMs = measureMs {
+                messages.forEach { message ->
+                    if (OpenCodeMarkdownDetector.shouldRender(message.text)) {
+                        OpenCodeMarkdownParser.parse(message.text, highlighter)
+                    }
+                }
+            }
+            val mapper = RenderedMarkdownMapper(highlighter).apply { computationDispatcher = Dispatchers.Default }
+            val mapperMs = measureMs {
+                mapper.enrichRows(
+                    messages.map { message ->
+                        SessionChatMessageItem(
+                            id = message.id,
+                            role = message.role,
+                            text = message.text,
+                            metadataLabel = "Benchmark",
+                        )
+                    },
+                    previousById = emptyMap(),
+                )
+                Unit
+            }
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    markdownDispatcher = Dispatchers.Default,
+                    highlighter = highlighter,
+                )
+
+            val startedAt = System.nanoTime()
+            viewModel.bind("ses-benchmark", "Markdown benchmark", "/repo")
+            while (viewModel.uiState.value.timeline == TimelineState.Loading) {
+                advanceUntilIdle()
+                Thread.sleep(1)
+            }
+            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+
+            assertEquals(TimelineState.Ready, viewModel.uiState.value.timeline)
+            assertEquals(20, viewModel.uiState.value.messages.size)
+            println(
+                "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
+                    "mapper-ms=$mapperMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
+            )
         }
 
     @Test
@@ -540,7 +596,11 @@ class SessionChatViewModelTest {
         assertNotNull(item.renderedMarkdown)
     }
 
-    private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel {
+    private fun createViewModel(
+        repository: FakeMessageRepository,
+        markdownDispatcher: CoroutineDispatcher = testDispatcher,
+        highlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
+    ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -555,10 +615,33 @@ class SessionChatViewModelTest {
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
             renderedMarkdownMapper =
-                RenderedMarkdownMapper(OpenCodeSyntaxHighlighter.default).apply {
-                    computationDispatcher = testDispatcher
+                RenderedMarkdownMapper(highlighter).apply {
+                    computationDispatcher = markdownDispatcher
                 },
         )
+    }
+
+    private fun longMarkdownHistory(): List<Message> =
+        (1..20).map { messageIndex ->
+            Message(
+                id = "benchmark-$messageIndex",
+                role = MessageRole.Assistant,
+                text =
+                    buildString {
+                        append("## Response $messageIndex\n\n```typescript\n")
+                        repeat(150) { lineIndex ->
+                            append("const item$lineIndex = response$lineIndex?.value ?? 'markdown benchmark';\n")
+                        }
+                        append("```\n")
+                    },
+                sentAtEpochMs = messageIndex.toLong(),
+            )
+        }
+
+    private suspend fun measureMs(block: suspend () -> Unit): Long {
+        val startedAt = System.nanoTime()
+        block()
+        return (System.nanoTime() - startedAt) / 1_000_000
     }
 }
 

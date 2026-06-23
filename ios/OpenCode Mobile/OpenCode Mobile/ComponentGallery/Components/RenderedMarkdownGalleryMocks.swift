@@ -97,6 +97,14 @@ enum RenderedMarkdownGalleryMocks {
     [markdown]
     renderer = "native"
     ```
+
+    ```makefile
+    .PHONY: build test
+    build:
+    \t@npm run build
+    test:
+    \t@npm test
+    ```
     """
 
     private static let richMarkdown = """

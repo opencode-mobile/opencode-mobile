@@ -17,7 +17,7 @@
   regression snippets pass Joni and iOS-hybrid backend regression coverage.
   A popular-languages TextMate pack (Java, C#, C/C++, Ruby, PHP, SQL, TOML,
   XML, Scala, Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell,
-  Elixir, Erlang, R, and Zig) is bundled with Shiki golden fixtures and smoke
+  Elixir, Erlang, R, Zig, and Make/Makefile) is bundled with Shiki golden fixtures and smoke
   coverage; fenced blocks in those languages no longer hit semantic fallback.
   Java method-signature lines (`void main(String[] args)`) can still miss inner
   tokens until broader Java grammar parity lands. EventEmitter-style duplicate

@@ -18,6 +18,7 @@ struct OpenCodeRenderedMarkdown: View {
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
     let initialHeight: CGFloat
+    let measuresHeight: Bool
     let onHeightChange: (CGFloat) -> Void
     let onLinkTap: (URL) -> Void
 
@@ -27,12 +28,14 @@ struct OpenCodeRenderedMarkdown: View {
         document: NativeMarkdownDocument,
         variant: OpenCodeRenderedMarkdownVariant,
         initialHeight: CGFloat = 1,
+        measuresHeight: Bool = false,
         onHeightChange: @escaping (CGFloat) -> Void = { _ in },
         onLinkTap: @escaping (URL) -> Void = { url in UIApplication.shared.open(url) }
     ) {
         self.document = document
         self.variant = variant
         self.initialHeight = max(1, initialHeight)
+        self.measuresHeight = measuresHeight
         self.onHeightChange = onHeightChange
         self.onLinkTap = onLinkTap
         _measuredHeight = State(initialValue: max(1, initialHeight))
@@ -45,12 +48,12 @@ struct OpenCodeRenderedMarkdown: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .readRenderedMarkdownSize { size in
+        .modifier(RenderedMarkdownHeightReporter(isEnabled: measuresHeight) { size in
             let nextHeight = max(1, size.height)
             guard abs(measuredHeight - nextHeight) > 1 else { return }
             measuredHeight = nextHeight
             onHeightChange(nextHeight)
-        }
+        })
         .environment(\.openURL, OpenURLAction { url in
             guard url.scheme == "http" || url.scheme == "https" else {
                 return .discarded
@@ -664,6 +667,19 @@ private extension View {
             }
         )
         .onPreferenceChange(RenderedMarkdownSizePreferenceKey.self, perform: onChange)
+    }
+}
+
+private struct RenderedMarkdownHeightReporter: ViewModifier {
+    let isEnabled: Bool
+    let onChange: (CGSize) -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.readRenderedMarkdownSize(onChange: onChange)
+        } else {
+            content
+        }
     }
 }
 

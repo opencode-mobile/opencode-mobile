@@ -82,6 +82,7 @@ class PopularLanguageHighlighterSmokeTest {
                 "erlang-basic",
                 "r-basic",
                 "zig-basic",
+                "make-basic",
             )
     }
 }

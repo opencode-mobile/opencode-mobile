@@ -15,6 +15,62 @@ struct SessionChatViewModelTests {
         #expect(messages[0].text == "Hello")
     }
 
+    @Test func benchmark_loadMessages_longMarkdownHistory() async {
+        let messages = longMarkdownHistory()
+        let detectorMs = milliseconds {
+            _ = messages.filter { OpenCodeRenderedMarkdownDetector.shouldRender($0.text) }.count
+        }
+        let parserMs = await milliseconds {
+            await Task.detached(priority: .userInitiated) {
+                for message in messages {
+                    guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+                    _ = OpenCodeRenderedMarkdownParser.parse(message.text, isStreaming: false)
+                }
+            }.value
+        }
+        let mapper = RenderedMarkdownMapper()
+        let mapperMs = await milliseconds {
+            _ = await mapper.enrichRows(
+                messages.map {
+                    SessionChatRow(
+                        id: $0.id,
+                        role: $0.role,
+                        text: $0.text,
+                        metadataLabel: "Benchmark",
+                        isPending: false,
+                        isStreaming: false,
+                        renderedMarkdown: nil,
+                        modelProviderID: nil,
+                        modelID: nil,
+                        contextInputTokens: nil
+                    )
+                },
+                previousByID: [:]
+            )
+        }
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages)
+        )
+        defer { viewModel.stopObserving() }
+
+        let clock = ContinuousClock()
+        let elapsed = await clock.measure {
+            await viewModel.loadMessages()
+        }
+
+        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
+            Issue.record("Expected a loaded benchmark timeline")
+            return
+        }
+        #expect(messages.count == 20)
+        let line =
+            "MARKDOWN_BENCHMARK ios detector-ms=\(detectorMs) parser-bridge-ms=\(parserMs) " +
+            "mapper-ms=\(mapperMs) viewmodel-load-ms=\(elapsed.components.attoseconds / 1_000_000_000_000_000) " +
+            "messages=20 code-lines=3000\n"
+        print(String(line.dropLast()))
+        fputs(line, stderr)
+    }
+
     @Test func loadMessages_empty() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository(messages: []))
         await viewModel.loadMessages()
@@ -375,7 +431,8 @@ struct SessionChatViewModelTests {
     private func makeViewModel(
         messageRepository: FakeMessageRepository = FakeMessageRepository(),
         eventStream: FakeForegroundEventStream? = nil,
-        overridingLiveStore: (any MessageLiveStore)? = nil
+        overridingLiveStore: (any MessageLiveStore)? = nil,
+        renderedMarkdownMapper: RenderedMarkdownMapper = .shared
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         let sessionRepository = FakeChatSessionRepository()
@@ -401,10 +458,40 @@ struct SessionChatViewModelTests {
             sessionRepository: sessionRepository,
             messageLiveStore: messageLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore,
-            foregroundEventStream: eventStream
+            foregroundEventStream: eventStream,
+            renderedMarkdownMapper: renderedMarkdownMapper
         )
         viewModel.startObserving()
         return viewModel
+    }
+
+    private func longMarkdownHistory() -> [Message] {
+        (1...20).map { messageIndex in
+            Message(
+                id: "benchmark-\(messageIndex)",
+                role: .assistant,
+                text: "## Response \(messageIndex)\n\n```typescript\n" +
+                    (0..<150).map { lineIndex in
+                        "const item\(lineIndex) = response\(lineIndex)?.value ?? 'markdown benchmark';"
+                    }.joined(separator: "\n") +
+                    "\n```\n",
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: Int64(messageIndex)
+            )
+        }
+    }
+
+    private func milliseconds(_ block: () -> Void) -> Int64 {
+        let clock = ContinuousClock()
+        let elapsed = clock.measure(block)
+        return elapsed.components.attoseconds / 1_000_000_000_000_000
+    }
+
+    private func milliseconds(_ block: () async -> Void) async -> Int64 {
+        let clock = ContinuousClock()
+        let elapsed = await clock.measure(block)
+        return elapsed.components.attoseconds / 1_000_000_000_000_000
     }
 }
 

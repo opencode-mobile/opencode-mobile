@@ -24,6 +24,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
@@ -51,6 +55,8 @@ import dev.opencode.mobile.markdown.isLikelyExpandable
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 enum class OpenCodeRenderedMarkdownVariant(
     val wireName: String,
@@ -205,6 +211,7 @@ private fun ListRow(
 private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
+    val annotated = rememberCodeAnnotatedString(block.code, block.spans, colors)
     Box(
         modifier =
             Modifier
@@ -216,7 +223,7 @@ private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
     ) {
         SelectionContainer {
             Text(
-                text = buildCodeAnnotatedString(block.code, block.spans, colors),
+                text = annotated,
                 modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
                 style = CodeTextStyle,
                 softWrap = false,
@@ -229,6 +236,7 @@ private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
 private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
+    val annotatedLines = rememberDiffLineAnnotatedStrings(block.lines, colors)
     Column(
         modifier =
             Modifier
@@ -238,7 +246,8 @@ private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
                 .horizontalScroll(scrollState)
                 .padding(vertical = 8.dp),
     ) {
-        block.lines.forEach { line ->
+        block.lines.forEachIndexed { index, line ->
+            val annotated = annotatedLines.getOrElse(index) { AnnotatedString(line.text) }
             val background =
                 when (line.kind) {
                     DiffLineKind.Added -> openCodeColor("diff-add").copy(alpha = 0.18f)
@@ -254,7 +263,7 @@ private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
                         .padding(horizontal = 12.dp, vertical = 1.dp),
             ) {
                 Text(
-                    text = buildCodeAnnotatedString(line.text, line.spans, colors),
+                    text = annotated,
                     modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
                     style = CodeTextStyle,
                     softWrap = false,
@@ -319,7 +328,8 @@ private fun MarkdownInlineText(
     onLinkTap: ((String) -> Unit)?,
 ) {
     val uriHandler = LocalUriHandler.current
-    val annotated = buildMarkdownAnnotatedString(inlines, markdownTextColors())
+    val colors = markdownTextColors()
+    val annotated = rememberMarkdownAnnotatedString(inlines, colors)
     ClickableText(
         text = annotated,
         modifier = modifier,
@@ -540,3 +550,52 @@ private fun blockSpacingFor(variant: OpenCodeRenderedMarkdownVariant): Dp =
         OpenCodeRenderedMarkdownVariant.OutgoingMessage -> 8.dp
         OpenCodeRenderedMarkdownVariant.Standalone -> 12.dp
     }
+
+@Composable
+private fun rememberCodeAnnotatedString(
+    code: String,
+    spans: List<CodeSpan>,
+    colors: CodeColors,
+): AnnotatedString {
+    var annotated by remember(code, spans) { mutableStateOf<AnnotatedString?>(null) }
+    LaunchedEffect(code, spans, colors) {
+        annotated =
+            withContext(Dispatchers.Default) {
+                buildCodeAnnotatedString(code, spans, colors)
+            }
+    }
+    return annotated ?: remember(code) { AnnotatedString(code) }
+}
+
+@Composable
+private fun rememberDiffLineAnnotatedStrings(
+    lines: List<dev.opencode.mobile.markdown.DiffLine>,
+    colors: CodeColors,
+): List<AnnotatedString> {
+    var annotatedLines by remember(lines) { mutableStateOf<List<AnnotatedString>?>(null) }
+    LaunchedEffect(lines, colors) {
+        annotatedLines =
+            withContext(Dispatchers.Default) {
+                lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
+            }
+    }
+    return annotatedLines
+        ?: remember(lines) {
+            lines.map { line -> AnnotatedString(line.text) }
+        }
+}
+
+@Composable
+private fun rememberMarkdownAnnotatedString(
+    inlines: List<MarkdownInline>,
+    colors: MarkdownTextColors,
+): AnnotatedString {
+    var annotated by remember(inlines) { mutableStateOf<AnnotatedString?>(null) }
+    LaunchedEffect(inlines, colors) {
+        annotated =
+            withContext(Dispatchers.Default) {
+                buildMarkdownAnnotatedString(inlines, colors)
+            }
+    }
+    return annotated ?: remember(inlines) { AnnotatedString("") }
+}

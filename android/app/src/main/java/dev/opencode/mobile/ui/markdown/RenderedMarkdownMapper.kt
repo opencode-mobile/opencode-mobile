@@ -9,8 +9,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 @Singleton
@@ -20,7 +18,7 @@ class RenderedMarkdownMapper
         private val codeHighlighter: OpenCodeCodeHighlighter,
     ) {
         internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
-        private val cacheMutex = Mutex()
+        private val cacheLock = Any()
         private val cache =
             object : LinkedHashMap<CacheKey, MarkdownDocument>(MAX_CACHE_ENTRIES + 1, 0.75f, true) {
                 override fun removeEldestEntry(eldest: MutableMap.MutableEntry<CacheKey, MarkdownDocument>?): Boolean =
@@ -33,20 +31,7 @@ class RenderedMarkdownMapper
             isStreaming: Boolean,
         ): MarkdownDocument? =
             withContext(computationDispatcher) {
-                if (!OpenCodeMarkdownDetector.shouldRender(text)) {
-                    return@withContext null
-                }
-                val cacheKey = CacheKey(messageId, text, isStreaming)
-                cacheMutex.withLock { cache[cacheKey] }?.let { return@withContext it }
-                val document =
-                    OpenCodeMarkdownParser.parse(
-                        markdown = text,
-                        codeHighlighter = codeHighlighter,
-                        isStreaming = isStreaming,
-                    )
-                cacheMutex.withLock {
-                    cache[cacheKey] ?: document.also { cache[cacheKey] = it }
-                }
+                parseDocument(messageId, text, isStreaming)
             }
 
         suspend fun enrichRows(
@@ -56,20 +41,45 @@ class RenderedMarkdownMapper
             withContext(computationDispatcher) {
                 buildList(rows.size) {
                     for (row in rows) {
-                        add(enrichRow(row, previousById[row.id]))
+                        add(enrichRowOnWorker(row, previousById[row.id]))
                     }
                 }
             }
 
-        private suspend fun enrichRow(
+        private fun enrichRowOnWorker(
             row: SessionChatMessageItem,
             previous: SessionChatMessageItem?,
         ): SessionChatMessageItem {
             if (!OpenCodeMarkdownDetector.shouldRender(row.text)) {
                 return row.copy(renderedMarkdown = null)
             }
-            val document = reusableDocument(row, previous) ?: parse(row.id, row.text, row.isStreaming)
+            val document =
+                reusableDocument(row, previous)
+                    ?: parseDocument(row.id, row.text, row.isStreaming)
             return row.copy(renderedMarkdown = document)
+        }
+
+        private fun parseDocument(
+            messageId: String,
+            text: String,
+            isStreaming: Boolean,
+        ): MarkdownDocument? {
+            if (!OpenCodeMarkdownDetector.shouldRender(text)) {
+                return null
+            }
+            val cacheKey = CacheKey(messageId, text, isStreaming)
+            synchronized(cacheLock) {
+                cache[cacheKey]?.let { return it }
+            }
+            val document =
+                OpenCodeMarkdownParser.parse(
+                    markdown = text,
+                    codeHighlighter = codeHighlighter,
+                    isStreaming = isStreaming,
+                )
+            return synchronized(cacheLock) {
+                cache[cacheKey] ?: document.also { cache[cacheKey] = it }
+            }
         }
 
         private fun reusableDocument(

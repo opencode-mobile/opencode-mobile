@@ -616,6 +616,27 @@ pub fn label(count: u32) []const u8 {
 }
 `,
   },
+  {
+    id: "make-basic",
+    language: "make",
+    aliases: ["makefile"],
+    code: `# Makefile
+.PHONY: help build test
+
+help:
+\t@echo "Available commands:"
+\t@echo "  make build - Build the project"
+\t@echo "  make test  - Run tests"
+
+build:
+\t@echo "Building project..."
+\t@npm run build
+
+test:
+\t@echo "Running tests..."
+\t@npm test
+`,
+  },
 ]
 
 const shikiLangs = [...new Set(fixtures.map((fixture) => fixture.language))]

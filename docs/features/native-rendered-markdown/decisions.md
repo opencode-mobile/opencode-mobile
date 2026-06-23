@@ -23,6 +23,25 @@
   while still letting `shared/markdown-core` own parsing and diagnostics.
 - Date: 2026-06-20.
 
+## Performance Work Preserves the Current Display Pipeline
+
+- Decision: optimize native renderer allocations and shared span processing
+  without changing all-at-once Session Chat loading, full TextMate
+  highlighting, or the iOS JSON boundary.
+- Reason: these are the directly observable large inefficiencies; changing
+  parsing ownership, loading order, or the bridge would be a broader display
+  architecture rewrite without a measured need.
+- Date: 2026-06-22.
+
+## iOS Hybrid TextMate Regexes Are Compiled Once Per Pattern
+
+- Decision: cache the Kotlin `Regex` instance for each TextMate pattern in the
+  hybrid iOS backend path.
+- Reason: unlike Android's Joni backend, iOS delegated every non-`\\G` match to
+  a newly compiled Kotlin regex. Grammar tokenization retries the same patterns
+  at many cursor positions, making compilation dominate long fenced blocks.
+- Date: 2026-06-23.
+
 ## Inline Markdown Uses Rendered Markdown
 
 - Decision: inline code, emphasis, and links now mount Rendered Markdown when

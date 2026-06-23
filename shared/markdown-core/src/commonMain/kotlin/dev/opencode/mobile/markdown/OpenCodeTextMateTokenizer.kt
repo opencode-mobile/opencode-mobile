@@ -30,18 +30,27 @@ data class TextMateRegexCapture(
 object KotlinRegexTextMateRegexBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "kotlin-regex"
 
+    // The iOS hybrid backend delegates here for all non-\\G expressions. TextMate
+    // grammars retry the same patterns at every cursor position, so compiling them
+    // per match turns long fenced blocks into a regex-compilation workload.
+    private val regexCache = mutableMapOf<String, Regex?>()
+
+    private fun compiledRegex(pattern: String): Regex? =
+        regexCache.getOrPut(pattern) {
+            try {
+                Regex(pattern, setOf(RegexOption.MULTILINE))
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        }
+
     override fun find(
         pattern: String,
         input: String,
         startIndex: Int,
         endIndex: Int,
     ): TextMateRegexMatch? {
-        val regex =
-            try {
-                Regex(pattern, setOf(RegexOption.MULTILINE))
-            } catch (_: IllegalArgumentException) {
-                return null
-            }
+        val regex = compiledRegex(pattern) ?: return null
         val match = regex.find(input, startIndex) ?: return null
         if (match.range.first > endIndex || match.range.last + 1 > endIndex) return null
 
@@ -97,6 +106,8 @@ data class TextMateLinesTokenizationResult(
 class OpenCodeTextMateNativeTokenizer(
     private val regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
 ) : OpenCodeTextMateTokenizer {
+    private val resolvedRulesCache = mutableMapOf<ResolvedRulesCacheKey, List<ResolvedTextMateRule>>()
+
     override fun tokenize(
         grammar: TextMateGrammarPayload,
         code: String,
@@ -574,6 +585,16 @@ class OpenCodeTextMateNativeTokenizer(
         baseGrammar: TextMateGrammar,
         baseScopes: List<String>,
     ): List<ResolvedTextMateRule> {
+        val cacheKey =
+            ResolvedRulesCacheKey(
+                grammarScope = grammar.scopeName,
+                patternsSignature = patternsSignature(patterns),
+                activeIncludes = activeIncludes,
+                baseGrammarScope = baseGrammar.scopeName,
+                baseScopes = baseScopes,
+            )
+        resolvedRulesCache[cacheKey]?.let { return it }
+
         val rules = mutableListOf<ResolvedTextMateRule>()
         var order = 0
 
@@ -624,8 +645,23 @@ class OpenCodeTextMateNativeTokenizer(
         matchingInjections(grammar, baseScopes, InjectionPriority.Right).forEach { injection ->
             addPatterns(grammar, listOf(injection), activeIncludes, emptyList())
         }
-        return rules
+        return rules.also { resolvedRulesCache[cacheKey] = it }
     }
+
+    private fun patternsSignature(patterns: List<TextMatePattern>): String =
+        buildString {
+            append(patterns.size)
+            patterns.forEach { pattern ->
+                append('|')
+                append(pattern.match ?: "")
+                append('#')
+                append(pattern.begin ?: "")
+                append('#')
+                append(pattern.include ?: "")
+                append('#')
+                append(pattern.patterns.size)
+            }
+        }
 
     private fun matchingInjections(
         grammar: TextMateGrammar,
@@ -1090,6 +1126,14 @@ class OpenCodeTextMateNativeTokenizer(
         } else {
             this + scope.split(Regex("\\s+")).filter { scopePart -> scopePart.isNotBlank() }
         }
+
+    private data class ResolvedRulesCacheKey(
+        val grammarScope: String,
+        val patternsSignature: String,
+        val activeIncludes: Set<String>,
+        val baseGrammarScope: String,
+        val baseScopes: List<String>,
+    )
 
     private data class ResolvedTextMateRule(
         val grammar: TextMateGrammar,

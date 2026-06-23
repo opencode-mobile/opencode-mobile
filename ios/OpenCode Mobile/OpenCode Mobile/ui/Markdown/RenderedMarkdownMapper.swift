@@ -19,7 +19,7 @@ final class RenderedMarkdownMapper {
             return nil
         }
 
-        let cacheKey = CacheKey(messageID: messageID, text: text, isStreaming: isStreaming)
+        let cacheKey = CacheKey(text: text, isStreaming: isStreaming)
         cacheLock.lock()
         if let cached = cache[cacheKey] {
             touch(cacheKey)
@@ -28,7 +28,7 @@ final class RenderedMarkdownMapper {
         }
         cacheLock.unlock()
 
-        let parsed = await Task.detached {
+        let parsed = await Task.detached(priority: .userInitiated) {
             OpenCodeRenderedMarkdownParser.parse(text, isStreaming: isStreaming)
         }.value
 
@@ -89,14 +89,7 @@ final class RenderedMarkdownMapper {
     }
 
     private struct CacheKey: Hashable {
-        let messageID: String
         let text: String
         let isStreaming: Bool
-
-        init(messageID: String, text: String, isStreaming: Bool) {
-            self.messageID = messageID
-            self.text = text
-            self.isStreaming = isStreaming
-        }
     }
 }

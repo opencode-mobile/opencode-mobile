@@ -26,6 +26,7 @@ import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -141,8 +143,15 @@ class SessionChatViewModel
                 if (!isCurrentBinding(sessionId, worktree)) return@launch
                 _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
                 runCatching {
-                    val messages = messageRepository.listMessages(sessionId, worktree)
-                    runCatching { modelRepository.listModelOptions(worktree) }
+                    val messages =
+                        withContext(Dispatchers.IO) {
+                            messageRepository.listMessages(sessionId, worktree)
+                        }
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            modelRepository.listModelOptions(worktree)
+                        }
+                    }
                         .onSuccess { catalog ->
                             if (isCurrentBinding(sessionId, worktree)) {
                                 applyModelCatalog(catalog, messages)
@@ -358,14 +367,17 @@ class SessionChatViewModel
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     val stateSnapshot = _uiState.value
                     val previousById = stateSnapshot.messages.associateBy { it.id }
-                    val structural = timelineMessages(messages, previousById)
-                    val merged =
-                        if (fromQuietRefresh && stateSnapshot.isSending) {
-                            mergeWithPending(structural, stateSnapshot.messages.filter { it.isPending })
-                        } else {
-                            structural
-                    }
-                    val enriched = renderedMarkdownMapper.enrichRows(merged, previousById)
+                    val enriched =
+                        withContext(Dispatchers.Default) {
+                            val structural = timelineMessages(messages, previousById)
+                            val merged =
+                                if (fromQuietRefresh && stateSnapshot.isSending) {
+                                    mergeWithPending(structural, stateSnapshot.messages.filter { it.isPending })
+                                } else {
+                                    structural
+                                }
+                            renderedMarkdownMapper.enrichRows(merged, previousById)
+                        }
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     _uiState.update { state ->
                         state.copy(

@@ -7582,6 +7582,113 @@
           "text": ";"
         }
       ]
+    },
+    {
+      "id": "make-basic",
+      "language": "make",
+      "aliases": [
+        "makefile"
+      ],
+      "code": "# Makefile\n.PHONY: help build test\n\nhelp:\n\t@echo \"Available commands:\"\n\t@echo \"  make build - Build the project\"\n\t@echo \"  make test  - Run tests\"\n\nbuild:\n\t@echo \"Building project...\"\n\t@npm run build\n\ntest:\n\t@echo \"Running tests...\"\n\t@npm test\n",
+      "shikiLanguage": "make",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 10,
+          "role": "Comment",
+          "text": "# Makefile"
+        },
+        {
+          "start": 11,
+          "end": 17,
+          "role": "Function",
+          "text": ".PHONY"
+        },
+        {
+          "start": 17,
+          "end": 18,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 36,
+          "end": 40,
+          "role": "Function",
+          "text": "help"
+        },
+        {
+          "start": 40,
+          "end": 41,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 43,
+          "end": 44,
+          "role": "Keyword",
+          "text": "@"
+        },
+        {
+          "start": 72,
+          "end": 73,
+          "role": "Keyword",
+          "text": "@"
+        },
+        {
+          "start": 114,
+          "end": 115,
+          "role": "Keyword",
+          "text": "@"
+        },
+        {
+          "start": 148,
+          "end": 153,
+          "role": "Function",
+          "text": "build"
+        },
+        {
+          "start": 153,
+          "end": 154,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 156,
+          "end": 157,
+          "role": "Keyword",
+          "text": "@"
+        },
+        {
+          "start": 185,
+          "end": 186,
+          "role": "Keyword",
+          "text": "@"
+        },
+        {
+          "start": 201,
+          "end": 205,
+          "role": "Function",
+          "text": "test"
+        },
+        {
+          "start": 205,
+          "end": 206,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 208,
+          "end": 209,
+          "role": "Keyword",
+          "text": "@"
+        },
+        {
+          "start": 234,
+          "end": 235,
+          "role": "Keyword",
+          "text": "@"
+        }
+      ]
     }
   ]
 }

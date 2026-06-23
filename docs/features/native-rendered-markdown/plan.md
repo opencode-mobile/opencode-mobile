@@ -81,7 +81,7 @@ Shell, YAML, CSS, HTML, Python, Rust, Go, and diff highlighting on Android and
 iOS against checked-in Shiki golden fixtures. The popular-languages pack extends
 bundled TextMate coverage to Java, C#, C/C++, Ruby, PHP, SQL, TOML, XML, Scala,
 Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell, Elixir, Erlang, R,
-and Zig with smoke tests and `java-basic` regression anchors. Until full Shiki
+Zig, and Make (`makefile` alias) with smoke tests and `java-basic` regression anchors. Until full Shiki
 parity lands, native semantic fallback highlighting is allowed only as an
 implementation scaffold and must emit/record a `HighlighterFallback` diagnostic
 in the shared render tree.

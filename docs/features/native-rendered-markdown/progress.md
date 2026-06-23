@@ -24,6 +24,11 @@
 - Outgoing overflow: structural markdown content retains collapse/expand;
   long wrapped inline markdown stays fully visible when no expand control can
   be offered.
+- Performance pass: preserves all-at-once chat loading and the JSON bridge
+  while removing avoidable native render allocations and span-list copies.
+- Performance measurement: Session Chat ViewModel benchmarks load 20 rendered
+  markdown messages with 3,000 total TypeScript lines through the production
+  highlighter path on each platform.
 
 ## Completed
 
@@ -280,3 +285,15 @@
   and Android Joni regex compilation caching.
 - 2026-06-21: Moved markdown parse ownership into Session Chat Screen Models,
   made `OpenCodeRenderedMarkdown` render-only, and added gallery mock documents.
+- 2026-06-22: `./gradlew :markdown-core:testDebugUnitTest --rerun-tasks` and
+  `./gradlew :app:testDebugUnitTest` passed after memoizing Compose attributed
+  strings, limiting SwiftUI markdown-height measurement to outgoing messages,
+  and making adjacent shared-span merging linear.
+- 2026-06-23: Android ViewModel benchmark reports `detector-ms=0 parser-ms=77
+  mapper-ms=52 viewmodel-load-ms=104` for the 20-message / 3000-line fixture.
+  iOS benchmark reports `parser-bridge-ms=958 mapper-ms=404 viewmodel-load-ms=407`
+  when the parser probe ran on `@MainActor`; production parsing already used
+  `Task.detached`. Shared tokenizer work now memoizes resolved TextMate rules,
+  iOS mapper enrichment runs in one background batch instead of one detached
+  task per message, and parse caches key on markdown text rather than message
+  id.

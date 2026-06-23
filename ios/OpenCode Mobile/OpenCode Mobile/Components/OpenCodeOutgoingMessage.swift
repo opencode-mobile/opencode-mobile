@@ -143,6 +143,7 @@ struct OpenCodeOutgoingMessage: View {
                     document: renderedMarkdown,
                     variant: .outgoingMessage,
                     initialHeight: initialRenderedMarkdownHeight,
+                    measuresHeight: true,
                     onHeightChange: { height in
                         renderedMarkdownHeight = height
                         onRenderedMarkdownHeightChange(min(height, outgoingMessageCollapsedRenderedMarkdownHeight))
