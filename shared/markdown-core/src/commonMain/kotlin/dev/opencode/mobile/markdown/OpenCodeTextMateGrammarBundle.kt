@@ -44,7 +44,6 @@ class TextMateGrammarBundle internal constructor(
     private val loadedByResourcePath = LinkedHashMap<String, TextMateGrammarPayload>()
     private val failedResourcePaths = mutableSetOf<String>()
     private val loadDiagnostics = preloadedDiagnostics.toMutableList()
-    private val loadLock = Any()
 
     init {
         loadedByResourcePath.putAll(preloadedGrammars)
@@ -112,20 +111,15 @@ class TextMateGrammarBundle internal constructor(
 
         val resourceReader = reader ?: return null
 
-        synchronized(loadLock) {
-            loadedByResourcePath[descriptor.resourcePath]?.let { return it }
-            if (descriptor.resourcePath in failedResourcePaths) return null
-
-            val result = OpenCodeTextMateGrammarBundleLoader.loadGrammarPayload(descriptor, resourceReader)
-            loadDiagnostics += result.diagnostics
-            val payload = result.payload
-            if (payload == null) {
-                failedResourcePaths += descriptor.resourcePath
-                return null
-            }
-            loadedByResourcePath[descriptor.resourcePath] = payload
-            return payload
+        val result = OpenCodeTextMateGrammarBundleLoader.loadGrammarPayload(descriptor, resourceReader)
+        loadDiagnostics += result.diagnostics
+        val payload = result.payload
+        if (payload == null) {
+            failedResourcePaths += descriptor.resourcePath
+            return null
         }
+
+        return loadedByResourcePath.getOrPut(descriptor.resourcePath) { payload }
     }
 }
 
