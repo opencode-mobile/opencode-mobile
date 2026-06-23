@@ -27,10 +27,9 @@ class OpenCodeTextMateGrammarResourceAndroidTest {
 
         assertTrue(result.diagnostics.isEmpty(), result.diagnostics.joinToString { it.message })
         assertTrue(
-            bundle.diagnostics.isEmpty(),
-            bundle.diagnostics.joinToString("\n") { "${it.resourcePath}: ${it.message}" },
+            bundle.grammars.isEmpty(),
+            "Bundled grammars should load lazily; expected none before first lookup",
         )
-        assertEquals(TextMateGrammarResourceFixtures.all.size, bundle.grammars.size)
 
         TextMateGrammarResourceFixtures.all.forEach { fixture ->
             val payload = assertNotNull(bundle.grammarForScope(fixture.scopeName), fixture.scopeName)
@@ -45,6 +44,12 @@ class OpenCodeTextMateGrammarResourceAndroidTest {
                 "${fixture.resourcePath} should expose at least one tokenizer rule",
             )
         }
+
+        assertTrue(
+            bundle.diagnostics.isEmpty(),
+            bundle.diagnostics.joinToString("\n") { "${it.resourcePath}: ${it.message}" },
+        )
+        assertEquals(TextMateGrammarResourceFixtures.all.size, bundle.grammars.size)
     }
 
     private fun readClasspathResource(resourcePath: String): String? =

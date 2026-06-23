@@ -183,6 +183,30 @@ class OpenCodeJoniRegexBackendAndroidTest {
     }
 
     @Test
+    fun joniBackendCachesUncompilablePatterns() {
+        val badPattern = "[unclosed"
+
+        assertEquals(
+            null,
+            OpenCodeJoniRegexBackend.find(
+                pattern = badPattern,
+                input = "test",
+                startIndex = 0,
+                endIndex = 4,
+            ),
+        )
+        assertEquals(
+            null,
+            OpenCodeJoniRegexBackend.find(
+                pattern = badPattern,
+                input = "test",
+                startIndex = 0,
+                endIndex = 4,
+            ),
+        )
+    }
+
+    @Test
     fun joniMatchesZeroWidthClassEndAfterClosingBrace() {
         val code = "class Foo {}"
         val match =

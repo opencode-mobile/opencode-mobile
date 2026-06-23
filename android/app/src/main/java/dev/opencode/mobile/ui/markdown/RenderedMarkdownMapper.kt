@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.markdown
 
+import android.util.Log
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
@@ -10,6 +11,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.system.measureTimeMillis
 
 @Singleton
 class RenderedMarkdownMapper
@@ -39,12 +41,38 @@ class RenderedMarkdownMapper
             previousById: Map<String, SessionChatMessageItem>,
         ): List<SessionChatMessageItem> =
             withContext(computationDispatcher) {
-                buildList(rows.size) {
-                    for (row in rows) {
-                        add(enrichRowOnWorker(row, previousById[row.id]))
+                var parsedCount = 0
+                var reusedCount = 0
+                var elapsedMs = 0L
+                val enriched =
+                    buildList(rows.size) {
+                        elapsedMs =
+                            measureTimeMillis {
+                                for (row in rows) {
+                                    val previous = previousById[row.id]
+                                    val enrichedRow = enrichRowOnWorker(row, previous)
+                                    add(enrichedRow)
+                                    when {
+                                        enrichedRow.renderedMarkdown == null -> Unit
+                                        row.renderedMarkdown != null &&
+                                            enrichedRow.renderedMarkdown === row.renderedMarkdown -> reusedCount++
+                                        previous?.renderedMarkdown != null &&
+                                            enrichedRow.renderedMarkdown === previous.renderedMarkdown -> reusedCount++
+                                        else -> parsedCount++
+                                    }
+                                }
+                            }
                     }
-                }
+                logI(
+                    "enrichRows rows=${rows.size} parsed=$parsedCount reused=$reusedCount " +
+                        "markdown=${enriched.count { it.renderedMarkdown != null }} ms=$elapsedMs",
+                )
+                enriched
             }
+
+        private fun logI(message: String) {
+            runCatching { Log.i(TAG, message) }
+        }
 
         private fun enrichRowOnWorker(
             row: SessionChatMessageItem,
@@ -105,6 +133,7 @@ class RenderedMarkdownMapper
 
         companion object {
             private const val MAX_CACHE_ENTRIES = 32
+            private const val TAG = "MarkdownMapper"
         }
 
         private data class CacheKey(

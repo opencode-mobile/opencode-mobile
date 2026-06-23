@@ -1,5 +1,7 @@
 package dev.opencode.mobile.markdown
 
+import java.io.OutputStream
+import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import org.jcodings.specific.UTF8Encoding
 import org.joni.Option
@@ -13,27 +15,54 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
 
     override val isOnigurumaCompatible: Boolean = true
 
-    private val regexCache = ConcurrentHashMap<String, Regex>()
+    private sealed class RegexCacheEntry {
+        data class Compiled(
+            val regex: Regex,
+        ) : RegexCacheEntry()
 
-    private fun cachedRegex(pattern: String): Regex? {
-        regexCache[pattern]?.let { return it }
+        data object Failed : RegexCacheEntry()
+    }
+
+    private val regexCache = ConcurrentHashMap<String, RegexCacheEntry>()
+
+    // Joni prints Oniguruma parse warnings to System.err for many bundled TextMate
+    // patterns. Compilation is cached, but cold-start still emits thousands of lines
+    // to logcat and pays stderr I/O per unique pattern.
+    private val compileLock = Any()
+    private val silentErr = PrintStream(OutputStream.nullOutputStream())
+
+    private fun cachedRegex(pattern: String): Regex? =
+        when (val entry = regexCache.computeIfAbsent(pattern, ::compilePattern)) {
+            is RegexCacheEntry.Compiled -> entry.regex
+            RegexCacheEntry.Failed -> null
+        }
+
+    private fun compilePattern(pattern: String): RegexCacheEntry {
         val patternBytes = pattern.toByteArray(StandardCharsets.UTF_8)
-        val compiled =
-            try {
-                Regex(
-                    patternBytes,
-                    0,
-                    patternBytes.size,
-                    Option.MULTILINE,
-                    UTF8Encoding.INSTANCE,
-                    Syntax.RUBY,
-                )
-            } catch (_: JOniException) {
-                null
-            } catch (_: IllegalArgumentException) {
-                null
+        synchronized(compileLock) {
+            val originalErr = System.err
+            return try {
+                System.setErr(silentErr)
+                val compiled =
+                    try {
+                        Regex(
+                            patternBytes,
+                            0,
+                            patternBytes.size,
+                            Option.MULTILINE,
+                            UTF8Encoding.INSTANCE,
+                            Syntax.RUBY,
+                        )
+                    } catch (_: JOniException) {
+                        null
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    }
+                compiled?.let { RegexCacheEntry.Compiled(it) } ?: RegexCacheEntry.Failed
+            } finally {
+                System.setErr(originalErr)
             }
-        return compiled?.let { regexCache.putIfAbsent(pattern, it) ?: it }
+        }
     }
 
     override fun find(

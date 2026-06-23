@@ -35,25 +35,48 @@ data class TextMateGrammarBundleLoadResult(
     val diagnostics: List<TextMateGrammarLoadDiagnostic>,
 )
 
-class TextMateGrammarBundle(
+class TextMateGrammarBundle internal constructor(
     val manifest: TextMateGrammarManifest,
-    val grammars: List<TextMateGrammarPayload>,
-    val diagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
+    private val reader: OpenCodeTextMateResourceReader?,
+    preloadedGrammars: Map<String, TextMateGrammarPayload> = emptyMap(),
+    preloadedDiagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
 ) {
-    private val grammarByResourcePath: Map<String, TextMateGrammarPayload> =
-        grammars.associateBy { grammar -> grammar.descriptor.resourcePath }
-    private val grammarByScopeName: Map<String, TextMateGrammarPayload> =
-        grammars.associateBy { grammar -> grammar.scopeName }
+    private val loadedByResourcePath = LinkedHashMap<String, TextMateGrammarPayload>()
+    private val failedResourcePaths = mutableSetOf<String>()
+    private val loadDiagnostics = preloadedDiagnostics.toMutableList()
+    private val loadLock = Any()
+
+    init {
+        loadedByResourcePath.putAll(preloadedGrammars)
+    }
+
+    private val descriptorsByResourcePath: Map<String, TextMateGrammarDescriptor> by lazy {
+        manifest.languages
+            .flatMap { entry -> entry.grammars }
+            .associateBy { descriptor -> descriptor.resourcePath }
+    }
+
+    private val descriptorsByScopeName: Map<String, TextMateGrammarDescriptor> by lazy {
+        manifest.languages
+            .flatMap { entry -> entry.grammars }
+            .associateBy { descriptor -> descriptor.scopeName }
+    }
+
+    val grammars: List<TextMateGrammarPayload>
+        get() = loadedByResourcePath.values.toList()
+
+    val diagnostics: List<TextMateGrammarLoadDiagnostic>
+        get() = loadDiagnostics.toList()
 
     fun grammarsFor(languageOrAlias: String?): List<TextMateGrammarPayload> {
         val entry = manifest.entryFor(languageOrAlias) ?: return emptyList()
-        return entry.grammars.mapNotNull { descriptor -> grammarByResourcePath[descriptor.resourcePath] }
+        return entry.grammars.mapNotNull { descriptor -> grammarForDescriptor(descriptor) }
     }
 
     fun primaryGrammarFor(languageOrAlias: String?): TextMateGrammarPayload? {
         val requested = languageOrAlias?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
         val entry = manifest.entryFor(requested) ?: return null
-        val loaded = entry.grammars.mapNotNull { descriptor -> grammarByResourcePath[descriptor.resourcePath] }
+        val loaded = entry.grammars.mapNotNull { descriptor -> grammarForDescriptor(descriptor) }
         val preferredNames = setOf(entry.language.lowercase(), requested) + entry.aliases.map { alias -> alias.lowercase() }
 
         return loaded.firstOrNull { grammar ->
@@ -62,11 +85,57 @@ class TextMateGrammarBundle(
         } ?: loaded.firstOrNull()
     }
 
-    fun grammarForScope(scopeName: String): TextMateGrammarPayload? = grammarByScopeName[scopeName]
+    fun grammarForScope(scopeName: String): TextMateGrammarPayload? =
+        descriptorsByScopeName[scopeName]?.let { descriptor -> grammarForDescriptor(descriptor) }
+
+    internal fun preloadAllFromReader() {
+        descriptorsByResourcePath.values.forEach { descriptor -> grammarForDescriptor(descriptor) }
+    }
+
+    companion object {
+        fun fromPreloaded(
+            manifest: TextMateGrammarManifest,
+            grammars: List<TextMateGrammarPayload>,
+            diagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
+        ): TextMateGrammarBundle =
+            TextMateGrammarBundle(
+                manifest = manifest,
+                reader = null,
+                preloadedGrammars = grammars.associateBy { grammar -> grammar.descriptor.resourcePath },
+                preloadedDiagnostics = diagnostics,
+            )
+    }
+
+    private fun grammarForDescriptor(descriptor: TextMateGrammarDescriptor): TextMateGrammarPayload? {
+        loadedByResourcePath[descriptor.resourcePath]?.let { return it }
+        if (descriptor.resourcePath in failedResourcePaths) return null
+
+        val resourceReader = reader ?: return null
+
+        synchronized(loadLock) {
+            loadedByResourcePath[descriptor.resourcePath]?.let { return it }
+            if (descriptor.resourcePath in failedResourcePaths) return null
+
+            val result = OpenCodeTextMateGrammarBundleLoader.loadGrammarPayload(descriptor, resourceReader)
+            loadDiagnostics += result.diagnostics
+            val payload = result.payload
+            if (payload == null) {
+                failedResourcePaths += descriptor.resourcePath
+                return null
+            }
+            loadedByResourcePath[descriptor.resourcePath] = payload
+            return payload
+        }
+    }
 }
 
 object OpenCodeTextMateGrammarBundleLoader {
     const val defaultManifestResourcePath: String = "textmate-grammars/manifest.json"
+
+    data class GrammarPayloadLoadResult(
+        val payload: TextMateGrammarPayload?,
+        val diagnostics: List<TextMateGrammarLoadDiagnostic>,
+    )
 
     fun loadBundled(reader: OpenCodeTextMateResourceReader): TextMateGrammarBundleLoadResult {
         val manifestJson =
@@ -120,7 +189,11 @@ object OpenCodeTextMateGrammarBundleLoader {
             }
 
         return TextMateGrammarBundleLoadResult(
-            bundle = load(manifest, reader),
+            bundle =
+                TextMateGrammarBundle(
+                    manifest = manifest,
+                    reader = reader,
+                ),
             diagnostics = emptyList(),
         )
     }
@@ -129,80 +202,80 @@ object OpenCodeTextMateGrammarBundleLoader {
         manifest: TextMateGrammarManifest,
         reader: OpenCodeTextMateResourceReader,
     ): TextMateGrammarBundle {
+        val bundle =
+            TextMateGrammarBundle(
+                manifest = manifest,
+                reader = reader,
+            )
+        bundle.preloadAllFromReader()
+        return bundle
+    }
+
+    internal fun loadGrammarPayload(
+        descriptor: TextMateGrammarDescriptor,
+        reader: OpenCodeTextMateResourceReader,
+    ): GrammarPayloadLoadResult {
         val diagnostics = mutableListOf<TextMateGrammarLoadDiagnostic>()
-        val descriptors =
-            manifest.languages
-                .flatMap { entry -> entry.grammars }
-                .distinctBy { descriptor -> descriptor.resourcePath }
-        val grammars =
-            descriptors.mapNotNull { descriptor ->
-                val grammarJson =
-                    reader.readText(descriptor.resourcePath)
-                        ?: run {
-                            diagnostics +=
-                                TextMateGrammarLoadDiagnostic(
-                                    kind = TextMateGrammarLoadDiagnosticKind.GrammarMissing,
-                                    resourcePath = descriptor.resourcePath,
-                                    message = "Bundled grammar resource was not found for ${descriptor.scopeName}.",
-                                )
-                            return@mapNotNull null
-                        }
-
-                val grammarObject =
-                    try {
-                        OpenCodeMarkdownJson.json.parseToJsonElement(grammarJson).jsonObject
-                    } catch (error: SerializationException) {
-                        diagnostics +=
-                            TextMateGrammarLoadDiagnostic(
-                                kind = TextMateGrammarLoadDiagnosticKind.GrammarInvalid,
-                                resourcePath = descriptor.resourcePath,
-                                message = error.message ?: "Bundled grammar resource could not be decoded.",
-                            )
-                        return@mapNotNull null
-                    } catch (error: IllegalArgumentException) {
-                        diagnostics +=
-                            TextMateGrammarLoadDiagnostic(
-                                kind = TextMateGrammarLoadDiagnosticKind.GrammarInvalid,
-                                resourcePath = descriptor.resourcePath,
-                                message = error.message ?: "Bundled grammar resource could not be decoded.",
-                            )
-                        return@mapNotNull null
-                    }
-
-                val grammar =
-                    OpenCodeTextMateGrammarDecoder.decodeOrNull(grammarObject)
-                        ?: run {
-                            diagnostics +=
-                                TextMateGrammarLoadDiagnostic(
-                                    kind = TextMateGrammarLoadDiagnosticKind.GrammarInvalid,
-                                    resourcePath = descriptor.resourcePath,
-                                    message = "Bundled grammar resource did not match the supported TextMate grammar schema.",
-                                )
-                            return@mapNotNull null
-                        }
-
-                val payload =
-                    TextMateGrammarPayload(
-                        descriptor = descriptor,
-                        json = grammarObject,
-                        grammar = grammar,
-                    )
-                if (payload.scopeName != descriptor.scopeName) {
+        val grammarJson =
+            reader.readText(descriptor.resourcePath)
+                ?: run {
                     diagnostics +=
                         TextMateGrammarLoadDiagnostic(
-                            kind = TextMateGrammarLoadDiagnosticKind.ScopeMismatch,
+                            kind = TextMateGrammarLoadDiagnosticKind.GrammarMissing,
                             resourcePath = descriptor.resourcePath,
-                            message =
-                                "Manifest scope ${descriptor.scopeName} did not match bundled grammar scope ${payload.scopeName}.",
+                            message = "Bundled grammar resource was not found for ${descriptor.scopeName}.",
                         )
+                    return GrammarPayloadLoadResult(payload = null, diagnostics = diagnostics)
                 }
-                payload
+
+        val grammarObject =
+            try {
+                OpenCodeMarkdownJson.json.parseToJsonElement(grammarJson).jsonObject
+            } catch (error: SerializationException) {
+                diagnostics +=
+                    TextMateGrammarLoadDiagnostic(
+                        kind = TextMateGrammarLoadDiagnosticKind.GrammarInvalid,
+                        resourcePath = descriptor.resourcePath,
+                        message = error.message ?: "Bundled grammar resource could not be decoded.",
+                    )
+                return GrammarPayloadLoadResult(payload = null, diagnostics = diagnostics)
+            } catch (error: IllegalArgumentException) {
+                diagnostics +=
+                    TextMateGrammarLoadDiagnostic(
+                        kind = TextMateGrammarLoadDiagnosticKind.GrammarInvalid,
+                        resourcePath = descriptor.resourcePath,
+                        message = error.message ?: "Bundled grammar resource could not be decoded.",
+                    )
+                return GrammarPayloadLoadResult(payload = null, diagnostics = diagnostics)
             }
 
-        return TextMateGrammarBundle(
-            manifest = manifest,
-            grammars = grammars,
-            diagnostics = diagnostics,
-        )
+        val grammar =
+            OpenCodeTextMateGrammarDecoder.decodeOrNull(grammarObject)
+                ?: run {
+                    diagnostics +=
+                        TextMateGrammarLoadDiagnostic(
+                            kind = TextMateGrammarLoadDiagnosticKind.GrammarInvalid,
+                            resourcePath = descriptor.resourcePath,
+                            message = "Bundled grammar resource did not match the supported TextMate grammar schema.",
+                        )
+                    return GrammarPayloadLoadResult(payload = null, diagnostics = diagnostics)
+                }
+
+        val payload =
+            TextMateGrammarPayload(
+                descriptor = descriptor,
+                json = grammarObject,
+                grammar = grammar,
+            )
+        if (payload.scopeName != descriptor.scopeName) {
+            diagnostics +=
+                TextMateGrammarLoadDiagnostic(
+                    kind = TextMateGrammarLoadDiagnosticKind.ScopeMismatch,
+                    resourcePath = descriptor.resourcePath,
+                    message =
+                        "Manifest scope ${descriptor.scopeName} did not match bundled grammar scope ${payload.scopeName}.",
+                )
+        }
+        return GrammarPayloadLoadResult(payload = payload, diagnostics = diagnostics)
     }
 }

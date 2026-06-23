@@ -149,6 +149,23 @@ class OpenCodeMarkdownHighlighterGoldenTest {
     }
 
     @Test
+    fun textMateGrammarBundledLoadIsLazyUntilLanguageRequested() {
+        val manifest = singleLanguageManifest()
+        val bundle =
+            OpenCodeTextMateGrammarBundleLoader.loadFromManifestJson(
+                manifestJson = OpenCodeMarkdownJson.json.encodeToString(manifest),
+                reader = singleLanguageResourceReader(),
+            ).bundle ?: error("missing manifest bundle")
+
+        assertTrue(bundle.grammars.isEmpty())
+
+        val kotlinGrammar = bundle.primaryGrammarFor("kotlin")
+        assertNotNull(kotlinGrammar)
+        assertEquals(1, bundle.grammars.size)
+        assertTrue(bundle.grammarsFor("swift").isEmpty())
+    }
+
+    @Test
     fun textMateGrammarBundleLoadsManifestAndGrammarPayloadsFromReader() {
         val manifest = singleLanguageManifest()
         val bundle =

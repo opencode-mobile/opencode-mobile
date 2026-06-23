@@ -80,7 +80,9 @@ class SessionChatViewModel
             boundWorktree = worktree
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             _uiState.value = SessionChatUiState.initial(sessionId, sessionTitle)
+            logI("startLiveObservation session=$sessionId")
             startLiveObservation(sessionId, worktree)
+            logI("loadMessages scheduled session=$sessionId")
             loadMessages()
         }
 
@@ -104,12 +106,13 @@ class SessionChatViewModel
                                     "live state session=$sessionId messages=${messages.size} " +
                                         "status=${status?.raw?.get("type") ?: "-"} connection=$connectionState",
                                 )
-                                applyLoadedMessages(
-                                    messages = messages,
-                                    sourceSessionId = sessionId,
-                                    sourceWorktree = worktree,
-                                    fromQuietRefresh = true,
-                                )
+                        applyLoadedMessages(
+                            messages = messages,
+                            sourceSessionId = sessionId,
+                            sourceWorktree = worktree,
+                            fromQuietRefresh = true,
+                            source = "live-store",
+                        )
                                 _uiState.update {
                                     it.copy(
                                         sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
@@ -141,12 +144,14 @@ class SessionChatViewModel
             val worktree = boundWorktree ?: return
             viewModelScope.launch {
                 if (!isCurrentBinding(sessionId, worktree)) return@launch
+                logI("loadMessages start session=$sessionId worktree=$worktree")
                 _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
                 runCatching {
                     val messages =
                         withContext(Dispatchers.IO) {
                             messageRepository.listMessages(sessionId, worktree)
                         }
+                    logI("loadMessages fetched session=$sessionId count=${messages.size}")
                     runCatching {
                         withContext(Dispatchers.IO) {
                             modelRepository.listModelOptions(worktree)
@@ -154,8 +159,15 @@ class SessionChatViewModel
                     }
                         .onSuccess { catalog ->
                             if (isCurrentBinding(sessionId, worktree)) {
+                                logI(
+                                    "loadMessages models session=$sessionId options=${catalog.options.size} " +
+                                        "default=${catalog.serverDefault?.modelLabel ?: "-"}",
+                                )
                                 applyModelCatalog(catalog, messages)
                             }
+                        }
+                        .onFailure { throwable ->
+                            logW("loadMessages models failed session=$sessionId error=${throwable.message ?: throwable::class.simpleName}")
                         }
                     messages
                 }.onSuccess { messages ->
@@ -163,8 +175,10 @@ class SessionChatViewModel
                         messages = messages,
                         sourceSessionId = sessionId,
                         sourceWorktree = worktree,
+                        source = "viewmodel-load",
                     )
                 }.onFailure { throwable ->
+                    logE("loadMessages failed session=$sessionId", throwable)
                     if (isCurrentBinding(sessionId, worktree)) {
                         applyLoadError(throwable)
                     }
@@ -185,6 +199,7 @@ class SessionChatViewModel
                             sourceSessionId = sessionId,
                             sourceWorktree = worktree,
                             isRefreshing = false,
+                            source = "refresh",
                         )
                     }
                     .onFailure { throwable ->
@@ -300,6 +315,7 @@ class SessionChatViewModel
                             messages = messages,
                             sourceSessionId = sessionId,
                             sourceWorktree = worktree,
+                            source = "send-prompt",
                         )
                     } catch (_: Throwable) {
                         // Prompt was accepted; live store or pull-to-refresh will sync the timeline.
@@ -350,38 +366,72 @@ class SessionChatViewModel
             runCatching { Log.d(TAG, message) }
         }
 
+        private fun logW(message: String) {
+            runCatching { Log.w(TAG, message) }
+        }
+
+        private fun logE(
+            message: String,
+            throwable: Throwable,
+        ) {
+            runCatching { Log.e(TAG, message, throwable) }
+        }
+
         private fun applyLoadedMessages(
             messages: List<Message>,
             sourceSessionId: String,
             sourceWorktree: String,
             isRefreshing: Boolean = false,
             fromQuietRefresh: Boolean = false,
+            source: String,
         ) {
             if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+            logI(
+                "applyLoadedMessages start session=$sourceSessionId source=$source " +
+                    "count=${messages.size} quietRefresh=$fromQuietRefresh refreshing=$isRefreshing",
+            )
             transformJob?.cancel()
             transformJob =
                 viewModelScope.launch {
                     if (fromQuietRefresh && hasStreamingDelta(messages)) {
+                        logD("applyLoadedMessages debounce session=$sourceSessionId ms=$STREAMING_MARKDOWN_PARSE_DEBOUNCE_MS")
                         delay(STREAMING_MARKDOWN_PARSE_DEBOUNCE_MS)
                     }
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     val stateSnapshot = _uiState.value
                     val previousById = stateSnapshot.messages.associateBy { it.id }
+                    var structuralMs = 0L
+                    var enrichMs = 0L
                     val enriched =
                         withContext(Dispatchers.Default) {
+                            val structuralStartedAt = System.nanoTime()
                             val structural = timelineMessages(messages, previousById)
+                            structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
                             val merged =
                                 if (fromQuietRefresh && stateSnapshot.isSending) {
                                     mergeWithPending(structural, stateSnapshot.messages.filter { it.isPending })
                                 } else {
                                     structural
                                 }
-                            renderedMarkdownMapper.enrichRows(merged, previousById)
+                            val enrichStartedAt = System.nanoTime()
+                            val result = renderedMarkdownMapper.enrichRows(merged, previousById)
+                            enrichMs = (System.nanoTime() - enrichStartedAt) / 1_000_000
+                            result
                         }
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
+                    val timeline =
+                        if (enriched.isEmpty()) {
+                            TimelineState.Empty
+                        } else {
+                            TimelineState.Ready
+                        }
+                    logI(
+                        "applyLoadedMessages ready session=$sourceSessionId source=$source " +
+                            "timeline=$timeline messages=${enriched.size} structuralMs=$structuralMs enrichMs=$enrichMs",
+                    )
                     _uiState.update { state ->
                         state.copy(
-                            timeline = if (enriched.isEmpty()) TimelineState.Empty else TimelineState.Ready,
+                            timeline = timeline,
                             messages = enriched,
                             isSending = if (fromQuietRefresh) state.isSending else false,
                             isRefreshing = isRefreshing,

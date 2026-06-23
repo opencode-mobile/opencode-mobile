@@ -25,7 +25,7 @@ fun testJavascriptGrammarBundle(): TextMateGrammarBundle {
             embeddedLanguages = emptyList(),
             aliases = listOf("js"),
         )
-    return TextMateGrammarBundle(
+    return TextMateGrammarBundle.fromPreloaded(
         manifest =
             TextMateGrammarManifest(
                 schemaVersion = 1,
