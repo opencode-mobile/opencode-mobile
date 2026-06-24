@@ -47,6 +47,10 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         return cache[key]!.stream()
     }
 
+    func cachedMessages(sessionID: String, directory: String) -> [Message]? {
+        baseMessages[sessionID]
+    }
+
     func clearCache() {
         cache.removeAll()
         infoCache.removeAll()
@@ -85,7 +89,9 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         directory: String,
         publish: @escaping ([Message]) -> Void
     ) async {
+        SessionPerformanceProbe.emit("history_request_started")
         guard let messages = await loadMessages(sessionID: sessionID, directory: directory) else { return }
+        SessionPerformanceProbe.emit("history_request_finished")
         rebuildCache(sessionID: sessionID, messages: messages)
         publish(messages)
     }
@@ -315,7 +321,10 @@ final class DefaultMessageLiveStore: MessageLiveStore {
 
     private func loadMessages(sessionID: String, directory: String) async -> [Message]? {
         do {
-            return try await messageRepository.listMessages(sessionID: sessionID, directory: directory)
+            let repository = messageRepository
+            return try await Task.detached(priority: .userInitiated) {
+                try await repository.listMessages(sessionID: sessionID, directory: directory)
+            }.value
         } catch {
             return nil
         }

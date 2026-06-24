@@ -8,7 +8,7 @@ final class RenderedMarkdownMapper {
     private var cacheOrder: [CacheKey] = []
     private let maxCacheEntries = 32
 
-    private init() {}
+    init() {}
 
     func parse(
         messageID: String,

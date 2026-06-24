@@ -134,6 +134,10 @@ final class SessionChatViewModel {
     private let sentTimeFormatter: DateFormatter
     private var liveObservationTask: Task<Void, Never>?
     private var transformTask: Task<Void, Never>?
+    private var isObservingMessages = false
+    private var pendingHistoryRows: [SessionChatRow] = []
+    private(set) var hasOlderHistory = false
+    private static let initialHistoryWindowSize = 3
 
     init(
         sessionID: String,
@@ -170,6 +174,7 @@ final class SessionChatViewModel {
 
     func startObserving() {
         liveObservationTask?.cancel()
+        isObservingMessages = true
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         liveObservationTask = Task {
             async let messageLoop: Void = observeMessages()
@@ -181,20 +186,30 @@ final class SessionChatViewModel {
     }
 
     func loadMessages() async {
+        SessionPerformanceProbe.emit("session_screen_started")
         let sessionID = state.sessionID
         let sessionTitle = state.sessionTitle
         let composer = state.composer
         state = .loading(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
 
+        if let cachedMessages = messageLiveStore.cachedMessages(sessionID: sessionID, directory: worktree) {
+            await applyLoadedMessagesTransform(cachedMessages, sessionID: sessionID, isRefreshing: true)
+        }
+
         do {
-            async let messagesLoad = messageRepository.listMessages(sessionID: sessionID, directory: worktree)
             async let modelsLoad = modelRepository.listModelOptions(directory: worktree)
-            let messages = try await messagesLoad
-            if let catalog = try? await modelsLoad {
-                applyModelCatalog(catalog, messages: messages)
+            if isObservingMessages {
+                if let catalog = try? await modelsLoad {
+                    applyModelCatalog(catalog, messages: [])
+                }
+            } else {
+                let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+                if let catalog = try? await modelsLoad {
+                    applyModelCatalog(catalog, messages: messages)
+                }
+                transformTask?.cancel()
+                await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             }
-            transformTask?.cancel()
-            await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             await refreshSessionStatus()
         } catch {
             applyError(error, sessionID: sessionID)
@@ -235,6 +250,31 @@ final class SessionChatViewModel {
                 )
             }
         }
+    }
+
+    func loadOlderHistory() async {
+        guard !pendingHistoryRows.isEmpty,
+              case let .loaded(sessionID, sessionTitle, displayedRows, composer, isSending, isRefreshing, errorBanner) = state
+        else { return }
+
+        let batchStart = max(pendingHistoryRows.count - Self.initialHistoryWindowSize, 0)
+        let batch = Array(pendingHistoryRows[batchStart...])
+        pendingHistoryRows.removeSubrange(batchStart...)
+        hasOlderHistory = !pendingHistoryRows.isEmpty
+
+        let previousByID = Dictionary(uniqueKeysWithValues: displayedRows.map { ($0.id, $0) })
+        let enriched = await renderedMarkdownMapper.enrichRows(batch, previousByID: previousByID)
+        guard !Task.isCancelled else { return }
+        state = .loaded(
+            sessionID: sessionID,
+            sessionTitle: sessionTitle,
+            messages: enriched + displayedRows,
+            composer: composer,
+            isSending: isSending,
+            isRefreshing: isRefreshing,
+            errorBanner: errorBanner
+        )
+        refreshContextUsage()
     }
 
     func updateComposerText(_ text: String) {
@@ -385,6 +425,7 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
         liveObservationTask?.cancel()
         liveObservationTask = nil
+        isObservingMessages = false
     }
 
     private func observeMessages() async {
@@ -483,16 +524,21 @@ final class SessionChatViewModel {
             } else {
                 serverRows
             }
-        let enriched = await renderedMarkdownMapper.enrichRows(rows, previousByID: previousByID)
+        pendingHistoryRows = Array(rows.dropLast(Self.initialHistoryWindowSize))
+        hasOlderHistory = !pendingHistoryRows.isEmpty
+        let initialWindow = Array(rows.suffix(Self.initialHistoryWindowSize))
+        SessionPerformanceProbe.emit("markdown_preparation_started")
+        let enrichedWindow = await renderedMarkdownMapper.enrichRows(initialWindow, previousByID: previousByID)
+        SessionPerformanceProbe.emit("markdown_preparation_finished")
         guard !Task.isCancelled else { return }
 
-        if enriched.isEmpty {
+        if enrichedWindow.isEmpty {
             state = .empty(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
         } else {
             state = .loaded(
                 sessionID: sessionID,
                 sessionTitle: sessionTitle,
-                messages: enriched,
+                messages: enrichedWindow,
                 composer: composer,
                 isSending: fromQuietRefresh ? isSending : false,
                 isRefreshing: isRefreshing,
@@ -500,6 +546,8 @@ final class SessionChatViewModel {
             )
         }
         refreshContextUsage()
+        SessionPerformanceProbe.emit("styled_timeline_published")
+
     }
 
     private func hasStreamingDelta(_ messages: [Message]) -> Bool {

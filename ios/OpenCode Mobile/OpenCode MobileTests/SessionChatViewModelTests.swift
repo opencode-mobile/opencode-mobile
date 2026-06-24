@@ -511,6 +511,8 @@ private final class FakeMessageLiveStore: MessageLiveStore, @unchecked Sendable 
         }
     }
 
+    func cachedMessages(sessionID: String, directory: String) -> [Message]? { nil }
+
     func emit(_ messages: [Message]) {
         for continuation in continuations.values {
             continuation.yield(messages)
