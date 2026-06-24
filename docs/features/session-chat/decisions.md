@@ -56,6 +56,22 @@
   actions, and is likely to recur on future session-scoped screens.
 - Revisit when: another screen needs a materially different status arrangement.
 
+## Treat cold rich-history loading as a staged performance problem
+
+- Date: 2026-06-24
+- Decision: do not publish unstyled raw Markdown merely to shorten the loading
+  indicator. Instead, retain native syntax styling and investigate staged
+  rendering at the document/block level: a responsive shell, a fully styled
+  visible window, and progressive older-history hydration.
+- Reason: Big Session profiling shows history retrieval is fast while Markdown
+  document preparation is expensive. Raw-first publishing made the app appear
+  loaded but left it unresponsive and visually degraded.
+- Measurement: use app-emitted benchmark probes for history request, Markdown
+  preparation, and styled-timeline publication; XCTest accessibility waits are
+  not reliable while the renderer is busy.
+- Revisit when: code-block virtualization has been benchmarked against Big
+  Session and a representative deterministic fixture is available for CI.
+
 ## Derive context usage from best available data
 
 - Date: 2026-06-01

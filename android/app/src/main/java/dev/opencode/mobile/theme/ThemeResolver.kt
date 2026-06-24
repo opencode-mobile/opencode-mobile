@@ -79,6 +79,22 @@ object ThemeResolver {
         tokens["syntax-diff-delete"] = if (isDark) primary else "#FF8C00"
         tokens["syntax-diff-unknown"] = info
 
+        // Markdown
+        tokens["markdown-h1"] = textStrong(ink, isDark)
+        tokens["markdown-h2"] = textStrong(ink, isDark)
+        tokens["markdown-h3"] = textStrong(ink, isDark)
+        tokens["markdown-link-text"] = interactive
+        tokens["markdown-link-underline"] = interactive
+        tokens["markdown-code-text"] = textStrong(ink, isDark)
+        tokens["markdown-code-bg"] = if (isDark) "#FFFFFF14" else "#0000000A"
+        tokens["markdown-quote-text"] = mix(ink, neutral, if (isDark) 0.42f else 0.45f)
+        tokens["markdown-quote-bar"] = interactive
+        tokens["markdown-list-marker"] = mix(ink, neutral, if (isDark) 0.42f else 0.45f)
+        tokens["markdown-image"] = mix(ink, neutral, if (isDark) 0.58f else 0.62f)
+        tokens["markdown-hr"] = mix(neutral, ink, if (isDark) 0.03f else 0.07f)
+        tokens["markdown-strong"] = textStrong(ink, isDark)
+        tokens["markdown-em"] = mix(ink, neutral, if (isDark) 0.42f else 0.45f)
+
         // Apply overrides
         for ((key, value) in overrides) {
             tokens[key] = value.normalizedHex()

@@ -17,7 +17,14 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
+import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
+import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -67,6 +74,77 @@ class SessionChatViewModelTest {
             assertEquals(TimelineState.Ready, state.timeline)
             assertEquals(1, state.messages.size)
             assertEquals("Hello", state.messages.first().text)
+        }
+
+    @Test
+    fun loadMessages_enrichesMarkdownBeforeReady() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.Assistant,
+                                    text = "# Heading",
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(TimelineState.Ready, state.timeline)
+            assertNotNull(state.messages.single().renderedMarkdown)
+        }
+
+    @Test
+    fun benchmark_loadMessages_longMarkdownHistory() =
+        runTest(testDispatcher) {
+            val messages = longMarkdownHistory()
+            val highlighter = OpenCodeBundledJoniMarkdownHighlighter.default()
+            val detectorMs = measureMs { messages.count { OpenCodeMarkdownDetector.shouldRender(it.text) } }
+            val parserMs = measureMs {
+                messages.forEach { message ->
+                    if (OpenCodeMarkdownDetector.shouldRender(message.text)) {
+                        OpenCodeMarkdownParser.parse(message.text, highlighter)
+                    }
+                }
+            }
+            val mapper = RenderedMarkdownMapper(highlighter).apply { computationDispatcher = Dispatchers.Default }
+            val mapperMs = measureMs {
+                mapper.enrichRows(
+                    messages.map { message ->
+                        SessionChatMessageItem(
+                            id = message.id,
+                            role = message.role,
+                            text = message.text,
+                            metadataLabel = "Benchmark",
+                        )
+                    },
+                    previousById = emptyMap(),
+                )
+                Unit
+            }
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    highlighter = highlighter,
+                )
+
+            val startedAt = System.nanoTime()
+            viewModel.bind("ses-benchmark", "Markdown benchmark", "/repo")
+            advanceUntilIdle()
+            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+
+            assertEquals(TimelineState.Ready, viewModel.uiState.value.timeline)
+            assertEquals(20, viewModel.uiState.value.messages.size)
+            println(
+                "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
+                    "mapper-ms=$mapperMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
+            )
         }
 
     @Test
@@ -477,7 +555,48 @@ class SessionChatViewModelTest {
             assertEquals(null, noLimit.uiState.value.contextUsageFraction)
         }
 
-    private fun createViewModel(repository: FakeMessageRepository): SessionChatViewModel {
+    @Test
+    fun toMessageItem_preservesRenderedMarkdownWhileStreaming() {
+        val viewModel = createViewModel(FakeMessageRepository())
+        val previous =
+            SessionChatMessageItem(
+                id = "msg-1",
+                role = MessageRole.Assistant,
+                text = "# Partial",
+                metadataLabel = "Build",
+                isStreaming = true,
+                renderedMarkdown =
+                    dev.opencode.mobile.markdown.MarkdownDocument(
+                        sourceHash = "# Partial".hashCode(),
+                        blocks =
+                            listOf(
+                                dev.opencode.mobile.markdown.MarkdownBlock.Heading(
+                                    level = 1,
+                                    inlines = listOf(dev.opencode.mobile.markdown.MarkdownInline.Text("Partial")),
+                                ),
+                            ),
+                    ),
+            )
+
+        val item =
+            viewModel.toMessageItem(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "# Partial heading",
+                    parts = listOf(MessagePart.Text(text = "# Partial heading", isStreaming = true)),
+                ),
+                previous,
+            )
+
+        assertNotNull(item.renderedMarkdown)
+    }
+
+    private fun createViewModel(
+        repository: FakeMessageRepository,
+        markdownDispatcher: CoroutineDispatcher = testDispatcher,
+        highlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
+    ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -491,7 +610,34 @@ class SessionChatViewModelTest {
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+            renderedMarkdownMapper =
+                RenderedMarkdownMapper(highlighter).apply {
+                    computationDispatcher = markdownDispatcher
+                },
         )
+    }
+
+    private fun longMarkdownHistory(): List<Message> =
+        (1..20).map { messageIndex ->
+            Message(
+                id = "benchmark-$messageIndex",
+                role = MessageRole.Assistant,
+                text =
+                    buildString {
+                        append("## Response $messageIndex\n\n```typescript\n")
+                        repeat(150) { lineIndex ->
+                            append("const item$lineIndex = response$lineIndex?.value ?? 'markdown benchmark';\n")
+                        }
+                        append("```\n")
+                    },
+                sentAtEpochMs = messageIndex.toLong(),
+            )
+        }
+
+    private suspend fun measureMs(block: suspend () -> Unit): Long {
+        val startedAt = System.nanoTime()
+        block()
+        return (System.nanoTime() - startedAt) / 1_000_000
     }
 }
 

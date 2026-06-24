@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.live
 
+import android.util.Log
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
@@ -25,6 +26,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.system.measureTimeMillis
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @Singleton
@@ -94,17 +96,22 @@ class DefaultMessageLiveStore
             directory: String,
         ): Flow<List<Message>> =
             channelFlow {
+                logI("observeMessages subscribe session=$sessionId directory=$directory")
                 // Initial seed: full REST load
-                val initial = fullReload(sessionId, directory)
+                val initial = fullReload(sessionId, directory, reason = "initial-subscribe")
                 if (initial != null) {
+                    logI("observeMessages emit session=$sessionId count=${initial.size} source=initial-subscribe")
                     send(initial)
                 }
 
                 // React to SSE events
                 eventStream.events.collect { event ->
                     if (event.type == "stream.reconnected" || event.type == "server.connected") {
-                        val reloaded = fullReload(sessionId, directory)
-                        if (reloaded != null) send(reloaded)
+                        val reloaded = fullReload(sessionId, directory, reason = event.type)
+                        if (reloaded != null) {
+                            logI("observeMessages emit session=$sessionId count=${reloaded.size} source=${event.type}")
+                            send(reloaded)
+                        }
                         return@collect
                     }
 
@@ -114,8 +121,14 @@ class DefaultMessageLiveStore
                         "message.updated" -> handleMessageUpdated(event.rawProperties, sessionId)
                         "message.part.updated" -> {
                             if (requiresFullReloadForBaseOnlyPartUpdate(event.rawProperties, sessionId)) {
-                                val reloaded = fullReload(sessionId, directory)
-                                if (reloaded != null) send(reloaded)
+                                val reloaded = fullReload(sessionId, directory, reason = "message.part.updated-base-only")
+                                if (reloaded != null) {
+                                    logI(
+                                        "observeMessages emit session=$sessionId count=${reloaded.size} " +
+                                            "source=message.part.updated-base-only",
+                                    )
+                                    send(reloaded)
+                                }
                                 return@collect
                             }
                             handleMessagePartUpdated(event.rawProperties, sessionId)
@@ -123,8 +136,14 @@ class DefaultMessageLiveStore
                         "message.removed" -> handleMessageRemoved(event.rawProperties, sessionId)
                         "message.part.removed" -> {
                             if (requiresFullReloadForBaseOnlyPartRemoval(event.rawProperties, sessionId)) {
-                                val reloaded = fullReload(sessionId, directory)
-                                if (reloaded != null) send(reloaded)
+                                val reloaded = fullReload(sessionId, directory, reason = "message.part.removed-base-only")
+                                if (reloaded != null) {
+                                    logI(
+                                        "observeMessages emit session=$sessionId count=${reloaded.size} " +
+                                            "source=message.part.removed-base-only",
+                                    )
+                                    send(reloaded)
+                                }
                                 return@collect
                             }
                             handleMessagePartRemoved(event.rawProperties, sessionId)
@@ -134,6 +153,7 @@ class DefaultMessageLiveStore
 
                     val messages = buildMessages(sessionId)
                     if (messages.isNotEmpty() && markChanged(sessionId, messages)) {
+                        logD("observeMessages emit session=$sessionId count=${messages.size} source=sse-incremental type=${event.type}")
                         send(messages)
                     }
                 }
@@ -262,15 +282,26 @@ class DefaultMessageLiveStore
         private suspend fun fullReload(
             sessionId: String,
             directory: String,
+            reason: String,
         ): List<Message>? {
-            val messages =
-                runCatching {
-                    messageRepository.listMessages(sessionId, directory)
-                }.getOrNull() ?: return null
-
+            var messages: List<Message>? = null
+            val elapsedMs =
+                measureTimeMillis {
+                    messages =
+                        runCatching {
+                            messageRepository.listMessages(sessionId, directory)
+                        }.getOrNull()
+                }
+            if (messages == null) {
+                logW("fullReload failed session=$sessionId reason=$reason ms=$elapsedMs")
+                return null
+            }
             rebuildCache(sessionId, messages)
             val fp = messageFingerprint(messages)
             lastFingerprints[sessionId] = fp
+            logI(
+                "fullReload session=$sessionId reason=$reason count=${messages.size} ms=$elapsedMs",
+            )
             return messages
         }
 
@@ -302,6 +333,7 @@ class DefaultMessageLiveStore
                     if (fp != lastFingerprints[sessionId]) {
                         rebuildCache(sessionId, messages)
                         lastFingerprints[sessionId] = fp
+                        logD("observeMessages emit session=$sessionId count=${messages.size} source=poll fingerprint-changed")
                         send(messages)
                     }
                 }
@@ -374,4 +406,20 @@ class DefaultMessageLiveStore
         }
 
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
+
+        private fun logI(message: String) {
+            runCatching { Log.i(TAG, message) }
+        }
+
+        private fun logD(message: String) {
+            runCatching { Log.d(TAG, message) }
+        }
+
+        private fun logW(message: String) {
+            runCatching { Log.w(TAG, message) }
+        }
+
+        private companion object {
+            private const val TAG = "MessageLiveStore"
+        }
     }

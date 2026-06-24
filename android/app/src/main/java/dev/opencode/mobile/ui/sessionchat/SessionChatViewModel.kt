@@ -20,8 +20,13 @@ import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,12 +34,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
+
+private const val STREAMING_MARKDOWN_PARSE_DEBOUNCE_MS = 40L
 
 @HiltViewModel
 class SessionChatViewModel
@@ -47,6 +55,7 @@ class SessionChatViewModel
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val foregroundEventStream: ForegroundEventStream,
         private val eventDomainAdapter: EventDomainAdapter,
+        private val renderedMarkdownMapper: RenderedMarkdownMapper,
     ) : ViewModel() {
         private val _uiState =
             MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
@@ -55,6 +64,7 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundWorktree: String? = null
         private var observeJob: Job? = null
+        private var transformJob: Job? = null
 
         fun bind(
             sessionId: String,
@@ -65,11 +75,14 @@ class SessionChatViewModel
                 return
             }
             observeJob?.cancel()
+            transformJob?.cancel()
             boundSessionId = sessionId
             boundWorktree = worktree
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             _uiState.value = SessionChatUiState.initial(sessionId, sessionTitle)
+            logI("startLiveObservation session=$sessionId")
             startLiveObservation(sessionId, worktree)
+            logI("loadMessages scheduled session=$sessionId")
             loadMessages()
         }
 
@@ -88,11 +101,18 @@ class SessionChatViewModel
                             ) { messages, status, connectionState ->
                                 Triple(messages, status, connectionState)
                             }.collect { (messages, status, connectionState) ->
+                                if (!isCurrentBinding(sessionId, worktree)) return@collect
                                 logD(
                                     "live state session=$sessionId messages=${messages.size} " +
                                         "status=${status?.raw?.get("type") ?: "-"} connection=$connectionState",
                                 )
-                                applyLoadedMessages(messages, fromQuietRefresh = true)
+                        applyLoadedMessages(
+                            messages = messages,
+                            sourceSessionId = sessionId,
+                            sourceWorktree = worktree,
+                            fromQuietRefresh = true,
+                            source = "live-store",
+                        )
                                 _uiState.update {
                                     it.copy(
                                         sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
@@ -123,14 +143,46 @@ class SessionChatViewModel
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
             viewModelScope.launch {
+                if (!isCurrentBinding(sessionId, worktree)) return@launch
+                logI("loadMessages start session=$sessionId worktree=$worktree")
                 _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
                 runCatching {
-                    val messages = messageRepository.listMessages(sessionId, worktree)
-                    runCatching { modelRepository.listModelOptions(worktree) }
-                        .onSuccess { catalog -> applyModelCatalog(catalog, messages) }
+                    val messages =
+                        withContext(Dispatchers.IO) {
+                            messageRepository.listMessages(sessionId, worktree)
+                        }
+                    logI("loadMessages fetched session=$sessionId count=${messages.size}")
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            modelRepository.listModelOptions(worktree)
+                        }
+                    }
+                        .onSuccess { catalog ->
+                            if (isCurrentBinding(sessionId, worktree)) {
+                                logI(
+                                    "loadMessages models session=$sessionId options=${catalog.options.size} " +
+                                        "default=${catalog.serverDefault?.modelLabel ?: "-"}",
+                                )
+                                applyModelCatalog(catalog, messages)
+                            }
+                        }
+                        .onFailure { throwable ->
+                            logW("loadMessages models failed session=$sessionId error=${throwable.message ?: throwable::class.simpleName}")
+                        }
                     messages
-                }.onSuccess { messages -> applyLoadedMessages(messages) }
-                    .onFailure { throwable -> applyLoadError(throwable) }
+                }.onSuccess { messages ->
+                    applyLoadedMessages(
+                        messages = messages,
+                        sourceSessionId = sessionId,
+                        sourceWorktree = worktree,
+                        source = "viewmodel-load",
+                    )
+                }.onFailure { throwable ->
+                    logE("loadMessages failed session=$sessionId", throwable)
+                    if (isCurrentBinding(sessionId, worktree)) {
+                        applyLoadError(throwable)
+                    }
+                }
             }
         }
 
@@ -138,15 +190,26 @@ class SessionChatViewModel
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
             viewModelScope.launch {
+                if (!isCurrentBinding(sessionId, worktree)) return@launch
                 _uiState.update { it.copy(isRefreshing = true, errorMessage = null) }
                 runCatching { messageRepository.listMessages(sessionId, worktree) }
-                    .onSuccess { messages -> applyLoadedMessages(messages, isRefreshing = false) }
+                    .onSuccess { messages ->
+                        applyLoadedMessages(
+                            messages = messages,
+                            sourceSessionId = sessionId,
+                            sourceWorktree = worktree,
+                            isRefreshing = false,
+                            source = "refresh",
+                        )
+                    }
                     .onFailure { throwable ->
-                        _uiState.update {
-                            it.copy(
-                                isRefreshing = false,
-                                errorMessage = errorMessage(throwable),
-                            )
+                        if (isCurrentBinding(sessionId, worktree)) {
+                            _uiState.update {
+                                it.copy(
+                                    isRefreshing = false,
+                                    errorMessage = errorMessage(throwable),
+                                )
+                            }
                         }
                     }
             }
@@ -207,23 +270,28 @@ class SessionChatViewModel
             val selectedModel = _uiState.value.selectedModel ?: return
             if (prompt.isEmpty() || _uiState.value.isSending) return
 
-            val optimistic =
-                SessionChatMessageItem(
-                    id = "pending-${UUID.randomUUID()}",
-                    role = MessageRole.User,
-                    text = prompt,
-                    metadataLabel = composerMetadataLabel(),
-                    isPending = true,
-                    isStreaming = false,
-                )
-
             viewModelScope.launch {
+                if (!isCurrentBinding(sessionId, worktree)) return@launch
+                val optimistic =
+                    SessionChatMessageItem(
+                        id = "pending-${UUID.randomUUID()}",
+                        role = MessageRole.User,
+                        text = prompt,
+                        metadataLabel = composerMetadataLabel(),
+                        isPending = true,
+                        isStreaming = false,
+                    )
+                val enriched =
+                    renderedMarkdownMapper.enrichRows(
+                        rows = listOf(optimistic),
+                        previousById = emptyMap(),
+                    )
                 _uiState.update {
                     it.copy(
                         composerText = "",
                         isSending = true,
                         errorMessage = null,
-                        messages = it.messages + optimistic,
+                        messages = it.messages + enriched,
                         timeline = TimelineState.Ready,
                     )
                 }
@@ -238,22 +306,33 @@ class SessionChatViewModel
                             ),
                         directory = worktree,
                     )
-                    refreshSessionStatus()
+                    if (isCurrentBinding(sessionId, worktree)) {
+                        refreshSessionStatus()
+                    }
                     try {
                         val messages = messageRepository.listMessages(sessionId, worktree)
-                        applyLoadedMessages(messages)
+                        applyLoadedMessages(
+                            messages = messages,
+                            sourceSessionId = sessionId,
+                            sourceWorktree = worktree,
+                            source = "send-prompt",
+                        )
                     } catch (_: Throwable) {
                         // Prompt was accepted; live store or pull-to-refresh will sync the timeline.
-                        _uiState.update { it.copy(isSending = false) }
+                        if (isCurrentBinding(sessionId, worktree)) {
+                            _uiState.update { it.copy(isSending = false) }
+                        }
                     }
                 } catch (throwable: Throwable) {
                     logSendFailure(throwable)
-                    _uiState.update {
-                        it.copy(
-                            isSending = false,
-                            messages = it.messages.filterNot { item -> item.id == optimistic.id },
-                            errorMessage = errorMessage(throwable),
-                        )
+                    if (isCurrentBinding(sessionId, worktree)) {
+                        _uiState.update {
+                            it.copy(
+                                isSending = false,
+                                messages = it.messages.filterNot { item -> item.id == optimistic.id },
+                                errorMessage = errorMessage(throwable),
+                            )
+                        }
                     }
                 }
             }
@@ -287,29 +366,87 @@ class SessionChatViewModel
             runCatching { Log.d(TAG, message) }
         }
 
+        private fun logW(message: String) {
+            runCatching { Log.w(TAG, message) }
+        }
+
+        private fun logE(
+            message: String,
+            throwable: Throwable,
+        ) {
+            runCatching { Log.e(TAG, message, throwable) }
+        }
+
         private fun applyLoadedMessages(
             messages: List<Message>,
+            sourceSessionId: String,
+            sourceWorktree: String,
             isRefreshing: Boolean = false,
             fromQuietRefresh: Boolean = false,
+            source: String,
         ) {
-            _uiState.update { state ->
-                val serverItems = timelineMessages(messages)
-                val merged =
-                    if (fromQuietRefresh && state.isSending) {
-                        mergeWithPending(serverItems, state.messages.filter { it.isPending })
-                    } else {
-                        serverItems
+            if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+            logI(
+                "applyLoadedMessages start session=$sourceSessionId source=$source " +
+                    "count=${messages.size} quietRefresh=$fromQuietRefresh refreshing=$isRefreshing",
+            )
+            transformJob?.cancel()
+            transformJob =
+                viewModelScope.launch {
+                    if (fromQuietRefresh && hasStreamingDelta(messages)) {
+                        logD("applyLoadedMessages debounce session=$sourceSessionId ms=$STREAMING_MARKDOWN_PARSE_DEBOUNCE_MS")
+                        delay(STREAMING_MARKDOWN_PARSE_DEBOUNCE_MS)
                     }
-                state.copy(
-                    timeline = if (merged.isEmpty()) TimelineState.Empty else TimelineState.Ready,
-                    messages = merged,
-                    isSending = if (fromQuietRefresh) state.isSending else false,
-                    isRefreshing = isRefreshing,
-                    contextUsageFraction = contextUsageFraction(merged, state.modelOptions, state.selectedModel),
-                    errorMessage = if (fromQuietRefresh) state.errorMessage else null,
-                )
-            }
+                    if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
+                    val stateSnapshot = _uiState.value
+                    val previousById = stateSnapshot.messages.associateBy { it.id }
+                    var structuralMs = 0L
+                    var enrichMs = 0L
+                    val structuralStartedAt = System.nanoTime()
+                    val structural = timelineMessages(messages, previousById)
+                    structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
+                    val merged =
+                        if (fromQuietRefresh && stateSnapshot.isSending) {
+                            mergeWithPending(structural, stateSnapshot.messages.filter { it.isPending })
+                        } else {
+                            structural
+                        }
+                    val enrichStartedAt = System.nanoTime()
+                    val enriched = renderedMarkdownMapper.enrichRows(merged, previousById)
+                    enrichMs = (System.nanoTime() - enrichStartedAt) / 1_000_000
+                    if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
+                    val timeline =
+                        if (enriched.isEmpty()) {
+                            TimelineState.Empty
+                        } else {
+                            TimelineState.Ready
+                        }
+                    logI(
+                        "applyLoadedMessages ready session=$sourceSessionId source=$source " +
+                            "timeline=$timeline messages=${enriched.size} structuralMs=$structuralMs enrichMs=$enrichMs",
+                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            timeline = timeline,
+                            messages = enriched,
+                            isSending = if (fromQuietRefresh) state.isSending else false,
+                            isRefreshing = isRefreshing,
+                            contextUsageFraction = contextUsageFraction(enriched, state.modelOptions, state.selectedModel),
+                            errorMessage = if (fromQuietRefresh) state.errorMessage else null,
+                        )
+                    }
+                }
         }
+
+        private fun isCurrentBinding(
+            sessionId: String,
+            worktree: String,
+        ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
+
+        private fun hasStreamingDelta(messages: List<Message>): Boolean =
+            messages.any { message ->
+                message.parts.any { part -> part is dev.opencode.mobile.domain.message.MessagePart.Text && part.isStreaming }
+            }
 
         private fun mergeWithPending(
             serverItems: List<SessionChatMessageItem>,
@@ -323,7 +460,10 @@ class SessionChatViewModel
             return serverItems + pendingToKeep
         }
 
-        private fun timelineMessages(messages: List<Message>): List<SessionChatMessageItem> =
+        private fun timelineMessages(
+            messages: List<Message>,
+            previousById: Map<String, SessionChatMessageItem>,
+        ): List<SessionChatMessageItem> =
             messages
                 .withIndex()
                 .sortedWith { left, right ->
@@ -334,7 +474,7 @@ class SessionChatViewModel
                         leftTime != null && rightTime != null -> left.value.id.compareTo(right.value.id)
                         else -> left.index.compareTo(right.index)
                     }
-                }.map { toMessageItem(it.value) }
+                }.map { toMessageItem(it.value, previousById[it.value.id]) }
 
         private fun applyLoadError(throwable: Throwable) {
             _uiState.update {
@@ -347,14 +487,24 @@ class SessionChatViewModel
             }
         }
 
-        internal fun toMessageItem(message: Message): SessionChatMessageItem {
+        internal fun toMessageItem(
+            message: Message,
+            previous: SessionChatMessageItem? = null,
+        ): SessionChatMessageItem {
             val isStreaming = message.parts.any { it is dev.opencode.mobile.domain.message.MessagePart.Text && it.isStreaming }
+            val text = message.text
+            val shouldRenderMarkdown = OpenCodeMarkdownDetector.shouldRender(text)
+            val preservedMarkdown =
+                previous?.renderedMarkdown?.takeIf {
+                    shouldRenderMarkdown && (previous.text == text || previous.isStreaming)
+                }
             return SessionChatMessageItem(
                 id = message.id,
                 role = message.role,
-                text = message.text,
+                text = text,
                 metadataLabel = metadataLabel(message),
                 isStreaming = isStreaming,
+                renderedMarkdown = if (shouldRenderMarkdown) preservedMarkdown else null,
                 modelProviderId = message.modelProviderId,
                 modelId = message.modelId,
                 contextInputTokens = message.contextInputTokens,
@@ -568,6 +718,7 @@ data class SessionChatMessageItem(
     val metadataLabel: String,
     val isPending: Boolean = false,
     val isStreaming: Boolean = false,
+    val renderedMarkdown: MarkdownDocument? = null,
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,

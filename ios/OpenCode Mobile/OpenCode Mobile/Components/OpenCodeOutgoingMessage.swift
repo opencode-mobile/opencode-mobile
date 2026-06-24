@@ -4,6 +4,7 @@ import UIKit
 private let outgoingMessageControlIconTouchTarget: CGFloat = 28
 private let outgoingMessageExpandCollapseIconSize: CGFloat = 16
 private let outgoingMessageActionIconSize: CGFloat = 16
+private let outgoingMessageCollapsedRenderedMarkdownHeight: CGFloat = 140
 
 private func outgoingMessageControlIcon(_ icon: OpenCodeIcon, size: CGFloat) -> some View {
     Image(icon.rawValue)
@@ -17,22 +18,33 @@ private func outgoingMessageControlIcon(_ icon: OpenCodeIcon, size: CGFloat) -> 
 
 struct OpenCodeOutgoingMessage: View {
     let text: String
+    let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
     let onRestoreClick: () -> Void
+    let initialRenderedMarkdownHeight: CGFloat
+    let onRenderedMarkdownHeightChange: (CGFloat) -> Void
     @State private var expanded: Bool
     @State private var fullTextHeight: CGFloat = 0
     @State private var collapsedTextHeight: CGFloat = 0
+    @State private var renderedMarkdownHeight: CGFloat = 1
 
     init(
         text: String,
+        renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
         initiallyExpanded: Bool = false,
+        initialRenderedMarkdownHeight: CGFloat = 1,
+        onRenderedMarkdownHeightChange: @escaping (CGFloat) -> Void = { _ in },
         onRestoreClick: @escaping () -> Void
     ) {
         self.text = text
+        self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
+        self.initialRenderedMarkdownHeight = max(1, initialRenderedMarkdownHeight)
+        self.onRenderedMarkdownHeightChange = onRenderedMarkdownHeightChange
         self.onRestoreClick = onRestoreClick
         _expanded = State(initialValue: initiallyExpanded)
+        _renderedMarkdownHeight = State(initialValue: max(1, initialRenderedMarkdownHeight))
     }
 
     var body: some View {
@@ -125,33 +137,67 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     private var visibleText: some View {
-        Text(text)
-            .font(OpenCodeTypography.body)
-            .foregroundStyle(OpenCodeColors.textPrimary)
-            .lineLimit(expanded ? nil : 5)
-            .fixedSize(horizontal: false, vertical: true)
+        Group {
+            if let renderedMarkdown {
+                OpenCodeRenderedMarkdown(
+                    document: renderedMarkdown,
+                    variant: .outgoingMessage,
+                    initialHeight: initialRenderedMarkdownHeight,
+                    measuresHeight: true,
+                    onHeightChange: { height in
+                        renderedMarkdownHeight = height
+                        onRenderedMarkdownHeightChange(min(height, outgoingMessageCollapsedRenderedMarkdownHeight))
+                    }
+                )
+                .frame(
+                    height: isExpandable && !expanded
+                        ? min(renderedMarkdownHeight, outgoingMessageCollapsedRenderedMarkdownHeight)
+                        : renderedMarkdownHeight
+                )
+                .clipped()
+            } else {
+                Text(text)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .lineLimit(expanded ? nil : 5)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var measurementText: some View {
-        ZStack {
-            Text(text)
-                .font(OpenCodeTypography.body)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-                .readSize { fullTextHeight = $0.height }
+        Group {
+            if usesRenderedMarkdown {
+                Color.clear
+            } else {
+                ZStack {
+                    Text(text)
+                        .font(OpenCodeTypography.body)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .readSize { fullTextHeight = $0.height }
 
-            Text(text)
-                .font(OpenCodeTypography.body)
-                .lineLimit(5)
-                .fixedSize(horizontal: false, vertical: true)
-                .readSize { collapsedTextHeight = $0.height }
+                    Text(text)
+                        .font(OpenCodeTypography.body)
+                        .lineLimit(5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .readSize { collapsedTextHeight = $0.height }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .hidden()
     }
 
+    private var usesRenderedMarkdown: Bool {
+        renderedMarkdown != nil
+    }
+
     private var isExpandable: Bool {
-        fullTextHeight > collapsedTextHeight + 1
+        if let renderedMarkdown {
+            return renderedMarkdown.isLikelyExpandable && renderedMarkdownHeight > outgoingMessageCollapsedRenderedMarkdownHeight + 1
+        }
+        return fullTextHeight > collapsedTextHeight + 1
     }
 }
 

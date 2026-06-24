@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,8 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -47,13 +53,15 @@ import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
+import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -61,6 +69,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 private enum class ComposerPickerKind(
     val sheetTitle: String,
@@ -81,6 +90,8 @@ fun SessionChatScreen(
     onSessionContextClick: () -> Unit = {},
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
+    val context = LocalContext.current
+
     LaunchedEffect(sessionId, sessionTitle, worktree) {
         viewModel.bind(sessionId, sessionTitle, worktree)
     }
@@ -89,7 +100,6 @@ fun SessionChatScreen(
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
-    val context = LocalContext.current
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -175,23 +185,27 @@ fun SessionChatScreen(
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
                     var isFollowingScroll by remember(uiState.sessionId) { mutableStateOf(false) }
+                    val markdownHeightCache = remember(uiState.sessionId) { mutableStateMapOf<RenderedMarkdownHeightKey, Dp>() }
+                    var latestMessageHeightRevision by remember(uiState.sessionId) { mutableIntStateOf(0) }
+                    val latestMessageId = uiState.messages.lastOrNull()?.id
 
-	                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
-	                        snapshotFlow {
-	                            listState.isScrollInProgress to !listState.canScrollForward
-	                        }.distinctUntilChanged().collect { (isScrollInProgress, atBottom) ->
-	                            if (atBottom) {
-	                                followingLatest = true
-	                            } else if (isScrollInProgress && !isFollowingScroll) {
-	                                followingLatest = false
-	                            }
-	                        }
+                    LaunchedEffect(uiState.sessionId, uiState.messages.size) {
+                        snapshotFlow {
+                            listState.isScrollInProgress to !listState.canScrollForward
+                        }.distinctUntilChanged().collect { (isScrollInProgress, atBottom) ->
+                            if (atBottom) {
+                                followingLatest = true
+                            } else if (isScrollInProgress && !isFollowingScroll) {
+                                followingLatest = false
+                            }
+                        }
                     }
 
                     LaunchedEffect(
                         uiState.sessionId,
-                        uiState.messages.lastOrNull()?.id,
+                        latestMessageId,
                         uiState.messages.lastOrNull()?.text,
+                        latestMessageHeightRevision,
                     ) {
                         val latestMessage = uiState.messages.lastOrNull() ?: return@LaunchedEffect
                         val bottomIndex = uiState.messages.size
@@ -227,6 +241,30 @@ fun SessionChatScreen(
                                 MessageRow(
                                     message = message,
                                     onRestoreClick = { viewModel.restoreComposerText(message.text) },
+                                    initialRenderedMarkdownHeight = { variant, width ->
+                                        markdownHeightCache[
+                                            RenderedMarkdownHeightKey(
+                                                messageId = message.id,
+                                                variant = variant,
+                                                widthBucket = width.value.roundToInt(),
+                                            ),
+                                        ] ?: 1.dp
+                                    },
+                                    onRenderedMarkdownHeightChange = { variant, width, height ->
+                                        val key =
+                                            RenderedMarkdownHeightKey(
+                                                messageId = message.id,
+                                                variant = variant,
+                                                widthBucket = width.value.roundToInt(),
+                                            )
+                                        val previous = markdownHeightCache[key]
+                                        markdownHeightCache[key] = height
+                                        if (message.id == latestMessageId && followingLatest) {
+                                            if (previous == null || abs(previous.value - height.value) > 1f) {
+                                                latestMessageHeightRevision += 1
+                                            }
+                                        }
+                                    },
                                     modifier =
                                         Modifier.padding(
                                             bottom = if (index == uiState.messages.lastIndex) 0.dp else 8.dp,
@@ -263,9 +301,10 @@ fun SessionChatScreen(
             )
         }
 
-        val modelCatalog = remember(uiState.modelOptions) {
-            ModelSelectionCatalog(options = uiState.modelOptions, serverDefault = null)
-        }
+        val modelCatalog =
+            remember(uiState.modelOptions) {
+                ModelSelectionCatalog(options = uiState.modelOptions, serverDefault = null)
+            }
         val activeModelProvider = modelCatalog.providers.firstOrNull { it.id == activeModelProviderId }
         val modelSheetTitle =
             if (activePicker == ComposerPickerKind.Model) {
@@ -478,29 +517,62 @@ private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCod
 private fun MessageRow(
     message: SessionChatMessageItem,
     onRestoreClick: () -> Unit,
+    initialRenderedMarkdownHeight: (OpenCodeRenderedMarkdownVariant, Dp) -> Dp,
+    onRenderedMarkdownHeightChange: (OpenCodeRenderedMarkdownVariant, Dp, Dp) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment =
-            if (message.role == MessageRole.User) {
-                Alignment.End
-            } else {
-                Alignment.Start
-            },
-    ) {
-        when (message.role) {
-            MessageRole.User ->
-                OpenCodeOutgoingMessage(
-                    text = message.text,
-                    metadataLabel = message.metadataLabel,
-                    onRestoreClick = onRestoreClick,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            MessageRole.Assistant ->
-                AssistantMessageBubble(text = message.text)
-            MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
-                FallbackMessageBubble(roleLabel = message.role.displayLabel(), text = message.text)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val availableWidth = maxWidth
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment =
+                if (message.role == MessageRole.User) {
+                    Alignment.End
+                } else {
+                    Alignment.Start
+                },
+        ) {
+            when (message.role) {
+                MessageRole.User ->
+                    OpenCodeOutgoingMessage(
+                        text = message.text,
+                        renderedMarkdown = message.renderedMarkdown,
+                        metadataLabel = message.metadataLabel,
+                        onRestoreClick = onRestoreClick,
+                        initialRenderedMarkdownHeight =
+                            initialRenderedMarkdownHeight(
+                                OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                                availableWidth,
+                            ),
+                        onRenderedMarkdownHeightChange = { height ->
+                            onRenderedMarkdownHeightChange(
+                                OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                                availableWidth,
+                                height,
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                MessageRole.Assistant ->
+                    AssistantMessageBubble(
+                        text = message.text,
+                        renderedMarkdown = message.renderedMarkdown,
+                        initialRenderedMarkdownHeight =
+                            initialRenderedMarkdownHeight(
+                                OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                                availableWidth,
+                            ),
+                        onRenderedMarkdownHeightChange = { height ->
+                            onRenderedMarkdownHeightChange(
+                                OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                                availableWidth,
+                                height,
+                            )
+                        },
+                    )
+                MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
+                    FallbackMessageBubble(roleLabel = message.role.displayLabel(), text = message.text)
+            }
         }
     }
 }
@@ -508,18 +580,34 @@ private fun MessageRow(
 @Composable
 private fun AssistantMessageBubble(
     text: String,
+    renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument?,
+    initialRenderedMarkdownHeight: Dp,
+    onRenderedMarkdownHeightChange: (Dp) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = text.ifBlank { "…" },
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    val bubbleModifier =
+        modifier
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+
+    when {
+        renderedMarkdown != null ->
+            OpenCodeRenderedMarkdown(
+                document = renderedMarkdown,
+                variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                initialHeight = initialRenderedMarkdownHeight,
+                onContentHeightChange = onRenderedMarkdownHeightChange,
+                modifier = bubbleModifier,
+            )
+        else ->
+            Text(
+                text = text.ifBlank { "…" },
+                modifier = bubbleModifier,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+    }
 }
 
 @Composable
@@ -627,6 +715,12 @@ private fun SessionComposer(
         }
     }
 }
+
+private data class RenderedMarkdownHeightKey(
+    val messageId: String,
+    val variant: OpenCodeRenderedMarkdownVariant,
+    val widthBucket: Int,
+)
 
 @Preview(showBackground = true)
 @Composable

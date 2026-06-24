@@ -76,6 +76,22 @@ struct ThemeResolver {
         tokens["syntax-diff-delete"] = isDark ? primary : "#FF8C00"
         tokens["syntax-diff-unknown"] = info
 
+        // Markdown
+        tokens["markdown-h1"] = textStrong(ink: ink, isDark: isDark)
+        tokens["markdown-h2"] = textStrong(ink: ink, isDark: isDark)
+        tokens["markdown-h3"] = textStrong(ink: ink, isDark: isDark)
+        tokens["markdown-link-text"] = interactive
+        tokens["markdown-link-underline"] = interactive
+        tokens["markdown-code-text"] = textStrong(ink: ink, isDark: isDark)
+        tokens["markdown-code-bg"] = isDark ? "#FFFFFF14" : "#0000000A"
+        tokens["markdown-quote-text"] = mix(ink, neutral, isDark ? 0.42 : 0.45)
+        tokens["markdown-quote-bar"] = interactive
+        tokens["markdown-list-marker"] = mix(ink, neutral, isDark ? 0.42 : 0.45)
+        tokens["markdown-image"] = mix(ink, neutral, isDark ? 0.58 : 0.62)
+        tokens["markdown-hr"] = mix(neutral, ink, isDark ? 0.03 : 0.07)
+        tokens["markdown-strong"] = textStrong(ink: ink, isDark: isDark)
+        tokens["markdown-em"] = mix(ink, neutral, isDark ? 0.42 : 0.45)
+
         // Apply overrides
         for (key, value) in overrides {
             tokens[key] = value.normalizedHex

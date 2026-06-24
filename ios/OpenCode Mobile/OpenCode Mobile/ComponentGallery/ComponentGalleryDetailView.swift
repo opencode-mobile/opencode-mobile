@@ -64,6 +64,8 @@ struct ComponentGalleryDetailView: View {
             ProjectSessionSelectorGalleryView()
         case .sessionStatusBar:
             SessionStatusBarGalleryView()
+        case .renderedMarkdown:
+            RenderedMarkdownGalleryView()
         }
     }
 }

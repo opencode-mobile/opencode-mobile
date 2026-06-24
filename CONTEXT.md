@@ -133,6 +133,15 @@ Server-only part types (`step-start`, `step-finish`, `agent`, `subtask`,
 `snapshot`, `patch`, `compaction`, `retry`) are consumed by the adapter but do
 not produce a visible domain part in v1.
 
+### Rendered Markdown
+
+Formatted display of message text that may include headings, lists, links,
+tables, inline code, fenced code blocks, and fenced diff blocks.
+
+Rendered Markdown is a display projection only. The source text remains raw
+markdown for sending, copying, restoring to the composer, and repository/domain
+state.
+
 ### Model Selection
 
 The user's selected provider/model pair and optional server-provided Variant

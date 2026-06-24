@@ -32,12 +32,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private const val OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT = 5
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.84f
+private val OutgoingMessageCollapsedRenderedMarkdownHeight = 140.dp
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
 private val OutgoingMessagePaddingHorizontal = 18.dp
 private val OutgoingMessagePaddingVertical = 14.dp
@@ -54,7 +56,10 @@ fun OpenCodeOutgoingMessage(
     metadataLabel: String,
     onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier,
+    renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument? = null,
     initiallyExpanded: Boolean = false,
+    initialRenderedMarkdownHeight: Dp = 1.dp,
+    onRenderedMarkdownHeightChange: (Dp) -> Unit = {},
 ) {
     var expanded by rememberSaveable(text) { mutableStateOf(initiallyExpanded) }
     var expandable by rememberSaveable(text) { mutableStateOf(false) }
@@ -82,20 +87,35 @@ fun OpenCodeOutgoingMessage(
                         ),
                     horizontalAlignment = Alignment.End,
                 ) {
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = if (expanded) Int.MAX_VALUE else OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT,
-                        overflow = TextOverflow.Clip,
-                        onTextLayout = { result ->
-                            expandable =
-                                if (expanded) {
-                                    result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
-                                } else {
-                                    result.hasVisualOverflow || result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
-                                }
-                        },
-                    )
+                    if (renderedMarkdown != null) {
+                        OpenCodeRenderedMarkdown(
+                            document = renderedMarkdown,
+                            variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                            initialHeight = initialRenderedMarkdownHeight,
+                            collapsedMaxHeight = OutgoingMessageCollapsedRenderedMarkdownHeight,
+                            expanded = expanded,
+                            onExpandableChange = { expandable = it },
+                            onContentHeightChange = { height ->
+                                onRenderedMarkdownHeightChange(minOf(height, OutgoingMessageCollapsedRenderedMarkdownHeight))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = if (expanded) Int.MAX_VALUE else OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT,
+                            overflow = TextOverflow.Clip,
+                            onTextLayout = { result ->
+                                expandable =
+                                    if (expanded) {
+                                        result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
+                                    } else {
+                                        result.hasVisualOverflow || result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
+                                    }
+                            },
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageContentSpacing),

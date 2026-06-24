@@ -131,6 +131,33 @@ The canonical tokens match the OpenCode desktop token schema:
 | `syntax-diff-delete` | `#FF8C00` | `#FAB283` |
 | `syntax-diff-unknown` | `#A753AE` | `#EDB2F1` |
 
+### Syntax role mapping (code blocks)
+
+Rendered Markdown maps shared `CodeTokenRole` values to syntax tokens using the
+same buckets as the web client:
+
+| `CodeTokenRole` | Syntax token | Web appearance |
+|---|---|---|
+| `Comment` | `syntax-comment` | Gray |
+| `Keyword` | `syntax-keyword` | Pink / magenta |
+| `Type` | `syntax-type` | Yellow / gold class names |
+| `Function` | `syntax-primitive` | Sky blue builtins (`Map`, `Object.entries`) |
+| `Property`, `Constant` | `syntax-constant` | Cyan / teal members, keys, `this` |
+| `String` | `syntax-string` | Mint / teal string literals |
+| `Number`, `Attribute` | `syntax-property` | Peach / orange numeric literals |
+| `Variable` | `text-primary` | Off-white parameters and locals |
+| `Operator`, `Punctuation`, `Plain` | `text-primary` | Off-white punctuation |
+| `Tag` | `syntax-info` | Info accent |
+| `Inserted` | `diff-add` | Diff added lines |
+| `Deleted` | `syntax-diff-delete` | Diff deleted lines |
+| `Warning` | `syntax-diff-unknown` | Diff headers / unknown |
+| `Critical` | `syntax-critical` | Invalid / error emphasis |
+
+Private field declarations (`#baseUrl;`) intentionally stay plain. Member access
+(`this.#baseUrl`) uses `Property` and renders with `syntax-constant`. JavaScript
+`this` and expression keywords such as `new` are normalized to web roles before
+rendering.
+
 ### Markdown (rendered markdown colors)
 
 | Token | Purpose |
