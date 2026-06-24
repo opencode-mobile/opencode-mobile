@@ -65,6 +65,22 @@ Do not add these to v1 without revisiting the project docs:
   Keystore-backed storage. Use SwiftData and Room as the default structured
   persistence choices when local app-owned data is needed.
 
+## Xcode MCP
+
+- Xcode's MCP bridge is configured for Codex as the `xcode` server. Use its
+  tools when iOS work benefits from Xcode context or capabilities: project
+  navigation, source reads and edits, compiler diagnostics, builds, tests,
+  SwiftUI preview rendering, build logs, and Apple documentation search.
+- Before using Xcode MCP tools, ensure the intended iOS project is open in
+  Xcode. The bridge operates on Xcode's active workspace rather than treating
+  the filesystem as the project model.
+- Prefer Xcode MCP for Xcode-owned actions such as building, testing, project
+  navigator changes, and preview rendering. Use normal repository tools for
+  cross-platform and plain filesystem work.
+- Treat build, test, and source-edit MCP actions as project mutations: use them
+  only when they are within the user's requested scope, and report relevant
+  results.
+
 ## Design System And Feature Workflow
 
 - Build the Component Collection before feature screens depend on reusable UI.
