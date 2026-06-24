@@ -24,7 +24,8 @@ struct SessionChatRow: Identifiable, Equatable {
             lhs.modelProviderID == rhs.modelProviderID &&
             lhs.modelID == rhs.modelID &&
             lhs.contextInputTokens == rhs.contextInputTokens &&
-            lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash
+            lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash &&
+            lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count
     }
 }
 

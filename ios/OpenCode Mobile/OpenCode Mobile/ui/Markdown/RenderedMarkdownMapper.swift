@@ -19,7 +19,12 @@ final class RenderedMarkdownMapper {
             return nil
         }
 
-        let cacheKey = CacheKey(text: text, isStreaming: isStreaming)
+        let cacheKey = CacheKey(
+            messageID: messageID,
+            textHash: stableMarkdownSourceHash(text),
+            textLength: text.count,
+            isStreaming: isStreaming
+        )
         cacheLock.lock()
         if let cached = cache[cacheKey] {
             touch(cacheKey)
@@ -89,7 +94,18 @@ final class RenderedMarkdownMapper {
     }
 
     private struct CacheKey: Hashable {
-        let text: String
+        let messageID: String
+        let textHash: Int
+        let textLength: Int
         let isStreaming: Bool
     }
+}
+
+func stableMarkdownSourceHash(_ markdown: String) -> Int {
+    var hash = 0x811c9dc5
+    for byte in markdown.utf8 {
+        hash = hash ^ Int(byte)
+        hash = hash &* 0x01000193
+    }
+    return hash
 }

@@ -131,16 +131,12 @@ class SessionChatViewModelTest {
             val viewModel =
                 createViewModel(
                     repository = FakeMessageRepository(messages = messages),
-                    markdownDispatcher = Dispatchers.Default,
                     highlighter = highlighter,
                 )
 
             val startedAt = System.nanoTime()
             viewModel.bind("ses-benchmark", "Markdown benchmark", "/repo")
-            while (viewModel.uiState.value.timeline == TimelineState.Loading) {
-                advanceUntilIdle()
-                Thread.sleep(1)
-            }
+            advanceUntilIdle()
             val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
 
             assertEquals(TimelineState.Ready, viewModel.uiState.value.timeline)

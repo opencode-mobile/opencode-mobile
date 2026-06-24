@@ -402,22 +402,18 @@ class SessionChatViewModel
                     val previousById = stateSnapshot.messages.associateBy { it.id }
                     var structuralMs = 0L
                     var enrichMs = 0L
-                    val enriched =
-                        withContext(Dispatchers.Default) {
-                            val structuralStartedAt = System.nanoTime()
-                            val structural = timelineMessages(messages, previousById)
-                            structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
-                            val merged =
-                                if (fromQuietRefresh && stateSnapshot.isSending) {
-                                    mergeWithPending(structural, stateSnapshot.messages.filter { it.isPending })
-                                } else {
-                                    structural
-                                }
-                            val enrichStartedAt = System.nanoTime()
-                            val result = renderedMarkdownMapper.enrichRows(merged, previousById)
-                            enrichMs = (System.nanoTime() - enrichStartedAt) / 1_000_000
-                            result
+                    val structuralStartedAt = System.nanoTime()
+                    val structural = timelineMessages(messages, previousById)
+                    structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
+                    val merged =
+                        if (fromQuietRefresh && stateSnapshot.isSending) {
+                            mergeWithPending(structural, stateSnapshot.messages.filter { it.isPending })
+                        } else {
+                            structural
                         }
+                    val enrichStartedAt = System.nanoTime()
+                    val enriched = renderedMarkdownMapper.enrichRows(merged, previousById)
+                    enrichMs = (System.nanoTime() - enrichStartedAt) / 1_000_000
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     val timeline =
                         if (enriched.isEmpty()) {

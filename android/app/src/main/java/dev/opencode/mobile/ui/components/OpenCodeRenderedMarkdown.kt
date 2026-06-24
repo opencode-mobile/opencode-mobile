@@ -52,6 +52,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.isLikelyExpandable
+import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import kotlin.math.roundToInt
@@ -597,5 +598,5 @@ private fun rememberMarkdownAnnotatedString(
                 buildMarkdownAnnotatedString(inlines, colors)
             }
     }
-    return annotated ?: remember(inlines) { AnnotatedString("") }
+    return annotated ?: remember(inlines) { AnnotatedString(plainTextFromMarkdownInlines(inlines)) }
 }

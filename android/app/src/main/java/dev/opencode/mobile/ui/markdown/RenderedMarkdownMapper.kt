@@ -5,6 +5,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -95,7 +96,13 @@ class RenderedMarkdownMapper
             if (!OpenCodeMarkdownDetector.shouldRender(text)) {
                 return null
             }
-            val cacheKey = CacheKey(messageId, text, isStreaming)
+            val cacheKey =
+                CacheKey(
+                    messageId = messageId,
+                    textHash = stableMarkdownSourceHash(text),
+                    textLength = text.length,
+                    isStreaming = isStreaming,
+                )
             synchronized(cacheLock) {
                 cache[cacheKey]?.let { return it }
             }
@@ -138,7 +145,8 @@ class RenderedMarkdownMapper
 
         private data class CacheKey(
             val messageId: String,
-            val text: String,
+            val textHash: Int,
+            val textLength: Int,
             val isStreaming: Boolean,
         )
     }

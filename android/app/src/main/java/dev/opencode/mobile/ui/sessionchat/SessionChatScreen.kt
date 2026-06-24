@@ -29,6 +29,8 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +43,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -181,6 +185,9 @@ fun SessionChatScreen(
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
                     var isFollowingScroll by remember(uiState.sessionId) { mutableStateOf(false) }
+                    val markdownHeightCache = remember(uiState.sessionId) { mutableStateMapOf<RenderedMarkdownHeightKey, Dp>() }
+                    var latestMessageHeightRevision by remember(uiState.sessionId) { mutableIntStateOf(0) }
+                    val latestMessageId = uiState.messages.lastOrNull()?.id
 
                     LaunchedEffect(uiState.sessionId, uiState.messages.size) {
                         snapshotFlow {
@@ -196,8 +203,9 @@ fun SessionChatScreen(
 
                     LaunchedEffect(
                         uiState.sessionId,
-                        uiState.messages.lastOrNull()?.id,
+                        latestMessageId,
                         uiState.messages.lastOrNull()?.text,
+                        latestMessageHeightRevision,
                     ) {
                         val latestMessage = uiState.messages.lastOrNull() ?: return@LaunchedEffect
                         val bottomIndex = uiState.messages.size
@@ -233,8 +241,30 @@ fun SessionChatScreen(
                                 MessageRow(
                                     message = message,
                                     onRestoreClick = { viewModel.restoreComposerText(message.text) },
-                                    initialRenderedMarkdownHeight = { _, _ -> 1.dp },
-                                    onRenderedMarkdownHeightChange = { _, _, _ -> },
+                                    initialRenderedMarkdownHeight = { variant, width ->
+                                        markdownHeightCache[
+                                            RenderedMarkdownHeightKey(
+                                                messageId = message.id,
+                                                variant = variant,
+                                                widthBucket = width.value.roundToInt(),
+                                            ),
+                                        ] ?: 1.dp
+                                    },
+                                    onRenderedMarkdownHeightChange = { variant, width, height ->
+                                        val key =
+                                            RenderedMarkdownHeightKey(
+                                                messageId = message.id,
+                                                variant = variant,
+                                                widthBucket = width.value.roundToInt(),
+                                            )
+                                        val previous = markdownHeightCache[key]
+                                        markdownHeightCache[key] = height
+                                        if (message.id == latestMessageId && followingLatest) {
+                                            if (previous == null || abs(previous.value - height.value) > 1f) {
+                                                latestMessageHeightRevision += 1
+                                            }
+                                        }
+                                    },
                                     modifier =
                                         Modifier.padding(
                                             bottom = if (index == uiState.messages.lastIndex) 0.dp else 8.dp,
@@ -685,6 +715,12 @@ private fun SessionComposer(
         }
     }
 }
+
+private data class RenderedMarkdownHeightKey(
+    val messageId: String,
+    val variant: OpenCodeRenderedMarkdownVariant,
+    val widthBucket: Int,
+)
 
 @Preview(showBackground = true)
 @Composable

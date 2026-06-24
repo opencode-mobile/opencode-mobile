@@ -32,6 +32,8 @@ struct SessionChatView: View {
     @State private var hasInitializedTimelineScroll = false
     @State private var followingLatest = true
     @State private var lastTimelineMessageScrollSignature: String?
+    @State private var latestRenderedMarkdownHeightRevision = 0
+    @State private var markdownHeightCache: [String: CGFloat] = [:]
     @State private var showSessionContext = false
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
@@ -167,11 +169,11 @@ struct SessionChatView: View {
                                 ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                     HStack {
                                         if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                                            messageRow(message)
+                                            messageRow(message, isLatest: index == messages.count - 1)
                                             Spacer(minLength: 0)
                                         } else {
                                             Spacer(minLength: 0)
-                                            messageRow(message)
+                                            messageRow(message, isLatest: index == messages.count - 1)
                                         }
                                     }
                                     .id(message.id)
@@ -225,7 +227,7 @@ struct SessionChatView: View {
 
     private func timelineMessageScrollSignature(sessionID: String, messages: [SessionChatRow]) -> String {
         let latest = messages.last
-        return "\(sessionID)-\(messages.count)-\(latest?.id ?? "empty")-\(latest?.text.hashValue ?? 0)"
+        return "\(sessionID)-\(messages.count)-\(latest?.id ?? "empty")-\(latest?.text.hashValue ?? 0)-\(latestRenderedMarkdownHeightRevision)"
     }
 
     @MainActor
@@ -257,19 +259,37 @@ struct SessionChatView: View {
     }
 
     @ViewBuilder
-    private func messageRow(_ message: SessionChatRow) -> some View {
+    private func messageRow(_ message: SessionChatRow, isLatest: Bool) -> some View {
+        let heightCacheKey = { (variant: OpenCodeRenderedMarkdownVariant) in
+            "\(message.id)-\(variant.rawValue)"
+        }
+        let onHeightChange = { (variant: OpenCodeRenderedMarkdownVariant, height: CGFloat) in
+            let key = heightCacheKey(variant)
+            let previous = markdownHeightCache[key]
+            markdownHeightCache[key] = height
+            if isLatest && followingLatest {
+                if previous == nil || abs((previous ?? 0) - height) > 1 {
+                    latestRenderedMarkdownHeightRevision += 1
+                }
+            }
+        }
+
         switch message.role {
         case .user:
             OpenCodeOutgoingMessage(
                 text: message.text,
                 renderedMarkdown: message.renderedMarkdown,
                 metadataLabel: message.metadataLabel,
+                initialRenderedMarkdownHeight: markdownHeightCache[heightCacheKey(.outgoingMessage)] ?? 1,
+                onRenderedMarkdownHeightChange: { onHeightChange(.outgoingMessage, $0) },
                 onRestoreClick: { viewModel.restoreComposerText(message.text) }
             )
         case .assistant:
             AssistantMessageBubble(
                 text: message.text,
-                renderedMarkdown: message.renderedMarkdown
+                renderedMarkdown: message.renderedMarkdown,
+                initialRenderedMarkdownHeight: markdownHeightCache[heightCacheKey(.assistantMessage)] ?? 1,
+                onRenderedMarkdownHeightChange: { onHeightChange(.assistantMessage, $0) }
             )
         case .command, .tool, .unknown:
             Text("\(message.role.displayLabel): \(message.text.isEmpty ? "…" : message.text)")
@@ -507,13 +527,30 @@ struct SessionChatView: View {
 private struct AssistantMessageBubble: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
+    let initialRenderedMarkdownHeight: CGFloat
+    let onRenderedMarkdownHeightChange: (CGFloat) -> Void
+
+    init(
+        text: String,
+        renderedMarkdown: NativeMarkdownDocument?,
+        initialRenderedMarkdownHeight: CGFloat = 1,
+        onRenderedMarkdownHeightChange: @escaping (CGFloat) -> Void = { _ in }
+    ) {
+        self.text = text
+        self.renderedMarkdown = renderedMarkdown
+        self.initialRenderedMarkdownHeight = max(1, initialRenderedMarkdownHeight)
+        self.onRenderedMarkdownHeightChange = onRenderedMarkdownHeightChange
+    }
 
     var body: some View {
         Group {
             if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
-                    variant: .assistantMessage
+                    variant: .assistantMessage,
+                    initialHeight: initialRenderedMarkdownHeight,
+                    measuresHeight: true,
+                    onHeightChange: onRenderedMarkdownHeightChange
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)

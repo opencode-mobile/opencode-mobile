@@ -265,7 +265,7 @@ object OpenCodeMarkdownParser {
         codeHighlighter: OpenCodeCodeHighlighter,
     ): MarkdownDocument {
         if (markdown.isBlank()) {
-            return MarkdownDocument(sourceHash = markdown.hashCode(), blocks = emptyList())
+            return MarkdownDocument(sourceHash = stableMarkdownSourceHash(markdown), blocks = emptyList())
         }
 
         val diagnostics = mutableListOf<MarkdownDiagnostic>()
@@ -372,7 +372,7 @@ object OpenCodeMarkdownParser {
         }
 
         return MarkdownDocument(
-            sourceHash = markdown.hashCode(),
+            sourceHash = stableMarkdownSourceHash(markdown),
             blocks = blocks,
             diagnostics = diagnostics.distinct(),
         )
@@ -645,4 +645,37 @@ fun MarkdownDocument.isLikelyExpandable(): Boolean {
             }
         }
     return visualLines > 6 || blocks.any { it is MarkdownBlock.CodeBlock && it.code.length > 420 }
+}
+
+fun stableMarkdownSourceHash(markdown: String): Int {
+    var hash = 0x811c9dc5.toInt()
+    for (byte in markdown.encodeToByteArray()) {
+        hash = hash xor byte.toInt()
+        hash *= 0x01000193
+    }
+    return hash
+}
+
+fun plainTextFromMarkdownInlines(inlines: List<MarkdownInline>): String =
+    buildString {
+        appendPlainMarkdownInlines(inlines)
+    }
+
+private fun StringBuilder.appendPlainMarkdownInlines(inlines: List<MarkdownInline>) {
+    inlines.forEach { inline ->
+        when (inline) {
+            is MarkdownInline.Text -> append(inline.text)
+            is MarkdownInline.Code -> append(inline.code)
+            is MarkdownInline.Emphasis -> appendPlainMarkdownInlines(inline.children)
+            is MarkdownInline.Strong -> appendPlainMarkdownInlines(inline.children)
+            is MarkdownInline.Link -> {
+                val start = length
+                appendPlainMarkdownInlines(inline.children)
+                if (length == start) append(inline.destination)
+            }
+            is MarkdownInline.ImageAlt -> append("[image: ${inline.alt}]")
+            MarkdownInline.SoftBreak -> append('\n')
+            MarkdownInline.HardBreak -> append('\n')
+        }
+    }
 }

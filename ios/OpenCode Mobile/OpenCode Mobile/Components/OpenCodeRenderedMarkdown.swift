@@ -23,7 +23,7 @@ struct OpenCodeRenderedMarkdown: View {
     let onLinkTap: (URL) -> Void
 
     @State private var measuredHeight: CGFloat
-    @State private var expandedCodeBlocks = Set<Int>()
+    @State private var expandedCodeBlocks = Set<String>()
 
     init(
         document: NativeMarkdownDocument,
@@ -44,8 +44,8 @@ struct OpenCodeRenderedMarkdown: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: blockSpacing) {
-            ForEach(Array(document.blocks.enumerated()), id: \.offset) { index, block in
-                blockView(block, index: index)
+            ForEach(document.blocksWithStableIdentities) { entry in
+                blockView(entry.block, identity: entry.identity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,7 +65,7 @@ struct OpenCodeRenderedMarkdown: View {
     }
 
     @ViewBuilder
-    private func blockView(_ block: NativeMarkdownBlock, index: Int) -> some View {
+    private func blockView(_ block: NativeMarkdownBlock, identity: String) -> some View {
         switch block {
         case .paragraph(let inlines):
             inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textPrimary)
@@ -91,7 +91,7 @@ struct OpenCodeRenderedMarkdown: View {
                 }
             }
         case .codeBlock(_, let code, let spans):
-            codeBlock(index: index, code: code, spans: spans)
+            codeBlock(identity: identity, code: code, spans: spans)
         case .diffBlock(let lines):
             diffBlock(lines: lines)
         case .table(let header, let rows):
@@ -118,16 +118,15 @@ struct OpenCodeRenderedMarkdown: View {
         font: Font,
         color: Color
     ) -> some View {
-        Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
-            .fixedSize(horizontal: false, vertical: true)
+        InlineMarkdownText(inlines: inlines, font: font, color: color)
     }
 
     private func codeBlock(
-        index: Int,
+        identity: String,
         code: String,
         spans: [NativeCodeSpan]
     ) -> some View {
-        let isExpanded = expandedCodeBlocks.contains(index)
+        let isExpanded = expandedCodeBlocks.contains(identity)
         let preview = codePreview(code: code, spans: spans, expanded: isExpanded)
         return ScrollView(.horizontal, showsIndicators: true) {
             Text(NativeMarkdownAttributedString.code(preview.code, spans: preview.spans))
@@ -146,9 +145,9 @@ struct OpenCodeRenderedMarkdown: View {
             if preview.isTruncated {
                 Button(isExpanded ? "Collapse code" : "Show full code") {
                     if isExpanded {
-                        expandedCodeBlocks.remove(index)
+                        expandedCodeBlocks.remove(identity)
                     } else {
-                        expandedCodeBlocks.insert(index)
+                        expandedCodeBlocks.insert(identity)
                     }
                 }
                 .font(OpenCodeTypography.caption)
@@ -458,6 +457,122 @@ enum NativeMarkdownAttributedString {
             OpenCodeColors.syntaxDiffUnknown
         case .critical:
             OpenCodeColors.syntaxCritical
+        }
+    }
+}
+
+private struct InlineMarkdownText: View {
+    let inlines: [NativeMarkdownInline]
+    let font: Font
+    let color: Color
+
+    @State private var styled: AttributedString?
+
+    var body: some View {
+        Text(styled ?? AttributedString(inlines.plainText))
+            .fixedSize(horizontal: false, vertical: true)
+            .task(id: inlines.stableCacheKey) {
+                styled = NativeMarkdownAttributedString.inline(inlines, font: font, color: color)
+            }
+    }
+}
+
+private struct NativeMarkdownBlockIdentityEntry: Identifiable {
+    let identity: String
+    let block: NativeMarkdownBlock
+
+    var id: String { identity }
+}
+
+private extension NativeMarkdownDocument {
+    var blocksWithStableIdentities: [NativeMarkdownBlockIdentityEntry] {
+        var seenCounts: [String: Int] = [:]
+        return blocks.map { block in
+            let base = block.stableIdentity
+            let count = seenCounts[base, default: 0]
+            seenCounts[base] = count + 1
+            let identity = count == 0 ? base : "\(base)-\(count)"
+            return NativeMarkdownBlockIdentityEntry(identity: identity, block: block)
+        }
+    }
+}
+
+private extension NativeMarkdownBlock {
+    var stableIdentity: String {
+        switch self {
+        case .paragraph(let inlines):
+            return "p-\(inlines.stableCacheKey)"
+        case .heading(let level, let inlines):
+            return "h\(level)-\(inlines.stableCacheKey)"
+        case .blockquote(let inlines):
+            return "q-\(inlines.stableCacheKey)"
+        case .bulletList(let items):
+            return "ul-\(items.map(\.stableCacheKey).joined(separator: "|"))"
+        case .orderedList(let start, let items):
+            return "ol-\(start)-\(items.map(\.stableCacheKey).joined(separator: "|"))"
+        case .codeBlock(let language, let code, _):
+            return "code-\(language ?? "")-\(code.hashValue)"
+        case .diffBlock(let lines):
+            return "diff-\(lines.map(\.text).joined().hashValue)"
+        case .table(let header, let rows):
+            return "table-\(header.flatMap { $0 }.stableCacheKey)-\(rows.count)"
+        case .thematicBreak:
+            return "hr"
+        }
+    }
+}
+
+private extension Array where Element == NativeMarkdownInline {
+    var stableCacheKey: String {
+        map(\.stableCacheKey).joined(separator: "\u{1f}")
+    }
+
+    var plainText: String {
+        reduce(into: "") { result, inline in
+            result.append(inline.plainText)
+        }
+    }
+}
+
+private extension NativeMarkdownInline {
+    var stableCacheKey: String {
+        switch self {
+        case .text(let value):
+            return "t:\(value)"
+        case .code(let value):
+            return "c:\(value)"
+        case .emphasis(let children):
+            return "e:\(children.stableCacheKey)"
+        case .strong(let children):
+            return "s:\(children.stableCacheKey)"
+        case .link(let destination, let children):
+            return "l:\(destination):\(children.stableCacheKey)"
+        case .imageAlt(let alt):
+            return "i:\(alt)"
+        case .softBreak:
+            return "sb"
+        case .hardBreak:
+            return "hb"
+        }
+    }
+
+    var plainText: String {
+        switch self {
+        case .text(let value):
+            return value
+        case .code(let value):
+            return value
+        case .emphasis(let children):
+            return children.plainText
+        case .strong(let children):
+            return children.plainText
+        case .link(let destination, let children):
+            let childText = children.plainText
+            return childText.isEmpty ? destination : childText
+        case .imageAlt(let alt):
+            return "[image: \(alt)]"
+        case .softBreak, .hardBreak:
+            return "\n"
         }
     }
 }

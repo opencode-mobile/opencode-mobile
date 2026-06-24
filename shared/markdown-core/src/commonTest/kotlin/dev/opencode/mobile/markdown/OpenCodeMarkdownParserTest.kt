@@ -185,4 +185,28 @@ class OpenCodeMarkdownParserTest {
 
         assertEquals("codeBlock", document.getValue("blocks").jsonArray.single().jsonObject.getValue("type").jsonPrimitive.content)
     }
+
+    @Test
+    fun plainTextFromInlinesMatchesReadableFallback() {
+        val inlines =
+            listOf(
+                MarkdownInline.Text("Read "),
+                MarkdownInline.Link(
+                    destination = "https://example.com",
+                    children = listOf(MarkdownInline.Text("docs")),
+                ),
+                MarkdownInline.Text(" and use "),
+                MarkdownInline.Code("inline"),
+            )
+
+        assertEquals("Read docs and use inline", plainTextFromMarkdownInlines(inlines))
+    }
+
+    @Test
+    fun stableMarkdownSourceHashDiffersForDifferentSnapshots() {
+        assertNotEquals(
+            stableMarkdownSourceHash("# Aa"),
+            stableMarkdownSourceHash("# BB"),
+        )
+    }
 }
