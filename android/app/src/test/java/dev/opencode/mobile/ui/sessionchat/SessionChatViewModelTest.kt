@@ -240,17 +240,17 @@ class SessionChatViewModelTest {
 
             assertEquals(
                 "anthropic",
-                viewModel.uiState.value.selectedModel
+                viewModel.uiState.value.composer.selectedModel
                     ?.option
                     ?.providerId,
             )
             assertEquals(
                 "claude-sonnet",
-                viewModel.uiState.value.selectedModel
+                viewModel.uiState.value.composer.selectedModel
                     ?.option
                     ?.modelId,
             )
-            assertEquals("high", viewModel.uiState.value.selectedVariant)
+            assertEquals("high", viewModel.uiState.value.composer.selectedVariant)
         }
 
     @Test

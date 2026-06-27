@@ -4,9 +4,8 @@
 
 - Date: 2026-06-27
 - Decision: Session Chat Screen Models expose one composite `SessionChatUiState`
-  snapshot with a regional `SessionChatTimelineState` enum for the message list.
-  Connection, session status, context usage, composer, and activity flags live in
-  the root snapshot on both platforms.
+  snapshot with a regional `SessionChatTimelineState` enum for the message list and
+  nested `SessionChatComposerState` for prompt controls on both platforms.
 - Reason: the chat shell stays visible while the timeline and live metadata
   change independently. A root screen-phase enum duplicated identity fields and
   forced enum-case helpers for routine updates.
