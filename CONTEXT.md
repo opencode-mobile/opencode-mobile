@@ -193,6 +193,15 @@ The app uses this stream to update session state in the foreground. When the app
 reconnects, it refreshes state instead of relying on guaranteed background
 delivery.
 
+### OC-2 theme
+
+A desktop-compatible theme file format (JSON) used by OpenCode clients.
+
+Each theme defines `light` and `dark` variants with palette seeds and optional
+token overrides. Mobile apps resolve seeds into semantic color tokens at
+runtime. Users pick bundled desktop presets or import custom OC-2 JSON in
+Settings.
+
 ### Design System
 
 The shared visual and interaction language for both native apps.

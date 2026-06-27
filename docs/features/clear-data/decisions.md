@@ -22,9 +22,8 @@ handles upstream cancellation when subscribers drain.
 Simple "Clear all data? This cannot be undone." -- no detailed itemised list.
 Keeps the button self-explanatory given its location in Developer Tools.
 
-## Android theme import gap
+## Theme reset on clear
 
-Android `ThemeManager` does not persist imported themes (unlike iOS which uses
-UserDefaults). The `clearAll()` method on Android merely resets to the bundled
-theme. This is a pre-existing parity gap documented in
-`docs/features/theme/parity-gaps.md`.
+`ThemeManager.clearAll()` on both platforms drops imported themes and resets the
+active selection to the bundled OC-2 default. Theme persistence shipped in OPE-17;
+see `docs/features/theme/decisions.md`.
