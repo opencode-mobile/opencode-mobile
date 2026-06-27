@@ -43,6 +43,12 @@ state — IDs may grow.
 | --- | --- |
 | OPE-15 | `ios-oniguruma-backend` |
 
+### Done (Polish & Validation)
+
+| Issue | Feature slug |
+| --- | --- |
+| OPE-27 | `ios-ui-organization` |
+
 ### In Progress
 
 | Issue | Feature slug |

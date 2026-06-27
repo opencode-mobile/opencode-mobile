@@ -20,7 +20,7 @@
 ## iOS
 
 - [x] Events API client + domain adapter + stream service
-- [x] Factory registration + `scenePhase` lifecycle in `ContentView`
+- [x] Factory registration + `scenePhase` lifecycle in `AppRootView`
 - [x] **Live Stores:** mirrored protocols + `SharedLiveObservation` subscriber lifecycle
 - [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates banner
 - [x] Session status on list rows and chat

@@ -111,6 +111,58 @@ the design-system component workflow before the feature screen depends on it.
 Feature-local layout is allowed when it is specific to one screen and does not
 create a reusable design-system concept.
 
+## iOS Source Layout
+
+Feature screens and screen models live under `UI/<Feature>/` inside the app
+target (`ios/OpenCode Mobile/OpenCode Mobile/`). This mirrors Android's
+`dev.opencode.mobile/ui/<feature>/` convention.
+
+```text
+OpenCode Mobile/
+├── UI/
+│   ├── SessionChat/       # SessionChatView, SessionChatViewModel
+│   ├── SessionContext/    # SessionContextView, SessionContextViewModel
+│   ├── Main/              # ProjectListHomeView, connection banner
+│   ├── Connection/        # onboarding + setup sheet
+│   ├── Settings/          # SettingsView
+│   ├── Root/              # AppRootView, AppRootViewModel
+│   └── Markdown/          # parser + rendered-markdown mapper
+├── Components/            # design-system primitives
+├── ComponentGallery/
+├── Domain/
+├── Data/
+├── DI/
+├── Theme/                 # presets, resolver, OpenCodeColors, typography
+├── Network/
+├── Icons/
+└── OpenCode_MobileApp.swift
+```
+
+New feature work should add a folder under `UI/` rather than placing views at
+the app target root. Shared non-feature UI helpers belong under the relevant
+`UI/` subfolder (for example `UI/Main/` for shell chrome).
+
+The Xcode project uses filesystem-synchronized groups, so moving files on disk
+is sufficient — no manual `project.pbxproj` path edits are required for
+in-target moves.
+
+## Android Source Layout
+
+Feature screens live under `android/app/src/main/java/dev/opencode/mobile/ui/`:
+
+```text
+ui/
+├── sessionchat/
+├── sessioncontext/
+├── main/
+├── connection/
+├── settings/
+├── root/
+├── components/
+├── componentgallery/
+└── markdown/
+```
+
 ## Persistence
 
 Connection Profile secrets must be stored in native secure storage:
