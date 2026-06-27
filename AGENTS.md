@@ -158,6 +158,9 @@ them.
   implementing a feature that should exist in both native apps.
 - Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
   Actions, checking workflow status, or troubleshooting failed CI runs.
+- Use `.agents/skills/linear-project-tracking/SKILL.md` when planning or
+  implementing work that should be tracked in Linear, updating feature progress,
+  or keeping issues in sync with `docs/features/`.
 
 ## Documentation Rules
 
