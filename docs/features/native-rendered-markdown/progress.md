@@ -44,18 +44,19 @@
   inline parsing. Expensive stage: TextMate tokenization of fenced code blocks
   (regex matching at every cursor position on every line).
 - Platform benchmark on the 20-message / 3,000-line TypeScript fixture
-  (2026-06-23):
+  (2026-06-23, pre-libonig):
   - Android: `parser-ms=77`, `mapper-ms=52`, `viewmodel-load-ms=104`.
   - iOS: `parser-bridge-ms=958`, `mapper-ms=404`, `viewmodel-load-ms=407`.
-- Why iOS is slower despite shared KMP tokenizer code:
-  1. **Regex backend (primary):** Android uses Joni/Oniguruma
-     (`OpenCodeJoniRegexBackend`); iOS uses a Kotlin `Regex` shim
-     (`OpenCodeOnigurumaRegexBackend`). TextMate grammars assume Oniguruma.
-  2. **JSON bridge (secondary):** iOS encodes a parse request and decodes the
-     full render-tree JSON through `OpenCodeMarkdownJson.parseMarkdownJson`;
-     Android calls `OpenCodeMarkdownParser.parse()` directly.
-  3. **Runtime (tertiary):** KMP runs on JVM/ART on Android and as a
-     Kotlin/Native framework on iOS.
+- Big Session cold open (2026-06-27, post-libonig, full history): **~2.5 s** on
+  iOS and Android in manual device testing.
+- Why iOS was slower before libonig despite shared KMP tokenizer code:
+  1. **Regex backend (primary, resolved):** Android uses Joni/Oniguruma; iOS now
+     uses libonig (`OpenCodeLibOnigRegexBackend`). The Kotlin `Regex` hybrid
+     shim is regression-only.
+  2. **JSON bridge (secondary, optional):** iOS encodes a parse request and decodes
+     the full render-tree JSON; Android calls `OpenCodeMarkdownParser.parse()`
+     directly.
+  3. **Runtime (tertiary):** KMP on JVM/ART vs Kotlin/Native framework.
 - Enrichment scope: iOS and Android parse the full timeline on load.
   See `docs/features/native-rendered-markdown/parity-gaps.md`.
 

@@ -49,25 +49,21 @@
 
 ## Markdown Parse Performance
 
-- Status: temporary
+- Status: narrowed
 - Area: performance
 - Shared intent: cold Session Chat open should prepare styled markdown documents
   in roughly interactive time, including large syntax-highlighted code blocks.
-- Current iOS state: `RenderedMarkdownMapper.enrichRows()` calls
-  `OpenCodeRenderedMarkdownParser`, which round-trips through
-  `OpenCodeMarkdownJson.parseMarkdownJson` before Swift decodes the render tree.
-  Highlighting uses `OpenCodeLibOnigRegexBackend` (libonig). Historical
-  benchmark on the hybrid backend: 20-message / 3,000-line fixture
-  `parser-bridge-ms=958` vs Android `parser-ms=77`. Re-profile after libonig.
-  Session Chat enriches the full merged timeline on load on both platforms.
-- Reason: the shared hot path is KMP TextMate tokenization inside
-  `parseFence()`. iOS still pays extra for the JSON bridge; the regex backend
-  gap is closed. Kotlin/Native vs JVM runtime differences add a smaller third
-  factor. Big Session profiling showed markdown preparation (~24 s) dominated
-  history fetch (~0.12 s) before libonig; re-profile on device after this change.
-- Owner or next action: benchmark bypassing or slimming the JSON bridge;
-  virtualize or collapse large code blocks on first frame. See
-  `docs/features/session-chat/progress.md`.
+- Current state (2026-06-27): manual **Big Session** cold open is **~2.5 s** on
+  iOS and Android with libonig on iOS, full-history enrichment on both platforms,
+  and no `HighlighterBackendFallback` on the production regex path.
+- iOS still round-trips through `OpenCodeMarkdownJson.parseMarkdownJson` before
+  Swift decodes the render tree; Android calls `OpenCodeMarkdownParser.parse()`
+  directly. The JSON bridge is a remaining optimization target, not a blocker
+  for Big Session on current hardware.
+- Historical: hybrid regex backend + staged window reached **~27 s** styled
+  timeline on the same fixture (2026-06-24 probes).
+- Owner or next action: optional JSON-bridge slimming; code-block virtualization
+  if larger sessions regress. See `docs/features/session-chat/progress.md`.
 
 ## Code Block Layout
 

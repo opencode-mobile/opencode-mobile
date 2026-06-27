@@ -2,8 +2,7 @@
 
 ## Status
 
-- Status: **complete** for Phases 0–4 (simulator measurement recorded; device Big
-  Session probe still optional follow-up).
+- Status: **complete** for Phases 0–4.
 - Blocks: none for production wiring.
 - Android: unchanged (Joni remains production backend).
 
@@ -30,7 +29,7 @@
 
 - [x] `embedAndSignAppleFrameworkForXcode` succeeds through Xcode simulator build.
 - [x] `linkDebugFrameworkIosSimulatorArm64` and `compileKotlinIosArm64` succeed.
-- [ ] Device install and Big Session cold-path probe comparison (optional follow-up).
+- [x] Big Session cold open on iOS device matches Android (~2.5 s; see below).
 
 ## Android
 
@@ -45,23 +44,36 @@
 - [ ] Revisit full Shiki golden gate on iOS (`@Ignore` on
       `nativeHighlighterMatchesShikiSemanticGoldenFixtures`) as a follow-up decision.
 
-## Benchmarks (20 messages × 150-line TypeScript fences)
+## Benchmarks
+
+### Big Session cold open (manual, device)
+
+- Date: 2026-06-27.
+- Fixture: local **Big Session** (large syntax-highlighted code response).
+- Result: **~2.5 s** from open to styled timeline on iOS, matching Android in
+  manual testing after libonig shipped and iOS returned to full-history enrichment.
+- Prior baseline (2026-06-24, hybrid regex backend): markdown preparation alone
+  took **~24 s** for the initial visible window; see
+  `docs/features/session-chat/progress.md`.
+
+### KMP micro-benchmark (20 messages × 150-line TypeScript fences)
 
 Measured on developer machine (Jun 2026). Android numbers are JVM unit tests;
-iOS number is `iosSimulatorArm64Test` on simulator (not device).
+iOS number is `iosSimulatorArm64Test` on simulator (not comparable to app
+cold open).
 
 | Backend | Platform | Parser ms | Notes |
 | --- | --- | ---: | --- |
 | Kotlin Regex hybrid | Android JVM test | 4581 | regression shim only |
 | Joni | Android JVM test | 1356 | production Android backend |
-| libonig | iOS simulator test | 21809 | production iOS backend |
+| libonig | iOS simulator test | 21809 | KMP native test harness overhead |
 
-Simulator libonig is slower than Android Joni in this micro-benchmark; treat as
-a coarse signal only until a device Session Chat cold-path probe is recorded.
-Production iOS no longer emits `HighlighterBackendFallback`.
+Production iOS no longer emits `HighlighterBackendFallback`. App-level Big
+Session timing is the authoritative performance signal for this feature.
 
 ## Remaining Follow-Ups
 
-- Re-profile Session Chat cold open on iPad with libonig backend.
 - Investigate `javascript-http-error-repro` open-rule leak at EOF on libonig (not
   in Joni's strict open-rule fixture subset).
+- Optional: slim or bypass the iOS JSON bridge if profiling shows it is still
+  material on other fixtures.
