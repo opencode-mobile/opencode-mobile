@@ -8,10 +8,11 @@ struct SessionChatViewModelTests {
     @Test func loadMessages_success() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
         await viewModel.loadMessages()
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
+        let messages = viewModel.uiState.messages
         #expect(messages.count == 1)
         #expect(messages[0].text == "Hello")
     }
@@ -59,11 +60,12 @@ struct SessionChatViewModelTests {
             await viewModel.loadMessages()
         }
 
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected a loaded benchmark timeline")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected a ready benchmark timeline")
             return
         }
-        #expect(messages.count == 20)
+        let loadedMessages = viewModel.uiState.messages
+        #expect(loadedMessages.count == 20)
         let line =
             "MARKDOWN_BENCHMARK ios detector-ms=\(detectorMs) parser-bridge-ms=\(parserMs) " +
             "mapper-ms=\(mapperMs) viewmodel-load-ms=\(elapsed.components.attoseconds / 1_000_000_000_000_000) " +
@@ -75,8 +77,8 @@ struct SessionChatViewModelTests {
     @Test func loadMessages_empty() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository(messages: []))
         await viewModel.loadMessages()
-        guard case .empty = viewModel.state else {
-            Issue.record("Expected empty state")
+        guard viewModel.uiState.timeline == .empty else {
+            Issue.record("Expected empty timeline")
             return
         }
     }
@@ -84,8 +86,8 @@ struct SessionChatViewModelTests {
     @Test func loadMessages_error() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository(shouldFailLoad: true))
         await viewModel.loadMessages()
-        guard case .error = viewModel.state else {
-            Issue.record("Expected error state")
+        guard viewModel.uiState.timeline == .error else {
+            Issue.record("Expected error timeline")
             return
         }
     }
@@ -96,11 +98,12 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         viewModel.updateComposerText("New prompt")
         await viewModel.sendPrompt()
-        guard case let .loaded(_, _, messages, _, isSending, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
-        #expect(isSending == false)
+        let messages = viewModel.uiState.messages
+        #expect(viewModel.uiState.isSending == false)
         #expect(repository.sendPromptAsyncCalled)
         #expect(repository.sentOptions?.model?.providerID == "anthropic")
         #expect(repository.sentOptions?.model?.modelID == "claude-sonnet")
@@ -129,9 +132,9 @@ struct SessionChatViewModelTests {
 
         await viewModel.loadMessages()
 
-        #expect(viewModel.state.composer.selectedModel?.option.providerID == "anthropic")
-        #expect(viewModel.state.composer.selectedModel?.option.modelID == "claude-sonnet")
-        #expect(viewModel.state.composer.selectedVariant == "high")
+        #expect(viewModel.uiState.composer.selectedModel?.option.providerID == "anthropic")
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+        #expect(viewModel.uiState.composer.selectedVariant == "high")
     }
 
     @Test func loadMessages_sortsOldestToNewest() async {
@@ -144,10 +147,11 @@ struct SessionChatViewModelTests {
             )
         )
         await viewModel.loadMessages()
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
+        let messages = viewModel.uiState.messages
         #expect(messages.map(\.text) == ["Earlier", "Later"])
     }
 
@@ -162,10 +166,11 @@ struct SessionChatViewModelTests {
             )
         )
         await viewModel.loadMessages()
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
+        let messages = viewModel.uiState.messages
         #expect(messages.map(\.text) == ["Earlier", "Hydrating", "Later"])
     }
 
@@ -174,13 +179,14 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         viewModel.updateComposerText("Fail me")
         await viewModel.sendPrompt()
-        guard case let .loaded(_, _, messages, _, isSending, _, errorBanner) = viewModel.state else {
-            Issue.record("Expected loaded state with banner")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline with error message")
             return
         }
-        #expect(isSending == false)
+        let messages = viewModel.uiState.messages
+        #expect(viewModel.uiState.isSending == false)
         #expect(!messages.contains { $0.text == "Fail me" })
-        #expect(errorBanner != nil)
+        #expect(viewModel.uiState.errorMessage != nil)
     }
 
     @Test func sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() async {
@@ -189,14 +195,15 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         viewModel.updateComposerText("Pending prompt")
         await viewModel.sendPrompt()
-        guard case let .loaded(_, _, messages, _, isSending, _, errorBanner) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
+        let messages = viewModel.uiState.messages
         #expect(repository.sendPromptAsyncCalled)
-        #expect(isSending == false)
+        #expect(viewModel.uiState.isSending == false)
         #expect(messages.contains { $0.text == "Pending prompt" && $0.isPending })
-        #expect(errorBanner == nil)
+        #expect(viewModel.uiState.errorMessage == nil)
     }
 
     @Test func quietRefreshDuringSend_keepsPendingMessageAndSendingFlag() async {
@@ -207,26 +214,28 @@ struct SessionChatViewModelTests {
         viewModel.updateComposerText("New prompt")
         let sendTask = Task { await viewModel.sendPrompt() }
         try? await Task.sleep(for: .milliseconds(50))
-        guard case let .loaded(_, _, messages, _, isSending, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state while send is in flight")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline while send is in flight")
             repository.releaseSend()
             sendTask.cancel()
             return
         }
-        #expect(isSending)
+        let messages = viewModel.uiState.messages
+        #expect(viewModel.uiState.isSending)
         #expect(messages.contains { $0.text == "New prompt" && $0.isPending })
 
         repository.messages = [Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil)]
         eventStream.emit(OpencodeEvent(type: "message.updated", sessionID: "ses-1"))
         try? await Task.sleep(for: .milliseconds(500))
 
-        guard case let .loaded(_, _, refreshed, _, stillSending, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state after quiet refresh")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline after quiet refresh")
             repository.releaseSend()
             _ = await sendTask.value
             return
         }
-        #expect(stillSending)
+        let refreshed = viewModel.uiState.messages
+        #expect(viewModel.uiState.isSending)
         #expect(refreshed.contains { $0.text == "New prompt" && $0.isPending })
 
         repository.releaseSend()
@@ -245,10 +254,8 @@ struct SessionChatViewModelTests {
         ]
         liveStore.emit(updated)
         let resumed = await waitUntil(timeoutMs: 2_000) {
-            if case let .loaded(_, _, messages, _, _, _, _) = viewModel.state {
-                return messages.contains { $0.text == "Resumed" }
-            }
-            return false
+            viewModel.uiState.timeline == .ready &&
+                viewModel.uiState.messages.contains { $0.text == "Resumed" }
         }
         #expect(resumed)
     }
@@ -260,10 +267,11 @@ struct SessionChatViewModelTests {
         viewModel.stopObserving()
         eventStream.emit(OpencodeEvent(type: "message.updated", sessionID: "ses-1"))
         try? await Task.sleep(for: .milliseconds(500))
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
+        let messages = viewModel.uiState.messages
         #expect(messages.count == 1)
         #expect(messages[0].text == "Hello")
     }
@@ -278,11 +286,11 @@ struct SessionChatViewModelTests {
         ]
         liveStore.emit(updated)
         try? await Task.sleep(for: .milliseconds(500))
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
+        guard viewModel.uiState.timeline == .ready else {
+            Issue.record("Expected ready timeline")
             return
         }
-        #expect(messages.contains { $0.text == "Updated" })
+        #expect(viewModel.uiState.messages.contains { $0.text == "Updated" })
     }
 
     @Test func connectionState_mapsToSessionConnectionStatus() {
@@ -362,7 +370,7 @@ struct SessionChatViewModelTests {
 
         await viewModel.loadMessages()
 
-        #expect(viewModel.contextUsageFraction == 0.25)
+        #expect(viewModel.uiState.contextUsageFraction == 0.25)
     }
 
     @Test func contextUsageFraction_clampsAboveOne() async {
@@ -386,7 +394,7 @@ struct SessionChatViewModelTests {
 
         await viewModel.loadMessages()
 
-        #expect(viewModel.contextUsageFraction == 1)
+        #expect(viewModel.uiState.contextUsageFraction == 1)
     }
 
     @Test func contextUsageFraction_unavailableWhenTokensOrLimitMissing() async {
@@ -407,7 +415,7 @@ struct SessionChatViewModelTests {
             )
         )
         await noTokens.loadMessages()
-        #expect(noTokens.contextUsageFraction == nil)
+        #expect(noTokens.uiState.contextUsageFraction == nil)
 
         let noLimit = makeViewModel(
             messageRepository: FakeMessageRepository(
@@ -427,7 +435,7 @@ struct SessionChatViewModelTests {
             )
         )
         await noLimit.loadMessages()
-        #expect(noLimit.contextUsageFraction == nil)
+        #expect(noLimit.uiState.contextUsageFraction == nil)
     }
 
     private func makeViewModel(

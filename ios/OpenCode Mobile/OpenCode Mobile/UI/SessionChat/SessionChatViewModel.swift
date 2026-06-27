@@ -61,39 +61,35 @@ enum SessionChatTimelineState: Equatable {
     case error
 }
 
-enum SessionChatScreenState: Equatable {
-    case loading(sessionID: String, sessionTitle: String, composer: SessionChatComposerState)
-    case empty(sessionID: String, sessionTitle: String, composer: SessionChatComposerState)
-    case loaded(
-        sessionID: String,
-        sessionTitle: String,
-        messages: [SessionChatRow],
-        composer: SessionChatComposerState,
-        isSending: Bool,
-        isRefreshing: Bool,
-        errorBanner: String?
-    )
-    case error(sessionID: String, sessionTitle: String, message: String, composer: SessionChatComposerState)
+struct SessionChatUiState: Equatable {
+    var sessionID: String
+    var sessionTitle: String
+    var timeline: SessionChatTimelineState
+    var messages: [SessionChatRow]
+    var composer: SessionChatComposerState
+    var isSending: Bool = false
+    var isRefreshing: Bool = false
+    var isAborting: Bool = false
+    var sessionStatusLabel: String?
+    var connectionStatus: SessionConnectionStatus = .offline
+    var contextUsageFraction: Double?
+    var errorMessage: String?
 
-    var sessionID: String {
-        switch self {
-        case let .loading(id, _, _), let .empty(id, _, _), let .loaded(id, _, _, _, _, _, _), let .error(id, _, _, _):
-            id
-        }
-    }
-
-    var sessionTitle: String {
-        switch self {
-        case let .loading(_, title, _), let .empty(_, title, _), let .loaded(_, title, _, _, _, _, _), let .error(_, title, _, _):
-            title
-        }
-    }
-
-    var composer: SessionChatComposerState {
-        switch self {
-        case let .loading(_, _, composer), let .empty(_, _, composer), let .loaded(_, _, _, composer, _, _, _), let .error(_, _, _, composer):
-            composer
-        }
+    static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
+        SessionChatUiState(
+            sessionID: sessionID,
+            sessionTitle: sessionTitle,
+            timeline: .loading,
+            messages: [],
+            composer: SessionChatComposerState(
+                text: "",
+                selectedModel: nil,
+                modelOptions: [],
+                selectedMode: SessionChatPickers.modes[0],
+                selectedVariant: nil,
+                modelNotice: nil
+            )
+        )
     }
 }
 
@@ -117,11 +113,7 @@ enum SessionConnectionStatus: String, Equatable, Sendable {
 @MainActor
 @Observable
 final class SessionChatViewModel {
-    private(set) var state: SessionChatScreenState
-    private(set) var sessionStatusLabel: String?
-    private(set) var connectionStatus: SessionConnectionStatus = .offline
-    private(set) var contextUsageFraction: Double?
-    private(set) var isAborting = false
+    private(set) var uiState: SessionChatUiState
     private let sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
@@ -158,11 +150,7 @@ final class SessionChatViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.foregroundEventStream = foregroundEventStream
         self.renderedMarkdownMapper = renderedMarkdownMapper
-        self.state = .loading(
-            sessionID: sessionID,
-            sessionTitle: sessionTitle,
-            composer: Self.defaultComposer()
-        )
+        self.uiState = .initial(sessionID: sessionID, sessionTitle: sessionTitle)
         OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -185,13 +173,11 @@ final class SessionChatViewModel {
 
     func loadMessages() async {
         SessionPerformanceProbe.emit("session_screen_started")
-        let sessionID = state.sessionID
-        let sessionTitle = state.sessionTitle
-        let composer = state.composer
-        state = .loading(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
+        uiState.timeline = .loading
+        uiState.errorMessage = nil
 
         if let cachedMessages = messageLiveStore.cachedMessages(sessionID: sessionID, directory: worktree) {
-            await applyLoadedMessagesTransform(cachedMessages, sessionID: sessionID, isRefreshing: true)
+            await applyLoadedMessagesTransform(cachedMessages, isRefreshing: true)
         }
 
         do {
@@ -211,9 +197,9 @@ final class SessionChatViewModel {
                             applyModelCatalog(catalog, messages: messagesForCatalog)
                         }
                     } catch {
-                        applyError(error, sessionID: sessionID)
+                        applyError(error)
                     }
-                } else if case .loading = state {
+                } else if uiState.timeline == .loading {
                     await awaitLiveStoreTimelineResolution()
                 }
             } else {
@@ -222,46 +208,29 @@ final class SessionChatViewModel {
                     applyModelCatalog(catalog, messages: messages)
                 }
                 transformTask?.cancel()
-                await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
+                await applyLoadedMessagesTransform(messages, isRefreshing: false)
             }
             await refreshSessionStatus()
         } catch {
-            applyError(error, sessionID: sessionID)
+            applyError(error)
         }
     }
 
     func refreshMessages() async {
-        let sessionID = state.sessionID
-        let sessionTitle = state.sessionTitle
-        let composer = state.composer
-
-        if case let .loaded(_, _, messages, _, isSending, _, _) = state {
-            state = .loaded(
-                sessionID: sessionID,
-                sessionTitle: sessionTitle,
-                messages: messages,
-                composer: composer,
-                isSending: isSending,
-                isRefreshing: true,
-                errorBanner: nil
-            )
+        if uiState.timeline == .ready {
+            uiState.isRefreshing = true
+            uiState.errorMessage = nil
         }
 
         do {
             let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
             transformTask?.cancel()
-            await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
+            await applyLoadedMessagesTransform(messages, isRefreshing: false)
         } catch {
-            if case let .loaded(_, _, messages, _, _, _, _) = state {
-                state = .loaded(
-                    sessionID: sessionID,
-                    sessionTitle: sessionTitle,
-                    messages: messages,
-                    composer: composer,
-                    isSending: false,
-                    isRefreshing: false,
-                    errorBanner: errorMessage(error)
-                )
+            if uiState.timeline == .ready {
+                uiState.isSending = false
+                uiState.isRefreshing = false
+                uiState.errorMessage = errorMessage(error)
             }
         }
     }
@@ -305,13 +274,11 @@ final class SessionChatViewModel {
     }
 
     func sendPrompt() async {
-        let trimmed = state.composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = uiState.composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard let selectedModel = state.composer.selectedModel else { return }
+        guard let selectedModel = uiState.composer.selectedModel else { return }
 
-        let sessionID = state.sessionID
-        let sessionTitle = state.sessionTitle
-        var composer = state.composer
+        var composer = uiState.composer
         composer.text = ""
 
         let optimistic = SessionChatRow(
@@ -327,18 +294,15 @@ final class SessionChatViewModel {
             contextInputTokens: nil
         )
 
-        let existing = messagesFromCurrentState()
+        let existing = uiState.messages
         let enriched = await renderedMarkdownMapper.enrichRows([optimistic], previousByID: [:])
-        let optimisticMessages = existing + enriched
-        state = .loaded(
-            sessionID: sessionID,
-            sessionTitle: sessionTitle,
-            messages: optimisticMessages,
-            composer: composer,
-            isSending: true,
-            isRefreshing: false,
-            errorBanner: nil
-        )
+        uiState.composer = composer
+        uiState.messages = existing + enriched
+        uiState.timeline = .ready
+        uiState.isSending = true
+        uiState.isRefreshing = false
+        uiState.errorMessage = nil
+        refreshContextUsage()
 
         do {
             try await messageRepository.sendPromptAsync(
@@ -357,55 +321,34 @@ final class SessionChatViewModel {
             do {
                 let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
                 transformTask?.cancel()
-                await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
+                await applyLoadedMessagesTransform(messages, isRefreshing: false)
             } catch {
                 // Prompt was accepted; live store or pull-to-refresh will sync the timeline.
-                if case let .loaded(id, title, messages, composer, _, _, _) = state {
-                    state = .loaded(
-                        sessionID: id,
-                        sessionTitle: title,
-                        messages: messages,
-                        composer: composer,
-                        isSending: false,
-                        isRefreshing: false,
-                        errorBanner: nil
-                    )
-                }
+                uiState.isSending = false
+                uiState.isRefreshing = false
+                uiState.errorMessage = nil
             }
         } catch {
-            if case let .loaded(id, title, messages, composer, _, _, _) = state {
-                state = .loaded(
-                    sessionID: id,
-                    sessionTitle: title,
-                    messages: messages.filter { $0.id != optimistic.id },
-                    composer: composer,
-                    isSending: false,
-                    isRefreshing: false,
-                    errorBanner: errorMessage(error)
-                )
+            if uiState.timeline == .ready {
+                uiState.messages = uiState.messages.filter { $0.id != optimistic.id }
+                uiState.isSending = false
+                uiState.isRefreshing = false
+                uiState.errorMessage = errorMessage(error)
             } else {
-                applyError(error, sessionID: sessionID)
+                applyError(error)
             }
         }
     }
 
     func abortSession() async {
-        isAborting = true
+        uiState.isAborting = true
         do {
             _ = try await sessionRepository.abortSession(id: sessionID, directory: worktree)
-            isAborting = false
+            uiState.isAborting = false
         } catch {
-            isAborting = false
-            if case let .loaded(id, title, messages, composer, isSending, isRefreshing, _) = state {
-                state = .loaded(
-                    sessionID: id,
-                    sessionTitle: title,
-                    messages: messages,
-                    composer: composer,
-                    isSending: isSending,
-                    isRefreshing: isRefreshing,
-                    errorBanner: errorMessage(error)
-                )
+            uiState.isAborting = false
+            if uiState.timeline == .ready {
+                uiState.errorMessage = errorMessage(error)
             }
         }
     }
@@ -420,12 +363,7 @@ final class SessionChatViewModel {
     private func observeMessages() async {
         for await messages in messageLiveStore.observeMessages(sessionID: sessionID, directory: worktree) {
             OpenCodeLog.sessionChat.debug("live messages session=\(self.sessionID, privacy: .public) count=\(messages.count)")
-            applyLoadedMessages(
-                messages,
-                sessionID: sessionID,
-                isRefreshing: false,
-                fromQuietRefresh: true
-            )
+            applyLoadedMessages(messages, isRefreshing: false, fromQuietRefresh: true)
         }
     }
 
@@ -433,15 +371,15 @@ final class SessionChatViewModel {
         for await statuses in sessionStatusLiveStore.observeStatuses(directory: worktree) {
             let status = statuses[sessionID]
             OpenCodeLog.sessionChat.debug("live status session=\(self.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)")
-            sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
+            uiState.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
         }
     }
 
     private func observeConnectionState() async {
-        connectionStatus = SessionConnectionStatus(connectionState: foregroundEventStream.connectionState)
+        uiState.connectionStatus = SessionConnectionStatus(connectionState: foregroundEventStream.connectionState)
         for await state in foregroundEventStream.connectionStateUpdates() {
             OpenCodeLog.sessionChat.debug("live connection session=\(self.sessionID, privacy: .public) state=\(String(describing: state), privacy: .public)")
-            connectionStatus = SessionConnectionStatus(connectionState: state)
+            uiState.connectionStatus = SessionConnectionStatus(connectionState: state)
         }
     }
 
@@ -463,7 +401,6 @@ final class SessionChatViewModel {
 
     private func applyLoadedMessages(
         _ messages: [Message],
-        sessionID: String,
         isRefreshing: Bool,
         fromQuietRefresh: Bool = false
     ) {
@@ -471,7 +408,6 @@ final class SessionChatViewModel {
         transformTask = Task {
             await applyLoadedMessagesTransform(
                 messages,
-                sessionID: sessionID,
                 isRefreshing: isRefreshing,
                 fromQuietRefresh: fromQuietRefresh
             )
@@ -480,7 +416,6 @@ final class SessionChatViewModel {
 
     private func applyLoadedMessagesTransform(
         _ messages: [Message],
-        sessionID: String,
         isRefreshing: Bool,
         fromQuietRefresh: Bool = false
     ) async {
@@ -489,11 +424,10 @@ final class SessionChatViewModel {
         }
         guard !Task.isCancelled else { return }
 
-        let sessionTitle = state.sessionTitle
-        let composer = state.composer
-        let isSending = fromQuietRefresh ? isSendingFromCurrentState() : false
-        let errorBanner = fromQuietRefresh ? errorBannerFromCurrentState() : nil
-        let previousByID = Dictionary(uniqueKeysWithValues: messagesFromCurrentState().map { ($0.id, $0) })
+        let stateSnapshot = uiState
+        let isSending = fromQuietRefresh ? stateSnapshot.isSending : false
+        let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
+        let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
         let serverRows =
             messages
                 .enumerated()
@@ -509,7 +443,7 @@ final class SessionChatViewModel {
                 .map { row(from: $0.element, previous: previousByID[$0.element.id]) }
         let rows =
             if fromQuietRefresh, isSending {
-                mergeWithPending(serverRows, pendingRowsFromCurrentState())
+                mergeWithPending(serverRows, pendingRows: stateSnapshot.messages.filter(\.isPending))
             } else {
                 serverRows
             }
@@ -518,22 +452,36 @@ final class SessionChatViewModel {
         SessionPerformanceProbe.emit("markdown_preparation_finished")
         guard !Task.isCancelled else { return }
 
-        if enriched.isEmpty {
-            state = .empty(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
-        } else {
-            state = .loaded(
-                sessionID: sessionID,
-                sessionTitle: sessionTitle,
-                messages: enriched,
-                composer: composer,
-                isSending: fromQuietRefresh ? isSending : false,
-                isRefreshing: isRefreshing,
-                errorBanner: fromQuietRefresh ? errorBanner : nil
-            )
-        }
+        let timeline: SessionChatTimelineState =
+            if enriched.isEmpty {
+                .empty
+            } else {
+                .ready
+            }
+        let resolvedTimeline: SessionChatTimelineState =
+            if fromQuietRefresh, stateSnapshot.timeline == .error, enriched.isEmpty {
+                .error
+            } else {
+                timeline
+            }
+        let resolvedErrorMessage: String? =
+            if fromQuietRefresh {
+                if !enriched.isEmpty, stateSnapshot.timeline == .error {
+                    nil
+                } else {
+                    previousErrorMessage
+                }
+            } else {
+                nil
+            }
+
+        uiState.timeline = resolvedTimeline
+        uiState.messages = enriched
+        uiState.isSending = fromQuietRefresh ? isSending : false
+        uiState.isRefreshing = isRefreshing
+        uiState.errorMessage = resolvedErrorMessage
         refreshContextUsage()
         SessionPerformanceProbe.emit("styled_timeline_published")
-
     }
 
     private func hasStreamingDelta(_ messages: [Message]) -> Bool {
@@ -547,7 +495,7 @@ final class SessionChatViewModel {
         }
     }
 
-    private func mergeWithPending(_ serverRows: [SessionChatRow], _ pendingRows: [SessionChatRow]) -> [SessionChatRow] {
+    private func mergeWithPending(_ serverRows: [SessionChatRow], pendingRows: [SessionChatRow]) -> [SessionChatRow] {
         guard !pendingRows.isEmpty else { return serverRows }
         let pendingToKeep =
             pendingRows.filter { pending in
@@ -556,45 +504,22 @@ final class SessionChatViewModel {
         return serverRows + pendingToKeep
     }
 
-    private func pendingRowsFromCurrentState() -> [SessionChatRow] {
-        if case let .loaded(_, _, messages, _, _, _, _) = state {
-            return messages.filter(\.isPending)
-        }
-        return []
-    }
-
-    private func isSendingFromCurrentState() -> Bool {
-        if case let .loaded(_, _, _, _, isSending, _, _) = state {
-            return isSending
-        }
-        return false
-    }
-
-    private func errorBannerFromCurrentState() -> String? {
-        if case let .loaded(_, _, _, _, _, _, errorBanner) = state {
-            return errorBanner
-        }
-        return nil
-    }
-
-    private func applyError(_ error: Error, sessionID: String) {
-        state = .error(
-            sessionID: sessionID,
-            sessionTitle: state.sessionTitle,
-            message: errorMessage(error),
-            composer: state.composer
-        )
+    private func applyError(_ error: Error) {
+        uiState.timeline = .error
+        uiState.messages = []
+        uiState.isSending = false
+        uiState.errorMessage = errorMessage(error)
     }
 
     private func awaitLiveStoreTimelineResolution() async {
-        guard case .loading = state else { return }
+        guard uiState.timeline == .loading else { return }
         let deadline = Date().addingTimeInterval(2)
         while Date() < deadline {
-            if case .loading = state {
+            if uiState.timeline == .loading {
                 if let transformTask {
                     await transformTask.value
                 }
-                if case .loading = state {
+                if uiState.timeline == .loading {
                     try? await Task.sleep(nanoseconds: 10_000_000)
                     continue
                 }
@@ -642,7 +567,7 @@ final class SessionChatViewModel {
                 return $0.id > $1.id
             }
             .first { $0.modelProviderID != nil && $0.modelID != nil }
-        let current = state.composer.selectedModel
+        let current = uiState.composer.selectedModel
         let currentOption = current.flatMap {
             catalog.option(providerID: $0.option.providerID, modelID: $0.option.modelID)
         }
@@ -656,7 +581,7 @@ final class SessionChatViewModel {
             return "Selected model is unavailable. Using \(fallback.modelLabel)."
         }()
         let variant = resolvedVariant(
-            remembered: state.composer.selectedVariant ?? latestModelMessage?.variant,
+            remembered: uiState.composer.selectedVariant ?? latestModelMessage?.variant,
             for: fallback
         )
         updateComposer { composer in
@@ -677,42 +602,18 @@ final class SessionChatViewModel {
         return [mode, model, variant, timeLabel].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private func messagesFromCurrentState() -> [SessionChatRow] {
-        if case let .loaded(_, _, messages, _, _, _, _) = state {
-            return messages
-        }
-        return []
-    }
-
     private func updateComposer(_ update: (inout SessionChatComposerState) -> Void) {
-        var composer = state.composer
+        var composer = uiState.composer
         update(&composer)
-        switch state {
-        case let .loading(id, title, _):
-            state = .loading(sessionID: id, sessionTitle: title, composer: composer)
-        case let .empty(id, title, _):
-            state = .empty(sessionID: id, sessionTitle: title, composer: composer)
-        case let .loaded(id, title, messages, _, isSending, isRefreshing, errorBanner):
-            state = .loaded(
-                sessionID: id,
-                sessionTitle: title,
-                messages: messages,
-                composer: composer,
-                isSending: isSending,
-                isRefreshing: isRefreshing,
-                errorBanner: errorBanner
-            )
-        case let .error(id, title, message, _):
-            state = .error(sessionID: id, sessionTitle: title, message: message, composer: composer)
-        }
+        uiState.composer = composer
         refreshContextUsage()
     }
 
     private func refreshContextUsage() {
-        contextUsageFraction = Self.contextUsageFraction(
-            messages: messagesFromCurrentState(),
-            modelOptions: state.composer.modelOptions,
-            selectedModel: state.composer.selectedModel
+        uiState.contextUsageFraction = Self.contextUsageFraction(
+            messages: uiState.messages,
+            modelOptions: uiState.composer.modelOptions,
+            selectedModel: uiState.composer.selectedModel
         )
     }
 
@@ -741,21 +642,10 @@ final class SessionChatViewModel {
         return error.localizedDescription
     }
 
-    private static func defaultComposer() -> SessionChatComposerState {
-        SessionChatComposerState(
-            text: "",
-            selectedModel: nil,
-            modelOptions: [],
-            selectedMode: SessionChatPickers.modes[0],
-            selectedVariant: nil,
-            modelNotice: nil
-        )
-    }
-
     private func refreshSessionStatus() async {
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: worktree) else { return }
         let status = statuses.first(where: { $0.sessionID == sessionID })
-        sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
+        uiState.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
     }
 }
 

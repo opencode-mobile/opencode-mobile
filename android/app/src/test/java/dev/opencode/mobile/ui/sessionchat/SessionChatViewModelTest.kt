@@ -71,7 +71,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(TimelineState.Ready, state.timeline)
+            assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertEquals(1, state.messages.size)
             assertEquals("Hello", state.messages.first().text)
         }
@@ -96,7 +96,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(TimelineState.Ready, state.timeline)
+            assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertNotNull(state.messages.single().renderedMarkdown)
         }
 
@@ -139,7 +139,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
 
-            assertEquals(TimelineState.Ready, viewModel.uiState.value.timeline)
+            assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
             assertEquals(20, viewModel.uiState.value.messages.size)
             println(
                 "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
@@ -154,7 +154,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(TimelineState.Empty, viewModel.uiState.value.timeline)
+            assertEquals(SessionChatTimelineState.Empty, viewModel.uiState.value.timeline)
         }
 
     @Test
@@ -164,7 +164,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(TimelineState.Error, viewModel.uiState.value.timeline)
+            assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
         }
 
     @Test
@@ -175,7 +175,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(TimelineState.Error, viewModel.uiState.value.timeline)
+            assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
 
             repository.shouldFailLoad = false
             repository.eventStream.emit(
@@ -184,7 +184,7 @@ class SessionChatViewModelTest {
             advanceTimeBy(301)
             advanceUntilIdle()
 
-            assertEquals(TimelineState.Ready, viewModel.uiState.value.timeline)
+            assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
             assertEquals(1, viewModel.uiState.value.messages.size)
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }

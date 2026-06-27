@@ -147,7 +147,7 @@ class SessionChatViewModel
             viewModelScope.launch {
                 if (!isCurrentBinding(sessionId, worktree)) return@launch
                 logI("loadMessages start session=$sessionId worktree=$worktree")
-                _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
+                _uiState.update { it.copy(timeline = SessionChatTimelineState.Loading, errorMessage = null) }
                 runCatching {
                     val messages =
                         withContext(ioDispatcher) {
@@ -294,7 +294,7 @@ class SessionChatViewModel
                         isSending = true,
                         errorMessage = null,
                         messages = it.messages + enriched,
-                        timeline = TimelineState.Ready,
+                        timeline = SessionChatTimelineState.Ready,
                     )
                 }
                 try {
@@ -419,12 +419,12 @@ class SessionChatViewModel
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     val timeline =
                         when {
-                            enriched.isEmpty() -> TimelineState.Empty
-                            else -> TimelineState.Ready
+                            enriched.isEmpty() -> SessionChatTimelineState.Empty
+                            else -> SessionChatTimelineState.Ready
                         }
                     val resolvedTimeline =
-                        if (fromQuietRefresh && stateSnapshot.timeline == TimelineState.Error && enriched.isEmpty()) {
-                            TimelineState.Error
+                        if (fromQuietRefresh && stateSnapshot.timeline == SessionChatTimelineState.Error && enriched.isEmpty()) {
+                            SessionChatTimelineState.Error
                         } else {
                             timeline
                         }
@@ -441,7 +441,7 @@ class SessionChatViewModel
                             contextUsageFraction = contextUsageFraction(enriched, state.modelOptions, state.selectedModel),
                             errorMessage =
                                 if (fromQuietRefresh) {
-                                    if (enriched.isNotEmpty() && state.timeline == TimelineState.Error) {
+                                    if (enriched.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
                                         null
                                     } else {
                                         state.errorMessage
@@ -495,7 +495,7 @@ class SessionChatViewModel
         private fun applyLoadError(throwable: Throwable) {
             _uiState.update {
                 it.copy(
-                    timeline = TimelineState.Error,
+                    timeline = SessionChatTimelineState.Error,
                     messages = emptyList(),
                     isSending = false,
                     errorMessage = errorMessage(throwable),
@@ -653,7 +653,7 @@ class SessionChatViewModel
 data class SessionChatUiState(
     val sessionId: String,
     val sessionTitle: String,
-    val timeline: TimelineState,
+    val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem>,
     val composerText: String,
     val selectedModel: ModelSelection?,
@@ -677,7 +677,7 @@ data class SessionChatUiState(
             SessionChatUiState(
                 sessionId = sessionId,
                 sessionTitle = sessionTitle,
-                timeline = TimelineState.Loading,
+                timeline = SessionChatTimelineState.Loading,
                 messages = emptyList(),
                 composerText = "",
                 selectedModel = null,
@@ -720,7 +720,7 @@ fun EventStreamConnectionState.toSessionConnectionStatus(): SessionConnectionSta
         -> SessionConnectionStatus.Offline
     }
 
-enum class TimelineState {
+enum class SessionChatTimelineState {
     Loading,
     Empty,
     Ready,

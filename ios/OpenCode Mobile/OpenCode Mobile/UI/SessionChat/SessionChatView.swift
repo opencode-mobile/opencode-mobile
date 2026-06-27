@@ -58,17 +58,17 @@ struct SessionChatView: View {
             )
 
             OpenCodeSessionStatusBar(
-                sessionID: viewModel.state.sessionID,
-                connectionStatus: viewModel.connectionStatus.openCodeStatus,
-                contextUsageFraction: viewModel.contextUsageFraction,
+                sessionID: viewModel.uiState.sessionID,
+                connectionStatus: viewModel.uiState.connectionStatus.openCodeStatus,
+                contextUsageFraction: viewModel.uiState.contextUsageFraction,
                 onCopySessionID: {
-                    UIPasteboard.general.string = viewModel.state.sessionID
+                    UIPasteboard.general.string = viewModel.uiState.sessionID
                 },
                 onConnectionClick: {},
                 onContextClick: { showSessionContext = true }
             )
 
-            if let statusLabel = viewModel.sessionStatusLabel {
+            if let statusLabel = viewModel.uiState.sessionStatusLabel {
                 Text(statusLabel)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textInteractiveBase)
@@ -77,7 +77,7 @@ struct SessionChatView: View {
                     .padding(.bottom, 8)
             }
 
-            if let notice = viewModel.state.composer.modelNotice {
+            if let notice = viewModel.uiState.composer.modelNotice {
                 Text(notice)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
@@ -100,7 +100,7 @@ struct SessionChatView: View {
         )
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSessionContext) {
-            SessionContextView(sessionID: viewModel.state.sessionID, worktree: session.worktree)
+            SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
         }
         .task {
             viewModel.startObserving()
@@ -124,7 +124,16 @@ struct SessionChatView: View {
 
     @ViewBuilder
     private var timeline: some View {
-        switch viewModel.state {
+        if let errorMessage = viewModel.uiState.errorMessage, viewModel.uiState.timeline == .ready {
+            Text(errorMessage)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
+        }
+
+        switch viewModel.uiState.timeline {
         case .loading:
             Spacer()
             ProgressView()
@@ -137,23 +146,18 @@ struct SessionChatView: View {
                 .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.horizontal, 16)
             Spacer()
-        case let .error(_, _, message, _):
+        case .error:
             Spacer()
-            Text(message)
+            Text(viewModel.uiState.errorMessage ?? "Unable to load messages")
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.horizontal, 16)
             Spacer()
-        case let .loaded(sessionID, _, messages, _, _, isRefreshing, errorBanner):
+        case .ready:
+            let sessionID = viewModel.uiState.sessionID
+            let messages = viewModel.uiState.messages
+            let isRefreshing = viewModel.uiState.isRefreshing
             VStack(spacing: 0) {
-                if let errorBanner {
-                    Text(errorBanner)
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
-                }
                 GeometryReader { _ in
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -244,10 +248,7 @@ struct SessionChatView: View {
     }
 
     private func messagesFromLoadedState() -> [SessionChatRow] {
-        if case let .loaded(_, _, messages, _, _, _, _) = viewModel.state {
-            return messages
-        }
-        return []
+        viewModel.uiState.timeline == .ready ? viewModel.uiState.messages : []
     }
 
     @ViewBuilder
@@ -294,13 +295,8 @@ struct SessionChatView: View {
     }
 
     private var composer: some View {
-        let composer = viewModel.state.composer
-        let isSending: Bool = {
-            if case let .loaded(_, _, _, _, isSending, _, _) = viewModel.state {
-                return isSending
-            }
-            return false
-        }()
+        let composer = viewModel.uiState.composer
+        let isSending = viewModel.uiState.isSending
 
         return VStack(alignment: .leading, spacing: 10) {
             TextField("Ask anything...", text: composerTextBinding, axis: .vertical)
@@ -334,10 +330,10 @@ struct SessionChatView: View {
 
                 Spacer(minLength: 0)
 
-                if viewModel.sessionStatusLabel != nil {
+                if viewModel.uiState.sessionStatusLabel != nil {
                     OpenCodeButton(
                         variant: .iconCircle(.stop, accessibilityLabel: "Abort active work"),
-                        enabled: !viewModel.isAborting,
+                        enabled: !viewModel.uiState.isAborting,
                         contrast: .low
                     ) {
                         Task { await viewModel.abortSession() }
@@ -366,7 +362,7 @@ struct SessionChatView: View {
 
     private var composerTextBinding: Binding<String> {
         Binding(
-            get: { viewModel.state.composer.text },
+            get: { viewModel.uiState.composer.text },
             set: { viewModel.updateComposerText($0) }
         )
     }
@@ -385,7 +381,7 @@ struct SessionChatView: View {
     }
 
     private var modelSelectionCatalog: ModelSelectionCatalog {
-        let composer = viewModel.state.composer
+        let composer = viewModel.uiState.composer
         return ModelSelectionCatalog(options: composer.modelOptions, serverDefault: nil)
     }
 
@@ -418,7 +414,7 @@ struct SessionChatView: View {
     private var modelPickerScrollTargetID: String? {
         guard activePicker == .model else { return nil }
         guard let provider = activeModelProvider else { return nil }
-        let composer = viewModel.state.composer
+        let composer = viewModel.uiState.composer
         guard let selected = composer.selectedModel?.option else { return nil }
         let filtered = filteredModels(in: provider)
         guard filtered.contains(where: { $0.id == selected.id }) else { return nil }
@@ -480,7 +476,7 @@ struct SessionChatView: View {
 
     @ViewBuilder
     private var pickerSheetEntries: some View {
-        let composer = viewModel.state.composer
+        let composer = viewModel.uiState.composer
         switch activePicker {
         case .model:
             modelPickerEntries(composer: composer)

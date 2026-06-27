@@ -151,14 +151,14 @@ fun SessionChatScreen(
             }
 
             when (uiState.timeline) {
-                TimelineState.Loading ->
+                SessionChatTimelineState.Loading ->
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator()
                     }
-                TimelineState.Error ->
+                SessionChatTimelineState.Error ->
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
                         contentAlignment = Alignment.Center,
@@ -169,7 +169,7 @@ fun SessionChatScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                TimelineState.Empty ->
+                SessionChatTimelineState.Empty ->
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
                         contentAlignment = Alignment.Center,
@@ -180,7 +180,7 @@ fun SessionChatScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                TimelineState.Ready -> {
+                SessionChatTimelineState.Ready -> {
                     val listState = rememberLazyListState()
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
