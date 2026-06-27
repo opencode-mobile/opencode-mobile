@@ -136,9 +136,6 @@ final class SessionChatViewModel {
     private var liveObservationTask: Task<Void, Never>?
     private var transformTask: Task<Void, Never>?
     private var isObservingMessages = false
-    private var pendingHistoryRows: [SessionChatRow] = []
-    private(set) var hasOlderHistory = false
-    private static let initialHistoryWindowSize = 3
 
     init(
         sessionID: String,
@@ -200,8 +197,24 @@ final class SessionChatViewModel {
         do {
             async let modelsLoad = modelRepository.listModelOptions(directory: worktree)
             if isObservingMessages {
-                if let catalog = try? await modelsLoad {
-                    applyModelCatalog(catalog, messages: [])
+                let catalog = try? await modelsLoad
+                var messagesForCatalog = messageLiveStore.cachedMessages(sessionID: sessionID, directory: worktree) ?? []
+                if let catalog {
+                    applyModelCatalog(catalog, messages: messagesForCatalog)
+                }
+                if messagesForCatalog.isEmpty {
+                    do {
+                        _ = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+                        await awaitLiveStoreTimelineResolution()
+                        if let catalog {
+                            messagesForCatalog = messageLiveStore.cachedMessages(sessionID: sessionID, directory: worktree) ?? []
+                            applyModelCatalog(catalog, messages: messagesForCatalog)
+                        }
+                    } catch {
+                        applyError(error, sessionID: sessionID)
+                    }
+                } else if case .loading = state {
+                    await awaitLiveStoreTimelineResolution()
                 }
             } else {
                 let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
@@ -251,31 +264,6 @@ final class SessionChatViewModel {
                 )
             }
         }
-    }
-
-    func loadOlderHistory() async {
-        guard !pendingHistoryRows.isEmpty,
-              case let .loaded(sessionID, sessionTitle, displayedRows, composer, isSending, isRefreshing, errorBanner) = state
-        else { return }
-
-        let batchStart = max(pendingHistoryRows.count - Self.initialHistoryWindowSize, 0)
-        let batch = Array(pendingHistoryRows[batchStart...])
-        pendingHistoryRows.removeSubrange(batchStart...)
-        hasOlderHistory = !pendingHistoryRows.isEmpty
-
-        let previousByID = Dictionary(uniqueKeysWithValues: displayedRows.map { ($0.id, $0) })
-        let enriched = await renderedMarkdownMapper.enrichRows(batch, previousByID: previousByID)
-        guard !Task.isCancelled else { return }
-        state = .loaded(
-            sessionID: sessionID,
-            sessionTitle: sessionTitle,
-            messages: enriched + displayedRows,
-            composer: composer,
-            isSending: isSending,
-            isRefreshing: isRefreshing,
-            errorBanner: errorBanner
-        )
-        refreshContextUsage()
     }
 
     func updateComposerText(_ text: String) {
@@ -525,21 +513,18 @@ final class SessionChatViewModel {
             } else {
                 serverRows
             }
-        pendingHistoryRows = Array(rows.dropLast(Self.initialHistoryWindowSize))
-        hasOlderHistory = !pendingHistoryRows.isEmpty
-        let initialWindow = Array(rows.suffix(Self.initialHistoryWindowSize))
         SessionPerformanceProbe.emit("markdown_preparation_started")
-        let enrichedWindow = await renderedMarkdownMapper.enrichRows(initialWindow, previousByID: previousByID)
+        let enriched = await renderedMarkdownMapper.enrichRows(rows, previousByID: previousByID)
         SessionPerformanceProbe.emit("markdown_preparation_finished")
         guard !Task.isCancelled else { return }
 
-        if enrichedWindow.isEmpty {
+        if enriched.isEmpty {
             state = .empty(sessionID: sessionID, sessionTitle: sessionTitle, composer: composer)
         } else {
             state = .loaded(
                 sessionID: sessionID,
                 sessionTitle: sessionTitle,
-                messages: enrichedWindow,
+                messages: enriched,
                 composer: composer,
                 isSending: fromQuietRefresh ? isSending : false,
                 isRefreshing: isRefreshing,
@@ -599,6 +584,24 @@ final class SessionChatViewModel {
             message: errorMessage(error),
             composer: state.composer
         )
+    }
+
+    private func awaitLiveStoreTimelineResolution() async {
+        guard case .loading = state else { return }
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if case .loading = state {
+                if let transformTask {
+                    await transformTask.value
+                }
+                if case .loading = state {
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                    continue
+                }
+                return
+            }
+            return
+        }
     }
 
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {

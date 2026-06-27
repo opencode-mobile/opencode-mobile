@@ -129,7 +129,8 @@ in the shared render tree.
      highlighter path. **Done.**
    - add bundled grammar resource reader for iOS. **Done through app-bundle
      resource copy and `iosMain` bundle lookup.**
-   - add native Oniguruma backend for iOS;
+   - add native Oniguruma backend for iOS; **planned in
+     `docs/features/ios-oniguruma-backend/plan.md`.**
    - complete full TextMate rule state, injections, embedded grammars, and
      incremental reuse;
    - add Shiki golden token tests. **Fixture coverage is active for Milestone 0

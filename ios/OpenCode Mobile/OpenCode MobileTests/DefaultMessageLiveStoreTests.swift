@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
+@Suite(.serialized)
 @MainActor
 struct DefaultMessageLiveStoreTests {
     private let decoder = JSONDecoder()
@@ -12,10 +13,13 @@ struct DefaultMessageLiveStoreTests {
         let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
         let collector = MessageCollector()
         let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        try? await Task.sleep(for: .milliseconds(500))
 
+        let loaded = await waitUntil {
+            collector.latest()?.first?.text == "Hello"
+        }
+        task.cancel()
+        #expect(loaded)
         #expect(collector.emissions.count >= 1)
-        #expect(collector.latest()?.first?.text == "Hello")
     }
 
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
@@ -53,11 +57,13 @@ struct DefaultMessageLiveStoreTests {
         // Add a text part to it.
         let partEvent = eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "Hello from part", sessionID: "ses-1")
         eventStream.emit(partEvent)
-        try? await Task.sleep(for: .milliseconds(200))
+        let updated = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text.contains("Hello from part") == true
+        }
         task.cancel()
 
-        let last = collector.latest()
-        let msg2 = last?.first(where: { $0.id == "msg-2" })
+        let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(updated)
         #expect(msg2?.text.contains("Hello from part") == true)
         #expect(msg2?.parts.count == 1)
     }
@@ -113,10 +119,13 @@ struct DefaultMessageLiveStoreTests {
 
         eventStream.emit(eventWithTextDelta(partID: "prt-1", messageID: "msg-2", delta: "Hel", sessionID: "ses-1"))
         eventStream.emit(eventWithTextDelta(partID: "prt-1", messageID: "msg-2", delta: "lo", sessionID: "ses-1"))
-        try? await Task.sleep(for: .milliseconds(300))
+        let updated = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello"
+        }
         task.cancel()
 
         let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(updated)
         #expect(msg2?.text == "Hello")
         guard case .text(let textPart) = msg2?.parts.first else {
             Issue.record("Expected text part")
@@ -141,11 +150,15 @@ struct DefaultMessageLiveStoreTests {
         eventStream.emit(eventWithToolPart(partID: "prt-t1", messageID: "msg-2", tool: "bash", status: "pending", sessionID: "ses-1"))
         eventStream.emit(eventWithTextPart(partID: "prt-2", messageID: "msg-2", text: "Second", sessionID: "ses-1"))
         eventStream.emit(eventWithToolPart(partID: "prt-t1", messageID: "msg-2", tool: "bash", status: "completed", sessionID: "ses-1"))
-        try? await Task.sleep(for: .milliseconds(300))
+        let expected = "First\n\u{2713} bash\nSecond"
+        let updated = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == expected
+        }
         task.cancel()
 
         let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
-        #expect(msg2?.text == "First\n\u{2713} bash\nSecond")
+        #expect(updated)
+        #expect(msg2?.text == expected)
         #expect(msg2?.parts.count == 3)
     }
 
@@ -181,9 +194,12 @@ struct DefaultMessageLiveStoreTests {
             ),
         ]
         eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-1", text: "New", sessionID: "ses-1"))
-        try? await Task.sleep(for: .milliseconds(500))
+        let updated = await waitUntil {
+            collector.latest()?.first?.text == "New"
+        }
         task.cancel()
 
+        #expect(updated)
         #expect(collector.latest()?.first?.text == "New")
         #expect(repo.listMessagesCallCount == 2)
     }
@@ -202,11 +218,13 @@ struct DefaultMessageLiveStoreTests {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(dataLine: json)!
         eventStream.emit(event)
-        try? await Task.sleep(for: .milliseconds(500))
+        let removed = await waitUntil {
+            collector.latest()?.isEmpty == true
+        }
         task.cancel()
 
-        let last = collector.latest()
-        #expect(last?.isEmpty == true)
+        #expect(removed)
+        #expect(collector.latest()?.isEmpty == true)
     }
 
     @Test func messagePartRemoved_updatesText() async {
@@ -256,11 +274,13 @@ struct DefaultMessageLiveStoreTests {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(dataLine: #"{"payload":{"type":"stream.reconnected","properties":{}}}"#)!
         eventStream.emit(event)
-        try? await Task.sleep(for: .milliseconds(800))
+        let reloaded = await waitUntil {
+            collector.latest()?.first?.text == "After reconnect"
+        }
         task.cancel()
 
-        let last = collector.latest()
-        #expect(last?.first?.text == "After reconnect")
+        #expect(reloaded)
+        #expect(collector.latest()?.first?.text == "After reconnect")
     }
 
     @Test func eventsForOtherSessionsAreIgnored() async {
@@ -270,7 +290,10 @@ struct DefaultMessageLiveStoreTests {
 
         let collector = MessageCollector()
         let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
-        try? await Task.sleep(for: .milliseconds(300))
+        let loaded = await waitUntil(timeoutMs: 5_000) {
+            collector.latest() != nil
+        }
+        #expect(loaded)
 
         let countBefore = collector.latest()?.count
 
@@ -285,6 +308,18 @@ struct DefaultMessageLiveStoreTests {
     }
 
     // MARK: - Helpers
+
+    private func waitUntil(
+        timeoutMs: Int = 5_000,
+        predicate: @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+        while Date() < deadline {
+            if predicate() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return predicate()
+    }
 
     private func eventWithInfo(id: String, role: String, sessionID: String) -> OpencodeEvent {
         let json = """

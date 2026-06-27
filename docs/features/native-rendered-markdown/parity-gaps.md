@@ -8,9 +8,12 @@
   Oniguruma-compatible native backend and Shiki-level breadth.
 - Current iOS state: SwiftUI renderer calls the KMP JSON bridge, which loads
   bundled TextMate grammar resources from the app bundle and tokenizes through
-  the shared TextMate tokenizer with the hybrid `OpenCodeOnigurumaRegexBackend`
-  (`\\G` anchoring on Kotlin `Regex`). It is not Oniguruma-compatible and emits
-  `HighlighterBackendFallback`.
+  the shared TextMate tokenizer with `OpenCodeLibOnigRegexBackend` (libonig via
+  Kotlin/Native cinterop). Production iOS no longer emits
+  `HighlighterBackendFallback` for the regex backend. The hybrid
+  `OpenCodeKotlinRegexHybridTextMateBackend` (Kotlin `Regex` shim; deprecated
+  typealias `OpenCodeOnigurumaRegexBackend`) remains in `commonMain` for
+  regression comparisons only.
 - Current Android state: session chat, component gallery, and the KMP platform
   provider all resolve the same bundled Joni TextMate highlighter through
   `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
@@ -43,6 +46,24 @@
   `@Ignore` from the KMP native-vs-Shiki highlighter comparison test, close
   remaining Java method-signature token gaps, and close remaining JavaScript
   line-state parity gaps.
+
+## Markdown Parse Performance
+
+- Status: narrowed
+- Area: performance
+- Shared intent: cold Session Chat open should prepare styled markdown documents
+  in roughly interactive time, including large syntax-highlighted code blocks.
+- Current state (2026-06-27): manual **Big Session** cold open is **~2.5 s** on
+  iOS and Android with libonig on iOS, full-history enrichment on both platforms,
+  and no `HighlighterBackendFallback` on the production regex path.
+- iOS still round-trips through `OpenCodeMarkdownJson.parseMarkdownJson` before
+  Swift decodes the render tree; Android calls `OpenCodeMarkdownParser.parse()`
+  directly. The JSON bridge is a remaining optimization target, not a blocker
+  for Big Session on current hardware.
+- Historical: hybrid regex backend + staged window reached **~27 s** styled
+  timeline on the same fixture (2026-06-24 probes).
+- Owner or next action: optional JSON-bridge slimming; code-block virtualization
+  if larger sessions regress. See `docs/features/session-chat/progress.md`.
 
 ## Code Block Layout
 

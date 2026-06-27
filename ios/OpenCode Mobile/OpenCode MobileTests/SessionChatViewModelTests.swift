@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
+@Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
     @Test func loadMessages_success() async {
@@ -238,17 +239,18 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         viewModel.stopObserving()
         viewModel.startObserving()
-        try? await Task.sleep(for: .milliseconds(50))
+        try? await Task.sleep(for: .milliseconds(200))
         let updated = [
             Message(id: "msg-2", role: .assistant, text: "Resumed", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
         liveStore.emit(updated)
-        try? await Task.sleep(for: .milliseconds(500))
-        guard case let .loaded(_, _, messages, _, _, _, _) = viewModel.state else {
-            Issue.record("Expected loaded state")
-            return
+        let resumed = await waitUntil(timeoutMs: 2_000) {
+            if case let .loaded(_, _, messages, _, _, _, _) = viewModel.state {
+                return messages.contains { $0.text == "Resumed" }
+            }
+            return false
         }
-        #expect(messages.contains { $0.text == "Resumed" })
+        #expect(resumed)
     }
 
     @Test func stopObserving_cancelsBackgroundTasks() async {
@@ -493,30 +495,47 @@ struct SessionChatViewModelTests {
         let elapsed = await clock.measure(block)
         return elapsed.components.attoseconds / 1_000_000_000_000_000
     }
+
+    private func waitUntil(
+        timeoutMs: Int = 2_000,
+        predicate: @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+        while Date() < deadline {
+            if predicate() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return predicate()
+    }
 }
 
 @MainActor
-private final class FakeMessageLiveStore: MessageLiveStore, @unchecked Sendable {
-    private var continuations: [UUID: AsyncStream<[Message]>.Continuation] = [:]
+private final class FakeMessageLiveStore: MessageLiveStore {
+    private var publish: (([Message]) -> Void)?
+    private var observation: SharedLiveObservation<[Message]>?
 
-    func observeMessages(sessionID: String, directory: String) -> AsyncStream<[Message]> {
-        AsyncStream { continuation in
-            let id = UUID()
-            continuations[id] = continuation
-            continuation.onTermination = { [weak self] _ in
-                Task { @MainActor in
-                    self?.continuations.removeValue(forKey: id)
-                }
+    private func ensureObservation() -> SharedLiveObservation<[Message]> {
+        if let observation {
+            return observation
+        }
+        let created = SharedLiveObservation<[Message]> { yield in
+            Task { @MainActor [weak self] in
+                self?.publish = yield
+                await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
             }
         }
+        observation = created
+        return created
+    }
+
+    func observeMessages(sessionID: String, directory: String) -> AsyncStream<[Message]> {
+        ensureObservation().stream()
     }
 
     func cachedMessages(sessionID: String, directory: String) -> [Message]? { nil }
 
     func emit(_ messages: [Message]) {
-        for continuation in continuations.values {
-            continuation.yield(messages)
-        }
+        publish?(messages)
     }
 
     func clearCache() {}

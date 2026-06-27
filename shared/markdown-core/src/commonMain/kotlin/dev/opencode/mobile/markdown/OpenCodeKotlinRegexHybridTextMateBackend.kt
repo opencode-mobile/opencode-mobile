@@ -1,12 +1,11 @@
 package dev.opencode.mobile.markdown
 
 /**
- * Hybrid TextMate regex backend used on iOS. Kotlin [Regex] handles most patterns;
- * a small set of Oniguruma-specific anchors used by bundled grammars are handled
- * explicitly until a native Oniguruma binding lands.
+ * Temporary Kotlin [Regex] shim used for regression comparisons. Production iOS uses
+ * [OpenCodeLibOnigRegexBackend]; Android uses [OpenCodeJoniRegexBackend].
  */
-object OpenCodeOnigurumaRegexBackend : OpenCodeTextMateRegexBackend {
-    override val name: String = "apple-kotlin-regex-textmate-bridge"
+object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
+    override val name: String = "kotlin-regex-hybrid-textmate-bridge"
 
     override val isOnigurumaCompatible: Boolean = false
 
@@ -54,3 +53,9 @@ object OpenCodeOnigurumaRegexBackend : OpenCodeTextMateRegexBackend {
             ?.takeIf { it.start == startIndex }
     }
 }
+
+@Deprecated(
+    message = "Use OpenCodeKotlinRegexHybridTextMateBackend for the Kotlin Regex hybrid shim.",
+    replaceWith = ReplaceWith("OpenCodeKotlinRegexHybridTextMateBackend"),
+)
+typealias OpenCodeOnigurumaRegexBackend = OpenCodeKotlinRegexHybridTextMateBackend

@@ -115,7 +115,14 @@ final class DefaultMessageLiveStore: MessageLiveStore {
         defer { debounceTask?.cancel() }
 
         for await event in eventStream.events() {
-            if event.type == "stream.reconnected" || event.type == "server.connected" {
+            if event.type == "stream.reconnected" {
+                debounceTask?.cancel()
+                debounceTask = nil
+                await fullReload(sessionID: sessionID, directory: directory, publish: publish)
+                continue
+            }
+
+            if event.type == "server.connected" {
                 // Connection reset — full reload.
                 debounceTask?.cancel()
                 debounceTask = Task { [weak self] in
@@ -321,10 +328,7 @@ final class DefaultMessageLiveStore: MessageLiveStore {
 
     private func loadMessages(sessionID: String, directory: String) async -> [Message]? {
         do {
-            let repository = messageRepository
-            return try await Task.detached(priority: .userInitiated) {
-                try await repository.listMessages(sessionID: sessionID, directory: directory)
-            }.value
+            return try await messageRepository.listMessages(sessionID: sessionID, directory: directory)
         } catch {
             return nil
         }

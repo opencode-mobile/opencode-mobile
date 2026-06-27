@@ -19,7 +19,7 @@ class OpenCodeBackendHighlighterRegressionTest {
     @Test
     fun iosHybridBackendCoversWithCacheIdentifiersUniformly() {
         val code = withCacheSnippet()
-        val result = highlighter(OpenCodeOnigurumaRegexBackend).highlight("javascript", code)
+        val result = highlighter(OpenCodeKotlinRegexHybridTextMateBackend).highlight("javascript", code)
         HighlighterRegressionAssertions.assertIdentifiersUniformlyCovered(
             code = code,
             spans = result.spans,
@@ -32,7 +32,7 @@ class OpenCodeBackendHighlighterRegressionTest {
     fun iosHybridBackendNormalizesHttpClientPrivateFields() {
         val fixture =
             HighlighterGoldenFixtures.all.single { it.id == "javascript-http-client-class-repro" }
-        val result = highlighter(OpenCodeOnigurumaRegexBackend).highlight(fixture.language, fixture.code)
+        val result = highlighter(OpenCodeKotlinRegexHybridTextMateBackend).highlight(fixture.language, fixture.code)
         val privateFields = listOf("#baseUrl", "#headers", "#interceptors", "#timeout")
         HighlighterRegressionAssertions.assertPrivateFieldsMatchWebRoles(
             code = fixture.code,
@@ -45,7 +45,7 @@ class OpenCodeBackendHighlighterRegressionTest {
 
     @Test
     fun iosHybridBackendEmitsBackendFallbackDiagnostic() {
-        val result = highlighter(OpenCodeOnigurumaRegexBackend).highlight("javascript", "const answer = 1")
+        val result = highlighter(OpenCodeKotlinRegexHybridTextMateBackend).highlight("javascript", "const answer = 1")
         assertTrue(
             result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterBackendFallback },
             "Expected ios hybrid backend fallback diagnostic, got ${result.diagnostics}",
@@ -55,7 +55,7 @@ class OpenCodeBackendHighlighterRegressionTest {
     @Test
     fun iosHybridBackendCoversJavaMainClassRegressionFixture() {
         val fixture = HighlighterGoldenFixtures.all.single { it.id == "java-basic" }
-        val result = highlighter(OpenCodeOnigurumaRegexBackend).highlight(fixture.language, fixture.code)
+        val result = highlighter(OpenCodeKotlinRegexHybridTextMateBackend).highlight(fixture.language, fixture.code)
         HighlighterRegressionAssertions.assertTokenRoles(
             code = fixture.code,
             spans = result.spans,
@@ -91,14 +91,4 @@ class OpenCodeBackendHighlighterRegressionTest {
             grammarBundle = bundledGrammarBundle(),
             textMateTokenizer = OpenCodeTextMateNativeTokenizer(backend),
         )
-
-    private fun bundledGrammarBundle(): TextMateGrammarBundle =
-        OpenCodeTextMateGrammarBundleLoader
-            .loadBundled(
-                OpenCodeTextMateResourceReader { resourcePath ->
-                    OpenCodeBackendHighlighterRegressionTest::class.java.classLoader
-                        ?.getResource(resourcePath)
-                        ?.readText()
-                },
-            ).bundle ?: error("missing bundled TextMate grammar bundle")
 }

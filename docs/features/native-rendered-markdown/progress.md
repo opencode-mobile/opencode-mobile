@@ -30,6 +30,36 @@
   markdown messages with 3,000 total TypeScript lines through the production
   highlighter path on each platform.
 
+## Performance Profiling Synthesis
+
+- Date: 2026-06-26.
+- Call chain: native Screen Model → `RenderedMarkdownMapper.enrichRows()` →
+  KMP `OpenCodeMarkdownParser.parse()` → fenced-code `parseFence()` →
+  `OpenCodeSyntaxHighlighter.highlight()` →
+  `OpenCodeTextMateNativeTokenizer.tokenize()`.
+- Almost all cold-path CPU time lives in KMP. Native app code orchestrates
+  when to parse and caches results; SwiftUI and Compose rendering are separate
+  from the measured markdown-preparation gap.
+- Cheap stages: `OpenCodeMarkdownDetector.shouldRender()`, block walking, and
+  inline parsing. Expensive stage: TextMate tokenization of fenced code blocks
+  (regex matching at every cursor position on every line).
+- Platform benchmark on the 20-message / 3,000-line TypeScript fixture
+  (2026-06-23, pre-libonig):
+  - Android: `parser-ms=77`, `mapper-ms=52`, `viewmodel-load-ms=104`.
+  - iOS: `parser-bridge-ms=958`, `mapper-ms=404`, `viewmodel-load-ms=407`.
+- Big Session cold open (2026-06-27, post-libonig, full history): **~2.5 s** on
+  iOS and Android in manual device testing.
+- Why iOS was slower before libonig despite shared KMP tokenizer code:
+  1. **Regex backend (primary, resolved):** Android uses Joni/Oniguruma; iOS now
+     uses libonig (`OpenCodeLibOnigRegexBackend`). The Kotlin `Regex` hybrid
+     shim is regression-only.
+  2. **JSON bridge (secondary, optional):** iOS encodes a parse request and decodes
+     the full render-tree JSON; Android calls `OpenCodeMarkdownParser.parse()`
+     directly.
+  3. **Runtime (tertiary):** KMP on JVM/ART vs Kotlin/Native framework.
+- Enrichment scope: iOS and Android parse the full timeline on load.
+  See `docs/features/native-rendered-markdown/parity-gaps.md`.
+
 ## Completed
 
 - Superseded ADR 0003 with ADR 0004.

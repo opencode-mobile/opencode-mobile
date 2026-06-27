@@ -23,6 +23,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -57,6 +58,7 @@ class SessionChatViewModel
         private val eventDomainAdapter: EventDomainAdapter,
         private val renderedMarkdownMapper: RenderedMarkdownMapper,
     ) : ViewModel() {
+        internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         private val _uiState =
             MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
         val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
@@ -148,12 +150,12 @@ class SessionChatViewModel
                 _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
                 runCatching {
                     val messages =
-                        withContext(Dispatchers.IO) {
+                        withContext(ioDispatcher) {
                             messageRepository.listMessages(sessionId, worktree)
                         }
                     logI("loadMessages fetched session=$sessionId count=${messages.size}")
                     runCatching {
-                        withContext(Dispatchers.IO) {
+                        withContext(ioDispatcher) {
                             modelRepository.listModelOptions(worktree)
                         }
                     }
@@ -416,10 +418,15 @@ class SessionChatViewModel
                     enrichMs = (System.nanoTime() - enrichStartedAt) / 1_000_000
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     val timeline =
-                        if (enriched.isEmpty()) {
-                            TimelineState.Empty
+                        when {
+                            enriched.isEmpty() -> TimelineState.Empty
+                            else -> TimelineState.Ready
+                        }
+                    val resolvedTimeline =
+                        if (fromQuietRefresh && stateSnapshot.timeline == TimelineState.Error && enriched.isEmpty()) {
+                            TimelineState.Error
                         } else {
-                            TimelineState.Ready
+                            timeline
                         }
                     logI(
                         "applyLoadedMessages ready session=$sourceSessionId source=$source " +
@@ -427,12 +434,21 @@ class SessionChatViewModel
                     )
                     _uiState.update { state ->
                         state.copy(
-                            timeline = timeline,
+                            timeline = resolvedTimeline,
                             messages = enriched,
                             isSending = if (fromQuietRefresh) state.isSending else false,
                             isRefreshing = isRefreshing,
                             contextUsageFraction = contextUsageFraction(enriched, state.modelOptions, state.selectedModel),
-                            errorMessage = if (fromQuietRefresh) state.errorMessage else null,
+                            errorMessage =
+                                if (fromQuietRefresh) {
+                                    if (enriched.isNotEmpty() && state.timeline == TimelineState.Error) {
+                                        null
+                                    } else {
+                                        state.errorMessage
+                                    }
+                                } else {
+                                    null
+                                },
                         )
                     }
                 }

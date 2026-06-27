@@ -6,19 +6,10 @@ import kotlin.test.assertEquals
 class MarkdownSessionChatBenchmarkTest {
     @Test
     fun benchmarkLongMarkdownHistoryHybridBackend() {
-        val bundle =
-            OpenCodeTextMateGrammarBundleLoader
-                .loadBundled(
-                    OpenCodeTextMateResourceReader { resourcePath ->
-                        MarkdownSessionChatBenchmarkTest::class.java.classLoader
-                            ?.getResource(resourcePath)
-                            ?.readText()
-                    },
-                ).bundle
         val highlighter =
             OpenCodeSyntaxHighlighter(
-                grammarBundle = bundle,
-                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeOnigurumaRegexBackend),
+                grammarBundle = bundledGrammarBundle(),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeKotlinRegexHybridTextMateBackend),
             )
         val messages = longMarkdownHistory()
 
@@ -37,6 +28,29 @@ class MarkdownSessionChatBenchmarkTest {
         assertEquals(20, markdownCount)
         println(
             "MARKDOWN_BENCHMARK kmp-hybrid detector-ms=$detectorMs parser-ms=$parserMs messages=20 code-lines=3000",
+        )
+    }
+
+    @Test
+    fun benchmarkLongMarkdownHistoryJoniBackend() {
+        val highlighter =
+            OpenCodeSyntaxHighlighter(
+                grammarBundle = bundledGrammarBundle(),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
+            )
+        val messages = longMarkdownHistory()
+
+        val parserStartedAt = System.nanoTime()
+        messages.forEach { message ->
+            if (OpenCodeMarkdownDetector.shouldRender(message)) {
+                OpenCodeMarkdownParser.parse(message, highlighter)
+            }
+        }
+        val parserMs = (System.nanoTime() - parserStartedAt) / 1_000_000
+
+        assertEquals(20, messages.count { OpenCodeMarkdownDetector.shouldRender(it) })
+        println(
+            "MARKDOWN_BENCHMARK kmp-joni parser-ms=$parserMs messages=20 code-lines=3000",
         )
     }
 

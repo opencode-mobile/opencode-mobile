@@ -68,13 +68,22 @@
 
 ## Big Session Performance Investigation
 
-- Date: 2026-06-24.
 - Fixture: the manually named **Big Session** on the local opencode server. It
   contains a large syntax-highlighted code response and is used only as a local
   performance repro, not as a deterministic CI fixture.
-- Measurement: an opt-in iOS UI benchmark emits Darwin-notification probes from
-  the app, avoiding XCTest accessibility polling while rich text is rendering.
-- Latest measured cold-path breakdown:
+
+### Current (2026-06-27, libonig + full-history enrichment)
+
+- Manual device test: **~2.5 s** cold open to styled timeline on iOS, matching
+  Android for the same session.
+- iOS and Android both enrich the full merged timeline on load.
+- Warm revisits remain fast because the in-memory render-document cache is keyed
+  by message text.
+
+### Historical (2026-06-24, hybrid regex backend, staged window)
+
+- Measurement: opt-in iOS UI benchmark via Darwin-notification probes.
+- Cold-path breakdown:
 
   | Stage | Elapsed from benchmark start |
   | --- | ---: |
@@ -84,18 +93,28 @@
   | Markdown preparation started | 3.082 s |
   | Markdown preparation finished / styled timeline published | 27.303 s |
 
-- Finding: the full-history request took **0.118 s**; Markdown preparation for
-  the initial visible window took **24.221 s**. The cold-path bottleneck is
-  native Markdown document preparation/layout, not server history retrieval.
-- Warm revisits are fast because the in-memory render-document cache is keyed
-  by message text. Cold opening remains the active problem.
-- Experiments tried:
-  - removing the duplicate foreground history fetch while the live store reloads;
-  - cache-first history publication;
-  - moving history DTO adaptation off the main actor;
-  - publishing raw/unstyled rows before rich rendering (rejected: the app was
-    unresponsive while documents were prepared and the result degraded styling);
-  - preparing only a latest-message window (still blocked by a large code
-    message within that window).
-- Next experiment: retain syntax styling but virtualize/collapse large code
-  blocks for the first frame, expanding the complete block only on demand.
+- Finding: history fetch **0.118 s**; markdown preparation for the initial
+  visible window **24.221 s**. Bottleneck was KMP TextMate tokenization on the
+  non-Oniguruma iOS regex shim.
+
+### Hot path (unchanged)
+
+`SessionChatViewModel` → `RenderedMarkdownMapper.enrichRows()` →
+`OpenCodeMarkdownParser.parse()` (Android) / JSON bridge (iOS) →
+`parseFence()` → `OpenCodeSyntaxHighlighter.highlight()` →
+`OpenCodeTextMateNativeTokenizer.tokenize()`.
+
+### Experiments tried
+
+- removing the duplicate foreground history fetch while the live store reloads;
+- cache-first history publication;
+- moving history DTO adaptation off the main actor;
+- publishing raw/unstyled rows before rich rendering (rejected: unresponsive and
+  degraded styling);
+- preparing only a latest-message window (rejected 2026-06-27: Android parity);
+- **libonig backend** (shipped): restored acceptable Big Session cold open.
+
+### Next optimization candidates
+
+- virtualize or collapse large code blocks for the first frame;
+- slim or bypass the iOS JSON bridge if it shows up on other profiles.
