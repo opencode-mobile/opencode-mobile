@@ -172,3 +172,40 @@ them.
   context, and the result of a real trade-off.
 - Do not couple domain language to generated code names unless the server API has
   made that language part of the user-facing model.
+
+## Cursor Cloud specific instructions
+
+This section captures durable, non-obvious facts for working in the Cursor Cloud
+Linux VM. Standard build/lint/test commands live in `README.md` and
+`android/README.md`; this section only adds caveats.
+
+- **Platform reachability:** The VM is Linux. Only the Android app and the
+  Node-based repo tooling (`scripts/*`) are runnable here. The iOS app cannot be
+  built or tested on this VM because it requires macOS + Xcode (its build also
+  runs a Gradle Apple-framework phase against `shared/markdown-core`). Run iOS
+  build/checks via the macOS GitHub Actions workflows instead.
+- **Toolchain (preinstalled in the VM image):** JDK 17 and the Android SDK
+  (`platform-tools`, `platforms;android-36`, `build-tools;36.0.0`) are installed
+  at `~/Android/sdk`. `~/.bashrc` exports `JAVA_HOME` (JDK 17), `ANDROID_HOME`,
+  and `PATH`, and `android/local.properties` (gitignored) points Gradle at the
+  SDK. The project pins `jvmToolchain(17)`; Gradle auto-detects the JDK 17
+  toolchain from `/usr/lib/jvm`, so builds work even if a shell defaults to
+  JDK 21.
+- **No Android emulator:** The VM has no `/dev/kvm` / nested virtualization, so a
+  hardware-accelerated emulator (and therefore `./run-android.sh` and
+  `connectedDebugAndroidTest`) cannot run here. Validate the app via
+  `./gradlew :app:assembleDebug` and the JVM unit-test suites instead. The build
+  produces an installable `app/build/outputs/apk/debug/app-debug.apk`.
+- **Pre-existing check failures (not environment issues):** On the current
+  committed tree, `./gradlew ktlintCheck` and `./gradlew lintDebug` report
+  violations (ktlint style nits plus `NewApi` lint errors with no lint baseline).
+  CI is `workflow_dispatch`-only, so these were not gated. They reproduce
+  identically in CI; do not treat them as a broken environment.
+- **Flaky unit tests:** A handful of coroutine-timing tests are non-deterministic
+  across runs (e.g. some `SessionChatViewModelTest` and `ConnectionProfileStoreTest`
+  cases) because background work runs off the test scheduler. Re-run the task or
+  run the class in isolation. `shared/markdown-core` tests and the core
+  `domain.*` / `MainScreenViewModelTest` suites are deterministic and pass.
+- **Test result paths:** `shared/markdown-core` is a separate Gradle module
+  rooted at `/workspace/shared/markdown-core` (not under `android/`); its reports
+  live there, not under `android/`.
