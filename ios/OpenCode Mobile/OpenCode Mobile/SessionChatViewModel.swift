@@ -196,18 +196,12 @@ final class SessionChatViewModel {
 
         do {
             async let modelsLoad = modelRepository.listModelOptions(directory: worktree)
-            if isObservingMessages {
-                if let catalog = try? await modelsLoad {
-                    applyModelCatalog(catalog, messages: [])
-                }
-            } else {
-                let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
-                if let catalog = try? await modelsLoad {
-                    applyModelCatalog(catalog, messages: messages)
-                }
-                transformTask?.cancel()
-                await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
+            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+            if let catalog = try? await modelsLoad {
+                applyModelCatalog(catalog, messages: messages)
             }
+            transformTask?.cancel()
+            await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             await refreshSessionStatus()
         } catch {
             applyError(error, sessionID: sessionID)

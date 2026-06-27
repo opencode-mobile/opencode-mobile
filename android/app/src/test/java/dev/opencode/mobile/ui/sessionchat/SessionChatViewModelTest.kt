@@ -614,7 +614,7 @@ class SessionChatViewModelTest {
                 RenderedMarkdownMapper(highlighter).apply {
                     computationDispatcher = markdownDispatcher
                 },
-        )
+        ).apply { ioDispatcher = testDispatcher }
     }
 
     private fun longMarkdownHistory(): List<Message> =

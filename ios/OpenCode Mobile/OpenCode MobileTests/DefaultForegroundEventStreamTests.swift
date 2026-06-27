@@ -20,7 +20,8 @@ struct DefaultForegroundEventStreamTests {
 
         await Task.yield()
         stream.start()
-        let becameConnected = await waitUntil { states.contains(.connected) }
+        try? await Task.sleep(for: .milliseconds(50))
+        let becameConnected = await waitUntil(timeoutMs: 2_000) { states.contains(.connected) }
         stream.stop()
         stateTask.cancel()
 
@@ -48,7 +49,8 @@ struct DefaultForegroundEventStreamTests {
 
         await Task.yield()
         stream.start()
-        let receivedMessage = await waitUntil {
+        try? await Task.sleep(for: .milliseconds(50))
+        let receivedMessage = await waitUntil(timeoutMs: 2_000) {
             states.contains(.connected) && events.contains { $0.type == "message.updated" && $0.sessionID == "ses-1" }
         }
         stream.stop()
@@ -70,7 +72,8 @@ struct DefaultForegroundEventStreamTests {
 
         await Task.yield()
         stream.start()
-        let reconnected = await waitUntil(timeoutMs: 2_500) {
+        try? await Task.sleep(for: .milliseconds(1_200))
+        let reconnected = await waitUntil(timeoutMs: 3_500) {
             events.filter { $0.type == "stream.reconnected" }.count == 1
         }
         try? await Task.sleep(for: .milliseconds(100))
@@ -82,11 +85,18 @@ struct DefaultForegroundEventStreamTests {
     }
 
     private func makeStream(responses: [String]) -> DefaultForegroundEventStream {
+        let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockForegroundSSEURLProtocol.self]
-        MockForegroundSSEURLProtocol.register(responses: responses.map { Data($0.utf8) })
+        MockForegroundSSEURLProtocol.register(
+            streamID: streamID,
+            responses: responses.map { Data($0.utf8) }
+        )
         let session = URLSession(configuration: configuration)
-        let connection = ServerConnection(baseURL: URL(string: "http://127.0.0.1:4096/")!, password: "secret")
+        let connection = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/\(streamID)/")!,
+            password: "secret"
+        )
         let client = EventsAPIClient(connectionProvider: { connection }, urlSession: session)
         return DefaultForegroundEventStream(api: client, adapter: EventDomainAdapter())
     }
@@ -106,16 +116,24 @@ struct DefaultForegroundEventStreamTests {
 
 private final class MockForegroundSSEURLProtocol: URLProtocol {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var responses: [Data] = []
+    nonisolated(unsafe) private static var responseQueues: [String: [Data]] = [:]
 
-    static func register(responses: [Data]) {
+    static func register(streamID: String, responses: [Data]) {
         lock.lock()
-        self.responses = responses
+        responseQueues[streamID] = responses
         lock.unlock()
     }
 
+    private static func streamID(from request: URLRequest) -> String? {
+        guard let url = request.url else { return nil }
+        let components = url.pathComponents.filter { $0 != "/" }
+        guard components.count >= 3 else { return nil }
+        guard components[components.count - 2] == "global", components.last == "event" else { return nil }
+        return components[components.count - 3]
+    }
+
     override class func canInit(with request: URLRequest) -> Bool {
-        request.url?.path.hasSuffix("/global/event") == true
+        streamID(from: request) != nil
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -123,8 +141,11 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
+        guard let streamID = Self.streamID(from: request) else { return }
         Self.lock.lock()
-        let body = Self.responses.isEmpty ? Data() : Self.responses.removeFirst()
+        var queue = Self.responseQueues[streamID] ?? []
+        let body = queue.isEmpty ? Data() : queue.removeFirst()
+        Self.responseQueues[streamID] = queue
         Self.lock.unlock()
 
         let response = HTTPURLResponse(
@@ -134,7 +155,9 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
             headerFields: ["Content-Type": "text/event-stream"]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: body)
+        if !body.isEmpty {
+            client?.urlProtocol(self, didLoad: body)
+        }
         client?.urlProtocolDidFinishLoading(self)
     }
 

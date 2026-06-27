@@ -40,9 +40,7 @@ final class SharedLiveObservation<Value: Sendable> {
     private func startUpstreamIfNeeded() {
         upstreamTask?.cancel()
         upstreamTask = makeUpstream { [weak self] value in
-            Task { @MainActor in
-                self?.publish(value)
-            }
+            self?.publish(value)
         }
     }
 

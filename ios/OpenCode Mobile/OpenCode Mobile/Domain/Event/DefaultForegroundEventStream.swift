@@ -49,7 +49,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         OpenCodeLog.sse.info("foreground SSE stream starting")
         let api = api
         let adapter = adapter
-        streamTask = Task.detached(priority: .utility) { [weak self] in
+        streamTask = Task { @MainActor [weak self] in
             await self?.runStreamLoop(api: api, adapter: adapter)
         }
     }
