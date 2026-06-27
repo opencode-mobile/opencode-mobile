@@ -24,7 +24,7 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 ## Lifecycle
 
-- **App foreground:** Android `ProcessLifecycleOwner` start/stop; iOS `scenePhase` `.active` / `.background` on root `ContentView`.
+- **App foreground:** Android `ProcessLifecycleOwner` start/stop; iOS `scenePhase` `.active` / `.background` on `AppRootView`.
 - **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back.
 
 ## Heartbeats

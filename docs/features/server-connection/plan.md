@@ -70,5 +70,5 @@ connection before saving, and return to edit server details when needed.
 
 ## Platform Entry Points
 
-- iOS: root gate in `ContentView`; setup sheet from onboarding and home.
+- iOS: root gate in `AppRootView`; setup sheet from onboarding and home.
 - Android: root gate in `MainNavigation`; setup sheet from onboarding and home.
