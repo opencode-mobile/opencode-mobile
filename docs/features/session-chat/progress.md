@@ -25,7 +25,8 @@
 
 ## Android
 
-- Added session-chat navigation key and destination.
+- Session Chat Screen Model exposes composite `SessionChatUiState` with regional
+  `SessionChatTimelineState` for the message list.
 - Wired session row tap from `MainScreen` to Session Chat route.
 - Added Session Chat scaffold with local message list and composer send behavior.
 - Replaced the standalone Session ID row with the 36 dp status bar.
@@ -38,7 +39,8 @@
 
 ## iOS
 
-- Added Session Chat destination view.
+- Session Chat Screen Model exposes composite `SessionChatUiState` with regional
+  `SessionChatTimelineState` for the message list.
 - Wired `ProjectListHomeView` session rows with `Button` plus
   `navigationDestination(item:)` so **`List` does not show disclosure chevrons**
   (SwiftUI adds chevrons for `NavigationLink` rows by default).

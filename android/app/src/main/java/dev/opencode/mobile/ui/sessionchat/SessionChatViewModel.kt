@@ -147,7 +147,7 @@ class SessionChatViewModel
             viewModelScope.launch {
                 if (!isCurrentBinding(sessionId, worktree)) return@launch
                 logI("loadMessages start session=$sessionId worktree=$worktree")
-                _uiState.update { it.copy(timeline = TimelineState.Loading, errorMessage = null) }
+                _uiState.update { it.copy(timeline = SessionChatTimelineState.Loading, errorMessage = null) }
                 runCatching {
                     val messages =
                         withContext(ioDispatcher) {
@@ -218,19 +218,19 @@ class SessionChatViewModel
         }
 
         fun updateComposerText(text: String) {
-            _uiState.update { it.copy(composerText = text) }
+            updateComposer { it.copy(text = text) }
         }
 
         fun selectModel(model: String) {
-            val option = _uiState.value.modelOptions.firstOrNull { it.id == model } ?: return
+            val option = _uiState.value.composer.modelOptions.firstOrNull { it.id == model } ?: return
             selectModel(option)
         }
 
         fun selectModel(option: ModelSelectionOption) {
-            _uiState.update { state ->
-                val previousVariant = state.selectedVariant
+            updateComposer { composer ->
+                val previousVariant = composer.selectedVariant
                 val variant = previousVariant?.takeIf { it in option.variants }
-                state.copy(
+                composer.copy(
                     selectedModel = ModelSelection(option, variant),
                     selectedVariant = variant,
                     modelNotice = null,
@@ -240,21 +240,21 @@ class SessionChatViewModel
 
         fun selectMode(mode: String) {
             if (mode in AvailableModes) {
-                _uiState.update { it.copy(selectedMode = mode) }
+                updateComposer { it.copy(selectedMode = mode) }
             }
         }
 
         fun selectVariant(variant: String) {
-            _uiState.update { state ->
+            updateComposer { composer ->
                 if (variant == ModelSelection.DefaultVariantLabel) {
-                    return@update state.copy(
-                        selectedModel = state.selectedModel?.copy(selectedVariant = null),
+                    return@updateComposer composer.copy(
+                        selectedModel = composer.selectedModel?.copy(selectedVariant = null),
                         selectedVariant = null,
                     )
                 }
-                val selectedModel = state.selectedModel ?: return@update state
-                if (variant !in selectedModel.option.variants) return@update state
-                state.copy(
+                val selectedModel = composer.selectedModel ?: return@updateComposer composer
+                if (variant !in selectedModel.option.variants) return@updateComposer composer
+                composer.copy(
                     selectedModel = selectedModel.copy(selectedVariant = variant),
                     selectedVariant = variant,
                 )
@@ -262,14 +262,15 @@ class SessionChatViewModel
         }
 
         fun restoreComposerText(text: String) {
-            _uiState.update { it.copy(composerText = text) }
+            updateComposer { it.copy(text = text) }
         }
 
         fun sendPrompt() {
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
-            val prompt = _uiState.value.composerText.trim()
-            val selectedModel = _uiState.value.selectedModel ?: return
+            val composer = _uiState.value.composer
+            val prompt = composer.text.trim()
+            val selectedModel = composer.selectedModel ?: return
             if (prompt.isEmpty() || _uiState.value.isSending) return
 
             viewModelScope.launch {
@@ -290,11 +291,11 @@ class SessionChatViewModel
                     )
                 _uiState.update {
                     it.copy(
-                        composerText = "",
+                        composer = composer.copy(text = ""),
                         isSending = true,
                         errorMessage = null,
                         messages = it.messages + enriched,
-                        timeline = TimelineState.Ready,
+                        timeline = SessionChatTimelineState.Ready,
                     )
                 }
                 try {
@@ -304,7 +305,7 @@ class SessionChatViewModel
                             PromptSendOptions(
                                 text = prompt,
                                 model = PromptModelSelection(selectedModel.option.providerId, selectedModel.option.modelId),
-                                variant = _uiState.value.selectedVariant,
+                                variant = composer.selectedVariant,
                             ),
                         directory = worktree,
                     )
@@ -419,12 +420,12 @@ class SessionChatViewModel
                     if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
                     val timeline =
                         when {
-                            enriched.isEmpty() -> TimelineState.Empty
-                            else -> TimelineState.Ready
+                            enriched.isEmpty() -> SessionChatTimelineState.Empty
+                            else -> SessionChatTimelineState.Ready
                         }
                     val resolvedTimeline =
-                        if (fromQuietRefresh && stateSnapshot.timeline == TimelineState.Error && enriched.isEmpty()) {
-                            TimelineState.Error
+                        if (fromQuietRefresh && stateSnapshot.timeline == SessionChatTimelineState.Error && enriched.isEmpty()) {
+                            SessionChatTimelineState.Error
                         } else {
                             timeline
                         }
@@ -438,10 +439,15 @@ class SessionChatViewModel
                             messages = enriched,
                             isSending = if (fromQuietRefresh) state.isSending else false,
                             isRefreshing = isRefreshing,
-                            contextUsageFraction = contextUsageFraction(enriched, state.modelOptions, state.selectedModel),
+                            contextUsageFraction =
+                                contextUsageFraction(
+                                    enriched,
+                                    state.composer.modelOptions,
+                                    state.composer.selectedModel,
+                                ),
                             errorMessage =
                                 if (fromQuietRefresh) {
-                                    if (enriched.isNotEmpty() && state.timeline == TimelineState.Error) {
+                                    if (enriched.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
                                         null
                                     } else {
                                         state.errorMessage
@@ -495,7 +501,7 @@ class SessionChatViewModel
         private fun applyLoadError(throwable: Throwable) {
             _uiState.update {
                 it.copy(
-                    timeline = TimelineState.Error,
+                    timeline = SessionChatTimelineState.Error,
                     messages = emptyList(),
                     isSending = false,
                     errorMessage = errorMessage(throwable),
@@ -564,13 +570,17 @@ class SessionChatViewModel
         }
 
         private fun composerMetadataLabel(): String {
-            val state = _uiState.value
+            val composer = _uiState.value.composer
             return listOfNotNull(
-                state.selectedMode,
-                state.selectedModel?.modelLabel,
-                state.selectedVariant,
+                composer.selectedMode,
+                composer.selectedModel?.modelLabel,
+                composer.selectedVariant,
                 formatSentTime(System.currentTimeMillis()),
             ).joinToString(" · ")
+        }
+
+        private fun updateComposer(transform: (SessionChatComposerState) -> SessionChatComposerState) {
+            _uiState.update { it.copy(composer = transform(it.composer)) }
         }
 
         private fun applyModelCatalog(
@@ -584,27 +594,35 @@ class SessionChatViewModel
                         .sortedWith(compareByDescending<Message> { it.sentAtEpochMs ?: Long.MIN_VALUE }.thenByDescending { it.id })
                         .firstOrNull { it.modelProviderId != null && it.modelId != null }
                 val currentOption =
-                    state.selectedModel?.let { catalog.option(it.option.providerId, it.option.modelId) }
+                    state.composer.selectedModel?.let { catalog.option(it.option.providerId, it.option.modelId) }
                 val desired =
                     currentOption ?: latestModelMessage?.let { message ->
                         catalog.option(message.modelProviderId.orEmpty(), message.modelId.orEmpty())
                     }
                 val fallback = desired ?: catalog.serverDefault ?: catalog.options.first()
                 val notice =
-                    if (state.selectedModel != null &&
-                        catalog.option(state.selectedModel.option.providerId, state.selectedModel.option.modelId) == null
+                    if (state.composer.selectedModel != null &&
+                        catalog.option(
+                            state.composer.selectedModel.option.providerId,
+                            state.composer.selectedModel.option.modelId,
+                        ) == null
                     ) {
                         "Selected model is unavailable. Using ${fallback.modelLabel}."
                     } else {
                         null
                     }
-                val variant = resolvedVariant(state.selectedVariant ?: latestModelMessage?.variant, fallback)
+                val variant = resolvedVariant(state.composer.selectedVariant ?: latestModelMessage?.variant, fallback)
+                val selectedModel = ModelSelection(fallback, variant)
+                val composer =
+                    state.composer.copy(
+                        modelOptions = catalog.options,
+                        selectedModel = selectedModel,
+                        selectedVariant = variant,
+                        modelNotice = notice,
+                    )
                 state.copy(
-                    modelOptions = catalog.options,
-                    selectedModel = ModelSelection(fallback, variant),
-                    selectedVariant = variant,
-                    modelNotice = notice,
-                    contextUsageFraction = contextUsageFraction(state.messages, catalog.options, ModelSelection(fallback, variant)),
+                    composer = composer,
+                    contextUsageFraction = contextUsageFraction(state.messages, catalog.options, selectedModel),
                 )
             }
         }
@@ -650,17 +668,33 @@ class SessionChatViewModel
         }
     }
 
+data class SessionChatComposerState(
+    val text: String = "",
+    val selectedModel: ModelSelection? = null,
+    val modelOptions: List<ModelSelectionOption> = emptyList(),
+    val selectedMode: String = SessionChatViewModel.AvailableModes.first(),
+    val selectedVariant: String? = null,
+    val modelNotice: String? = null,
+) {
+    val selectedModelLabel: String
+        get() = selectedModel?.modelLabel ?: "Model"
+
+    val selectedVariantLabel: String
+        get() = selectedVariant ?: ModelSelection.DefaultVariantLabel
+
+    val variantOptions: List<String>
+        get() = listOf(ModelSelection.DefaultVariantLabel) + selectedModel?.option?.variants.orEmpty()
+
+    val canSelectVariant: Boolean
+        get() = selectedModel?.option?.supportsVariants == true
+}
+
 data class SessionChatUiState(
     val sessionId: String,
     val sessionTitle: String,
-    val timeline: TimelineState,
-    val messages: List<SessionChatMessageItem>,
-    val composerText: String,
-    val selectedModel: ModelSelection?,
-    val modelOptions: List<ModelSelectionOption>,
-    val selectedMode: String,
-    val selectedVariant: String?,
-    val modelNotice: String?,
+    val timeline: SessionChatTimelineState,
+    val messages: List<SessionChatMessageItem> = emptyList(),
+    val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
     val isRefreshing: Boolean = false,
     val isAborting: Boolean = false,
@@ -677,28 +711,9 @@ data class SessionChatUiState(
             SessionChatUiState(
                 sessionId = sessionId,
                 sessionTitle = sessionTitle,
-                timeline = TimelineState.Loading,
-                messages = emptyList(),
-                composerText = "",
-                selectedModel = null,
-                modelOptions = emptyList(),
-                selectedMode = SessionChatViewModel.AvailableModes.first(),
-                selectedVariant = null,
-                modelNotice = null,
+                timeline = SessionChatTimelineState.Loading,
             )
     }
-
-    val selectedModelLabel: String
-        get() = selectedModel?.modelLabel ?: "Model"
-
-    val selectedVariantLabel: String
-        get() = selectedVariant ?: ModelSelection.DefaultVariantLabel
-
-    val variantOptions: List<String>
-        get() = listOf(ModelSelection.DefaultVariantLabel) + selectedModel?.option?.variants.orEmpty()
-
-    val canSelectVariant: Boolean
-        get() = selectedModel?.option?.supportsVariants == true
 }
 
 enum class SessionConnectionStatus(
@@ -720,7 +735,7 @@ fun EventStreamConnectionState.toSessionConnectionStatus(): SessionConnectionSta
         -> SessionConnectionStatus.Offline
     }
 
-enum class TimelineState {
+enum class SessionChatTimelineState {
     Loading,
     Empty,
     Ready,

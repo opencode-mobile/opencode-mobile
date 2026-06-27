@@ -102,6 +102,37 @@ On iOS, use SwiftUI-native patterns such as Observation and MainActor async
 tasks where they fit. On Android, use ViewModel with StateFlow and coroutines.
 The framework details differ, but the conceptual contract should remain aligned.
 
+### Screen Model state shape
+
+Expose one composite snapshot per screen. Name the root value `FeatureUiState`
+on both platforms.
+
+Default shape:
+
+- **Composite root** — a struct or data class holding every field the view reads.
+  Do not split live metadata across extra ViewModel properties.
+- **Regional enums** — small enums for one UI region whose modes are mutually
+  exclusive, such as `SessionChatTimelineState` for the message list area.
+- **Nested sub-states or flat fields** — either is fine inside the root. Group
+  related fields when a cluster will grow; keep simple scalars flat.
+- **Orthogonal flags** — connection status, send/refresh/abort activity, and
+  non-blocking errors stay separate fields instead of new root enum cases.
+
+Reserve a top-level sealed interface or enum for screens whose layouts are
+genuinely disjoint end to end, such as home `Disconnected` vs `Loaded`. Even
+then, keep one rich loaded shape rather than many shallow cases.
+
+When extending a screen:
+
+1. Add a field with a safe default when layout is unchanged.
+2. Add a nested sub-state when grouping several related fields.
+3. Add a regional enum case only when that region's UI is mutually exclusive.
+4. Split to a new screen when the work is a different user task.
+
+Avoid root screen-phase enums when persistent chrome stays visible while only
+one region changes. Avoid helper sprawl such as `isSendingFromCurrentState()`;
+that usually means the root should be composite.
+
 ## Design System Dependency
 
 Screens compose the shared Component Collection. If a feature needs a new

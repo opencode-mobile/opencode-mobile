@@ -1,5 +1,17 @@
 # Session Chat Decisions
 
+## Composite Session Chat UiState
+
+- Date: 2026-06-27
+- Decision: Session Chat Screen Models expose one composite `SessionChatUiState`
+  snapshot with a regional `SessionChatTimelineState` enum for the message list and
+  nested `SessionChatComposerState` for prompt controls on both platforms.
+- Reason: the chat shell stays visible while the timeline and live metadata
+  change independently. A root screen-phase enum duplicated identity fields and
+  forced enum-case helpers for routine updates.
+- Revisit when: another session-scoped screen needs a shared timeline-state
+  primitive in the design-system docs.
+
 ## Start with local Screen Model scaffold
 
 - Date: 2026-05-07

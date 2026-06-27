@@ -10,7 +10,7 @@
 ## Move-only refactor first
 
 - Phase 1 is filesystem + Xcode reference moves with no logic changes.
-- Optional file splits (e.g. extracting `SessionChatScreenState` from
+- Optional file splits (e.g. extracting `SessionChatUiState` from
   `SessionChatViewModel.swift`) are follow-ups inside the new folders.
 
 ## Single app target

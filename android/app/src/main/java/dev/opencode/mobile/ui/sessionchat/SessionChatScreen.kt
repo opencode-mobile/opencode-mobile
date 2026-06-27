@@ -132,7 +132,7 @@ fun SessionChatScreen(
                 )
             }
 
-            uiState.modelNotice?.let { notice ->
+            uiState.composer.modelNotice?.let { notice ->
                 Text(
                     text = notice,
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
@@ -151,14 +151,14 @@ fun SessionChatScreen(
             }
 
             when (uiState.timeline) {
-                TimelineState.Loading ->
+                SessionChatTimelineState.Loading ->
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator()
                     }
-                TimelineState.Error ->
+                SessionChatTimelineState.Error ->
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
                         contentAlignment = Alignment.Center,
@@ -169,7 +169,7 @@ fun SessionChatScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                TimelineState.Empty ->
+                SessionChatTimelineState.Empty ->
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
                         contentAlignment = Alignment.Center,
@@ -180,7 +180,7 @@ fun SessionChatScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                TimelineState.Ready -> {
+                SessionChatTimelineState.Ready -> {
                     val listState = rememberLazyListState()
                     var lastScrolledMessageId by remember(uiState.sessionId) { mutableStateOf<String?>(null) }
                     var followingLatest by remember(uiState.sessionId) { mutableStateOf(true) }
@@ -280,17 +280,17 @@ fun SessionChatScreen(
             }
 
             SessionComposer(
-                composerText = uiState.composerText,
-                selectedModel = uiState.selectedModelLabel,
-                selectedMode = uiState.selectedMode,
-                selectedVariant = uiState.selectedVariantLabel,
-                showVariant = uiState.canSelectVariant,
-                sendEnabled = uiState.composerText.isNotBlank() && uiState.selectedModel != null && !uiState.isSending,
+                composerText = uiState.composer.text,
+                selectedModel = uiState.composer.selectedModelLabel,
+                selectedMode = uiState.composer.selectedMode,
+                selectedVariant = uiState.composer.selectedVariantLabel,
+                showVariant = uiState.composer.canSelectVariant,
+                sendEnabled = uiState.composer.text.isNotBlank() && uiState.composer.selectedModel != null && !uiState.isSending,
                 showStop = uiState.sessionStatusLabel != null,
                 stopEnabled = !uiState.isAborting,
                 onTextChange = viewModel::updateComposerText,
                 onModelClick = {
-                    activeModelProviderId = uiState.selectedModel?.option?.providerId
+                    activeModelProviderId = uiState.composer.selectedModel?.option?.providerId
                     activePicker = ComposerPickerKind.Model
                 },
                 onModeClick = { activePicker = ComposerPickerKind.Mode },
@@ -302,8 +302,8 @@ fun SessionChatScreen(
         }
 
         val modelCatalog =
-            remember(uiState.modelOptions) {
-                ModelSelectionCatalog(options = uiState.modelOptions, serverDefault = null)
+            remember(uiState.composer.modelOptions) {
+                ModelSelectionCatalog(options = uiState.composer.modelOptions, serverDefault = null)
             }
         val activeModelProvider = modelCatalog.providers.firstOrNull { it.id == activeModelProviderId }
         val modelSheetTitle =
@@ -354,7 +354,7 @@ fun SessionChatScreen(
                     ModelPickerSheetContent(
                         providers = modelCatalog.providers,
                         activeProvider = activeModelProvider,
-                        selectedModel = uiState.selectedModel?.option,
+                        selectedModel = uiState.composer.selectedModel?.option,
                         filterText = modelFilterText,
                         onSelectProvider = { provider ->
                             activeModelProviderId = provider.id
@@ -372,7 +372,7 @@ fun SessionChatScreen(
                         OpenCodeBottomSheetEntry(
                             title = mode,
                             endDecorator =
-                                if (mode == uiState.selectedMode) {
+                                if (mode == uiState.composer.selectedMode) {
                                     BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                                 } else {
                                     BottomSheetEntryDecorator.None
@@ -384,11 +384,11 @@ fun SessionChatScreen(
                         )
                     }
                 ComposerPickerKind.Variant ->
-                    uiState.variantOptions.forEach { variant ->
+                    uiState.composer.variantOptions.forEach { variant ->
                         OpenCodeBottomSheetEntry(
                             title = variant,
                             endDecorator =
-                                if (variant == uiState.selectedVariantLabel) {
+                                if (variant == uiState.composer.selectedVariantLabel) {
                                     BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
                                 } else {
                                     BottomSheetEntryDecorator.None
