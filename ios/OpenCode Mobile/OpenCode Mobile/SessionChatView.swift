@@ -158,14 +158,6 @@ struct SessionChatView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 0) {
-                                if viewModel.hasOlderHistory {
-                                    Button("Load earlier messages") {
-                                        Task { await viewModel.loadOlderHistory() }
-                                    }
-                                    .font(OpenCodeTypography.bodySecondary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                }
                                 ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                     HStack {
                                         if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {

@@ -61,8 +61,7 @@
 - Date: 2026-06-24
 - Decision: do not publish unstyled raw Markdown merely to shorten the loading
   indicator. Instead, retain native syntax styling and investigate staged
-  rendering at the document/block level: a responsive shell, a fully styled
-  visible window, and progressive older-history hydration.
+  rendering at the document/block level.
 - Reason: Big Session profiling shows history retrieval is fast while KMP
   markdown document preparation (TextMate tokenization of fenced code blocks)
   is expensive. See `docs/features/native-rendered-markdown/progress.md`
@@ -72,8 +71,23 @@
 - Measurement: use app-emitted benchmark probes for history request, Markdown
   preparation, and styled-timeline publication; XCTest accessibility waits are
   not reliable while the renderer is busy.
+- Superseded: the 2026-06-24 iOS-only **Load earlier messages** window
+  (`initialHistoryWindowSize = 3`) was removed on 2026-06-27. Session Chat on
+  both platforms now enriches the full merged timeline on load; performance work
+  continues one optimization at a time (JSON bridge, virtualization, etc.).
 - Revisit when: code-block virtualization has been benchmarked against Big
   Session and a representative deterministic fixture is available for CI.
+
+## Enrich full session history on load (Android parity)
+
+- Date: 2026-06-27
+- Decision: iOS Session Chat enriches the full merged timeline on load, matching
+  Android. Do not gate older messages behind manual hydration.
+- Reason: staged hydration improved cold-open time but diverged product behavior
+  and hid history behind an extra action. Optimize performance without splitting
+  the visible timeline.
+- Revisit when: a shared virtualization or block-collapse strategy ships on both
+  platforms with benchmark evidence.
 
 ## Derive context usage from best available data
 

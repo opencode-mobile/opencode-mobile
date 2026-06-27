@@ -59,12 +59,7 @@
   Highlighting uses `OpenCodeLibOnigRegexBackend` (libonig). Historical
   benchmark on the hybrid backend: 20-message / 3,000-line fixture
   `parser-bridge-ms=958` vs Android `parser-ms=77`. Re-profile after libonig.
-  Session Chat enriches only the initial visible window
-  (`initialHistoryWindowSize = 3`) before first publish.
-- Current Android state: `RenderedMarkdownMapper` calls
-  `OpenCodeMarkdownParser.parse()` directly with
-  `OpenCodeBundledJoniMarkdownHighlighter` (Joni/Oniguruma). Session Chat
-  enriches the full merged timeline on load.
+  Session Chat enriches the full merged timeline on load on both platforms.
 - Reason: the shared hot path is KMP TextMate tokenization inside
   `parseFence()`. iOS still pays extra for the JSON bridge; the regex backend
   gap is closed. Kotlin/Native vs JVM runtime differences add a smaller third

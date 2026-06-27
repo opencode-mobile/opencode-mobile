@@ -95,10 +95,9 @@
   `OpenCodeTextMateNativeTokenizer.tokenize()`. Block structure parsing,
   inline parsing, and `OpenCodeMarkdownDetector.shouldRender()` are cheap
   (`detector-ms=0` on the deterministic 20-message / 3,000-line fixture).
-- iOS enriches only the initial visible window (`initialHistoryWindowSize = 3`)
-  before first publish; Android enriches the full merged timeline. A single
-  large fenced code block inside that window can still dominate cold open on
-  both platforms.
+- iOS and Android both enrich the full merged timeline on load. A single large
+  fenced code block inside the timeline can still dominate cold open on both
+  platforms.
 - Warm revisits are fast because the in-memory render-document cache is keyed
   by message text. Cold opening remains the active problem.
 - Experiments tried:

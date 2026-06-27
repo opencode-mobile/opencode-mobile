@@ -56,8 +56,7 @@
      Android calls `OpenCodeMarkdownParser.parse()` directly.
   3. **Runtime (tertiary):** KMP runs on JVM/ART on Android and as a
      Kotlin/Native framework on iOS.
-- Enrichment scope: iOS parses the initial history window only
-  (`initialHistoryWindowSize = 3`); Android parses the full timeline on load.
+- Enrichment scope: iOS and Android parse the full timeline on load.
   See `docs/features/native-rendered-markdown/parity-gaps.md`.
 
 ## Completed
