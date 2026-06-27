@@ -16,7 +16,7 @@ private val appleMarkdownHighlighter: OpenCodeCodeHighlighter by lazy {
 
         OpenCodeSyntaxHighlighter(
             grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeOnigurumaRegexBackend),
+            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend),
         )
 }
 

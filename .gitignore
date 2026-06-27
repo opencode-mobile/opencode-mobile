@@ -66,3 +66,8 @@ icons/cache/
 # Theme research
 research/
 research/
+
+# markdown-core native Oniguruma build artifacts
+shared/markdown-core/native/build/
+shared/markdown-core/native/libs/
+shared/markdown-core/native/oniguruma-src/

@@ -32,6 +32,24 @@
   parsing ownership, loading order, or the bridge would be a broader display
   architecture rewrite without a measured need.
 - Date: 2026-06-22.
+- Revisit when: Big Session and fixture benchmarks show the dominant cost is KMP
+  TextMate tokenization in `parseFence()`, with iOS further penalized by the
+  hybrid regex backend and JSON bridge. Profiling synthesis (2026-06-26)
+  identifies those as the primary iOS/Android gap, not block parsing or native
+  UI layout. Reconsider preserving the JSON boundary and deferring an iOS
+  Oniguruma backend once code-block virtualization has been benchmarked.
+
+## Markdown Parse Hot Path Lives In KMP
+
+- Finding: cold-path markdown preparation time is dominated by
+  `shared/markdown-core`, specifically `parseFence()` →
+  `OpenCodeSyntaxHighlighter.highlight()` →
+  `OpenCodeTextMateNativeTokenizer.tokenize()`. Detector, block structure, and
+  inline parsing are comparatively cheap.
+- Reason: Session Chat and fixture benchmarks isolate history fetch,
+  mapper orchestration, and parser/tokenizer work. Big Session shows ~24 s
+  markdown preparation vs ~0.12 s history fetch.
+- Date: 2026-06-26.
 
 ## iOS Hybrid TextMate Regexes Are Compiled Once Per Pattern
 

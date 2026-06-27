@@ -63,9 +63,12 @@
   indicator. Instead, retain native syntax styling and investigate staged
   rendering at the document/block level: a responsive shell, a fully styled
   visible window, and progressive older-history hydration.
-- Reason: Big Session profiling shows history retrieval is fast while Markdown
-  document preparation is expensive. Raw-first publishing made the app appear
-  loaded but left it unresponsive and visually degraded.
+- Reason: Big Session profiling shows history retrieval is fast while KMP
+  markdown document preparation (TextMate tokenization of fenced code blocks)
+  is expensive. See `docs/features/native-rendered-markdown/progress.md`
+  (Performance Profiling Synthesis) and `parity-gaps.md` (Markdown Parse
+  Performance). Raw-first publishing made the app appear loaded but left it
+  unresponsive and visually degraded.
 - Measurement: use app-emitted benchmark probes for history request, Markdown
   preparation, and styled-timeline publication; XCTest accessibility waits are
   not reliable while the renderer is busy.

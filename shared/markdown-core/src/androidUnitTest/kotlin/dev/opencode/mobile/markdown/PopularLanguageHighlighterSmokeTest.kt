@@ -40,22 +40,11 @@ class PopularLanguageHighlighterSmokeTest {
         }
     }
 
-    private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter {
-        val bundle =
-            OpenCodeTextMateGrammarBundleLoader
-                .loadBundled(
-                    OpenCodeTextMateResourceReader { resourcePath ->
-                        PopularLanguageHighlighterSmokeTest::class.java.classLoader
-                            ?.getResource(resourcePath)
-                            ?.readText()
-                    },
-                ).bundle ?: error("missing bundled TextMate grammar bundle")
-
-        return OpenCodeSyntaxHighlighter(
-            grammarBundle = bundle,
+    private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter =
+        OpenCodeSyntaxHighlighter(
+            grammarBundle = bundledGrammarBundle(),
             textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
         )
-    }
 
     private companion object {
         val popularLanguageFixtureIds =

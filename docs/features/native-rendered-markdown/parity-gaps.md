@@ -8,9 +8,12 @@
   Oniguruma-compatible native backend and Shiki-level breadth.
 - Current iOS state: SwiftUI renderer calls the KMP JSON bridge, which loads
   bundled TextMate grammar resources from the app bundle and tokenizes through
-  the shared TextMate tokenizer with the hybrid `OpenCodeOnigurumaRegexBackend`
-  (`\\G` anchoring on Kotlin `Regex`). It is not Oniguruma-compatible and emits
-  `HighlighterBackendFallback`.
+  the shared TextMate tokenizer with `OpenCodeLibOnigRegexBackend` (libonig via
+  Kotlin/Native cinterop). Production iOS no longer emits
+  `HighlighterBackendFallback` for the regex backend. The hybrid
+  `OpenCodeKotlinRegexHybridTextMateBackend` (Kotlin `Regex` shim; deprecated
+  typealias `OpenCodeOnigurumaRegexBackend`) remains in `commonMain` for
+  regression comparisons only.
 - Current Android state: session chat, component gallery, and the KMP platform
   provider all resolve the same bundled Joni TextMate highlighter through
   `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
@@ -43,6 +46,33 @@
   `@Ignore` from the KMP native-vs-Shiki highlighter comparison test, close
   remaining Java method-signature token gaps, and close remaining JavaScript
   line-state parity gaps.
+
+## Markdown Parse Performance
+
+- Status: temporary
+- Area: performance
+- Shared intent: cold Session Chat open should prepare styled markdown documents
+  in roughly interactive time, including large syntax-highlighted code blocks.
+- Current iOS state: `RenderedMarkdownMapper.enrichRows()` calls
+  `OpenCodeRenderedMarkdownParser`, which round-trips through
+  `OpenCodeMarkdownJson.parseMarkdownJson` before Swift decodes the render tree.
+  Highlighting uses `OpenCodeLibOnigRegexBackend` (libonig). Historical
+  benchmark on the hybrid backend: 20-message / 3,000-line fixture
+  `parser-bridge-ms=958` vs Android `parser-ms=77`. Re-profile after libonig.
+  Session Chat enriches only the initial visible window
+  (`initialHistoryWindowSize = 3`) before first publish.
+- Current Android state: `RenderedMarkdownMapper` calls
+  `OpenCodeMarkdownParser.parse()` directly with
+  `OpenCodeBundledJoniMarkdownHighlighter` (Joni/Oniguruma). Session Chat
+  enriches the full merged timeline on load.
+- Reason: the shared hot path is KMP TextMate tokenization inside
+  `parseFence()`. iOS still pays extra for the JSON bridge; the regex backend
+  gap is closed. Kotlin/Native vs JVM runtime differences add a smaller third
+  factor. Big Session profiling showed markdown preparation (~24 s) dominated
+  history fetch (~0.12 s) before libonig; re-profile on device after this change.
+- Owner or next action: benchmark bypassing or slimming the JSON bridge;
+  virtualize or collapse large code blocks on first frame. See
+  `docs/features/session-chat/progress.md`.
 
 ## Code Block Layout
 

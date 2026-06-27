@@ -21,14 +21,4 @@ class HttpClientPrivateFieldHighlighterDiagnosticTest {
             label = "kotlin-regex",
         )
     }
-
-    private fun bundledGrammarBundle(): TextMateGrammarBundle =
-        OpenCodeTextMateGrammarBundleLoader
-            .loadBundled(
-                OpenCodeTextMateResourceReader { resourcePath ->
-                    HttpClientPrivateFieldHighlighterDiagnosticTest::class.java.classLoader
-                        ?.getResource(resourcePath)
-                        ?.readText()
-                },
-            ).bundle ?: error("missing bundled TextMate grammar bundle")
 }

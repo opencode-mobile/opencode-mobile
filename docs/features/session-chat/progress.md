@@ -86,7 +86,19 @@
 
 - Finding: the full-history request took **0.118 s**; Markdown preparation for
   the initial visible window took **24.221 s**. The cold-path bottleneck is
-  native Markdown document preparation/layout, not server history retrieval.
+  KMP markdown document preparation in `shared/markdown-core`, not server
+  history retrieval or SwiftUI layout.
+- Hot path (all in `shared/markdown-core`):
+  `SessionChatViewModel` → `RenderedMarkdownMapper.enrichRows()` →
+  `OpenCodeMarkdownParser.parse()` → `parseFence()` →
+  `OpenCodeSyntaxHighlighter.highlight()` →
+  `OpenCodeTextMateNativeTokenizer.tokenize()`. Block structure parsing,
+  inline parsing, and `OpenCodeMarkdownDetector.shouldRender()` are cheap
+  (`detector-ms=0` on the deterministic 20-message / 3,000-line fixture).
+- iOS enriches only the initial visible window (`initialHistoryWindowSize = 3`)
+  before first publish; Android enriches the full merged timeline. A single
+  large fenced code block inside that window can still dominate cold open on
+  both platforms.
 - Warm revisits are fast because the in-memory render-document cache is keyed
   by message text. Cold opening remains the active problem.
 - Experiments tried:
