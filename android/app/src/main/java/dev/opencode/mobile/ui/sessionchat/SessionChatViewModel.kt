@@ -423,7 +423,7 @@ class SessionChatViewModel
                             else -> TimelineState.Ready
                         }
                     val resolvedTimeline =
-                        if (fromQuietRefresh && stateSnapshot.timeline == TimelineState.Error) {
+                        if (fromQuietRefresh && stateSnapshot.timeline == TimelineState.Error && enriched.isEmpty()) {
                             TimelineState.Error
                         } else {
                             timeline
@@ -439,7 +439,16 @@ class SessionChatViewModel
                             isSending = if (fromQuietRefresh) state.isSending else false,
                             isRefreshing = isRefreshing,
                             contextUsageFraction = contextUsageFraction(enriched, state.modelOptions, state.selectedModel),
-                            errorMessage = if (fromQuietRefresh) state.errorMessage else null,
+                            errorMessage =
+                                if (fromQuietRefresh) {
+                                    if (enriched.isNotEmpty() && state.timeline == TimelineState.Error) {
+                                        null
+                                    } else {
+                                        state.errorMessage
+                                    }
+                                } else {
+                                    null
+                                },
                         )
                     }
                 }

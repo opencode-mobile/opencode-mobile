@@ -25,6 +25,19 @@ import oniguruma.onig_region_new
 import oniguruma.onig_search
 import oniguruma.opencode_onig_region_beg_at
 import oniguruma.opencode_onig_region_end_at
+import kotlin.native.concurrent.ThreadLocal
+
+@OptIn(ExperimentalForeignApi::class)
+private sealed class LibOnigRegexCacheEntry {
+    data class Compiled(
+        val regex: CPointer<OnigRegexType>,
+    ) : LibOnigRegexCacheEntry()
+
+    data object Failed : LibOnigRegexCacheEntry()
+}
+
+@ThreadLocal
+private var libOnigRegexCache: MutableMap<String, LibOnigRegexCacheEntry> = mutableMapOf()
 
 @OptIn(ExperimentalForeignApi::class)
 object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
@@ -32,33 +45,23 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
 
     override val isOnigurumaCompatible: Boolean = true
 
-    private sealed class RegexCacheEntry {
-        data class Compiled(
-            val regex: CPointer<OnigRegexType>,
-        ) : RegexCacheEntry()
-
-        data object Failed : RegexCacheEntry()
-    }
-
-    private val regexCache = mutableMapOf<String, RegexCacheEntry>()
-
     private fun cachedRegex(pattern: String): CPointer<OnigRegexType>? {
-        regexCache[pattern]?.let { entry ->
+        libOnigRegexCache[pattern]?.let { entry ->
             return when (entry) {
-                is RegexCacheEntry.Compiled -> entry.regex
-                RegexCacheEntry.Failed -> null
+                is LibOnigRegexCacheEntry.Compiled -> entry.regex
+                LibOnigRegexCacheEntry.Failed -> null
             }
         }
 
         val compiled = compilePattern(pattern)
-        regexCache[pattern] = compiled
+        libOnigRegexCache[pattern] = compiled
         return when (compiled) {
-            is RegexCacheEntry.Compiled -> compiled.regex
-            RegexCacheEntry.Failed -> null
+            is LibOnigRegexCacheEntry.Compiled -> compiled.regex
+            LibOnigRegexCacheEntry.Failed -> null
         }
     }
 
-    private fun compilePattern(pattern: String): RegexCacheEntry {
+    private fun compilePattern(pattern: String): LibOnigRegexCacheEntry {
         val patternBytes = pattern.encodeToByteArray()
         return memScoped {
             val regexOut = alloc<CPointerVar<OnigRegexType>>()
@@ -75,10 +78,10 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
                         errorInfo.ptr,
                     )
                 if (compileResult != 0) {
-                    RegexCacheEntry.Failed
+                    LibOnigRegexCacheEntry.Failed
                 } else {
-                    val compiled = regexOut.value ?: return@withUtf8Range RegexCacheEntry.Failed
-                    RegexCacheEntry.Compiled(compiled)
+                    val compiled = regexOut.value ?: return@withUtf8Range LibOnigRegexCacheEntry.Failed
+                    LibOnigRegexCacheEntry.Compiled(compiled)
                 }
             }
         }

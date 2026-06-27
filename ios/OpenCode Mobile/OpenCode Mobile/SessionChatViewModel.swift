@@ -196,12 +196,34 @@ final class SessionChatViewModel {
 
         do {
             async let modelsLoad = modelRepository.listModelOptions(directory: worktree)
-            let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
-            if let catalog = try? await modelsLoad {
-                applyModelCatalog(catalog, messages: messages)
+            if isObservingMessages {
+                let catalog = try? await modelsLoad
+                var messagesForCatalog = messageLiveStore.cachedMessages(sessionID: sessionID, directory: worktree) ?? []
+                if let catalog {
+                    applyModelCatalog(catalog, messages: messagesForCatalog)
+                }
+                if messagesForCatalog.isEmpty {
+                    do {
+                        _ = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+                        await awaitLiveStoreTimelineResolution()
+                        if let catalog {
+                            messagesForCatalog = messageLiveStore.cachedMessages(sessionID: sessionID, directory: worktree) ?? []
+                            applyModelCatalog(catalog, messages: messagesForCatalog)
+                        }
+                    } catch {
+                        applyError(error, sessionID: sessionID)
+                    }
+                } else if case .loading = state {
+                    await awaitLiveStoreTimelineResolution()
+                }
+            } else {
+                let messages = try await messageRepository.listMessages(sessionID: sessionID, directory: worktree)
+                if let catalog = try? await modelsLoad {
+                    applyModelCatalog(catalog, messages: messages)
+                }
+                transformTask?.cancel()
+                await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             }
-            transformTask?.cancel()
-            await applyLoadedMessagesTransform(messages, sessionID: sessionID, isRefreshing: false)
             await refreshSessionStatus()
         } catch {
             applyError(error, sessionID: sessionID)
@@ -562,6 +584,24 @@ final class SessionChatViewModel {
             message: errorMessage(error),
             composer: state.composer
         )
+    }
+
+    private func awaitLiveStoreTimelineResolution() async {
+        guard case .loading = state else { return }
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if case .loading = state {
+                if let transformTask {
+                    await transformTask.value
+                }
+                if case .loading = state {
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                    continue
+                }
+                return
+            }
+            return
+        }
     }
 
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {

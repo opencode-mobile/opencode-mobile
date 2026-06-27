@@ -168,6 +168,28 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun quietRefresh_recoversFromErrorWhenMessagesArrive() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(shouldFailLoad = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(TimelineState.Error, viewModel.uiState.value.timeline)
+
+            repository.shouldFailLoad = false
+            repository.eventStream.emit(
+                OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"),
+            )
+            advanceTimeBy(301)
+            advanceUntilIdle()
+
+            assertEquals(TimelineState.Ready, viewModel.uiState.value.timeline)
+            assertEquals(1, viewModel.uiState.value.messages.size)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
     fun sendPrompt_success_reloadsMessages() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -676,7 +698,7 @@ private class FakeMessageRepository(
                 text = "Hello",
             ),
         ),
-    private val shouldFailLoad: Boolean = false,
+    var shouldFailLoad: Boolean = false,
     private val shouldFailSend: Boolean = false,
     var failListMessagesAfterSend: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
