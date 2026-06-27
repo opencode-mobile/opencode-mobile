@@ -1,0 +1,6 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "install": "if [ -f package.json ]; then npm install; fi\nif [ -d \"$ANDROID_HOME\" ] && [ -f android/gradlew ]; then printf 'sdk.dir=%s\\n' \"$ANDROID_HOME\" > android/local.properties; fi"
+}

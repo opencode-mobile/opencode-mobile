@@ -175,3 +175,43 @@ them.
   context, and the result of a real trade-off.
 - Do not couple domain language to generated code names unless the server API has
   made that language part of the user-facing model.
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious facts for working in the Cursor Cloud Linux VM. Standard
+build/lint/test commands live in `README.md` and `android/README.md`; this
+section only adds caveats.
+
+- **Environment is code.** `.cursor/environment.json` builds `.cursor/Dockerfile`,
+  which is the source of truth for the dev image (saving a snapshot is a no-op).
+  Change the toolchain by editing the Dockerfile, not by mutating a snapshot. The
+  image preinstalls JDK 17, Node.js 22, and the Android SDK
+  (`platform-tools`, `platforms;android-36`, `build-tools;36.0.0`) at
+  `/opt/android-sdk`, with `JAVA_HOME` / `ANDROID_HOME` / `PATH` baked in. The
+  `install` step runs `npm install` and regenerates gitignored
+  `android/local.properties` from `$ANDROID_HOME`.
+- **Platform reachability.** The VM is Linux, so only the Android app and the
+  Node tooling under `scripts/` are runnable here. The iOS app cannot be built or
+  tested on Linux (it needs macOS + Xcode and runs a Gradle Apple-framework phase
+  against `shared/markdown-core`); use the macOS GitHub Actions workflows for iOS.
+- **No Android emulator.** The VM has no `/dev/kvm` / nested virtualization, so a
+  hardware-accelerated emulator (and therefore `./run-android.sh` and
+  `connectedDebugAndroidTest`) cannot run here. Validate the app via
+  `./gradlew :app:assembleDebug` plus the JVM unit-test suites; the build emits
+  an installable `app/build/outputs/apk/debug/app-debug.apk`.
+- **Toolchain detection.** The project pins `jvmToolchain(17)`; Gradle
+  auto-detects the JDK 17 toolchain, so builds work even when a shell defaults to
+  another JDK.
+- **Pre-existing check failures (not environment issues).** On the current
+  committed tree, `./gradlew ktlintCheck` and `./gradlew lintDebug` report
+  violations (ktlint style nits plus `NewApi` lint errors with no lint baseline).
+  CI is `workflow_dispatch`-only, so these were never gated; they reproduce
+  identically in CI. Do not treat them as a broken environment.
+- **Flaky unit tests.** A few coroutine-timing tests are non-deterministic across
+  runs (e.g. some `SessionChatViewModelTest` and `ConnectionProfileStoreTest`
+  cases) because background work runs off the test scheduler. Re-run the task or
+  run the class in isolation. `shared/markdown-core` and the core `domain.*` /
+  `MainScreenViewModelTest` suites are deterministic and pass.
+- **Module layout.** `shared/markdown-core` is a separate Gradle module rooted at
+  `/workspace/shared/markdown-core` (not under `android/`); its build outputs and
+  test reports live there.
