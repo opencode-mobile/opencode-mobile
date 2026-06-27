@@ -42,7 +42,7 @@ struct ButtonGalleryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Button")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                 HStack(spacing: 8) {
                     ForEach(GalleryButtonVariant.allCases) { variant in
                         OpenCodeChoiceBadge(

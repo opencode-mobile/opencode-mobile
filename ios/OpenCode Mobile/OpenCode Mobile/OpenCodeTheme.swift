@@ -51,47 +51,6 @@ enum OpenCodeColors {
     static var diffAdd: Color { resolve("diff-add") }
     static var diffDelete: Color { resolve("diff-delete") }
 
-    // MARK: - Deprecated old names (mapped to nearest OC-2 equivalent)
-
-    @available(*, deprecated, renamed: "backgroundBase")
-    static var backgroundPrimary: Color { backgroundBase }
-    @available(*, deprecated, message: "Use surfaceRaisedBase instead")
-    static var backgroundSecondary: Color { surfaceRaisedBase }
-    @available(*, deprecated, message: "Use surfaceRaisedBase instead")
-    static var backgroundElevated: Color { surfaceRaisedBase }
-    @available(*, deprecated, renamed: "surfaceBase")
-    static var surfacePrimary: Color { surfaceBase }
-    @available(*, deprecated, renamed: "surfaceRaisedBase")
-    static var surfaceSecondary: Color { surfaceRaisedBase }
-    @available(*, deprecated, message: "Use surfaceBase instead")
-    static var surfaceInset: Color { surfaceBase }
-    @available(*, deprecated, renamed: "textStrong")
-    static var textPrimary: Color { textStrong }
-    @available(*, deprecated, renamed: "textBase")
-    static var textSecondary: Color { textBase }
-    @available(*, deprecated, renamed: "textWeak")
-    static var textTertiary: Color { textWeak }
-    @available(*, deprecated, renamed: "textWeaker")
-    static var textDisabled: Color { textWeaker }
-    @available(*, deprecated, renamed: "textInteractiveBase")
-    static var textInteractive: Color { textInteractiveBase }
-    @available(*, deprecated, renamed: "borderWeakerBase")
-    static var borderSubtle: Color { borderWeakerBase }
-    @available(*, deprecated, renamed: "borderWeakBase")
-    static var borderDefault: Color { borderWeakBase }
-    @available(*, deprecated, renamed: "iconBase")
-    static var iconDefault: Color { iconBase }
-    @available(*, deprecated, renamed: "iconStrongBase")
-    static var iconStrong: Color { iconStrongBase }
-    @available(*, deprecated, renamed: "success")
-    static var statusSuccess: Color { success }
-    @available(*, deprecated, renamed: "warning")
-    static var statusWarning: Color { warning }
-    @available(*, deprecated, renamed: "error")
-    static var statusError: Color { error }
-    @available(*, deprecated, renamed: "info")
-    static var statusInfo: Color { info }
-
     // MARK: - Syntax
 
     static var syntaxComment: Color { resolve("syntax-comment") }

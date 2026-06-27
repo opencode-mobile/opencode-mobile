@@ -28,7 +28,7 @@ struct ProjectListHomeView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .navigationDestination(isPresented: $showSettings) {
             SettingsView(onConnectionSetup: presentConnectionSetup)
         }
@@ -107,7 +107,7 @@ struct ProjectListHomeView: View {
                 .font(OpenCodeTypography.heading)
             Text(message)
                 .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .multilineTextAlignment(.center)
             OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
                 Task { await viewModel.retryProbe() }
@@ -146,7 +146,7 @@ struct ProjectListHomeView: View {
                 .frame(minHeight: proxy.size.height, alignment: .bottom)
             }
         }
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
     }
 
     private var addProjectSheetBinding: Binding<Bool> {
@@ -179,7 +179,7 @@ struct ProjectListHomeView: View {
             List {
                 if candidates.isEmpty {
                     Text("No more projects on this server")
-                        .foregroundStyle(OpenCodeColors.textSecondary)
+                        .foregroundStyle(OpenCodeColors.textBase)
                         .listRowSeparator(.hidden)
                 } else {
                     ForEach(candidates) { candidate in

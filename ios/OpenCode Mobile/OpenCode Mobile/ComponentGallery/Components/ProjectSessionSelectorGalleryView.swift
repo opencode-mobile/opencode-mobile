@@ -12,12 +12,12 @@ struct ProjectSessionSelectorGalleryView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Scenario")
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             segmentedBadges(ProjectSessionSelectorGalleryScenario.allCases, selection: $scenario) { $0.label }
 
             Text("Selected project")
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             projectBadges
 
             ProjectSessionSelector(

@@ -58,13 +58,13 @@ struct OpenCodeListItem<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(OpenCodeTypography.heading)
-                    .foregroundStyle(enabled ? OpenCodeColors.textPrimary : OpenCodeColors.textDisabled)
+                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                     .lineLimit(1)
 
                 if let subtitle {
                     Text(subtitle)
                         .font(OpenCodeTypography.caption)
-                        .foregroundStyle(enabled ? OpenCodeColors.textSecondary : OpenCodeColors.textDisabled)
+                        .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                 }
             }
@@ -72,7 +72,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             Spacer(minLength: 0)
 
             trailing()
-                .foregroundStyle(OpenCodeColors.iconDefault)
+                .foregroundStyle(OpenCodeColors.iconBase)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -82,7 +82,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         .overlay {
             if style == .card {
                 RoundedRectangle(cornerRadius: listItemCornerRadius)
-                    .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
             }
         }
         .opacity(enabled ? 1 : 0.7)
@@ -95,10 +95,10 @@ struct OpenCodeListItem<Trailing: View>: View {
             Color.clear
         case (.plain, true), (.card, true):
             RoundedRectangle(cornerRadius: listItemCornerRadius)
-                .fill(OpenCodeColors.surfaceSecondary)
+                .fill(OpenCodeColors.surfaceRaisedBase)
         case (.card, false):
             RoundedRectangle(cornerRadius: listItemCornerRadius)
-                .fill(OpenCodeColors.surfacePrimary)
+                .fill(OpenCodeColors.surfaceBase)
         }
     }
 
@@ -117,7 +117,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon)
                 .font(.system(size: 24))
-                .foregroundStyle(OpenCodeColors.iconDefault)
+                .foregroundStyle(OpenCodeColors.iconBase)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")

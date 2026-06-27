@@ -8,18 +8,18 @@ struct IconsGalleryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Material Icons catalog from icons/manifest.yaml")
                     .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textSecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
 
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(OpenCodeIcon.allCases, id: \.self) { icon in
                         VStack(spacing: 4) {
                             OpenCodeIconImage(icon: icon)
                                 .font(.system(size: 24))
-                                .foregroundStyle(OpenCodeColors.iconDefault)
+                                .foregroundStyle(OpenCodeColors.iconBase)
                                 .frame(width: 32, height: 32)
                             Text(icon.rawValue.replacingOccurrences(of: "md_", with: ""))
                                 .font(OpenCodeTypography.caption)
-                                .foregroundStyle(OpenCodeColors.textSecondary)
+                                .foregroundStyle(OpenCodeColors.textBase)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }

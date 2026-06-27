@@ -31,7 +31,22 @@ The canonical theme source is an OC-2 format JSON file bundled with each app:
 ```
 
 Both apps load this at runtime, run the resolver, and produce the resolved token
-dictionary. Imported themes follow the same pipeline.
+dictionary. Bundled presets and imported themes follow the same pipeline.
+
+### Bundled theme presets
+
+Thirty-seven desktop themes ship with each app. Canonical JSON lives in
+`shared/theme-presets/`; platform bundles are updated via `npm run themes:sync`
+and verified with `npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
+
+| Platform | Bundle location |
+| --- | --- |
+| iOS | `Resources/ThemePresets/` (may flatten into bundle root at build time) |
+| Android | `assets/theme-presets/` |
+
+`manifest.json` lists `{ id, name }` pairs for the Settings theme picker. Default
+selection is the `oc-2` preset unless the user chooses another preset or imports
+custom JSON.
 
 ## Palette Seeds
 

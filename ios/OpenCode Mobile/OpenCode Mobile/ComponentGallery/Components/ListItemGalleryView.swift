@@ -44,7 +44,7 @@ struct ListItemGalleryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("List item")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(label: "Selected", selected: selected, action: { selected.toggle() })
                     OpenCodeChoiceBadge(label: "Enabled", selected: enabled, action: { enabled.toggle() })
@@ -54,7 +54,7 @@ struct ListItemGalleryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Subtitle")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(label: "On", selected: subtitleVisible, action: { subtitleVisible = true })
                     OpenCodeChoiceBadge(label: "Off", selected: !subtitleVisible, action: { subtitleVisible = false })
@@ -64,7 +64,7 @@ struct ListItemGalleryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Style")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(label: "Plain", selected: !cardStyle, action: { cardStyle = false })
                     OpenCodeChoiceBadge(label: "Card", selected: cardStyle, action: { cardStyle = true })
@@ -74,7 +74,7 @@ struct ListItemGalleryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Start decorator")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                 HStack(spacing: 8) {
                     ForEach(GalleryDecoratorKind.allCases) { kind in
                         OpenCodeChoiceBadge(
@@ -90,7 +90,7 @@ struct ListItemGalleryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Letter accent")
                         .font(OpenCodeTypography.button)
-                        .foregroundStyle(OpenCodeColors.textPrimary)
+                        .foregroundStyle(OpenCodeColors.textStrong)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(LetterAccent.allCases, id: \.self) { accent in

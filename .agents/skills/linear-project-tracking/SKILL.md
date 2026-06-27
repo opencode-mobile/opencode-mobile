@@ -1,6 +1,6 @@
 ---
 name: linear-project-tracking
-description: Keep opencode-mobile Linear issues in sync with repo feature docs and implementation work. Use when planning features, implementing changes, updating docs/features progress, closing todos, starting or finishing work, or when the user mentions Linear, issues, backlog, or project tracking.
+description: Keep opencode-mobile Linear issues in sync with repo feature docs and implementation work. Use when planning features, implementing changes, updating docs/features progress, closing todos, starting or finishing work, or when the user mentions Linear, issues, backlog, or project tracking. Creates and maintains a live work-plan canvas beside the chat for visibility on active issues.
 ---
 
 # Linear Project Tracking
@@ -35,7 +35,7 @@ Map feature slices to project milestones:
 For milestone-to-issue mapping and label conventions, see
 [reference.md](reference.md).
 
-## Core Rule
+## Core Rules
 
 **Never finish feature work without updating Linear.**
 
@@ -44,6 +44,66 @@ When you change code or docs for a feature slice:
 1. Update `docs/features/<slug>/progress.md` (and `parity-gaps.md` if needed).
 2. Update the matching Linear issue in the same session.
 3. If no issue exists, create one before or as part of the work.
+
+**Always maintain a work-plan canvas for the active Linear issue.**
+
+The canvas is the live execution dashboard the user opens beside the chat. Keep
+it current — not a one-time snapshot.
+
+## Work Plan Canvas
+
+Read the `canvas` skill for file rules (`cursor/canvas` only, no network, token
+colors). For layout and section templates, see [canvas.md](canvas.md).
+
+### When to create
+
+Create or open the canvas **before writing code**, right after you identify the
+Linear issue and read `progress.md` / `plan.md`. Do this for every issue you
+work on — not only large features.
+
+### Naming and location
+
+```text
+~/.cursor/projects/<workspace>/canvases/<issue-key>-<slug>-work-plan.canvas.tsx
+```
+
+Example: `ope-17-theme-work-plan.canvas.tsx`. Reuse the same file when returning
+to an issue; do not create duplicates.
+
+### What to include
+
+Seed from `progress.md` unchecked items, `plan.md` phases, and the Linear issue
+**Remaining** list:
+
+- Issue key + title, milestone, feature slug, docs path, branch name
+- Summary stats (checklist %, phases left, todos done)
+- **Implementation phases** — ordered blocks with platform scope, files to
+  touch, and status (`pending` / `in_progress` / `completed`)
+- **Execution todos** — `TodoListCard` mirroring the session plan; update
+  statuses as work lands
+- **Callout** — one-line current focus ("Working on Phase 2: Android import UI")
+- Optional: manual QA table, shipped-on-branch summary when closing out
+
+### When to update
+
+Update the canvas in the **same turn** as meaningful progress:
+
+| Event | Canvas action |
+| --- | --- |
+| Phase or todo completed | Mark done; refresh stats and callout |
+| Scope grows | Add phase/todo; note in Linear issue too |
+| Branch created or renamed | Update header metadata |
+| Blocked or descoped | Callout tone + note what is deferred |
+| Issue closed or handed off | Final state; todos reflect remaining QA only |
+
+Do not wait until the end of a session. The user relies on the canvas for
+mid-task visibility.
+
+### Introducing the canvas
+
+Link the canvas file in chat when you create or materially update it:
+
+`[OPE-17 theme plan](/Users/ivan/.cursor/projects/.../ope-17-theme-work-plan.canvas.tsx)`
 
 ## Workflow
 
@@ -59,9 +119,12 @@ When you change code or docs for a feature slice:
    - `labels`: `Feature` plus `iOS`, `Android`, and/or `Shared` as appropriate
    - `description`: user goal, doc path, remaining checklist
 4. Move issue to **In Progress** (`state`: `In Progress`).
+5. **Create or refresh the work-plan canvas** from remaining scope; link it in
+   chat.
 
 ### While implementing
 
+- Update the work-plan canvas after each completed phase or meaningful chunk.
 - Add sub-items to the issue description when scope grows.
 - Link related issues with `relatedTo` / `blockedBy` when dependencies exist.
 - For cross-platform slices, keep one issue per feature slice (not separate iOS
@@ -70,14 +133,15 @@ When you change code or docs for a feature slice:
 ### After completing work
 
 1. Mark checklist items done in `progress.md`.
-2. Update the Linear issue:
+2. Update the work-plan canvas to final state (stats, callout, remaining QA).
+3. Update the Linear issue:
    - **Done** when the slice is complete for both platforms (or intentionally
      scoped subset is done and remainder is split to a new issue).
    - **In Progress** when meaningful work landed but docs list remaining items.
    - **Todo** when planned but not started.
-3. Move remaining items from `progress.md` into the issue description under
+4. Move remaining items from `progress.md` into the issue description under
    **Remaining**.
-4. Post a project status update (`save_status_update`) when a milestone
+5. Post a project status update (`save_status_update`) when a milestone
    materially advances or a major slice ships.
 
 ### New feature slice
@@ -158,7 +222,10 @@ Always pass markdown with real newlines, not `\n` escape sequences.
 - [ ] Read docs/features/<slug>/progress.md
 - [ ] Find or create Linear issue in opencode apps
 - [ ] Set state to In Progress before coding
+- [ ] Create or refresh work-plan canvas; link in chat
 - [ ] Implement + update progress.md
+- [ ] Update canvas after each completed phase/chunk
 - [ ] Update Linear issue state and Remaining list
+- [ ] Final canvas update before closing issue
 - [ ] Post project status update if milestone-level progress
 ```

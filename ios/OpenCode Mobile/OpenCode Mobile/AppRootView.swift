@@ -64,7 +64,7 @@ struct AppRootView: View {
                 }
             }
         }
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .task {
             await rootViewModel.load()
         }

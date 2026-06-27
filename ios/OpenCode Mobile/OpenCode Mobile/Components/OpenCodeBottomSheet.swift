@@ -123,7 +123,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         .presentationContentInteraction(mode == .scrollable ? .scrolls : .automatic)
         .interactiveDismissDisabled(mode == .scrollable)
         .presentationCornerRadius(24)
-        .presentationBackground(OpenCodeColors.surfacePrimary)
+        .presentationBackground(OpenCodeColors.surfaceBase)
         .presentationDragIndicator(mode == .scrollable ? .hidden : .visible)
     }
 
@@ -196,7 +196,7 @@ struct OpenCodeBottomSheetEntry: View {
 
                 Text(title)
                     .font(OpenCodeTypography.body)
-                    .foregroundStyle(enabled ? OpenCodeColors.textPrimary : OpenCodeColors.textDisabled)
+                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -271,7 +271,7 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .padding(.bottom, bottomSheetContentBottomPadding)
-        .background(OpenCodeColors.surfacePrimary)
+        .background(OpenCodeColors.surfaceBase)
         .fixedSize(horizontal: false, vertical: mode == .compact)
     }
 
@@ -304,7 +304,7 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
 
             Text(title)
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -348,7 +348,7 @@ private struct BottomSheetEntryDecoration: View {
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon)
                 .font(.system(size: bottomSheetEntryIconSize, weight: .medium))
-                .foregroundStyle(enabled ? OpenCodeColors.iconDefault : OpenCodeColors.textDisabled)
+                .foregroundStyle(enabled ? OpenCodeColors.iconBase : OpenCodeColors.textWeaker)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")

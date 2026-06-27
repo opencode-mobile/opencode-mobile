@@ -1,5 +1,6 @@
 import Factory
 import SwiftUI
+import UniformTypeIdentifiers
 
 private struct SectionHeader: View {
     let title: String
@@ -8,7 +9,7 @@ private struct SectionHeader: View {
         HStack {
             Text(title)
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .textCase(.uppercase)
             Spacer()
         }
@@ -23,6 +24,10 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
     @State private var showClearConfirmation = false
+    @State private var showThemePicker = false
+    @State private var showThemeImporter = false
+    @State private var importError: String?
+    @State private var themeManager = ThemeManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,6 +47,41 @@ struct SettingsView: View {
                         startDecorator: .icon(.cloud, accessibilityLabel: "Server Connection"),
                         action: onConnectionSetup
                     )
+
+                    SectionHeader(title: "Appearance")
+
+                    OpenCodeListItem(
+                        title: "Theme",
+                        subtitle: themeManager.currentTheme.name,
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
+                        action: { showThemePicker = true }
+                    )
+
+                    OpenCodeListItem(
+                        title: "Import Theme",
+                        subtitle: "Custom OpenCode OC-2 JSON file",
+                        startDecorator: .icon(.folder, accessibilityLabel: "Import Theme"),
+                        action: {
+                            importError = nil
+                            showThemeImporter = true
+                        }
+                    )
+
+                    if let importError {
+                        Text(importError)
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+                    } else if let loadError = themeManager.loadError {
+                        Text(loadError)
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.error)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+                    }
 
                     SectionHeader(title: "Developer Tools")
 
@@ -63,9 +103,35 @@ struct SettingsView: View {
         }
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
+        }
+        .openCodeBottomSheet(
+            isPresented: $showThemePicker,
+            title: "Theme",
+            scrollTargetID: themeManager.currentTheme.id
+        ) {
+            ForEach(themeManager.availablePresets()) { preset in
+                OpenCodeBottomSheetEntry(
+                    title: preset.name,
+                    endDecorator: preset.id == themeManager.currentTheme.id
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        themeManager.applyPreset(id: preset.id)
+                        showThemePicker = false
+                    }
+                )
+                .id(preset.id)
+            }
+        }
+        .fileImporter(
+            isPresented: $showThemeImporter,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleThemeImport(result)
         }
         .alert("Clear all data?", isPresented: $showClearConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -74,6 +140,27 @@ struct SettingsView: View {
             }
         } message: {
             Text("This cannot be undone.")
+        }
+    }
+
+    private func handleThemeImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            do {
+                try themeManager.importTheme(from: url)
+                importError = nil
+            } catch {
+                importError = error.localizedDescription
+            }
+        case .failure(let error):
+            importError = error.localizedDescription
         }
     }
 }

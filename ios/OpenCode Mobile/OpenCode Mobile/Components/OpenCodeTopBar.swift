@@ -75,12 +75,12 @@ struct OpenCodeTopBar: View {
 
             if showDivider {
                 Rectangle()
-                    .fill(OpenCodeColors.borderSubtle)
+                    .fill(OpenCodeColors.borderWeakerBase)
                     .frame(height: 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .top)
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
     }
 
     @ViewBuilder
@@ -116,7 +116,7 @@ struct OpenCodeTopBar: View {
         if let title {
             Text(title)
                 .font(OpenCodeTypography.title)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
                 .lineLimit(1)
                 .truncationMode(.tail)
         } else {
@@ -222,7 +222,7 @@ private struct OpenCodeTopBarPreviewContent: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(OpenCodeTypography.button)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             content()
         }
     }

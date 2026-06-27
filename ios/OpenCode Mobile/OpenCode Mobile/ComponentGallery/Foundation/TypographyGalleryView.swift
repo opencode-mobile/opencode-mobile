@@ -23,7 +23,7 @@ struct TypographyGalleryView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Type Roles")
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
 
             ForEach(typeRoles) { role in
                 TypeRoleSample(role: role)
@@ -39,18 +39,18 @@ private struct TypeRoleSample: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(role.id)
                 .font(OpenCodeTypography.button)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
 
             Text(role.sample)
                 .font(role.font)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(role.isCode ? 10 : 0)
-                .background(role.isCode ? OpenCodeColors.surfaceSecondary : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                .background(role.isCode ? OpenCodeColors.surfaceRaisedBase : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
+        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

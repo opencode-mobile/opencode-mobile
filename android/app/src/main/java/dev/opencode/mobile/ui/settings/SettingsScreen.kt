@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.ThemeManager
+import dev.opencode.mobile.theme.ThemePreset
+import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -31,9 +39,27 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
     onClearData: () -> Unit,
+    onImportTheme: (android.net.Uri) -> Unit,
+    onApplyPreset: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
+    var showThemePicker by remember { mutableStateOf(false) }
+    val currentTheme = ThemeManager.currentTheme
+    val themeImportError = ThemeManager.loadError
+    val presets =
+        ThemeManager.availablePresets().ifEmpty {
+            listOf(ThemePreset(id = "oc-2", name = "OC-2"))
+        }
+
+    val themeImportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            if (uri != null) {
+                onImportTheme(uri)
+            }
+        }
 
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
@@ -52,6 +78,33 @@ fun SettingsScreen(
                 onClick = onConnectionSetup,
             )
 
+            SectionHeader(title = "Appearance")
+
+            OpenCodeListItem(
+                title = "Theme",
+                subtitle = currentTheme.name,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
+                onClick = { showThemePicker = true },
+            )
+
+            OpenCodeListItem(
+                title = "Import Theme",
+                subtitle = "Custom OpenCode OC-2 JSON file",
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Import Theme"),
+                onClick = {
+                    themeImportLauncher.launch(arrayOf("application/json", "text/json", "*/*"))
+                },
+            )
+
+            themeImportError?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = openCodeColor("error"),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+
             SectionHeader(title = "Developer Tools")
 
             OpenCodeListItem(
@@ -66,6 +119,28 @@ fun SettingsScreen(
                 subtitle = "Remove connection, cache, and imported themes",
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
                 onClick = { showClearConfirmation = true },
+            )
+        }
+    }
+
+    OpenCodeBottomSheet(
+        visible = showThemePicker,
+        title = "Theme",
+        onDismissRequest = { showThemePicker = false },
+    ) {
+        presets.forEach { preset ->
+            OpenCodeBottomSheetEntry(
+                title = preset.name,
+                endDecorator =
+                    if (preset.id == currentTheme.id) {
+                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                    } else {
+                        BottomSheetEntryDecorator.None
+                    },
+                onClick = {
+                    onApplyPreset(preset.id)
+                    showThemePicker = false
+                },
             )
         }
     }
@@ -120,6 +195,8 @@ private fun SettingsScreenLightPreview() {
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
+            onImportTheme = {},
+            onApplyPreset = {},
         )
     }
 }
@@ -133,6 +210,8 @@ private fun SettingsScreenDarkPreview() {
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
+            onImportTheme = {},
+            onApplyPreset = {},
         )
     }
 }

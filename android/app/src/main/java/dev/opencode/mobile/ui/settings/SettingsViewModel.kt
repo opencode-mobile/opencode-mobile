@@ -1,8 +1,11 @@
 package dev.opencode.mobile.ui.settings
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.MessageLiveStore
@@ -16,6 +19,7 @@ import javax.inject.Inject
 class SettingsViewModel
     @Inject
     constructor(
+        @ApplicationContext private val context: Context,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val foregroundEventStream: ForegroundEventStream,
         private val sessionLiveStore: SessionLiveStore,
@@ -31,5 +35,13 @@ class SettingsViewModel
                 messageLiveStore.clearCache()
                 ThemeManager.clearAll()
             }
+        }
+
+        fun importThemeFromUri(uri: Uri) {
+            ThemeManager.importThemeFromUri(context, uri)
+        }
+
+        fun applyPreset(id: String) {
+            ThemeManager.applyPreset(id)
         }
     }

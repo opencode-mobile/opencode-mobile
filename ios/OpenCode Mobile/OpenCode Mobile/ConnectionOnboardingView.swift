@@ -12,7 +12,7 @@ struct ConnectionOnboardingView: View {
                     .multilineTextAlignment(.center)
                 Text("OpenCode Mobile controls sessions on an opencode server running on your development machine.")
                     .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textSecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .multilineTextAlignment(.center)
             }
             OpenCodeButton(variant: .fullWidthText(title: "Connect to server"), action: onConnectClick)
@@ -20,6 +20,6 @@ struct ConnectionOnboardingView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
     }
 }

@@ -77,7 +77,7 @@ struct OpenCodeOutgoingMessage: View {
     private var footer: some View {
         Text(metadataLabel)
             .font(OpenCodeTypography.caption)
-            .foregroundStyle(OpenCodeColors.textTertiary)
+            .foregroundStyle(OpenCodeColors.textWeak)
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -112,7 +112,7 @@ struct OpenCodeOutgoingMessage: View {
                 action: { UIPasteboard.general.string = text }
             )
         }
-        .foregroundStyle(OpenCodeColors.iconDefault)
+        .foregroundStyle(OpenCodeColors.iconBase)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -158,7 +158,7 @@ struct OpenCodeOutgoingMessage: View {
             } else {
                 Text(text)
                     .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(expanded ? nil : 5)
                     .fixedSize(horizontal: false, vertical: true)
             }

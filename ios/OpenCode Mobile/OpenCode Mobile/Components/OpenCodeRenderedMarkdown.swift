@@ -68,7 +68,7 @@ struct OpenCodeRenderedMarkdown: View {
     private func blockView(_ block: NativeMarkdownBlock, identity: String) -> some View {
         switch block {
         case .paragraph(let inlines):
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textPrimary)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
         case .heading(let level, let inlines):
             inlineText(inlines, font: headingFont(level), color: headingColor(level))
         case .blockquote(let inlines):
@@ -109,7 +109,7 @@ struct OpenCodeRenderedMarkdown: View {
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.markdownListMarker)
                 .frame(width: 24, alignment: .leading)
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textPrimary)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
         }
     }
 
@@ -136,10 +136,10 @@ struct OpenCodeRenderedMarkdown: View {
                 .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 6))
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
         .overlay(alignment: .bottomTrailing) {
             if preview.isTruncated {
@@ -152,7 +152,7 @@ struct OpenCodeRenderedMarkdown: View {
                 }
                 .font(OpenCodeTypography.caption)
                 .padding(8)
-                .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 6))
+                .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 6))
                 .padding(6)
             }
         }
@@ -189,10 +189,10 @@ struct OpenCodeRenderedMarkdown: View {
             .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 6))
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
     }
 
@@ -209,7 +209,7 @@ struct OpenCodeRenderedMarkdown: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
             )
         }
     }
@@ -223,13 +223,13 @@ struct OpenCodeRenderedMarkdown: View {
                 inlineText(
                     row[index],
                     font: isHeader ? OpenCodeTypography.bodySecondary.weight(.medium) : OpenCodeTypography.bodySecondary,
-                    color: OpenCodeColors.textPrimary
+                    color: OpenCodeColors.textStrong
                 )
                 .frame(minWidth: 112, maxWidth: 220, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(isHeader ? OpenCodeColors.surfaceSecondary : OpenCodeColors.surfacePrimary)
-                .border(OpenCodeColors.borderSubtle, width: 0.5)
+                .background(isHeader ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.surfaceBase)
+                .border(OpenCodeColors.borderWeakerBase, width: 0.5)
             }
         }
     }
@@ -296,7 +296,7 @@ enum NativeMarkdownAttributedString {
     ) -> AttributedString {
         var output = AttributedString(code)
         output.font = OpenCodeTypography.code
-        output.foregroundColor = OpenCodeColors.textPrimary
+        output.foregroundColor = OpenCodeColors.textStrong
 
         let sortedSpans = spans.sorted {
             let leftPriority = stylePriority(for: $0.role)
@@ -428,7 +428,7 @@ enum NativeMarkdownAttributedString {
     private static func color(for role: NativeCodeTokenRole) -> Color {
         switch role {
         case .plain:
-            OpenCodeColors.textPrimary
+            OpenCodeColors.textStrong
         case .comment:
             OpenCodeColors.syntaxComment
         case .keyword:
@@ -436,7 +436,7 @@ enum NativeMarkdownAttributedString {
         case .type:
             OpenCodeColors.syntaxType
         case .variable:
-            OpenCodeColors.textPrimary
+            OpenCodeColors.textStrong
         case .property, .constant:
             OpenCodeColors.syntaxConstant
         case .function:
@@ -446,7 +446,7 @@ enum NativeMarkdownAttributedString {
         case .string:
             OpenCodeColors.syntaxString
         case .operatorToken, .punctuation:
-            OpenCodeColors.textPrimary
+            OpenCodeColors.textStrong
         case .tag:
             OpenCodeColors.syntaxInfo
         case .inserted:

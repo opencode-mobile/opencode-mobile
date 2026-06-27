@@ -7,18 +7,31 @@ final class ThemeManager {
 
     static let shared = ThemeManager()
 
+    private enum StorageKeys {
+        static let importedThemes = ThemePersistence.importedThemesKey
+        static let selectedThemeID = ThemePersistence.selectedThemeIDKey
+    }
+
+    private static let defaultPresetID = "oc-2"
+    private static let presetBundleSubdirectories: [String?] = [
+        "ThemePresets",
+        "Resources/ThemePresets",
+        nil,
+    ]
+
     private(set) var currentTheme: OpenCodeTheme
     private(set) var resolvedLight: ResolvedTokens
     private(set) var resolvedDark: ResolvedTokens
     private(set) var loadError: String?
 
     private let defaults: UserDefaults
+    private var cachedManifestPresets: [ThemePreset]?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.currentTheme = ThemeManager.bundledTheme()
         self.resolvedLight = ResolvedTokens()
         self.resolvedDark = ResolvedTokens()
+        self.currentTheme = Self.loadInitialTheme(defaults: defaults)
         resolve()
     }
 
@@ -33,23 +46,61 @@ final class ThemeManager {
         colorScheme == .dark ? resolvedDark : resolvedLight
     }
 
+    // MARK: - Presets
+
+    func availablePresets() -> [ThemePreset] {
+        ThemeSupport.mergePresets(
+            bundled: manifestPresets(),
+            imported: ThemePersistence.importedPresets(defaults: defaults)
+        )
+    }
+
+    func applyPreset(id: String) {
+        guard let theme = Self.loadPreset(id: id) else {
+            loadError = "Theme preset not found"
+            return
+        }
+        do {
+            try ThemeSupport.validate(theme)
+            currentTheme = theme
+            resolve()
+            ThemePersistence.saveSelectedThemeID(id, defaults: defaults)
+            loadError = nil
+        } catch {
+            loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     // MARK: - Theme loading
 
     func loadBundledTheme() {
-        currentTheme = Self.bundledTheme()
+        currentTheme = Self.loadPreset(id: Self.defaultPresetID) ?? Self.bundledTheme()
         resolve()
         loadError = nil
     }
 
     func importTheme(from data: Data) throws {
-        let decoder = JSONDecoder()
-        let theme = try decoder.decode(OpenCodeTheme.self, from: data)
-        try validate(theme)
-        currentTheme = theme
-        resolve()
-        persistImportedTheme(theme)
-        saveSelectedThemeID(theme.id)
-        loadError = nil
+        let previousTheme = currentTheme
+        do {
+            try ThemeSupport.assertImportSize(data.count)
+            let decoder = JSONDecoder()
+            let theme = try decoder.decode(OpenCodeTheme.self, from: data)
+            try ThemeSupport.validate(theme)
+            try ThemeSupport.assertNoPresetIdCollision(
+                themeID: theme.id,
+                bundledPresetIDs: manifestPresetIDs()
+            )
+            currentTheme = theme
+            resolve()
+            try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
+            ThemePersistence.saveSelectedThemeID(theme.id, defaults: defaults)
+            loadError = nil
+        } catch {
+            currentTheme = previousTheme
+            resolve()
+            loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            throw error
+        }
     }
 
     func importTheme(from url: URL) throws {
@@ -57,25 +108,79 @@ final class ThemeManager {
         try importTheme(from: data)
     }
 
-    // MARK: - Validation
+    // MARK: - Persistence
 
-    private func validate(_ theme: OpenCodeTheme) throws {
-        let required = ["neutral", "ink", "primary", "success", "warning", "error", "info"]
-        for variant in [theme.light, theme.dark] {
-            let mirror = Mirror(reflecting: variant.palette)
-            let missing = required.filter { key in
-                !mirror.children.contains { child in
-                    guard child.label == key, let value = child.value as? String else { return false }
-                    return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                }
-            }
-            if !missing.isEmpty {
-                throw ThemeError.missingPaletteSeeds(missing)
-            }
+    private static func loadInitialTheme(defaults: UserDefaults) -> OpenCodeTheme {
+        let defaultTheme = loadPreset(id: defaultPresetID) ?? bundledTheme()
+        guard let selectedID = defaults.string(forKey: StorageKeys.selectedThemeID),
+              !selectedID.isEmpty
+        else {
+            return defaultTheme
         }
+        if let imported = ThemePersistence.loadImportedTheme(id: selectedID, defaults: defaults) {
+            return imported
+        }
+        if let preset = loadPreset(id: selectedID) {
+            return preset
+        }
+        return defaultTheme
     }
 
-    // MARK: - Persistence
+    private func manifestPresets() -> [ThemePreset] {
+        if let cachedManifestPresets {
+            return cachedManifestPresets
+        }
+        let presets = Self.loadPresetManifest()
+        cachedManifestPresets = presets
+        return presets
+    }
+
+    private func manifestPresetIDs() -> Set<String> {
+        Set(manifestPresets().map(\.id))
+    }
+
+    private static func presetResourceURL(
+        name: String,
+        extension ext: String = "json"
+    ) -> URL? {
+        for subdirectory in presetBundleSubdirectories {
+            if let url = Bundle.main.url(
+                forResource: name,
+                withExtension: ext,
+                subdirectory: subdirectory
+            ) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private static func loadPresetManifest() -> [ThemePreset] {
+        for subdirectory in presetBundleSubdirectories {
+            guard let url = Bundle.main.url(
+                forResource: "manifest",
+                withExtension: "json",
+                subdirectory: subdirectory
+            ),
+            let data = try? Data(contentsOf: url),
+            let presets = try? JSONDecoder().decode([ThemePreset].self, from: data),
+            presets.count > 1
+            else {
+                continue
+            }
+            return presets
+        }
+        return [ThemePreset(id: defaultPresetID, name: "OC-2")]
+    }
+
+    private static func loadPreset(id: String) -> OpenCodeTheme? {
+        guard let url = presetResourceURL(name: id),
+              let data = try? Data(contentsOf: url)
+        else {
+            return nil
+        }
+        return try? JSONDecoder().decode(OpenCodeTheme.self, from: data)
+    }
 
     private static func bundledTheme() -> OpenCodeTheme {
         guard let asset = NSDataAsset(name: "ThemeJson") else {
@@ -89,27 +194,8 @@ final class ThemeManager {
         }
     }
 
-    private func persistImportedTheme(_ theme: OpenCodeTheme) {
-        var saved: [String: Data] = [:]
-        if let existing = defaults.data(forKey: "importedThemes"),
-           let dict = try? JSONDecoder().decode([String: Data].self, from: existing) {
-            saved = dict
-        }
-        if let encoded = try? JSONEncoder().encode(theme) {
-            saved[theme.id] = encoded
-            if let data = try? JSONEncoder().encode(saved) {
-                defaults.set(data, forKey: "importedThemes")
-            }
-        }
-    }
-
-    private func saveSelectedThemeID(_ id: String) {
-        defaults.set(id, forKey: "selectedThemeID")
-    }
-
     func clearAll() {
-        defaults.removeObject(forKey: "importedThemes")
-        defaults.removeObject(forKey: "selectedThemeID")
+        ThemePersistence.clear(defaults: defaults)
         loadBundledTheme()
     }
 }

@@ -73,16 +73,16 @@ struct ProjectSessionSelector: View {
 
             if let selectedProject {
                 projectHeader(selectedProject)
-                Divider().overlay(OpenCodeColors.borderSubtle)
+                Divider().overlay(OpenCodeColors.borderWeakerBase)
                 sessionPreview(selectedProject)
-                Divider().overlay(OpenCodeColors.borderSubtle)
+                Divider().overlay(OpenCodeColors.borderWeakerBase)
                 footer(selectedProject)
             }
         }
-        .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 12))
+        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
     }
 
@@ -108,17 +108,17 @@ struct ProjectSessionSelector: View {
             HStack(spacing: 4) {
                 OpenCodeIconImage(icon: .folder)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.iconDefault)
+                    .foregroundStyle(OpenCodeColors.iconBase)
                     .accessibilityHidden(true)
                 Text(project.displayName)
                     .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             Text(compactHomePath(project.pathSubtitle))
                 .font(OpenCodeTypography.code)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .lineLimit(1)
         }
         .padding(.horizontal, horizontalSpacing)
@@ -132,7 +132,7 @@ struct ProjectSessionSelector: View {
                     placeholderSlots(count: 1)
                     Text(error)
                         .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.statusError)
+                        .foregroundStyle(OpenCodeColors.error)
                         .lineLimit(2)
                         .padding(.horizontal, horizontalSpacing)
                 }
@@ -176,7 +176,7 @@ struct ProjectSessionSelector: View {
             if let createError {
                 Text(createError)
                     .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.statusError)
+                    .foregroundStyle(OpenCodeColors.error)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -220,13 +220,13 @@ private struct AddProjectSessionSelectorTile: View {
         Button(action: action) {
             OpenCodeIconImage(icon: .add)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .frame(width: 48, height: 48)
-                .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+                .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            OpenCodeColors.borderDefault,
+                            OpenCodeColors.borderWeakBase,
                             style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
                         )
                 )
