@@ -37,7 +37,7 @@ dictionary. Bundled presets and imported themes follow the same pipeline.
 
 Thirty-seven desktop themes ship with each app. Canonical JSON lives in
 `shared/theme-presets/`; platform bundles are updated via `npm run themes:sync`
-(see `scripts/sync-theme-presets.mjs`).
+and verified with `npm run themes:check` (see `scripts/sync-theme-presets.mjs`).
 
 | Platform | Bundle location |
 | --- | --- |

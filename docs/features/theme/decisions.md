@@ -22,9 +22,16 @@ ref so preset updates are deliberate.
 
 ## Settings separates presets from import
 
-The **Theme** row opens a picker for bundled presets (and previously imported
-themes). **Import Theme** remains a separate action for custom OC-2 JSON files.
-This matches desktop parity without conflating curated presets with one-off files.
+The **Theme** row opens a picker for bundled presets plus any previously
+imported themes (imports are appended after bundled entries and deduped by ID).
+**Import Theme** remains a separate action for custom OC-2 JSON files. Imports
+whose `id` matches a bundled preset are rejected to avoid picker ambiguity.
+
+## Import guardrails
+
+Imported JSON is capped at 512 KB. Validation requires the standard palette
+seeds in both light and dark variants. Persist failures roll back the in-memory
+selection and surface an error instead of silently dropping the import.
 
 ## Persistence keys are aligned across platforms
 

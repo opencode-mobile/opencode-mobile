@@ -5,6 +5,7 @@
   "scripts": {
     "icons:sync": "node scripts/sync-icons.mjs",
     "themes:sync": "node scripts/sync-theme-presets.mjs",
+    "themes:check": "node scripts/check-theme-presets.mjs",
     "icons:check": "node scripts/check-icons.mjs",
     "icons:audit": "node scripts/audit-icon-usage.mjs",
     "markdown:highlighter:golden": "node scripts/generate-markdown-highlighter-fixtures.mjs",

@@ -48,6 +48,15 @@
 
 ## Follow-up (out of scope for OPE-17)
 
-- Live theme switching without restart
+- Live theme switching without restart (iOS may need trait/invalidate work; Settings subtitle updates immediately)
 - Theme picker with color swatch preview
 - Theme editor / export / server sync
+
+## Hardening (post-review)
+
+- [x] Picker lists persisted imported themes alongside bundled presets
+- [x] Reject imports whose `id` collides with a bundled preset
+- [x] 512 KB import size cap and persist rollback on failure
+- [x] `npm run themes:check` for shared/iOS/Android preset parity
+- [x] `ThemeSupport` / `ThemePersistence` unit tests on both platforms
+- [x] Remove duplicate Android `assets/oc-2.json` (single preset bundle path)

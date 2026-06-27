@@ -8,8 +8,8 @@ final class ThemeManager {
     static let shared = ThemeManager()
 
     private enum StorageKeys {
-        static let importedThemes = "importedThemes"
-        static let selectedThemeID = "selectedThemeID"
+        static let importedThemes = ThemePersistence.importedThemesKey
+        static let selectedThemeID = ThemePersistence.selectedThemeIDKey
     }
 
     private static let defaultPresetID = "oc-2"
@@ -25,7 +25,7 @@ final class ThemeManager {
     private(set) var loadError: String?
 
     private let defaults: UserDefaults
-    private var cachedPresets: [ThemePreset]?
+    private var cachedManifestPresets: [ThemePreset]?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -49,12 +49,10 @@ final class ThemeManager {
     // MARK: - Presets
 
     func availablePresets() -> [ThemePreset] {
-        if let cachedPresets {
-            return cachedPresets
-        }
-        let presets = Self.loadPresetManifest()
-        cachedPresets = presets
-        return presets
+        ThemeSupport.mergePresets(
+            bundled: manifestPresets(),
+            imported: ThemePersistence.importedPresets(defaults: defaults)
+        )
     }
 
     func applyPreset(id: String) {
@@ -63,10 +61,10 @@ final class ThemeManager {
             return
         }
         do {
-            try validate(theme)
+            try ThemeSupport.validate(theme)
             currentTheme = theme
             resolve()
-            saveSelectedThemeID(id)
+            ThemePersistence.saveSelectedThemeID(id, defaults: defaults)
             loadError = nil
         } catch {
             loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -82,37 +80,32 @@ final class ThemeManager {
     }
 
     func importTheme(from data: Data) throws {
-        let decoder = JSONDecoder()
-        let theme = try decoder.decode(OpenCodeTheme.self, from: data)
-        try validate(theme)
-        currentTheme = theme
-        resolve()
-        persistImportedTheme(theme)
-        saveSelectedThemeID(theme.id)
-        loadError = nil
+        let previousTheme = currentTheme
+        do {
+            try ThemeSupport.assertImportSize(data.count)
+            let decoder = JSONDecoder()
+            let theme = try decoder.decode(OpenCodeTheme.self, from: data)
+            try ThemeSupport.validate(theme)
+            try ThemeSupport.assertNoPresetIdCollision(
+                themeID: theme.id,
+                bundledPresetIDs: manifestPresetIDs()
+            )
+            currentTheme = theme
+            resolve()
+            try ThemePersistence.persistImportedTheme(theme, defaults: defaults)
+            ThemePersistence.saveSelectedThemeID(theme.id, defaults: defaults)
+            loadError = nil
+        } catch {
+            currentTheme = previousTheme
+            resolve()
+            loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            throw error
+        }
     }
 
     func importTheme(from url: URL) throws {
         let data = try Data(contentsOf: url)
         try importTheme(from: data)
-    }
-
-    // MARK: - Validation
-
-    private func validate(_ theme: OpenCodeTheme) throws {
-        let required = ["neutral", "ink", "primary", "success", "warning", "error", "info"]
-        for variant in [theme.light, theme.dark] {
-            let mirror = Mirror(reflecting: variant.palette)
-            let missing = required.filter { key in
-                !mirror.children.contains { child in
-                    guard child.label == key, let value = child.value as? String else { return false }
-                    return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                }
-            }
-            if !missing.isEmpty {
-                throw ThemeError.missingPaletteSeeds(missing)
-            }
-        }
     }
 
     // MARK: - Persistence
@@ -124,7 +117,7 @@ final class ThemeManager {
         else {
             return defaultTheme
         }
-        if let imported = loadImportedTheme(id: selectedID, defaults: defaults) {
+        if let imported = ThemePersistence.loadImportedTheme(id: selectedID, defaults: defaults) {
             return imported
         }
         if let preset = loadPreset(id: selectedID) {
@@ -133,14 +126,17 @@ final class ThemeManager {
         return defaultTheme
     }
 
-    private static func loadImportedTheme(id: String, defaults: UserDefaults) -> OpenCodeTheme? {
-        guard let themesData = defaults.data(forKey: StorageKeys.importedThemes),
-              let themes = try? JSONDecoder().decode([String: Data].self, from: themesData),
-              let themeData = themes[id]
-        else {
-            return nil
+    private func manifestPresets() -> [ThemePreset] {
+        if let cachedManifestPresets {
+            return cachedManifestPresets
         }
-        return try? JSONDecoder().decode(OpenCodeTheme.self, from: themeData)
+        let presets = Self.loadPresetManifest()
+        cachedManifestPresets = presets
+        return presets
+    }
+
+    private func manifestPresetIDs() -> Set<String> {
+        Set(manifestPresets().map(\.id))
     }
 
     private static func presetResourceURL(
@@ -198,27 +194,8 @@ final class ThemeManager {
         }
     }
 
-    private func persistImportedTheme(_ theme: OpenCodeTheme) {
-        var saved: [String: Data] = [:]
-        if let existing = defaults.data(forKey: StorageKeys.importedThemes),
-           let dict = try? JSONDecoder().decode([String: Data].self, from: existing) {
-            saved = dict
-        }
-        if let encoded = try? JSONEncoder().encode(theme) {
-            saved[theme.id] = encoded
-            if let data = try? JSONEncoder().encode(saved) {
-                defaults.set(data, forKey: StorageKeys.importedThemes)
-            }
-        }
-    }
-
-    private func saveSelectedThemeID(_ id: String) {
-        defaults.set(id, forKey: StorageKeys.selectedThemeID)
-    }
-
     func clearAll() {
-        defaults.removeObject(forKey: StorageKeys.importedThemes)
-        defaults.removeObject(forKey: StorageKeys.selectedThemeID)
+        ThemePersistence.clear(defaults: defaults)
         loadBundledTheme()
     }
 }

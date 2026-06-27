@@ -22,6 +22,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
+import dev.opencode.mobile.theme.ThemePreset
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -46,7 +47,10 @@ fun SettingsScreen(
     var showThemePicker by remember { mutableStateOf(false) }
     val currentTheme = ThemeManager.currentTheme
     val themeImportError = ThemeManager.loadError
-    val presets = ThemeManager.availablePresets()
+    val presets =
+        ThemeManager.availablePresets().ifEmpty {
+            listOf(ThemePreset(id = "oc-2", name = "OC-2"))
+        }
 
     val themeImportLauncher =
         rememberLauncherForActivityResult(

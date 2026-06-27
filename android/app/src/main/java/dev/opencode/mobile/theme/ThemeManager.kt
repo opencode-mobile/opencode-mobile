@@ -31,7 +31,7 @@ object ThemeManager {
 
     private var appContext: Context? = null
     private var initialized = false
-    private var cachedPresets: List<ThemePreset>? = null
+    private var cachedManifestPresets: List<ThemePreset>? = null
 
     init {
         resolve()
@@ -51,16 +51,10 @@ object ThemeManager {
     }
 
     fun availablePresets(): List<ThemePreset> {
-        cachedPresets?.let { return it }
-        val ctx = appContext ?: return emptyList()
-        return try {
-            val manifest =
-                ctx.assets.open("$PRESET_ASSET_DIR/manifest.json").bufferedReader().use { it.readText() }
-            json.decodeFromString<List<ThemePreset>>(manifest).also { cachedPresets = it }
-        } catch (e: Exception) {
-            Log.e("ThemeManager", "Failed to load theme preset manifest", e)
-            emptyList()
-        }
+        return ThemeSupport.mergePresets(
+            bundled = manifestPresets(),
+            imported = importedThemePresets(),
+        )
     }
 
     fun applyPreset(id: String) {
@@ -70,7 +64,7 @@ object ThemeManager {
             return
         }
         try {
-            validate(theme)
+            ThemeSupport.validateTheme(theme)
             currentTheme = theme
             resolve()
             saveSelectedThemeID(id)
@@ -93,15 +87,20 @@ object ThemeManager {
     }
 
     fun importTheme(jsonData: String) {
+        val previousTheme = currentTheme
         try {
+            ThemeSupport.assertImportSize(jsonData.toByteArray(Charsets.UTF_8).size)
             val theme = json.decodeFromString<OpenCodeTheme>(jsonData)
-            validate(theme)
+            ThemeSupport.validateTheme(theme)
+            ThemeSupport.assertNoPresetIdCollision(theme.id, manifestPresetIds())
             currentTheme = theme
             resolve()
             persistImportedTheme(theme)
             saveSelectedThemeID(theme.id)
             loadError = null
         } catch (e: Exception) {
+            currentTheme = previousTheme
+            resolve()
             loadError = e.message ?: "Unknown error importing theme"
             Log.e("ThemeManager", "Failed to import theme", e)
         }
@@ -123,26 +122,38 @@ object ThemeManager {
         }
     }
 
-    private fun validate(theme: OpenCodeTheme) {
-        val required = listOf("neutral", "ink", "primary", "success", "warning", "error", "info")
-        for (variant in listOf(theme.light, theme.dark)) {
-            val missing =
-                required.filter { key ->
-                    val value =
-                        when (key) {
-                            "neutral" -> variant.palette.neutral
-                            "ink" -> variant.palette.ink
-                            "primary" -> variant.palette.primary
-                            "success" -> variant.palette.success
-                            "warning" -> variant.palette.warning
-                            "error" -> variant.palette.error
-                            "info" -> variant.palette.info
-                            else -> return@filter true
-                        }
-                    value.isBlank()
-                }
-            if (missing.isNotEmpty()) {
-                throw ThemeValidationException("Missing required palette seeds: ${missing.joinToString(", ")}")
+    private fun manifestPresets(): List<ThemePreset> {
+        cachedManifestPresets?.let { return it }
+        val ctx = appContext ?: return emptyList()
+        return try {
+            val manifest =
+                ctx.assets.open("$PRESET_ASSET_DIR/manifest.json").bufferedReader().use { it.readText() }
+            json.decodeFromString<List<ThemePreset>>(manifest).also { cachedManifestPresets = it }
+        } catch (e: Exception) {
+            Log.e("ThemeManager", "Failed to load theme preset manifest", e)
+            emptyList()
+        }
+    }
+
+    private fun manifestPresetIds(): Set<String> = manifestPresets().map { it.id }.toSet()
+
+    private fun importedThemePresets(): List<ThemePreset> {
+        val preferences = prefs() ?: return emptyList()
+        val importedThemesJson = preferences.getString(KEY_IMPORTED_THEMES, null) ?: return emptyList()
+        val importedThemes =
+            try {
+                json.decodeFromString<Map<String, String>>(importedThemesJson)
+            } catch (e: Exception) {
+                Log.w("ThemeManager", "Failed to decode imported themes", e)
+                return emptyList()
+            }
+        return importedThemes.mapNotNull { (_, themeJson) ->
+            try {
+                val theme = json.decodeFromString<OpenCodeTheme>(themeJson)
+                ThemePreset(id = theme.id, name = theme.name)
+            } catch (e: Exception) {
+                Log.w("ThemeManager", "Failed to decode imported theme preset", e)
+                null
             }
         }
     }
@@ -179,19 +190,12 @@ object ThemeManager {
 
     private fun loadBundledTheme(): OpenCodeTheme {
         loadPreset(DEFAULT_PRESET_ID)?.let { return it }
-        val ctx = appContext
-        if (ctx == null) {
+        if (appContext == null) {
             Log.w("ThemeManager", "App context not set, using fallback theme")
-            return createFallbackTheme()
+        } else {
+            Log.e("ThemeManager", "Failed to load bundled preset $DEFAULT_PRESET_ID")
         }
-        return try {
-            val inputStream = ctx.assets.open("oc-2.json")
-            val jsonString = inputStream.bufferedReader().use { it.readText() }
-            json.decodeFromString<OpenCodeTheme>(jsonString)
-        } catch (e: Exception) {
-            Log.e("ThemeManager", "Failed to load bundled oc-2.json", e)
-            createFallbackTheme()
-        }
+        return createFallbackTheme()
     }
 
     private fun loadPreset(id: String): OpenCodeTheme? {
@@ -206,7 +210,7 @@ object ThemeManager {
     }
 
     private fun persistImportedTheme(theme: OpenCodeTheme) {
-        val preferences = prefs() ?: return
+        val preferences = prefs() ?: throw ThemeImportException("Could not access theme storage")
         val existing =
             preferences.getString(KEY_IMPORTED_THEMES, null)?.let { stored ->
                 try {
@@ -215,8 +219,12 @@ object ThemeManager {
                     mutableMapOf()
                 }
             } ?: mutableMapOf()
-        existing[theme.id] = json.encodeToString(theme)
-        preferences.edit().putString(KEY_IMPORTED_THEMES, json.encodeToString(existing)).apply()
+        try {
+            existing[theme.id] = json.encodeToString(theme)
+            preferences.edit().putString(KEY_IMPORTED_THEMES, json.encodeToString(existing)).apply()
+        } catch (e: Exception) {
+            throw ThemeImportException("Could not save imported theme")
+        }
     }
 
     private fun saveSelectedThemeID(id: String) {
