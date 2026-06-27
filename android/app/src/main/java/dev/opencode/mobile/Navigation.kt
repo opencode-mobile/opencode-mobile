@@ -120,6 +120,8 @@ fun MainNavigation() {
                                                     connectionSetupVisible = true
                                                 },
                                                 onClearData = settingsViewModel::clearAllData,
+                                                onImportTheme = settingsViewModel::importThemeFromUri,
+                                                onApplyPreset = settingsViewModel::applyPreset,
                                             )
                                         }
                                     }

@@ -45,7 +45,7 @@ struct BottomSheetGalleryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Bottom sheet")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
 
                 HStack(spacing: 8) {
                     OpenCodeChoiceBadge(
@@ -140,7 +140,7 @@ private struct DecoratorControls: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(OpenCodeTypography.button)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
 
             HStack(spacing: 8) {
                 ForEach(GalleryBottomSheetDecoratorKind.allCases) { kind in
@@ -163,7 +163,7 @@ private struct ItemCountControls: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Items")
                 .font(OpenCodeTypography.button)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
 
             HStack(spacing: 8) {
                 ForEach([2, 4, 6], id: \.self) { count in

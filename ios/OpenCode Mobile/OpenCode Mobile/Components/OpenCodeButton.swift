@@ -164,20 +164,20 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     }
 
     private var foregroundColor: Color {
-        if !enabled { return OpenCodeColors.textSecondary }
-        return contrast == .low ? OpenCodeColors.textPrimary : OpenCodeColors.surfacePrimary
+        if !enabled { return OpenCodeColors.textBase }
+        return contrast == .low ? OpenCodeColors.textStrong : OpenCodeColors.surfaceBase
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
-        if !enabled { return OpenCodeColors.surfaceSecondary }
-        if isPressed { return OpenCodeColors.textSecondary }
-        return contrast == .low ? OpenCodeColors.surfaceSecondary : OpenCodeColors.textPrimary
+        if !enabled { return OpenCodeColors.surfaceRaisedBase }
+        if isPressed { return OpenCodeColors.textBase }
+        return contrast == .low ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.textStrong
     }
 
     private func borderColor(isPressed: Bool) -> Color {
-        if !enabled { return OpenCodeColors.borderSubtle }
-        if isPressed { return OpenCodeColors.textSecondary }
-        return contrast == .low ? OpenCodeColors.borderSubtle : OpenCodeColors.textPrimary
+        if !enabled { return OpenCodeColors.borderWeakerBase }
+        if isPressed { return OpenCodeColors.textBase }
+        return contrast == .low ? OpenCodeColors.borderWeakerBase : OpenCodeColors.textStrong
     }
 }
 

@@ -71,7 +71,7 @@ struct SessionChatView: View {
             if let statusLabel = viewModel.sessionStatusLabel {
                 Text(statusLabel)
                     .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textInteractive)
+                    .foregroundStyle(OpenCodeColors.textInteractiveBase)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -80,7 +80,7 @@ struct SessionChatView: View {
             if let notice = viewModel.state.composer.modelNotice {
                 Text(notice)
                     .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textSecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -89,7 +89,7 @@ struct SessionChatView: View {
             timeline
             composer
         }
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .openCodeBottomSheet(
             isPresented: pickerPresentedBinding,
             title: modelPickerSheetTitle,
@@ -134,14 +134,14 @@ struct SessionChatView: View {
             Spacer()
             Text("No messages yet. Send a prompt to start.")
                 .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.horizontal, 16)
             Spacer()
         case let .error(_, _, message, _):
             Spacer()
             Text(message)
                 .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.horizontal, 16)
             Spacer()
         case let .loaded(sessionID, _, messages, _, _, isRefreshing, errorBanner):
@@ -149,7 +149,7 @@ struct SessionChatView: View {
                 if let errorBanner {
                     Text(errorBanner)
                         .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textSecondary)
+                        .foregroundStyle(OpenCodeColors.textBase)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 4)
@@ -286,10 +286,10 @@ struct SessionChatView: View {
         case .command, .tool, .unknown:
             Text("\(message.role.displayLabel): \(message.text.isEmpty ? "…" : message.text)")
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+                .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -305,7 +305,7 @@ struct SessionChatView: View {
         return VStack(alignment: .leading, spacing: 10) {
             TextField("Ask anything...", text: composerTextBinding, axis: .vertical)
                 .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 4)
 
@@ -355,10 +355,10 @@ struct SessionChatView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 26))
+        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 26))
         .overlay(
             RoundedRectangle(cornerRadius: 26)
-                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
@@ -547,15 +547,15 @@ private struct AssistantMessageBubble: View {
             } else {
                 Text(text.isEmpty ? "…" : text)
                     .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(OpenCodeColors.surfacePrimary, in: RoundedRectangle(cornerRadius: 8))
+        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(OpenCodeColors.borderSubtle, lineWidth: 1)
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
     }
 
@@ -567,10 +567,10 @@ private struct ModelPickerFilterField: View {
     var body: some View {
         TextField("Filter models...", text: $text)
             .font(OpenCodeTypography.body)
-            .foregroundStyle(OpenCodeColors.textPrimary)
+            .foregroundStyle(OpenCodeColors.textStrong)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
     }

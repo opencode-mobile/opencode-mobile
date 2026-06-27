@@ -19,11 +19,11 @@ extension EventStreamConnectionState {
     var homeStatusTint: Color {
         switch self {
         case .connected:
-            OpenCodeColors.statusSuccess
+            OpenCodeColors.success
         case .connecting, .reconnecting:
-            OpenCodeColors.statusWarning
+            OpenCodeColors.warning
         case .idle, .disconnected:
-            OpenCodeColors.textSecondary
+            OpenCodeColors.textBase
         }
     }
 }

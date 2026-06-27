@@ -7,6 +7,31 @@ SCHEME="${IOS_SCHEME:-OpenCode Mobile}"
 BUNDLE_ID="${IOS_BUNDLE_ID:-dev.opencode.mobile}"
 DERIVED_DATA_PATH="${IOS_DERIVED_DATA_PATH:-$ROOT_DIR/build/ios}"
 
+CLEAN=0
+for arg in "$@"; do
+  case "$arg" in
+    --clean)
+      CLEAN=1
+      ;;
+    -h|--help)
+      cat <<EOF
+Usage: ./run-ios.sh [--clean]
+
+Build and launch $SCHEME on an iPhone simulator.
+
+Options:
+  --clean   Run xcodebuild clean, remove the app from the simulator, then build
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      echo "Run ./run-ios.sh --help for usage." >&2
+      exit 1
+      ;;
+  esac
+done
+
 if [ ! -d "$PROJECT" ]; then
   echo "Missing Xcode project at $PROJECT" >&2
   exit 1
@@ -84,6 +109,17 @@ fi
 
 open -a Simulator
 xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
+if [ "$CLEAN" -eq 1 ]; then
+  echo "Cleaning $SCHEME..."
+  xcodebuild \
+    -project "$PROJECT" \
+    -scheme "$SCHEME" \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    clean
+  xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+fi
 
 xcodebuild \
   -project "$PROJECT" \

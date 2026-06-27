@@ -31,21 +31,21 @@ struct ComponentGalleryHomeView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(entry.title)
                                         .font(OpenCodeTypography.heading)
-                                        .foregroundStyle(OpenCodeColors.textPrimary)
+                                        .foregroundStyle(OpenCodeColors.textStrong)
                                     Text(entry.description)
                                         .font(OpenCodeTypography.bodySecondary)
-                                        .foregroundStyle(OpenCodeColors.textSecondary)
+                                        .foregroundStyle(OpenCodeColors.textBase)
                                 }
                                 .padding(.vertical, 4)
                             }
-                            .listRowBackground(OpenCodeColors.surfacePrimary)
+                            .listRowBackground(OpenCodeColors.surfaceBase)
                         }
                     }
                 }
             }
             .scrollContentBackground(.hidden)
         }
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .navigationBarHidden(true)
         .preferredColorScheme(themeMode.colorScheme)
     }

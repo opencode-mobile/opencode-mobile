@@ -81,7 +81,7 @@ struct TopBarGalleryView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Top bar")
                     .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textPrimary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
 
                 ControlGroup(title: "Leading") {
                     HStack(spacing: 8) {
@@ -124,7 +124,7 @@ struct TopBarGalleryView: View {
 
                 Text("Switch controls to review the title-only, back, close, icon-action, labeled-action, divider, and disabled-action states.")
                     .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textSecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
             }
             .padding(.horizontal, 16)
 
@@ -147,7 +147,7 @@ private struct ControlGroup<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(OpenCodeTypography.button)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             content()
         }
     }

@@ -7,10 +7,10 @@ struct ChoiceBadgeGalleryView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Interactive")
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             Text("Tap a badge to select it.")
                 .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
 
             HStack(spacing: 8) {
                 ForEach(["Alpha", "Beta", "Gamma"], id: \.self) { option in
@@ -24,7 +24,7 @@ struct ChoiceBadgeGalleryView: View {
 
             Text("Disabled")
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             HStack(spacing: 8) {
                 OpenCodeChoiceBadge(label: "Unavailable", selected: false, enabled: false, action: {})
             }

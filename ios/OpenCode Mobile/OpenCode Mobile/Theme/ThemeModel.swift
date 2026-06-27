@@ -1,5 +1,10 @@
 import Foundation
 
+struct ThemePreset: Identifiable, Equatable, Codable {
+    let id: String
+    let name: String
+}
+
 struct OpenCodeTheme: Codable, Equatable {
     let schema: String?
     let name: String

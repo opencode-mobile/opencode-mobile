@@ -38,17 +38,17 @@ struct OpenCodeChoiceBadge: View {
     }
 
     private var labelColor: Color {
-        enabled ? OpenCodeColors.textPrimary : OpenCodeColors.textSecondary
+        enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase
     }
 
     private var backgroundColor: Color {
-        guard enabled else { return OpenCodeColors.surfaceSecondary }
-        return selected ? OpenCodeColors.surfaceSecondary : OpenCodeColors.surfacePrimary
+        guard enabled else { return OpenCodeColors.surfaceRaisedBase }
+        return selected ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.surfaceBase
     }
 
     private var borderColor: Color {
-        guard enabled else { return OpenCodeColors.borderSubtle }
-        return selected ? OpenCodeColors.borderDefault : OpenCodeColors.borderSubtle
+        guard enabled else { return OpenCodeColors.borderWeakerBase }
+        return selected ? OpenCodeColors.borderWeakBase : OpenCodeColors.borderWeakerBase
     }
 }
 

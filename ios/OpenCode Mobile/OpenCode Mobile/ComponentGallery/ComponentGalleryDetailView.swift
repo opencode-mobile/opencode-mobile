@@ -18,7 +18,7 @@ struct ComponentGalleryDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(entry.description)
                         .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textSecondary)
+                        .foregroundStyle(OpenCodeColors.textBase)
                         .padding(.horizontal, horizontalPadding)
 
                     ComponentGalleryControls(themeMode: $themeMode)
@@ -35,7 +35,7 @@ struct ComponentGalleryDetailView: View {
                 .padding(.vertical, 16)
             }
         }
-        .background(OpenCodeColors.backgroundPrimary)
+        .background(OpenCodeColors.backgroundBase)
         .navigationBarHidden(true)
     }
 

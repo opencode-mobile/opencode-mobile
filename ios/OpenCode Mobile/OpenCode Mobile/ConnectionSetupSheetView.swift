@@ -38,7 +38,7 @@ struct ConnectionSetupSheetView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
             Group {
                 if secure {
                     SecureField(title, text: text)
@@ -49,10 +49,10 @@ struct ConnectionSetupSheetView: View {
                 }
             }
             .font(OpenCodeTypography.body)
-            .foregroundStyle(OpenCodeColors.textPrimary)
+            .foregroundStyle(OpenCodeColors.textStrong)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(OpenCodeColors.surfaceSecondary, in: RoundedRectangle(cornerRadius: 12))
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -62,8 +62,8 @@ struct ConnectionSetupSheetView: View {
             .font(OpenCodeTypography.bodySecondary)
             .foregroundStyle(
                 viewModel.state == .testSucceeded
-                    ? OpenCodeColors.textPrimary
-                    : OpenCodeColors.textSecondary
+                    ? OpenCodeColors.textStrong
+                    : OpenCodeColors.textBase
             )
             .opacity(message == nil ? 0 : 1)
             .accessibilityHidden(message == nil)

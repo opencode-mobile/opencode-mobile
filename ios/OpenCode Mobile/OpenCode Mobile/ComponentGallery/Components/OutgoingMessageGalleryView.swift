@@ -35,10 +35,10 @@ struct OutgoingMessageGalleryView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Interactive")
                 .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textPrimary)
+                .foregroundStyle(OpenCodeColors.textStrong)
             Text("Switch samples, then use the chevron on long messages to expand or collapse.")
                 .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textSecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
 
             HStack(spacing: 8) {
                 ForEach(OutgoingMessageSample.allCases, id: \.self) { option in

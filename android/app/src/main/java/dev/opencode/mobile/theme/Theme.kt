@@ -17,11 +17,6 @@ fun OpenCodeTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    androidx.compose.runtime.SideEffect {
-        ThemeManager.initialize(context)
-    }
-
     val colorScheme =
         when {
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
