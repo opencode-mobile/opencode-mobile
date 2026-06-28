@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -15,6 +17,11 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.SessionModelSelection
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.network.OpencodeHttpClient
+import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.message.DisplayMessage
@@ -37,6 +44,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -247,6 +255,131 @@ class SessionChatViewModelTest {
                     ?.modelId,
             )
             assertEquals("high", viewModel.uiState.value.composer.selectedVariant)
+        }
+
+    @Test
+    fun loadMessages_prefersLatestMessageModelOverCatalogDefault() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val historyOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    modelProviderId = "openai",
+                                    modelId = "gpt-4",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, historyOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                "openai",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.providerId,
+            )
+            assertEquals(
+                "gpt-4",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun loadMessages_restoresCachedModelSelectionOverHistory() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val cachedOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "openai",
+                        modelId = "gpt-4",
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    variant = "high",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, cachedOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("openai", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals("gpt-4", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
         }
 
     @Test
@@ -612,18 +745,39 @@ class SessionChatViewModelTest {
 
     private fun createViewModel(
         repository: FakeMessageRepository,
+        modelRepository: FakeModelRepository = FakeModelRepository(),
+        sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
+        val json = Json { ignoreUnknownKeys = true }
+        val connectionProfileStore = FakeConnectionProfileStore()
+        val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+        runBlocking {
+            activeConnectionManager.applyProfile(
+                ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = ""),
+            )
+        }
+        val connectionSessionCoordinator =
+            ConnectionSessionCoordinator(
+                activeConnectionManager = activeConnectionManager,
+                connectionProfileStore = connectionProfileStore,
+                secureCredentialStore = FakeSecureCredentialStore(),
+                sessionModelSelectionStore = sessionModelSelectionStore,
+                httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+            )
         return SessionChatViewModel(
             messageRepository = repository,
-            modelRepository = FakeModelRepository(),
+            modelRepository = modelRepository,
             sessionRepository = sessionRepository,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+            eventDomainAdapter = EventDomainAdapter(json),
+            connectionSessionCoordinator = connectionSessionCoordinator,
+            sessionModelSelectionStore = sessionModelSelectionStore,
         ).apply { ioDispatcher = testDispatcher }
     }
 
@@ -649,6 +803,77 @@ class SessionChatViewModelTest {
         block()
         return (System.nanoTime() - startedAt) / 1_000_000
     }
+}
+
+private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
+    private val saved = mutableMapOf<String, SessionModelSelection>()
+
+    fun seed(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+        selection: SessionModelSelection,
+    ) {
+        saved[key(serverBaseUrl, worktree, sessionId)] = selection
+    }
+
+    override suspend fun load(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+    ): SessionModelSelection? = saved[key(serverBaseUrl, worktree, sessionId)]
+
+    override suspend fun save(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+        selection: SessionModelSelection,
+    ) {
+        saved[key(serverBaseUrl, worktree, sessionId)] = selection
+    }
+
+    override suspend fun clearAll() {
+        saved.clear()
+    }
+
+    private fun key(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+    ): String = "$serverBaseUrl|$worktree|$sessionId"
+}
+
+private class FakeConnectionProfileStore : dev.opencode.mobile.domain.connection.ConnectionProfileStore {
+    override suspend fun activeProfile(): dev.opencode.mobile.domain.connection.ConnectionProfile? = null
+
+    override suspend fun saveProfile(profile: dev.opencode.mobile.domain.connection.ConnectionProfile) = Unit
+
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = emptyList()
+
+    override suspend fun addWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) = Unit
+
+    override suspend fun setAddedWorktrees(
+        serverBaseUrl: String,
+        worktrees: List<String>,
+    ) = Unit
+
+    override suspend fun clearAll() = Unit
+}
+
+private class FakeSecureCredentialStore : dev.opencode.mobile.domain.connection.SecureCredentialStore {
+    override fun readPassword(serverBaseUrl: String): String? = null
+
+    override fun writePassword(
+        serverBaseUrl: String,
+        password: String,
+    ) = Unit
+
+    override fun deletePassword(serverBaseUrl: String) = Unit
+
+    override fun clearAll() = Unit
 }
 
 private class FakeMessageRepository(
@@ -767,8 +992,11 @@ private class FakeMessageRepository(
     }
 }
 
-private class FakeModelRepository : ModelRepository {
+private class FakeModelRepository(
+    private val catalog: ModelSelectionCatalog? = null,
+) : ModelRepository {
     override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
+        catalog?.let { return it }
         val option =
             ModelSelectionOption(
                 providerId = "anthropic",

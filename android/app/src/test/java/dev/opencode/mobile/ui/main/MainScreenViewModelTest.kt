@@ -16,6 +16,8 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.model.SessionModelSelection
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -236,6 +238,7 @@ class MainScreenViewModelTest {
                 activeConnectionManager = activeConnectionManager,
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
+                sessionModelSelectionStore = FakeSessionModelSelectionStore(),
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
@@ -446,4 +449,21 @@ private class FakeSecureCredentialStore : SecureCredentialStore {
     override fun clearAll() {
         passwords.clear()
     }
+}
+
+private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
+    override suspend fun load(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+    ): SessionModelSelection? = null
+
+    override suspend fun save(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+        selection: SessionModelSelection,
+    ) = Unit
+
+    override suspend fun clearAll() = Unit
 }

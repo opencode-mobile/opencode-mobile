@@ -133,6 +133,24 @@ Avoid root screen-phase enums when persistent chrome stays visible while only
 one region changes. Avoid helper sprawl such as `isSendingFromCurrentState()`;
 that usually means the root should be composite.
 
+### Session Chat facade (high-risk)
+
+Session Chat is the reference implementation of a **regional Screen Model**:
+`SessionChatTimeline`, `SessionChatComposer`, and `SessionInfo` own behavior;
+`SessionChatViewModel` coordinates and merges state only.
+
+Treat edits to `SessionChatViewModel` as architectural decisions, not routine
+feature work. Before changing it:
+
+1. Put new logic in the owning region.
+2. Keep the facade to `bind()`, `mergeUiState()`, and explicit cross-region
+   callbacks.
+3. Do not add repository dependencies, caches, or store I/O to the facade.
+4. Document boundary changes in `docs/features/session-chat/decisions.md`.
+
+See [Session Chat decisions](../features/session-chat/decisions.md#keep-sessionchatviewmodel-as-a-thin-facade)
+for the full allow/deny list and region ownership table.
+
 ## Design System Dependency
 
 Screens compose the shared Component Collection. If a feature needs a new

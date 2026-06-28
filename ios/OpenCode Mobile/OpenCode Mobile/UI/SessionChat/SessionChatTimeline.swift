@@ -261,16 +261,21 @@ final class SessionChatTimeline {
     }
 
     private func latestModelHint(from messages: [Message]) -> LatestModelHint? {
-        guard let message = messages
-            .sorted(by: {
+        let sorted =
+            messages.sorted(by: {
                 let leftTime = $0.sentAtEpochMs ?? Int64.min
                 let rightTime = $1.sentAtEpochMs ?? Int64.min
                 if leftTime != rightTime { return leftTime > rightTime }
                 return $0.id > $1.id
             })
-            .first(where: { $0.modelProviderID != nil && $0.modelID != nil }),
-            let providerID = message.modelProviderID,
-            let modelID = message.modelID
+        return latestModelHint(from: sorted, role: .user)
+            ?? latestModelHint(from: sorted, role: .assistant)
+    }
+
+    private func latestModelHint(from sortedMessages: [Message], role: MessageRole) -> LatestModelHint? {
+        guard let message = sortedMessages.first(where: { $0.role == role && $0.modelProviderID != nil && $0.modelID != nil }),
+              let providerID = message.modelProviderID,
+              let modelID = message.modelID
         else { return nil }
         return LatestModelHint(providerID: providerID, modelID: modelID, variant: message.variant)
     }

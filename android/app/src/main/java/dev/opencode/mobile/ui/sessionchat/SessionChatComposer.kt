@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import android.util.Log
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -9,6 +10,8 @@ import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.SessionModelSelection
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +31,8 @@ class SessionChatComposer(
     private val messageRepository: MessageRepository,
     private val modelRepository: ModelRepository,
     private val sessionRepository: SessionRepository,
+    private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+    private val sessionModelSelectionStore: SessionModelSelectionStore,
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
@@ -38,6 +43,9 @@ class SessionChatComposer(
     private var boundSessionId: String? = null
     private var boundWorktree: String? = null
     private var loadedCatalog: ModelSelectionCatalog? = null
+    private var cachedSelection: SessionModelSelection? = null
+    private var cacheResolved = false
+    private var appliedInitialModelSelection = false
 
     fun bind(
         sessionId: String,
@@ -52,8 +60,12 @@ class SessionChatComposer(
         boundSessionId = sessionId
         boundWorktree = worktree
         loadedCatalog = null
+        cachedSelection = null
+        cacheResolved = false
+        appliedInitialModelSelection = false
         _state.value = SessionChatComposerRegionState()
         logI("bind session=$sessionId worktree=$worktree")
+        loadCachedSelection()
     }
 
     fun loadCatalog() {
@@ -80,17 +92,54 @@ class SessionChatComposer(
     fun applyLatestModelHint(hint: LatestModelHint?) {
         val catalog = loadedCatalog ?: return
         if (catalog.options.isEmpty()) return
-        val latestOption = hint?.let { catalog.option(it.providerId, it.modelId) }
-        updateFromCatalog(catalog, latestOption, hint?.variant)
+        val latestOption = hint?.let { catalog.option(it.providerId, it.modelId) } ?: return
+        updateFromCatalog(catalog, latestOption, hint.variant)
+    }
+
+    fun tryApplyInitialSelection(
+        timelineState: SessionChatTimelineRegionState,
+        messageHint: LatestModelHint?,
+    ) {
+        if (appliedInitialModelSelection) return
+        if (!cacheResolved) return
+        if (_state.value.composer.modelOptions.isEmpty()) return
+
+        when (timelineState.timeline) {
+            SessionChatTimelineState.Loading -> return
+            SessionChatTimelineState.Error,
+            SessionChatTimelineState.Empty,
+            -> appliedInitialModelSelection = true
+            SessionChatTimelineState.Ready -> {
+                cachedSelection?.let { cached ->
+                    if (_state.value.composer.modelOptions.any {
+                            it.providerId == cached.providerId && it.modelId == cached.modelId
+                        }
+                    ) {
+                        appliedInitialModelSelection = true
+                        applyLatestModelHint(
+                            LatestModelHint(
+                                providerId = cached.providerId,
+                                modelId = cached.modelId,
+                                variant = cached.variant,
+                            ),
+                        )
+                        return
+                    }
+                }
+                messageHint?.let { hint ->
+                    appliedInitialModelSelection = true
+                    applyLatestModelHint(hint)
+                } ?: run {
+                    if (timelineState.messages.isNotEmpty()) {
+                        appliedInitialModelSelection = true
+                    }
+                }
+            }
+        }
     }
 
     fun updateComposerText(text: String) {
         updateComposer { it.copy(text = text) }
-    }
-
-    fun selectModel(model: String) {
-        val option = _state.value.composer.modelOptions.firstOrNull { it.id == model } ?: return
-        selectModel(option)
     }
 
     fun selectModel(option: ModelSelectionOption) {
@@ -103,6 +152,7 @@ class SessionChatComposer(
                 modelNotice = null,
             )
         }
+        persistCurrentSelection()
     }
 
     fun selectMode(mode: String) {
@@ -126,6 +176,7 @@ class SessionChatComposer(
                 selectedVariant = variant,
             )
         }
+        persistCurrentSelection()
     }
 
     fun restoreComposerText(text: String) {
@@ -183,6 +234,7 @@ class SessionChatComposer(
                         ),
                     directory = worktree,
                 )
+                persistCurrentSelection()
                 onSendAccepted()
             } catch (throwable: Throwable) {
                 logSendFailure(throwable)
@@ -219,6 +271,51 @@ class SessionChatComposer(
         }
     }
 
+    private fun loadCachedSelection() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        val serverBaseUrl = connectionSessionCoordinator.currentProfile()?.baseUrl ?: run {
+            cacheResolved = true
+            return
+        }
+        scope.launch {
+            cachedSelection =
+                withContext(ioDispatcher) {
+                    sessionModelSelectionStore.load(
+                        serverBaseUrl = serverBaseUrl,
+                        worktree = worktree,
+                        sessionId = sessionId,
+                    )
+                }
+            cacheResolved = true
+        }
+    }
+
+    private fun persistCurrentSelection() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        val serverBaseUrl = connectionSessionCoordinator.currentProfile()?.baseUrl ?: return
+        val selected = _state.value.composer.selectedModel ?: return
+        val variant = _state.value.composer.selectedVariant
+        scope.launch {
+            val selection =
+                SessionModelSelection(
+                    providerId = selected.option.providerId,
+                    modelId = selected.option.modelId,
+                    variant = variant,
+                )
+            withContext(ioDispatcher) {
+                sessionModelSelectionStore.save(
+                    serverBaseUrl = serverBaseUrl,
+                    worktree = worktree,
+                    sessionId = sessionId,
+                    selection = selection,
+                )
+            }
+            cachedSelection = selection
+        }
+    }
+
     private fun isCurrentBinding(
         sessionId: String,
         worktree: String,
@@ -238,7 +335,7 @@ class SessionChatComposer(
         _state.update { state ->
             val currentOption =
                 state.composer.selectedModel?.let { catalog.option(it.option.providerId, it.option.modelId) }
-            val desired = currentOption ?: latestOption
+            val desired = latestOption ?: currentOption
             val fallback = desired ?: catalog.serverDefault ?: catalog.options.first()
             val notice =
                 if (state.composer.selectedModel != null &&

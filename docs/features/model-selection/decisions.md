@@ -5,10 +5,28 @@
 The mobile composer uses **Variant** for the server-provided model variant keys.
 `Default` is a mobile label only and is omitted from prompt requests.
 
-## No Persistent Mobile Default
+## Persistent Per-Session Cache
 
-Model selection is remembered per open Session Chat screen only. Mobile v1 does
-not write opencode config defaults or persist a separate mobile preference.
+- Date: 2026-06-28
+- Decision: Persist composer model/variant locally per
+  `server + worktree + sessionId`. Restore cached selection before history
+  bootstrap or catalog defaults. Write cache on explicit user model/variant
+  changes and successful prompt send. **Store I/O lives in
+  `SessionChatComposer`**, not `SessionChatViewModel` (Android shipped;
+  iOS parity pending).
+- Reason: match OpenCode desktop session-local model memory without writing
+  server config or adding global workspace defaults.
+- Revisit when: agent selection becomes server-backed or cross-session defaults
+  are explicitly in scope.
+
+## History Bootstrap Source
+
+- Date: 2026-06-28
+- Decision: When no cached selection exists, bootstrap from the latest **user**
+  message with model metadata; fall back to latest assistant message if needed.
+- Reason: align with desktop `local.session.restore(lastUserMessage)` behavior.
+- Revisit when: API evidence shows user messages never carry model metadata for
+  mobile clients.
 
 ## Model Picker Uses Provider Drilldown
 

@@ -204,10 +204,21 @@ class SessionChatTimeline(
         )
     }
 
-    fun latestModelHintFromMessages(messages: List<Message>): LatestModelHint? =
-        messages
-            .sortedWith(compareByDescending<Message> { it.sentAtEpochMs ?: Long.MIN_VALUE }.thenByDescending { it.id })
-            .firstOrNull { it.modelProviderId != null && it.modelId != null }
+    fun latestModelHintFromMessages(messages: List<Message>): LatestModelHint? {
+        val sorted =
+            messages.sortedWith(
+                compareByDescending<Message> { it.sentAtEpochMs ?: Long.MIN_VALUE }.thenByDescending { it.id },
+            )
+        return latestModelHintFromMessages(sorted, MessageRole.User)
+            ?: latestModelHintFromMessages(sorted, MessageRole.Assistant)
+    }
+
+    private fun latestModelHintFromMessages(
+        sortedMessages: List<Message>,
+        role: MessageRole,
+    ): LatestModelHint? =
+        sortedMessages
+            .firstOrNull { it.role == role && it.modelProviderId != null && it.modelId != null }
             ?.let { message ->
                 LatestModelHint(
                     providerId = message.modelProviderId.orEmpty(),

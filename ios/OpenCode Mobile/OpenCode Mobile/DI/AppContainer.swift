@@ -10,12 +10,17 @@ extension Container {
         self { UserDefaultsConnectionProfileStore() }.singleton
     }
 
+    var sessionModelSelectionStore: Factory<any SessionModelSelectionStore> {
+        self { UserDefaultsSessionModelSelectionStore() }.singleton
+    }
+
     var connectionSessionCoordinator: Factory<ConnectionSessionCoordinator> {
         self { @MainActor in
             ConnectionSessionCoordinator(
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionProfileStore: self.connectionProfileStore(),
-                secureCredentialStore: self.secureCredentialStore()
+                secureCredentialStore: self.secureCredentialStore(),
+                sessionModelSelectionStore: self.sessionModelSelectionStore()
             )
         }.singleton
     }
@@ -231,7 +236,9 @@ extension Container {
                 modelRepository: self.modelRepository(),
                 sessionRepository: self.sessionRepository(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
-                foregroundEventStream: self.foregroundEventStream()
+                foregroundEventStream: self.foregroundEventStream(),
+                sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }
     }

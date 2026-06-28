@@ -106,18 +106,71 @@
 - Date: 2026-06-27
 - Decision: Session Chat Screen Models on both platforms delegate to
   `SessionChatTimeline` (message list load, live updates, markdown transform,
-  optimistic rows) and `SessionChatComposer` (catalog load, picker state, send).
-  `SessionChatViewModel` remains the facade: composite `SessionChatUiState`,
-  chrome (connection, status, context usage, abort), and send wiring.
+  optimistic rows), `SessionChatComposer` (catalog load, picker state, send,
+  abort, model-selection cache), and `SessionInfo` (session id/title, SSE
+  connection, agent status, context usage). `SessionChatViewModel` remains a
+  **thin facade**: `bind()` orchestration, composite `SessionChatUiState` via
+  `mergeUiState()`, and explicit cross-region wiring (for example
+  `sendPrompt` callbacks).
 - Reason: the monolithic ViewModel mixed independent concerns; parallel catalog
   and message loads are easier to reason about when each region owns its API
   calls.
 - Composer catalog load uses `GET /config/providers` only. Initial model
-  selection still applies a one-shot `LatestModelHint` from timeline message
-  history via the facade after both loads complete (not inside the composer
-  load path).
+  selection resolves inside `SessionChatComposer` (cached selection, then
+  timeline `LatestModelHint`, then catalog default). The facade may pass the
+  timeline hint into the composer but must not own cache state or store I/O.
 - Revisit when: the experiment is evaluated; optional follow-up to drop history
   hint and use `/session` metadata or server default only.
+
+## Keep SessionChatViewModel as a thin facade
+
+- Date: 2026-06-28
+- Decision: treat `SessionChatViewModel` as a **coordinator**, not a feature
+  brain. New Session Chat work must land in a region class first. The facade
+  grows only when wiring regions together — not when implementing behavior.
+- **Region ownership**
+
+  | Region | Owns |
+  | --- | --- |
+  | `SessionChatTimeline` | Message load/refresh, live observation, markdown rows, optimistic send merge |
+  | `SessionChatComposer` | Catalog, picker state, send/abort, `SessionModelSelectionStore` read/write |
+  | `SessionInfo` | Session id/title, SSE connection, agent status, context usage |
+  | `SessionChatViewModel` | `bind()` orchestration, `mergeUiState()`, minimal cross-region callbacks |
+
+- **Allowed in the facade**
+
+  - Delegating public screen actions to the correct region.
+  - `mergeUiState()` and error-priority rules that flatten regional state into
+    `SessionChatUiState`.
+  - Short cross-region wiring with explicit callbacks (for example
+    `sendPrompt` → optimistic rows, reload, status refresh).
+  - Bind bookkeeping (`sessionId`, `worktree`, `sessionTitle`) for
+    orchestration only.
+
+- **Not allowed in the facade**
+
+  - Repository or store calls (inject dependencies into the region that uses
+    them).
+  - Caches, `appliedInitial*` flags, or other feature-private mutable state.
+  - Growing `combine { }` collectors with side effects — prefer region methods
+    or a dedicated initializer if coordination gets non-trivial.
+  - Dead public methods that bypass regional ownership (remove or wire to UI).
+
+- **Before changing `SessionChatViewModel`**
+
+  1. Name which region owns the new behavior.
+  2. If the facade must change, keep the diff to orchestration or merge logic
+     only.
+  3. Update this decision (or `parity-gaps.md`) when boundaries shift.
+  4. Keep Android and iOS region splits aligned unless a platform difference is
+     intentional and documented.
+
+- Reason: the facade grew quickly during Message Repository and Model Selection
+  integration; centralizing logic there recreated a monolith and made tests and
+  parity harder. Android moved model-selection cache out of the ViewModel into
+  `SessionChatComposer` on 2026-06-28; iOS should follow the same boundary.
+- Revisit when: a fourth region is insufficient and a dedicated Session Chat
+  coordinator type is clearer than expanding the ViewModel.
 
 ## Extract SessionInfo from facade
 

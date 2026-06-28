@@ -14,7 +14,11 @@ final class SessionChatViewModel {
     private let timeline: SessionChatTimeline
     private let composer: SessionChatComposer
     private let sessionInfo: SessionInfo
-    private var appliedInitialModelHint = false
+    private let sessionModelSelectionStore: any SessionModelSelectionStore
+    private let activeConnectionManager: ActiveConnectionManager
+    private var appliedInitialModelSelection = false
+    private var cachedSelection: SessionModelSelection?
+    private var cacheResolved = false
 
     init(
         sessionID: String,
@@ -24,11 +28,15 @@ final class SessionChatViewModel {
         modelRepository: any ModelRepository,
         sessionRepository: any SessionRepository,
         sessionStatusLiveStore: any SessionStatusLiveStore,
-        foregroundEventStream: any ForegroundEventStream
+        foregroundEventStream: any ForegroundEventStream,
+        sessionModelSelectionStore: any SessionModelSelectionStore,
+        activeConnectionManager: ActiveConnectionManager
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
         self.worktree = worktree
+        self.sessionModelSelectionStore = sessionModelSelectionStore
+        self.activeConnectionManager = activeConnectionManager
         self.uiState = .initial(sessionID: sessionID, sessionTitle: sessionTitle)
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
@@ -53,11 +61,12 @@ final class SessionChatViewModel {
         timeline.onChange = { [weak self] in self?.publishUiState() }
         composer.onChange = { [weak self] in self?.publishUiState() }
         sessionInfo.onChange = { [weak self] in self?.publishUiState() }
+        Task { await self.loadCachedSelection() }
         publishUiState()
     }
 
     func startObserving() {
-        appliedInitialModelHint = false
+        appliedInitialModelSelection = false
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionInfo.startObserving()
         timeline.startObserving()
@@ -67,7 +76,7 @@ final class SessionChatViewModel {
         async let catalogLoad: Void = composer.loadCatalog()
         _ = await catalogLoad
         await waitForTimelineResolution()
-        await applyInitialModelHintIfNeeded()
+        await applyInitialModelSelectionIfNeeded()
         await sessionInfo.refreshStatus()
     }
 
@@ -81,6 +90,7 @@ final class SessionChatViewModel {
 
     func selectModel(_ option: ModelSelectionOption) {
         composer.selectModel(option)
+        persistCurrentSelection()
     }
 
     func selectMode(_ mode: String) {
@@ -89,6 +99,7 @@ final class SessionChatViewModel {
 
     func selectVariant(_ variant: String) {
         composer.selectVariant(variant)
+        persistCurrentSelection()
     }
 
     func restoreComposerText(_ text: String) {
@@ -103,6 +114,7 @@ final class SessionChatViewModel {
             },
             onSendAccepted: { [weak self] in
                 guard let self else { return }
+                self.persistCurrentSelection()
                 await self.sessionInfo.refreshStatus()
                 await self.timeline.reloadAfterSend(
                     onComplete: { [weak self] in self?.composer.clearSending() },
@@ -130,6 +142,37 @@ final class SessionChatViewModel {
         timeline.row(from: message, previous: previous)
     }
 
+    private func loadCachedSelection() async {
+        defer { cacheResolved = true }
+        guard let serverBaseURL = activeConnectionManager.currentProfile()?.baseURL else { return }
+        cachedSelection = await sessionModelSelectionStore.load(
+            serverBaseURL: serverBaseURL,
+            worktree: worktree,
+            sessionID: sessionID
+        )
+        publishUiState()
+    }
+
+    private func persistCurrentSelection() {
+        guard let serverBaseURL = activeConnectionManager.currentProfile()?.baseURL,
+              let selectedModel = composer.state.composer.selectedModel
+        else { return }
+        let selection = SessionModelSelection(
+            providerID: selectedModel.option.providerID,
+            modelID: selectedModel.option.modelID,
+            variant: composer.state.composer.selectedVariant
+        )
+        cachedSelection = selection
+        Task {
+            await sessionModelSelectionStore.save(
+                serverBaseURL: serverBaseURL,
+                worktree: worktree,
+                sessionID: sessionID,
+                selection: selection
+            )
+        }
+    }
+
     private func waitForTimelineResolution() async {
         let deadline = Date().addingTimeInterval(15)
         while Date() < deadline, timeline.state.timeline == .loading {
@@ -137,18 +180,55 @@ final class SessionChatViewModel {
         }
     }
 
-    private func applyInitialModelHintIfNeeded() async {
-        guard !appliedInitialModelHint else { return }
-        guard timeline.state.timeline != .error else { return }
-        guard !composer.state.composer.modelOptions.isEmpty else { return }
-        appliedInitialModelHint = true
-        composer.applyLatestModelHint(timeline.latestModelHint())
+    private func applyInitialModelSelectionIfNeeded() async {
+        tryApplyInitialModelSelection(
+            timelineState: timeline.state,
+            composerState: composer.state
+        )
+    }
+
+    private func tryApplyInitialModelSelection(
+        timelineState: SessionChatTimelineRegionState,
+        composerState: SessionChatComposerRegionState
+    ) {
+        guard !appliedInitialModelSelection else { return }
+        guard cacheResolved else { return }
+        guard !composerState.composer.modelOptions.isEmpty else { return }
+
+        switch timelineState.timeline {
+        case .loading:
+            return
+        case .error, .empty:
+            appliedInitialModelSelection = true
+        case .ready:
+            if let cachedSelection,
+               composerState.composer.modelOptions.contains(where: {
+                   $0.providerID == cachedSelection.providerID && $0.modelID == cachedSelection.modelID
+               }) {
+                appliedInitialModelSelection = true
+                composer.applyLatestModelHint(
+                    LatestModelHint(
+                        providerID: cachedSelection.providerID,
+                        modelID: cachedSelection.modelID,
+                        variant: cachedSelection.variant
+                    )
+                )
+                return
+            }
+            if let hint = timeline.latestModelHint() {
+                appliedInitialModelSelection = true
+                composer.applyLatestModelHint(hint)
+            } else if !timelineState.messages.isEmpty {
+                appliedInitialModelSelection = true
+            }
+        }
     }
 
     private func publishUiState() {
         let timelineState = timeline.state
         let composerState = composer.state
         let infoState = sessionInfo.state
+        tryApplyInitialModelSelection(timelineState: timelineState, composerState: composerState)
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,

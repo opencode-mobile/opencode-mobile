@@ -95,6 +95,61 @@ struct SessionChatViewModelTests {
         #expect(messages.contains { $0.text == "Hello" })
     }
 
+    @Test func loadMessages_restoresCachedModelSelectionOverHistory() async {
+        let defaultOption = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: ["low", "high"],
+            contextLimitTokens: 128_000
+        )
+        let cachedOption = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "gpt-4",
+            modelName: "GPT-4",
+            variants: [],
+            contextLimitTokens: 128_000
+        )
+        let selectionStore = InMemorySessionModelSelectionStore()
+        await selectionStore.save(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            worktree: "/repo",
+            sessionID: "ses-1",
+            selection: SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil)
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-2",
+                        role: .assistant,
+                        text: "Reply",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: "high",
+                        mode: nil,
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            ),
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: FakeModelRepository(
+                catalog: ModelSelectionCatalog(
+                    options: [defaultOption, cachedOption],
+                    serverDefault: defaultOption
+                )
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.composer.selectedModel?.option.providerID == "openai")
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+    }
+
     @Test func loadMessages_initializesModelFromLatestMessage() async {
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(
@@ -424,7 +479,9 @@ struct SessionChatViewModelTests {
 
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
-        eventStream: FakeForegroundEventStream? = nil
+        eventStream: FakeForegroundEventStream? = nil,
+        sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
+        modelRepository: FakeModelRepository = FakeModelRepository()
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         let sessionRepository = FakeChatSessionRepository()
@@ -443,15 +500,22 @@ struct SessionChatViewModelTests {
             } else {
                 fake
             }
+        let selectionStore = sessionModelSelectionStore ?? InMemorySessionModelSelectionStore()
+        let activeConnectionManager = ActiveConnectionManager()
+        activeConnectionManager.apply(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+        )
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
             worktree: "/repo",
             messageRepository: repo,
-            modelRepository: FakeModelRepository(),
+            modelRepository: modelRepository,
             sessionRepository: sessionRepository,
             sessionStatusLiveStore: sessionStatusLiveStore,
-            foregroundEventStream: eventStream
+            foregroundEventStream: eventStream,
+            sessionModelSelectionStore: selectionStore,
+            activeConnectionManager: activeConnectionManager
         )
         viewModel.startObserving()
         return viewModel
@@ -742,7 +806,9 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
 }
 
 private struct FakeModelRepository: ModelRepository {
-    func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
+    let catalog: ModelSelectionCatalog
+
+    init(catalog: ModelSelectionCatalog? = nil) {
         let option = ModelSelectionOption(
             providerID: "anthropic",
             providerName: "Anthropic",
@@ -751,7 +817,34 @@ private struct FakeModelRepository: ModelRepository {
             variants: ["low", "high"],
             contextLimitTokens: 128_000
         )
-        return ModelSelectionCatalog(options: [option], serverDefault: option)
+        self.catalog = catalog ?? ModelSelectionCatalog(options: [option], serverDefault: option)
+    }
+
+    func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
+        catalog
+    }
+}
+
+@MainActor
+private final class InMemorySessionModelSelectionStore: SessionModelSelectionStore, @unchecked Sendable {
+    private var saved: [String: SessionModelSelection] = [:]
+
+    func load(serverBaseURL: String, worktree: String, sessionID: String) async -> SessionModelSelection? {
+        saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)]
+    }
+
+    func save(serverBaseURL: String, worktree: String, sessionID: String, selection: SessionModelSelection) async {
+        saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)] = selection
+    }
+
+    func clearAll() async {
+        saved.removeAll()
+    }
+
+    private func key(serverBaseURL: String, worktree: String, sessionID: String) -> String {
+        let trimmed = serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.hasSuffix("/") ? trimmed : trimmed + "/"
+        return [normalized, worktree, sessionID].joined(separator: "|")
     }
 }
 

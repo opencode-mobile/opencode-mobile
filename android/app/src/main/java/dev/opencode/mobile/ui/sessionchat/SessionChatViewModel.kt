@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -11,6 +12,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -32,6 +33,8 @@ class SessionChatViewModel
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
         eventDomainAdapter: EventDomainAdapter,
+        connectionSessionCoordinator: ConnectionSessionCoordinator,
+        sessionModelSelectionStore: SessionModelSelectionStore,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -50,6 +53,8 @@ class SessionChatViewModel
                 messageRepository = messageRepository,
                 modelRepository = modelRepository,
                 sessionRepository = sessionRepository,
+                connectionSessionCoordinator = connectionSessionCoordinator,
+                sessionModelSelectionStore = sessionModelSelectionStore,
                 scope = viewModelScope,
             )
         private val sessionInfo =
@@ -68,16 +73,16 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
-        private var appliedInitialModelHint = false
 
         init {
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
             viewModelScope.launch {
                 combine(timeline.state, composer.state, sessionInfo.state) { timelineState, composerState, infoState ->
-                    mergeUiState(timelineState, composerState, infoState)
-                }.collect { merged ->
-                    _uiState.value = merged
+                    Triple(timelineState, composerState, infoState)
+                }.collect { (timelineState, composerState, infoState) ->
+                    composer.tryApplyInitialSelection(timelineState, timeline.latestModelHint())
+                    _uiState.value = mergeUiState(timelineState, composerState, infoState)
                 }
             }
         }
@@ -96,7 +101,6 @@ class SessionChatViewModel
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
-            appliedInitialModelHint = false
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
@@ -104,12 +108,10 @@ class SessionChatViewModel
             viewModelScope.launch {
                 composer.loadCatalog()
             }
-            scheduleInitialModelHint()
         }
 
         fun loadMessages() {
             timeline.loadMessages()
-            scheduleInitialModelHint()
         }
 
         fun refreshMessages() {
@@ -118,10 +120,6 @@ class SessionChatViewModel
 
         fun updateComposerText(text: String) {
             composer.updateComposerText(text)
-        }
-
-        fun selectModel(model: String) {
-            composer.selectModel(model)
         }
 
         fun selectModel(option: ModelSelectionOption) {
@@ -168,19 +166,6 @@ class SessionChatViewModel
             message: Message,
             previous: SessionChatMessageItem? = null,
         ): SessionChatMessageItem = timeline.toMessageItem(message, previous)
-
-        private fun scheduleInitialModelHint() {
-            viewModelScope.launch {
-                if (appliedInitialModelHint) return@launch
-                val timelineState = timeline.state.first { it.timeline != SessionChatTimelineState.Loading }
-                composer.state.first { it.composer.modelOptions.isNotEmpty() }
-                if (appliedInitialModelHint) return@launch
-                appliedInitialModelHint = true
-                if (timelineState.timeline != SessionChatTimelineState.Error) {
-                    composer.applyLatestModelHint(timeline.latestModelHint())
-                }
-            }
-        }
 
         private fun mergeUiState(
             timelineState: SessionChatTimelineRegionState,

@@ -50,8 +50,9 @@ final class SessionChatComposer {
 
     func applyLatestModelHint(_ hint: LatestModelHint?) {
         guard let catalog = loadedCatalog, !catalog.options.isEmpty else { return }
-        let latestOption = hint.flatMap { catalog.option(providerID: $0.providerID, modelID: $0.modelID) }
-        updateFromCatalog(catalog, latestOption: latestOption, latestVariant: hint?.variant)
+        guard let hint else { return }
+        guard let latestOption = catalog.option(providerID: hint.providerID, modelID: hint.modelID) else { return }
+        updateFromCatalog(catalog, latestOption: latestOption, latestVariant: hint.variant)
     }
 
     func updateComposerText(_ text: String) {
@@ -193,7 +194,7 @@ final class SessionChatComposer {
         let currentOption = current.flatMap {
             catalog.option(providerID: $0.option.providerID, modelID: $0.option.modelID)
         }
-        let desired = currentOption ?? latestOption
+        let desired = latestOption ?? currentOption
         let fallback = desired ?? catalog.serverDefault ?? catalog.options[0]
         let notice: String? = {
             guard let current, catalog.option(providerID: current.option.providerID, modelID: current.option.modelID) == nil else { return nil }

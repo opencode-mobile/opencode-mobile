@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -16,6 +17,7 @@ class ConnectionSessionCoordinator
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionProfileStore: ConnectionProfileStore,
         private val secureCredentialStore: SecureCredentialStore,
+        private val sessionModelSelectionStore: SessionModelSelectionStore,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
     ) {
@@ -37,6 +39,7 @@ class ConnectionSessionCoordinator
         suspend fun clearConnectionData() {
             secureCredentialStore.clearAll()
             connectionProfileStore.clearAll()
+            sessionModelSelectionStore.clearAll()
             activeConnectionManager.disconnect()
             httpClient.rebuild()
             sseHttpClient.rebuild()
