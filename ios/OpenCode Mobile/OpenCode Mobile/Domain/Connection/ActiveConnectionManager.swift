@@ -54,6 +54,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: ConnectionProfileStore
     private let secureCredentialStore: SecureCredentialStore
+    private let sessionModelSelectionStore: SessionModelSelectionStore
     private let lock = NSLock()
     private var profileSavedHandlers: [() -> Void] = []
     private var profileClearedHandlers: [() -> Void] = []
@@ -61,11 +62,13 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     init(
         activeConnectionManager: ActiveConnectionManager,
         connectionProfileStore: ConnectionProfileStore,
-        secureCredentialStore: SecureCredentialStore = KeychainCredentialStore()
+        secureCredentialStore: SecureCredentialStore = KeychainCredentialStore(),
+        sessionModelSelectionStore: SessionModelSelectionStore = UserDefaultsSessionModelSelectionStore()
     ) {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.secureCredentialStore = secureCredentialStore
+        self.sessionModelSelectionStore = sessionModelSelectionStore
     }
 
     func onProfileSaved(_ handler: @escaping () -> Void) {
@@ -92,6 +95,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     func clearConnectionData() async {
         secureCredentialStore.clearAll()
         await connectionProfileStore.clearAll()
+        await sessionModelSelectionStore.clearAll()
         activeConnectionManager.disconnect()
         let handlers = profileClearedHandlers
         handlers.forEach { $0() }

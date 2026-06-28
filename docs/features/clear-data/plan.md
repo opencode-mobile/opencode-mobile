@@ -31,6 +31,8 @@ None (all operations are local).
 ## Domain Objects
 
 - `ConnectionProfileStore` -- new `clearAll()` method.
+- `SessionModelSelectionStore` -- new `clearAll()` method (included in Clear All
+  Data orchestration).
 - `ActiveConnectionManager` -- new `disconnect()` method.
 - `ConnectionSessionCoordinator` -- orchestrates the clearing sequence.
 - `SessionLiveStore`, `SessionStatusLiveStore`, `MessageLiveStore` -- new

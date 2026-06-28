@@ -8,7 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.live.MessageLiveStore
+import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.theme.ThemeManager
@@ -24,7 +24,7 @@ class SettingsViewModel
         private val foregroundEventStream: ForegroundEventStream,
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
-        private val messageLiveStore: MessageLiveStore,
+        private val messageRepository: MessageRepository,
     ) : ViewModel() {
         fun clearAllData() {
             viewModelScope.launch {
@@ -32,7 +32,7 @@ class SettingsViewModel
                 connectionSessionCoordinator.clearConnectionData()
                 sessionLiveStore.clearCache()
                 sessionStatusLiveStore.clearCache()
-                messageLiveStore.clearCache()
+                messageRepository.clearMessageCache()
                 ThemeManager.clearAll()
             }
         }

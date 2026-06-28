@@ -1,3 +1,3 @@
 # Session Chat Parity Gaps
 
-No temporary parity gaps are currently tracked for this slice.
+No known iOS/Android parity gaps for the current slice.

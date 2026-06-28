@@ -1,6 +1,35 @@
 package dev.opencode.mobile.domain.message
 
+import kotlinx.coroutines.flow.Flow
+
 interface MessageRepository {
+    fun observeMessages(
+        sessionId: String,
+        directory: String? = null,
+    ): Flow<MessageListUpdate>
+
+    fun observeDisplayMessages(
+        sessionId: String,
+        directory: String? = null,
+    ): Flow<DisplayMessageListUpdate>
+
+    suspend fun refreshMessages(
+        sessionId: String,
+        directory: String? = null,
+    ): List<Message>
+
+    suspend fun refreshDisplayMessages(
+        sessionId: String,
+        directory: String? = null,
+    ): List<DisplayMessage>
+
+    suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+    ): DisplayMessage
+
+    fun clearMessageCache()
+
     suspend fun listMessages(
         sessionId: String,
         directory: String? = null,

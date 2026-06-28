@@ -1,0 +1,307 @@
+import Foundation
+import OSLog
+
+@MainActor
+final class SessionChatTimeline {
+    var onChange: (() -> Void)?
+
+    private(set) var state = SessionChatTimelineRegionState()
+
+    private let sessionID: String
+    private let worktree: String
+    private let messageRepository: any MessageRepository
+    private let sentTimeFormatter: DateFormatter
+    private var observationTask: Task<Void, Never>?
+    private var transformTask: Task<Void, Never>?
+    private var mergePendingWhileSending = false
+    private var pendingOptimisticRows: [SessionChatRow] = []
+    private var lastLoadedMessages: [Message] = []
+
+    init(
+        sessionID: String,
+        worktree: String,
+        messageRepository: any MessageRepository
+    ) {
+        self.sessionID = sessionID
+        self.worktree = worktree
+        self.messageRepository = messageRepository
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mm a"
+        self.sentTimeFormatter = formatter
+    }
+
+    func reset() {
+        observationTask?.cancel()
+        observationTask = nil
+        transformTask?.cancel()
+        mergePendingWhileSending = false
+        pendingOptimisticRows = []
+        lastLoadedMessages = []
+        state = SessionChatTimelineRegionState()
+        notifyChange()
+    }
+
+    func startObserving() {
+        observationTask?.cancel()
+        state.timeline = .loading
+        state.errorMessage = nil
+        notifyChange()
+        observationTask = Task {
+            for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
+                guard !Task.isCancelled else { return }
+                switch update {
+                case .loadFailed(let error):
+                    applyError(error)
+                case .messages(let displayMessages):
+                    applyLoadedDisplayMessages(displayMessages, isRefreshing: false, fromQuietRefresh: true)
+                }
+            }
+        }
+    }
+
+    func stopObserving() {
+        observationTask?.cancel()
+        observationTask = nil
+    }
+
+    func loadMessages() async {
+        state.timeline = .loading
+        state.errorMessage = nil
+        notifyChange()
+        do {
+            let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)
+            transformTask?.cancel()
+            await applyLoadedDisplayMessagesTransform(displayMessages, isRefreshing: false)
+        } catch {
+            applyError(error)
+        }
+    }
+
+    func refreshMessages() async {
+        if state.timeline == .ready {
+            state.isRefreshing = true
+            state.errorMessage = nil
+            notifyChange()
+        }
+
+        do {
+            let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)
+            transformTask?.cancel()
+            await applyLoadedDisplayMessagesTransform(displayMessages, isRefreshing: false)
+        } catch {
+            if state.timeline == .ready {
+                state.isRefreshing = false
+                state.errorMessage = errorMessage(error)
+                notifyChange()
+            }
+        }
+    }
+
+    func beginOptimisticSend(_ rows: [SessionChatRow]) {
+        mergePendingWhileSending = true
+        pendingOptimisticRows = rows
+        state.messages.append(contentsOf: rows)
+        state.timeline = .ready
+        state.errorMessage = nil
+        notifyChange()
+    }
+
+    func failOptimisticSend(optimisticID: String, error: String) {
+        mergePendingWhileSending = false
+        pendingOptimisticRows = []
+        state.messages.removeAll { $0.id == optimisticID }
+        state.errorMessage = error
+        notifyChange()
+    }
+
+    func clearSendingState() {
+        mergePendingWhileSending = false
+        pendingOptimisticRows = []
+    }
+
+    func reloadAfterSend(onComplete: @escaping () -> Void, onReloadFailed: @escaping () -> Void) async {
+        do {
+            let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)
+            transformTask?.cancel()
+            await applyLoadedDisplayMessagesTransform(displayMessages, isRefreshing: false, onPublished: onComplete)
+        } catch {
+            onReloadFailed()
+        }
+    }
+
+    func latestModelHint() -> LatestModelHint? {
+        latestModelHint(from: lastLoadedMessages)
+    }
+
+    func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
+        row(from: DisplayMessage(message: message), previous: previous)
+    }
+
+    func row(from display: DisplayMessage, previous: SessionChatRow? = nil) -> SessionChatRow {
+        let message = display.message
+        let isStreaming = display.isStreaming
+        return SessionChatRow(
+            id: message.id,
+            role: message.role,
+            text: message.text,
+            metadataLabel: metadataLabel(
+                mode: message.mode,
+                model: message.model,
+                variant: message.variant,
+                sentAtEpochMs: message.sentAtEpochMs
+            ),
+            isPending: false,
+            isStreaming: isStreaming,
+            renderedMarkdown: display.renderedMarkdown ?? previous?.renderedMarkdown.flatMap { document in
+                isStreaming && (previous?.isStreaming == true || previous?.text == message.text) ? document : nil
+            },
+            modelProviderID: message.modelProviderID,
+            modelID: message.modelID,
+            contextInputTokens: message.contextInputTokens
+        )
+    }
+
+    private func applyLoadedDisplayMessages(
+        _ displayMessages: [DisplayMessage],
+        isRefreshing: Bool,
+        fromQuietRefresh: Bool = false,
+        onPublished: (() -> Void)? = nil
+    ) {
+        transformTask?.cancel()
+        transformTask = Task {
+            await applyLoadedDisplayMessagesTransform(
+                displayMessages,
+                isRefreshing: isRefreshing,
+                fromQuietRefresh: fromQuietRefresh,
+                onPublished: onPublished
+            )
+        }
+    }
+
+    private func applyLoadedDisplayMessagesTransform(
+        _ displayMessages: [DisplayMessage],
+        isRefreshing: Bool,
+        fromQuietRefresh: Bool = false,
+        onPublished: (() -> Void)? = nil
+    ) async {
+        lastLoadedMessages = displayMessages.map(\.message)
+        guard !Task.isCancelled else { return }
+
+        let stateSnapshot = state
+        let isSending = fromQuietRefresh ? mergePendingWhileSending : false
+        let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
+        let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
+        let serverRows =
+            displayMessages
+                .enumerated()
+                .sorted { left, right in
+                    let leftTime = left.element.message.sentAtEpochMs
+                    let rightTime = right.element.message.sentAtEpochMs
+                    if let leftTime, let rightTime {
+                        if leftTime != rightTime { return leftTime < rightTime }
+                        return left.element.message.id < right.element.message.id
+                    }
+                    return left.offset < right.offset
+                }
+                .map { row(from: $0.element, previous: previousByID[$0.element.id]) }
+        let rows =
+            if fromQuietRefresh, isSending {
+                mergeWithPending(
+                    serverRows,
+                    pendingRows: pendingOptimisticRows.isEmpty
+                        ? stateSnapshot.messages.filter(\.isPending)
+                        : pendingOptimisticRows
+                )
+            } else {
+                serverRows
+            }
+        guard !Task.isCancelled else { return }
+
+        let timeline: SessionChatTimelineState =
+            if rows.isEmpty { .empty } else { .ready }
+        let resolvedTimeline: SessionChatTimelineState =
+            if fromQuietRefresh, stateSnapshot.timeline == .error, rows.isEmpty {
+                .error
+            } else {
+                timeline
+            }
+        let resolvedErrorMessage: String? =
+            if fromQuietRefresh {
+                if !rows.isEmpty, stateSnapshot.timeline == .error {
+                    nil
+                } else {
+                    previousErrorMessage
+                }
+            } else {
+                nil
+            }
+
+        state.timeline = resolvedTimeline
+        state.messages = rows
+        state.isRefreshing = isRefreshing
+        state.errorMessage = resolvedErrorMessage
+        if !fromQuietRefresh {
+            mergePendingWhileSending = false
+            pendingOptimisticRows = []
+        }
+        notifyChange()
+        SessionPerformanceProbe.emit("styled_timeline_published")
+        onPublished?()
+    }
+
+    private func applyError(_ error: Error) {
+        mergePendingWhileSending = false
+        pendingOptimisticRows = []
+        lastLoadedMessages = []
+        state.timeline = .error
+        state.messages = []
+        state.errorMessage = errorMessage(error)
+        notifyChange()
+    }
+
+    private func latestModelHint(from messages: [Message]) -> LatestModelHint? {
+        let sorted =
+            messages.sorted(by: {
+                let leftTime = $0.sentAtEpochMs ?? Int64.min
+                let rightTime = $1.sentAtEpochMs ?? Int64.min
+                if leftTime != rightTime { return leftTime > rightTime }
+                return $0.id > $1.id
+            })
+        return latestModelHint(from: sorted, role: .user)
+            ?? latestModelHint(from: sorted, role: .assistant)
+    }
+
+    private func latestModelHint(from sortedMessages: [Message], role: MessageRole) -> LatestModelHint? {
+        guard let message = sortedMessages.first(where: { $0.role == role && $0.modelProviderID != nil && $0.modelID != nil }),
+              let providerID = message.modelProviderID,
+              let modelID = message.modelID
+        else { return nil }
+        return LatestModelHint(providerID: providerID, modelID: modelID, variant: message.variant)
+    }
+
+    private func mergeWithPending(_ serverRows: [SessionChatRow], pendingRows: [SessionChatRow]) -> [SessionChatRow] {
+        guard !pendingRows.isEmpty else { return serverRows }
+        let pendingToKeep =
+            pendingRows.filter { pending in
+                !serverRows.contains(where: { $0.role == .user && $0.text == pending.text })
+            }
+        return serverRows + pendingToKeep
+    }
+
+    private func metadataLabel(mode: String?, model: String?, variant: String? = nil, sentAtEpochMs: Int64? = nil) -> String {
+        let timeLabel = sentAtEpochMs.map { sentTimeFormatter.string(from: Date(timeIntervalSince1970: TimeInterval($0) / 1000)) }
+        return [mode, model, variant, timeLabel].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func errorMessage(_ error: Error) -> String {
+        if let messageError = error as? MessageError {
+            return messageError.localizedDescription
+        }
+        return error.localizedDescription
+    }
+
+    private func notifyChange() {
+        onChange?()
+    }
+}

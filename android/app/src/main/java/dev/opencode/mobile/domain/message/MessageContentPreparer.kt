@@ -1,4 +1,4 @@
-package dev.opencode.mobile.ui.markdown
+package dev.opencode.mobile.domain.message
 
 import android.util.Log
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -6,7 +6,6 @@ import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
-import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
@@ -15,12 +14,13 @@ import kotlinx.coroutines.withContext
 import kotlin.system.measureTimeMillis
 
 @Singleton
-class RenderedMarkdownMapper
+class MessageContentPreparer
     @Inject
     constructor(
         private val codeHighlighter: OpenCodeCodeHighlighter,
     ) {
         internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
+
         private val cacheLock = Any()
         private val cache =
             object : LinkedHashMap<CacheKey, MarkdownDocument>(MAX_CACHE_ENTRIES + 1, 0.75f, true) {
@@ -28,65 +28,73 @@ class RenderedMarkdownMapper
                     size > MAX_CACHE_ENTRIES
             }
 
-        suspend fun parse(
-            messageId: String,
-            text: String,
-            isStreaming: Boolean,
-        ): MarkdownDocument? =
-            withContext(computationDispatcher) {
-                parseDocument(messageId, text, isStreaming)
-            }
-
-        suspend fun enrichRows(
-            rows: List<SessionChatMessageItem>,
-            previousById: Map<String, SessionChatMessageItem>,
-        ): List<SessionChatMessageItem> =
+        suspend fun prepareMessages(
+            messages: List<Message>,
+            previousById: Map<String, DisplayMessage> = emptyMap(),
+        ): List<DisplayMessage> =
             withContext(computationDispatcher) {
                 var parsedCount = 0
                 var reusedCount = 0
                 var elapsedMs = 0L
-                val enriched =
-                    buildList(rows.size) {
+                val prepared =
+                    buildList(messages.size) {
                         elapsedMs =
                             measureTimeMillis {
-                                for (row in rows) {
-                                    val previous = previousById[row.id]
-                                    val enrichedRow = enrichRowOnWorker(row, previous)
-                                    add(enrichedRow)
+                                for (message in messages) {
+                                    val previous = previousById[message.id]
+                                    val display = prepareMessageOnWorker(message, previous)
+                                    add(display)
                                     when {
-                                        enrichedRow.renderedMarkdown == null -> Unit
-                                        row.renderedMarkdown != null &&
-                                            enrichedRow.renderedMarkdown === row.renderedMarkdown -> reusedCount++
+                                        display.renderedMarkdown == null -> Unit
                                         previous?.renderedMarkdown != null &&
-                                            enrichedRow.renderedMarkdown === previous.renderedMarkdown -> reusedCount++
+                                            display.renderedMarkdown === previous.renderedMarkdown -> reusedCount++
                                         else -> parsedCount++
                                     }
                                 }
                             }
                     }
                 logI(
-                    "enrichRows rows=${rows.size} parsed=$parsedCount reused=$reusedCount " +
-                        "markdown=${enriched.count { it.renderedMarkdown != null }} ms=$elapsedMs",
+                    "prepareMessages count=${messages.size} parsed=$parsedCount reused=$reusedCount " +
+                        "markdown=${prepared.count { it.renderedMarkdown != null }} ms=$elapsedMs",
                 )
-                enriched
+                prepared
             }
 
-        private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
-        }
+        suspend fun prepareOptimisticUserMessage(
+            id: String,
+            text: String,
+        ): DisplayMessage =
+            prepareMessage(
+                Message(
+                    id = id,
+                    role = MessageRole.User,
+                    text = text,
+                ),
+            )
 
-        private fun enrichRowOnWorker(
-            row: SessionChatMessageItem,
-            previous: SessionChatMessageItem?,
-        ): SessionChatMessageItem {
-            if (!OpenCodeMarkdownDetector.shouldRender(row.text)) {
-                return row.copy(renderedMarkdown = null)
+        suspend fun prepareMessage(
+            message: Message,
+            previous: DisplayMessage? = null,
+        ): DisplayMessage =
+            withContext(computationDispatcher) {
+                prepareMessageOnWorker(message, previous)
+            }
+
+        private fun prepareMessageOnWorker(
+            message: Message,
+            previous: DisplayMessage?,
+        ): DisplayMessage {
+            if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
+                return DisplayMessage(message = message, renderedMarkdown = null)
             }
             val document =
-                reusableDocument(row, previous)
-                    ?: parseDocument(row.id, row.text, row.isStreaming)
-            return row.copy(renderedMarkdown = document)
+                reusableDocument(message, previous)
+                    ?: parseDocument(message.id, message.text, messageIsStreaming(message))
+            return DisplayMessage(message = message, renderedMarkdown = document)
         }
+
+        private fun messageIsStreaming(message: Message): Boolean =
+            message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
 
         private fun parseDocument(
             messageId: String,
@@ -118,29 +126,34 @@ class RenderedMarkdownMapper
         }
 
         private fun reusableDocument(
-            row: SessionChatMessageItem,
-            previous: SessionChatMessageItem?,
+            message: Message,
+            previous: DisplayMessage?,
         ): MarkdownDocument? {
-            val existing = row.renderedMarkdown
+            val isStreaming = messageIsStreaming(message)
+            val existing = previous?.renderedMarkdown
             if (existing != null &&
-                !row.isStreaming &&
-                previous?.isStreaming != true
+                !isStreaming &&
+                previous.isStreaming != true
             ) {
                 return existing
             }
-            if (row.isStreaming &&
+            if (isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
-                previous.text == row.text
+                previous.text == message.text
             ) {
                 return previous.renderedMarkdown
             }
             return null
         }
 
+        private fun logI(message: String) {
+            runCatching { Log.i(TAG, message) }
+        }
+
         companion object {
             private const val MAX_CACHE_ENTRIES = 32
-            private const val TAG = "MarkdownMapper"
+            private const val TAG = "MessageContentPreparer"
         }
 
         private data class CacheKey(

@@ -1,12 +1,14 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
-import dev.opencode.mobile.domain.live.MessageLiveStore
+import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -15,14 +17,22 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.SessionModelSelection
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.network.OpencodeHttpClient
+import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
+import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +44,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -113,25 +124,18 @@ class SessionChatViewModelTest {
                     }
                 }
             }
-            val mapper = RenderedMarkdownMapper(highlighter).apply { computationDispatcher = Dispatchers.Default }
-            val mapperMs = measureMs {
-                mapper.enrichRows(
-                    messages.map { message ->
-                        SessionChatMessageItem(
-                            id = message.id,
-                            role = message.role,
-                            text = message.text,
-                            metadataLabel = "Benchmark",
-                        )
-                    },
-                    previousById = emptyMap(),
-                )
+            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = Dispatchers.Default }
+            val preparerMs = measureMs {
+                preparer.prepareMessages(messages)
                 Unit
             }
             val viewModel =
                 createViewModel(
-                    repository = FakeMessageRepository(messages = messages),
-                    highlighter = highlighter,
+                    repository =
+                        FakeMessageRepository(
+                            messages = messages,
+                            contentPreparer = preparer,
+                        ),
                 )
 
             val startedAt = System.nanoTime()
@@ -143,7 +147,7 @@ class SessionChatViewModelTest {
             assertEquals(20, viewModel.uiState.value.messages.size)
             println(
                 "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
-                    "mapper-ms=$mapperMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
+                    "preparer-ms=$preparerMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
             )
         }
 
@@ -155,6 +159,87 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(SessionChatTimelineState.Empty, viewModel.uiState.value.timeline)
+        }
+
+    @Test
+    fun loadMessages_empty_restoresCachedModelSelection() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val cachedOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "openai",
+                        modelId = "gpt-4",
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, cachedOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(SessionChatTimelineState.Empty, viewModel.uiState.value.timeline)
+            assertEquals("openai", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals("gpt-4", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
+        }
+
+    @Test
+    fun bind_resetsUiStateBeforeRegionsFinish() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Hello",
+                                    sentAtEpochMs = 1_000L,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("draft text")
+
+            viewModel.bind("ses-2", "Second", "/repo")
+
+            assertEquals("ses-2", viewModel.uiState.value.sessionId)
+            assertEquals("Second", viewModel.uiState.value.sessionTitle)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertEquals(SessionChatTimelineState.Loading, viewModel.uiState.value.timeline)
         }
 
     @Test
@@ -251,6 +336,236 @@ class SessionChatViewModelTest {
                     ?.modelId,
             )
             assertEquals("high", viewModel.uiState.value.composer.selectedVariant)
+        }
+
+    @Test
+    fun loadMessages_prefersLatestMessageModelOverCatalogDefault() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val historyOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    modelProviderId = "openai",
+                                    modelId = "gpt-4",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, historyOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                "openai",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.providerId,
+            )
+            assertEquals(
+                "gpt-4",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun loadMessages_restoresCachedModelSelectionOverHistory() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val cachedOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "openai",
+                        modelId = "gpt-4",
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    variant = "high",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, cachedOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("openai", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals("gpt-4", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
+        }
+
+    @Test
+    fun selectModel_persistsAndRestoresOnRebind() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val pickedOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, pickedOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.selectModel(pickedOption)
+            advanceUntilIdle()
+
+            viewModel.bind("ses-2", "Other", "/repo")
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("openai", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals("gpt-4", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
+        }
+
+    @Test
+    fun loadMessages_showsNoticeWhenCachedModelUnavailable() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "removed",
+                        modelId = "missing-model",
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Hello",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    sentAtEpochMs = 1_000L,
+                                ),
+                            ),
+                    ),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("anthropic", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals(
+                "Selected model is unavailable. Using Claude Sonnet.",
+                viewModel.uiState.value.composer.modelNotice,
+            )
         }
 
     @Test
@@ -616,26 +931,39 @@ class SessionChatViewModelTest {
 
     private fun createViewModel(
         repository: FakeMessageRepository,
-        markdownDispatcher: CoroutineDispatcher = testDispatcher,
-        highlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
+        modelRepository: FakeModelRepository = FakeModelRepository(),
+        sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
-        val messageLiveStore = EventDrivenFakeMessageLiveStore(repository)
+        val json = Json { ignoreUnknownKeys = true }
+        val connectionProfileStore = FakeConnectionProfileStore()
+        val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+        runBlocking {
+            activeConnectionManager.applyProfile(
+                ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = ""),
+            )
+        }
+        val connectionSessionCoordinator =
+            ConnectionSessionCoordinator(
+                activeConnectionManager = activeConnectionManager,
+                connectionProfileStore = connectionProfileStore,
+                secureCredentialStore = FakeSecureCredentialStore(),
+                sessionModelSelectionStore = sessionModelSelectionStore,
+                httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+            )
         return SessionChatViewModel(
             messageRepository = repository,
-            modelRepository = FakeModelRepository(),
+            modelRepository = modelRepository,
             sessionRepository = sessionRepository,
-            messageLiveStore = messageLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
-            renderedMarkdownMapper =
-                RenderedMarkdownMapper(highlighter).apply {
-                    computationDispatcher = markdownDispatcher
-                },
+            eventDomainAdapter = EventDomainAdapter(json),
+            connectionSessionCoordinator = connectionSessionCoordinator,
+            sessionModelSelectionStore = sessionModelSelectionStore,
         ).apply { ioDispatcher = testDispatcher }
     }
 
@@ -663,30 +991,75 @@ class SessionChatViewModelTest {
     }
 }
 
-@OptIn(FlowPreview::class)
-private class EventDrivenFakeMessageLiveStore(
-    private val repository: FakeMessageRepository,
-) : MessageLiveStore {
-    override fun clearCache() = Unit
+private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
+    private val saved = mutableMapOf<String, SessionModelSelection>()
 
-    override fun observeMessages(
+    fun seed(
+        serverBaseUrl: String,
+        worktree: String,
         sessionId: String,
-        directory: String,
-    ): Flow<List<Message>> =
-        channelFlow {
-            suspend fun loadMessages(): List<Message>? = runCatching { repository.listMessages(sessionId, directory) }.getOrNull()
+        selection: SessionModelSelection,
+    ) {
+        saved[key(serverBaseUrl, worktree, sessionId)] = selection
+    }
 
-            loadMessages()?.let { send(it) }
+    override suspend fun load(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+    ): SessionModelSelection? = saved[key(serverBaseUrl, worktree, sessionId)]
 
-            repository.eventStream.events
-                .filter { event ->
-                    event.type == "stream.reconnected" ||
-                        (event.sessionId == sessionId && event.triggersMessageRefresh)
-                }.debounce(300)
-                .collect {
-                    loadMessages()?.let { send(it) }
-                }
-        }
+    override suspend fun save(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+        selection: SessionModelSelection,
+    ) {
+        saved[key(serverBaseUrl, worktree, sessionId)] = selection
+    }
+
+    override suspend fun clearAll() {
+        saved.clear()
+    }
+
+    private fun key(
+        serverBaseUrl: String,
+        worktree: String,
+        sessionId: String,
+    ): String = "$serverBaseUrl|$worktree|$sessionId"
+}
+
+private class FakeConnectionProfileStore : dev.opencode.mobile.domain.connection.ConnectionProfileStore {
+    override suspend fun activeProfile(): dev.opencode.mobile.domain.connection.ConnectionProfile? = null
+
+    override suspend fun saveProfile(profile: dev.opencode.mobile.domain.connection.ConnectionProfile) = Unit
+
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = emptyList()
+
+    override suspend fun addWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) = Unit
+
+    override suspend fun setAddedWorktrees(
+        serverBaseUrl: String,
+        worktrees: List<String>,
+    ) = Unit
+
+    override suspend fun clearAll() = Unit
+}
+
+private class FakeSecureCredentialStore : dev.opencode.mobile.domain.connection.SecureCredentialStore {
+    override fun readPassword(serverBaseUrl: String): String? = null
+
+    override fun writePassword(
+        serverBaseUrl: String,
+        password: String,
+    ) = Unit
+
+    override fun deletePassword(serverBaseUrl: String) = Unit
+
+    override fun clearAll() = Unit
 }
 
 private class FakeMessageRepository(
@@ -702,11 +1075,74 @@ private class FakeMessageRepository(
     private val shouldFailSend: Boolean = false,
     var failListMessagesAfterSend: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
+    private val contentPreparer: MessageContentPreparer =
+        MessageContentPreparer(OpenCodeSyntaxHighlighter.default).apply {
+            computationDispatcher = Dispatchers.Unconfined
+        },
 ) : MessageRepository {
     val eventStream = FakeForegroundEventStream()
     var sendPromptAsyncCalled: Boolean = false
     var sentOptions: PromptSendOptions? = null
     private var listMessagesCallCount = 0
+
+    override fun observeMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<MessageListUpdate> =
+        channelFlow {
+            suspend fun loadUpdate(): MessageListUpdate =
+                runCatching { listMessages(sessionId, directory) }
+                    .fold(
+                        onSuccess = { MessageListUpdate.Messages(it) },
+                        onFailure = { MessageListUpdate.LoadFailed(it) },
+                    )
+
+            send(loadUpdate())
+
+            eventStream.events
+                .filter { event ->
+                    event.type == "stream.reconnected" ||
+                        (event.sessionId == sessionId && event.triggersMessageRefresh)
+                }.debounce(300)
+                .collect {
+                    send(loadUpdate())
+                }
+        }
+
+    override fun observeDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<DisplayMessageListUpdate> =
+        flow {
+            var previousById = emptyMap<String, DisplayMessage>()
+            observeMessages(sessionId, directory).collect { update ->
+                when (update) {
+                    is MessageListUpdate.LoadFailed -> emit(DisplayMessageListUpdate.LoadFailed(update.error))
+                    is MessageListUpdate.Messages -> {
+                        val prepared = contentPreparer.prepareMessages(update.messages, previousById)
+                        previousById = prepared.associateBy { it.id }
+                        emit(DisplayMessageListUpdate.Messages(prepared))
+                    }
+                }
+            }
+        }
+
+    override suspend fun refreshMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<Message> = listMessages(sessionId, directory)
+
+    override suspend fun refreshDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<DisplayMessage> = contentPreparer.prepareMessages(refreshMessages(sessionId, directory))
+
+    override suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+    ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
+
+    override fun clearMessageCache() = Unit
 
     override suspend fun listMessages(
         sessionId: String,
@@ -742,8 +1178,11 @@ private class FakeMessageRepository(
     }
 }
 
-private class FakeModelRepository : ModelRepository {
+private class FakeModelRepository(
+    private val catalog: ModelSelectionCatalog? = null,
+) : ModelRepository {
     override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
+        catalog?.let { return it }
         val option =
             ModelSelectionOption(
                 providerId = "anthropic",

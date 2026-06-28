@@ -40,6 +40,13 @@ Chat screen with visible messages and a composer ready for new prompts.
 - model, mode, and Variant as composer selections for the next prompt.
 - Screen Model concept represented with immutable state plus explicit actions.
 
+## Screen Model structure
+
+Session Chat uses a **regional Screen Model**: `SessionChatTimeline`,
+`SessionChatComposer`, and `SessionInfo` own behavior; `SessionChatViewModel`
+is a thin facade. Any change to the facade is an architectural decision — see
+[Session Chat decisions](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade).
+
 ## UI States
 
 - Loaded with messages.

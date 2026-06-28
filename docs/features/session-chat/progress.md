@@ -36,6 +36,14 @@
   affordance, and Send action rows.
 - Composer selector chips open **`OpenCodeBottomSheet`** pickers instead of
   cycling values in place.
+- **2026-06-27:** Refactored Screen Model into `SessionChatTimeline`,
+  `SessionChatComposer`, `SessionInfo`, and a thin `SessionChatViewModel`
+  facade. All `SessionChatViewModelTest` cases pass.
+- **2026-06-27:** Timeline subscribes to `MessageLiveStore` only; pull-to-refresh,
+  post-send reload, and error retry use `refreshMessages`. No duplicate REST on bind.
+- **2026-06-28:** Model-selection cache load/save and initial selection resolution
+  live in `SessionChatComposer` on both platforms. See
+  [Keep SessionChatViewModel as a thin facade](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade).
 
 ## iOS
 
@@ -52,6 +60,19 @@
   attachment affordance, and Send action rows.
 - Composer selector chips open **`openCodeBottomSheet`** pickers instead of
   cycling values in place.
+- **2026-06-27:** Refactored Screen Model into `SessionChatTimeline`,
+  `SessionChatComposer`, `SessionInfo`, and a thin `SessionChatViewModel`
+  facade (mirrors Android). All `SessionChatViewModelTests` pass.
+- **2026-06-27:** Message observation moved from ViewModel into Timeline via
+  `MessageLiveStore`; `loadMessages()` loads catalog only (matches screen `.task` flow).
+- **2026-06-28:** Model-selection cache moved from `SessionChatViewModel` into
+  `SessionChatComposer` (parity with Android).
+
+## Architecture guardrails
+
+- Session Chat Screen Model changes are **high-risk**. Read
+  [Keep SessionChatViewModel as a thin facade](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade)
+  before editing `SessionChatViewModel` on either platform.
 
 ## Validation Status
 

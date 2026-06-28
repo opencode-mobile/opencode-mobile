@@ -16,7 +16,8 @@
 - [x] LiveStore protocols: `clearCache()`
 - [x] Default LiveStore implementations: `clearCache()`
 - [x] `ThemeManager.clearAll()`
-- [x] `Container.clearAllData()` orchestrator
+- [x] `Container.clearAllData()` orchestrator (includes
+  `SessionModelSelectionStore.clearAll()`)
 - [x] `SettingsView` UI
 
 ## Android
@@ -26,7 +27,8 @@
 - [x] LiveStore interfaces: `clearCache()`
 - [x] Default LiveStore implementations: `clearCache()`
 - [x] `ThemeManager.clearAll()`
-- [x] `ConnectionSessionCoordinator.clearAllData()` orchestrator
+- [x] `ConnectionSessionCoordinator.clearAllData()` orchestrator (includes
+  `SessionModelSelectionStore.clearAll()`)
 - [x] `SettingsViewModel` + `SettingsScreen` UI + `Navigation.kt` wiring
 
 ## Verification
