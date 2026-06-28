@@ -37,7 +37,7 @@
 - Composer selector chips open **`OpenCodeBottomSheet`** pickers instead of
   cycling values in place.
 - **2026-06-27:** Refactored Screen Model into `SessionChatTimeline`,
-  `SessionChatComposer`, `SessionChatStatusBar`, and a thin `SessionChatViewModel`
+  `SessionChatComposer`, `SessionInfo`, and a thin `SessionChatViewModel`
   facade. All `SessionChatViewModelTest` cases pass.
 - **2026-06-27:** Timeline subscribes to `MessageLiveStore` only; pull-to-refresh,
   post-send reload, and error retry use `refreshMessages`. No duplicate REST on bind.
@@ -58,7 +58,7 @@
 - Composer selector chips open **`openCodeBottomSheet`** pickers instead of
   cycling values in place.
 - **2026-06-27:** Refactored Screen Model into `SessionChatTimeline`,
-  `SessionChatComposer`, `SessionChatStatusBar`, and a thin `SessionChatViewModel`
+  `SessionChatComposer`, `SessionInfo`, and a thin `SessionChatViewModel`
   facade (mirrors Android). All `SessionChatViewModelTests` pass.
 - **2026-06-27:** Message observation moved from ViewModel into Timeline via
   `MessageLiveStore`; `loadMessages()` loads catalog only (matches screen `.task` flow).

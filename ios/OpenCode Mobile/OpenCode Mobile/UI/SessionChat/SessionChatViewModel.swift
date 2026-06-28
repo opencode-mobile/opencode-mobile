@@ -13,7 +13,7 @@ final class SessionChatViewModel {
 
     private let timeline: SessionChatTimeline
     private let composer: SessionChatComposer
-    private let statusBar: SessionChatStatusBar
+    private let sessionInfo: SessionInfo
     private var appliedInitialModelHint = false
 
     init(
@@ -36,28 +36,30 @@ final class SessionChatViewModel {
             messageRepository: messageRepository
         )
         self.composer = SessionChatComposer(
+            sessionID: sessionID,
             worktree: worktree,
             messageRepository: messageRepository,
-            modelRepository: modelRepository
+            modelRepository: modelRepository,
+            sessionRepository: sessionRepository
         )
-        self.statusBar = SessionChatStatusBar(
-            sessionID: sessionID,
+        self.sessionInfo = SessionInfo(
             worktree: worktree,
             sessionRepository: sessionRepository,
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: foregroundEventStream
         )
         OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
+        sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
         composer.onChange = { [weak self] in self?.publishUiState() }
-        statusBar.onChange = { [weak self] in self?.publishUiState() }
+        sessionInfo.onChange = { [weak self] in self?.publishUiState() }
         publishUiState()
     }
 
     func startObserving() {
         appliedInitialModelHint = false
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
-        statusBar.startObserving()
+        sessionInfo.startObserving()
         timeline.startObserving()
     }
 
@@ -66,7 +68,7 @@ final class SessionChatViewModel {
         _ = await catalogLoad
         await waitForTimelineResolution()
         await applyInitialModelHintIfNeeded()
-        await statusBar.refreshStatus()
+        await sessionInfo.refreshStatus()
     }
 
     func refreshMessages() async {
@@ -101,7 +103,7 @@ final class SessionChatViewModel {
             },
             onSendAccepted: { [weak self] in
                 guard let self else { return }
-                await self.statusBar.refreshStatus()
+                await self.sessionInfo.refreshStatus()
                 await self.timeline.reloadAfterSend(
                     onComplete: { [weak self] in self?.composer.clearSending() },
                     onReloadFailed: { [weak self] in self?.composer.clearSending() }
@@ -115,35 +117,17 @@ final class SessionChatViewModel {
     }
 
     func abortSession() async {
-        await statusBar.abortSession(timelineIsReady: timeline.state.timeline == .ready)
+        await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
     }
 
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
         timeline.stopObserving()
-        statusBar.stopObserving()
+        sessionInfo.stopObserving()
     }
 
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
         timeline.row(from: message, previous: previous)
-    }
-
-    static func contextUsageFraction(
-        messages: [SessionChatRow],
-        modelOptions: [ModelSelectionOption],
-        selectedModel: ModelSelection?
-    ) -> Double? {
-        guard let latest = messages.reversed().first(where: { $0.role == .assistant && $0.contextInputTokens != nil }),
-              let inputTokens = latest.contextInputTokens
-        else { return nil }
-        let messageHasModel = latest.modelProviderID != nil && latest.modelID != nil
-        let messageLimit = modelOptions.first {
-            $0.providerID == latest.modelProviderID && $0.modelID == latest.modelID
-        }?.contextLimitTokens
-        guard let contextLimit = messageLimit ?? (messageHasModel ? nil : selectedModel?.option.contextLimitTokens),
-              contextLimit > 0
-        else { return nil }
-        return min(max(Double(inputTokens) / Double(contextLimit), 0), 1)
     }
 
     private func waitForTimelineResolution() async {
@@ -164,35 +148,33 @@ final class SessionChatViewModel {
     private func publishUiState() {
         let timelineState = timeline.state
         let composerState = composer.state
-        let statusBarState = statusBar.state
+        let infoState = sessionInfo.state
         uiState = SessionChatUiState(
-            sessionID: sessionID,
-            sessionTitle: sessionTitle,
+            sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
+            sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
             timeline: timelineState.timeline,
             messages: timelineState.messages,
             composer: composerState.composer,
             isSending: composerState.isSending,
             isRefreshing: timelineState.isRefreshing,
-            isAborting: statusBarState.isAborting,
-            sessionStatusLabel: statusBarState.sessionStatusLabel,
-            connectionStatus: statusBarState.connectionStatus,
-            contextUsageFraction: Self.contextUsageFraction(
+            isAborting: composerState.isAborting,
+            sessionStatusLabel: infoState.sessionStatusLabel,
+            connectionStatus: infoState.connectionStatus,
+            contextUsageFraction: sessionInfo.contextUsageFraction(
                 messages: timelineState.messages,
                 modelOptions: composerState.composer.modelOptions,
                 selectedModel: composerState.composer.selectedModel
             ),
             errorMessage: mergedErrorMessage(
                 timelineState: timelineState,
-                composerState: composerState,
-                statusBarState: statusBarState
+                composerState: composerState
             )
         )
     }
 
     private func mergedErrorMessage(
         timelineState: SessionChatTimelineRegionState,
-        composerState: SessionChatComposerRegionState,
-        statusBarState: SessionChatStatusBarState
+        composerState: SessionChatComposerRegionState
     ) -> String? {
         if timelineState.timeline == .error {
             return timelineState.errorMessage
@@ -200,7 +182,7 @@ final class SessionChatViewModel {
         if let error = composerState.errorMessage {
             return error
         }
-        if let error = statusBarState.abortErrorMessage {
+        if let error = composerState.abortErrorMessage {
             return error
         }
         return timelineState.errorMessage

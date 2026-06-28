@@ -10,7 +10,6 @@ import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
-import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -50,10 +49,11 @@ class SessionChatViewModel
             SessionChatComposer(
                 messageRepository = messageRepository,
                 modelRepository = modelRepository,
+                sessionRepository = sessionRepository,
                 scope = viewModelScope,
             )
-        private val statusBar =
-            SessionChatStatusBar(
+        private val sessionInfo =
+            SessionInfo(
                 sessionRepository = sessionRepository,
                 sessionStatusLiveStore = sessionStatusLiveStore,
                 foregroundEventStream = foregroundEventStream,
@@ -74,8 +74,8 @@ class SessionChatViewModel
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
             viewModelScope.launch {
-                combine(timeline.state, composer.state, statusBar.state) { timelineState, composerState, statusBarState ->
-                    mergeUiState(timelineState, composerState, statusBarState)
+                combine(timeline.state, composer.state, sessionInfo.state) { timelineState, composerState, infoState ->
+                    mergeUiState(timelineState, composerState, infoState)
                 }.collect { merged ->
                     _uiState.value = merged
                 }
@@ -99,8 +99,8 @@ class SessionChatViewModel
             appliedInitialModelHint = false
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             timeline.bind(sessionId, worktree)
-            composer.bind(worktree)
-            statusBar.bind(sessionId, worktree)
+            composer.bind(sessionId, worktree)
+            sessionInfo.bind(sessionId, sessionTitle, worktree)
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -148,7 +148,7 @@ class SessionChatViewModel
                 worktree = worktree,
                 onOptimisticRows = { rows -> timeline.beginOptimisticSend(rows) },
                 onSendAccepted = {
-                    statusBar.refreshStatus()
+                    sessionInfo.refreshStatus()
                     timeline.reloadAfterSend(
                         onComplete = { composer.clearSending() },
                         onReloadFailed = { composer.clearSending() },
@@ -161,7 +161,7 @@ class SessionChatViewModel
         }
 
         fun abort() {
-            statusBar.abort()
+            composer.abort()
         }
 
         internal fun toMessageItem(
@@ -185,65 +185,34 @@ class SessionChatViewModel
         private fun mergeUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
-            statusBarState: SessionChatStatusBarState,
+            infoState: SessionInfoRegionState,
         ): SessionChatUiState {
             val errorMessage =
                 when {
                     timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
                     composerState.errorMessage != null -> composerState.errorMessage
-                    statusBarState.abortErrorMessage != null -> statusBarState.abortErrorMessage
+                    composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                     else -> timelineState.errorMessage
                 }
             return SessionChatUiState(
-                sessionId = boundSessionId.orEmpty(),
-                sessionTitle = boundSessionTitle.orEmpty(),
+                sessionId = infoState.sessionId,
+                sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = timelineState.messages,
                 composer = composerState.composer,
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,
-                isAborting = statusBarState.isAborting,
-                sessionStatusLabel = statusBarState.sessionStatusLabel,
-                connectionStatus = statusBarState.connectionStatus,
+                isAborting = composerState.isAborting,
+                sessionStatusLabel = infoState.sessionStatusLabel,
+                connectionStatus = infoState.connectionStatus,
                 contextUsageFraction =
-                    contextUsageFraction(
+                    sessionInfo.contextUsageFraction(
                         timelineState.messages,
                         composerState.composer.modelOptions,
                         composerState.composer.selectedModel,
                     ),
                 errorMessage = errorMessage,
             )
-        }
-
-        private fun contextUsageFraction(
-            messages: List<SessionChatMessageItem>,
-            modelOptions: List<ModelSelectionOption>,
-            selectedModel: ModelSelection?,
-        ): Float? {
-            val latestAssistantWithUsage =
-                messages
-                    .asReversed()
-                    .firstOrNull { it.role == dev.opencode.mobile.domain.message.MessageRole.Assistant && it.contextInputTokens != null }
-                    ?: return null
-            val inputTokens = latestAssistantWithUsage.contextInputTokens ?: return null
-            val messageHasModel = latestAssistantWithUsage.modelProviderId != null && latestAssistantWithUsage.modelId != null
-            val contextLimit: Long =
-                modelLimit(modelOptions, latestAssistantWithUsage)
-                    ?: (if (messageHasModel) null else selectedModel?.option?.contextLimitTokens)
-                    ?: return null
-            if (contextLimit <= 0L) return null
-            return (inputTokens.toFloat() / contextLimit.toFloat()).coerceIn(0f, 1f)
-        }
-
-        private fun modelLimit(
-            modelOptions: List<ModelSelectionOption>,
-            message: SessionChatMessageItem,
-        ): Long? {
-            val providerId = message.modelProviderId ?: return null
-            val modelId = message.modelId ?: return null
-            return modelOptions
-                .firstOrNull { it.providerId == providerId && it.modelId == modelId }
-                ?.contextLimitTokens
         }
 
         private fun logI(message: String) {

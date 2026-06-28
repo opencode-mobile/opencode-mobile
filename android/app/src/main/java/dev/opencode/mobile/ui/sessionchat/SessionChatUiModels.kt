@@ -64,14 +64,16 @@ data class SessionChatTimelineRegionState(
 data class SessionChatComposerRegionState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
+    val isAborting: Boolean = false,
     val errorMessage: String? = null,
+    val abortErrorMessage: String? = null,
 )
 
-data class SessionChatStatusBarState(
+data class SessionInfoRegionState(
+    val sessionId: String = "",
+    val sessionTitle: String = "",
     val sessionStatusLabel: String? = null,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
-    val isAborting: Boolean = false,
-    val abortErrorMessage: String? = null,
 )
 
 data class LatestModelHint(

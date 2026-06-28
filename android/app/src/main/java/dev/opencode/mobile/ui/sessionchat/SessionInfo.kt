@@ -4,7 +4,9 @@ import android.util.Log
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
-import dev.opencode.mobile.domain.message.MessageError
+import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.model.ModelSelection
+import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,30 +17,42 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class SessionChatStatusBar(
+class SessionInfo(
     private val sessionRepository: SessionRepository,
     private val sessionStatusLiveStore: SessionStatusLiveStore,
     private val foregroundEventStream: ForegroundEventStream,
     private val eventDomainAdapter: EventDomainAdapter,
     private val scope: CoroutineScope,
 ) {
-    private val _state = MutableStateFlow(SessionChatStatusBarState())
-    val state: StateFlow<SessionChatStatusBarState> = _state.asStateFlow()
+    private val _state = MutableStateFlow(SessionInfoRegionState())
+    val state: StateFlow<SessionInfoRegionState> = _state.asStateFlow()
 
     private var boundSessionId: String? = null
+    private var boundSessionTitle: String? = null
     private var boundWorktree: String? = null
     private var observationJob: Job? = null
 
     fun bind(
         sessionId: String,
+        sessionTitle: String,
         worktree: String,
     ) {
-        if (boundSessionId == sessionId && boundWorktree == worktree) return
+        if (boundSessionId == sessionId &&
+            boundSessionTitle == sessionTitle &&
+            boundWorktree == worktree
+        ) {
+            return
+        }
         stopObserving()
         boundSessionId = sessionId
+        boundSessionTitle = sessionTitle
         boundWorktree = worktree
-        _state.value = SessionChatStatusBarState()
-        logI("bind session=$sessionId worktree=$worktree")
+        _state.value =
+            SessionInfoRegionState(
+                sessionId = sessionId,
+                sessionTitle = sessionTitle,
+            )
+        logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
         startObserving(sessionId, worktree)
     }
 
@@ -61,27 +75,25 @@ class SessionChatStatusBar(
         }
     }
 
-    fun abort() {
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
-        scope.launch {
-            _state.update { it.copy(isAborting = true, abortErrorMessage = null) }
-            runCatching { sessionRepository.abortSession(sessionId, directory = worktree) }
-                .onFailure { throwable ->
-                    if (isCurrentBinding(sessionId, worktree)) {
-                        _state.update {
-                            it.copy(
-                                isAborting = false,
-                                abortErrorMessage = errorMessage(throwable),
-                            )
-                        }
-                    }
-                }.onSuccess {
-                    if (isCurrentBinding(sessionId, worktree)) {
-                        _state.update { it.copy(isAborting = false, abortErrorMessage = null) }
-                    }
-                }
-        }
+    fun contextUsageFraction(
+        messages: List<SessionChatMessageItem>,
+        modelOptions: List<ModelSelectionOption>,
+        selectedModel: ModelSelection?,
+    ): Float? {
+        val latestAssistantWithUsage =
+            messages
+                .asReversed()
+                .firstOrNull { it.role == MessageRole.Assistant && it.contextInputTokens != null }
+                ?: return null
+        val inputTokens = latestAssistantWithUsage.contextInputTokens ?: return null
+        val messageHasModel =
+            latestAssistantWithUsage.modelProviderId != null && latestAssistantWithUsage.modelId != null
+        val contextLimit: Long =
+            modelLimit(modelOptions, latestAssistantWithUsage)
+                ?: (if (messageHasModel) null else selectedModel?.option?.contextLimitTokens)
+                ?: return null
+        if (contextLimit <= 0L) return null
+        return (inputTokens.toFloat() / contextLimit.toFloat()).coerceIn(0f, 1f)
     }
 
     private fun startObserving(
@@ -130,18 +142,21 @@ class SessionChatStatusBar(
             }
     }
 
+    private fun modelLimit(
+        modelOptions: List<ModelSelectionOption>,
+        message: SessionChatMessageItem,
+    ): Long? {
+        val providerId = message.modelProviderId ?: return null
+        val modelId = message.modelId ?: return null
+        return modelOptions
+            .firstOrNull { it.providerId == providerId && it.modelId == modelId }
+            ?.contextLimitTokens
+    }
+
     private fun isCurrentBinding(
         sessionId: String,
         worktree: String,
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
-
-    private fun errorMessage(throwable: Throwable): String =
-        when (throwable) {
-            is MessageError.Http -> throwable.message ?: "Request failed"
-            is MessageError.Transport -> "Unable to reach the server"
-            is MessageError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
-        }
 
     private fun logI(message: String) {
         runCatching { Log.i(TAG, message) }
@@ -152,6 +167,6 @@ class SessionChatStatusBar(
     }
 
     companion object {
-        private const val TAG = "SessionChatStatusBar"
+        private const val TAG = "SessionInfo"
     }
 }

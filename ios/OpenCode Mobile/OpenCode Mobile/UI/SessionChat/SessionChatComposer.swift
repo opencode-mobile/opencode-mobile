@@ -7,20 +7,26 @@ final class SessionChatComposer {
 
     private(set) var state = SessionChatComposerRegionState()
 
+    private let sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
     private let modelRepository: any ModelRepository
+    private let sessionRepository: any SessionRepository
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
 
     init(
+        sessionID: String,
         worktree: String,
         messageRepository: any MessageRepository,
-        modelRepository: any ModelRepository
+        modelRepository: any ModelRepository,
+        sessionRepository: any SessionRepository
     ) {
+        self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
         self.modelRepository = modelRepository
+        self.sessionRepository = sessionRepository
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
@@ -152,6 +158,23 @@ final class SessionChatComposer {
     func setSendError(_ error: String) {
         state.isSending = false
         state.errorMessage = error
+        notifyChange()
+    }
+
+    func abortSession(timelineIsReady: Bool) async {
+        state.isAborting = true
+        state.abortErrorMessage = nil
+        notifyChange()
+        do {
+            _ = try await sessionRepository.abortSession(id: sessionID, directory: worktree)
+            state.isAborting = false
+            state.abortErrorMessage = nil
+        } catch {
+            state.isAborting = false
+            if timelineIsReady {
+                state.abortErrorMessage = errorMessage(error)
+            }
+        }
         notifyChange()
     }
 

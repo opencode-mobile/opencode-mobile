@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.session.SessionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ import java.util.UUID
 class SessionChatComposer(
     private val messageRepository: MessageRepository,
     private val modelRepository: ModelRepository,
+    private val sessionRepository: SessionRepository,
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
@@ -33,15 +35,25 @@ class SessionChatComposer(
     private val _state = MutableStateFlow(SessionChatComposerRegionState())
     val state: StateFlow<SessionChatComposerRegionState> = _state.asStateFlow()
 
+    private var boundSessionId: String? = null
     private var boundWorktree: String? = null
     private var loadedCatalog: ModelSelectionCatalog? = null
 
-    fun bind(worktree: String) {
-        if (boundWorktree == worktree && _state.value.composer.modelOptions.isNotEmpty()) return
+    fun bind(
+        sessionId: String,
+        worktree: String,
+    ) {
+        if (boundSessionId == sessionId &&
+            boundWorktree == worktree &&
+            _state.value.composer.modelOptions.isNotEmpty()
+        ) {
+            return
+        }
+        boundSessionId = sessionId
         boundWorktree = worktree
         loadedCatalog = null
         _state.value = SessionChatComposerRegionState()
-        logI("bind worktree=$worktree")
+        logI("bind session=$sessionId worktree=$worktree")
     }
 
     fun loadCatalog() {
@@ -183,6 +195,34 @@ class SessionChatComposer(
     fun clearSending() {
         _state.update { it.copy(isSending = false) }
     }
+
+    fun abort() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        scope.launch {
+            _state.update { it.copy(isAborting = true, abortErrorMessage = null) }
+            runCatching { sessionRepository.abortSession(sessionId, directory = worktree) }
+                .onFailure { throwable ->
+                    if (isCurrentBinding(sessionId, worktree)) {
+                        _state.update {
+                            it.copy(
+                                isAborting = false,
+                                abortErrorMessage = errorMessage(throwable),
+                            )
+                        }
+                    }
+                }.onSuccess {
+                    if (isCurrentBinding(sessionId, worktree)) {
+                        _state.update { it.copy(isAborting = false, abortErrorMessage = null) }
+                    }
+                }
+        }
+    }
+
+    private fun isCurrentBinding(
+        sessionId: String,
+        worktree: String,
+    ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
     private fun applyCatalog(catalog: ModelSelectionCatalog) {
         if (catalog.options.isEmpty()) return

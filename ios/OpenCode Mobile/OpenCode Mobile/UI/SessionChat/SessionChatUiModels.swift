@@ -108,14 +108,16 @@ struct SessionChatComposerRegionState: Equatable {
         modelNotice: nil
     )
     var isSending: Bool = false
+    var isAborting: Bool = false
     var errorMessage: String?
+    var abortErrorMessage: String?
 }
 
-struct SessionChatStatusBarState: Equatable {
+struct SessionInfoRegionState: Equatable {
+    var sessionID: String = ""
+    var sessionTitle: String = ""
     var sessionStatusLabel: String?
     var connectionStatus: SessionConnectionStatus = .offline
-    var isAborting: Bool = false
-    var abortErrorMessage: String?
 }
 
 struct LatestModelHint: Equatable {

@@ -119,17 +119,23 @@
 - Revisit when: the experiment is evaluated; optional follow-up to drop history
   hint and use `/session` metadata or server default only.
 
+## Extract SessionInfo from facade
+
+- Date: 2026-06-28
+- Decision: Replace `SessionChatStatusBar` with `SessionInfo` for read-only
+  session metadata (session id/title, SSE connection, agent work status,
+  context usage). Move abort/stop into `SessionChatComposer`.
+- Reason: separates passive session context from user actions (send/stop);
+  `OpenCodeSessionStatusBar` remains the design-system component fed from
+  flattened `SessionChatUiState`.
+- Revisit when: context usage moves to a dedicated API field from the server.
+
 ## Extract SessionChatStatusBar from facade
 
 - Date: 2026-06-27
+- Superseded by **Extract SessionInfo from facade** (2026-06-28).
 - Decision: Session status observation, SSE connection state, abort, and
-  one-shot status refresh live in `SessionChatStatusBar` on both platforms.
-  Drop the internal name “chrome”. `SessionChatViewModel` keeps session
-  identity, `contextUsageFraction`, `LatestModelHint`, and merged `uiState`.
-- Reason: completes Timeline + Composer + StatusBar symmetry; matches
-  `OpenCodeSessionStatusBar` and iOS `startObserving` / `stopObserving`
-  vocabulary.
-- Revisit when: context usage moves to a dedicated API field from the server.
+  one-shot status refresh lived in `SessionChatStatusBar` on both platforms.
 
 ## MessageLiveStore as sole timeline message source
 
