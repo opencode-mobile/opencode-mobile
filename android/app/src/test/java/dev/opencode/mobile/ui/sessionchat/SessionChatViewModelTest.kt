@@ -383,6 +383,111 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun selectModel_persistsAndRestoresOnRebind() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val pickedOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, pickedOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.selectModel(pickedOption)
+            advanceUntilIdle()
+
+            viewModel.bind("ses-2", "Other", "/repo")
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("openai", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals("gpt-4", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
+        }
+
+    @Test
+    fun loadMessages_showsNoticeWhenCachedModelUnavailable() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "removed",
+                        modelId = "missing-model",
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Hello",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    sentAtEpochMs = 1_000L,
+                                ),
+                            ),
+                    ),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("anthropic", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals(
+                "Selected model is unavailable. Using Claude Sonnet.",
+                viewModel.uiState.value.composer.modelNotice,
+            )
+        }
+
+    @Test
     fun loadMessages_sortsOldestToNewest() =
         runTest(testDispatcher) {
             val viewModel =

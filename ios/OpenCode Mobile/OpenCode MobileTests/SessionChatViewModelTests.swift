@@ -150,6 +150,90 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
     }
 
+    @Test func selectModel_persistsAndRestoresOnNewViewModel() async {
+        let defaultOption = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: ["low", "high"],
+            contextLimitTokens: 128_000
+        )
+        let pickedOption = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "gpt-4",
+            modelName: "GPT-4",
+            variants: [],
+            contextLimitTokens: 128_000
+        )
+        let catalog = ModelSelectionCatalog(
+            options: [defaultOption, pickedOption],
+            serverDefault: defaultOption
+        )
+        let selectionStore = InMemorySessionModelSelectionStore()
+        let firstViewModel = makeViewModel(
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: FakeModelRepository(catalog: catalog)
+        )
+        await firstViewModel.loadMessages()
+        firstViewModel.selectModel(pickedOption)
+        _ = await waitUntil { selectionStore.hasSavedSelection(sessionID: "ses-1") }
+        firstViewModel.stopObserving()
+
+        let secondViewModel = makeViewModel(
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: FakeModelRepository(catalog: catalog)
+        )
+        await secondViewModel.loadMessages()
+
+        #expect(secondViewModel.uiState.composer.selectedModel?.option.providerID == "openai")
+        #expect(secondViewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+    }
+
+    @Test func loadMessages_showsNoticeWhenCachedModelUnavailable() async {
+        let defaultOption = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: ["low", "high"],
+            contextLimitTokens: 128_000
+        )
+        let selectionStore = InMemorySessionModelSelectionStore()
+        await selectionStore.save(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            worktree: "/repo",
+            sessionID: "ses-1",
+            selection: SessionModelSelection(providerID: "removed", modelID: "missing-model", variant: nil)
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .user,
+                        text: "Hello",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        mode: nil,
+                        sentAtEpochMs: 1_000
+                    ),
+                ]
+            ),
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: FakeModelRepository(
+                catalog: ModelSelectionCatalog(options: [defaultOption], serverDefault: defaultOption)
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.composer.selectedModel?.option.providerID == "anthropic")
+        #expect(viewModel.uiState.composer.modelNotice == "Selected model is unavailable. Using Claude Sonnet.")
+    }
+
     @Test func loadMessages_initializesModelFromLatestMessage() async {
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(
@@ -835,6 +919,14 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
 
     func save(serverBaseURL: String, worktree: String, sessionID: String, selection: SessionModelSelection) async {
         saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)] = selection
+    }
+
+    func hasSavedSelection(
+        sessionID: String,
+        serverBaseURL: String = "http://127.0.0.1:4096/",
+        worktree: String = "/repo"
+    ) -> Bool {
+        saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)] != nil
     }
 
     func clearAll() async {

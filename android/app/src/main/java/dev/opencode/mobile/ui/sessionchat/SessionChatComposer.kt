@@ -110,28 +110,26 @@ class SessionChatComposer(
             SessionChatTimelineState.Empty,
             -> appliedInitialModelSelection = true
             SessionChatTimelineState.Ready -> {
-                cachedSelection?.let { cached ->
-                    if (_state.value.composer.modelOptions.any {
-                            it.providerId == cached.providerId && it.modelId == cached.modelId
-                        }
-                    ) {
-                        appliedInitialModelSelection = true
-                        applyLatestModelHint(
-                            LatestModelHint(
-                                providerId = cached.providerId,
-                                modelId = cached.modelId,
-                                variant = cached.variant,
-                            ),
-                        )
-                        return
-                    }
+                val staleCached = staleCachedSelection()
+                cachedSelection?.takeIf { staleCached == null }?.let { cached ->
+                    appliedInitialModelSelection = true
+                    applyLatestModelHint(
+                        LatestModelHint(
+                            providerId = cached.providerId,
+                            modelId = cached.modelId,
+                            variant = cached.variant,
+                        ),
+                    )
+                    return
                 }
                 messageHint?.let { hint ->
                     appliedInitialModelSelection = true
                     applyLatestModelHint(hint)
+                    staleCached?.let { applyStaleCacheNotice(it) }
                 } ?: run {
                     if (timelineState.messages.isNotEmpty()) {
                         appliedInitialModelSelection = true
+                        staleCached?.let { applyStaleCacheNotice(it) }
                     }
                 }
             }
@@ -314,6 +312,20 @@ class SessionChatComposer(
             }
             cachedSelection = selection
         }
+    }
+
+    private fun staleCachedSelection(): SessionModelSelection? {
+        val cached = cachedSelection ?: return null
+        val isAvailable =
+            _state.value.composer.modelOptions.any {
+                it.providerId == cached.providerId && it.modelId == cached.modelId
+            }
+        return if (isAvailable) null else cached
+    }
+
+    private fun applyStaleCacheNotice(cached: SessionModelSelection) {
+        val fallbackLabel = _state.value.composer.selectedModel?.modelLabel ?: cached.modelId
+        updateComposer { it.copy(modelNotice = "Selected model is unavailable. Using $fallbackLabel.") }
     }
 
     private fun isCurrentBinding(

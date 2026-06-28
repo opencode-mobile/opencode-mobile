@@ -117,9 +117,9 @@ flow:
    effective selection through the store.
 
 `SessionChatViewModel` only forwards the timeline hint into the composer during
-state merge. It must not hold cache state or call the store directly. iOS still
-needs parity: move cache orchestration from `SessionChatViewModel` into
-`SessionChatComposer` to match Android.
+state merge. It must not hold cache state or call the store directly. Both
+platforms keep `SessionModelSelectionStore` read/write inside
+`SessionChatComposer`.
 
 ### Tests
 
