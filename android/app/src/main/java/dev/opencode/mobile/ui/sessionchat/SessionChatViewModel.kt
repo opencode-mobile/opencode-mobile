@@ -102,6 +102,7 @@ class SessionChatViewModel
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
+            _uiState.value = SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             sessionInfo.bind(sessionId, sessionTitle, worktree)

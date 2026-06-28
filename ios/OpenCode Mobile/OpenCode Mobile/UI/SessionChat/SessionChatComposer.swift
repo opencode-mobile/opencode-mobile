@@ -84,7 +84,7 @@ final class SessionChatComposer {
         case .loading:
             return
         case .error, .empty:
-            appliedInitialModelSelection = true
+            applyResolvedInitialSelection(messageHint: messageHint, markAppliedWithoutHint: true)
         case .ready:
             let staleCached = staleCachedSelection()
             if let cachedSelection,
@@ -110,6 +110,38 @@ final class SessionChatComposer {
                 if let staleCached {
                     applyStaleCacheNotice(staleCached)
                 }
+            }
+        }
+    }
+
+    private func applyResolvedInitialSelection(
+        messageHint: LatestModelHint?,
+        markAppliedWithoutHint: Bool
+    ) {
+        let staleCached = staleCachedSelection()
+        if let cachedSelection, staleCached == nil {
+            appliedInitialModelSelection = true
+            applyLatestModelHint(
+                LatestModelHint(
+                    providerID: cachedSelection.providerID,
+                    modelID: cachedSelection.modelID,
+                    variant: cachedSelection.variant
+                )
+            )
+            return
+        }
+        if let messageHint {
+            appliedInitialModelSelection = true
+            applyLatestModelHint(messageHint)
+            if let staleCached {
+                applyStaleCacheNotice(staleCached)
+            }
+            return
+        }
+        if markAppliedWithoutHint {
+            appliedInitialModelSelection = true
+            if let staleCached {
+                applyStaleCacheNotice(staleCached)
             }
         }
     }

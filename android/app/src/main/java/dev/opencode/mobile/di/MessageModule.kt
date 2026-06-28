@@ -51,7 +51,8 @@ abstract class MessageModule {
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
-                    api.listMessages(sessionId, directory).map(adapter::toMessage)
+                    runCatching { api.listMessages(sessionId, directory).map(adapter::toMessage) }
+                        .getOrElse { throw adapter.mapError(it) }
                 },
                 store = store,
                 eventStream = eventStream,

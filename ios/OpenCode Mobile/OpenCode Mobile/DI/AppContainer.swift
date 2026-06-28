@@ -96,7 +96,11 @@ extension Container {
             let adapter = self.messageDomainAdapter()
             return MessageSync(
                 listMessages: { sessionID, directory in
-                    try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
+                    do {
+                        return try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
+                    } catch {
+                        throw adapter.mapError(error)
+                    }
                 },
                 store: self.messageStore(),
                 eventStream: self.foregroundEventStream()

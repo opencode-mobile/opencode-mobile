@@ -162,6 +162,87 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadMessages_empty_restoresCachedModelSelection() =
+        runTest(testDispatcher) {
+            val defaultOption =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = listOf("low", "high"),
+                    contextLimitTokens = 128_000,
+                )
+            val cachedOption =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val selectionStore = FakeSessionModelSelectionStore()
+            selectionStore.seed(
+                serverBaseUrl = "http://127.0.0.1:4096/",
+                worktree = "/repo",
+                sessionId = "ses-1",
+                selection =
+                    SessionModelSelection(
+                        providerId = "openai",
+                        modelId = "gpt-4",
+                    ),
+            )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(
+                                options = listOf(defaultOption, cachedOption),
+                                serverDefault = defaultOption,
+                            ),
+                        ),
+                    sessionModelSelectionStore = selectionStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(SessionChatTimelineState.Empty, viewModel.uiState.value.timeline)
+            assertEquals("openai", viewModel.uiState.value.composer.selectedModel?.option?.providerId)
+            assertEquals("gpt-4", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
+        }
+
+    @Test
+    fun bind_resetsUiStateBeforeRegionsFinish() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-1",
+                                    role = MessageRole.User,
+                                    text = "Hello",
+                                    sentAtEpochMs = 1_000L,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("draft text")
+
+            viewModel.bind("ses-2", "Second", "/repo")
+
+            assertEquals("ses-2", viewModel.uiState.value.sessionId)
+            assertEquals("Second", viewModel.uiState.value.sessionTitle)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertEquals(SessionChatTimelineState.Loading, viewModel.uiState.value.timeline)
+        }
+
+    @Test
     fun loadMessages_error() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository(shouldFailLoad = true))

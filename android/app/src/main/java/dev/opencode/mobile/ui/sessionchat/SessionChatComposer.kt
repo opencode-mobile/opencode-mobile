@@ -108,7 +108,7 @@ class SessionChatComposer(
             SessionChatTimelineState.Loading -> return
             SessionChatTimelineState.Error,
             SessionChatTimelineState.Empty,
-            -> appliedInitialModelSelection = true
+            -> applyResolvedInitialSelection(messageHint, markAppliedWithoutHint = true)
             SessionChatTimelineState.Ready -> {
                 val staleCached = staleCachedSelection()
                 cachedSelection?.takeIf { staleCached == null }?.let { cached ->
@@ -133,6 +133,34 @@ class SessionChatComposer(
                     }
                 }
             }
+        }
+    }
+
+    private fun applyResolvedInitialSelection(
+        messageHint: LatestModelHint?,
+        markAppliedWithoutHint: Boolean,
+    ) {
+        val staleCached = staleCachedSelection()
+        cachedSelection?.takeIf { staleCached == null }?.let { cached ->
+            appliedInitialModelSelection = true
+            applyLatestModelHint(
+                LatestModelHint(
+                    providerId = cached.providerId,
+                    modelId = cached.modelId,
+                    variant = cached.variant,
+                ),
+            )
+            return
+        }
+        messageHint?.let { hint ->
+            appliedInitialModelSelection = true
+            applyLatestModelHint(hint)
+            staleCached?.let { applyStaleCacheNotice(it) }
+            return
+        }
+        if (markAppliedWithoutHint) {
+            appliedInitialModelSelection = true
+            staleCached?.let { applyStaleCacheNotice(it) }
         }
     }
 
