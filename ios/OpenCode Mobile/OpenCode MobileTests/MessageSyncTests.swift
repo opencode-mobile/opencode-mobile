@@ -369,6 +369,7 @@ private final class MessageCollector: @unchecked Sendable {
     }
 }
 
+@MainActor
 private func makeMessageSync(
     repo: FakeLiveMessageRepository,
     eventStream: FakeForegroundEventStream

@@ -258,7 +258,7 @@ final class MessageSync {
         publishMessages: @escaping ([Message]) -> Void
     ) {
         let messages = store.messages(sessionID: sessionID)
-        guard !messages.isEmpty, markChanged(sessionID: sessionID, messages: messages) else { return }
+        guard markChanged(sessionID: sessionID, messages: messages) else { return }
         publishMessages(messages)
     }
 

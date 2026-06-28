@@ -139,7 +139,7 @@ class MessageSync(
                     }
 
                     val messages = store.messages(sessionId)
-                    if (messages.isNotEmpty() && markChanged(sessionId, messages)) {
+                    if (markChanged(sessionId, messages)) {
                         logD(
                             "observeMessages emit session=$sessionId count=${messages.size} " +
                                 "source=sse-incremental type=${event.type}",
