@@ -30,24 +30,33 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(String(output.characters) == code)
     }
 
-    @Test func mapperReusesAnExistingFinalDocumentWithoutComparingRuntimeHashes() async {
+    @Test func preparerReusesAnExistingFinalDocumentWithoutComparingRuntimeHashes() async {
         let document = NativeMarkdownDocument(sourceHash: 17, blocks: [.paragraph([.text("Heading")])])
-        let row = SessionChatRow(
-            id: "message-1",
-            role: .assistant,
-            text: "# Heading",
-            metadataLabel: "",
-            isPending: false,
-            isStreaming: false,
-            renderedMarkdown: document,
-            modelProviderID: nil,
-            modelID: nil,
-            contextInputTokens: nil
+        let previous =
+            DisplayMessage(
+                message: Message(
+                    id: "message-1",
+                    role: .assistant,
+                    text: "# Heading",
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                renderedMarkdown: document
+            )
+        let prepared = await MessageContentPreparer.shared.prepareMessage(
+            Message(
+                id: "message-1",
+                role: .assistant,
+                text: "# Heading",
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            previous: previous
         )
 
-        let enriched = await RenderedMarkdownMapper.shared.enrichRows([row], previousByID: [:])
-
-        #expect(enriched.first?.renderedMarkdown?.sourceHash == 17)
+        #expect(prepared.renderedMarkdown?.sourceHash == 17)
     }
 
     @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() {

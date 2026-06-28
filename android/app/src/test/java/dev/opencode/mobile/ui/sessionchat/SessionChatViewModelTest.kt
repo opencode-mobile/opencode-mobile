@@ -6,7 +6,7 @@ import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
-import dev.opencode.mobile.domain.live.MessageLiveStore
+import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -17,12 +17,15 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
+import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.ui.markdown.RenderedMarkdownMapper
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -113,25 +116,18 @@ class SessionChatViewModelTest {
                     }
                 }
             }
-            val mapper = RenderedMarkdownMapper(highlighter).apply { computationDispatcher = Dispatchers.Default }
-            val mapperMs = measureMs {
-                mapper.enrichRows(
-                    messages.map { message ->
-                        SessionChatMessageItem(
-                            id = message.id,
-                            role = message.role,
-                            text = message.text,
-                            metadataLabel = "Benchmark",
-                        )
-                    },
-                    previousById = emptyMap(),
-                )
+            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = Dispatchers.Default }
+            val preparerMs = measureMs {
+                preparer.prepareMessages(messages)
                 Unit
             }
             val viewModel =
                 createViewModel(
-                    repository = FakeMessageRepository(messages = messages),
-                    highlighter = highlighter,
+                    repository =
+                        FakeMessageRepository(
+                            messages = messages,
+                            contentPreparer = preparer,
+                        ),
                 )
 
             val startedAt = System.nanoTime()
@@ -143,7 +139,7 @@ class SessionChatViewModelTest {
             assertEquals(20, viewModel.uiState.value.messages.size)
             println(
                 "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
-                    "mapper-ms=$mapperMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
+                    "preparer-ms=$preparerMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
             )
         }
 
@@ -616,26 +612,18 @@ class SessionChatViewModelTest {
 
     private fun createViewModel(
         repository: FakeMessageRepository,
-        markdownDispatcher: CoroutineDispatcher = testDispatcher,
-        highlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val sessionRepository = FakeSessionRepository()
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
-        val messageLiveStore = EventDrivenFakeMessageLiveStore(repository)
         return SessionChatViewModel(
             messageRepository = repository,
             modelRepository = FakeModelRepository(),
             sessionRepository = sessionRepository,
-            messageLiveStore = messageLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
-            renderedMarkdownMapper =
-                RenderedMarkdownMapper(highlighter).apply {
-                    computationDispatcher = markdownDispatcher
-                },
         ).apply { ioDispatcher = testDispatcher }
     }
 
@@ -663,32 +651,6 @@ class SessionChatViewModelTest {
     }
 }
 
-@OptIn(FlowPreview::class)
-private class EventDrivenFakeMessageLiveStore(
-    private val repository: FakeMessageRepository,
-) : MessageLiveStore {
-    override fun clearCache() = Unit
-
-    override fun observeMessages(
-        sessionId: String,
-        directory: String,
-    ): Flow<List<Message>> =
-        channelFlow {
-            suspend fun loadMessages(): List<Message>? = runCatching { repository.listMessages(sessionId, directory) }.getOrNull()
-
-            loadMessages()?.let { send(it) }
-
-            repository.eventStream.events
-                .filter { event ->
-                    event.type == "stream.reconnected" ||
-                        (event.sessionId == sessionId && event.triggersMessageRefresh)
-                }.debounce(300)
-                .collect {
-                    loadMessages()?.let { send(it) }
-                }
-        }
-}
-
 private class FakeMessageRepository(
     var messages: List<Message> =
         listOf(
@@ -702,11 +664,74 @@ private class FakeMessageRepository(
     private val shouldFailSend: Boolean = false,
     var failListMessagesAfterSend: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
+    private val contentPreparer: MessageContentPreparer =
+        MessageContentPreparer(OpenCodeSyntaxHighlighter.default).apply {
+            computationDispatcher = Dispatchers.Unconfined
+        },
 ) : MessageRepository {
     val eventStream = FakeForegroundEventStream()
     var sendPromptAsyncCalled: Boolean = false
     var sentOptions: PromptSendOptions? = null
     private var listMessagesCallCount = 0
+
+    override fun observeMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<MessageListUpdate> =
+        channelFlow {
+            suspend fun loadUpdate(): MessageListUpdate =
+                runCatching { listMessages(sessionId, directory) }
+                    .fold(
+                        onSuccess = { MessageListUpdate.Messages(it) },
+                        onFailure = { MessageListUpdate.LoadFailed(it) },
+                    )
+
+            send(loadUpdate())
+
+            eventStream.events
+                .filter { event ->
+                    event.type == "stream.reconnected" ||
+                        (event.sessionId == sessionId && event.triggersMessageRefresh)
+                }.debounce(300)
+                .collect {
+                    send(loadUpdate())
+                }
+        }
+
+    override fun observeDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<DisplayMessageListUpdate> =
+        flow {
+            var previousById = emptyMap<String, DisplayMessage>()
+            observeMessages(sessionId, directory).collect { update ->
+                when (update) {
+                    is MessageListUpdate.LoadFailed -> emit(DisplayMessageListUpdate.LoadFailed(update.error))
+                    is MessageListUpdate.Messages -> {
+                        val prepared = contentPreparer.prepareMessages(update.messages, previousById)
+                        previousById = prepared.associateBy { it.id }
+                        emit(DisplayMessageListUpdate.Messages(prepared))
+                    }
+                }
+            }
+        }
+
+    override suspend fun refreshMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<Message> = listMessages(sessionId, directory)
+
+    override suspend fun refreshDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<DisplayMessage> = contentPreparer.prepareMessages(refreshMessages(sessionId, directory))
+
+    override suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+    ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
+
+    override fun clearMessageCache() = Unit
 
     override suspend fun listMessages(
         sessionId: String,

@@ -1,0 +1,277 @@
+package dev.opencode.mobile.ui.sessionchat
+
+import android.util.Log
+import dev.opencode.mobile.domain.message.MessageError
+import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.message.PromptModelSelection
+import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelSelection
+import dev.opencode.mobile.domain.model.ModelSelectionCatalog
+import dev.opencode.mobile.domain.model.ModelSelectionOption
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.util.UUID
+
+class SessionChatComposer(
+    private val messageRepository: MessageRepository,
+    private val modelRepository: ModelRepository,
+    private val scope: CoroutineScope,
+) {
+    var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+
+    private val _state = MutableStateFlow(SessionChatComposerRegionState())
+    val state: StateFlow<SessionChatComposerRegionState> = _state.asStateFlow()
+
+    private var boundWorktree: String? = null
+    private var loadedCatalog: ModelSelectionCatalog? = null
+
+    fun bind(worktree: String) {
+        if (boundWorktree == worktree && _state.value.composer.modelOptions.isNotEmpty()) return
+        boundWorktree = worktree
+        loadedCatalog = null
+        _state.value = SessionChatComposerRegionState()
+        logI("bind worktree=$worktree")
+    }
+
+    fun loadCatalog() {
+        val worktree = boundWorktree ?: return
+        scope.launch {
+            runCatching {
+                withContext(ioDispatcher) {
+                    modelRepository.listModelOptions(worktree)
+                }
+            }.onSuccess { catalog ->
+                if (boundWorktree == worktree) {
+                    logI(
+                        "loadCatalog options=${catalog.options.size} " +
+                            "default=${catalog.serverDefault?.modelLabel ?: "-"}",
+                    )
+                    applyCatalog(catalog)
+                }
+            }.onFailure { throwable ->
+                logW("loadCatalog failed error=${throwable.message ?: throwable::class.simpleName}")
+            }
+        }
+    }
+
+    fun applyLatestModelHint(hint: LatestModelHint?) {
+        val catalog = loadedCatalog ?: return
+        if (catalog.options.isEmpty()) return
+        val latestOption = hint?.let { catalog.option(it.providerId, it.modelId) }
+        updateFromCatalog(catalog, latestOption, hint?.variant)
+    }
+
+    fun updateComposerText(text: String) {
+        updateComposer { it.copy(text = text) }
+    }
+
+    fun selectModel(model: String) {
+        val option = _state.value.composer.modelOptions.firstOrNull { it.id == model } ?: return
+        selectModel(option)
+    }
+
+    fun selectModel(option: ModelSelectionOption) {
+        updateComposer { composer ->
+            val previousVariant = composer.selectedVariant
+            val variant = previousVariant?.takeIf { it in option.variants }
+            composer.copy(
+                selectedModel = ModelSelection(option, variant),
+                selectedVariant = variant,
+                modelNotice = null,
+            )
+        }
+    }
+
+    fun selectMode(mode: String) {
+        if (mode in AvailableModes) {
+            updateComposer { it.copy(selectedMode = mode) }
+        }
+    }
+
+    fun selectVariant(variant: String) {
+        updateComposer { composer ->
+            if (variant == ModelSelection.DefaultVariantLabel) {
+                return@updateComposer composer.copy(
+                    selectedModel = composer.selectedModel?.copy(selectedVariant = null),
+                    selectedVariant = null,
+                )
+            }
+            val selectedModel = composer.selectedModel ?: return@updateComposer composer
+            if (variant !in selectedModel.option.variants) return@updateComposer composer
+            composer.copy(
+                selectedModel = selectedModel.copy(selectedVariant = variant),
+                selectedVariant = variant,
+            )
+        }
+    }
+
+    fun restoreComposerText(text: String) {
+        updateComposer { it.copy(text = text) }
+    }
+
+    fun sendPrompt(
+        sessionId: String,
+        worktree: String,
+        onOptimisticRows: suspend (List<SessionChatMessageItem>) -> Unit,
+        onSendAccepted: suspend () -> Unit,
+        onSendFailed: (optimisticId: String, error: String) -> Unit,
+    ) {
+        val composer = _state.value.composer
+        val prompt = composer.text.trim()
+        val selectedModel = composer.selectedModel ?: return
+        if (prompt.isEmpty() || _state.value.isSending) return
+
+        scope.launch {
+            val display =
+                withContext(ioDispatcher) {
+                    messageRepository.prepareOptimisticUserMessage(
+                        id = "pending-${UUID.randomUUID()}",
+                        text = prompt,
+                    )
+                }
+            val enriched =
+                listOf(
+                    SessionChatMessageItem(
+                        id = display.id,
+                        role = dev.opencode.mobile.domain.message.MessageRole.User,
+                        text = display.text,
+                        metadataLabel = composerMetadataLabel(composer),
+                        isPending = true,
+                        isStreaming = false,
+                        renderedMarkdown = display.renderedMarkdown,
+                    ),
+                )
+            _state.update {
+                it.copy(
+                    composer = composer.copy(text = ""),
+                    isSending = true,
+                    errorMessage = null,
+                )
+            }
+            onOptimisticRows(enriched)
+            try {
+                messageRepository.sendPromptAsync(
+                    sessionId = sessionId,
+                    options =
+                        PromptSendOptions(
+                            text = prompt,
+                            model = PromptModelSelection(selectedModel.option.providerId, selectedModel.option.modelId),
+                            variant = composer.selectedVariant,
+                        ),
+                    directory = worktree,
+                )
+                onSendAccepted()
+            } catch (throwable: Throwable) {
+                logSendFailure(throwable)
+                _state.update { it.copy(isSending = false) }
+                onSendFailed(display.id, errorMessage(throwable))
+            }
+        }
+    }
+
+    fun clearSending() {
+        _state.update { it.copy(isSending = false) }
+    }
+
+    private fun applyCatalog(catalog: ModelSelectionCatalog) {
+        if (catalog.options.isEmpty()) return
+        loadedCatalog = catalog
+        updateFromCatalog(catalog, latestOption = null, latestVariant = null)
+    }
+
+    private fun updateFromCatalog(
+        catalog: ModelSelectionCatalog,
+        latestOption: ModelSelectionOption?,
+        latestVariant: String?,
+    ) {
+        _state.update { state ->
+            val currentOption =
+                state.composer.selectedModel?.let { catalog.option(it.option.providerId, it.option.modelId) }
+            val desired = currentOption ?: latestOption
+            val fallback = desired ?: catalog.serverDefault ?: catalog.options.first()
+            val notice =
+                if (state.composer.selectedModel != null &&
+                    catalog.option(
+                        state.composer.selectedModel.option.providerId,
+                        state.composer.selectedModel.option.modelId,
+                    ) == null
+                ) {
+                    "Selected model is unavailable. Using ${fallback.modelLabel}."
+                } else {
+                    null
+                }
+            val variant = resolvedVariant(state.composer.selectedVariant ?: latestVariant, fallback)
+            val selectedModel = ModelSelection(fallback, variant)
+            state.copy(
+                composer =
+                    state.composer.copy(
+                        modelOptions = catalog.options,
+                        selectedModel = selectedModel,
+                        selectedVariant = variant,
+                        modelNotice = notice,
+                    ),
+            )
+        }
+    }
+
+    private fun resolvedVariant(
+        remembered: String?,
+        option: ModelSelectionOption,
+    ): String? = remembered?.takeIf { it.isNotBlank() && it in option.variants }
+
+    private fun composerMetadataLabel(composer: SessionChatComposerState): String =
+        listOfNotNull(
+            composer.selectedMode,
+            composer.selectedModel?.modelLabel,
+            composer.selectedVariant,
+            formatSentTime(System.currentTimeMillis()),
+        ).joinToString(" · ")
+
+    private fun updateComposer(transform: (SessionChatComposerState) -> SessionChatComposerState) {
+        _state.update { it.copy(composer = transform(it.composer)) }
+    }
+
+    private fun formatSentTime(epochMs: Long): String =
+        Instant
+            .ofEpochMilli(epochMs)
+            .atZone(ZoneId.systemDefault())
+            .format(SentTimeFormatter)
+
+    private fun errorMessage(throwable: Throwable): String =
+        when (throwable) {
+            is MessageError.Http -> throwable.message ?: "Request failed"
+            is MessageError.Transport -> "Unable to reach the server"
+            is MessageError.Decoding -> "Unable to read server response"
+            else -> throwable.message ?: "Something went wrong"
+        }
+
+    private fun logSendFailure(throwable: Throwable) {
+        runCatching { Log.e(TAG, "sendPromptAsync failed", throwable) }
+    }
+
+    private fun logI(message: String) {
+        runCatching { Log.i(TAG, message) }
+    }
+
+    private fun logW(message: String) {
+        runCatching { Log.w(TAG, message) }
+    }
+
+    companion object {
+        private const val TAG = "SessionChatComposer"
+        val AvailableModes = listOf("Build", "Plan")
+        const val ModelFilterThreshold = 10
+        private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+    }
+}

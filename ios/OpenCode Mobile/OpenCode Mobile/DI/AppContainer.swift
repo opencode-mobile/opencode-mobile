@@ -81,11 +81,45 @@ extension Container {
         self { MessageDomainAdapter() }.singleton
     }
 
+    var messageStore: Factory<InMemoryMessageStore> {
+        self { @MainActor in InMemoryMessageStore() }.singleton
+    }
+
+    var messageSync: Factory<MessageSync> {
+        self { @MainActor in
+            let api = self.messagesAPIClient()
+            let adapter = self.messageDomainAdapter()
+            return MessageSync(
+                listMessages: { sessionID, directory in
+                    try await api.listMessages(sessionID: sessionID, directory: directory).map(adapter.message)
+                },
+                store: self.messageStore(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
+    var messageContentPreparer: Factory<MessageContentPreparer> {
+        self { MessageContentPreparer.shared }.singleton
+    }
+
+    var displayMessagePipeline: Factory<DisplayMessagePipeline> {
+        self { @MainActor in
+            DisplayMessagePipeline(
+                messageSync: self.messageSync(),
+                contentPreparer: self.messageContentPreparer()
+            )
+        }.singleton
+    }
+
     var messageRepository: Factory<any MessageRepository> {
-        self {
+        self { @MainActor in
             DefaultMessageRepository(
                 api: self.messagesAPIClient(),
-                adapter: self.messageDomainAdapter()
+                adapter: self.messageDomainAdapter(),
+                messageSync: self.messageSync(),
+                displayMessagePipeline: self.displayMessagePipeline(),
+                contentPreparer: self.messageContentPreparer()
             )
         }.singleton
     }
@@ -137,15 +171,6 @@ extension Container {
         self { @MainActor in
             DefaultSessionLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
-            )
-        }.singleton
-    }
-
-    var messageLiveStore: Factory<DefaultMessageLiveStore> {
-        self { @MainActor in
-            DefaultMessageLiveStore(
-                messageRepository: self.messageRepository(),
                 eventStream: self.foregroundEventStream()
             )
         }.singleton
@@ -205,7 +230,6 @@ extension Container {
                 messageRepository: self.messageRepository(),
                 modelRepository: self.modelRepository(),
                 sessionRepository: self.sessionRepository(),
-                messageLiveStore: self.messageLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream()
             )
@@ -260,7 +284,7 @@ extension Container {
             await shared.connectionSessionCoordinator().clearConnectionData()
             shared.sessionLiveStore().clearCache()
             shared.sessionStatusLiveStore().clearCache()
-            shared.messageLiveStore().clearCache()
+            shared.messageRepository().clearMessageCache()
             ThemeManager.shared.clearAll()
         }
     }

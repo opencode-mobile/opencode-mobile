@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import android.util.Log
 import dev.opencode.mobile.data.remote.MessagesApi
+import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import kotlin.system.measureTimeMillis
 
@@ -10,7 +11,39 @@ class DefaultMessageRepository
     constructor(
         private val api: MessagesApi,
         private val adapter: MessageDomainAdapter,
+        private val messageSync: MessageSync,
+        private val displayMessagePipeline: DisplayMessagePipeline,
+        private val contentPreparer: MessageContentPreparer,
     ) : MessageRepository {
+        override fun observeMessages(
+            sessionId: String,
+            directory: String?,
+        ): Flow<MessageListUpdate> = messageSync.observeMessages(sessionId, directory)
+
+        override fun observeDisplayMessages(
+            sessionId: String,
+            directory: String?,
+        ): Flow<DisplayMessageListUpdate> = displayMessagePipeline.observeDisplayMessages(sessionId, directory)
+
+        override suspend fun refreshMessages(
+            sessionId: String,
+            directory: String?,
+        ): List<Message> = messageSync.refreshMessages(sessionId, directory)
+
+        override suspend fun refreshDisplayMessages(
+            sessionId: String,
+            directory: String?,
+        ): List<DisplayMessage> = displayMessagePipeline.refreshDisplayMessages(sessionId, directory)
+
+        override suspend fun prepareOptimisticUserMessage(
+            id: String,
+            text: String,
+        ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
+
+        override fun clearMessageCache() {
+            messageSync.clearCache()
+        }
+
         override suspend fun listMessages(
             sessionId: String,
             directory: String?,

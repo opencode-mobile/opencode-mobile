@@ -4,15 +4,15 @@ import Testing
 
 @Suite(.serialized)
 @MainActor
-struct DefaultMessageLiveStoreTests {
+struct MessageSyncTests {
     private let decoder = JSONDecoder()
 
     @Test func initialLoad_emitsMessagesFromRepository() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
 
         let loaded = await waitUntil {
             collector.latest()?.first?.text == "Hello"
@@ -25,10 +25,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
 
         let event = eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1")
@@ -44,10 +44,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messagePartUpdated_textPartAppendsToSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(100))
 
         // Create a user message slot first.
@@ -71,10 +71,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messagePartUpdated_textDelta_marksStreaming() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
 
         eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
@@ -108,10 +108,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messagePartUpdated_textDeltaAppendsToExistingPart() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(100))
 
         eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
@@ -137,10 +137,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messagePartUpdated_preservesPartOrderAcrossReplacement() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(100))
 
         eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
@@ -176,10 +176,10 @@ struct DefaultMessageLiveStoreTests {
             ),
         ]
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
 
         repo.messages = [
@@ -207,10 +207,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messageRemoved_deletesSlotAndEmits() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
 
         // Remove msg-1.
@@ -230,10 +230,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func messagePartRemoved_updatesText() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
 
         // Add msg-2 via SSE (incremental cache).
@@ -261,10 +261,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func streamReconnected_triggersFullReload() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
 
         repo.messages = [
@@ -286,10 +286,10 @@ struct DefaultMessageLiveStoreTests {
     @Test func eventsForOtherSessionsAreIgnored() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
-        let store = DefaultMessageLiveStore(messageRepository: repo, eventStream: eventStream)
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
 
         let collector = MessageCollector()
-        let task = Task { await collector.collect(store.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         let loaded = await waitUntil(timeoutMs: 5_000) {
             collector.latest() != nil
         }
@@ -356,15 +356,30 @@ struct DefaultMessageLiveStoreTests {
 private final class MessageCollector: @unchecked Sendable {
     private(set) var emissions: [[Message]] = []
 
-    func collect(_ stream: AsyncStream<[Message]>) async {
-        for await messages in stream {
-            emissions.append(messages)
+    func collect(_ stream: AsyncStream<MessageListUpdate>) async {
+        for await update in stream {
+            if case .messages(let messages) = update {
+                emissions.append(messages)
+            }
         }
     }
 
     func latest() -> [Message]? {
         emissions.last
     }
+}
+
+private func makeMessageSync(
+    repo: FakeLiveMessageRepository,
+    eventStream: FakeForegroundEventStream
+) -> MessageSync {
+    MessageSync(
+        listMessages: { sessionID, directory in
+            try await repo.listMessages(sessionID: sessionID, directory: directory)
+        },
+        store: InMemoryMessageStore(),
+        eventStream: eventStream
+    )
 }
 
 private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sendable {
@@ -374,6 +389,31 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
         ], model: nil, mode: nil, sentAtEpochMs: nil),
     ]
     var listMessagesCallCount = 0
+
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
+        AsyncStream { _ in }
+    }
+
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        AsyncStream { _ in }
+    }
+
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await listMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        let messages = try await refreshMessages(sessionID: sessionID, directory: directory)
+        return messages.map { DisplayMessage(message: $0) }
+    }
+
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
+        DisplayMessage(
+            message: Message(id: id, role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: nil)
+        )
+    }
+
+    func clearMessageCache() {}
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         listMessagesCallCount += 1

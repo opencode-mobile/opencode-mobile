@@ -2,10 +2,16 @@ package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageDomainAdapter
+import dev.opencode.mobile.domain.message.MessageListUpdate
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -31,16 +37,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class MessageLiveStoreTest {
+class MessageSyncTest {
     private val testDispatcher = StandardTestDispatcher()
 
     @Test
     fun observeMessages_emitsInitialMessages() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
-            val store = createMessageStore(repository, FakeForegroundEventStream())
+            val sync = createMessageSync(repository, FakeForegroundEventStream())
 
-            val messages = store.observeMessages("ses-1", "/repo").first()
+            val messages = sync.firstMessages("ses-1", "/repo")
 
             assertEquals("Hello", messages.single().text)
         }
@@ -50,11 +56,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val initialLoadGate = CompletableDeferred<Unit>()
             val repository = FakeMessageRepository(holdLoadUntil = initialLoadGate)
-            val store = createMessageStore(repository, FakeForegroundEventStream())
+            val store = createMessageSync(repository, FakeForegroundEventStream())
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -74,11 +82,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -97,11 +107,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -118,11 +130,13 @@ class MessageLiveStoreTest {
     fun observeMessages_pollsTimelineWhenFingerprintChanges() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
-            val store = createMessageStore(repository, FakeForegroundEventStream())
+            val store = createMessageSync(repository, FakeForegroundEventStream())
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -141,11 +155,13 @@ class MessageLiveStoreTest {
     fun observeMessages_doesNotEmitDuplicateOnUnchangedPoll() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
-            val store = createMessageStore(repository, FakeForegroundEventStream())
+            val store = createMessageSync(repository, FakeForegroundEventStream())
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -164,11 +180,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -187,11 +205,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -219,11 +239,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -275,11 +297,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -304,11 +328,13 @@ class MessageLiveStoreTest {
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -345,11 +371,13 @@ class MessageLiveStoreTest {
                         ),
                 )
             val eventStream = FakeForegroundEventStream()
-            val store = createMessageStore(repository, eventStream)
+            val store = createMessageSync(repository, eventStream)
             val emissions = mutableListOf<List<Message>>()
             val collectJob =
                 launch {
-                    store.observeMessages("ses-1", "/repo").collect { emissions.add(it) }
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
                 }
             advanceTimeBy(1)
 
@@ -371,12 +399,28 @@ class MessageLiveStoreTest {
             assertEquals(2, repository.listMessagesCallCount)
         }
 
-    private fun createMessageStore(
+    private fun createMessageSync(
         repository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream,
-    ): DefaultMessageLiveStore {
+    ): MessageSync {
         val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-        return DefaultMessageLiveStore(repository, eventStream, scope)
+        return MessageSync(
+            listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+            store = InMemoryMessageStore(MessageDomainAdapter()),
+            eventStream = eventStream,
+            liveStoreScope = scope,
+        )
+    }
+
+    private suspend fun MessageSync.firstMessages(
+        sessionId: String,
+        directory: String,
+    ): List<Message> {
+        val update = observeMessages(sessionId, directory).first()
+        return when (update) {
+            is MessageListUpdate.Messages -> update.messages
+            is MessageListUpdate.LoadFailed -> throw update.error
+        }
     }
 
     private fun messageUpdatedEvent(
@@ -616,6 +660,37 @@ private class FakeMessageRepository(
     private val holdLoadUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
     var listMessagesCallCount = 0
+
+    override fun observeMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<MessageListUpdate> = emptyFlow()
+
+    override fun observeDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<dev.opencode.mobile.domain.message.DisplayMessageListUpdate> = emptyFlow()
+
+    override suspend fun refreshMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<Message> = listMessages(sessionId, directory)
+
+    override suspend fun refreshDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<dev.opencode.mobile.domain.message.DisplayMessage> =
+        refreshMessages(sessionId, directory).map { dev.opencode.mobile.domain.message.DisplayMessage(it) }
+
+    override suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+    ): dev.opencode.mobile.domain.message.DisplayMessage =
+        dev.opencode.mobile.domain.message.DisplayMessage(
+            Message(id = id, role = MessageRole.User, text = text),
+        )
+
+    override fun clearMessageCache() = Unit
 
     override suspend fun listMessages(
         sessionId: String,

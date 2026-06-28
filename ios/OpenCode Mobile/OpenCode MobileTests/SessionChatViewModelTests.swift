@@ -30,25 +30,9 @@ struct SessionChatViewModelTests {
                 }
             }.value
         }
-        let mapper = RenderedMarkdownMapper()
-        let mapperMs = await milliseconds {
-            _ = await mapper.enrichRows(
-                messages.map {
-                    SessionChatRow(
-                        id: $0.id,
-                        role: $0.role,
-                        text: $0.text,
-                        metadataLabel: "Benchmark",
-                        isPending: false,
-                        isStreaming: false,
-                        renderedMarkdown: nil,
-                        modelProviderID: nil,
-                        modelID: nil,
-                        contextInputTokens: nil
-                    )
-                },
-                previousByID: [:]
-            )
+        let mapper = MessageContentPreparer()
+        let preparerMs = await milliseconds {
+            _ = await mapper.prepareMessages(messages)
         }
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(messages: messages)
@@ -68,7 +52,7 @@ struct SessionChatViewModelTests {
         #expect(loadedMessages.count == 20)
         let line =
             "MARKDOWN_BENCHMARK ios detector-ms=\(detectorMs) parser-bridge-ms=\(parserMs) " +
-            "mapper-ms=\(mapperMs) viewmodel-load-ms=\(elapsed.components.attoseconds / 1_000_000_000_000_000) " +
+            "preparer-ms=\(preparerMs) viewmodel-load-ms=\(elapsed.components.attoseconds / 1_000_000_000_000_000) " +
             "messages=20 code-lines=3000\n"
         print(String(line.dropLast()))
         fputs(line, stderr)
@@ -243,8 +227,8 @@ struct SessionChatViewModelTests {
     }
 
     @Test func startObserving_afterStop_resumesEventReloads() async {
-        let liveStore = FakeMessageLiveStore()
-        let viewModel = makeViewModel(overridingLiveStore: liveStore)
+        let repository = FakeObservingMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
         await viewModel.loadMessages()
         viewModel.stopObserving()
         viewModel.startObserving()
@@ -252,7 +236,7 @@ struct SessionChatViewModelTests {
         let updated = [
             Message(id: "msg-2", role: .assistant, text: "Resumed", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
-        liveStore.emit(updated)
+        repository.emit(updated)
         let resumed = await waitUntil(timeoutMs: 2_000) {
             viewModel.uiState.timeline == .ready &&
                 viewModel.uiState.messages.contains { $0.text == "Resumed" }
@@ -277,14 +261,14 @@ struct SessionChatViewModelTests {
     }
 
     @Test func messageUpdatedEvent_reloadsMessages() async {
-        let liveStore = FakeMessageLiveStore()
-        let viewModel = makeViewModel(overridingLiveStore: liveStore)
+        let repository = FakeObservingMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
         await viewModel.loadMessages()
         try? await Task.sleep(for: .milliseconds(50))
         let updated = [
             Message(id: "msg-2", role: .assistant, text: "Updated", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
-        liveStore.emit(updated)
+        repository.emit(updated)
         try? await Task.sleep(for: .milliseconds(500))
         guard viewModel.uiState.timeline == .ready else {
             Issue.record("Expected ready timeline")
@@ -439,10 +423,8 @@ struct SessionChatViewModelTests {
     }
 
     private func makeViewModel(
-        messageRepository: FakeMessageRepository = FakeMessageRepository(),
-        eventStream: FakeForegroundEventStream? = nil,
-        overridingLiveStore: (any MessageLiveStore)? = nil,
-        renderedMarkdownMapper: RenderedMarkdownMapper = .shared
+        messageRepository: (any MessageRepository)? = nil,
+        eventStream: FakeForegroundEventStream? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         let sessionRepository = FakeChatSessionRepository()
@@ -450,26 +432,26 @@ struct SessionChatViewModelTests {
             sessionRepository: sessionRepository,
             eventStream: eventStream
         )
-        let messageLiveStore: any MessageLiveStore
-        if let overridingLiveStore {
-            messageLiveStore = overridingLiveStore
-        } else {
-            messageLiveStore = DefaultMessageLiveStore(
-                messageRepository: messageRepository,
-                eventStream: eventStream
-            )
-        }
+        let fake = messageRepository ?? FakeMessageRepository()
+        let repo: any MessageRepository =
+            if fake is FakeObservingMessageRepository {
+                fake
+            } else if fake is SyncingTestMessageRepository {
+                fake
+            } else if let fakeRepository = fake as? FakeMessageRepository {
+                SyncingTestMessageRepository(fake: fakeRepository, eventStream: eventStream)
+            } else {
+                fake
+            }
         let viewModel = SessionChatViewModel(
             sessionID: "ses-1",
             sessionTitle: "Title",
             worktree: "/repo",
-            messageRepository: messageRepository,
+            messageRepository: repo,
             modelRepository: FakeModelRepository(),
             sessionRepository: sessionRepository,
-            messageLiveStore: messageLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore,
-            foregroundEventStream: eventStream,
-            renderedMarkdownMapper: renderedMarkdownMapper
+            foregroundEventStream: eventStream
         )
         viewModel.startObserving()
         return viewModel
@@ -518,15 +500,80 @@ struct SessionChatViewModelTests {
 }
 
 @MainActor
-private final class FakeMessageLiveStore: MessageLiveStore {
-    private var publish: (([Message]) -> Void)?
-    private var observation: SharedLiveObservation<[Message]>?
+private final class SyncingTestMessageRepository: MessageRepository, @unchecked Sendable {
+    private let fake: FakeMessageRepository
+    private let sync: MessageSync
+    private let displayPipeline: DisplayMessagePipeline
+    private let contentPreparer: MessageContentPreparer
 
-    private func ensureObservation() -> SharedLiveObservation<[Message]> {
+    init(
+        fake: FakeMessageRepository,
+        eventStream: FakeForegroundEventStream,
+        contentPreparer: MessageContentPreparer = .shared
+    ) {
+        self.fake = fake
+        self.contentPreparer = contentPreparer
+        self.sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await fake.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: InMemoryMessageStore(),
+            eventStream: eventStream
+        )
+        self.displayPipeline = DisplayMessagePipeline(messageSync: sync, contentPreparer: contentPreparer)
+    }
+
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
+        sync.observeMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        displayPipeline.observeDisplayMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await sync.refreshMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        try await displayPipeline.refreshDisplayMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
+        await contentPreparer.prepareOptimisticUserMessage(id: id, text: text)
+    }
+
+    func clearMessageCache() {
+        sync.clearCache()
+    }
+
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await fake.listMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
+        try await fake.getMessage(sessionID: sessionID, messageID: messageID, directory: directory)
+    }
+
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
+        try await fake.sendMessage(sessionID: sessionID, text: text, directory: directory)
+    }
+
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
+        try await fake.sendPromptAsync(sessionID: sessionID, options: options, directory: directory)
+    }
+}
+
+@MainActor
+private final class FakeObservingMessageRepository: MessageRepository, @unchecked Sendable {
+    private var publish: ((MessageListUpdate) -> Void)?
+    private var observation: SharedLiveObservation<MessageListUpdate>?
+
+    private func ensureObservation() -> SharedLiveObservation<MessageListUpdate> {
         if let observation {
             return observation
         }
-        let created = SharedLiveObservation<[Message]> { yield in
+        let created = SharedLiveObservation<MessageListUpdate> { yield in
             Task { @MainActor [weak self] in
                 self?.publish = yield
                 await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
@@ -536,17 +583,65 @@ private final class FakeMessageLiveStore: MessageLiveStore {
         return created
     }
 
-    func observeMessages(sessionID: String, directory: String) -> AsyncStream<[Message]> {
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
         ensureObservation().stream()
     }
 
-    func cachedMessages(sessionID: String, directory: String) -> [Message]? { nil }
-
-    func emit(_ messages: [Message]) {
-        publish?(messages)
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        AsyncStream { continuation in
+            let task = Task {
+                var previousByID: [String: DisplayMessage] = [:]
+                for await update in observeMessages(sessionID: sessionID, directory: directory) {
+                    switch update {
+                    case .loadFailed(let error):
+                        continuation.yield(.loadFailed(error))
+                    case .messages(let messages):
+                        let prepared = await MessageContentPreparer.shared.prepareMessages(messages, previousByID: previousByID)
+                        previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
+                        continuation.yield(.messages(prepared))
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
-    func clearCache() {}
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        throw MessageError.transport("unused")
+    }
+
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        throw MessageError.transport("unused")
+    }
+
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
+        await MessageContentPreparer.shared.prepareOptimisticUserMessage(id: id, text: text)
+    }
+
+    func clearMessageCache() {}
+
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        [Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil)]
+    }
+
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
+        fatalError()
+    }
+
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
+        fatalError()
+    }
+
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func emit(_ messages: [Message]) {
+        publish?(.messages(messages))
+    }
+
+    func emitLoadFailed(_ error: Error) {
+        publish?(.loadFailed(error))
+    }
 }
 
 private final class FakeMessageRepository: MessageRepository, @unchecked Sendable {
@@ -580,6 +675,40 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         sendContinuation?.resume()
         sendContinuation = nil
     }
+
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
+        AsyncStream { _ in }
+    }
+
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        AsyncStream { continuation in
+            Task {
+                do {
+                    let messages = try await listMessages(sessionID: sessionID, directory: directory)
+                    let prepared = await MessageContentPreparer.shared.prepareMessages(messages)
+                    continuation.yield(.messages(prepared))
+                } catch {
+                    continuation.yield(.loadFailed(error))
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        try await listMessages(sessionID: sessionID, directory: directory)
+    }
+
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        let messages = try await refreshMessages(sessionID: sessionID, directory: directory)
+        return await MessageContentPreparer.shared.prepareMessages(messages)
+    }
+
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
+        await MessageContentPreparer.shared.prepareOptimisticUserMessage(id: id, text: text)
+    }
+
+    func clearMessageCache() {}
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         listMessagesCallCount += 1

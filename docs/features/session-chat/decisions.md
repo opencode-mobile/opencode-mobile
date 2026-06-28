@@ -101,6 +101,49 @@
 - Revisit when: a shared virtualization or block-collapse strategy ships on both
   platforms with benchmark evidence.
 
+## Split Timeline and Composer screen regions
+
+- Date: 2026-06-27
+- Decision: Session Chat Screen Models on both platforms delegate to
+  `SessionChatTimeline` (message list load, live updates, markdown transform,
+  optimistic rows) and `SessionChatComposer` (catalog load, picker state, send).
+  `SessionChatViewModel` remains the facade: composite `SessionChatUiState`,
+  chrome (connection, status, context usage, abort), and send wiring.
+- Reason: the monolithic ViewModel mixed independent concerns; parallel catalog
+  and message loads are easier to reason about when each region owns its API
+  calls.
+- Composer catalog load uses `GET /config/providers` only. Initial model
+  selection still applies a one-shot `LatestModelHint` from timeline message
+  history via the facade after both loads complete (not inside the composer
+  load path).
+- Revisit when: the experiment is evaluated; optional follow-up to drop history
+  hint and use `/session` metadata or server default only.
+
+## Extract SessionChatStatusBar from facade
+
+- Date: 2026-06-27
+- Decision: Session status observation, SSE connection state, abort, and
+  one-shot status refresh live in `SessionChatStatusBar` on both platforms.
+  Drop the internal name “chrome”. `SessionChatViewModel` keeps session
+  identity, `contextUsageFraction`, `LatestModelHint`, and merged `uiState`.
+- Reason: completes Timeline + Composer + StatusBar symmetry; matches
+  `OpenCodeSessionStatusBar` and iOS `startObserving` / `stopObserving`
+  vocabulary.
+- Revisit when: context usage moves to a dedicated API field from the server.
+
+## MessageLiveStore as sole timeline message source
+
+- Date: 2026-06-27
+- Decision: `SessionChatTimeline` subscribes to `MessageLiveStore.observeMessages`
+  on bind/start; it does not call `MessageRepository.listMessages` directly.
+  Pull-to-refresh, post-send reload, and error retry use
+  `MessageLiveStore.refreshMessages`. Initial subscribe failures propagate as
+  `MessageListUpdate.LoadFailed` so the timeline can enter the error state.
+  SSE-driven reconnect reloads keep the last good snapshot on silent failure.
+- Reason: removes duplicate REST on screen open and the ViewModel-owned message
+  observation loop on iOS; one reactive path from SSE through the live store.
+- Revisit when: the server exposes push-only history with no REST seed.
+
 ## Derive context usage from best available data
 
 - Date: 2026-06-01
