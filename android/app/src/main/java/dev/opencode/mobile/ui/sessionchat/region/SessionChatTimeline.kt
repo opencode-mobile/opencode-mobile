@@ -1,6 +1,10 @@
-package dev.opencode.mobile.ui.sessionchat
+package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.ui.sessionchat.LatestModelHint
+import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message

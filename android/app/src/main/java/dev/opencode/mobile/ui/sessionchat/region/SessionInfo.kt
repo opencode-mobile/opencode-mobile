@@ -1,6 +1,9 @@
-package dev.opencode.mobile.ui.sessionchat
+package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
+import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore

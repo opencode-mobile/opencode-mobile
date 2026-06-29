@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
