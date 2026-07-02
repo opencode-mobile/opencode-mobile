@@ -14,25 +14,30 @@ struct ComponentGalleryDetailView: View {
                 showDivider: true
             )
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(entry.description)
-                        .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .padding(.horizontal, horizontalPadding)
-
-                    ComponentGalleryControls(themeMode: $themeMode)
-                        .padding(.horizontal, horizontalPadding)
-
-                    if entry.id == .topBar || entry.id == .sessionStatusBar {
-                        content
-                    } else {
-                        content
+            if entry.id == .messageList {
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(entry.description)
+                            .font(OpenCodeTypography.bodySecondary)
+                            .foregroundStyle(OpenCodeColors.textBase)
                             .padding(.horizontal, horizontalPadding)
+
+                        ComponentGalleryControls(themeMode: $themeMode)
+                            .padding(.horizontal, horizontalPadding)
+
+                        if entry.id == .topBar || entry.id == .sessionStatusBar {
+                            content
+                        } else {
+                            content
+                                .padding(.horizontal, horizontalPadding)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 16)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 16)
             }
         }
         .background(OpenCodeColors.backgroundBase)
@@ -58,6 +63,8 @@ struct ComponentGalleryDetailView: View {
             ListItemGalleryView()
         case .choiceBadge:
             ChoiceBadgeGalleryView()
+        case .actionPill:
+            ActionPillGalleryView()
         case .button:
             ButtonGalleryView()
         case .projectSessionSelector:
@@ -66,6 +73,8 @@ struct ComponentGalleryDetailView: View {
             SessionStatusBarGalleryView()
         case .renderedMarkdown:
             RenderedMarkdownGalleryView()
+        case .messageList:
+            MessageListGalleryView()
         }
     }
 }

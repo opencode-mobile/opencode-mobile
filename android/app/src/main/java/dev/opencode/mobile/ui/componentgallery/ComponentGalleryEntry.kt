@@ -19,10 +19,12 @@ enum class ComponentGalleryEntryId {
     BottomSheet,
     ListItem,
     ChoiceBadge,
+    ActionPill,
     Button,
     ProjectSessionSelector,
     SessionStatusBar,
     RenderedMarkdown,
+    MessageList,
 }
 
 data class ComponentGalleryEntry(
@@ -83,6 +85,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ActionPill,
+            title = "Action Pill",
+            description = "Floating pill for contextual overlay actions such as scroll to end.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.Button,
             title = "Button",
             description = "Reusable action component with text and icon variants.",
@@ -104,6 +112,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.RenderedMarkdown,
             title = "Rendered Markdown",
             description = "Safe markdown, code, and fenced diff rendering for message text.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.MessageList,
+            title = "Message List",
+            description = "Scrollable outgoing and incoming message list with scroll-to-end pill.",
             category = ComponentGalleryCategory.Components,
         ),
     )

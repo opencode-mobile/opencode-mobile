@@ -15,6 +15,7 @@ object OpenCodeIcons {
     private var _add: ImageVector? = null
     private var _arrow_back: ImageVector? = null
     private var _arrow_upward: ImageVector? = null
+    private var _arrow_downward: ImageVector? = null
     private var _check: ImageVector? = null
     private var _chevron_right: ImageVector? = null
     private var _close: ImageVector? = null
@@ -104,6 +105,31 @@ object OpenCodeIcons {
                         )
                     }.build()
             return _arrow_upward!!
+        }
+
+    val ArrowDownward: ImageVector
+        get() {
+            if (_arrow_downward != null) return _arrow_downward!!
+            _arrow_downward =
+                ImageVector
+                    .Builder(
+                        name = "ArrowDownward",
+                        defaultWidth = 24.dp,
+                        defaultHeight = 24.dp,
+                        viewportWidth = 24f,
+                        viewportHeight = 24f,
+                    ).apply {
+                        addPath(
+                            pathData =
+                                PathParser()
+                                    .parsePathString(
+                                        "m20 12-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z",
+                                    ).toNodes(),
+                            fill = SolidColor(Color.Black),
+                            pathFillType = PathFillType.NonZero,
+                        )
+                    }.build()
+            return _arrow_downward!!
         }
 
     val Check: ImageVector

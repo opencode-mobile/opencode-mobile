@@ -92,3 +92,21 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: revisit if the iOS timeline stops using lazy scroll
   relayout/auto-scroll, or if a stable shared row-width primitive replaces the
   current platform-specific measurement.
+
+## Session chat scroll-to-end on iOS
+
+- Status: intentional
+- Area: component | motion
+- Shared intent: show the scroll-to-end action pill when the timeline is not
+  pinned to the bottom; scroll to the latest messages on tap.
+- iOS behavior: Session Chat temporarily uses eager SwiftUI `VStack` timeline
+  layout and `ScrollViewReader.scrollTo(lastMessage, anchor: .bottom)`.
+- Android behavior: Session Chat uses lazy Compose list state and scrolls to the
+  bottom anchor item.
+- Reason: SwiftUI `LazyVStack` programmatic scrolling is unreliable for
+  variable-height markdown chat rows; it can miss the target or land in blank
+  estimated space. Eager layout trades long-history performance for correct
+  scroll-to-end behavior while the durable iOS timeline is rebuilt.
+- Review trigger: replace the iOS SwiftUI scroll view with a UIKit-backed
+  `UICollectionView`/`UITableView` timeline using hosted SwiftUI cells before
+  treating long-history chat performance as production-ready.

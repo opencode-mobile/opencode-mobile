@@ -1,15 +1,21 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -17,17 +23,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.components.OpenCodeActionPill
+import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
+import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.displayLabel
+import kotlinx.coroutines.launch
 
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
@@ -74,34 +89,75 @@ internal fun SessionChatTimelineView(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        SessionChatTimelineState.Ready ->
-            PullToRefreshBox(
-                isRefreshing = props.isRefreshing,
-                onRefresh = props.onRefresh,
-                modifier = modifier.fillMaxWidth(),
-            ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding =
-                        PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 12.dp,
-                            bottom = 12.dp,
-                        ),
-                ) {
-                    itemsIndexed(props.messages, key = { _, message -> message.id }) { index, message ->
-                        SessionChatMessageRow(
-                            message = message,
-                            onRestoreClick = { props.onRestoreComposerText(message.text) },
-                            modifier =
-                                Modifier.padding(
-                                    bottom = if (index == props.messages.lastIndex) 0.dp else 8.dp,
-                                ),
-                        )
-                    }
+        SessionChatTimelineState.Ready -> {
+            val listState = rememberLazyListState()
+            val revealThresholdMinPx = with(LocalDensity.current) { 120.dp.roundToPx() }
+            val showScrollToEnd by remember(props.messages, revealThresholdMinPx) {
+                derivedStateOf {
+                    listState.shouldShowScrollToEndPill(
+                        messageCount = props.messages.size,
+                        revealThresholdMinPx = revealThresholdMinPx,
+                    )
                 }
             }
+            val coroutineScope = rememberCoroutineScope()
+
+            Box(modifier = modifier.fillMaxSize()) {
+                PullToRefreshBox(
+                    isRefreshing = props.isRefreshing,
+                    onRefresh = props.onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding =
+                            PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 12.dp,
+                                bottom = 12.dp,
+                            ),
+                    ) {
+                        itemsIndexed(props.messages, key = { _, message -> message.id }) { index, message ->
+                            SessionChatMessageRow(
+                                message = message,
+                                onRestoreClick = { props.onRestoreComposerText(message.text) },
+                                modifier =
+                                    Modifier.padding(
+                                        bottom = if (index == props.messages.lastIndex) 0.dp else 8.dp,
+                                    ),
+                            )
+                        }
+                        item(key = SessionChatTimelineBottomAnchorKey) {
+                            Spacer(modifier = Modifier.height(1.dp))
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showScrollToEnd,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 12.dp),
+                ) {
+                    OpenCodeActionPill(
+                        variant = OpenCodeActionPillVariant.ScrollToEnd,
+                        onClick = {
+                            coroutineScope.launch {
+                                val bottomAnchorIndex = props.messages.size
+                                if (bottomAnchorIndex > 0) {
+                                    listState.animateScrollToItem(bottomAnchorIndex)
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -168,6 +224,8 @@ private fun AssistantMessageBubble(
             )
     }
 }
+
+private const val SessionChatTimelineBottomAnchorKey = "session-chat-timeline-bottom"
 
 @Composable
 private fun FallbackMessageBubble(

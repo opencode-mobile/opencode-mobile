@@ -1,5 +1,23 @@
 # Session Chat Decisions
 
+## Use eager SwiftUI timeline before UIKit-backed iOS timeline
+
+- Date: 2026-06-29
+- Decision: iOS Session Chat temporarily renders the message timeline with
+  eager SwiftUI `VStack` layout and `ScrollViewReader.scrollTo(lastMessage,
+  anchor: .bottom)` for the scroll-to-end action pill. Do not reintroduce
+  `LazyVStack` for this interaction.
+- Reason: `LazyVStack` estimates off-screen variable-height rows. Session Chat
+  rows can be markdown-heavy and may remeasure after first layout, so
+  SwiftUI programmatic scrolling can miss the last message or land in blank
+  estimated space. Eager layout is less scalable but gives deterministic
+  target geometry for the current product slice.
+- Follow-up: replace the iOS timeline with a UIKit-backed virtualized list
+  (`UICollectionView` or `UITableView` with SwiftUI-hosted cells) before
+  treating long-history performance as production-ready.
+- Revisit when: the UIKit-backed timeline lands, or benchmark evidence shows
+  eager SwiftUI layout is acceptable for representative long histories.
+
 ## Composite Session Chat UiState
 
 - Date: 2026-06-27

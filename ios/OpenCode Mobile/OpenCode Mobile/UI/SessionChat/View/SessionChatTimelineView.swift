@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let sessionChatTimelineBottomAnchorID = "session-chat-timeline-bottom-anchor"
+
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
     let messages: [SessionChatRow]
@@ -44,42 +46,137 @@ struct SessionChatTimelineView: View {
                     .padding(.horizontal, 16)
                 Spacer()
             case .ready:
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(props.messages.enumerated()), id: \.element.id) { index, message in
-                            HStack {
-                                if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                                    SessionChatMessageRow(
-                                        message: message,
-                                        onRestoreClick: { props.onRestoreComposerText(message.text) }
-                                    )
-                                    Spacer(minLength: 0)
-                                } else {
-                                    Spacer(minLength: 0)
-                                    SessionChatMessageRow(
-                                        message: message,
-                                        onRestoreClick: { props.onRestoreComposerText(message.text) }
-                                    )
-                                }
-                            }
-                            .padding(.bottom, index == props.messages.count - 1 ? 0 : 8)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                .refreshable {
-                    await props.onRefresh()
-                }
-                .overlay {
-                    if props.isRefreshing {
-                        ProgressView()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                SessionChatTimelineReadyView(props: props)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct SessionChatTimelineReadyView: View {
+    let props: SessionChatTimelineViewProps
+
+    @State private var scrollPositionID: String?
+    @State private var scrollDistanceFromBottom = CGFloat.greatestFiniteMagnitude
+    @State private var contentHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    @State private var isUserScrolling = false
+
+    private var isScrollable: Bool {
+        contentHeight > viewportHeight + 8
+    }
+
+    private var showScrollToEnd: Bool {
+        guard !props.messages.isEmpty, isScrollable else { return false }
+
+        if #available(iOS 18, *) {
+            return ScrollToEndVisibility.shouldShow(
+                scrollDistanceFromBottom: scrollDistanceFromBottom,
+                viewportHeight: viewportHeight,
+                isUserScrolling: isUserScrolling
+            )
+        }
+
+        guard !isUserScrolling else { return false }
+        return scrollPositionID != sessionChatTimelineBottomAnchorID
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                SessionChatTimelineMessageStack(
+                    messages: props.messages,
+                    onRestoreComposerText: props.onRestoreComposerText
+                )
+                .scrollTargetLayout()
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onChange(of: geometry.size.height, initial: true) { _, height in
+                                contentHeight = height
+                            }
+                    }
+                }
+            }
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onChange(of: geometry.size.height, initial: true) { _, height in
+                            viewportHeight = height
+                        }
+                }
+            }
+            .scrollPosition(id: $scrollPositionID, anchor: .bottom)
+            .scrollToEndScrollObserver(
+                distanceFromBottom: $scrollDistanceFromBottom,
+                isUserScrolling: $isUserScrolling,
+                scrollPositionID: scrollPositionID
+            )
+            .refreshable {
+                await props.onRefresh()
+            }
+            .overlay {
+                if props.isRefreshing {
+                    ProgressView()
+                }
+            }
+
+            if showScrollToEnd {
+                OpenCodeActionPill(variant: .scrollToEnd) {
+                    scrollToLastMessage()
+                }
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
+    }
+
+    private func scrollToLastMessage() {
+        guard !props.messages.isEmpty else { return }
+        Task { @MainActor in
+            await Task.yield()
+            withAnimation(.easeOut(duration: 0.2)) {
+                scrollPositionID = sessionChatTimelineBottomAnchorID
+            }
+        }
+    }
+}
+
+private struct SessionChatTimelineMessageStack: View {
+    let messages: [SessionChatRow]
+    let onRestoreComposerText: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                HStack {
+                    if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                        SessionChatMessageRow(
+                            message: message,
+                            onRestoreClick: { onRestoreComposerText(message.text) }
+                        )
+                        Spacer(minLength: 0)
+                    } else {
+                        Spacer(minLength: 0)
+                        SessionChatMessageRow(
+                            message: message,
+                            onRestoreClick: { onRestoreComposerText(message.text) }
+                        )
+                    }
+                }
+                .id(message.id)
+                .padding(.bottom, index == messages.count - 1 ? 0 : 8)
+            }
+
+            Color.clear
+                .frame(height: 12)
+                .id(sessionChatTimelineBottomAnchorID)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
 }
 
