@@ -123,4 +123,29 @@ enum MessageListGalleryMocks {
             metadataLabel: nil
         ),
     ]
+
+    static func nextLiveMessage(sequence: Int, lastRole: MessageListGalleryRole?) -> MessageListGalleryMessage {
+        let nextRole: MessageListGalleryRole =
+            switch lastRole {
+            case .none, .assistant: .user
+            case .user: .assistant
+            }
+
+        switch nextRole {
+        case .user:
+            return MessageListGalleryMessage(
+                id: "gallery-live-user-\(sequence)",
+                role: .user,
+                text: "Live message \(sequence): keep streaming updates coming every five seconds.",
+                metadataLabel: userMetadata
+            )
+        case .assistant:
+            return MessageListGalleryMessage(
+                id: "gallery-live-assistant-\(sequence)",
+                role: .assistant,
+                text: "Live reply \(sequence): this simulated assistant message was appended while live messages are enabled.",
+                metadataLabel: nil
+            )
+        }
+    }
 }

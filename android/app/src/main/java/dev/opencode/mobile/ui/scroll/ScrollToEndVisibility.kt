@@ -51,3 +51,17 @@ fun LazyListState.shouldShowScrollToEndPill(
     revealThresholdMinPx: Int,
 ): Boolean =
     !isScrollInProgress && shouldShowScrollToEnd(messageCount, revealThresholdMinPx)
+
+fun LazyListState.shouldFollowLatestTimeline(
+    messageCount: Int,
+    revealThresholdMinPx: Int,
+): Boolean =
+    messageCount > 0 &&
+        !isScrollInProgress &&
+        !shouldShowScrollToEnd(messageCount, revealThresholdMinPx)
+
+suspend fun LazyListState.animateScrollToTimelineEnd(messageCount: Int) {
+    if (messageCount > 0) {
+        animateScrollToItem(messageCount)
+    }
+}

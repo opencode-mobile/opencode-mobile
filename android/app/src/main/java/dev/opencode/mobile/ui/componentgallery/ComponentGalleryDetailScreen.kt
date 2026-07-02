@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.componentgallery
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,37 +33,31 @@ fun ComponentGalleryDetailScreen(
             showDivider = true,
         )
 
-        if (entry.id == ComponentGalleryEntryId.MessageList) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                content()
+        LazyColumn(
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item {
+                Text(
+                    text = entry.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = horizontalPadding),
+                )
             }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                item {
-                    Text(
-                        text = entry.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = horizontalPadding),
-                    )
-                }
-                item {
-                    ComponentGalleryControls(
-                        themeMode = themeMode,
-                        onThemeModeChange = onThemeModeChange,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
-                    )
-                }
-                item {
-                    if (entry.id == ComponentGalleryEntryId.TopBar || entry.id == ComponentGalleryEntryId.SessionStatusBar) {
+            item {
+                ComponentGalleryControls(
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
+                )
+            }
+            item {
+                if (entry.id == ComponentGalleryEntryId.TopBar || entry.id == ComponentGalleryEntryId.SessionStatusBar) {
+                    content()
+                } else {
+                    Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
                         content()
-                    } else {
-                        Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
-                            content()
-                        }
                     }
                 }
             }

@@ -3,10 +3,10 @@ import SwiftUI
 private let messageListGalleryBottomAnchorID = "message-list-gallery-bottom-anchor"
 
 struct MessageListGalleryView: View {
-    private let messages = MessageListGalleryMocks.messages
+    @Bindable var model: MessageListGalleryModel
 
     var body: some View {
-        MessageListGalleryPreview(messages: messages)
+        MessageListGalleryPreview(messages: model.messages)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -82,6 +82,7 @@ private struct MessageListGalleryPreview: View {
 
     private func scrollToEnd() {
         guard !messages.isEmpty else { return }
+        scrollPositionID = nil
         Task { @MainActor in
             await Task.yield()
             withAnimation(.easeOut(duration: 0.2)) {
@@ -147,6 +148,6 @@ private struct MessageListGalleryMessageRow: View {
 }
 
 #Preview {
-    MessageListGalleryView()
+    MessageListGalleryView(model: MessageListGalleryModel())
         .openCodeTheme()
 }

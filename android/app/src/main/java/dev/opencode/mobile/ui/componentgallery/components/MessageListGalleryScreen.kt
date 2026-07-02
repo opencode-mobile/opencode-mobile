@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
@@ -37,9 +38,12 @@ import kotlinx.coroutines.launch
 private const val MessageListGalleryBottomAnchorKey = "message-list-gallery-bottom"
 
 @Composable
-fun MessageListGalleryScreen(modifier: Modifier = Modifier) {
+fun MessageListGalleryScreen(
+    modifier: Modifier = Modifier,
+    viewModel: MessageListGalleryViewModel = viewModel(),
+) {
     MessageListGalleryPreview(
-        messages = MessageListGalleryMocks.messages,
+        messages = viewModel.messages,
         modifier = modifier.fillMaxSize(),
     )
 }

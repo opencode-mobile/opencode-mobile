@@ -20,6 +20,13 @@ enum ScrollToEndVisibility {
 
         return scrollDistanceFromBottom > revealThreshold(viewportHeight: viewportHeight)
     }
+
+    static func isNearBottom(
+        scrollDistanceFromBottom: CGFloat,
+        viewportHeight: CGFloat
+    ) -> Bool {
+        scrollDistanceFromBottom <= revealThreshold(viewportHeight: viewportHeight)
+    }
 }
 
 private struct ScrollToEndScrollSnapshot: Equatable {

@@ -4,18 +4,23 @@ struct ComponentGalleryDetailView: View {
     let entry: ComponentGalleryEntry
     @Binding var themeMode: ComponentGalleryThemeMode
     @Environment(\.dismiss) private var dismiss
+    @State private var messageListGalleryModel = MessageListGalleryModel()
     private let horizontalPadding: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: entry.title,
-                leading: .back(action: { dismiss() }),
-                showDivider: true
-            )
+            if entry.id == .messageList {
+                messageListTopBar
+            } else {
+                OpenCodeTopBar(
+                    title: entry.title,
+                    leading: .back(action: { dismiss() }),
+                    showDivider: true
+                )
+            }
 
             if entry.id == .messageList {
-                content
+                MessageListGalleryView(model: messageListGalleryModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -74,7 +79,32 @@ struct ComponentGalleryDetailView: View {
         case .renderedMarkdown:
             RenderedMarkdownGalleryView()
         case .messageList:
-            MessageListGalleryView()
+            EmptyView()
+        }
+    }
+
+    private var messageListTopBar: some View {
+        ZStack(alignment: .trailing) {
+            OpenCodeTopBar(
+                title: entry.title,
+                leading: .back(action: { dismiss() }),
+                showDivider: true
+            )
+
+            Menu {
+                Toggle(
+                    "Enable live messages",
+                    isOn: $messageListGalleryModel.liveMessagesEnabled
+                )
+            } label: {
+                OpenCodeButton(
+                    variant: .iconCircle(.moreVert, accessibilityLabel: "More options"),
+                    contrast: .low,
+                    action: {}
+                )
+            }
+            .padding(.trailing, 12)
+            .padding(.vertical, 12)
         }
     }
 }

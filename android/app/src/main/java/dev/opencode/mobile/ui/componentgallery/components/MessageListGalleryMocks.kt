@@ -121,4 +121,33 @@ object MessageListGalleryMocks {
                 text = "You should land on this final assistant reply with no extra manual scroll needed.",
             ),
         )
+
+    fun nextLiveMessage(
+        sequence: Int,
+        lastRole: MessageListGalleryRole?,
+    ): MessageListGalleryMessage {
+        val nextRole =
+            when (lastRole) {
+                null, MessageListGalleryRole.Assistant -> MessageListGalleryRole.User
+                MessageListGalleryRole.User -> MessageListGalleryRole.Assistant
+            }
+
+        return when (nextRole) {
+            MessageListGalleryRole.User ->
+                MessageListGalleryMessage(
+                    id = "gallery-live-user-$sequence",
+                    role = MessageListGalleryRole.User,
+                    text = "Live message $sequence: keep streaming updates coming every five seconds.",
+                    metadataLabel = USER_METADATA,
+                )
+            MessageListGalleryRole.Assistant ->
+                MessageListGalleryMessage(
+                    id = "gallery-live-assistant-$sequence",
+                    role = MessageListGalleryRole.Assistant,
+                    text =
+                        "Live reply $sequence: this simulated assistant message was appended " +
+                        "while live messages are enabled.",
+                )
+        }
+    }
 }

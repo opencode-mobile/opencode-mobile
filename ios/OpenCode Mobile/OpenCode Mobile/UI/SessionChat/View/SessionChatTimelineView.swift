@@ -131,10 +131,40 @@ private struct SessionChatTimelineReadyView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
+        .onChange(of: props.messages.count) { _, _ in
+            followLatestIfNeeded()
+        }
+        .onChange(of: props.messages.last?.text) { _, _ in
+            followLatestIfNeeded()
+        }
+        .onChange(of: props.messages.last?.isStreaming) { _, _ in
+            followLatestIfNeeded()
+        }
+    }
+
+    private var isNearBottom: Bool {
+        guard !props.messages.isEmpty else { return true }
+
+        if #available(iOS 18, *) {
+            return ScrollToEndVisibility.isNearBottom(
+                scrollDistanceFromBottom: scrollDistanceFromBottom,
+                viewportHeight: viewportHeight
+            )
+        }
+
+        return scrollPositionID == nil
+            || scrollPositionID == sessionChatTimelineBottomAnchorID
+            || scrollPositionID == props.messages.last?.id
+    }
+
+    private func followLatestIfNeeded() {
+        guard isNearBottom, !isUserScrolling else { return }
+        scrollToLastMessage()
     }
 
     private func scrollToLastMessage() {
         guard !props.messages.isEmpty else { return }
+        scrollPositionID = nil
         Task { @MainActor in
             await Task.yield()
             withAnimation(.easeOut(duration: 0.2)) {
