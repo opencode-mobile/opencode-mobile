@@ -1098,7 +1098,17 @@ class OpenCodeTextMateNativeTokenizer(
             if (capture.start < 0 || capture.end > code.length || capture.start >= capture.end) {
                 ""
             } else {
-                Regex.escape(code.substring(capture.start, capture.end))
+                escapeTextMateRegexLiteral(code.substring(capture.start, capture.end))
+            }
+        }
+
+    private fun escapeTextMateRegexLiteral(value: String): String =
+        buildString(value.length) {
+            value.forEach { char ->
+                if (char in textMateRegexMetacharacters) {
+                    append('\\')
+                }
+                append(char)
             }
         }
 
@@ -1188,5 +1198,22 @@ class OpenCodeTextMateNativeTokenizer(
     private companion object {
         const val MAX_CAPTURE_TOKENIZE_DEPTH = 48
         val backReferenceRegex = Regex("""\\([1-9][0-9]?)""")
+        val textMateRegexMetacharacters =
+            setOf(
+                '\\',
+                '^',
+                '$',
+                '.',
+                '|',
+                '?',
+                '*',
+                '+',
+                '(',
+                ')',
+                '[',
+                ']',
+                '{',
+                '}',
+            )
     }
 }

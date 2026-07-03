@@ -401,15 +401,29 @@ object OpenCodeMarkdownParser {
         val match = fenceRegex.find(lines[start]) ?: return null
         val marker = match.groupValues[1]
         val language = match.groupValues[2].trim().takeIf { it.isNotBlank() }?.substringBefore(' ')
+        val normalizedLanguage = language?.lowercase()
         val content = mutableListOf<String>()
+        var nestedMarkdownFenceDepth = 0
         var index = start + 1
-        while (index < lines.size && !lines[index].trimStart().startsWith(marker)) {
-            content += lines[index]
+        while (index < lines.size) {
+            val line = lines[index]
+            val closesFence = line.closesFence(marker)
+            if (closesFence && nestedMarkdownFenceDepth == 0) {
+                break
+            }
+
+            if (normalizedLanguage.isMarkdownLanguage()) {
+                when {
+                    line.opensNestedFence(marker) -> nestedMarkdownFenceDepth += 1
+                    closesFence && nestedMarkdownFenceDepth > 0 -> nestedMarkdownFenceDepth -= 1
+                }
+            }
+
+            content += line
             index += 1
         }
         val nextIndex = if (index < lines.size) index + 1 else index
         val code = content.joinToString("\n")
-        val normalizedLanguage = language?.lowercase()
         val syntaxHighlight = codeHighlighter.highlight(normalizedLanguage, code)
         val diagnostics = mutableListOf<MarkdownDiagnostic>()
         if (normalizedLanguage != null && !codeHighlighter.supportsLanguage(normalizedLanguage)) {
@@ -626,6 +640,20 @@ object OpenCodeMarkdownParser {
     private val thematicBreakRegex = Regex("""^\s*(-{3,}|\*{3,}|_{3,})\s*$""")
     private val tableSeparatorRegex = Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""")
     private val rawHtmlRegex = Regex("""</?[A-Za-z][^>]*>""")
+
+    private fun String.closesFence(marker: String): Boolean {
+        val trimmed = trim()
+        return trimmed.length >= marker.length && trimmed.all { char -> char == marker.first() }
+    }
+
+    private fun String.opensNestedFence(marker: String): Boolean {
+        val match = fenceRegex.find(this) ?: return false
+        val nestedMarker = match.groupValues[1]
+        val info = match.groupValues[2].trim()
+        return nestedMarker.first() == marker.first() && info.isNotEmpty()
+    }
+
+    private fun String?.isMarkdownLanguage(): Boolean = this == "markdown" || this == "md"
 
 }
 

@@ -9,6 +9,9 @@ icons:
   - name: arrow_upward
     style: filled
     notes: SF Symbol arrow.up
+  - name: arrow_downward
+    style: filled
+    notes: SF Symbol arrow.down; scroll-to-end action pill
   - name: check
     style: filled
     notes: SF Symbol checkmark

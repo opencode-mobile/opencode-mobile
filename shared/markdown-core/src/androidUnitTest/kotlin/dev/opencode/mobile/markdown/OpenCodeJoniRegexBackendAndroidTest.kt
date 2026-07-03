@@ -165,6 +165,112 @@ class OpenCodeJoniRegexBackendAndroidTest {
         assertTemplateClosesOnSameLine("    const x = `${'$'}{this.#baseUrl}${'$'}{path}`;")
     }
 
+    @Test
+    fun pythonSingleQuotedStringClosesBeforeFollowingEnumMembers() {
+        val code =
+            """
+            class TaskStatus(Enum):
+                PENDING = "pending"
+                RUNNING = "running"
+                COMPLETED = "completed"
+            """.trimIndent()
+        val result = bundledJoniHighlighter().highlight("python", code)
+
+        assertTrue(result.diagnostics.isEmpty(), "Expected no backend fallback diagnostics in ${result.diagnostics}")
+        assertToken(code, result.spans, "\"pending\"", CodeTokenRole.String)
+        assertTokenAfter(code, result.spans, "PENDING = \"pending\"\n    ", "RUNNING", CodeTokenRole.Constant)
+        assertTokenAfter(code, result.spans, "RUNNING = ", "\"running\"", CodeTokenRole.String)
+        assertTokenAfter(code, result.spans, "RUNNING = \"running\"\n    ", "COMPLETED", CodeTokenRole.Constant)
+    }
+
+    @Test
+    fun pythonTripleQuotedDocstringBodyStaysString() {
+        val code =
+            """
+            def greet_user(name: str, greeting: str = "Hello") -> str:
+                ${"\"\"\""}
+                Greets a user with the specified name and greeting.
+
+                Args:
+                    name: The user's name
+                    greeting: The greeting to use (default: "Hello")
+                ${"\"\"\""}
+                return f"{'$'}{greeting}, {'$'}{name}!"
+            """.trimIndent()
+        val result = bundledJoniHighlighter().highlight("python", code)
+
+        assertTrue(result.diagnostics.isEmpty(), "Expected no backend fallback diagnostics in ${result.diagnostics}")
+        assertToken(code, result.spans, "Greets a user with the specified name and greeting.", CodeTokenRole.String)
+        assertToken(code, result.spans, "The user's name", CodeTokenRole.String)
+        val withStart = code.indexOf("with")
+        assertTrue(withStart >= 0, "Expected source to contain 'with'")
+        assertFalse(
+            result.spans.any { span -> span.role == CodeTokenRole.Keyword && span.start <= withStart && span.end >= withStart + "with".length },
+            "Docstring text should not highlight 'with' as a keyword: ${result.spans}",
+        )
+        assertToken(code, result.spans, "return", CodeTokenRole.Keyword)
+    }
+
+    @Test
+    fun javaImportDeclarationSeparatesKeywordQualifiedNameAndPunctuation() {
+        val code = "import java.util.Objects;\n"
+        val result = bundledJoniHighlighter().highlight("java", code)
+
+        assertTrue(result.diagnostics.isEmpty(), "Expected no backend fallback diagnostics in ${result.diagnostics}")
+        assertToken(code, result.spans, "import", CodeTokenRole.Keyword)
+        assertToken(code, result.spans, "java.util.Objects", CodeTokenRole.Function)
+        assertToken(code, result.spans, ";", CodeTokenRole.Punctuation)
+    }
+
+    @Test
+    fun javascriptAsyncFetchSnippetKeepsObjectAndTemplateScopesSeparated() {
+        val code =
+            """
+            async function fetchUserData(userId) {
+                try {
+                    const response = await fetch(`/api/users/${'$'}{userId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${'$'}{AUTH_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 5000
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${'$'}{response.status}`);
+                    }
+
+                    const data = await response.json();
+                    return { success: true, data };
+
+                } catch (error) {
+                    console.error('Failed to fetch user data:', error);
+                    return { success: false, error: error.message };
+                }
+            }
+            """.trimIndent()
+        val result = bundledJoniHighlighter().highlight("javascript", code)
+
+        assertTrue(result.diagnostics.isEmpty(), "Expected no backend fallback diagnostics in ${result.diagnostics}")
+        assertToken(code, result.spans, "function", CodeTokenRole.Keyword)
+        assertToken(code, result.spans, "fetchUserData", CodeTokenRole.Function)
+        assertToken(code, result.spans, "await", CodeTokenRole.Keyword)
+        assertToken(code, result.spans, "headers", CodeTokenRole.Property)
+        assertToken(code, result.spans, "'Authorization'", CodeTokenRole.String)
+        assertToken(code, result.spans, "AUTH_TOKEN", CodeTokenRole.Variable)
+        assertToken(code, result.spans, "'Content-Type'", CodeTokenRole.String)
+        assertToken(code, result.spans, "'application/json'", CodeTokenRole.String)
+        assertToken(code, result.spans, "timeout", CodeTokenRole.Property)
+        assertToken(code, result.spans, "5000", CodeTokenRole.Number)
+        assertToken(code, result.spans, "Error", CodeTokenRole.Function)
+        assertTokenAt(code, result.spans, "return", CodeTokenRole.Keyword)
+        assertTokenAfter(code, result.spans, "success: ", "true", CodeTokenRole.Constant)
+        assertTokenAfter(code, result.spans, "success: false, ", "error", CodeTokenRole.Property)
+        assertToken(code, result.spans, "catch", CodeTokenRole.Keyword)
+        assertToken(code, result.spans, "console", CodeTokenRole.Variable)
+        assertTokenAfter(code, result.spans, "console.", "error", CodeTokenRole.Function)
+    }
+
     private fun assertTemplateClosesOnSameLine(line: String) {
         val bundle =
             OpenCodeTextMateGrammarBundleLoader

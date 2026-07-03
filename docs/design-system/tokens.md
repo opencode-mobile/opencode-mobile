@@ -261,6 +261,21 @@ documented in `docs/design-system/components/choice-badge.md`.
 | `choiceBadge.paddingHorizontal` | 12 (logical px) |
 | `choiceBadge.paddingVertical` | 8 (logical px) |
 
+### Action pill
+
+Compact floating pill for contextual overlay actions such as scroll-to-end in
+chat. Geometry is shared across platforms; fills map to raised semantic
+surfaces as documented in `docs/design-system/components/action-pill.md`.
+
+| Token | Value |
+| --- | --- |
+| `actionPill.minHeight` | 36 (logical px; enforced via vertical padding) |
+| `actionPill.paddingHorizontal` | 14 (logical px) |
+| `actionPill.paddingVertical` | 8 (logical px) |
+| `actionPill.iconSize` | 16 (logical px) |
+| `actionPill.iconSpacing` | 6 (logical px) |
+| `actionPill.shadowElevation` | 4 (logical px) |
+
 ### Button
 
 Reusable action component with text and icon-only variants.

@@ -5,6 +5,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case add = "md_add"
     case arrowBack = "md_arrow_back"
     case arrowUpward = "md_arrow_upward"
+    case arrowDownward = "md_arrow_downward"
     case check = "md_check"
     case chevronRight = "md_chevron_right"
     case close = "md_close"

@@ -14,10 +14,12 @@ enum ComponentGalleryEntryID: String, Hashable {
     case bottomSheet
     case listItem
     case choiceBadge
+    case actionPill
     case button
     case projectSessionSelector
     case sessionStatusBar
     case renderedMarkdown
+    case messageList
 }
 
 struct ComponentGalleryEntry: Identifiable, Hashable {
@@ -77,6 +79,12 @@ let componentGalleryEntries = [
         category: .components
     ),
     ComponentGalleryEntry(
+        id: .actionPill,
+        title: "Action Pill",
+        description: "Floating pill for contextual overlay actions such as scroll to end.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
         id: .button,
         title: "Button",
         description: "Reusable action component with text and icon variants.",
@@ -98,6 +106,12 @@ let componentGalleryEntries = [
         id: .renderedMarkdown,
         title: "Rendered Markdown",
         description: "Safe markdown, code, and fenced diff rendering for message text.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .messageList,
+        title: "Message List",
+        description: "Scrollable outgoing and incoming message list with scroll-to-end pill.",
         category: .components
     ),
 ]

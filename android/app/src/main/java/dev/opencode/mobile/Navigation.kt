@@ -32,11 +32,13 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
+import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
@@ -136,13 +138,18 @@ fun MainNavigation() {
                                     entry<ComponentGalleryDetail> { key ->
                                         RouteSurface {
                                             val entry = ComponentGalleryEntries.first { it.id == key.entryId }
-                                            ComponentGalleryDetailScreen(
-                                                entry = entry,
-                                                themeMode = themeMode,
-                                                onThemeModeChange = { themeMode = it },
-                                                onNavigateBack = { backStack.removeLastOrNull() },
-                                            ) {
-                                                when (key.entryId) {
+                                            if (key.entryId == ComponentGalleryEntryId.MessageList) {
+                                                MessageListGalleryDetailScreen(
+                                                    onNavigateBack = { backStack.removeLastOrNull() },
+                                                )
+                                            } else {
+                                                ComponentGalleryDetailScreen(
+                                                    entry = entry,
+                                                    themeMode = themeMode,
+                                                    onThemeModeChange = { themeMode = it },
+                                                    onNavigateBack = { backStack.removeLastOrNull() },
+                                                ) {
+                                                    when (key.entryId) {
                                                     ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                                                     ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
                                                     ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
@@ -151,6 +158,7 @@ fun MainNavigation() {
                                                     ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                                                     ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                     ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
+                                                    ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                     ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                     ComponentGalleryEntryId.ProjectSessionSelector ->
                                                         ProjectSessionSelectorGalleryScreen()
@@ -158,6 +166,8 @@ fun MainNavigation() {
                                                         SessionStatusBarGalleryScreen()
                                                     ComponentGalleryEntryId.RenderedMarkdown ->
                                                         RenderedMarkdownGalleryScreen()
+                                                    ComponentGalleryEntryId.MessageList -> Unit
+                                                    }
                                                 }
                                             }
                                         }

@@ -107,6 +107,37 @@ class OpenCodeMarkdownParserTest {
     }
 
     @Test
+    fun markdownCodeBlockCanContainNestedLanguageFences() {
+        val document =
+            OpenCodeMarkdownParser.parse(
+                """
+                ```markdown
+                # Project Documentation
+
+                ```bash
+                curl -X GET /api/users/123
+                ```
+
+                ```json
+                {
+                  "username": "newuser"
+                }
+                ```
+                ```
+
+                After the sample.
+                """.trimIndent(),
+            )
+
+        val code = assertIs<MarkdownBlock.CodeBlock>(document.blocks.first())
+        assertEquals("markdown", code.language)
+        assertTrue(code.code.contains("```bash\ncurl -X GET /api/users/123\n```"))
+        assertTrue(code.code.contains("```json\n{\n  \"username\": \"newuser\"\n}\n```"))
+        val paragraph = assertIs<MarkdownBlock.Paragraph>(document.blocks[1])
+        assertEquals("After the sample.", plainTextFromMarkdownInlines(paragraph.inlines))
+    }
+
+    @Test
     fun jsonBoundaryUsesVersionedRenderTreeSchema() {
         val requestJson =
             OpenCodeMarkdownJson.json.encodeToString(

@@ -81,10 +81,17 @@ Shell, YAML, CSS, HTML, Python, Rust, Go, and diff highlighting on Android and
 iOS against checked-in Shiki golden fixtures. The popular-languages pack extends
 bundled TextMate coverage to Java, C#, C/C++, Ruby, PHP, SQL, TOML, XML, Scala,
 Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell, Elixir, Erlang, R,
-Zig, and Make (`makefile` alias) with smoke tests and `java-basic` regression anchors. Until full Shiki
-parity lands, native semantic fallback highlighting is allowed only as an
-implementation scaffold and must emit/record a `HighlighterFallback` diagnostic
-in the shared render tree.
+Zig, and Make (`makefile` alias) with smoke tests and `java-basic` regression
+anchors. Until full Shiki parity lands, native semantic fallback highlighting is
+allowed only as an implementation scaffold and must emit/record a
+`HighlighterFallback` diagnostic in the shared render tree.
+
+Follow-up `OPE-29` tracks a stronger oracle-parity pass: generate trusted Shiki
+or `vscode-textmate` fixtures for representative fenced code snippets, compare
+the shared KMP highlighter spans against those fixtures, add CommonMark-capable
+parser oracle fixtures for supported markdown constructs, and then decide
+whether to keep the handwritten parser behind differential tests or migrate
+render-tree construction to `jetbrains.markdown`.
 
 ## Implementation Milestones
 
@@ -138,6 +145,8 @@ in the shared render tree.
      `css`, and `html` parity are active; `java-basic` regression and per-language
      smoke tests are active; the full native comparison is present and ignored
      until the engine exists.**
+   - add oracle-driven highlighter and parser parity coverage for high-risk
+     snippets and supported markdown constructs. **Planned in OPE-29.**
 4. Chat polish:
    - tune outgoing collapse/expand thresholds;
    - verify streaming parse debounce;

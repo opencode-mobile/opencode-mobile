@@ -213,6 +213,10 @@
 - Expand active Shiki golden comparisons beyond the Android/Joni `diff`, `json`,
   `yaml`, `css`, and `html` subsets and remove the ignored full native-vs-Shiki
   highlighter comparison once the native TextMate engine is in place.
+- Track OPE-29: add trusted Shiki/`vscode-textmate` highlighter oracle fixtures
+  and CommonMark-capable parser oracle fixtures for high-risk rendered-markdown
+  examples, including the large multi-language code sample that exposed recent
+  visual regressions.
 - Add screenshot tests for both native renderers.
 - Tune outgoing markdown collapse thresholds after device review.
 - Run full manual scroll checks on long Session Chat timelines.
