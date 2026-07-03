@@ -511,9 +511,8 @@ private fun CodeColors.colorForRole(role: CodeTokenRole): androidx.compose.ui.gr
         CodeTokenRole.Keyword -> keyword
         CodeTokenRole.Type -> type
         CodeTokenRole.Variable -> plain
-        CodeTokenRole.Property,
-        CodeTokenRole.Constant,
-        -> constant
+        CodeTokenRole.Property -> property
+        CodeTokenRole.Constant -> constant
         CodeTokenRole.Function -> primitive
         CodeTokenRole.Number,
         CodeTokenRole.Attribute,
