@@ -74,8 +74,47 @@
   jump when the latest message is unchanged.
 - Reason: chat products anchor on the most recent message at the bottom; server
   order is usually chronological but the apps enforce sort and scroll explicitly.
+- Superseded (2026-07-03): the automatic **Follow Latest** scroll behavior was
+  removed. See **Remove automatic Follow Latest scroll for now** below. Timeline
+  order (oldest-to-newest) and the manual scroll-to-end pill are unchanged.
 - Revisit when: read-position preservation is needed while the user has scrolled
   up into history, or when a visible "jump to latest" control is added.
+
+## Remove automatic Follow Latest scroll for now
+
+- Date: 2026-07-03
+- Decision: Session Chat no longer auto-scrolls the timeline to the newest
+  message. Both platforms removed the reactive follow behavior
+  (`shouldFollowLatestTimeline` on Android; the `onChange` message
+  count/text/`isStreaming` handlers and `followLatestIfNeeded`/`isNearBottom` on
+  iOS). The manual scroll-to-end action pill (`OpenCodeActionPill`) is retained
+  and remains the only way to jump to the latest message.
+- Consequence: opening a session and receiving new/streaming messages does not
+  move the viewport. The user pulls to the bottom with the pill. This is an
+  accepted interim behavior, not the target UX.
+- Reason: the automatic follow behavior was unreliable across platforms and
+  scroll backends (see the iOS sub-18 gap below); we are deferring it rather
+  than shipping inconsistent auto-scroll.
+- Revisit when: Follow Latest is reintroduced with consistent, tested behavior
+  on both platforms (including a reliable near-bottom signal on iOS 17).
+
+## iOS scroll-to-end detection is degraded below iOS 18
+
+- Date: 2026-07-03
+- Status: known limitation, documented (no fix planned in this slice).
+- Detail: the iOS deployment target is 17.6, but distance-from-bottom and
+  user-scroll detection (`ScrollToEndVisibility.shouldShow`, the
+  `onScrollGeometryChange` observer) only run on iOS 18+. On iOS 17 the
+  scroll-to-end pill falls back to a coarse `scrollPosition(id:)` check and
+  `isUserScrolling` only flips when the scroll anchor id changes rather than
+  during an active drag. The pill can therefore appear or hide at the wrong time
+  on iOS 17.
+- Reason: `onScrollGeometryChange` is iOS 18+. A precise iOS 17 fallback needs a
+  UIKit-backed scroll observer, which is out of scope for the current slice and
+  overlaps the planned UIKit-backed timeline (see the eager SwiftUI timeline
+  decision above).
+- Revisit when: the UIKit-backed iOS timeline lands, or Follow Latest is
+  reintroduced and needs a reliable iOS 17 near-bottom signal.
 
 ## Promote Session status bar to Component Collection
 

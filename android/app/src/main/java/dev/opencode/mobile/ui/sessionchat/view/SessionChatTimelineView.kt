@@ -23,7 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,7 +39,6 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
-import dev.opencode.mobile.ui.scroll.shouldFollowLatestTimeline
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -104,25 +102,6 @@ internal fun SessionChatTimelineView(
                 }
             }
             val coroutineScope = rememberCoroutineScope()
-            val followLatestKey =
-                remember(props.messages) {
-                    Triple(
-                        props.messages.size,
-                        props.messages.lastOrNull()?.id,
-                        props.messages.lastOrNull()?.text,
-                    )
-                }
-
-            LaunchedEffect(followLatestKey) {
-                if (
-                    listState.shouldFollowLatestTimeline(
-                        messageCount = props.messages.size,
-                        revealThresholdMinPx = revealThresholdMinPx,
-                    )
-                ) {
-                    listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
-                }
-            }
 
             Box(modifier = modifier.fillMaxSize()) {
                 PullToRefreshBox(

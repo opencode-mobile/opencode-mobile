@@ -96,13 +96,15 @@ fun SessionChatScreen(
                 )
             }
 
-            uiState.errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+            if (uiState.timeline != SessionChatTimelineState.Error) {
+                uiState.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
 
             SessionChatTimelineView(

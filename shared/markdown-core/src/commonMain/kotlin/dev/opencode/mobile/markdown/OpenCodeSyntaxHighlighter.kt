@@ -240,11 +240,17 @@ class OpenCodeSyntaxHighlighter(
                 }
 
                 webObjectPropertyIdentifierRegex.findAll(code).forEach { match ->
-                    val wordStart = match.groups[1]!!.range.first
-                    val wordEnd = match.groups[1]!!.range.last + 1
+                    val keyGroup = match.groups[2] ?: return@forEach
+                    val wordStart = keyGroup.range.first
+                    val wordEnd = keyGroup.range.last + 1
                     val intersecting =
                         mutable.filter { span -> span.end > wordStart && span.start < wordEnd }
-                    if (intersecting.any { it.role == CodeTokenRole.String || it.role == CodeTokenRole.Comment }) {
+                    if (intersecting.any {
+                            it.role == CodeTokenRole.String ||
+                                it.role == CodeTokenRole.Comment ||
+                                it.role == CodeTokenRole.Keyword
+                        }
+                    ) {
                         return@forEach
                     }
                     mutable.removeAll(intersecting.toSet())
@@ -375,6 +381,21 @@ class OpenCodeSyntaxHighlighter(
                     continue
                 }
 
+                // Skip triple-quote sequences that are not real string openers:
+                // inside a comment, or embedded within a longer string literal
+                // that started earlier. A genuine docstring delimiter is either
+                // uncovered or begins its own string span at this position.
+                val coveringStart = spans.filter { span -> span.start <= start && span.end > start }
+                val embeddedInCommentOrString =
+                    coveringStart.any { span ->
+                        span.role == CodeTokenRole.Comment ||
+                            (span.role == CodeTokenRole.String && span.start < prefixStart)
+                    }
+                if (embeddedInCommentOrString) {
+                    cursor = start + 3
+                    continue
+                }
+
                 val end = code.indexOf(delimiter, start + 3).takeIf { it >= 0 } ?: break
                 spans.removeAll { span -> span.end > prefixStart && span.start < end + 3 }
                 spans += CodeSpan(prefixStart, end + 3, CodeTokenRole.String)
@@ -395,8 +416,11 @@ class OpenCodeSyntaxHighlighter(
             return index
         }
 
+        // Object-literal keys only: the identifier must directly follow an
+        // opening brace or a comma. This avoids recoloring switch `default:`,
+        // `case x:` labels, ternary branches, and type annotations as keys.
         private val webObjectPropertyIdentifierRegex =
-            Regex("""(?m)(?<![$\w])([A-Za-z_$][A-Za-z0-9_$]*)\s*:""")
+            Regex("""([{,])\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*:""")
 
         private val webMemberAccessRegex =
             Regex("""\.\s*([A-Za-z_$][A-Za-z0-9_$]*)""")
