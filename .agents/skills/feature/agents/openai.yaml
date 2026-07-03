@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feature"
+  short_description: "Link Linear tickets, branches, docs, merge checks, and PRs."
+  default_prompt: "Use the feature workflow to connect the current work to its Linear issue, branch, docs path, merge checklist, and pull request."

@@ -166,6 +166,8 @@ them.
 - Use `.agents/skills/linear-project-tracking/SKILL.md` when planning or
   implementing work that should be tracked in Linear, updating feature progress,
   or keeping issues in sync with `docs/features/`.
+- Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
+  feature docs directory, merge checklist, and pull request for a feature task.
 
 ## Documentation Rules
 
