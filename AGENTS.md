@@ -156,6 +156,9 @@ them.
   previews, or gallery entries.
 - Use `.agents/skills/synced-native-feature/SKILL.md` when planning or
   implementing a feature that should exist in both native apps.
+- Use `.agents/skills/documentation-planning/SKILL.md` when creating or updating
+  plans, feature docs, progress notes, decisions, parity gaps, or companion HTML
+  plan artifacts.
 - Use `.agents/skills/run-github-actions/SKILL.md` when triggering GitHub
   Actions, checking workflow status, or troubleshooting failed CI runs.
 - Use `.agents/skills/pull-app-logs/SKILL.md` when reading Android logcat or
@@ -173,6 +176,14 @@ them.
 - Keep the canonical design-system planning source under `docs/design-system/`.
 - Keep feature progress, decisions, and parity gaps under
   `docs/features/<feature-slug>/`.
+- Keep durable feature and task plans under `docs/features/<feature-slug>/`.
+  Use markdown for canonical planning text and an adjacent HTML file when a plan
+  benefits from visual review. For task-specific plans, prefer names like
+  `<ticket-or-task>-plan.md` and `<ticket-or-task>-plan.html`.
+- Commit durable documentation artifacts, including manually curated HTML plans.
+  Keep scratch notes, debug dumps, temporary investigations, and reproducible
+  generated noise out of git unless they become useful review or handoff
+  material.
 - Add ADRs only for decisions that are hard to reverse, surprising without
   context, and the result of a real trade-off.
 - Do not couple domain language to generated code names unless the server API has

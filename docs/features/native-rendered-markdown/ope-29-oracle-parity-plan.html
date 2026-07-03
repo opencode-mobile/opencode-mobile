@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OPE-29 Oracle Parity Plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #f0f3f6;
+      --text: #15181d;
+      --muted: #65707d;
+      --line: #d8dee6;
+      --accent: #2457d6;
+      --accent-soft: #e8eefc;
+      --ok: #137333;
+      --warn: #8a5a00;
+      --risk: #b3261e;
+      --code: #eef1f5;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171a1f;
+        --panel: #20242b;
+        --panel-soft: #252b33;
+        --text: #eef1f5;
+        --muted: #9da7b3;
+        --line: #363d47;
+        --accent: #9bb7ff;
+        --accent-soft: #25304a;
+        --ok: #8fd89e;
+        --warn: #f2c66d;
+        --risk: #ff9a90;
+        --code: #171a1f;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: 34px; line-height: 1.15; }
+    h2 { margin: 30px 0 12px; font-size: 22px; }
+    h3 { margin-bottom: 8px; font-size: 16px; }
+    p { color: var(--muted); }
+
+    code {
+      padding: 2px 5px;
+      background: var(--code);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .92em;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .panel,
+    .card,
+    .phase,
+    table {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .panel,
+    .card,
+    .phase { padding: 18px; }
+
+    .badge {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .metric-grid,
+    .artifact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      padding: 14px;
+      background: var(--panel-soft);
+      border-radius: 8px;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--text);
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .phase strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .phase span,
+    .card span,
+    td span {
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--panel-soft);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .risk { color: var(--risk); font-weight: 700; }
+
+    @media (max-width: 820px) {
+      .hero,
+      .flow { grid-template-columns: 1fr; }
+      main { padding-top: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="panel">
+        <span class="badge">OPE-29</span>
+        <h1>Rendered Markdown Highlighting Oracle Parity</h1>
+        <p>
+          Add trusted oracle fixtures around the markdown parser and syntax highlighter so
+          large real-world responses, fenced code blocks, and fragile TextMate edge cases
+          fail in tests before they regress visually in Session Chat.
+        </p>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top: 0;">Ticket Shape</h2>
+        <div class="metric-grid">
+          <div class="metric"><strong>Shared</strong><span>KMP markdown-core first</span></div>
+          <div class="metric"><strong>Oracle</strong><span>Shiki / vscode-textmate plus CommonMark</span></div>
+          <div class="metric"><strong>No UI</strong><span>Quality gate, not a renderer redesign</span></div>
+          <div class="metric"><strong>Docs</strong><span>Markdown source plus this HTML view</span></div>
+        </div>
+      </div>
+    </section>
+
+    <h2>What This Protects</h2>
+    <div class="artifact-grid">
+      <div class="card">
+        <h3>High-risk markdown samples</h3>
+        <span>Large assistant responses with multiple languages, nested fences, tables, lists, links, blockquotes, and raw HTML safety cases.</span>
+      </div>
+      <div class="card">
+        <h3>Syntax highlighting parity</h3>
+        <span>Representative fenced code snippets compared against trusted Shiki or vscode-textmate token output.</span>
+      </div>
+      <div class="card">
+        <h3>Parser structure parity</h3>
+        <span>Supported markdown constructs compared against a CommonMark-capable parser so handwritten parser drift is visible.</span>
+      </div>
+      <div class="card">
+        <h3>Platform bridges</h3>
+        <span>Android/Joni and iOS/libonig paths stay covered where production highlighters should agree.</span>
+      </div>
+    </div>
+
+    <h2>Implementation Flow</h2>
+    <div class="flow">
+      <div class="phase">
+        <strong>1. Inventory</strong>
+        <span>Collect existing regression samples: distributed scheduler, Python isolation, JS private fields, EventEmitter, HttpClient, and nested markdown fences.</span>
+      </div>
+      <div class="phase">
+        <strong>2. Fixture Contract</strong>
+        <span>Define compact oracle JSON for parser blocks and highlighter tokens, separate from broad generated Shiki goldens.</span>
+      </div>
+      <div class="phase">
+        <strong>3. Generators</strong>
+        <span>Extend Node tooling to emit trusted token fixtures and parser oracle snapshots deterministically.</span>
+      </div>
+      <div class="phase">
+        <strong>4. Active Tests</strong>
+        <span>Add targeted KMP tests that compare shared parser and highlighter output to the oracle fixtures.</span>
+      </div>
+      <div class="phase">
+        <strong>5. Decision</strong>
+        <span>Update docs with whether handwritten parser coverage is sufficient or migration to jetbrains.markdown should be planned.</span>
+      </div>
+    </div>
+
+    <h2>Artifacts</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Artifact</th>
+          <th>Purpose</th>
+          <th>Likely Path</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Highlighter oracle fixtures</td>
+          <td>Expected token roles and ranges for risky snippets.</td>
+          <td><code>shared/markdown-core/src/commonTest/resources/highlighter-oracles/</code></td>
+        </tr>
+        <tr>
+          <td>Parser oracle fixtures</td>
+          <td>Expected supported block/inline structure from CommonMark-capable parsing.</td>
+          <td><code>shared/markdown-core/src/commonTest/resources/parser-oracles/</code></td>
+        </tr>
+        <tr>
+          <td>Generated Kotlin fixture accessors</td>
+          <td>Typed access in KMP tests without ad hoc resource parsing in every test.</td>
+          <td><code>shared/markdown-core/src/commonTest/kotlin/.../MarkdownOracleFixtures.kt</code></td>
+        </tr>
+        <tr>
+          <td>Focused oracle tests</td>
+          <td>Active checks for parser structure, span invariants, and selected exact token parity.</td>
+          <td><code>shared/markdown-core/src/commonTest/kotlin/.../OpenCodeMarkdownOracleParityTest.kt</code></td>
+        </tr>
+        <tr>
+          <td>Platform backend parity tests</td>
+          <td>Android/Joni and iOS/libonig coverage for snippets that should match production behavior.</td>
+          <td><code>shared/markdown-core/src/androidUnitTest/</code> and <code>src/iosSimulatorArm64Test/</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Scope Boundaries</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>In Scope</th>
+          <th>Out Of Scope</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Oracle fixtures for supported markdown and high-risk fenced code.</td>
+          <td>Full CommonMark implementation or expanding rendered markdown scope.</td>
+        </tr>
+        <tr>
+          <td>Targeted active parity tests that can pass on current production paths.</td>
+          <td>Unignoring the broad full Shiki parity gate before the tokenizer is ready.</td>
+        </tr>
+        <tr>
+          <td>Regression samples that came from real Session Chat visual failures.</td>
+          <td>New renderer UI, screenshot infrastructure, or markdown editing behavior.</td>
+        </tr>
+        <tr>
+          <td>Documentation of parser strategy after oracle evidence is available.</td>
+          <td>Immediate migration to <code>jetbrains.markdown</code> unless evidence makes it necessary.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Verification Plan</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Check</th>
+          <th>What It Proves</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>npm run markdown:highlighter:golden</code></td>
+          <td>Generated Shiki/TextMate artifacts are deterministic when fixture tooling changes.</td>
+          <td class="warn">Run only if generator changes</td>
+        </tr>
+        <tr>
+          <td><code>./gradlew :markdown-core:testDebugUnitTest</code></td>
+          <td>Shared parser, Android/Joni highlighter, and common oracle tests pass.</td>
+          <td class="ok">Primary gate</td>
+        </tr>
+        <tr>
+          <td><code>./gradlew :markdown-core:iosSimulatorArm64Test</code></td>
+          <td>iOS/libonig backend and JSON bridge stay aligned where local toolchain allows.</td>
+          <td class="warn">Secondary gate</td>
+        </tr>
+        <tr>
+          <td>Docs update</td>
+          <td>Progress, remaining work, and parser strategy are clear after implementation.</td>
+          <td class="ok">Required</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Open Questions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Default Answer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Should parser oracles assert the full tree or only supported projections?</td>
+          <td>Assert supported projections so unsupported CommonMark behavior does not expand v1 scope.</td>
+        </tr>
+        <tr>
+          <td>Should highlighter parity be exact for every language?</td>
+          <td>No. Make exact tests active only for snippets already expected to match; keep broader parity as pending gate.</td>
+        </tr>
+        <tr>
+          <td>Should this replace the existing broad Shiki golden file?</td>
+          <td>No. Add a focused oracle layer beside it so regression intent stays readable.</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>
