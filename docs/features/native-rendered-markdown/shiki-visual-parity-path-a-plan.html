@@ -65,16 +65,16 @@
     </div>
 
     <div class="note">
-      <strong>Quick win:</strong> Theme presets already define
+      <strong>PA1 status:</strong> Theme presets already defined
       <code>syntax-variable</code>, <code>syntax-operator</code>, and
-      <code>syntax-punctuation</code> — renderers still map those roles to plain
-      body text. PA1 is wiring, not new token design.
+      <code>syntax-punctuation</code>; Android and iOS renderers now map those
+      roles to the dedicated syntax tokens. PA1 was wiring, not new token design.
     </div>
 
     <h2>Milestones</h2>
     <div class="metrics">
       <div class="metric"><strong>PA0</strong><span>Visual audit + gap table</span></div>
-      <div class="metric"><strong>PA1</strong><span>Wire existing tokens</span></div>
+      <div class="metric"><strong>PA1</strong><span>Wire existing tokens · done</span></div>
       <div class="metric"><strong>PA2</strong><span>Mapper alignment</span></div>
       <div class="metric"><strong>PA3</strong><span>Optional new roles</span></div>
       <div class="metric"><strong>PA4</strong><span>Gallery + sign-off</span></div>
@@ -108,6 +108,58 @@
       <li>Layer-7 shrink where redundant</li>
       <li>PA4 — gallery, docs, sign-off checklist</li>
     </ol>
+
+    <h2>Multi-agent execution plan</h2>
+    <p>
+      Use Codex subagents to parallelize bounded Path A work. The main agent
+      remains responsible for integration, canonical docs, shared KMP mapper
+      changes, and final PR readiness.
+    </p>
+    <table>
+      <tr><th>Workstream</th><th>Agent</th><th>Output</th><th>Guardrail</th></tr>
+      <tr>
+        <td>PA0 web/reference audit</td>
+        <td>Explorer subagent</td>
+        <td>Reference color buckets for V1–V5</td>
+        <td>No canonical docs or app edits</td>
+      </tr>
+      <tr>
+        <td>PA0 mobile-state audit</td>
+        <td>Explorer subagent</td>
+        <td>Current <code>CodeTokenRole</code> spans + token mapping</td>
+        <td>No canonical docs or app edits</td>
+      </tr>
+      <tr>
+        <td>PA1 Android wiring</td>
+        <td>Worker subagent</td>
+        <td>Theme resolver, Compose renderer, gallery/tests</td>
+        <td>No iOS, KMP mapper, or docs edits</td>
+      </tr>
+      <tr>
+        <td>PA1 iOS wiring</td>
+        <td>Worker subagent</td>
+        <td>Theme resolver, SwiftUI renderer, gallery/tests</td>
+        <td>No Android, KMP mapper, or docs edits</td>
+      </tr>
+      <tr>
+        <td>PA2 mapper/goldens</td>
+        <td>Main agent or one KMP worker subagent</td>
+        <td>Audit-proven mapper changes + verification</td>
+        <td>Serialized shared-file work</td>
+      </tr>
+      <tr>
+        <td>PA4 docs/sign-off</td>
+        <td>Main agent</td>
+        <td>Audit doc, tokens, progress, parity gaps, PR checklist</td>
+        <td>Centralized integration</td>
+      </tr>
+    </table>
+    <div class="note">
+      Run PA0 explorer subagents in parallel. Start Android and iOS worker
+      subagents only after PA0 approves the role → token mapping. Keep PA2
+      serialized because mapper rules, generated goldens, and layer-7 pruning
+      share blast-radius files.
+    </div>
 
     <h2>Merge checklist</h2>
     <ul>

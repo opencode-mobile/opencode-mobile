@@ -90,7 +90,10 @@ a symptom of the tokenizer/mapping gap, not a designed layer.
 ### Layer 8 — Rendering
 Web renders themed HTML spans in the DOM. Mobile converts role spans into native
 attributed text: SwiftUI `AttributedString` on iOS and Compose annotated strings
-on Android, mapping each `CodeTokenRole` to a theme token.
+on Android, mapping each `CodeTokenRole` to a theme token. Path A PA1 now gives
+`Variable`, `Operator`, and `Punctuation` dedicated syntax tokens instead of
+body text on both platforms. This improves visual parity without changing the
+render-tree schema or carrying full TextMate scope stacks.
 
 ### Layer 9 — Streaming
 While a message is still streaming (`isStreaming`), mobile intentionally uses the

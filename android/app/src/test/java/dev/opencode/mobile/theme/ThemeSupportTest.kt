@@ -64,6 +64,23 @@ class ThemeSupportTest {
     ThemeSupport.validateTheme(sampleTheme(id = "valid"))
   }
 
+  @Test
+  fun resolverProvidesPathASyntaxFallbackTokens() {
+    val theme = sampleTheme(id = "path-a")
+
+    val light = ThemeResolver.resolve(theme.light, isDark = false)
+    val dark = ThemeResolver.resolve(theme.dark, isDark = true)
+
+    assertEquals("#D1383D", light["syntax-variable"])
+    assertEquals("#E06C75", dark["syntax-variable"])
+    assertEquals("#318795", light["syntax-operator"])
+    assertEquals("#56B6C2", dark["syntax-operator"])
+    assertEquals(light["text-strong"], light["syntax-punctuation"])
+    assertEquals(dark["text-strong"], dark["syntax-punctuation"])
+    assertEquals("#D1383D", light["syntax-object"])
+    assertEquals("#E06C75", dark["syntax-object"])
+  }
+
   private fun incompletePalette(): PaletteSeeds =
     PaletteSeeds(
       neutral = "#111111",

@@ -142,6 +142,10 @@ The canonical tokens match the OpenCode desktop token schema:
 | `syntax-property` | `#A753AE` | `#FAB283` |
 | `syntax-type` | `#8A6F00` | `#FCD53A` |
 | `syntax-constant` | `#007B80` | `#93E9F6` |
+| `syntax-variable` | `#D1383D` | `#E06C75` |
+| `syntax-operator` | `#318795` | `#56B6C2` |
+| `syntax-punctuation` | `text-strong` | `text-strong` |
+| `syntax-object` | `#D1383D` | `#E06C75` |
 | `syntax-critical` | `#FF8C00` | `#FAB283` |
 | `syntax-diff-delete` | `#FF8C00` | `#FAB283` |
 | `syntax-diff-unknown` | `#A753AE` | `#EDB2F1` |
@@ -160,11 +164,13 @@ same buckets as the web client:
 | `Property`, `Constant` | `syntax-constant` | Cyan / teal members, keys, `this` |
 | `String` | `syntax-string` | Mint / teal string literals |
 | `Number`, `Attribute` | `syntax-property` | Peach / orange numeric literals |
-| `Variable` | `text-primary` | Off-white parameters and locals |
-| `Operator`, `Punctuation`, `Plain` | `text-primary` | Off-white punctuation |
+| `Variable` | `syntax-variable` | Red / rose parameters and locals |
+| `Operator` | `syntax-operator` | Teal operators |
+| `Punctuation` | `syntax-punctuation` | Strong punctuation |
+| `Plain` | `text-primary` | Off-white fallback text |
 | `Tag` | `syntax-info` | Info accent |
 | `Inserted` | `diff-add` | Diff added lines |
-| `Deleted` | `syntax-diff-delete` | Diff deleted lines |
+| `Deleted` | `diff-delete` | Diff deleted lines |
 | `Warning` | `syntax-diff-unknown` | Diff headers / unknown |
 | `Critical` | `syntax-critical` | Invalid / error emphasis |
 

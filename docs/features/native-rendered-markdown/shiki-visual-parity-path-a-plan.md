@@ -43,16 +43,16 @@ without carrying full TextMate scope stacks (Path B).
 
 Theme presets already ship unused syntax tokens:
 
-| Token | In `shared/theme-presets/opencode.json` | Wired in renderers today |
+| Token | In `shared/theme-presets/opencode.json` | Path A status |
 |-------|----------------------------------------|--------------------------|
-| `syntax-variable` | Yes | **No** — `Variable` → `text-primary` |
-| `syntax-operator` | Yes | **No** — `Operator` → `text-primary` |
-| `syntax-punctuation` | Yes | **No** — `Punctuation` → `text-primary` |
-| `syntax-object` | Yes | **No** — not referenced |
+| `syntax-variable` | Yes | **Done** — `Variable` → `syntax-variable` |
+| `syntax-operator` | Yes | **Done** — `Operator` → `syntax-operator` |
+| `syntax-punctuation` | Yes | **Done** — `Punctuation` → `syntax-punctuation` |
+| `syntax-object` | Yes | **Deferred** — not referenced until PA2/PA3 audit proves need |
 
-Built-in `ThemeResolver` on Android/iOS also omits these four tokens (preset
-themes override resolver when loaded). Phase 1 is primarily **wiring**, not new
-token design.
+Built-in `ThemeResolver` on Android/iOS now provides fallback values for these
+four tokens (preset themes still override resolver output when loaded). Phase 1
+was primarily **wiring**, not new token design.
 
 ## Non-goals
 
@@ -390,10 +390,36 @@ Execute in this sequence so later steps do not invalidate earlier ones:
 6. **PA4** — Gallery swatches, rendered-markdown docs, feature progress,
    mark audit rows resolved, visual sign-off checklist in PR description.
 
+### Parallel subagent execution
+
+Use subagents for bounded workstreams with disjoint file ownership. The main
+agent owns integration decisions, canonical docs, and any shared KMP mapper or
+golden changes unless explicitly delegated as a single bounded task.
+
+| Workstream | Owner | Scope | Outputs | Do not edit |
+|------------|-------|-------|---------|-------------|
+| PA0 web/reference audit | Explorer subagent | Extract web/Shiki reference colors or expected buckets for V1–V5 corpus | Notes for `path-a-visual-audit.md` gap table | Canonical docs, app code |
+| PA0 mobile-state audit | Explorer subagent | Extract current mobile `CodeTokenRole` spans and role → token mapping | Notes for `path-a-visual-audit.md` gap table | Canonical docs, app code |
+| PA1 Android wiring | Worker subagent | Android theme resolver, Compose rendered markdown role colors, Android gallery/tests | Android patch + changed file list | iOS files, KMP mapper, docs |
+| PA1 iOS wiring | Worker subagent | Swift theme resolver, SwiftUI rendered markdown role colors, iOS gallery/tests | iOS patch + changed file list | Android files, KMP mapper, docs |
+| PA2 mapper/golden work | Main agent or one KMP worker | Audit-proven scope mapper changes, optional golden regeneration, layer-7 shrink | Shared KMP patch + verification | Platform renderer files unless required |
+| PA4 docs/sign-off | Main agent | `path-a-visual-audit.md`, `tokens.md`, rendered-markdown docs, feature progress, parity gaps, PR checklist | Final integrated docs | None |
+
+Coordination rules:
+
+- Start PA0 web/reference and PA0 mobile-state explorers in parallel.
+- Start Android and iOS PA1 workers only after PA0 establishes the approved role
+  → token mapping.
+- Keep PA2 serialized with integration because `OpenCodeTextMate.kt`, generated
+  goldens, and `OpenCodeSyntaxHighlighter.kt` are shared blast-radius files.
+- Keep docs centralized in the main agent so progress, parity gaps, and audit
+  decisions do not diverge across workers.
+- Close worker agents after their patches are reviewed and integrated.
+
 ### Merge checklist
 
 - [ ] `path-a-visual-audit.md` committed; ≥ 90% corpus color-bucket match
-- [ ] `Variable` → `syntax-variable`, `Operator` → `syntax-operator`,
+- [x] `Variable` → `syntax-variable`, `Operator` → `syntax-operator`,
       `Punctuation` → `syntax-punctuation` on Android and iOS
 - [ ] `#baseUrl` declaration still `Plain`; `this.#baseUrl` still `Property`
 - [ ] Top-10 `*-basic` golden gates green (Android + iOS)

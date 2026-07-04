@@ -436,9 +436,9 @@ enum NativeMarkdownAttributedString {
         case .type:
             OpenCodeColors.syntaxType
         case .variable:
-            OpenCodeColors.textStrong
+            OpenCodeColors.syntaxVariable
         case .property:
-            OpenCodeColors.syntaxProperty
+            OpenCodeColors.syntaxConstant
         case .constant:
             OpenCodeColors.syntaxConstant
         case .function:
@@ -447,8 +447,10 @@ enum NativeMarkdownAttributedString {
             OpenCodeColors.syntaxProperty
         case .string:
             OpenCodeColors.syntaxString
-        case .operatorToken, .punctuation:
-            OpenCodeColors.textStrong
+        case .operatorToken:
+            OpenCodeColors.syntaxOperator
+        case .punctuation:
+            OpenCodeColors.syntaxPunctuation
         case .tag:
             OpenCodeColors.syntaxInfo
         case .inserted:

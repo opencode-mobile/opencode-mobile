@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Native Rendered Markdown HTML Index</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #eef2f6;
+      --text: #15181d;
+      --muted: #65707d;
+      --line: #d8dee6;
+      --accent: #2457d6;
+      --accent-soft: #e8eefc;
+      --ok: #137333;
+      --warn: #8a5a00;
+      --code: #eef1f5;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171a1f;
+        --panel: #20242b;
+        --panel-soft: #252b33;
+        --text: #eef1f5;
+        --muted: #9da7b3;
+        --line: #363d47;
+        --accent: #9bb7ff;
+        --accent-soft: #25304a;
+        --ok: #8fd89e;
+        --warn: #f2c66d;
+        --code: #171a1f;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: 30px; line-height: 1.16; }
+    h2 { margin: 30px 0 12px; font-size: 18px; }
+    h3 { margin-bottom: 8px; font-size: 16px; }
+    p { color: var(--muted); }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    code {
+      padding: 2px 5px;
+      background: var(--code);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .9em;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .hero { padding: 18px; }
+
+    .list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .item {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .item:last-child { border-bottom: 0; }
+
+    .item h3 { margin-bottom: 4px; }
+
+    .item p {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .status.current {
+      background: rgba(19, 115, 51, .14);
+      color: var(--ok);
+    }
+
+    .status.followup {
+      background: rgba(138, 90, 0, .16);
+      color: var(--warn);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <span class="badge">Native Rendered Markdown</span>
+      <h1>HTML Plan Index</h1>
+      <p>
+        Entry point for visual review artifacts under
+        <code>docs/features/native-rendered-markdown/</code>. Markdown files
+        remain the canonical source of truth; these HTML pages are scan-friendly
+        companions for plans, comparisons, and handoff state.
+      </p>
+    </section>
+
+    <h2>Feature Overview</h2>
+    <ul class="list">
+      <li class="item">
+        <h3><a href="./plan.html">Native Rendered Markdown Plan</a></h3>
+        <p>
+          Feature-wide visual plan for replacing the Rendered Markdown WebView
+          island with shared KMP parsing plus native SwiftUI and Compose
+          rendering.
+        </p>
+        <div class="meta">Companion to <code>plan.md</code></div>
+      </li>
+    </ul>
+
+    <h2>Highlighter Architecture And Oracle Work</h2>
+    <ul class="list">
+      <li class="item">
+        <h3><a href="./web-vs-mobile-highlighter.html">Web vs Mobile Highlighter</a></h3>
+        <p>
+          Layer-by-layer comparison of opencode web Shiki highlighting and
+          mobile native TextMate highlighting, including where divergence
+          concentrates.
+        </p>
+        <div class="meta">Companion to <code>web-vs-mobile-highlighter.md</code></div>
+      </li>
+
+      <li class="item">
+        <h3><a href="./ope-29-oracle-parity-plan.html">OPE-29 Oracle Parity Plan</a></h3>
+        <p>
+          Ticket-focused plan for adding trusted highlighter and parser oracle
+          fixtures around high-risk rendered-markdown examples.
+        </p>
+        <div class="meta">Task plan artifact</div>
+      </li>
+
+      <li class="item">
+        <h3><a href="./tokenizer-layer5-top10-sync-plan.html">Layer 5 Tokenizer Sync</a></h3>
+        <p>
+          Oracle-bounded tokenizer plan for reaching exact Shiki semantic
+          parity on the top ten Session Chat languages.
+        </p>
+        <div class="meta">
+          Companion to <code>tokenizer-layer5-top10-sync-plan.md</code>
+          <span class="status current">10/10 complete</span>
+        </div>
+      </li>
+    </ul>
+
+    <h2>Visual Parity Track</h2>
+    <ul class="list">
+      <li class="item">
+        <h3><a href="./shiki-visual-parity-paths-plan.html">Shiki Visual Parity Paths</a></h3>
+        <p>
+          Strategy comparison between Path A, which enriches semantic roles and
+          token mapping, and Path B, which would carry scope stacks and a
+          bundled Shiki theme.
+        </p>
+        <div class="meta">Companion to <code>shiki-visual-parity-paths-plan.md</code></div>
+      </li>
+
+      <li class="item">
+        <h3><a href="./shiki-visual-parity-path-a-plan.html">Path A Implementation Plan</a></h3>
+        <p>
+          Current working plan for Enriched Semantic Visual Parity, including
+          PA0 audit, PA1 token wiring, PA2 mapper work, multi-agent execution,
+          tests, and merge checklist.
+        </p>
+        <div class="meta">
+          Companion to <code>shiki-visual-parity-path-a-plan.md</code>
+          <span class="status current">active</span>
+          <span class="status followup">PA2/PA4 remain</span>
+        </div>
+      </li>
+    </ul>
+  </main>
+</body>
+</html>

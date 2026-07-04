@@ -75,6 +75,10 @@ object ThemeResolver {
         tokens["syntax-warning"] = warning
         tokens["syntax-info"] = info
         tokens["syntax-constant"] = if (isDark) "#93E9F6" else "#007B80"
+        tokens["syntax-variable"] = if (isDark) "#E06C75" else "#D1383D"
+        tokens["syntax-operator"] = if (isDark) "#56B6C2" else "#318795"
+        tokens["syntax-punctuation"] = textStrong(ink, isDark)
+        tokens["syntax-object"] = if (isDark) "#E06C75" else "#D1383D"
         tokens["syntax-critical"] = if (isDark) primary else "#FF8C00"
         tokens["syntax-diff-delete"] = if (isDark) primary else "#FF8C00"
         tokens["syntax-diff-unknown"] = info

@@ -209,6 +209,12 @@
   `shiki-visual-parity-paths-plan.md` for layer-6+ visual parity work.
 - 2026-07-04: Added Path A implementation plan (`shiki-visual-parity-path-a-plan.md`):
   PA0 audit, PA1 wire existing preset syntax tokens, PA2 mapper alignment.
+- 2026-07-04: Started Path A implementation with a multi-agent split. Added the
+  PA0 audit artifact and completed PA1 token wiring on Android and iOS:
+  `Variable` → `syntax-variable`, `Operator` → `syntax-operator`, and
+  `Punctuation` → `syntax-punctuation`, with `Plain` left on body text and
+  private field declaration behavior preserved. Added syntax token swatches,
+  resolver fallback coverage, and role-to-token tests on both platforms.
 
 ## Remaining
 
@@ -229,6 +235,10 @@
   and CommonMark-capable parser oracle fixtures for high-risk rendered-markdown
   examples, including the large multi-language code sample that exposed recent
   visual regressions.
+- Finish Path A PA2/PA4: resolve the remaining audit decisions for
+  `syntax-object`, object literal keys, `async` method shorthand, and
+  builtin/function distinctions; then complete gallery visual sign-off and PR
+  checklist documentation.
 - Add screenshot tests for both native renderers.
 - Tune outgoing markdown collapse thresholds after device review.
 - Run full manual scroll checks on long Session Chat timelines.

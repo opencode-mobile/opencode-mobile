@@ -30,20 +30,21 @@
   non-overlapping intervals and consolidated within identifier tokens (including
   same-role coverage gaps such as `wit` + `h` + `Cache` inside `withCache`)
   before native render. JavaScript private field declarations stay plain while
-  `this.#…` member access uses `Property`. Both native renderers map
-  `CodeTokenRole` values to web-aligned syntax tokens (`Variable` →
-  `text-primary`, `Function` → `syntax-primitive`, `Property` / `Constant` →
-  `syntax-constant`, `String` → `syntax-string`, `Number` → `syntax-property`,
-  punctuation → `text-primary`). Shiki assigns JVM parameter types such as
-  `String` to `Keyword` and leaves qualified names such as `System` as
+  `this.#…` member access uses `Property`. Path A PA1 now maps `Variable`,
+  `Operator`, and `Punctuation` to dedicated syntax tokens on both platforms
+  (`syntax-variable`, `syntax-operator`, `syntax-punctuation`) while `Plain`
+  remains body text. `Property` and `Constant` share `syntax-constant`; `Number`
+  and `Attribute` share `syntax-property`. Shiki assigns JVM parameter types such
+  as `String` to `Keyword` and leaves qualified names such as `System` as
   `Variable`; the shared `storage.*` scope mapper is unchanged.
 - Reason: TextMate/Oniguruma is the feasibility-gated subsystem. Top-10
   `*-basic` Shiki semantic golden gates pass on both Android/Joni and iOS/libonig
   (2026-07-04). Full byte-for-byte Shiki parity for all 36+ bundled languages
   remains open.
-- Owner or next action: implement full Path A in one PR per
-  [shiki-visual-parity-path-a-plan.md](./shiki-visual-parity-path-a-plan.md)
-  (PA0–PA4: audit, token wiring, mapper, optional roles, gallery/docs).
+- Owner or next action: complete Path A PA2/PA4 per
+  [shiki-visual-parity-path-a-plan.md](./shiki-visual-parity-path-a-plan.md):
+  audit object/property/function edge cases, decide whether `syntax-object`
+  needs a role, and finish visual sign-off.
 
 ## Markdown Parse Performance
 
