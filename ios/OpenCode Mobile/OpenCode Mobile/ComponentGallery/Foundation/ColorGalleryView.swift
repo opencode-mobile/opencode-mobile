@@ -37,7 +37,6 @@ private let tokenNames = [
     "syntax-variable",
     "syntax-operator",
     "syntax-punctuation",
-    "syntax-object",
     "syntax-constant",
     "syntax-critical",
     "syntax-diff-delete",

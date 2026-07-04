@@ -145,7 +145,6 @@ The canonical tokens match the OpenCode desktop token schema:
 | `syntax-variable` | `#D1383D` | `#E06C75` |
 | `syntax-operator` | `#318795` | `#56B6C2` |
 | `syntax-punctuation` | `text-strong` | `text-strong` |
-| `syntax-object` | `#D1383D` | `#E06C75` |
 | `syntax-critical` | `#FF8C00` | `#FAB283` |
 | `syntax-diff-delete` | `#FF8C00` | `#FAB283` |
 | `syntax-diff-unknown` | `#A753AE` | `#EDB2F1` |

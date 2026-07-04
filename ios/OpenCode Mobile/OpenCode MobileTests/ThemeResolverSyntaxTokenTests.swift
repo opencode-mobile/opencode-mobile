@@ -12,8 +12,6 @@ struct ThemeResolverSyntaxTokenTests {
         #expect(dark["syntax-operator"] == "#56B6C2")
         #expect(light["syntax-punctuation"] == light["text-strong"])
         #expect(dark["syntax-punctuation"] == dark["text-strong"])
-        #expect(light["syntax-object"] == "#D1383D")
-        #expect(dark["syntax-object"] == "#E06C75")
     }
 
     @Test func resolverKeepsPresetOverridesForPathASyntaxTokens() {
@@ -23,7 +21,6 @@ struct ThemeResolverSyntaxTokenTests {
                     "syntax-variable": "#111111",
                     "syntax-operator": "#222222",
                     "syntax-punctuation": "#333333",
-                    "syntax-object": "#444444",
                 ]
             ),
             isDark: false
@@ -32,7 +29,6 @@ struct ThemeResolverSyntaxTokenTests {
         #expect(resolved["syntax-variable"] == "#111111")
         #expect(resolved["syntax-operator"] == "#222222")
         #expect(resolved["syntax-punctuation"] == "#333333")
-        #expect(resolved["syntax-object"] == "#444444")
     }
 }
 

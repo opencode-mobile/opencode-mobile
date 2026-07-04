@@ -62,7 +62,6 @@ enum OpenCodeColors {
     static var syntaxVariable: Color { resolve("syntax-variable") }
     static var syntaxOperator: Color { resolve("syntax-operator") }
     static var syntaxPunctuation: Color { resolve("syntax-punctuation") }
-    static var syntaxObject: Color { resolve("syntax-object") }
     static var syntaxSuccess: Color { resolve("syntax-success") }
     static var syntaxWarning: Color { resolve("syntax-warning") }
     static var syntaxInfo: Color { resolve("syntax-info") }

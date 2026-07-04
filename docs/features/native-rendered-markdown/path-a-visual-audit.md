@@ -25,7 +25,7 @@ audit rows that may require PA2 mapper changes or PA3 role expansion.
 | `Plain` | Keep body text | PA1 done | Used for fallback text and intentionally plain private field declarations. |
 | `Property`, `Constant` | Keep `syntax-constant` | PA1 done | Android and iOS now align with the canonical token table. |
 | `Number`, `Attribute` | Keep `syntax-property` | PA1 done | No Path A change. |
-| `syntax-object` | Defer | PA2 done | Presets define it, but the audit did not prove a repeated role distinction that needs it. |
+| `syntax-object` | Defer | PA2 done | The audit did not prove a repeated role distinction that needs a token or role in this pass. |
 | New roles (`Builtin`, `Parameter`, `Namespace`, `Object`) | Skip | PA3 skipped | The audit did not meet the ≥3 recurring mismatches across ≥2 languages gate. |
 
 ## Gap Table
@@ -50,9 +50,8 @@ audit rows that may require PA2 mapper changes or PA3 role expansion.
 
 ## PA2/PA3 Decision Notes
 
-- Do not assign `syntax-object` in this Path A pass. It is available in presets
-  and resolver fallbacks, but the audit did not prove a repeated distinction
-  that needs a distinct render-tree role.
+- Do not assign or define `syntax-object` in this Path A pass. The audit did not
+  prove a repeated distinction that needs a distinct render-tree role.
 - Do not add `Builtin`, `Parameter`, `Namespace`, or `Object` roles in this pass.
   The audit did not meet the ≥3 recurring mismatches across ≥2 languages gate.
 - Keep `highlightPrivateFields`: declarations such as `#baseUrl;` stay plain,

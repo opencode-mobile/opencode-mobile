@@ -68,7 +68,6 @@ private val TokenNames =
         "syntax-variable",
         "syntax-operator",
         "syntax-punctuation",
-        "syntax-object",
         "syntax-critical",
         "syntax-diff-delete",
         "syntax-diff-unknown",

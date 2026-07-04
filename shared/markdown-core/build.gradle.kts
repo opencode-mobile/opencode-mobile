@@ -54,14 +54,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
-        val commonTest by getting
         val iosSimulatorArm64Test by getting {
-            dependsOn(commonTest)
             resources.srcDir("src/commonMain/resources")
             kotlin.srcDir(layout.buildDirectory.dir("generated/iosTestConstants"))
-        }
-        val androidUnitTest by getting {
-            dependsOn(commonTest)
         }
         androidMain.dependencies {
             implementation(libs.joni)

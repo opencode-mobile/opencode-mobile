@@ -77,8 +77,6 @@ class ThemeSupportTest {
     assertEquals("#56B6C2", dark["syntax-operator"])
     assertEquals(light["text-strong"], light["syntax-punctuation"])
     assertEquals(dark["text-strong"], dark["syntax-punctuation"])
-    assertEquals("#D1383D", light["syntax-object"])
-    assertEquals("#E06C75", dark["syntax-object"])
   }
 
   private fun incompletePalette(): PaletteSeeds =

@@ -71,7 +71,6 @@ struct ThemeResolver {
         tokens["syntax-variable"] = isDark ? "#E06C75" : "#D1383D"
         tokens["syntax-operator"] = isDark ? "#56B6C2" : "#318795"
         tokens["syntax-punctuation"] = textStrong(ink: ink, isDark: isDark)
-        tokens["syntax-object"] = isDark ? "#E06C75" : "#D1383D"
         tokens["syntax-success"] = success
         tokens["syntax-warning"] = warning
         tokens["syntax-info"] = info

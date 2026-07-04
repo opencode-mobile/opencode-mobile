@@ -50,8 +50,8 @@
   highlighting can be claimed.
 - Owner or next action: keep Path A closed unless real Session Chat samples show
   repeated visual gaps that justify a new role or the heavier Path B theme-key
-  model. `syntax-object` remains available as a resolver token but unused by the
-  render-tree role mapping.
+  model. `syntax-object` remains deferred and is not part of the active token
+  contract.
 
 ## Markdown Parse Performance
 
