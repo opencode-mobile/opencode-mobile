@@ -78,12 +78,110 @@ class OpenCodeBackendHighlighterRegressionTest {
         OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges(fixture.id, result.spans)
     }
 
+    @Test
+    fun kotlinRegexBackendRendersLargeCppPopularitySnippet() {
+        val code = largeCppPopularitySnippet()
+        val result = highlighter(KotlinRegexTextMateRegexBackend).highlight("cpp", code)
+
+        assertTrue(result.spans.isNotEmpty(), "Expected C++ spans for popularity snippet")
+        val roles = result.spans.map { it.role }.toSet()
+        assertTrue(
+            listOf(
+                CodeTokenRole.Comment,
+                CodeTokenRole.Keyword,
+                CodeTokenRole.Type,
+                CodeTokenRole.String,
+                CodeTokenRole.Function,
+                CodeTokenRole.Number,
+            ).all { role -> role in roles },
+            "Expected visibly colorable C++ roles, got ${roles.sortedBy { it.name }}",
+        )
+        HighlighterRegressionAssertions.assertTokenRoles(
+            code = code,
+            spans = result.spans,
+            expectations =
+                listOf(
+                    "return" to CodeTokenRole.Keyword,
+                    "\"Alice\"" to CodeTokenRole.String,
+                    "greet" to CodeTokenRole.Function,
+                    "30" to CodeTokenRole.Number,
+                ),
+            label = "cpp-popularity",
+        )
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoDuplicateSpanRanges("cpp-popularity", result.spans)
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges("cpp-popularity", result.spans)
+    }
+
     private fun withCacheSnippet(): String =
         """
         // Cache decorator for GET requests
         function withCache(client, options = {
           const { ttl = 60000, maxSize = 100 }
           const cache = new Map();
+        """.trimIndent()
+
+    private fun largeCppPopularitySnippet(): String =
+        """
+        // C++ - The #5 Most Popular Language
+
+        #include <iostream>
+        #include <vector>
+        #include <string>
+        #include <algorithm>
+        #include <numeric>
+
+        // Function
+        std::string greet(const std::string& personName) {
+            return "Hello, " + personName + "!";
+        }
+
+        // Class
+        class Student {
+        private:
+            std::string name;
+            int age;
+
+        public:
+            Student(std::string n, int a) : name(std::move(n)), age(a) {}
+
+            std::string introduce() const {
+                return "I'm " + name + ", " + std::to_string(age) + " years old";
+            }
+
+            std::string getName() const { return name; }
+            int getAge() const { return age; }
+        };
+
+        int main() {
+            // Variables and data types
+            std::string name = "Alice";
+            int age = 30;
+            bool isStudent = true;
+            std::vector<int> grades = {85, 92, 78, 95};
+
+            // Method call
+            std::cout << greet(name) << std::endl;
+
+            // Object creation
+            Student student(name, age);
+            std::cout << student.introduce() << std::endl;
+
+            // Lambda and algorithm
+            std::vector<int> passedGrades;
+            std::copy_if(grades.begin(), grades.end(),
+                         std::back_inserter(passedGrades),
+                         [](int g) { return g >= 80; });
+
+            double average = std::accumulate(grades.begin(), grades.end(), 0.0) / grades.size();
+
+            std::cout << "Passed grades: ";
+            for (int g : passedGrades) std::cout << g << " ";
+            std::cout << std::endl;
+
+            std::cout << "Average: " << average << std::endl;
+
+            return 0;
+        }
         """.trimIndent()
 
     private fun highlighter(backend: OpenCodeTextMateRegexBackend): OpenCodeSyntaxHighlighter =

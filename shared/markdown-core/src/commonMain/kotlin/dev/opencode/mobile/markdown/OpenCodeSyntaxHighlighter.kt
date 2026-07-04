@@ -34,7 +34,7 @@ class OpenCodeSyntaxHighlighter(
 ) : OpenCodeCodeHighlighter {
     override fun supportsLanguage(languageOrAlias: String?): Boolean =
         normalizedLanguage(languageOrAlias)?.let { language ->
-            grammarBundle?.manifest?.contains(language) ?: fallbackHighlighter.supportsLanguage(language)
+            grammarBundle?.manifest?.contains(language) == true || fallbackHighlighter.supportsLanguage(language)
         } ?: true
 
     override fun highlight(
@@ -54,6 +54,9 @@ class OpenCodeSyntaxHighlighter(
                     .highlightPrivateFields(code)
                     .normalizeWebSyntaxRoles(code, languageOrAlias)
                     .normalizeJavaSyntaxRoles(code, languageOrAlias)
+                    .enhanceCppSyntaxRoles(code, languageOrAlias)
+                    .partitionNonOverlappingSpans()
+                    .consolidateWithinIdentifiers(code)
                     .mergeAdjacentSemanticSpans(code)
                     .highlightPythonTripleQuotedStrings(code, languageOrAlias)
             if (spans.isNotEmpty()) {
@@ -122,6 +125,7 @@ class OpenCodeSyntaxHighlighter(
         }
 
         private val identifierRegex = Regex("""#?[A-Za-z_][A-Za-z0-9_]*""")
+        private val numberRegex = Regex("""\b(?:0[xX][0-9A-Fa-f]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?[uUlLfF]*)\b""")
 
         private fun List<CodeSpan>.consolidateWithinIdentifiers(code: String): List<CodeSpan> {
             if (isEmpty()) return emptyList()
@@ -172,6 +176,111 @@ class OpenCodeSyntaxHighlighter(
                 "cjs",
                 "mts",
                 "cts",
+            )
+
+        private val cppLanguageAliases =
+            setOf(
+                "c",
+                "h",
+                "cpp",
+                "c++",
+                "cc",
+                "cxx",
+                "hpp",
+                "h++",
+                "hh",
+                "objc",
+                "objective-c",
+                "objectivec",
+            )
+
+        private val cppKeywordIdentifiers =
+            setOf(
+                "alignas",
+                "alignof",
+                "asm",
+                "auto",
+                "break",
+                "case",
+                "catch",
+                "class",
+                "concept",
+                "const",
+                "consteval",
+                "constexpr",
+                "constinit",
+                "continue",
+                "decltype",
+                "default",
+                "delete",
+                "do",
+                "else",
+                "enum",
+                "explicit",
+                "export",
+                "extern",
+                "final",
+                "for",
+                "friend",
+                "goto",
+                "if",
+                "import",
+                "inline",
+                "mutable",
+                "namespace",
+                "new",
+                "noexcept",
+                "operator",
+                "override",
+                "private",
+                "protected",
+                "public",
+                "requires",
+                "return",
+                "sizeof",
+                "static",
+                "static_assert",
+                "switch",
+                "template",
+                "this",
+                "throw",
+                "try",
+                "typedef",
+                "typename",
+                "using",
+                "virtual",
+                "while",
+            )
+
+        private val cppConstantIdentifiers =
+            setOf(
+                "false",
+                "nullptr",
+                "NULL",
+                "true",
+            )
+
+        private val cppTypeIdentifiers =
+            setOf(
+                "bool",
+                "char",
+                "char8_t",
+                "char16_t",
+                "char32_t",
+                "double",
+                "float",
+                "int",
+                "long",
+                "short",
+                "signed",
+                "size_t",
+                "std",
+                "string",
+                "struct",
+                "unsigned",
+                "vector",
+                "void",
+                "wchar_t",
             )
 
         private val webExpressionKeywordIdentifiers =
@@ -274,6 +383,107 @@ class OpenCodeSyntaxHighlighter(
             }
 
             return mutable.sortedBy { it.start }
+        }
+
+        private fun List<CodeSpan>.enhanceCppSyntaxRoles(
+            code: String,
+            languageOrAlias: String?,
+        ): List<CodeSpan> {
+            val language = normalizedLanguage(languageOrAlias)
+            if (language !in cppLanguageAliases || code.isEmpty()) return this
+
+            val spans = toMutableList()
+            val protectedRanges = mutableListOf<IntRange>()
+            var index = 0
+
+            fun addSpan(
+                start: Int,
+                end: Int,
+                role: CodeTokenRole,
+            ) {
+                if (start < end) {
+                    spans += CodeSpan(start, end, role)
+                }
+            }
+
+            while (index < code.length) {
+                val current = code[index]
+                val next = code.getOrNull(index + 1)
+                when {
+                    current == '/' && next == '/' -> {
+                        val end = code.indexOf('\n', index).let { found -> if (found == -1) code.length else found }
+                        addSpan(index, end, CodeTokenRole.Comment)
+                        protectedRanges += index until end
+                        index = end
+                    }
+                    current == '/' && next == '*' -> {
+                        val end = code.indexOf("*/", index + 2).let { found -> if (found == -1) code.length else found + 2 }
+                        addSpan(index, end, CodeTokenRole.Comment)
+                        protectedRanges += index until end
+                        index = end
+                    }
+                    current == '"' || current == '\'' -> {
+                        val quote = current
+                        var cursor = index + 1
+                        var escaped = false
+                        while (cursor < code.length) {
+                            val char = code[cursor]
+                            if (escaped) {
+                                escaped = false
+                            } else if (char == '\\') {
+                                escaped = true
+                            } else if (char == quote) {
+                                cursor += 1
+                                break
+                            } else if (char == '\n') {
+                                break
+                            }
+                            cursor += 1
+                        }
+                        addSpan(index, cursor, CodeTokenRole.String)
+                        protectedRanges += index until cursor
+                        index = cursor
+                    }
+                    else -> index += 1
+                }
+            }
+
+            fun isProtected(position: Int): Boolean = protectedRanges.any { range -> position in range }
+
+            numberRegex.findAll(code).forEach { match ->
+                if (!isProtected(match.range.first)) {
+                    addSpan(match.range.first, match.range.last + 1, CodeTokenRole.Number)
+                }
+            }
+
+            identifierRegex.findAll(code).forEach { match ->
+                val word = match.value
+                val start = match.range.first
+                val end = match.range.last + 1
+                if (isProtected(start)) return@forEach
+
+                val role =
+                    when {
+                        word in cppKeywordIdentifiers -> CodeTokenRole.Keyword
+                        word in cppConstantIdentifiers -> CodeTokenRole.Constant
+                        word in cppTypeIdentifiers || word.firstOrNull()?.isUpperCase() == true -> CodeTokenRole.Type
+                        code.nextNonWhitespace(end) == '(' -> CodeTokenRole.Function
+                        else -> null
+                    }
+                if (role != null) {
+                    addSpan(start, end, role)
+                }
+            }
+
+            return spans.sortedBy { it.start }
+        }
+
+        private fun String.nextNonWhitespace(start: Int): Char? {
+            var index = start
+            while (index < length && this[index].isWhitespace()) {
+                index += 1
+            }
+            return getOrNull(index)
         }
 
         private fun List<CodeSpan>.highlightPrivateFields(code: String): List<CodeSpan> {
@@ -429,6 +639,7 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
             "py",
             "rust",
             "rs",
+            "scratch",
             "shell",
             "shellscript",
             "sh",
@@ -506,6 +717,7 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
         language: String?,
         code: String,
     ): List<CodeSpan> {
+        if (language == "scratch") return emptyList()
         if (code.isEmpty()) return emptyList()
         return tokenRegex
             .findAll(code)

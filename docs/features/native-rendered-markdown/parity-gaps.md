@@ -18,10 +18,16 @@
   provider all resolve the same bundled Joni TextMate highlighter through
   `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
   regression snippets pass Joni and iOS-hybrid backend regression coverage.
-  A popular-languages TextMate pack (Java, C#, C/C++, Ruby, PHP, SQL, TOML,
-  XML, Scala, Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell,
-  Elixir, Erlang, R, Zig, and Make/Makefile) is bundled with Shiki golden fixtures and smoke
-  coverage; fenced blocks in those languages no longer hit semantic fallback.
+  A top-language TextMate pack is bundled with Shiki golden fixtures and smoke
+  coverage for the requested Shiki-supported languages, including Java, C#,
+  C/C++, Ruby, PHP, SQL, TOML, XML, Scala, Lua, Docker, Vue, Svelte, GraphQL,
+  PowerShell, Perl, Haskell, Elixir, Erlang, R, Zig, Make/Makefile, Dart,
+  MATLAB, Groovy, Objective-C, Clojure, CoffeeScript, Fortran free/fixed form,
+  Pascal, Visual Basic, Assembly, COBOL, Julia, SAS, ABAP, Apex, Crystal, F#,
+  AWK, Nim, Ada, Prolog, Smalltalk, OCaml, and Common Lisp. Fenced blocks in
+  those languages no longer hit semantic fallback solely because a grammar is
+  missing. Scratch is recognized as a plain-code fallback because Shiki 4.2.0 has
+  no bundled Scratch grammar.
   Java method-signature lines (`void main(String[] args)`) can still miss inner
   tokens until broader Java grammar parity lands. EventEmitter-style duplicate
   span emission (`constconst`, doubled comment slashes) is deduplicated in
@@ -39,8 +45,9 @@
   `Variable`; the shared `storage.*` scope mapper is unchanged.
 - Reason: TextMate/Oniguruma is the feasibility-gated subsystem. Top-10
   `*-basic` Shiki semantic golden gates pass on both Android/Joni and iOS/libonig
-  (2026-07-04). Full byte-for-byte Shiki parity for all 36+ bundled languages
-  remains open.
+  (2026-07-04). Full byte-for-byte Shiki parity for all 62 manifest languages
+  remains open; Scratch needs a licensed grammar choice before semantic
+  highlighting can be claimed.
 - Owner or next action: keep Path A closed unless real Session Chat samples show
   repeated visual gaps that justify a new role or the heavier Path B theme-key
   model. `syntax-object` remains available as a resolver token but unused by the

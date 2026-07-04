@@ -1604,6 +1604,901 @@
       ]
     },
     {
+      "language": "dart",
+      "displayName": "Dart",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/dart.mjs",
+      "grammars": [
+        {
+          "name": "dart",
+          "displayName": "Dart",
+          "scopeName": "source.dart",
+          "resourcePath": "textmate-grammars/grammars/dart.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "matlab",
+      "displayName": "MATLAB",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/matlab.mjs",
+      "grammars": [
+        {
+          "name": "matlab",
+          "displayName": "MATLAB",
+          "scopeName": "source.matlab",
+          "resourcePath": "textmate-grammars/grammars/matlab.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "groovy",
+      "displayName": "Groovy",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/groovy.mjs",
+      "grammars": [
+        {
+          "name": "groovy",
+          "displayName": "Groovy",
+          "scopeName": "source.groovy",
+          "resourcePath": "textmate-grammars/grammars/groovy.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "objective-c",
+      "displayName": "Objective-C",
+      "aliases": [
+        "objc",
+        "objectivec"
+      ],
+      "grammarModule": "shiki/dist/langs/objective-c.mjs",
+      "grammars": [
+        {
+          "name": "objective-c",
+          "displayName": "Objective-C",
+          "scopeName": "source.objc",
+          "resourcePath": "textmate-grammars/grammars/objective-c.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "objc"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "clojure",
+      "displayName": "Clojure",
+      "aliases": [
+        "clj"
+      ],
+      "grammarModule": "shiki/dist/langs/clojure.mjs",
+      "grammars": [
+        {
+          "name": "clojure",
+          "displayName": "Clojure",
+          "scopeName": "source.clojure",
+          "resourcePath": "textmate-grammars/grammars/clojure.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "clj"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "coffee",
+      "displayName": "CoffeeScript",
+      "aliases": [
+        "coffeescript"
+      ],
+      "grammarModule": "shiki/dist/langs/coffee.mjs",
+      "grammars": [
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "coffee",
+          "displayName": "CoffeeScript",
+          "scopeName": "source.coffee",
+          "resourcePath": "textmate-grammars/grammars/coffee.json",
+          "embeddedLanguages": [
+            "javascript"
+          ],
+          "aliases": [
+            "coffeescript"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "fortran-free-form",
+      "displayName": "Fortran (Free Form)",
+      "aliases": [
+        "f03",
+        "f08",
+        "f18",
+        "f90",
+        "f95",
+        "fortran"
+      ],
+      "grammarModule": "shiki/dist/langs/fortran-free-form.mjs",
+      "grammars": [
+        {
+          "name": "fortran-free-form",
+          "displayName": "Fortran (Free Form)",
+          "scopeName": "source.fortran.free",
+          "resourcePath": "textmate-grammars/grammars/fortran-free-form.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "f90",
+            "f95",
+            "f03",
+            "f08",
+            "f18"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "fortran-fixed-form",
+      "displayName": "Fortran (Fixed Form)",
+      "aliases": [
+        "f",
+        "f77",
+        "for"
+      ],
+      "grammarModule": "shiki/dist/langs/fortran-fixed-form.mjs",
+      "grammars": [
+        {
+          "name": "fortran-free-form",
+          "displayName": "Fortran (Free Form)",
+          "scopeName": "source.fortran.free",
+          "resourcePath": "textmate-grammars/grammars/fortran-free-form.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "f90",
+            "f95",
+            "f03",
+            "f08",
+            "f18"
+          ]
+        },
+        {
+          "name": "fortran-fixed-form",
+          "displayName": "Fortran (Fixed Form)",
+          "scopeName": "source.fortran.fixed",
+          "resourcePath": "textmate-grammars/grammars/fortran-fixed-form.json",
+          "embeddedLanguages": [
+            "fortran-free-form"
+          ],
+          "aliases": [
+            "f",
+            "for",
+            "f77"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "pascal",
+      "displayName": "Pascal",
+      "aliases": [
+        "delphi",
+        "object-pascal"
+      ],
+      "grammarModule": "shiki/dist/langs/pascal.mjs",
+      "grammars": [
+        {
+          "name": "pascal",
+          "displayName": "Pascal",
+          "scopeName": "source.pascal",
+          "resourcePath": "textmate-grammars/grammars/pascal.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "vb",
+      "displayName": "Visual Basic",
+      "aliases": [
+        "cmd",
+        "visual-basic"
+      ],
+      "grammarModule": "shiki/dist/langs/vb.mjs",
+      "grammars": [
+        {
+          "name": "vb",
+          "displayName": "Visual Basic",
+          "scopeName": "source.asp.vb.net",
+          "resourcePath": "textmate-grammars/grammars/vb.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "cmd"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "asm",
+      "displayName": "Assembly",
+      "aliases": [
+        "assembly"
+      ],
+      "grammarModule": "shiki/dist/langs/asm.mjs",
+      "grammars": [
+        {
+          "name": "asm",
+          "displayName": "Assembly",
+          "scopeName": "source.asm.x86_64",
+          "resourcePath": "textmate-grammars/grammars/asm.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "cobol",
+      "displayName": "COBOL",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/cobol.mjs",
+      "grammars": [
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "css",
+          "displayName": "CSS",
+          "scopeName": "source.css",
+          "resourcePath": "textmate-grammars/grammars/css.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "html",
+          "displayName": "HTML",
+          "scopeName": "text.html.basic",
+          "resourcePath": "textmate-grammars/grammars/html.json",
+          "embeddedLanguages": [
+            "javascript",
+            "css"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "java",
+          "displayName": "Java",
+          "scopeName": "source.java",
+          "resourcePath": "textmate-grammars/grammars/java.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "cobol",
+          "displayName": "COBOL",
+          "scopeName": "source.cobol",
+          "resourcePath": "textmate-grammars/grammars/cobol.json",
+          "embeddedLanguages": [
+            "html",
+            "java"
+          ],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "julia",
+      "displayName": "Julia",
+      "aliases": [
+        "jl"
+      ],
+      "grammarModule": "shiki/dist/langs/julia.mjs",
+      "grammars": [
+        {
+          "name": "regexp",
+          "displayName": "RegExp",
+          "scopeName": "source.regexp.python",
+          "resourcePath": "textmate-grammars/grammars/regexp.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "regex"
+          ]
+        },
+        {
+          "name": "c",
+          "displayName": "C",
+          "scopeName": "source.c",
+          "resourcePath": "textmate-grammars/grammars/c.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "glsl",
+          "displayName": "GLSL",
+          "scopeName": "source.glsl",
+          "resourcePath": "textmate-grammars/grammars/glsl.json",
+          "embeddedLanguages": [
+            "c"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "sql",
+          "displayName": "SQL",
+          "scopeName": "source.sql",
+          "resourcePath": "textmate-grammars/grammars/sql.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "cpp-macro",
+          "displayName": "C++",
+          "scopeName": "source.cpp.embedded.macro",
+          "resourcePath": "textmate-grammars/grammars/cpp-macro.json",
+          "embeddedLanguages": [
+            "regexp",
+            "glsl",
+            "sql"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "regexp",
+          "displayName": "RegExp",
+          "scopeName": "source.regexp.python",
+          "resourcePath": "textmate-grammars/grammars/regexp.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "regex"
+          ]
+        },
+        {
+          "name": "c",
+          "displayName": "C",
+          "scopeName": "source.c",
+          "resourcePath": "textmate-grammars/grammars/c.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "glsl",
+          "displayName": "GLSL",
+          "scopeName": "source.glsl",
+          "resourcePath": "textmate-grammars/grammars/glsl.json",
+          "embeddedLanguages": [
+            "c"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "sql",
+          "displayName": "SQL",
+          "scopeName": "source.sql",
+          "resourcePath": "textmate-grammars/grammars/sql.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "cpp",
+          "displayName": "C++",
+          "scopeName": "source.cpp",
+          "resourcePath": "textmate-grammars/grammars/cpp.json",
+          "embeddedLanguages": [
+            "cpp-macro",
+            "regexp",
+            "glsl",
+            "sql"
+          ],
+          "aliases": [
+            "c++"
+          ]
+        },
+        {
+          "name": "python",
+          "displayName": "Python",
+          "scopeName": "source.python",
+          "resourcePath": "textmate-grammars/grammars/python.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "py"
+          ]
+        },
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "r",
+          "displayName": "R",
+          "scopeName": "source.r",
+          "resourcePath": "textmate-grammars/grammars/r.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "sql",
+          "displayName": "SQL",
+          "scopeName": "source.sql",
+          "resourcePath": "textmate-grammars/grammars/sql.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "julia",
+          "displayName": "Julia",
+          "scopeName": "source.julia",
+          "resourcePath": "textmate-grammars/grammars/julia.json",
+          "embeddedLanguages": [
+            "cpp",
+            "python",
+            "javascript",
+            "r",
+            "sql"
+          ],
+          "aliases": [
+            "jl"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "sas",
+      "displayName": "SAS",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/sas.mjs",
+      "grammars": [
+        {
+          "name": "sql",
+          "displayName": "SQL",
+          "scopeName": "source.sql",
+          "resourcePath": "textmate-grammars/grammars/sql.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "sas",
+          "displayName": "SAS",
+          "scopeName": "source.sas",
+          "resourcePath": "textmate-grammars/grammars/sas.json",
+          "embeddedLanguages": [
+            "sql"
+          ],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "abap",
+      "displayName": "ABAP",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/abap.mjs",
+      "grammars": [
+        {
+          "name": "abap",
+          "displayName": "ABAP",
+          "scopeName": "source.abap",
+          "resourcePath": "textmate-grammars/grammars/abap.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "apex",
+      "displayName": "Apex",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/apex.mjs",
+      "grammars": [
+        {
+          "name": "apex",
+          "displayName": "Apex",
+          "scopeName": "source.apex",
+          "resourcePath": "textmate-grammars/grammars/apex.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "crystal",
+      "displayName": "Crystal",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/crystal.mjs",
+      "grammars": [
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "css",
+          "displayName": "CSS",
+          "scopeName": "source.css",
+          "resourcePath": "textmate-grammars/grammars/css.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "html",
+          "displayName": "HTML",
+          "scopeName": "text.html.basic",
+          "resourcePath": "textmate-grammars/grammars/html.json",
+          "embeddedLanguages": [
+            "javascript",
+            "css"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "sql",
+          "displayName": "SQL",
+          "scopeName": "source.sql",
+          "resourcePath": "textmate-grammars/grammars/sql.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "css",
+          "displayName": "CSS",
+          "scopeName": "source.css",
+          "resourcePath": "textmate-grammars/grammars/css.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "c",
+          "displayName": "C",
+          "scopeName": "source.c",
+          "resourcePath": "textmate-grammars/grammars/c.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "shellscript",
+          "displayName": "Shell",
+          "scopeName": "source.shell",
+          "resourcePath": "textmate-grammars/grammars/shellscript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "bash",
+            "sh",
+            "shell",
+            "zsh"
+          ]
+        },
+        {
+          "name": "crystal",
+          "displayName": "Crystal",
+          "scopeName": "source.crystal",
+          "resourcePath": "textmate-grammars/grammars/crystal.json",
+          "embeddedLanguages": [
+            "html",
+            "sql",
+            "css",
+            "c",
+            "javascript",
+            "shellscript"
+          ],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "fsharp",
+      "displayName": "F#",
+      "aliases": [
+        "f#",
+        "fs"
+      ],
+      "grammarModule": "shiki/dist/langs/fsharp.mjs",
+      "grammars": [
+        {
+          "name": "markdown",
+          "displayName": "Markdown",
+          "scopeName": "text.html.markdown",
+          "resourcePath": "textmate-grammars/grammars/markdown.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "md"
+          ]
+        },
+        {
+          "name": "fsharp",
+          "displayName": "F#",
+          "scopeName": "source.fsharp",
+          "resourcePath": "textmate-grammars/grammars/fsharp.json",
+          "embeddedLanguages": [
+            "markdown"
+          ],
+          "aliases": [
+            "f#",
+            "fs"
+          ]
+        }
+      ]
+    },
+    {
+      "language": "awk",
+      "displayName": "AWK",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/awk.mjs",
+      "grammars": [
+        {
+          "name": "awk",
+          "displayName": "AWK",
+          "scopeName": "source.awk",
+          "resourcePath": "textmate-grammars/grammars/awk.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "nim",
+      "displayName": "Nim",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/nim.mjs",
+      "grammars": [
+        {
+          "name": "c",
+          "displayName": "C",
+          "scopeName": "source.c",
+          "resourcePath": "textmate-grammars/grammars/c.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "css",
+          "displayName": "CSS",
+          "scopeName": "source.css",
+          "resourcePath": "textmate-grammars/grammars/css.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "html",
+          "displayName": "HTML",
+          "scopeName": "text.html.basic",
+          "resourcePath": "textmate-grammars/grammars/html.json",
+          "embeddedLanguages": [
+            "javascript",
+            "css"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "java",
+          "displayName": "Java",
+          "scopeName": "source.java",
+          "resourcePath": "textmate-grammars/grammars/java.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "xml",
+          "displayName": "XML",
+          "scopeName": "text.xml",
+          "resourcePath": "textmate-grammars/grammars/xml.json",
+          "embeddedLanguages": [
+            "java"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "javascript",
+          "displayName": "JavaScript",
+          "scopeName": "source.js",
+          "resourcePath": "textmate-grammars/grammars/javascript.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "js",
+            "cjs",
+            "mjs"
+          ]
+        },
+        {
+          "name": "css",
+          "displayName": "CSS",
+          "scopeName": "source.css",
+          "resourcePath": "textmate-grammars/grammars/css.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "c",
+          "displayName": "C",
+          "scopeName": "source.c",
+          "resourcePath": "textmate-grammars/grammars/c.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        },
+        {
+          "name": "glsl",
+          "displayName": "GLSL",
+          "scopeName": "source.glsl",
+          "resourcePath": "textmate-grammars/grammars/glsl.json",
+          "embeddedLanguages": [
+            "c"
+          ],
+          "aliases": []
+        },
+        {
+          "name": "markdown",
+          "displayName": "Markdown",
+          "scopeName": "text.html.markdown",
+          "resourcePath": "textmate-grammars/grammars/markdown.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "md"
+          ]
+        },
+        {
+          "name": "nim",
+          "displayName": "Nim",
+          "scopeName": "source.nim",
+          "resourcePath": "textmate-grammars/grammars/nim.json",
+          "embeddedLanguages": [
+            "c",
+            "html",
+            "xml",
+            "javascript",
+            "css",
+            "glsl",
+            "markdown"
+          ],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "ada",
+      "displayName": "Ada",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/ada.mjs",
+      "grammars": [
+        {
+          "name": "ada",
+          "displayName": "Ada",
+          "scopeName": "source.ada",
+          "resourcePath": "textmate-grammars/grammars/ada.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "prolog",
+      "displayName": "Prolog",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/prolog.mjs",
+      "grammars": [
+        {
+          "name": "prolog",
+          "displayName": "Prolog",
+          "scopeName": "source.prolog",
+          "resourcePath": "textmate-grammars/grammars/prolog.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "smalltalk",
+      "displayName": "Smalltalk",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/smalltalk.mjs",
+      "grammars": [
+        {
+          "name": "smalltalk",
+          "displayName": "Smalltalk",
+          "scopeName": "source.smalltalk",
+          "resourcePath": "textmate-grammars/grammars/smalltalk.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "ocaml",
+      "displayName": "OCaml",
+      "aliases": [],
+      "grammarModule": "shiki/dist/langs/ocaml.mjs",
+      "grammars": [
+        {
+          "name": "ocaml",
+          "displayName": "OCaml",
+          "scopeName": "source.ocaml",
+          "resourcePath": "textmate-grammars/grammars/ocaml.json",
+          "embeddedLanguages": [],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "language": "common-lisp",
+      "displayName": "Common Lisp",
+      "aliases": [
+        "lisp"
+      ],
+      "grammarModule": "shiki/dist/langs/common-lisp.mjs",
+      "grammars": [
+        {
+          "name": "common-lisp",
+          "displayName": "Common Lisp",
+          "scopeName": "source.commonlisp",
+          "resourcePath": "textmate-grammars/grammars/common-lisp.json",
+          "embeddedLanguages": [],
+          "aliases": [
+            "lisp"
+          ]
+        }
+      ]
+    },
+    {
       "language": "make",
       "displayName": "Makefile",
       "aliases": [

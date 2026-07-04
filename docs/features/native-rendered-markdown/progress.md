@@ -198,6 +198,22 @@
   capture shorthand decoding, capture-depth recursion guards for C/C++-style
   `$self` loops, `java-basic` Joni/iOS-hybrid regression coverage, per-language
   smoke tests, and gallery language-sweep blocks for Java, C#, SQL, and TOML.
+- 2026-07-04: Expanded OPE-29 language recognition to the requested top-language
+  list through Shiki-backed smoke fixtures and bundled TextMate resources. The
+  manifest now has 62 language entries and 74 grammar JSON resources (~4.7 MB),
+  including Dart, MATLAB, Groovy, Objective-C, Clojure, CoffeeScript, Fortran
+  free/fixed form, Pascal, Visual Basic, Assembly, COBOL, Julia, SAS, ABAP, Apex,
+  Crystal, F#, AWK, Nim, Ada, Prolog, Smalltalk, OCaml, and Common Lisp. Scratch
+  remains a recognized plain-code fallback because Shiki 4.2.0 has no bundled
+  Scratch grammar. Added capture-array normalization for TextMate grammars such
+  as Smalltalk.
+- 2026-07-04: Fixed the Android `cpp` popularity-snippet regression where the
+  Joni TextMate path produced only comment/punctuation roles, leaving most C++
+  code grey. Production Android DI now builds the highlighter from app assets
+  with the injected application context, and the shared highlighter adds a
+  C/C++ lexical role enhancement for obvious comments, strings, keywords, types,
+  functions, constants, and numbers until full tokenizer parity covers those
+  scopes natively.
 - 2026-07-04: Closed top-10 `*-basic` Shiki golden gates on both Android/Joni
   (10/10) and iOS/libonig (10/10). iOS Kotlin/Swift/Go gaps required
   `ONIG_OPTION_CAPTURE_GROUP` at libonig compile time. Shrunk layer-7
@@ -230,8 +246,8 @@
 - Keep iOS grammar packaging/resource-reader behavior covered as release
   packaging changes.
 - Review grammar bundle size before release; the bundled grammar set is about
-  3.6 MB across 48 JSON files (14 Milestone 0 languages plus 22 popular
-  languages).
+  4.7 MB across 74 JSON files for 62 manifest language entries plus the Scratch
+  plain fallback.
 - Expand active Shiki golden comparisons beyond the top-10 `*-basic` gates and
   the Android/Joni `diff`, `json`, `yaml`, `css`, and `html` subsets and remove
   the ignored full native-vs-Shiki highlighter comparison once broader language
@@ -249,6 +265,20 @@
 
 ## Verification
 
+- 2026-07-04: `npm run markdown:highlighter:golden` regenerated Shiki fixtures,
+  the manifest, Kotlin fixture metadata, and 74 bundled grammar JSON files
+  (~4.7 MB) for 62 manifest language entries.
+- 2026-07-04: `./gradlew :markdown-core:testDebugUnitTest` passed after adding
+  top-language fixture coverage, Scratch plain-fallback coverage, and TextMate
+  capture-array normalization.
+- 2026-07-04: `./gradlew :markdown-core:iosSimulatorArm64Test` passed, covering
+  the iOS/libonig markdown-core path with the expanded grammar bundle.
+- 2026-07-04: Focused Android/Joni and shared backend C++ popularity-snippet
+  regressions passed with explicit role checks for comment, keyword, type,
+  string, function, and number spans.
+- 2026-07-04: `./gradlew :app:assembleDebug` passed after wiring production
+  Android markdown highlighting to the injected application-context asset
+  reader.
 - 2026-06-21: `npm run markdown:highlighter:golden` regenerated Shiki fixtures,
   manifest, and 48 bundled grammar JSON files (~3.6 MB) for the popular-languages
   pack.

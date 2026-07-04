@@ -88,6 +88,118 @@ class OpenCodeMarkdownHighlighterGoldenTest {
     }
 
     @Test
+    fun shikiGoldenFixturesCoverTopLanguageListExceptScratchPlainFallback() {
+        val coveredLabels =
+            HighlighterGoldenFixtures.all
+                .flatMap { fixture -> listOf(fixture.language) + fixture.aliases }
+                .toSet()
+
+        val requiredLabels =
+            setOf(
+                "python",
+                "javascript",
+                "java",
+                "csharp",
+                "c#",
+                "cpp",
+                "c++",
+                "typescript",
+                "php",
+                "go",
+                "kotlin",
+                "swift",
+                "ruby",
+                "rust",
+                "c",
+                "dart",
+                "r",
+                "perl",
+                "scala",
+                "matlab",
+                "powershell",
+                "lua",
+                "groovy",
+                "objective-c",
+                "objectivec",
+                "objc",
+                "shellscript",
+                "bash",
+                "sql",
+                "html",
+                "css",
+                "haskell",
+                "elixir",
+                "clojure",
+                "coffee",
+                "coffeescript",
+                "fortran",
+                "fortran-free-form",
+                "fortran-fixed-form",
+                "pascal",
+                "delphi",
+                "object-pascal",
+                "vb",
+                "visual-basic",
+                "asm",
+                "assembly",
+                "cobol",
+                "julia",
+                "sas",
+                "abap",
+                "apex",
+                "crystal",
+                "fsharp",
+                "f#",
+                "fs",
+                "awk",
+                "nim",
+                "ada",
+                "prolog",
+                "smalltalk",
+                "zig",
+                "ocaml",
+                "erlang",
+                "common-lisp",
+                "lisp",
+            )
+
+        assertTrue(
+            coveredLabels.containsAll(requiredLabels),
+            "Missing top-language labels: ${requiredLabels - coveredLabels}",
+        )
+        assertFalse(coveredLabels.contains("scratch"), "Scratch must remain a documented plain fallback until a grammar is chosen")
+    }
+
+    @Test
+    fun scratchFenceIsRecognizedAsPlainFallbackWithoutSemanticSpans() {
+        val highlighter =
+            OpenCodeSyntaxHighlighter(
+                grammarBundle = bundledGrammarBundle(),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeKotlinRegexHybridTextMateBackend),
+            )
+        val result = highlighter.highlight("scratch", """when green flag clicked""")
+
+        assertTrue(highlighter.supportsLanguage("scratch"))
+        assertTrue(result.spans.isEmpty())
+        assertTrue(result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterFallback })
+
+        val document =
+            OpenCodeMarkdownParser.parse(
+                """
+                ```scratch
+                when green flag clicked
+                ```
+                """.trimIndent(),
+                codeHighlighter = highlighter,
+            )
+
+        assertFalse(document.diagnostics.any { it.kind == MarkdownDiagnosticKind.UnsupportedLanguage })
+        val block = document.blocks.single() as MarkdownBlock.CodeBlock
+        assertEquals("scratch", block.language)
+        assertTrue(block.spans.isEmpty())
+    }
+
+    @Test
     fun generatedGrammarResourceFixturesMatchManifestDescriptors() {
         val descriptors =
             TextMateGrammarManifestFixtures.languages

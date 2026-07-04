@@ -379,7 +379,7 @@ func label(count int) string {
   {
     id: "csharp-basic",
     language: "csharp",
-    aliases: ["cs"],
+    aliases: ["c#", "cs"],
     code: `using System;
 
 public sealed class SessionService
@@ -408,7 +408,7 @@ int main(void) {
   {
     id: "cpp-basic",
     language: "cpp",
-    aliases: ["cc", "cxx"],
+    aliases: ["c++", "cc", "cxx"],
     code: `#include <iostream>
 #include <string>
 
@@ -614,6 +614,247 @@ label(Count) ->
 pub fn label(count: u32) []const u8 {
     return std.fmt.allocPrint(std.heap.page_allocator, "sessions: {d}", .{count}) catch "sessions: ?";
 }
+`,
+  },
+  {
+    id: "dart-basic",
+    language: "dart",
+    aliases: [],
+    code: `String label(int count) {
+  return 'sessions: $count';
+}
+`,
+  },
+  {
+    id: "matlab-basic",
+    language: "matlab",
+    aliases: [],
+    code: `function text = label(count)
+text = sprintf("sessions: %d", count);
+end
+`,
+  },
+  {
+    id: "groovy-basic",
+    language: "groovy",
+    aliases: [],
+    code: `class Session {
+  static String label(int count) {
+    return "sessions: $count"
+  }
+}
+`,
+  },
+  {
+    id: "objective-c-basic",
+    language: "objective-c",
+    aliases: ["objectivec", "objc"],
+    code: `#import <Foundation/Foundation.h>
+
+NSString *Label(NSInteger count) {
+    return [NSString stringWithFormat:@"sessions: %ld", (long)count];
+}
+`,
+  },
+  {
+    id: "clojure-basic",
+    language: "clojure",
+    aliases: ["clj"],
+    code: `(defn label [count]
+  (str "sessions: " count))
+`,
+  },
+  {
+    id: "coffeescript-basic",
+    language: "coffee",
+    aliases: ["coffeescript"],
+    code: `label = (count) ->
+  "sessions: #{count}"
+`,
+  },
+  {
+    id: "fortran-free-form-basic",
+    language: "fortran-free-form",
+    aliases: ["fortran", "f90"],
+    code: `program sessions
+  integer :: count
+  count = 3
+  print *, "sessions:", count
+end program sessions
+`,
+  },
+  {
+    id: "fortran-fixed-form-basic",
+    language: "fortran-fixed-form",
+    aliases: ["f77"],
+    code: `      PROGRAM SESSIONS
+      INTEGER COUNT
+      COUNT = 3
+      PRINT *, 'SESSIONS:', COUNT
+      END
+`,
+  },
+  {
+    id: "pascal-basic",
+    language: "pascal",
+    aliases: ["delphi", "object-pascal"],
+    code: `program Sessions;
+var
+  Count: Integer;
+begin
+  Count := 3;
+  Writeln('sessions: ', Count);
+end.
+`,
+  },
+  {
+    id: "visual-basic-basic",
+    language: "vb",
+    aliases: ["visual-basic"],
+    code: `Module Sessions
+    Function Label(count As Integer) As String
+        Return $"sessions: {count}"
+    End Function
+End Module
+`,
+  },
+  {
+    id: "assembly-basic",
+    language: "asm",
+    aliases: ["assembly"],
+    code: `section .text
+global _start
+_start:
+    mov eax, 1
+    int 0x80
+`,
+  },
+  {
+    id: "cobol-basic",
+    language: "cobol",
+    aliases: [],
+    code: `IDENTIFICATION DIVISION.
+PROGRAM-ID. SESSIONS.
+PROCEDURE DIVISION.
+    DISPLAY "sessions: 3".
+    STOP RUN.
+`,
+  },
+  {
+    id: "julia-basic",
+    language: "julia",
+    aliases: ["jl"],
+    code: `function label(count::Int)
+    return "sessions: $count"
+end
+`,
+  },
+  {
+    id: "sas-basic",
+    language: "sas",
+    aliases: [],
+    code: `/* sessions */
+data sessions;
+  count = 3;
+  label = cats("sessions: ", count);
+run;
+`,
+  },
+  {
+    id: "abap-basic",
+    language: "abap",
+    aliases: [],
+    code: `DATA count TYPE i VALUE 3.
+WRITE: / 'sessions:', count.
+`,
+  },
+  {
+    id: "apex-basic",
+    language: "apex",
+    aliases: [],
+    code: `public class Sessions {
+    public static String label(Integer count) {
+        return 'sessions: ' + count;
+    }
+}
+`,
+  },
+  {
+    id: "crystal-basic",
+    language: "crystal",
+    aliases: [],
+    code: `def label(count : Int32) : String
+  "sessions: #{count}"
+end
+`,
+  },
+  {
+    id: "fsharp-basic",
+    language: "fsharp",
+    aliases: ["f#", "fs"],
+    code: `let label count =
+    $"sessions: {count}"
+`,
+  },
+  {
+    id: "awk-basic",
+    language: "awk",
+    aliases: [],
+    code: `BEGIN {
+  count = 3
+  print "sessions: " count
+}
+`,
+  },
+  {
+    id: "nim-basic",
+    language: "nim",
+    aliases: [],
+    code: `proc label(count: int): string =
+  "sessions: " & $count
+`,
+  },
+  {
+    id: "ada-basic",
+    language: "ada",
+    aliases: [],
+    code: `with Ada.Text_IO; use Ada.Text_IO;
+procedure Sessions is
+begin
+   Put_Line("sessions: 3");
+end Sessions;
+`,
+  },
+  {
+    id: "prolog-basic",
+    language: "prolog",
+    aliases: [],
+    code: `label(Count, Text) :-
+    format(atom(Text), 'sessions: ~w', [Count]).
+`,
+  },
+  {
+    id: "smalltalk-basic",
+    language: "smalltalk",
+    aliases: [],
+    code: `Session >> label: count
+    ^ 'sessions: ', count asString
+`,
+  },
+  {
+    id: "ocaml-basic",
+    language: "ocaml",
+    aliases: [],
+    code: `let label count =
+  "sessions: " ^ string_of_int count
+`,
+  },
+  {
+    id: "common-lisp-basic",
+    language: "common-lisp",
+    aliases: ["lisp"],
+    code: `(defun label (count)
+  (format nil "sessions: ~A" count))
 `,
   },
   {

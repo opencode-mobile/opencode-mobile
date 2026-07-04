@@ -78,11 +78,15 @@ grammar metadata, and an Oniguruma-compatible regex backend bundled locally.
 
 Milestone 0 must prove Kotlin, Swift, TypeScript, JavaScript, JSON, Markdown,
 Shell, YAML, CSS, HTML, Python, Rust, Go, and diff highlighting on Android and
-iOS against checked-in Shiki golden fixtures. The popular-languages pack extends
+iOS against checked-in Shiki golden fixtures. The top-language pack extends
 bundled TextMate coverage to Java, C#, C/C++, Ruby, PHP, SQL, TOML, XML, Scala,
 Lua, Docker, Vue, Svelte, GraphQL, PowerShell, Perl, Haskell, Elixir, Erlang, R,
-Zig, and Make (`makefile` alias) with smoke tests and `java-basic` regression
-anchors. Until full Shiki parity lands, native semantic fallback highlighting is
+Zig, Make (`makefile` alias), Dart, MATLAB, Groovy, Objective-C, Clojure,
+CoffeeScript, Fortran free/fixed form, Pascal, Visual Basic, Assembly, COBOL,
+Julia, SAS, ABAP, Apex, Crystal, F#, AWK, Nim, Ada, Prolog, Smalltalk, OCaml,
+and Common Lisp with smoke fixtures and manifest/alias coverage. Scratch is a
+recognized plain-code fallback because Shiki 4.2.0 does not bundle a Scratch
+grammar. Until full Shiki parity lands, native semantic fallback highlighting is
 allowed only as an implementation scaffold and must emit/record a
 `HighlighterFallback` diagnostic in the shared render tree.
 
@@ -141,10 +145,10 @@ render-tree construction to `jetbrains.markdown`.
    - complete full TextMate rule state, injections, embedded grammars, and
      incremental reuse;
    - add Shiki golden token tests. **Fixture coverage is active for Milestone 0
-     plus the popular-languages pack; Android/Joni `diff`, `json`, `yaml`,
-     `css`, and `html` parity are active; `java-basic` regression and per-language
-     smoke tests are active; the full native comparison is present and ignored
-     until the engine exists.**
+     plus the top-language pack; Android/Joni `diff`, `json`, `yaml`, `css`, and
+     `html` parity are active; `java-basic` regression and per-language smoke
+     tests are active; Scratch is the explicit plain fallback; the full native
+     comparison is present and ignored until the engine exists.**
    - add oracle-driven highlighter and parser parity coverage for high-risk
      snippets and supported markdown constructs. **Planned in OPE-29.**
 4. Chat polish:

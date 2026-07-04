@@ -5043,6 +5043,7 @@
       "id": "csharp-basic",
       "language": "csharp",
       "aliases": [
+        "c#",
         "cs"
       ],
       "code": "using System;\n\npublic sealed class SessionService\n{\n    public string Label(string id, int count)\n    {\n        return $\"{id}: {count}\";\n    }\n}\n",
@@ -5411,6 +5412,7 @@
       "id": "cpp-basic",
       "language": "cpp",
       "aliases": [
+        "c++",
         "cc",
         "cxx"
       ],
@@ -7580,6 +7582,1721 @@
           "end": 169,
           "role": "Punctuation",
           "text": ";"
+        }
+      ]
+    },
+    {
+      "id": "dart-basic",
+      "language": "dart",
+      "aliases": [],
+      "code": "String label(int count) {\n  return 'sessions: $count';\n}\n",
+      "shikiLanguage": "dart",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 6,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 7,
+          "end": 12,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 13,
+          "end": 16,
+          "role": "Type",
+          "text": "int"
+        },
+        {
+          "start": 28,
+          "end": 34,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 35,
+          "end": 46,
+          "role": "String",
+          "text": "'sessions: "
+        },
+        {
+          "start": 46,
+          "end": 47,
+          "role": "String",
+          "text": "$"
+        },
+        {
+          "start": 47,
+          "end": 52,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 52,
+          "end": 53,
+          "role": "String",
+          "text": "'"
+        },
+        {
+          "start": 53,
+          "end": 54,
+          "role": "Punctuation",
+          "text": ";"
+        }
+      ]
+    },
+    {
+      "id": "matlab-basic",
+      "language": "matlab",
+      "aliases": [],
+      "code": "function text = label(count)\ntext = sprintf(\"sessions: %d\", count);\nend\n",
+      "shikiLanguage": "matlab",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 8,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 9,
+          "end": 13,
+          "role": "Variable",
+          "text": "text"
+        },
+        {
+          "start": 16,
+          "end": 21,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 22,
+          "end": 27,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 44,
+          "end": 58,
+          "role": "String",
+          "text": "\"sessions: %d\""
+        },
+        {
+          "start": 68,
+          "end": 71,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "groovy-basic",
+      "language": "groovy",
+      "aliases": [],
+      "code": "class Session {\n  static String label(int count) {\n    return \"sessions: $count\"\n  }\n}\n",
+      "shikiLanguage": "groovy",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 6,
+          "end": 13,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 18,
+          "end": 24,
+          "role": "Keyword",
+          "text": "static"
+        },
+        {
+          "start": 25,
+          "end": 31,
+          "role": "Keyword",
+          "text": "String"
+        },
+        {
+          "start": 32,
+          "end": 37,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 38,
+          "end": 41,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 42,
+          "end": 47,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 55,
+          "end": 61,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 62,
+          "end": 73,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 73,
+          "end": 79,
+          "role": "Variable",
+          "text": "$count"
+        },
+        {
+          "start": 79,
+          "end": 80,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 85,
+          "end": 86,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "objective-c-basic",
+      "language": "objective-c",
+      "aliases": [
+        "objectivec",
+        "objc"
+      ],
+      "code": "#import <Foundation/Foundation.h>\n\nNSString *Label(NSInteger count) {\n    return [NSString stringWithFormat:@\"sessions: %ld\", (long)count];\n}\n",
+      "shikiLanguage": "objective-c",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "#"
+        },
+        {
+          "start": 1,
+          "end": 7,
+          "role": "Keyword",
+          "text": "import"
+        },
+        {
+          "start": 8,
+          "end": 33,
+          "role": "String",
+          "text": "<Foundation/Foundation.h>"
+        },
+        {
+          "start": 35,
+          "end": 43,
+          "role": "Type",
+          "text": "NSString"
+        },
+        {
+          "start": 44,
+          "end": 45,
+          "role": "Operator",
+          "text": "*"
+        },
+        {
+          "start": 45,
+          "end": 50,
+          "role": "Function",
+          "text": "Label"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 51,
+          "end": 60,
+          "role": "Type",
+          "text": "NSInteger"
+        },
+        {
+          "start": 61,
+          "end": 66,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 66,
+          "end": 67,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 68,
+          "end": 69,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 74,
+          "end": 80,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 81,
+          "end": 82,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 82,
+          "end": 90,
+          "role": "Type",
+          "text": "NSString"
+        },
+        {
+          "start": 91,
+          "end": 107,
+          "role": "Function",
+          "text": "stringWithFormat"
+        },
+        {
+          "start": 107,
+          "end": 108,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 108,
+          "end": 120,
+          "role": "String",
+          "text": "@\"sessions: "
+        },
+        {
+          "start": 120,
+          "end": 123,
+          "role": "Constant",
+          "text": "%ld"
+        },
+        {
+          "start": 123,
+          "end": 124,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 124,
+          "end": 125,
+          "role": "Punctuation",
+          "text": ","
+        },
+        {
+          "start": 126,
+          "end": 127,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 127,
+          "end": 131,
+          "role": "Keyword",
+          "text": "long"
+        },
+        {
+          "start": 131,
+          "end": 132,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 137,
+          "end": 139,
+          "role": "Punctuation",
+          "text": "];"
+        },
+        {
+          "start": 140,
+          "end": 141,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "clojure-basic",
+      "language": "clojure",
+      "aliases": [
+        "clj"
+      ],
+      "code": "(defn label [count]\n  (str \"sessions: \" count))\n",
+      "shikiLanguage": "clojure",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 1,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 1,
+          "end": 5,
+          "role": "Keyword",
+          "text": "defn"
+        },
+        {
+          "start": 12,
+          "end": 13,
+          "role": "Punctuation",
+          "text": "["
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "role": "Punctuation",
+          "text": "]"
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 23,
+          "end": 26,
+          "role": "Function",
+          "text": "str"
+        },
+        {
+          "start": 27,
+          "end": 39,
+          "role": "String",
+          "text": "\"sessions: \""
+        },
+        {
+          "start": 45,
+          "end": 47,
+          "role": "Punctuation",
+          "text": "))"
+        }
+      ]
+    },
+    {
+      "id": "coffeescript-basic",
+      "language": "coffee",
+      "aliases": [
+        "coffeescript"
+      ],
+      "code": "label = (count) ->\n  \"sessions: #{count}\"\n",
+      "shikiLanguage": "coffee",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 6,
+          "end": 7,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 8,
+          "end": 9,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 9,
+          "end": 14,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 14,
+          "end": 15,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 16,
+          "end": 18,
+          "role": "Keyword",
+          "text": "->"
+        },
+        {
+          "start": 21,
+          "end": 32,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 32,
+          "end": 34,
+          "role": "Punctuation",
+          "text": "#{"
+        },
+        {
+          "start": 34,
+          "end": 39,
+          "role": "String",
+          "text": "count"
+        },
+        {
+          "start": 39,
+          "end": 40,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 40,
+          "end": 41,
+          "role": "String",
+          "text": "\""
+        }
+      ]
+    },
+    {
+      "id": "fortran-free-form-basic",
+      "language": "fortran-free-form",
+      "aliases": [
+        "fortran",
+        "f90"
+      ],
+      "code": "program sessions\n  integer :: count\n  count = 3\n  print *, \"sessions:\", count\nend program sessions\n",
+      "shikiLanguage": "fortran-free-form",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 7,
+          "role": "Keyword",
+          "text": "program"
+        },
+        {
+          "start": 19,
+          "end": 26,
+          "role": "Keyword",
+          "text": "integer"
+        },
+        {
+          "start": 27,
+          "end": 29,
+          "role": "Operator",
+          "text": "::"
+        },
+        {
+          "start": 44,
+          "end": 45,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 46,
+          "end": 47,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 50,
+          "end": 55,
+          "role": "Keyword",
+          "text": "print"
+        },
+        {
+          "start": 56,
+          "end": 57,
+          "role": "Operator",
+          "text": "*"
+        },
+        {
+          "start": 59,
+          "end": 70,
+          "role": "String",
+          "text": "\"sessions:\""
+        },
+        {
+          "start": 78,
+          "end": 89,
+          "role": "Keyword",
+          "text": "end program"
+        }
+      ]
+    },
+    {
+      "id": "fortran-fixed-form-basic",
+      "language": "fortran-fixed-form",
+      "aliases": [
+        "f77"
+      ],
+      "code": "      PROGRAM SESSIONS\n      INTEGER COUNT\n      COUNT = 3\n      PRINT *, 'SESSIONS:', COUNT\n      END\n",
+      "shikiLanguage": "fortran-fixed-form",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 6,
+          "role": "Number",
+          "text": "      "
+        },
+        {
+          "start": 6,
+          "end": 13,
+          "role": "Keyword",
+          "text": "PROGRAM"
+        },
+        {
+          "start": 23,
+          "end": 29,
+          "role": "Number",
+          "text": "      "
+        },
+        {
+          "start": 29,
+          "end": 36,
+          "role": "Keyword",
+          "text": "INTEGER"
+        },
+        {
+          "start": 43,
+          "end": 49,
+          "role": "Number",
+          "text": "      "
+        },
+        {
+          "start": 55,
+          "end": 56,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 57,
+          "end": 58,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 59,
+          "end": 65,
+          "role": "Number",
+          "text": "      "
+        },
+        {
+          "start": 65,
+          "end": 70,
+          "role": "Keyword",
+          "text": "PRINT"
+        },
+        {
+          "start": 71,
+          "end": 72,
+          "role": "Operator",
+          "text": "*"
+        },
+        {
+          "start": 74,
+          "end": 85,
+          "role": "String",
+          "text": "'SESSIONS:'"
+        },
+        {
+          "start": 93,
+          "end": 99,
+          "role": "Number",
+          "text": "      "
+        },
+        {
+          "start": 99,
+          "end": 102,
+          "role": "Keyword",
+          "text": "END"
+        }
+      ]
+    },
+    {
+      "id": "pascal-basic",
+      "language": "pascal",
+      "aliases": [
+        "delphi",
+        "object-pascal"
+      ],
+      "code": "program Sessions;\nvar\n  Count: Integer;\nbegin\n  Count := 3;\n  Writeln('sessions: ', Count);\nend.\n",
+      "shikiLanguage": "pascal",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 7,
+          "role": "Keyword",
+          "text": "program"
+        },
+        {
+          "start": 18,
+          "end": 21,
+          "role": "Keyword",
+          "text": "var"
+        },
+        {
+          "start": 40,
+          "end": 45,
+          "role": "Keyword",
+          "text": "begin"
+        },
+        {
+          "start": 57,
+          "end": 58,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 70,
+          "end": 82,
+          "role": "String",
+          "text": "'sessions: '"
+        },
+        {
+          "start": 92,
+          "end": 95,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "visual-basic-basic",
+      "language": "vb",
+      "aliases": [
+        "visual-basic"
+      ],
+      "code": "Module Sessions\n    Function Label(count As Integer) As String\n        Return $\"sessions: {count}\"\n    End Function\nEnd Module\n",
+      "shikiLanguage": "vb",
+      "tokens": [
+        {
+          "start": 20,
+          "end": 29,
+          "role": "Keyword",
+          "text": "Function "
+        },
+        {
+          "start": 29,
+          "end": 34,
+          "role": "Function",
+          "text": "Label"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 35,
+          "end": 40,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 41,
+          "end": 43,
+          "role": "Operator",
+          "text": "As"
+        },
+        {
+          "start": 44,
+          "end": 51,
+          "role": "Type",
+          "text": "Integer"
+        },
+        {
+          "start": 51,
+          "end": 52,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 53,
+          "end": 55,
+          "role": "Operator",
+          "text": "As"
+        },
+        {
+          "start": 56,
+          "end": 62,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 71,
+          "end": 77,
+          "role": "Keyword",
+          "text": "Return"
+        },
+        {
+          "start": 78,
+          "end": 79,
+          "role": "Operator",
+          "text": "$"
+        },
+        {
+          "start": 79,
+          "end": 98,
+          "role": "String",
+          "text": "\"sessions: {count}\""
+        },
+        {
+          "start": 103,
+          "end": 115,
+          "role": "Keyword",
+          "text": "End Function"
+        },
+        {
+          "start": 116,
+          "end": 119,
+          "role": "Function",
+          "text": "End"
+        }
+      ]
+    },
+    {
+      "id": "assembly-basic",
+      "language": "asm",
+      "aliases": [
+        "assembly"
+      ],
+      "code": "section .text\nglobal _start\n_start:\n    mov eax, 1\n    int 0x80\n",
+      "shikiLanguage": "asm",
+      "tokens": [
+        {
+          "start": 28,
+          "end": 34,
+          "role": "Function",
+          "text": "_start"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 40,
+          "end": 43,
+          "role": "Operator",
+          "text": "mov"
+        },
+        {
+          "start": 44,
+          "end": 47,
+          "role": "Constant",
+          "text": "eax"
+        },
+        {
+          "start": 49,
+          "end": 50,
+          "role": "Number",
+          "text": "1"
+        },
+        {
+          "start": 55,
+          "end": 58,
+          "role": "Operator",
+          "text": "int"
+        },
+        {
+          "start": 59,
+          "end": 63,
+          "role": "Number",
+          "text": "0x80"
+        }
+      ]
+    },
+    {
+      "id": "cobol-basic",
+      "language": "cobol",
+      "aliases": [],
+      "code": "IDENTIFICATION DIVISION.\nPROGRAM-ID. SESSIONS.\nPROCEDURE DIVISION.\n    DISPLAY \"sessions: 3\".\n    STOP RUN.\n",
+      "shikiLanguage": "cobol",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 23,
+          "role": "Keyword",
+          "text": "IDENTIFICATION DIVISION"
+        },
+        {
+          "start": 25,
+          "end": 35,
+          "role": "Keyword",
+          "text": "PROGRAM-ID"
+        },
+        {
+          "start": 37,
+          "end": 45,
+          "role": "Function",
+          "text": "SESSIONS"
+        },
+        {
+          "start": 47,
+          "end": 65,
+          "role": "Keyword",
+          "text": "PROCEDURE DIVISION"
+        },
+        {
+          "start": 71,
+          "end": 78,
+          "role": "Keyword",
+          "text": "DISPLAY"
+        },
+        {
+          "start": 79,
+          "end": 92,
+          "role": "String",
+          "text": "\"sessions: 3\""
+        },
+        {
+          "start": 98,
+          "end": 106,
+          "role": "Keyword",
+          "text": "STOP RUN"
+        }
+      ]
+    },
+    {
+      "id": "julia-basic",
+      "language": "julia",
+      "aliases": [
+        "jl"
+      ],
+      "code": "function label(count::Int)\n    return \"sessions: $count\"\nend\n",
+      "shikiLanguage": "julia",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 8,
+          "role": "Keyword",
+          "text": "function"
+        },
+        {
+          "start": 9,
+          "end": 14,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 20,
+          "end": 22,
+          "role": "Operator",
+          "text": "::"
+        },
+        {
+          "start": 22,
+          "end": 25,
+          "role": "Type",
+          "text": "Int"
+        },
+        {
+          "start": 31,
+          "end": 37,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 38,
+          "end": 49,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 49,
+          "end": 55,
+          "role": "Variable",
+          "text": "$count"
+        },
+        {
+          "start": 55,
+          "end": 56,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 57,
+          "end": 60,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "sas-basic",
+      "language": "sas",
+      "aliases": [],
+      "code": "/* sessions */\ndata sessions;\n  count = 3;\n  label = cats(\"sessions: \", count);\nrun;\n",
+      "shikiLanguage": "sas",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 14,
+          "role": "Comment",
+          "text": "/* sessions */"
+        }
+      ]
+    },
+    {
+      "id": "abap-basic",
+      "language": "abap",
+      "aliases": [],
+      "code": "DATA count TYPE i VALUE 3.\nWRITE: / 'sessions:', count.\n",
+      "shikiLanguage": "abap",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Keyword",
+          "text": "DATA"
+        },
+        {
+          "start": 5,
+          "end": 15,
+          "role": "Keyword",
+          "text": "count TYPE"
+        },
+        {
+          "start": 15,
+          "end": 17,
+          "role": "Type",
+          "text": " i"
+        },
+        {
+          "start": 18,
+          "end": 23,
+          "role": "Keyword",
+          "text": "VALUE"
+        },
+        {
+          "start": 24,
+          "end": 25,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 27,
+          "end": 32,
+          "role": "Keyword",
+          "text": "WRITE"
+        },
+        {
+          "start": 34,
+          "end": 35,
+          "role": "Keyword",
+          "text": "/"
+        },
+        {
+          "start": 36,
+          "end": 47,
+          "role": "String",
+          "text": "'sessions:'"
+        },
+        {
+          "start": 49,
+          "end": 54,
+          "role": "Keyword",
+          "text": "count"
+        }
+      ]
+    },
+    {
+      "id": "apex-basic",
+      "language": "apex",
+      "aliases": [],
+      "code": "public class Sessions {\n    public static String label(Integer count) {\n        return 'sessions: ' + count;\n    }\n}\n",
+      "shikiLanguage": "apex",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 6,
+          "role": "Keyword",
+          "text": "public"
+        },
+        {
+          "start": 7,
+          "end": 12,
+          "role": "Keyword",
+          "text": "class"
+        },
+        {
+          "start": 13,
+          "end": 21,
+          "role": "Type",
+          "text": "Sessions"
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 28,
+          "end": 34,
+          "role": "Keyword",
+          "text": "public"
+        },
+        {
+          "start": 35,
+          "end": 41,
+          "role": "Keyword",
+          "text": "static"
+        },
+        {
+          "start": 42,
+          "end": 48,
+          "role": "Keyword",
+          "text": "String"
+        },
+        {
+          "start": 49,
+          "end": 54,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 54,
+          "end": 55,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 55,
+          "end": 62,
+          "role": "Keyword",
+          "text": "Integer"
+        },
+        {
+          "start": 68,
+          "end": 69,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 70,
+          "end": 71,
+          "role": "Punctuation",
+          "text": "{"
+        },
+        {
+          "start": 80,
+          "end": 86,
+          "role": "Keyword",
+          "text": "return"
+        },
+        {
+          "start": 87,
+          "end": 99,
+          "role": "String",
+          "text": "'sessions: '"
+        },
+        {
+          "start": 100,
+          "end": 101,
+          "role": "Operator",
+          "text": "+"
+        },
+        {
+          "start": 102,
+          "end": 107,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 107,
+          "end": 108,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 113,
+          "end": 114,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 115,
+          "end": 116,
+          "role": "Punctuation",
+          "text": "}"
+        }
+      ]
+    },
+    {
+      "id": "crystal-basic",
+      "language": "crystal",
+      "aliases": [],
+      "code": "def label(count : Int32) : String\n  \"sessions: #{count}\"\nend\n",
+      "shikiLanguage": "crystal",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "role": "Keyword",
+          "text": "def"
+        },
+        {
+          "start": 4,
+          "end": 9,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 9,
+          "end": 10,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 10,
+          "end": 15,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 18,
+          "end": 23,
+          "role": "Type",
+          "text": "Int32"
+        },
+        {
+          "start": 23,
+          "end": 24,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 25,
+          "end": 26,
+          "role": "Punctuation",
+          "text": ":"
+        },
+        {
+          "start": 27,
+          "end": 33,
+          "role": "Type",
+          "text": "String"
+        },
+        {
+          "start": 36,
+          "end": 47,
+          "role": "String",
+          "text": "\"sessions: "
+        },
+        {
+          "start": 47,
+          "end": 49,
+          "role": "Punctuation",
+          "text": "#{"
+        },
+        {
+          "start": 49,
+          "end": 54,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 54,
+          "end": 55,
+          "role": "Punctuation",
+          "text": "}"
+        },
+        {
+          "start": 55,
+          "end": 56,
+          "role": "String",
+          "text": "\""
+        },
+        {
+          "start": 57,
+          "end": 60,
+          "role": "Keyword",
+          "text": "end"
+        }
+      ]
+    },
+    {
+      "id": "fsharp-basic",
+      "language": "fsharp",
+      "aliases": [
+        "f#",
+        "fs"
+      ],
+      "code": "let label count =\n    $\"sessions: {count}\"\n",
+      "shikiLanguage": "fsharp",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 4,
+          "end": 16,
+          "role": "Variable",
+          "text": "label count "
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Keyword",
+          "text": "="
+        },
+        {
+          "start": 23,
+          "end": 42,
+          "role": "String",
+          "text": "\"sessions: {count}\""
+        }
+      ]
+    },
+    {
+      "id": "awk-basic",
+      "language": "awk",
+      "aliases": [],
+      "code": "BEGIN {\n  count = 3\n  print \"sessions: \" count\n}\n",
+      "shikiLanguage": "awk",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Constant",
+          "text": "BEGIN"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 18,
+          "end": 19,
+          "role": "Number",
+          "text": "3"
+        },
+        {
+          "start": 22,
+          "end": 27,
+          "role": "Keyword",
+          "text": "print"
+        },
+        {
+          "start": 28,
+          "end": 40,
+          "role": "String",
+          "text": "\"sessions: \""
+        }
+      ]
+    },
+    {
+      "id": "nim-basic",
+      "language": "nim",
+      "aliases": [],
+      "code": "proc label(count: int): string =\n  \"sessions: \" & $count\n",
+      "shikiLanguage": "nim",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Keyword",
+          "text": "proc"
+        },
+        {
+          "start": 5,
+          "end": 10,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 18,
+          "end": 21,
+          "role": "Keyword",
+          "text": "int"
+        },
+        {
+          "start": 22,
+          "end": 23,
+          "role": "Operator",
+          "text": ":"
+        },
+        {
+          "start": 24,
+          "end": 30,
+          "role": "Keyword",
+          "text": "string"
+        },
+        {
+          "start": 31,
+          "end": 32,
+          "role": "Operator",
+          "text": "="
+        },
+        {
+          "start": 35,
+          "end": 47,
+          "role": "String",
+          "text": "\"sessions: \""
+        },
+        {
+          "start": 48,
+          "end": 49,
+          "role": "Operator",
+          "text": "&"
+        },
+        {
+          "start": 50,
+          "end": 51,
+          "role": "Operator",
+          "text": "$"
+        }
+      ]
+    },
+    {
+      "id": "ada-basic",
+      "language": "ada",
+      "aliases": [],
+      "code": "with Ada.Text_IO; use Ada.Text_IO;\nprocedure Sessions is\nbegin\n   Put_Line(\"sessions: 3\");\nend Sessions;\n",
+      "shikiLanguage": "ada",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 4,
+          "role": "Keyword",
+          "text": "with"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 18,
+          "end": 21,
+          "role": "Keyword",
+          "text": "use"
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "Punctuation",
+          "text": ";"
+        },
+        {
+          "start": 35,
+          "end": 44,
+          "role": "Keyword",
+          "text": "procedure"
+        },
+        {
+          "start": 45,
+          "end": 53,
+          "role": "Function",
+          "text": "Sessions"
+        },
+        {
+          "start": 54,
+          "end": 56,
+          "role": "Keyword",
+          "text": "is"
+        },
+        {
+          "start": 57,
+          "end": 62,
+          "role": "Keyword",
+          "text": "begin"
+        },
+        {
+          "start": 66,
+          "end": 74,
+          "role": "Function",
+          "text": "Put_Line"
+        },
+        {
+          "start": 74,
+          "end": 75,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 75,
+          "end": 88,
+          "role": "String",
+          "text": "\"sessions: 3\""
+        },
+        {
+          "start": 88,
+          "end": 90,
+          "role": "Punctuation",
+          "text": ");"
+        },
+        {
+          "start": 91,
+          "end": 94,
+          "role": "Keyword",
+          "text": "end"
+        },
+        {
+          "start": 95,
+          "end": 103,
+          "role": "Function",
+          "text": "Sessions"
+        },
+        {
+          "start": 103,
+          "end": 104,
+          "role": "Punctuation",
+          "text": ";"
+        }
+      ]
+    },
+    {
+      "id": "prolog-basic",
+      "language": "prolog",
+      "aliases": [],
+      "code": "label(Count, Text) :-\n    format(atom(Text), 'sessions: ~w', [Count]).\n",
+      "shikiLanguage": "prolog",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 5,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 5,
+          "end": 6,
+          "role": "Punctuation",
+          "text": "("
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "role": "Variable",
+          "text": "Count"
+        },
+        {
+          "start": 13,
+          "end": 17,
+          "role": "Variable",
+          "text": "Text"
+        },
+        {
+          "start": 17,
+          "end": 18,
+          "role": "Punctuation",
+          "text": ")"
+        },
+        {
+          "start": 19,
+          "end": 21,
+          "role": "Keyword",
+          "text": ":-"
+        },
+        {
+          "start": 26,
+          "end": 32,
+          "role": "Function",
+          "text": "format"
+        },
+        {
+          "start": 33,
+          "end": 37,
+          "role": "Function",
+          "text": "atom"
+        },
+        {
+          "start": 38,
+          "end": 42,
+          "role": "Variable",
+          "text": "Text"
+        },
+        {
+          "start": 45,
+          "end": 59,
+          "role": "Constant",
+          "text": "'sessions: ~w'"
+        },
+        {
+          "start": 62,
+          "end": 67,
+          "role": "Variable",
+          "text": "Count"
+        },
+        {
+          "start": 69,
+          "end": 70,
+          "role": "Keyword",
+          "text": "."
+        }
+      ]
+    },
+    {
+      "id": "smalltalk-basic",
+      "language": "smalltalk",
+      "aliases": [],
+      "code": "Session >> label: count\n    ^ 'sessions: ', count asString\n",
+      "shikiLanguage": "smalltalk",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 7,
+          "role": "Type",
+          "text": "Session"
+        },
+        {
+          "start": 8,
+          "end": 10,
+          "role": "Operator",
+          "text": ">>"
+        },
+        {
+          "start": 28,
+          "end": 29,
+          "role": "Keyword",
+          "text": "^"
+        },
+        {
+          "start": 30,
+          "end": 42,
+          "role": "String",
+          "text": "'sessions: '"
+        },
+        {
+          "start": 42,
+          "end": 43,
+          "role": "Operator",
+          "text": ","
+        }
+      ]
+    },
+    {
+      "id": "ocaml-basic",
+      "language": "ocaml",
+      "aliases": [],
+      "code": "let label count =\n  \"sessions: \" ^ string_of_int count\n",
+      "shikiLanguage": "ocaml",
+      "tokens": [
+        {
+          "start": 0,
+          "end": 3,
+          "role": "Keyword",
+          "text": "let"
+        },
+        {
+          "start": 4,
+          "end": 9,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 10,
+          "end": 15,
+          "role": "Variable",
+          "text": "count"
+        },
+        {
+          "start": 16,
+          "end": 17,
+          "role": "Type",
+          "text": "="
+        },
+        {
+          "start": 20,
+          "end": 32,
+          "role": "String",
+          "text": "\"sessions: \""
+        },
+        {
+          "start": 33,
+          "end": 34,
+          "role": "String",
+          "text": "^"
+        }
+      ]
+    },
+    {
+      "id": "common-lisp-basic",
+      "language": "common-lisp",
+      "aliases": [
+        "lisp"
+      ],
+      "code": "(defun label (count)\n  (format nil \"sessions: ~A\" count))\n",
+      "shikiLanguage": "common-lisp",
+      "tokens": [
+        {
+          "start": 1,
+          "end": 6,
+          "role": "Keyword",
+          "text": "defun"
+        },
+        {
+          "start": 7,
+          "end": 12,
+          "role": "Function",
+          "text": "label"
+        },
+        {
+          "start": 14,
+          "end": 19,
+          "role": "Function",
+          "text": "count"
+        },
+        {
+          "start": 24,
+          "end": 30,
+          "role": "Function",
+          "text": "format"
+        },
+        {
+          "start": 31,
+          "end": 34,
+          "role": "Constant",
+          "text": "nil"
+        },
+        {
+          "start": 35,
+          "end": 49,
+          "role": "String",
+          "text": "\"sessions: ~A\""
+        },
+        {
+          "start": 50,
+          "end": 55,
+          "role": "Function",
+          "text": "count"
         }
       ]
     },
