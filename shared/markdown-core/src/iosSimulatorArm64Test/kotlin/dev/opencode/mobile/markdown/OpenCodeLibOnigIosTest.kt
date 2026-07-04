@@ -145,6 +145,56 @@ class OpenCodeLibOnigIosTest {
     }
 
     @Test
+    fun libOnigMatchesShikiJavascriptGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "javascript-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiTypescriptGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "typescript-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiPythonGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "python-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiKotlinGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "kotlin-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiSwiftGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "swift-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiShellscriptGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "shellscript-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiRustGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "rust-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiGoGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "go-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiJsonGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "json-basic")
+    }
+
+    @Test
+    fun libOnigMatchesShikiYamlGoldenFixture() {
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(bundledHighlighter(), "yaml-basic")
+    }
+
+    @Test
     fun libOnigJavascriptRegressionFixturesLeaveNoOpenRulesAtEof() {
         val fixtureIds =
             listOf(

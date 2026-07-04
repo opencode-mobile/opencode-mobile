@@ -9,6 +9,8 @@ plugins {
 }
 
 kotlin {
+    applyDefaultHierarchyTemplate()
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -52,9 +54,14 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        val commonTest by getting
         val iosSimulatorArm64Test by getting {
+            dependsOn(commonTest)
             resources.srcDir("src/commonMain/resources")
             kotlin.srcDir(layout.buildDirectory.dir("generated/iosTestConstants"))
+        }
+        val androidUnitTest by getting {
+            dependsOn(commonTest)
         }
         androidMain.dependencies {
             implementation(libs.joni)
@@ -147,5 +154,13 @@ android {
         getByName("test") {
             resources.srcDir("src/commonMain/resources")
         }
+    }
+}
+
+tasks.withType<org.gradle.api.tasks.Copy>().configureEach {
+    if (name.contains("iosSimulatorArm64Test", ignoreCase = true) &&
+        name.contains("ProcessResources", ignoreCase = true)
+    ) {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
 }

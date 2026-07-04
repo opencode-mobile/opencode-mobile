@@ -198,6 +198,17 @@
   capture shorthand decoding, capture-depth recursion guards for C/C++-style
   `$self` loops, `java-basic` Joni/iOS-hybrid regression coverage, per-language
   smoke tests, and gallery language-sweep blocks for Java, C#, SQL, and TOML.
+- 2026-07-04: Closed top-10 `*-basic` Shiki golden gates on both Android/Joni
+  (10/10) and iOS/libonig (10/10). iOS Kotlin/Swift/Go gaps required
+  `ONIG_OPTION_CAPTURE_GROUP` at libonig compile time. Shrunk layer-7
+  `normalizeWebSyntaxRoles` for JS/TS; retained `highlightPrivateFields` and
+  `highlightPythonTripleQuotedStrings` for regression fixtures. Added
+  capture-depth guards fixing `cpp-basic` stack overflow in smoke tests.
+- 2026-07-04: Documented Path A (enriched semantic roles + token mapping) and
+  Path B (scope-carrying render tree + bundled Shiki theme) in
+  `shiki-visual-parity-paths-plan.md` for layer-6+ visual parity work.
+- 2026-07-04: Added Path A implementation plan (`shiki-visual-parity-path-a-plan.md`):
+  PA0 audit, PA1 wire existing preset syntax tokens, PA2 mapper alignment.
 
 ## Remaining
 
@@ -210,9 +221,10 @@
 - Review grammar bundle size before release; the bundled grammar set is about
   3.6 MB across 48 JSON files (14 Milestone 0 languages plus 22 popular
   languages).
-- Expand active Shiki golden comparisons beyond the Android/Joni `diff`, `json`,
-  `yaml`, `css`, and `html` subsets and remove the ignored full native-vs-Shiki
-  highlighter comparison once the native TextMate engine is in place.
+- Expand active Shiki golden comparisons beyond the top-10 `*-basic` gates and
+  the Android/Joni `diff`, `json`, `yaml`, `css`, and `html` subsets and remove
+  the ignored full native-vs-Shiki highlighter comparison once broader language
+  coverage is in place.
 - Track OPE-29: add trusted Shiki/`vscode-textmate` highlighter oracle fixtures
   and CommonMark-capable parser oracle fixtures for high-risk rendered-markdown
   examples, including the large multi-language code sample that exposed recent

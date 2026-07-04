@@ -238,61 +238,6 @@ class OpenCodeSyntaxHighlighter(
                     mutable.removeAll(intersecting.toSet())
                     mutable += CodeSpan(wordStart, wordEnd, CodeTokenRole.Variable)
                 }
-
-                webObjectPropertyIdentifierRegex.findAll(code).forEach { match ->
-                    val keyGroup = match.groups[2] ?: return@forEach
-                    val wordStart = keyGroup.range.first
-                    val wordEnd = keyGroup.range.last + 1
-                    val intersecting =
-                        mutable.filter { span -> span.end > wordStart && span.start < wordEnd }
-                    if (intersecting.any {
-                            it.role == CodeTokenRole.String ||
-                                it.role == CodeTokenRole.Comment ||
-                                it.role == CodeTokenRole.Keyword
-                        }
-                    ) {
-                        return@forEach
-                    }
-                    mutable.removeAll(intersecting.toSet())
-                    mutable += CodeSpan(wordStart, wordEnd, CodeTokenRole.Property)
-                }
-
-                webQuotedObjectPropertyRegexes.forEach { regex ->
-                    regex.findAll(code).forEach { match ->
-                        val propertyStart = match.range.first
-                        var propertyEnd = code.indexOf(':', propertyStart).takeIf { it >= 0 } ?: return@forEach
-                        while (propertyEnd > propertyStart && code[propertyEnd - 1].isWhitespace()) {
-                            propertyEnd -= 1
-                        }
-                        val intersecting =
-                            mutable.filter { span -> span.end > propertyStart && span.start < propertyEnd }
-                        if (intersecting.any { it.role == CodeTokenRole.Comment }) {
-                            return@forEach
-                        }
-                        mutable.removeAll(intersecting.toSet())
-                        mutable += CodeSpan(propertyStart, propertyEnd, CodeTokenRole.String)
-                    }
-                }
-
-                webMemberAccessRegex.findAll(code).forEach { match ->
-                    val memberStart = match.groups[1]!!.range.first
-                    val memberEnd = match.groups[1]!!.range.last + 1
-                    val intersecting =
-                        mutable.filter { span -> span.end > memberStart && span.start < memberEnd }
-                    if (intersecting.any { it.role == CodeTokenRole.String || it.role == CodeTokenRole.Comment }) {
-                        return@forEach
-                    }
-
-                    val nextIndex = code.indexOfFirstNonWhitespace(memberEnd)
-                    val role =
-                        if (nextIndex != null && code[nextIndex] == '(') {
-                            CodeTokenRole.Function
-                        } else {
-                            CodeTokenRole.Property
-                        }
-                    mutable.removeAll(intersecting.toSet())
-                    mutable += CodeSpan(memberStart, memberEnd, role)
-                }
             }
 
             return mutable.sortedBy { it.start }
@@ -416,35 +361,10 @@ class OpenCodeSyntaxHighlighter(
             return index
         }
 
-        // Object-literal keys only: the identifier must directly follow an
-        // opening brace or a comma. This avoids recoloring switch `default:`,
-        // `case x:` labels, ternary branches, and type annotations as keys.
-        private val webObjectPropertyIdentifierRegex =
-            Regex("""([{,])\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*:""")
-
-        private val webMemberAccessRegex =
-            Regex("""\.\s*([A-Za-z_$][A-Za-z0-9_$]*)""")
-
         private val javaImportRegex =
             Regex("""(?m)^\s*(import)\s+(?:(static)\s+)?([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*|\.\*)*)\s*(;)""")
 
-        private val webQuotedObjectPropertyRegexes =
-            listOf(
-                Regex("""'([^'\\]|\\.)*'\s*:"""),
-                Regex("\"([^\"\\\\]|\\\\.)*\"\\s*:"),
-                Regex("""`([^`\\]|\\.)*`\s*:"""),
-            )
-
         private val pythonStringPrefixCharacters = setOf('r', 'R', 'u', 'U', 'b', 'B', 'f', 'F')
-
-        private fun String.indexOfFirstNonWhitespace(startIndex: Int): Int? {
-            var index = startIndex
-            while (index < length) {
-                if (!this[index].isWhitespace()) return index
-                index += 1
-            }
-            return null
-        }
 
         private fun CodeTokenRole.coalescePriority(): Int =
             when (this) {
@@ -453,13 +373,13 @@ class OpenCodeSyntaxHighlighter(
                 CodeTokenRole.Plain -> 2
                 CodeTokenRole.Variable -> 3
                 CodeTokenRole.Property -> 4
-                CodeTokenRole.Function -> 5
+                CodeTokenRole.Type -> 5
                 CodeTokenRole.Number -> 6
                 CodeTokenRole.Constant -> 7
                 CodeTokenRole.String -> 8
                 CodeTokenRole.Comment -> 9
                 CodeTokenRole.Keyword -> 10
-                CodeTokenRole.Type -> 11
+                CodeTokenRole.Function -> 11
                 CodeTokenRole.Tag -> 12
                 CodeTokenRole.Attribute -> 13
                 CodeTokenRole.Inserted -> 14

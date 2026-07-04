@@ -37,15 +37,13 @@
   punctuation → `text-primary`). Shiki assigns JVM parameter types such as
   `String` to `Keyword` and leaves qualified names such as `System` as
   `Variable`; the shared `storage.*` scope mapper is unchanged.
-- Reason: TextMate/Oniguruma is the feasibility-gated subsystem. Full
-  byte-for-byte Shiki semantic golden parity and some line-boundary ASI cases
-  (for example multi-line `const` without semicolon) remain open on both
-  platforms.
-- Owner or next action: expand active Shiki golden comparisons beyond the
-  Android/Joni `diff`, `json`, `yaml`, `css`, and `html` subsets, remove
-  `@Ignore` from the KMP native-vs-Shiki highlighter comparison test, close
-  remaining Java method-signature token gaps, and close remaining JavaScript
-  line-state parity gaps.
+- Reason: TextMate/Oniguruma is the feasibility-gated subsystem. Top-10
+  `*-basic` Shiki semantic golden gates pass on both Android/Joni and iOS/libonig
+  (2026-07-04). Full byte-for-byte Shiki parity for all 36+ bundled languages
+  remains open.
+- Owner or next action: implement full Path A in one PR per
+  [shiki-visual-parity-path-a-plan.md](./shiki-visual-parity-path-a-plan.md)
+  (PA0–PA4: audit, token wiring, mapper, optional roles, gallery/docs).
 
 ## Markdown Parse Performance
 

@@ -124,7 +124,62 @@ class OpenCodeJoniRegexBackendAndroidTest {
 
     @Test
     fun joniHighlighterMatchesShikiJavascriptGoldenFixture() {
-        assertRegressionFixtureCoverage("javascript-basic")
+        assertGoldenFixtureParity("javascript-basic")
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiTypescriptGoldenFixture() {
+        assertGoldenFixtureParity("typescript-basic")
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiPythonGoldenFixture() {
+        assertGoldenFixtureParity("python-basic")
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiKotlinGoldenFixture() {
+        assertGoldenFixtureParity("kotlin-basic")
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiSwiftGoldenFixture() {
+        assertGoldenFixtureParity("swift-basic")
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiShellscriptGoldenFixture() {
+        assertGoldenFixtureParity("shellscript-basic")
+    }
+
+    @Test
+    fun joniBackendMatchesShellOptionPattern() {
+        val optionBegin =
+            "[\\t ]++(-)((?![\\n!#\\&()<>\\[{|]|$|[\\t ;]))"
+        val line = "set -euo pipefail"
+        val match = OpenCodeJoniRegexBackend.find(optionBegin, line, 3, line.length)
+        assertEquals(3, match?.start)
+        assertEquals(5, match?.end)
+    }
+
+    @Test
+    fun joniBackendDecomposesShellNormalStatementBeginPattern() {
+        val normalStatementBegin =
+            "(?!^[\\t ]*+$)(?:(?<=(?:^until| until|\\tuntil|^while| while|\\twhile|^elif| elif|\\telif|^else| else|\\telse|^then| then|\\tthen|^do| do|\\tdo|^if| if|\\tif) )|(?<=^|[!\\&(;`{|]))[\\t ]*+(?!nocorrect\\W|nocorrect\\$|function\\W|function\\$|foreach\\W|foreach\\$|repeat\\W|repeat\\$|logout\\W|logout\\$|coproc\\W|coproc\\$|select\\W|select\\$|while\\W|while\\$|pushd\\W|pushd\\$|until\\W|until\\$|case\\W|case\\$|done\\W|done\\$|elif\\W|elif\\$|else\\W|else\\$|esac\\W|esac\\$|popd\\W|popd\\$|then\\W|then\\$|time\\W|time\\$|for\\W|for\\$|end\\W|end\\$|fi\\W|fi\\$|do\\W|do\\$|in\\W|in\\$|if\\W|if\\$)"
+        val line = "set -euo pipefail"
+        val match = OpenCodeJoniRegexBackend.find(normalStatementBegin, line, 0, line.length)
+
+        assertEquals(TextMateRegexMatch(0, 0, listOf(TextMateRegexCapture(0, 0, 0))), match)
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiRustGoldenFixture() {
+        assertGoldenFixtureParity("rust-basic")
+    }
+
+    @Test
+    fun joniHighlighterMatchesShikiGoGoldenFixture() {
+        assertGoldenFixtureParity("go-basic")
     }
 
     @Test
@@ -471,20 +526,8 @@ class OpenCodeJoniRegexBackendAndroidTest {
         assertGoldenFixtureParity("html-basic")
     }
 
-    private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter {
-        val bundle =
-            OpenCodeTextMateGrammarBundleLoader
-                .loadBundled(
-                    OpenCodeTextMateResourceReader { resourcePath ->
-                        javaClass.classLoader?.getResource(resourcePath)?.readText()
-                    },
-                ).bundle ?: error("missing bundled TextMate grammar bundle")
-
-        return OpenCodeSyntaxHighlighter(
-            grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
-        )
-    }
+    private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter =
+        Top10GoldenFixtureAssertions.bundledHighlighter(OpenCodeJoniRegexBackend)
 
     private fun assertNoDuplicateSpanRanges(fixtureId: String) {
         val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }
@@ -507,20 +550,9 @@ class OpenCodeJoniRegexBackendAndroidTest {
     }
 
     private fun assertExactGoldenFixtureParity(fixtureId: String) {
-        val fixture = HighlighterGoldenFixtures.all.single { fixture -> fixture.id == fixtureId }
-        val result = bundledJoniHighlighter().highlight(fixture.language, fixture.code)
-
-        assertTrue(result.diagnostics.isEmpty(), "Expected no backend fallback diagnostics in ${result.diagnostics}")
-        assertEquals(
-            fixture.tokens,
-            result.spans.map { span ->
-                HighlighterGoldenToken(
-                    start = span.start,
-                    end = span.end,
-                    role = span.role,
-                    text = fixture.code.substring(span.start, span.end),
-                )
-            },
+        Top10GoldenFixtureAssertions.assertExactGoldenFixtureParity(
+            bundledJoniHighlighter(),
+            fixtureId,
         )
     }
 
@@ -568,7 +600,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
                 assertToken(fixture.code, result.spans, "// EventEmitter - A simple pub/sub implementation", CodeTokenRole.Comment)
                 assertTokenAfter(fixture.code, result.spans, "\n", "class", CodeTokenRole.Keyword)
                 assertTokenAfter(fixture.code, result.spans, "class ", "EventEmitter", CodeTokenRole.Type)
-                assertToken(fixture.code, result.spans, "Map", CodeTokenRole.Type)
+                assertToken(fixture.code, result.spans, "Map", CodeTokenRole.Function)
                 assertTokenAfter(fixture.code, result.spans, "  off(event, callback) {\n    if (!this.events.has(event)) return;\n    ", "const", CodeTokenRole.Keyword)
                 assertToken(fixture.code, result.spans, "emit", CodeTokenRole.Function)
             }

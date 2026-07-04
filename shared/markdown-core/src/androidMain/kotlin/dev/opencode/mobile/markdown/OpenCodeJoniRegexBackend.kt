@@ -19,6 +19,10 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
             val regex: Regex,
         ) : RegexCacheEntry()
 
+        data class Decomposed(
+            val candidates: List<String>,
+        ) : RegexCacheEntry()
+
         data object Failed : RegexCacheEntry()
     }
 
@@ -30,34 +34,43 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
     private val compileLock = Any()
     private val silentErr = PrintStream(OutputStream.nullOutputStream())
 
-    private fun cachedRegex(pattern: String): Regex? =
-        when (val entry = regexCache.computeIfAbsent(pattern, ::compilePattern)) {
-            is RegexCacheEntry.Compiled -> entry.regex
-            RegexCacheEntry.Failed -> null
+    private fun resolvePattern(pattern: String): RegexCacheEntry {
+        compilePattern(pattern)?.let { regex ->
+            return RegexCacheEntry.Compiled(regex)
         }
 
-    private fun compilePattern(pattern: String): RegexCacheEntry {
+        val candidates =
+            OpenCodeTextMateRegexAlternationSupport
+                .decompositionCandidates(pattern)
+                ?.filter { candidate -> compilePattern(candidate) != null }
+                .orEmpty()
+        if (candidates.isNotEmpty()) {
+            return RegexCacheEntry.Decomposed(candidates)
+        }
+
+        return RegexCacheEntry.Failed
+    }
+
+    private fun compilePattern(pattern: String): Regex? {
         val patternBytes = pattern.encodeToByteArray()
         synchronized(compileLock) {
             val originalErr = System.err
             return try {
                 System.setErr(silentErr)
-                val compiled =
-                    try {
-                        Regex(
-                            patternBytes,
-                            0,
-                            patternBytes.size,
-                            Option.MULTILINE,
-                            UTF8Encoding.INSTANCE,
-                            Syntax.RUBY,
-                        )
-                    } catch (_: JOniException) {
-                        null
-                    } catch (_: IllegalArgumentException) {
-                        null
-                    }
-                compiled?.let { RegexCacheEntry.Compiled(it) } ?: RegexCacheEntry.Failed
+                try {
+                    Regex(
+                        patternBytes,
+                        0,
+                        patternBytes.size,
+                        Option.MULTILINE or Option.CAPTURE_GROUP,
+                        UTF8Encoding.INSTANCE,
+                        Syntax.RUBY,
+                    )
+                } catch (_: JOniException) {
+                    null
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
             } finally {
                 System.setErr(originalErr)
             }
@@ -69,10 +82,65 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int,
+        contiguousAnchor: Int?,
+    ): TextMateRegexMatch? {
+        val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
+        val effectivePattern =
+            OpenCodeTextMateRegexContiguousAnchorSupport.effectivePattern(
+                pattern = normalizedPattern,
+                startIndex = startIndex,
+                contiguousAnchor = contiguousAnchor,
+            )
+
+        if (OpenCodeTextMateRegexContiguousAnchorSupport.rejectIfAnchorMismatch(effectivePattern, startIndex, contiguousAnchor)) {
+            return null
+        }
+
+        when {
+            effectivePattern == "\\G" ->
+                return OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+                    startIndex = startIndex,
+                    endIndex = endIndex,
+                    contiguousAnchor = contiguousAnchor,
+                )
+            effectivePattern.startsWith("\\G") -> {
+                val suffix = effectivePattern.removePrefix("\\G")
+                if (suffix.isEmpty()) {
+                    return OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+                        startIndex = startIndex,
+                        endIndex = endIndex,
+                        contiguousAnchor = contiguousAnchor,
+                    )
+                }
+                return find(suffix, input, startIndex, endIndex, contiguousAnchor)
+                    ?.takeIf { match -> match.start == startIndex }
+            }
+        }
+
+        when (val entry = regexCache.getOrPut(effectivePattern) { resolvePattern(effectivePattern) }) {
+            is RegexCacheEntry.Compiled ->
+                return OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
+                    pattern = effectivePattern,
+                    match = search(entry.regex, input, startIndex, endIndex),
+                    contiguousAnchor = contiguousAnchor,
+                )
+            is RegexCacheEntry.Decomposed -> {
+                return entry.candidates
+                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor) }
+                    .minByOrNull { match -> match.start }
+            }
+            RegexCacheEntry.Failed -> return null
+        }
+    }
+
+    private fun search(
+        regex: Regex,
+        input: String,
+        startIndex: Int,
+        endIndex: Int,
     ): TextMateRegexMatch? {
         val indexMap = Utf8IndexMap(input)
         val inputBytes = indexMap.bytes
-        val regex = cachedRegex(pattern) ?: return null
 
         val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, input.length))
         val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, input.length))

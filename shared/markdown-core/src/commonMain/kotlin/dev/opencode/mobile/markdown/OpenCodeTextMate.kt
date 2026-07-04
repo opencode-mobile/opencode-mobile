@@ -58,6 +58,10 @@ object OpenCodeTextMateScopeMapper {
     fun roleFor(scopes: List<String>): CodeTokenRole {
         val normalizedScopes = scopes.asReversed().map { it.lowercase() }
 
+        if (normalizedScopes.any { scope -> scope.contains("meta.shebang") || scope.contains("shebang") }) {
+            return CodeTokenRole.Comment
+        }
+
         if (
             normalizedScopes.any { scope -> scope.startsWith("punctuation.definition.string.") } &&
             normalizedScopes.any { scope -> scope == "string.quoted" || scope.startsWith("string.quoted.") }

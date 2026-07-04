@@ -14,19 +14,39 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int,
+        contiguousAnchor: Int?,
     ): TextMateRegexMatch? =
-        specialMatch(pattern, input, startIndex, endIndex)
-            ?: KotlinRegexTextMateRegexBackend.find(pattern, input, startIndex, endIndex)
+        specialMatch(pattern, input, startIndex, endIndex, contiguousAnchor)
+            ?: KotlinRegexTextMateRegexBackend.find(pattern, input, startIndex, endIndex, contiguousAnchor)
 
     private fun specialMatch(
         pattern: String,
         input: String,
         startIndex: Int,
         endIndex: Int,
+        contiguousAnchor: Int?,
     ): TextMateRegexMatch? =
         when {
-            pattern == "\\G" -> anchoredStart(input, startIndex, endIndex)
-            pattern.startsWith("\\G") -> anchoredPrefix(pattern.removePrefix("\\G"), input, startIndex, endIndex)
+            pattern == "\\G" ->
+                OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+                    startIndex = startIndex,
+                    endIndex = endIndex,
+                    contiguousAnchor = contiguousAnchor,
+                )
+            pattern.startsWith("\\G") -> {
+                val suffix = pattern.removePrefix("\\G")
+                if (suffix.isEmpty()) {
+                    OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+                        startIndex = startIndex,
+                        endIndex = endIndex,
+                        contiguousAnchor = contiguousAnchor,
+                    )
+                } else {
+                    KotlinRegexTextMateRegexBackend
+                        .find(suffix, input, startIndex, endIndex, contiguousAnchor)
+                        ?.takeIf { it.start == startIndex }
+                }
+            }
             else -> null
         }
 
@@ -35,11 +55,11 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int,
     ): TextMateRegexMatch? =
-        if (startIndex <= endIndex) {
-            TextMateRegexMatch(start = startIndex, end = startIndex)
-        } else {
-            null
-        }
+        OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+            startIndex = startIndex,
+            endIndex = endIndex,
+            contiguousAnchor = null,
+        )
 
     private fun anchoredPrefix(
         suffix: String,

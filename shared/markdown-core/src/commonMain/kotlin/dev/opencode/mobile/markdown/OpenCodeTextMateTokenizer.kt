@@ -12,6 +12,7 @@ interface OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int = input.length,
+        contiguousAnchor: Int? = null,
     ): TextMateRegexMatch?
 }
 
@@ -49,25 +50,38 @@ object KotlinRegexTextMateRegexBackend : OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int,
+        contiguousAnchor: Int?,
     ): TextMateRegexMatch? {
-        val regex = compiledRegex(pattern) ?: return null
+        val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
+        val effectivePattern =
+            OpenCodeTextMateRegexContiguousAnchorSupport.effectivePattern(
+                pattern = normalizedPattern,
+                startIndex = startIndex,
+                contiguousAnchor = contiguousAnchor,
+            )
+        val regex = compiledRegex(effectivePattern) ?: return null
         val match = regex.find(input, startIndex) ?: return null
         if (match.range.first > endIndex || match.range.last + 1 > endIndex) return null
 
-        return TextMateRegexMatch(
-            start = match.range.first,
-            end = match.range.last + 1,
-            captures =
-                match.groups
-                    .mapIndexedNotNull { index, group ->
-                        val range = group?.range ?: return@mapIndexedNotNull null
-                        if (range.first < 0 || range.last < range.first) return@mapIndexedNotNull null
-                        TextMateRegexCapture(
-                            index = index,
-                            start = range.first,
-                            end = range.last + 1,
-                        )
-                    },
+        return OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
+            pattern = effectivePattern,
+            match =
+                TextMateRegexMatch(
+                    start = match.range.first,
+                    end = match.range.last + 1,
+                    captures =
+                        match.groups
+                            .mapIndexedNotNull { index, group ->
+                                val range = group?.range ?: return@mapIndexedNotNull null
+                                if (range.first < 0 || range.last < range.first) return@mapIndexedNotNull null
+                                TextMateRegexCapture(
+                                    index = index,
+                                    start = range.first,
+                                    end = range.last + 1,
+                                )
+                            },
+                ),
+            contiguousAnchor = contiguousAnchor,
         )
     }
 }
@@ -255,6 +269,7 @@ class OpenCodeTextMateNativeTokenizer(
 
             if (endMatch == null) {
                 openRules += openRule
+                openRules += delimitedContent.openRules
                 return TextMateLineTokenizationResult(
                     tokens = normalize(tokens, lineEnd),
                     state = TextMateLineState(openRules),
@@ -304,7 +319,7 @@ class OpenCodeTextMateNativeTokenizer(
                         findEndPattern(
                             endPattern = pattern,
                             code = line,
-                            startIndex = 0,
+                            startIndex = (cursor - lineOffset).coerceIn(0, line.length),
                             endIndex = line.length,
                             boundarySuffix = boundarySuffix,
                         )
@@ -392,11 +407,18 @@ class OpenCodeTextMateNativeTokenizer(
             )
         val tokens = mutableListOf<TextMateScopeToken>()
         var cursor = startIndex
+        var contiguousAnchor = startIndex
+        var emptyContiguousBeginAt: Int? = null
 
         while (cursor < endIndex) {
             val next =
                 rules
-                    .mapNotNull { rule -> rule.findNext(code, cursor, endIndex, regexBackend) }
+                    .mapNotNull { rule ->
+                        if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
+                            return@mapNotNull null
+                        }
+                        rule.findNext(code, cursor, endIndex, regexBackend, contiguousAnchor)
+                    }
                     .minWithOrNull(
                         compareBy<TextMateRuleMatch> { it.match.start }
                             .thenBy { it.rule.order },
@@ -424,6 +446,8 @@ class OpenCodeTextMateNativeTokenizer(
                         captureDepth = captureDepth,
                     )
                 cursor = next.match.end.coerceAtLeast(cursor + 1)
+                contiguousAnchor = next.match.end
+                emptyContiguousBeginAt = null
             } else if (rule.begin != null) {
                 val result =
                     tokensForBeginEndRule(
@@ -438,12 +462,19 @@ class OpenCodeTextMateNativeTokenizer(
                         baseGrammar = baseGrammar,
                         offset = offset,
                         captureDepth = captureDepth,
+                        initialContiguousAnchor = contiguousAnchor,
                     )
                 tokens += result.tokens
                 if (result.openRule != null) {
                     return RangeTokenizationResult(tokens = tokens, openRules = listOf(result.openRule))
                 }
+                if (rule.begin == "\\G" && result.tokens.isEmpty() && result.nextIndex <= cursor) {
+                    emptyContiguousBeginAt = cursor
+                    continue
+                }
                 cursor = result.nextIndex.coerceAtLeast(cursor + 1)
+                contiguousAnchor = result.nextIndex
+                emptyContiguousBeginAt = null
             } else {
                 cursor += 1
             }
@@ -464,7 +495,15 @@ class OpenCodeTextMateNativeTokenizer(
         baseGrammar: TextMateGrammar,
         offset: Int,
         captureDepth: Int = 0,
+        initialContiguousAnchor: Int? = null,
     ): BeginEndTokenizationResult {
+        if (captureDepth > MAX_CAPTURE_TOKENIZE_DEPTH) {
+            return BeginEndTokenizationResult(
+                tokens = emptyList(),
+                nextIndex = beginMatch.end,
+            )
+        }
+
         val ruleScopes = baseScopes.withScope(pattern.name)
         val tokens = mutableListOf<TextMateScopeToken>()
         val beginTokens =
@@ -500,7 +539,8 @@ class OpenCodeTextMateNativeTokenizer(
                     offset = offset,
                     endPattern = resolvedEndPattern,
                     applyEndPatternLast = pattern.shouldApplyEndPatternLast,
-                    captureDepth = captureDepth,
+                    captureDepth = captureDepth + 1,
+                    initialContiguousAnchor = beginMatch.end,
                 )
             } else {
                 null
@@ -561,19 +601,20 @@ class OpenCodeTextMateNativeTokenizer(
             tokens = tokens,
             nextIndex = endMatch?.end ?: endIndex,
             openRule =
-                if (resolvedWhilePattern != null || (resolvedEndPattern != null && endMatch == null)) {
-                    TextMateOpenRule(
-                        grammar = grammar,
-                        pattern = pattern,
-                        endPattern = resolvedEndPattern,
-                        whilePattern = resolvedWhilePattern,
-                        ruleScopes = ruleScopes,
-                        contentScopes = contentScopes,
-                        activeIncludes = activeIncludes,
-                    )
-                } else {
-                    null
-                },
+                delimitedContent?.openRules?.firstOrNull()
+                    ?: if (resolvedWhilePattern != null || (resolvedEndPattern != null && endMatch == null)) {
+                        TextMateOpenRule(
+                            grammar = grammar,
+                            pattern = pattern,
+                            endPattern = resolvedEndPattern,
+                            whilePattern = resolvedWhilePattern,
+                            ruleScopes = ruleScopes,
+                            contentScopes = contentScopes,
+                            activeIncludes = activeIncludes,
+                        )
+                    } else {
+                        null
+                    },
         )
     }
 
@@ -659,6 +700,10 @@ class OpenCodeTextMateNativeTokenizer(
                 append('#')
                 append(pattern.include ?: "")
                 append('#')
+                append(pattern.name ?: "")
+                append('#')
+                append(pattern.contentName ?: "")
+                append('#')
                 append(pattern.patterns.size)
             }
         }
@@ -734,7 +779,12 @@ class OpenCodeTextMateNativeTokenizer(
         endPattern: String,
         applyEndPatternLast: Boolean,
         captureDepth: Int = 0,
+        initialContiguousAnchor: Int? = null,
     ): DelimitedContentTokenizationResult {
+        if (captureDepth > MAX_CAPTURE_TOKENIZE_DEPTH) {
+            return DelimitedContentTokenizationResult(tokens = emptyList(), endMatch = null)
+        }
+
         val rules =
             resolveRules(
                 grammar = grammar,
@@ -746,21 +796,42 @@ class OpenCodeTextMateNativeTokenizer(
             )
         val tokens = mutableListOf<TextMateScopeToken>()
         var cursor = startIndex
+        var contiguousAnchor = initialContiguousAnchor ?: startIndex
+        var emptyContiguousBeginAt: Int? = null
 
         while (cursor < endIndex) {
-            val endMatch = regexBackend.find(endPattern, code, cursor, endIndex)
+            if (endPattern == NEGATIVE_CONTIGUOUS_ANCHOR_END_PATTERN && cursor > startIndex) {
+                return DelimitedContentTokenizationResult(
+                    tokens = tokens,
+                    endMatch = TextMateRegexMatch(cursor, cursor),
+                )
+            }
+
+            val endMatch = findDelimitedEndPattern(endPattern, code, cursor, endIndex)
             val next =
                 rules
-                    .mapNotNull { rule -> rule.findNext(code, cursor, endIndex, regexBackend) }
+                    .mapNotNull { rule ->
+                        if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
+                            return@mapNotNull null
+                        }
+                        rule.findNext(code, cursor, endIndex, regexBackend, contiguousAnchor)
+                    }
                     .minWithOrNull(
                         compareBy<TextMateRuleMatch> { it.match.start }
                             .thenBy { it.rule.order },
                     )
 
-            if (endMatch != null && (next == null || endMatch.startsBefore(next.match, applyEndPatternLast))) {
+            if (next == null) {
+                if (endMatch != null && endMatch.start == cursor) {
+                    return DelimitedContentTokenizationResult(tokens = tokens, endMatch = endMatch)
+                }
+                cursor += 1
+                continue
+            }
+
+            if (endMatch != null && endMatch.startsBefore(next.match, applyEndPatternLast)) {
                 return DelimitedContentTokenizationResult(tokens = tokens, endMatch = endMatch)
             }
-            if (next == null) break
 
             if (next.match.start > cursor) {
                 cursor = next.match.start
@@ -784,6 +855,8 @@ class OpenCodeTextMateNativeTokenizer(
                         captureDepth = captureDepth,
                     )
                 cursor = next.match.end.coerceAtLeast(cursor + 1)
+                contiguousAnchor = next.match.end
+                emptyContiguousBeginAt = null
             } else if (rule.begin != null) {
                 val result =
                     tokensForBeginEndRule(
@@ -797,13 +870,24 @@ class OpenCodeTextMateNativeTokenizer(
                         activeIncludes = activeIncludes,
                         baseGrammar = baseGrammar,
                         offset = offset,
-                        captureDepth = captureDepth,
+                        captureDepth = captureDepth + 1,
+                        initialContiguousAnchor = contiguousAnchor,
                     )
                 tokens += result.tokens
                 if (result.openRule != null) {
-                    break
+                    return DelimitedContentTokenizationResult(
+                        tokens = tokens,
+                        endMatch = null,
+                        openRules = listOf(result.openRule),
+                    )
+                }
+                if (rule.begin == "\\G" && result.tokens.isEmpty() && result.nextIndex <= cursor) {
+                    emptyContiguousBeginAt = cursor
+                    continue
                 }
                 cursor = result.nextIndex.coerceAtLeast(cursor + 1)
+                contiguousAnchor = result.nextIndex
+                emptyContiguousBeginAt = null
             } else {
                 cursor += 1
             }
@@ -811,9 +895,37 @@ class OpenCodeTextMateNativeTokenizer(
 
         return DelimitedContentTokenizationResult(
             tokens = tokens,
-            endMatch = regexBackend.find(endPattern, code, cursor, endIndex),
+            endMatch =
+                if (endPattern == NEGATIVE_CONTIGUOUS_ANCHOR_END_PATTERN && cursor > startIndex) {
+                    TextMateRegexMatch(cursor, cursor)
+                } else {
+                    findDelimitedEndPattern(endPattern, code, cursor, endIndex)
+                        ?: findDelimitedEndPattern(endPattern, code, endIndex, endIndex)
+                },
+            openRules = emptyList(),
         )
     }
+
+    private fun findDelimitedEndPattern(
+        endPattern: String,
+        code: String,
+        startIndex: Int,
+        endIndex: Int,
+    ): TextMateRegexMatch? {
+        if (startIndex > endIndex) return null
+        regexBackend.find(endPattern, code, startIndex, endIndex)?.let { return it }
+        if (startIndex == endIndex && endIndex > 0) {
+            if (isLineTerminatorEndPattern(endPattern) && !code.substring(0, endIndex).contains('\n')) {
+                return TextMateRegexMatch(endIndex, endIndex)
+            }
+            return regexBackend.find(endPattern, code, endIndex - 1, endIndex)
+                ?.takeIf { match -> match.end == endIndex }
+        }
+        return null
+    }
+
+    private fun isLineTerminatorEndPattern(endPattern: String): Boolean =
+        endPattern == "\\n" || endPattern == "\\r\\n"
 
     private fun findEndPattern(
         endPattern: String,
@@ -1156,9 +1268,17 @@ class OpenCodeTextMateNativeTokenizer(
             startIndex: Int,
             endIndex: Int,
             regexBackend: OpenCodeTextMateRegexBackend,
+            contiguousAnchor: Int,
         ): TextMateRuleMatch? {
             val patternText = pattern.match ?: pattern.begin ?: return null
-            val match = regexBackend.find(patternText, code, startIndex, endIndex) ?: return null
+            val match =
+                regexBackend.find(
+                    pattern = patternText,
+                    input = code,
+                    startIndex = startIndex,
+                    endIndex = endIndex,
+                    contiguousAnchor = contiguousAnchor,
+                ) ?: return null
             return TextMateRuleMatch(rule = this, match = match)
         }
     }
@@ -1171,6 +1291,7 @@ class OpenCodeTextMateNativeTokenizer(
     private data class DelimitedContentTokenizationResult(
         val tokens: List<TextMateScopeToken>,
         val endMatch: TextMateRegexMatch?,
+        val openRules: List<TextMateOpenRule> = emptyList(),
     )
 
     private enum class InjectionPriority {
@@ -1196,6 +1317,7 @@ class OpenCodeTextMateNativeTokenizer(
     )
 
     private companion object {
+        const val NEGATIVE_CONTIGUOUS_ANCHOR_END_PATTERN = "(?!\\G)"
         const val MAX_CAPTURE_TOKENIZE_DEPTH = 48
         val backReferenceRegex = Regex("""\\([1-9][0-9]?)""")
         val textMateRegexMetacharacters =
