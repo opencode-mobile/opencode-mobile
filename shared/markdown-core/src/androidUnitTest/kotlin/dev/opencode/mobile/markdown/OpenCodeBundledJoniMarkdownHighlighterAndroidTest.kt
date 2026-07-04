@@ -133,6 +133,116 @@ class OpenCodeBundledJoniMarkdownHighlighterAndroidTest {
         OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges("cpp-popularity-joni", block.spans)
     }
 
+    @Test
+    fun bundledJoniHighlighterRendersLargePhpPopularitySnippet() {
+        val highlighter =
+            OpenCodeBundledJoniMarkdownHighlighter.create(
+                OpenCodeTextMateResourceReader { resourcePath ->
+                    javaClass.classLoader?.getResource(resourcePath)?.readText()
+                },
+            )
+        val document =
+            OpenCodeMarkdownParser.parse(
+                """
+                ```php
+                <?php
+                // PHP - The #7 Most Popular Language
+
+                // Variables
+                ${'$'}name = "Alice";
+                ${'$'}age = 30;
+                ${'$'}isStudent = true;
+                ${'$'}grades = [85, 92, 78, 95];
+
+                // Function
+                function greet(string ${'$'}personName): string {
+                    return "Hello, ${'$'}personName!";
+                }
+
+                // Class
+                class Student {
+                    private string ${'$'}name;
+                    private int ${'$'}age;
+                    private array ${'$'}grades;
+
+                    public function __construct(string ${'$'}name, int ${'$'}age, array ${'$'}grades) {
+                        ${'$'}this->name = ${'$'}name;
+                        ${'$'}this->age = ${'$'}age;
+                        ${'$'}this->grades = ${'$'}grades;
+                    }
+
+                    public function introduce(): string {
+                        return "I'm {${'$'}this->name}, {${'$'}this->age} years old";
+                    }
+
+                    public function getPassedGrades(): array {
+                        return array_filter(${'$'}this->grades, fn(${'$'}g) => ${'$'}g >= 80);
+                    }
+
+                    public function getName(): string {
+                        return ${'$'}this->name;
+                    }
+                }
+
+                // Main execution
+                echo greet(${'$'}name) . PHP_EOL;
+
+                ${'$'}student = new Student(${'$'}name, ${'$'}age, ${'$'}grades);
+                echo ${'$'}student->introduce() . PHP_EOL;
+
+                ${'$'}passedGrades = ${'$'}student->getPassedGrades();
+                echo "Passed grades: " . implode(", ", ${'$'}passedGrades) . PHP_EOL;
+
+                ${'$'}average = array_sum(${'$'}grades) / count(${'$'}grades);
+                echo "Average: ${'$'}average" . PHP_EOL;
+
+                // Array functions
+                ${'$'}filtered = array_filter(${'$'}grades, fn(${'$'}g) => ${'$'}g >= 80);
+                ${'$'}mapped = array_map(fn(${'$'}g) => "Grade: ${'$'}g", ${'$'}grades);
+
+                // Null coalescing and type hints
+                function getStudentName(?Student ${'$'}student): string {
+                    return ${'$'}student?->getName() ?? "Unknown";
+                }
+
+                echo getStudentName(${'$'}student) . PHP_EOL;
+                ?>
+                ```
+                """.trimIndent(),
+                codeHighlighter = highlighter,
+            )
+
+        assertTrue(document.diagnostics.isEmpty(), "Expected no parser diagnostics, got ${document.diagnostics}")
+        val block = document.blocks.single() as MarkdownBlock.CodeBlock
+        assertTrue(block.spans.isNotEmpty(), "Expected PHP spans for popularity snippet")
+        val roles = block.spans.map { it.role }.toSet()
+        assertTrue(
+            listOf(
+                CodeTokenRole.Comment,
+                CodeTokenRole.Keyword,
+                CodeTokenRole.Type,
+                CodeTokenRole.String,
+                CodeTokenRole.Function,
+                CodeTokenRole.Number,
+                CodeTokenRole.Variable,
+                CodeTokenRole.Operator,
+                CodeTokenRole.Constant,
+            ).all { role -> role in roles },
+            "Expected visibly colorable PHP roles, got ${roles.sortedBy { it.name }}",
+        )
+        block.assertTextHasRole("// PHP - The #7 Most Popular Language", CodeTokenRole.Comment)
+        block.assertTextHasRole("function", CodeTokenRole.Keyword)
+        block.assertTextHasRole("string", CodeTokenRole.Type)
+        block.assertTextHasRole("${'$'}name", CodeTokenRole.Variable)
+        block.assertTextHasRole("\"Alice\"", CodeTokenRole.String)
+        block.assertTextHasRole("greet", CodeTokenRole.Function)
+        block.assertTextHasRole("30", CodeTokenRole.Number)
+        block.assertTextHasRole("PHP_EOL", CodeTokenRole.Constant)
+        block.assertTextHasRole("->", CodeTokenRole.Operator)
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoDuplicateSpanRanges("php-popularity-joni", block.spans)
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges("php-popularity-joni", block.spans)
+    }
+
     private fun MarkdownBlock.CodeBlock.assertTextHasRole(
         text: String,
         role: CodeTokenRole,

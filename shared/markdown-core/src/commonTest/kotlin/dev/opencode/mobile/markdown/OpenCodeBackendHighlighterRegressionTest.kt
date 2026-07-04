@@ -112,6 +112,47 @@ class OpenCodeBackendHighlighterRegressionTest {
         OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges("cpp-popularity", result.spans)
     }
 
+    @Test
+    fun kotlinRegexBackendRendersPhpPopularitySnippet() {
+        val code = phpPopularitySnippet()
+        val result = highlighter(KotlinRegexTextMateRegexBackend).highlight("php", code)
+
+        assertTrue(result.spans.isNotEmpty(), "Expected PHP spans for popularity snippet")
+        val roles = result.spans.map { it.role }.toSet()
+        assertTrue(
+            listOf(
+                CodeTokenRole.Comment,
+                CodeTokenRole.Keyword,
+                CodeTokenRole.Type,
+                CodeTokenRole.String,
+                CodeTokenRole.Function,
+                CodeTokenRole.Number,
+                CodeTokenRole.Variable,
+                CodeTokenRole.Operator,
+                CodeTokenRole.Constant,
+            ).all { role -> role in roles },
+            "Expected visibly colorable PHP roles, got ${roles.sortedBy { it.name }}",
+        )
+        HighlighterRegressionAssertions.assertTokenRoles(
+            code = code,
+            spans = result.spans,
+            expectations =
+                listOf(
+                    "function" to CodeTokenRole.Keyword,
+                    "string" to CodeTokenRole.Type,
+                    "\$name" to CodeTokenRole.Variable,
+                    "\"Alice\"" to CodeTokenRole.String,
+                    "greet" to CodeTokenRole.Function,
+                    "30" to CodeTokenRole.Number,
+                    "PHP_EOL" to CodeTokenRole.Constant,
+                    "->" to CodeTokenRole.Operator,
+                ),
+            label = "php-popularity",
+        )
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoDuplicateSpanRanges("php-popularity", result.spans)
+        OpenCodeMarkdownHighlighterSpanInvariantTest.assertNoOverlappingSpanRanges("php-popularity", result.spans)
+    }
+
     private fun withCacheSnippet(): String =
         """
         // Cache decorator for GET requests
@@ -182,6 +223,41 @@ class OpenCodeBackendHighlighterRegressionTest {
 
             return 0;
         }
+        """.trimIndent()
+
+    private fun phpPopularitySnippet(): String =
+        """
+        <?php
+        // PHP - The #7 Most Popular Language
+
+        // Variables
+        ${'$'}name = "Alice";
+        ${'$'}age = 30;
+        ${'$'}isStudent = true;
+        ${'$'}grades = [85, 92, 78, 95];
+
+        // Function
+        function greet(string ${'$'}personName): string {
+            return "Hello, ${'$'}personName!";
+        }
+
+        // Class
+        class Student {
+            private string ${'$'}name;
+            private int ${'$'}age;
+            private array ${'$'}grades;
+
+            public function __construct(string ${'$'}name, int ${'$'}age, array ${'$'}grades) {
+                ${'$'}this->name = ${'$'}name;
+                ${'$'}this->age = ${'$'}age;
+                ${'$'}this->grades = ${'$'}grades;
+            }
+        }
+
+        echo greet(${'$'}name) . PHP_EOL;
+        ${'$'}student = new Student(${'$'}name, ${'$'}age, ${'$'}grades);
+        echo ${'$'}student->introduce() . PHP_EOL;
+        ?>
         """.trimIndent()
 
     private fun highlighter(backend: OpenCodeTextMateRegexBackend): OpenCodeSyntaxHighlighter =

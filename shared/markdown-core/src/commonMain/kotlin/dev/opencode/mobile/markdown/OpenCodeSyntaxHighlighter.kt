@@ -55,6 +55,7 @@ class OpenCodeSyntaxHighlighter(
                     .normalizeWebSyntaxRoles(code, languageOrAlias)
                     .normalizeJavaSyntaxRoles(code, languageOrAlias)
                     .enhanceCppSyntaxRoles(code, languageOrAlias)
+                    .enhancePhpSyntaxRoles(code, languageOrAlias)
                     .partitionNonOverlappingSpans()
                     .consolidateWithinIdentifiers(code)
                     .mergeAdjacentSemanticSpans(code)
@@ -194,6 +195,14 @@ class OpenCodeSyntaxHighlighter(
                 "objectivec",
             )
 
+        private val phpLanguageAliases =
+            setOf(
+                "php",
+                "php3",
+                "php4",
+                "php5",
+            )
+
         private val cppKeywordIdentifiers =
             setOf(
                 "alignas",
@@ -281,6 +290,80 @@ class OpenCodeSyntaxHighlighter(
                 "vector",
                 "void",
                 "wchar_t",
+            )
+
+        private val phpKeywordIdentifiers =
+            setOf(
+                "abstract",
+                "as",
+                "catch",
+                "class",
+                "clone",
+                "const",
+                "declare",
+                "default",
+                "echo",
+                "else",
+                "elseif",
+                "extends",
+                "final",
+                "finally",
+                "fn",
+                "for",
+                "foreach",
+                "function",
+                "global",
+                "if",
+                "implements",
+                "interface",
+                "namespace",
+                "new",
+                "private",
+                "protected",
+                "public",
+                "readonly",
+                "return",
+                "static",
+                "switch",
+                "throw",
+                "trait",
+                "try",
+                "use",
+                "while",
+                "yield",
+            )
+
+        private val phpTypeIdentifiers =
+            setOf(
+                "array",
+                "bool",
+                "callable",
+                "false",
+                "float",
+                "int",
+                "iterable",
+                "mixed",
+                "never",
+                "null",
+                "object",
+                "self",
+                "string",
+                "true",
+                "void",
+            )
+
+        private val phpConstantIdentifiers =
+            setOf(
+                "PHP_EOL",
+                "PHP_VERSION",
+                "__CLASS__",
+                "__DIR__",
+                "__FILE__",
+                "__FUNCTION__",
+                "__LINE__",
+                "__METHOD__",
+                "__NAMESPACE__",
+                "__TRAIT__",
             )
 
         private val webExpressionKeywordIdentifiers =
@@ -472,6 +555,129 @@ class OpenCodeSyntaxHighlighter(
                     }
                 if (role != null) {
                     addSpan(start, end, role)
+                }
+            }
+
+            return spans.sortedBy { it.start }
+        }
+
+        private fun List<CodeSpan>.enhancePhpSyntaxRoles(
+            code: String,
+            languageOrAlias: String?,
+        ): List<CodeSpan> {
+            val language = normalizedLanguage(languageOrAlias)
+            if (language !in phpLanguageAliases || code.isEmpty()) return this
+
+            val spans = toMutableList()
+            val protectedRanges = mutableListOf<IntRange>()
+            var index = 0
+
+            fun addSpan(
+                start: Int,
+                end: Int,
+                role: CodeTokenRole,
+            ) {
+                if (start < end) {
+                    spans += CodeSpan(start, end, role)
+                }
+            }
+
+            while (index < code.length) {
+                val current = code[index]
+                val next = code.getOrNull(index + 1)
+                when {
+                    code.startsWith("<?php", index) -> {
+                        addSpan(index, index + 5, CodeTokenRole.Keyword)
+                        index += 5
+                    }
+                    code.startsWith("<?=", index) -> {
+                        addSpan(index, index + 3, CodeTokenRole.Keyword)
+                        index += 3
+                    }
+                    code.startsWith("?>", index) -> {
+                        addSpan(index, index + 2, CodeTokenRole.Keyword)
+                        index += 2
+                    }
+                    current == '/' && next == '/' -> {
+                        val end = code.indexOf('\n', index).let { found -> if (found == -1) code.length else found }
+                        addSpan(index, end, CodeTokenRole.Comment)
+                        protectedRanges += index until end
+                        index = end
+                    }
+                    current == '#' -> {
+                        val end = code.indexOf('\n', index).let { found -> if (found == -1) code.length else found }
+                        addSpan(index, end, CodeTokenRole.Comment)
+                        protectedRanges += index until end
+                        index = end
+                    }
+                    current == '/' && next == '*' -> {
+                        val end = code.indexOf("*/", index + 2).let { found -> if (found == -1) code.length else found + 2 }
+                        addSpan(index, end, CodeTokenRole.Comment)
+                        protectedRanges += index until end
+                        index = end
+                    }
+                    current == '"' || current == '\'' -> {
+                        val quote = current
+                        var cursor = index + 1
+                        var escaped = false
+                        while (cursor < code.length) {
+                            val char = code[cursor]
+                            if (escaped) {
+                                escaped = false
+                            } else if (char == '\\') {
+                                escaped = true
+                            } else if (char == quote) {
+                                cursor += 1
+                                break
+                            } else if (char == '\n' && quote == '\'') {
+                                break
+                            }
+                            cursor += 1
+                        }
+                        addSpan(index, cursor, CodeTokenRole.String)
+                        protectedRanges += index until cursor
+                        index = cursor
+                    }
+                    else -> index += 1
+                }
+            }
+
+            fun isProtected(position: Int): Boolean = protectedRanges.any { range -> position in range }
+
+            Regex("""\$[A-Za-z_][A-Za-z0-9_]*""").findAll(code).forEach { match ->
+                if (!isProtected(match.range.first)) {
+                    addSpan(match.range.first, match.range.last + 1, CodeTokenRole.Variable)
+                }
+            }
+
+            numberRegex.findAll(code).forEach { match ->
+                if (!isProtected(match.range.first)) {
+                    addSpan(match.range.first, match.range.last + 1, CodeTokenRole.Number)
+                }
+            }
+
+            identifierRegex.findAll(code).forEach { match ->
+                val word = match.value
+                val start = match.range.first
+                val end = match.range.last + 1
+                if (isProtected(start)) return@forEach
+
+                val role =
+                    when {
+                        word in phpKeywordIdentifiers -> CodeTokenRole.Keyword
+                        word in phpConstantIdentifiers -> CodeTokenRole.Constant
+                        word in phpTypeIdentifiers || word.firstOrNull()?.isUpperCase() == true -> CodeTokenRole.Type
+                        code.nextNonWhitespace(end) == '(' -> CodeTokenRole.Function
+                        else -> null
+                    }
+                if (role != null) {
+                    addSpan(start, end, role)
+                }
+            }
+
+            Regex("""(?:->|::|\?->|\?\?|=>|[+\-*/%=<>!&|.]+)""").findAll(code).forEach { match ->
+                if (!isProtected(match.range.first)) {
+                    addSpan(match.range.first, match.range.last + 1, CodeTokenRole.Operator)
                 }
             }
 

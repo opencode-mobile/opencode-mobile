@@ -214,6 +214,11 @@
   C/C++ lexical role enhancement for obvious comments, strings, keywords, types,
   functions, constants, and numbers until full tokenizer parity covers those
   scopes natively.
+- 2026-07-04: Fixed the PHP popularity-snippet regression where Android styled
+  `<?php` but left ordinary comments and code grey. The shared highlighter now
+  adds PHP lexical role enhancement for comments, strings, variables, keywords,
+  types, functions, constants, operators, and numbers while broader TextMate
+  tokenizer parity remains incremental.
 - 2026-07-04: Closed top-10 `*-basic` Shiki golden gates on both Android/Joni
   (10/10) and iOS/libonig (10/10). iOS Kotlin/Swift/Go gaps required
   `ONIG_OPTION_CAPTURE_GROUP` at libonig compile time. Shrunk layer-7
@@ -276,6 +281,9 @@
 - 2026-07-04: Focused Android/Joni and shared backend C++ popularity-snippet
   regressions passed with explicit role checks for comment, keyword, type,
   string, function, and number spans.
+- 2026-07-04: Focused Android/Joni and shared backend PHP popularity-snippet
+  regressions passed with explicit role checks for comment, keyword, type,
+  string, function, number, variable, operator, and constant spans.
 - 2026-07-04: `./gradlew :app:assembleDebug` passed after wiring production
   Android markdown highlighting to the injected application-context asset
   reader.
