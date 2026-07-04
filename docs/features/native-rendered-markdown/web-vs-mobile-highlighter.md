@@ -109,13 +109,18 @@ diagnostic.
 
 ## Parity snapshot (native vs Shiki/web oracle)
 
-| Language | Exact Shiki parity on mobile? |
-|----------|-------------------------------|
-| `diff`, `json`, `yaml`, `css`, `html` | Yes (focused Android/Joni oracle) |
-| JavaScript / TypeScript | Partial — relies on per-language fixups |
-| Python, Java, C# | Partial — relies on per-language fixups |
+| Language / area | Exact Shiki semantic parity on mobile? |
+|-----------------|----------------------------------------|
+| Top 10 (`javascript`, `typescript`, `python`, `kotlin`, `swift`, `json`, `yaml`, `shell`, `rust`, `go`) | **Yes** — `*-basic` gates pass on Android/Joni and iOS/libonig (2026-07-04) |
+| `diff`, `json`, `yaml`, `css`, `html` (Milestone 0 subset) | Yes (focused oracle, includes overlap with top 10) |
+| Java, C#, popular-language pack | Partial — smoke tests and some fixtures; not full golden gates |
 | Nested markdown fences | Divergent (intentional app parser extension) |
-| Full broad language set | Open (broad Shiki golden gate still ignored) |
+| Full broad language set (36+) | Open (broad `@Ignore` Shiki golden gate) |
+| Live web theme colors | Open — semantic roles gated; visual parity is [Path A](./shiki-visual-parity-path-a-plan.md) |
+
+Oracle tests use `opencode-semantic-golden`, which collapses Shiki scopes into the
+same 18 `CodeTokenRole` values mobile uses. That is **semantic** parity, not
+production palette parity.
 
 ## Where divergence concentrates
 

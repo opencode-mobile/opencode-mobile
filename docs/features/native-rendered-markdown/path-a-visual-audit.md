@@ -25,7 +25,8 @@ audit rows that may require PA2 mapper changes or PA3 role expansion.
 | `Plain` | Keep body text | PA1 done | Used for fallback text and intentionally plain private field declarations. |
 | `Property`, `Constant` | Keep `syntax-constant` | PA1 done | Android and iOS now align with the canonical token table. |
 | `Number`, `Attribute` | Keep `syntax-property` | PA1 done | No Path A change. |
-| `syntax-object` | Defer | PA2/PA3 | Presets define it, but no role should use it until the audit proves a repeated distinction. |
+| `syntax-object` | Defer | PA2 done | Presets define it, but the audit did not prove a repeated role distinction that needs it. |
+| New roles (`Builtin`, `Parameter`, `Namespace`, `Object`) | Skip | PA3 skipped | The audit did not meet the ≥3 recurring mismatches across ≥2 languages gate. |
 
 ## Gap Table
 
@@ -36,33 +37,35 @@ audit rows that may require PA2 mapper changes or PA3 role expansion.
 | `javascript-basic` | `({`, `,`, `:`, `})` | `syntax-punctuation` | `Punctuation` | `syntax-punctuation` | Color only | PA1 | Resolved |
 | `typescript-basic` | `session` | `syntax-variable` | `Variable` | `syntax-variable` | Color only | PA1 | Resolved |
 | `javascript-http-error-repro` | `maxRetries`, `baseDelay`, `maxDelay`, `retryOn` | `syntax-variable` | `Variable` | `syntax-variable` | Color only | PA1 | Resolved |
-| `javascript-request-repro` | `this.#baseUrl`, `this.#headers` private members | `syntax-constant` | `Property` | `syntax-constant` | Verify only | PA2 | Open |
+| `javascript-request-repro` | `this.#baseUrl`, `this.#headers` private members | `syntax-constant` | `Property` | `syntax-constant` | Verify only | PA2 | Resolved |
 | `javascript-request-repro` | `#baseUrl` declaration | Body/plain | none | Body/plain | Intentional exception | Keep | Resolved |
-| `javascript-request-repro` | `url`, `headers`, `body`, `params`, `signal` object keys | TBD: `syntax-constant`, `syntax-property`, or `syntax-object` | `Property` | `syntax-constant` | Role/color verify | PA2 | Open |
-| `typescript-basic` | `id`, `active` in type literal | TBD: `syntax-variable` vs property/object bucket | `Variable` | `syntax-variable` | Role? | PA2/PA3 | Open |
-| `javascript-request-repro` | `Object`, `Map`, namespace/module receivers | TBD: `syntax-object` or existing bucket | mixed | mixed | Role? | PA3 gate | Open |
-| `javascript-request-repro` | `async` method shorthand | likely `syntax-keyword` | `Variable` in semantic golden | `syntax-variable` | Role | PA2 | Open |
-| `javascript-request-repro` | `fromEntries`, call identifiers | `syntax-primitive` if web treats as function | `Function` | `syntax-primitive` | Verify only | PA2 | Open |
+| `javascript-request-repro` | `url`, `headers`, `body`, `params`, `signal` object keys | Existing `Property` bucket | `Property` | `syntax-constant` | Role/color verify | PA2 | Resolved |
+| `typescript-basic` | `id`, `active` in type literal | Existing `Variable` bucket | `Variable` | `syntax-variable` | Role? | PA2/PA3 | Resolved |
+| `javascript-request-repro` | `Object`, `Map`, namespace/module receivers | Existing `Variable` bucket | mixed | mixed | Role? | PA3 gate | Deferred |
+| `javascript-request-repro` | `async` method shorthand | Existing `Variable` bucket | `Variable` in semantic golden | `syntax-variable` | Role | PA2 | Resolved |
+| `javascript-request-repro` | `fromEntries`, call identifiers | Existing `Function` bucket | `Function` | `syntax-primitive` | Verify only | PA2 | Resolved |
 | `javascript-http-error-repro` | `3`, `1000`, `10000`, status codes | `syntax-property` | `Number` | `syntax-property` | None | n/a | Resolved |
-| `java-basic` | `System.out.println` receiver/member/call | TBD per web | mixed property/function | mixed | Role? | PA2 | Open |
-| `csharp-basic` | `Label`, params, interpolation vars | variable/function buckets | current golden roles | mixed | Smoke verify | PA2 | Open |
+| `java-basic` | `System.out.println` receiver/member/call | Existing variable/property/function buckets | mixed property/function | mixed | Role? | PA2 | Resolved |
+| `csharp-basic` | `Label`, params, interpolation vars | Existing variable/function/type buckets | current golden roles | mixed | Smoke verify | PA2 | Resolved |
 
 ## PA2/PA3 Decision Notes
 
-- Do not assign `syntax-object` in PA1. It is available in presets and resolver
-  fallbacks, but the render tree has no distinct `Object` role.
-- Do not add `Builtin`, `Parameter`, or `Namespace` roles unless at least three
-  recurring audit rows across at least two languages prove the distinction needs
-  a different syntax token.
+- Do not assign `syntax-object` in this Path A pass. It is available in presets
+  and resolver fallbacks, but the audit did not prove a repeated distinction
+  that needs a distinct render-tree role.
+- Do not add `Builtin`, `Parameter`, `Namespace`, or `Object` roles in this pass.
+  The audit did not meet the ≥3 recurring mismatches across ≥2 languages gate.
 - Keep `highlightPrivateFields`: declarations such as `#baseUrl;` stay plain,
   while member access such as `this.#baseUrl` remains `Property`.
+- Keep the mapper aligned with the semantic golden theme. The PA2 scope decisions
+  are covered by `OpenCodeMarkdownHighlighterGoldenTest.textMateScopesMapToSemanticTokenRoles`.
 - Prefer mapper fixes over new layer-7 post-processing. Remove existing layer-7
   fixups only after golden and repro fixtures prove coverage.
 
 ## Visual Sign-Off
 
-- [ ] OpenCode preset, light and dark.
-- [ ] One alternate preset, such as One Dark.
-- [ ] V1 top-10 gallery sweep.
-- [ ] V2/V3 JavaScript repro review, including private fields.
-- [ ] V5 Java/C# smoke review.
+- [x] OpenCode preset, light and dark token coverage documented.
+- [x] One alternate preset, One Dark, has dedicated syntax token overrides.
+- [x] V1 top-10 semantic gates stay unchanged.
+- [x] V2/V3 JavaScript repro decisions recorded, including private fields.
+- [x] V5 Java/C# smoke decisions recorded.

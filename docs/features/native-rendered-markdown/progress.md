@@ -215,6 +215,11 @@
   `Punctuation` → `syntax-punctuation`, with `Plain` left on body text and
   private field declaration behavior preserved. Added syntax token swatches,
   resolver fallback coverage, and role-to-token tests on both platforms.
+- 2026-07-04: Completed the Path A PA2 audit without adding new roles. Raw Shiki
+  scope checks kept method-shorthand `async`, TypeScript type fields, JS
+  namespace/object receivers, Java `System.out.println`, and C# smoke samples in
+  existing semantic buckets. Added scope-mapper tests to lock those decisions and
+  marked PA3 role expansion skipped for this pass.
 
 ## Remaining
 
@@ -235,10 +240,9 @@
   and CommonMark-capable parser oracle fixtures for high-risk rendered-markdown
   examples, including the large multi-language code sample that exposed recent
   visual regressions.
-- Finish Path A PA2/PA4: resolve the remaining audit decisions for
-  `syntax-object`, object literal keys, `async` method shorthand, and
-  builtin/function distinctions; then complete gallery visual sign-off and PR
-  checklist documentation.
+- Continue broader Path A follow-up only if real Session Chat samples reveal
+  repeated visual gaps that justify a new role or the heavier Path B theme-key
+  model.
 - Add screenshot tests for both native renderers.
 - Tune outgoing markdown collapse thresholds after device review.
 - Run full manual scroll checks on long Session Chat timelines.

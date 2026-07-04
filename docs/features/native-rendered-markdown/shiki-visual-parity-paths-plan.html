@@ -79,16 +79,17 @@
     </p>
 
     <div class="metrics">
-      <div class="metric"><strong>Semantic</strong><span>18 <code>CodeTokenRole</code> values — gated</span></div>
-      <div class="metric"><strong>Visual</strong><span>~10 syntax tokens — still lossy</span></div>
-      <div class="metric"><strong style="color:var(--ok)">Path A</strong><span>Enriched roles + tokens (first)</span></div>
-      <div class="metric"><strong>Path B</strong><span>Scopes + Shiki theme (later)</span></div>
+      <div class="metric"><strong>18</strong><span><code>CodeTokenRole</code> values (semantic)</span></div>
+      <div class="metric"><strong>16</strong><span>visual buckets (15 syntax/diff + plain)</span></div>
+      <div class="metric"><strong>11</strong><span>product <code>syntax-*</code> theme tokens</span></div>
+      <div class="metric"><strong>2–6×</strong><span>scope compression vs Shiki leaf scopes</span></div>
     </div>
 
     <div class="note">
-      Shiki golden tests use <code>opencode-semantic-golden</code>, not the live web
-      theme. Passing a <code>*-basic</code> gate proves role agreement, not
-      production color parity.
+      <strong><code>opencode-semantic-golden</code></strong> is a test-only Shiki theme
+      in <code>generate-markdown-highlighter-fixtures.mjs</code>. It maps scopes into
+      the same 18 roles mobile uses. Passing a <code>*-basic</code> gate proves
+      <em>semantic</em> agreement, not live web palette parity.
     </div>
 
     <h2>Where color is lost</h2>
@@ -133,12 +134,13 @@
       <tr><td>A4</td><td>Broader golden gates + layer-7 prune</td><td>Fewer flat/wrong blocks</td></tr>
     </table>
 
-    <h3>Likely early wins (A1)</h3>
+    <h3>PA1 wiring (done)</h3>
     <table>
-      <tr><th>Role</th><th>Today</th><th>Web tendency</th></tr>
-      <tr><td><code>Variable</code></td><td><code>text-primary</code></td><td>Often tinted, not body color</td></tr>
-      <tr><td><code>Operator</code></td><td><code>text-primary</code></td><td>Subtle accent</td></tr>
-      <tr><td><code>Function</code></td><td><code>syntax-primitive</code></td><td>Builtins vs user fns may differ</td></tr>
+      <tr><th>Role</th><th>Was</th><th>Now</th></tr>
+      <tr><td><code>Variable</code></td><td><code>text-primary</code></td><td><code>syntax-variable</code></td></tr>
+      <tr><td><code>Operator</code></td><td><code>text-primary</code></td><td><code>syntax-operator</code></td></tr>
+      <tr><td><code>Punctuation</code></td><td><code>text-primary</code></td><td><code>syntax-punctuation</code></td></tr>
+      <tr><td><code>syntax-object</code></td><td>in preset</td><td>no role mapped yet</td></tr>
     </table>
 
     <h2>Path B — Work packages</h2>
@@ -180,7 +182,8 @@
 
     <p style="font-size:13px">
       Source: <code>shiki-visual-parity-paths-plan.md</code> ·
-      Layer context: <code>web-vs-mobile-highlighter.md</code>
+      Implementation: <code>shiki-visual-parity-path-a-plan.html</code> ·
+      Layer context: <code>web-vs-mobile-highlighter.html</code>
     </p>
   </main>
 </body>

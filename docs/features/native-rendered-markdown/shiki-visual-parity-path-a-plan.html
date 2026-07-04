@@ -74,19 +74,19 @@
     <h2>Milestones</h2>
     <div class="metrics">
       <div class="metric"><strong>PA0</strong><span>Visual audit + gap table</span></div>
-      <div class="metric"><strong>PA1</strong><span>Wire existing tokens · done</span></div>
-      <div class="metric"><strong>PA2</strong><span>Mapper alignment</span></div>
-      <div class="metric"><strong>PA3</strong><span>Optional new roles</span></div>
-      <div class="metric"><strong>PA4</strong><span>Gallery + sign-off</span></div>
+      <div class="metric"><strong>PA1</strong><span>Token wiring · done</span></div>
+      <div class="metric"><strong>PA2</strong><span>Mapper audit · done</span></div>
+      <div class="metric"><strong>PA3</strong><span>Skipped · no role gate</span></div>
+      <div class="metric"><strong>PA4</strong><span>Docs + tests · done</span></div>
     </div>
 
     <h2>Implementation flow</h2>
     <div class="flow">
       <div class="step"><strong>PA0</strong>Audit corpus<br>V1–V5 snippets</div>
       <div class="step"><strong>PA1</strong>Variable → syntax-variable<br>Operator, Punctuation</div>
-      <div class="step"><strong>PA2</strong>Scope mapper<br>Golden parity</div>
-      <div class="step"><strong>PA3?</strong>New roles<br>Only if gated</div>
-      <div class="step"><strong>PA4</strong>Docs + gallery<br>Web side-by-side</div>
+      <div class="step"><strong>PA2</strong>Scope mapper<br>No expansion needed</div>
+      <div class="step"><strong>PA3</strong>New roles<br>Skipped</div>
+      <div class="step"><strong>PA4</strong>Docs + gallery<br>Sign-off recorded</div>
     </div>
 
     <h2>Single PR scope (PA0–PA4)</h2>
@@ -94,8 +94,8 @@
       <tr><th>In PR</th><th>Out of PR</th></tr>
       <tr><td>PA0 audit + gap table</td><td>PA5 tokenizer golden promotion</td></tr>
       <tr><td>PA1 role → syntax token wiring</td><td>Path B scope + live theme</td></tr>
-      <tr><td>PA2 mapper fixes from audit</td><td>Broad <code>@Ignore</code> suite</td></tr>
-      <tr><td>PA3 roles if audit gate passes</td><td></td></tr>
+      <tr><td>PA2 mapper audit and tests</td><td>Broad <code>@Ignore</code> suite</td></tr>
+      <tr><td>PA3 skipped because role gate did not pass</td><td></td></tr>
       <tr><td>PA4 docs, gallery, tests</td><td></td></tr>
     </table>
 
@@ -103,8 +103,8 @@
     <ol style="color:var(--muted); font-size:14px;">
       <li>PA0 — audit corpus, commit <code>path-a-visual-audit.md</code></li>
       <li>PA1 — Android + iOS renderers, ThemeResolver, tokens.md</li>
-      <li>PA2 — mapper + golden regen if roles change</li>
-      <li>PA3 — new roles only if gated</li>
+      <li>PA2 — mapper audit, no role expansion, no golden regen</li>
+      <li>PA3 — skipped because no new-role gate passed</li>
       <li>Layer-7 shrink where redundant</li>
       <li>PA4 — gallery, docs, sign-off checklist</li>
     </ol>
@@ -170,9 +170,9 @@
       <li>Web side-by-side noted for V1–V3 in PR description</li>
     </ul>
 
-    <h2>PA1 — Role → token changes</h2>
+    <h2>PA1 — Role → token mapping</h2>
     <table>
-      <tr><th>Role</th><th>Today</th><th>PA1 target</th></tr>
+      <tr><th>Role</th><th>Before</th><th>After (PA1)</th></tr>
       <tr><td><code>Variable</code></td><td><code>text-primary</code></td><td><code>syntax-variable</code></td></tr>
       <tr><td><code>Operator</code></td><td><code>text-primary</code></td><td><code>syntax-operator</code></td></tr>
       <tr><td><code>Punctuation</code></td><td><code>text-primary</code></td><td><code>syntax-punctuation</code></td></tr>

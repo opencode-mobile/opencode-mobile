@@ -66,16 +66,23 @@ with the production web palette.
 
 ### Role → color mapping is intentionally lossy
 
-`docs/design-system/tokens.md` maps 18 roles to roughly ten syntax tokens.
-Notable collapses that make mobile look flatter than web:
+`docs/design-system/tokens.md` maps 18 roles to **16 visual buckets** (15
+syntax/diff theme tokens plus plain body text). Product theme presets define
+**11** named `syntax-*` colors. Shiki leaf scopes per fixture still outnumber
+mobile roles by roughly **2×–6×** (see `path-a-visual-audit.md`).
 
-| `CodeTokenRole` | Mobile syntax token | Typical web treatment |
-|-----------------|---------------------|------------------------|
-| `Variable` | `text-primary` (plain body color) | Often still tinted or distinct from punctuation |
-| `Operator`, `Punctuation`, `Plain` | `text-primary` | Web theme may separate operators from identifiers |
+Notable collapses that can still make mobile look flatter than web:
+
+| `CodeTokenRole` | Mobile syntax token | Notes |
+|-----------------|---------------------|-------|
+| `Variable` | `syntax-variable` | Wired in PA1 |
+| `Operator` | `syntax-operator` | Wired in PA1 |
+| `Punctuation` | `syntax-punctuation` | Wired in PA1 |
 | `Function` | `syntax-primitive` | Web may distinguish builtins vs user functions |
-| `Property`, `Constant` | `syntax-constant` | Web may split object keys, enums, and `this` |
-| `Number`, `Attribute` | `syntax-property` | Shared peach bucket |
+| `Property`, `Constant` | `syntax-constant` | Shared bucket |
+| `Number`, `Attribute` | `syntax-property` | Shared bucket |
+| `Plain` | `text-primary` | Fallback and intentional exceptions |
+| `syntax-object` | *(none yet)* | In presets; no role mapped |
 
 ## Path A — Enriched semantic model (recommended first)
 

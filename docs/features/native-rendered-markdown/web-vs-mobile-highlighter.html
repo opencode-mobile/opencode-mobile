@@ -187,8 +187,8 @@
       <tr>
         <td>5</td><td>Tokenizer</td>
         <td><code>vscode-textmate</code> (mature)</td>
-        <td><code>OpenCodeTextMateNativeTokenizer</code> (scaffold)</td>
-        <td><span class="pill risk">Primary divergence</span></td>
+        <td><code>OpenCodeTextMateNativeTokenizer</code> (hand-written; top-10 gated)</td>
+        <td><span class="pill warn">Top-10 gated</span> broader set open</td>
       </tr>
       <tr>
         <td>6</td><td>Token → color / role</td>
@@ -199,7 +199,7 @@
       <tr>
         <td>7</td><td>Post-processing</td>
         <td>None</td>
-        <td>Per-language fixups (JS/Java/C#/Python)</td>
+        <td>Per-language fixups (JS private fields, Python docstrings; JS/TS web remap shrunk)</td>
         <td><span class="pill risk">Symptom of L5/L6</span></td>
       </tr>
       <tr>
@@ -224,13 +224,23 @@
 
     <h2>Parity snapshot (native vs Shiki oracle)</h2>
     <table>
-      <tr><th>Language</th><th>Exact Shiki parity on mobile?</th></tr>
-      <tr><td><code>diff</code>, <code>json</code>, <code>yaml</code>, <code>css</code>, <code>html</code></td><td><span class="pill ok">Yes</span> focused Android/Joni oracle</td></tr>
-      <tr><td>JavaScript / TypeScript</td><td><span class="pill warn">Partial</span> relies on fixups</td></tr>
-      <tr><td>Python, Java, C#</td><td><span class="pill warn">Partial</span> relies on fixups</td></tr>
+      <tr><th>Language / area</th><th>Exact Shiki semantic parity on mobile?</th></tr>
+      <tr><td>Top 10 Session Chat languages</td><td><span class="pill ok">Yes</span> all <code>*-basic</code> gates pass on Android/Joni and iOS/libonig (2026-07-04)</td></tr>
+      <tr><td><code>diff</code>, <code>css</code>, <code>html</code> (M0 subset)</td><td><span class="pill ok">Yes</span> focused oracle (overlaps top 10 for json/yaml)</td></tr>
+      <tr><td>Java, C#, popular-language pack</td><td><span class="pill warn">Partial</span> smoke tests; not full golden gates</td></tr>
       <tr><td>Nested markdown fences</td><td><span class="pill warn">Divergent</span> intentional parser extension</td></tr>
-      <tr><td>Full broad language set</td><td><span class="pill risk">Open</span> broad golden gate ignored</td></tr>
+      <tr><td>Full broad language set (36+)</td><td><span class="pill risk">Open</span> broad <code>@Ignore</code> golden gate</td></tr>
+      <tr><td>Live web theme colors</td><td><span class="pill warn">Open</span> semantic roles gated; visual work is Path A</td></tr>
     </table>
+
+    <div class="panel">
+      <p style="color:var(--text); margin:0; font-size:14px;">
+        Oracle tests use <code>opencode-semantic-golden</code>: Shiki forced into the
+        same 18 <code>CodeTokenRole</code> buckets mobile uses. Mobile compresses
+        Shiki leaf scopes by roughly <strong>2×–6×</strong> per fixture (3–55 scopes →
+        2–10 roles). See <code>shiki-visual-parity-paths-plan.html</code>.
+      </p>
+    </div>
 
     <h2>Where divergence concentrates</h2>
     <div class="panel">
@@ -246,7 +256,9 @@
 
     <p style="font-size:13px">
       Source of truth: <code>web-vs-mobile-highlighter.md</code>. See also
-      <code>parity-gaps.md</code> and <code>progress.md</code>.
+      <code>tokenizer-layer5-top10-sync-plan.html</code>,
+      <code>shiki-visual-parity-paths-plan.html</code>,
+      <code>parity-gaps.md</code>, and <code>progress.md</code>.
     </p>
   </main>
 </body>

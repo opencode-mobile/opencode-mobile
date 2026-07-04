@@ -41,10 +41,10 @@
   `*-basic` Shiki semantic golden gates pass on both Android/Joni and iOS/libonig
   (2026-07-04). Full byte-for-byte Shiki parity for all 36+ bundled languages
   remains open.
-- Owner or next action: complete Path A PA2/PA4 per
-  [shiki-visual-parity-path-a-plan.md](./shiki-visual-parity-path-a-plan.md):
-  audit object/property/function edge cases, decide whether `syntax-object`
-  needs a role, and finish visual sign-off.
+- Owner or next action: keep Path A closed unless real Session Chat samples show
+  repeated visual gaps that justify a new role or the heavier Path B theme-key
+  model. `syntax-object` remains available as a resolver token but unused by the
+  render-tree role mapping.
 
 ## Markdown Parse Performance
 

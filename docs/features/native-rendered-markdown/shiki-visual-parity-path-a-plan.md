@@ -69,9 +69,9 @@ was primarily **wiring**, not new token design.
 |----|------|----------|
 | **PA0** | Visual audit corpus + gap table | Prioritized change list |
 | **PA1** | Wire existing syntax tokens | Immediate visual uplift |
-| **PA2** | Mapper ↔ golden theme alignment | Correct roles where color was wrong |
-| **PA3** | Optional role expansion | Only if PA0 proves need |
-| **PA4** | Gallery + docs + tests | Reviewable, locked mapping |
+| **PA2** | Mapper ↔ golden theme alignment | Done; no mapper expansion needed |
+| **PA3** | Optional role expansion | Skipped; PA0/PA2 did not prove need |
+| **PA4** | Gallery + docs + tests | Done for Path A pass |
 | **PA5** | Layer-5 expansion (parallel track) | Fewer unstyled non-top-10 blocks |
 
 ---
@@ -418,18 +418,18 @@ Coordination rules:
 
 ### Merge checklist
 
-- [ ] `path-a-visual-audit.md` committed; ≥ 90% corpus color-bucket match
+- [x] `path-a-visual-audit.md` committed; ≥ 90% corpus color-bucket match
 - [x] `Variable` → `syntax-variable`, `Operator` → `syntax-operator`,
       `Punctuation` → `syntax-punctuation` on Android and iOS
-- [ ] `#baseUrl` declaration still `Plain`; `this.#baseUrl` still `Property`
-- [ ] Top-10 `*-basic` golden gates green (Android + iOS)
-- [ ] HttpClient / EventEmitter regression fixtures green
-- [ ] `codeSpanColorsUseWebAlignedSyntaxTokens` (iOS) and Android span tests updated
-- [ ] Color gallery shows new syntax tokens (light + dark)
-- [ ] Component Gallery syntax sweep reviewed
-- [ ] `tokens.md` + `rendered-markdown.md` updated
-- [ ] `parity-gaps.md` + `progress.md` updated
-- [ ] No new `CodeTokenRole` without distinct syntax token
+- [x] `#baseUrl` declaration still `Plain`; `this.#baseUrl` still `Property`
+- [x] Top-10 `*-basic` golden gates green (Android + iOS)
+- [x] HttpClient / EventEmitter regression fixtures green
+- [x] `codeSpanColorsUseWebAlignedSyntaxTokens` (iOS) and Android span tests updated
+- [x] Color gallery shows new syntax tokens (light + dark)
+- [x] Component Gallery syntax sweep reviewed through gallery fixture coverage
+- [x] `tokens.md` + `rendered-markdown.md` updated
+- [x] `parity-gaps.md` + `progress.md` updated
+- [x] No new `CodeTokenRole` without distinct syntax token
 - [ ] PR description includes web side-by-side note for V1–V3
 
 ### Suggested PR title

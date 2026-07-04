@@ -105,15 +105,15 @@
       <tr><td><span class="pill ok">0 Locked</span></td><td>JSON, YAML</td><td>Gate pattern proven</td></tr>
       <tr><td>1 Structural</td><td>Kotlin, Go, Rust, Shell</td><td>Android/Joni + iOS/libonig green</td></tr>
       <tr><td><span class="pill ok">2 Stateful</span></td><td>Swift</td><td>Android/Joni + iOS/libonig green</td></tr>
-      <tr><td>3 Hard</td><td>Python</td><td>Strings, docstrings</td></tr>
-      <tr><td>4 Hardest</td><td>JavaScript, TypeScript</td><td>Templates, ASI, open rules</td></tr>
+      <tr><td><span class="pill ok">3 Hard</span></td><td>Python</td><td>Android/Joni + iOS/libonig green; docstring fixup remains</td></tr>
+      <tr><td><span class="pill ok">4 Hardest</span></td><td>JavaScript, TypeScript</td><td>Android/Joni + iOS/libonig green; layer-7 shrunk</td></tr>
     </table>
 
     <h2>Milestones</h2>
     <table>
       <tr><th>ID</th><th>Goal</th></tr>
       <tr><td>M0</td><td>Plan locked (this doc)</td></tr>
-      <tr><td>M1</td><td>All top-10 gates pass on Android/Joni (10/10) after JS/TS ASI lookbehind, line-comment EOL, and type-literal mapping fixes</td></tr>
+      <tr><td>M1</td><td>All top-10 gates pass on Android/Joni (10/10) — ASI lookbehind, line-comment EOL, contiguous anchors</td></tr>
       <tr><td>M2</td><td>Phase 1 green on Android/Joni + iOS/libonig — Kotlin, Go, Rust, Shell</td></tr>
       <tr><td>M3</td><td>Swift green on Android/Joni + iOS/libonig</td></tr>
       <tr><td>M4</td><td>Python green; triple-quote fixup still required for docstring regression</td></tr>
@@ -134,8 +134,7 @@
       (10/10). Layer-7 <code>normalizeWebSyntaxRoles</code> was shrunk for JS/TS;
       <code>highlightPrivateFields</code> and
       <code>highlightPythonTripleQuotedStrings</code> remain for regression
-      fixtures. Next: revisit enabling the broad <code>@Ignore</code> Shiki golden
-      test and close non-top-10 language gaps.
+      fixtures. Next: Path A visual parity, broader golden promotion, non-top-10 gaps.
     </p>
 
     <p style="font-size:13px">

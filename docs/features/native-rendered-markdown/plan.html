@@ -114,8 +114,8 @@
 
     <section class="grid">
       <div class="card"><span class="label">Runtime</span><strong>No WebView</strong><p>HTML assets, JavaScript bridges, and measured-height callbacks leave the app runtime.</p></div>
-      <div class="card"><span class="label">Shared Core</span><strong>KMP render tree</strong><p>Android consumes the shared parser directly; iOS has the framework build phase and a temporary parser mirror.</p></div>
-      <div class="card"><span class="label">Highlighting</span><strong>Gate open</strong><p>Semantic fallback exists, but TextMate/Oniguruma must pass before claiming Shiki-level highlighting.</p></div>
+      <div class="card"><span class="label">Shared Core</span><strong>KMP render tree</strong><p>Android calls the shared parser directly; iOS decodes the versioned JSON render tree from <code>OpenCodeMarkdownCore</code>.</p></div>
+      <div class="card"><span class="label">Highlighting</span><strong>Top-10 semantic gate</strong><p>TextMate/Joni + libonig pass all ten <code>*-basic</code> Shiki semantic oracles. Visual parity and broader language gates remain open.</p></div>
       <div class="card"><span class="label">Chat</span><strong>Native scrolling</strong><p>Plain text stays plain; markdown-shaped text renders with native layout.</p></div>
     </section>
 
@@ -145,7 +145,8 @@
       <tbody>
         <tr><td>Native runtime replacement</td><td class="ok">Complete</td><td>Both apps render markdown without WebView assets.</td></tr>
         <tr><td>KMP iOS boundary</td><td class="ok">Complete</td><td>Swift decodes `OpenCodeMarkdownCore.parseMarkdownJson` output.</td></tr>
-        <tr><td>TextMate gate</td><td class="risk">Open risk</td><td>Grammar loading, typed decode, primary grammar selection, Android resource coverage, tokenizer state, end back-references, while-rule continuation, grammar-bundle includes, capture-pattern tokenization, match/begin/end capture-hole preservation, nested begin/end content scanning, scope-list splitting, role-aware semantic merging, end-pattern ordering, injection selectors, Android Joni backend, Android runtime highlighter wiring, iOS bundled grammar loading, and Android/Joni diff+JSON+YAML+CSS+HTML golden parity are in place; iOS Oniguruma backend, broader TextMate state, and full golden token parity remain.</td></tr>
+        <tr><td>TextMate gate (top 10)</td><td class="ok">Complete</td><td>All top-10 <code>*-basic</code> Shiki semantic gates pass on Android/Joni and iOS/libonig; shared <code>Top10GoldenFixtureAssertions</code> helper.</td></tr>
+        <tr><td>TextMate gate (broad)</td><td class="warn">Open</td><td>Popular-language smoke tests and Milestone 0 subset pass; full 36+ <code>@Ignore</code> golden suite and Path A visual parity remain.</td></tr>
         <tr><td>Chat polish</td><td class="warn">Pending</td><td>Manual smooth-scroll checks pass on long chats and streaming code.</td></tr>
       </tbody>
     </table>
@@ -166,8 +167,8 @@
       <thead><tr><th>Layer</th><th>Checks</th></tr></thead>
       <tbody>
         <tr><td>Shared KMP</td><td>Parser blocks, inlines, safety diagnostics, code, diff, tables, JSON schema, grammar bundle loading, primary grammar selection, typed grammar decode, tokenizer scaffold behavior, line-state behavior, TextMate while-rule continuation, repository containers, external scope includes, nested capture patterns, match capture-hole preservation, applyEndPatternLast ordering, injection selectors, parser highlighter injection.</td></tr>
-        <tr><td>Android</td><td>Detector tests, Compose compile, link handling, chat copy/restore raw text, Joni backend contract tests, asset-backed grammar loading, active diff, JSON, YAML, CSS, and HTML Shiki golden parity.</td></tr>
-        <tr><td>iOS</td><td>Detector tests, SwiftUI build, link handling, chat copy/restore raw text, KMP JSON bridge grammar-loading coverage, pending native Oniguruma backend.</td></tr>
+        <tr><td>Android</td><td>Detector tests, Compose compile, link handling, chat copy/restore raw text, Joni backend, asset-backed grammars, top-10 golden gates, Milestone 0 diff/json/yaml/css/html parity, JS/Python repro fixtures.</td></tr>
+        <tr><td>iOS</td><td>Detector tests, SwiftUI build, link handling, chat copy/restore raw text, KMP JSON bridge, libonig backend, top-10 golden gates.</td></tr>
         <tr><td>Manual</td><td>Light/dark, long chat scroll, streaming fenced code, outgoing collapse, diff colors.</td></tr>
       </tbody>
     </table>
