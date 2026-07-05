@@ -1,6 +1,7 @@
 import SwiftUI
 
 private let messageListGalleryBottomAnchorID = "message-list-gallery-bottom-anchor"
+private let messageListGalleryAutoFollowTolerance: CGFloat = 16
 
 struct MessageListGalleryView: View {
     @Bindable var model: MessageListGalleryModel
@@ -33,7 +34,7 @@ private struct MessageListGalleryPreview: View {
         guard isScrollable else { return true }
 
         if #available(iOS 18, *) {
-            return scrollDistanceFromBottom <= 8
+            return scrollDistanceFromBottom <= messageListGalleryAutoFollowTolerance
         }
 
         return scrollPositionID == messageListGalleryBottomAnchorID

@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 private const val MessageListGalleryBottomAnchorKey = "message-list-gallery-bottom"
+private val MessageListGalleryAutoFollowTolerance = 16.dp
 
 @Composable
 fun MessageListGalleryScreen(
@@ -64,6 +65,7 @@ private fun MessageListGalleryPreview(
 ) {
     val listState = rememberLazyListState()
     val revealThresholdMinPx = with(LocalDensity.current) { 120.dp.roundToPx() }
+    val autoFollowTolerancePx = with(LocalDensity.current) { MessageListGalleryAutoFollowTolerance.roundToPx() }
     val showScrollToEnd by remember(messages, revealThresholdMinPx) {
         derivedStateOf {
             listState.shouldShowScrollToEndPill(
@@ -75,8 +77,13 @@ private fun MessageListGalleryPreview(
     val coroutineScope = rememberCoroutineScope()
     val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = messages.size) }
 
-    LaunchedEffect(listState, messages.size) {
-        snapshotFlow { listState.isPinnedToTimelineEnd(messageCount = messages.size) }
+    LaunchedEffect(listState, messages.size, autoFollowTolerancePx) {
+        snapshotFlow {
+            listState.isPinnedToTimelineEnd(
+                messageCount = messages.size,
+                tolerancePx = autoFollowTolerancePx,
+            )
+        }
             .distinctUntilChanged()
             .collect { isPinnedToEnd ->
                 autoFollowState.updatePinnedState(
@@ -90,7 +97,11 @@ private fun MessageListGalleryPreview(
         listState.animateScrollToTimelineEnd(messageCount = messages.size)
         withFrameNanos { }
         autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd = listState.isPinnedToTimelineEnd(messageCount = messages.size),
+            isPinnedToEnd =
+                listState.isPinnedToTimelineEnd(
+                    messageCount = messages.size,
+                    tolerancePx = autoFollowTolerancePx,
+                ),
         )
     }
 
@@ -99,7 +110,11 @@ private fun MessageListGalleryPreview(
         listState.animateScrollToTimelineEndAfterAppend(messageCount = messages.size)
         withFrameNanos { }
         autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd = listState.isPinnedToTimelineEnd(messageCount = messages.size),
+            isPinnedToEnd =
+                listState.isPinnedToTimelineEnd(
+                    messageCount = messages.size,
+                    tolerancePx = autoFollowTolerancePx,
+                ),
         )
     }
 
@@ -165,7 +180,10 @@ private fun MessageListGalleryPreview(
     }
 }
 
-private fun LazyListState.isPinnedToTimelineEnd(messageCount: Int): Boolean {
+private fun LazyListState.isPinnedToTimelineEnd(
+    messageCount: Int,
+    tolerancePx: Int,
+): Boolean {
     if (messageCount == 0) return true
 
     val bottomAnchorIndex = messageCount
@@ -173,7 +191,7 @@ private fun LazyListState.isPinnedToTimelineEnd(messageCount: Int): Boolean {
         layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
             ?: return false
 
-    return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset
+    return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset + tolerancePx
 }
 
 @Composable
