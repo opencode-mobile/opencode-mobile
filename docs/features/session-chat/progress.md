@@ -24,9 +24,10 @@
   low-contrast **`OpenCodeButton`** component.
 - **2026-07-05 / OPE-30:** Message List Component Gallery prototype now has
   live-message and auto-follow controls on iOS and Android. When auto-follow is
-  enabled, newly appended gallery messages wait for layout/render and then
-  advance to the bottom anchor. Production Session Chat semantics remain a
-  follow-up decision before promotion.
+  enabled and the list is already pinned to the bottom, newly appended gallery
+  messages wait for layout/render and then advance to the bottom anchor. If the
+  user is reading older messages, auto-follow does not pull the viewport forward.
+  Production Session Chat semantics remain a follow-up decision before promotion.
 
 ## Android
 

@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,11 +74,23 @@ private fun MessageListGalleryPreview(
     }
     val coroutineScope = rememberCoroutineScope()
     var previousMessageCount by remember { mutableStateOf(messages.size) }
+    var wasPinnedToEndBeforeMessageChange by remember { mutableStateOf(false) }
+    val isPinnedToEnd by remember(messages) {
+        derivedStateOf {
+            listState.isPinnedToTimelineEnd(messageCount = messages.size)
+        }
+    }
+
+    SideEffect {
+        if (messages.size == previousMessageCount) {
+            wasPinnedToEndBeforeMessageChange = isPinnedToEnd
+        }
+    }
 
     LaunchedEffect(messages.size, autoFollowEnabled) {
         val oldCount = previousMessageCount
         previousMessageCount = messages.size
-        if (autoFollowEnabled && messages.size > oldCount) {
+        if (autoFollowEnabled && messages.size > oldCount && wasPinnedToEndBeforeMessageChange) {
             withFrameNanos { }
             listState.animateScrollToTimelineEnd(messageCount = messages.size)
         }
@@ -131,6 +145,17 @@ private fun MessageListGalleryPreview(
             )
         }
     }
+}
+
+private fun LazyListState.isPinnedToTimelineEnd(messageCount: Int): Boolean {
+    if (messageCount == 0) return true
+
+    val bottomAnchorIndex = messageCount
+    val bottomAnchor =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
+            ?: return false
+
+    return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset
 }
 
 @Composable
