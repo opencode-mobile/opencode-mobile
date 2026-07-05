@@ -23,8 +23,7 @@ private struct MessageListGalleryPreview: View {
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var isUserScrolling = false
-    @State private var observedMessageCount = 0
-    @State private var wasPinnedToEndBeforeMessageChange = false
+    @State private var autoFollowState = MessageListAutoFollowState(initialMessageCount: 0)
 
     private var isScrollable: Bool {
         contentHeight > viewportHeight + 8
@@ -94,17 +93,18 @@ private struct MessageListGalleryPreview: View {
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .onAppear {
-            observedMessageCount = messages.count
-            wasPinnedToEndBeforeMessageChange = isPinnedToEnd
+            autoFollowState = MessageListAutoFollowState(initialMessageCount: messages.count)
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
         }
         .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
-            guard messages.count == observedMessageCount else { return }
-            wasPinnedToEndBeforeMessageChange = isPinnedToEnd
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
         }
-        .onChange(of: messages.count) { oldCount, newCount in
-            let shouldAutoFollow = autoFollowEnabled && newCount > oldCount && wasPinnedToEndBeforeMessageChange
-            observedMessageCount = newCount
-            guard shouldAutoFollow else { return }
+        .onChange(of: messages.count) { _, newCount in
+            guard autoFollowState.onMessageCountChanged(
+                messageCount: newCount,
+                autoFollowEnabled: autoFollowEnabled
+            ) else { return }
+
             scrollToEnd()
         }
         .background(OpenCodeColors.backgroundBase)
@@ -118,6 +118,8 @@ private struct MessageListGalleryPreview: View {
             withAnimation(.easeOut(duration: 0.2)) {
                 scrollPositionID = messageListGalleryBottomAnchorID
             }
+            await Task.yield()
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
         }
     }
 }

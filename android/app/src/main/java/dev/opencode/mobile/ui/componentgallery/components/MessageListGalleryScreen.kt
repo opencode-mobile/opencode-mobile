@@ -24,10 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -39,6 +37,7 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
+import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -74,33 +73,44 @@ private fun MessageListGalleryPreview(
         }
     }
     val coroutineScope = rememberCoroutineScope()
-    var previousMessageCount by remember { mutableStateOf(messages.size) }
-    var shouldFollowNextAppend by remember { mutableStateOf(false) }
+    val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = messages.size) }
 
     LaunchedEffect(listState, messages.size) {
         snapshotFlow { listState.isPinnedToTimelineEnd(messageCount = messages.size) }
             .distinctUntilChanged()
             .collect { isPinnedToEnd ->
-                if (messages.size == previousMessageCount) {
-                    shouldFollowNextAppend = isPinnedToEnd
-                }
+                autoFollowState.updatePinnedState(
+                    isPinnedToEnd = isPinnedToEnd,
+                    messageCount = messages.size,
+                )
             }
     }
 
     suspend fun animateToEndAndArmFollow() {
         listState.animateScrollToTimelineEnd(messageCount = messages.size)
         withFrameNanos { }
-        if (listState.isPinnedToTimelineEnd(messageCount = messages.size)) {
-            shouldFollowNextAppend = true
-        }
+        autoFollowState.markProgrammaticScrollSettled(
+            isPinnedToEnd = listState.isPinnedToTimelineEnd(messageCount = messages.size),
+        )
+    }
+
+    suspend fun animateAppendToEndAndArmFollow() {
+        withFrameNanos { }
+        listState.animateScrollToTimelineEndAfterAppend(messageCount = messages.size)
+        withFrameNanos { }
+        autoFollowState.markProgrammaticScrollSettled(
+            isPinnedToEnd = listState.isPinnedToTimelineEnd(messageCount = messages.size),
+        )
     }
 
     LaunchedEffect(messages.size, autoFollowEnabled) {
-        val oldCount = previousMessageCount
-        previousMessageCount = messages.size
-        if (autoFollowEnabled && messages.size > oldCount && shouldFollowNextAppend) {
-            withFrameNanos { }
-            animateToEndAndArmFollow()
+        if (
+            autoFollowState.onMessageCountChanged(
+                messageCount = messages.size,
+                autoFollowEnabled = autoFollowEnabled,
+            )
+        ) {
+            animateAppendToEndAndArmFollow()
         }
     }
 
