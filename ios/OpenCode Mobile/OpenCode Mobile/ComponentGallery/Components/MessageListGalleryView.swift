@@ -6,13 +6,17 @@ struct MessageListGalleryView: View {
     @Bindable var model: MessageListGalleryModel
 
     var body: some View {
-        MessageListGalleryPreview(messages: model.messages)
+        MessageListGalleryPreview(
+            messages: model.messages,
+            autoFollowEnabled: model.autoFollowEnabled
+        )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct MessageListGalleryPreview: View {
     let messages: [MessageListGalleryMessage]
+    let autoFollowEnabled: Bool
 
     @State private var scrollPositionID: String?
     @State private var scrollDistanceFromBottom = CGFloat.greatestFiniteMagnitude
@@ -77,6 +81,10 @@ private struct MessageListGalleryPreview: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
+        .onChange(of: messages.count) { oldCount, newCount in
+            guard autoFollowEnabled, newCount > oldCount else { return }
+            scrollToEnd()
+        }
         .background(OpenCodeColors.backgroundBase)
     }
 

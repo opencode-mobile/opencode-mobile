@@ -10,6 +10,8 @@ final class MessageListGalleryModel {
         }
     }
 
+    var autoFollowEnabled = false
+
     var messages = MessageListGalleryMocks.messages
 
     private var liveSequence = 0

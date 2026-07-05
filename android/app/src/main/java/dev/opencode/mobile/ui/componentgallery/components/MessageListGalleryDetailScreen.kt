@@ -64,6 +64,21 @@ fun MessageListGalleryDetailScreen(
                         menuExpanded = false
                     },
                 )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (viewModel.autoFollowEnabled) {
+                                "Disable auto-follow"
+                            } else {
+                                "Auto-follow new messages"
+                            },
+                        )
+                    },
+                    onClick = {
+                        viewModel.updateAutoFollow(!viewModel.autoFollowEnabled)
+                        menuExpanded = false
+                    },
+                )
             }
         }
 

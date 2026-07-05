@@ -22,6 +22,11 @@
   design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
   (checkmark on the current selection). Circular actions use the reusable
   low-contrast **`OpenCodeButton`** component.
+- **2026-07-05 / OPE-30:** Message List Component Gallery prototype now has
+  live-message and auto-follow controls on iOS and Android. When auto-follow is
+  enabled, newly appended gallery messages wait for layout/render and then
+  advance to the bottom anchor. Production Session Chat semantics remain a
+  follow-up decision before promotion.
 
 ## Android
 
@@ -80,6 +85,9 @@
 - Android `:app:testDebugUnitTest` passed on 2026-06-01.
 - iOS simulator debug build passed on 2026-06-01.
 - iOS `OpenCode Mobile` test action passed on 2026-06-01.
+- OPE-30 Component Gallery prototype: Android `:app:compileDebugKotlin`, iOS
+  simulator build/run, Android emulator install/run, and manual Message List
+  auto-follow verification passed on 2026-07-05.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

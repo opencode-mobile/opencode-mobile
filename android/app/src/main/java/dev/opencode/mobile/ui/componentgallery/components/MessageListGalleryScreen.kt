@@ -20,10 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -32,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import kotlinx.coroutines.launch
 
@@ -44,6 +49,7 @@ fun MessageListGalleryScreen(
 ) {
     MessageListGalleryPreview(
         messages = viewModel.messages,
+        autoFollowEnabled = viewModel.autoFollowEnabled,
         modifier = modifier.fillMaxSize(),
     )
 }
@@ -51,6 +57,7 @@ fun MessageListGalleryScreen(
 @Composable
 private fun MessageListGalleryPreview(
     messages: List<MessageListGalleryMessage>,
+    autoFollowEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -64,6 +71,16 @@ private fun MessageListGalleryPreview(
         }
     }
     val coroutineScope = rememberCoroutineScope()
+    var previousMessageCount by remember { mutableStateOf(messages.size) }
+
+    LaunchedEffect(messages.size, autoFollowEnabled) {
+        val oldCount = previousMessageCount
+        previousMessageCount = messages.size
+        if (autoFollowEnabled && messages.size > oldCount) {
+            withFrameNanos { }
+            listState.animateScrollToTimelineEnd(messageCount = messages.size)
+        }
+    }
 
     Box(
         modifier =
@@ -108,10 +125,7 @@ private fun MessageListGalleryPreview(
                 variant = OpenCodeActionPillVariant.ScrollToEnd,
                 onClick = {
                     coroutineScope.launch {
-                        val bottomAnchorIndex = messages.size
-                        if (bottomAnchorIndex > 0) {
-                            listState.animateScrollToItem(bottomAnchorIndex)
-                        }
+                        listState.animateScrollToTimelineEnd(messageCount = messages.size)
                     }
                 },
             )

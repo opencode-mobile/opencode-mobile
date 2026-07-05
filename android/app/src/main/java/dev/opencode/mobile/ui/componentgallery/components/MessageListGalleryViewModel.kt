@@ -14,6 +14,9 @@ class MessageListGalleryViewModel : ViewModel() {
     var liveMessagesEnabled by mutableStateOf(false)
         private set
 
+    var autoFollowEnabled by mutableStateOf(false)
+        private set
+
     var messages by mutableStateOf(MessageListGalleryMocks.messages)
         private set
 
@@ -28,6 +31,10 @@ class MessageListGalleryViewModel : ViewModel() {
         } else {
             stopLiveMessages()
         }
+    }
+
+    fun updateAutoFollow(enabled: Boolean) {
+        autoFollowEnabled = enabled
     }
 
     private fun startLiveMessages() {
