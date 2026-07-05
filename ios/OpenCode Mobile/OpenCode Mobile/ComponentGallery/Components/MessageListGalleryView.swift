@@ -1,7 +1,8 @@
 import SwiftUI
 
 private let messageListGalleryBottomAnchorID = "message-list-gallery-bottom-anchor"
-private let messageListGalleryAutoFollowTolerance: CGFloat = 16
+private let messageListGalleryPinnedTolerance: CGFloat = 8
+private let messageListGalleryAutoFollowExtraTolerance: CGFloat = 32
 
 struct MessageListGalleryView: View {
     @Bindable var model: MessageListGalleryModel
@@ -34,7 +35,8 @@ private struct MessageListGalleryPreview: View {
         guard isScrollable else { return true }
 
         if #available(iOS 18, *) {
-            return scrollDistanceFromBottom <= messageListGalleryAutoFollowTolerance
+            return scrollDistanceFromBottom <=
+                messageListGalleryPinnedTolerance + messageListGalleryAutoFollowExtraTolerance
         }
 
         return scrollPositionID == messageListGalleryBottomAnchorID
@@ -91,6 +93,14 @@ private struct MessageListGalleryPreview: View {
                 .padding(.bottom, 12)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
+
+            MessageListAutoFollowIndicator(
+                thresholdMet: isPinnedToEnd,
+                autoFollowEnabled: autoFollowEnabled
+            )
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .onAppear {
@@ -122,6 +132,32 @@ private struct MessageListGalleryPreview: View {
             await Task.yield()
             autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
         }
+    }
+}
+
+private struct MessageListAutoFollowIndicator: View {
+    let thresholdMet: Bool
+    let autoFollowEnabled: Bool
+
+    private var label: String {
+        if thresholdMet && autoFollowEnabled {
+            return "Auto-follow armed"
+        }
+
+        return thresholdMet ? "Threshold met" : "Threshold missed"
+    }
+
+    var body: some View {
+        Text(label)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(thresholdMet ? OpenCodeColors.textInteractiveBase : OpenCodeColors.textBase)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(OpenCodeColors.surfaceBase, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+            )
     }
 }
 

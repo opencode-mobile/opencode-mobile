@@ -43,7 +43,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 private const val MessageListGalleryBottomAnchorKey = "message-list-gallery-bottom"
-private val MessageListGalleryAutoFollowTolerance = 16.dp
+private val MessageListGalleryBottomAnchorHeight = 1.dp
+private val MessageListGalleryAutoFollowTolerance = 32.dp
 
 @Composable
 fun MessageListGalleryScreen(
@@ -66,6 +67,16 @@ private fun MessageListGalleryPreview(
     val listState = rememberLazyListState()
     val revealThresholdMinPx = with(LocalDensity.current) { 120.dp.roundToPx() }
     val autoFollowTolerancePx = with(LocalDensity.current) { MessageListGalleryAutoFollowTolerance.roundToPx() }
+    val bottomAnchorHeightPx = with(LocalDensity.current) { MessageListGalleryBottomAnchorHeight.roundToPx() }
+    val autoFollowThresholdMet by remember(messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
+        derivedStateOf {
+            listState.isPinnedToTimelineEnd(
+                messageCount = messages.size,
+                tolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+            )
+        }
+    }
     val showScrollToEnd by remember(messages, revealThresholdMinPx) {
         derivedStateOf {
             listState.shouldShowScrollToEndPill(
@@ -77,13 +88,8 @@ private fun MessageListGalleryPreview(
     val coroutineScope = rememberCoroutineScope()
     val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = messages.size) }
 
-    LaunchedEffect(listState, messages.size, autoFollowTolerancePx) {
-        snapshotFlow {
-            listState.isPinnedToTimelineEnd(
-                messageCount = messages.size,
-                tolerancePx = autoFollowTolerancePx,
-            )
-        }
+    LaunchedEffect(listState, messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
+        snapshotFlow { autoFollowThresholdMet }
             .distinctUntilChanged()
             .collect { isPinnedToEnd ->
                 autoFollowState.updatePinnedState(
@@ -101,6 +107,7 @@ private fun MessageListGalleryPreview(
                 listState.isPinnedToTimelineEnd(
                     messageCount = messages.size,
                     tolerancePx = autoFollowTolerancePx,
+                    bottomAnchorHeightPx = bottomAnchorHeightPx,
                 ),
         )
     }
@@ -114,6 +121,7 @@ private fun MessageListGalleryPreview(
                 listState.isPinnedToTimelineEnd(
                     messageCount = messages.size,
                     tolerancePx = autoFollowTolerancePx,
+                    bottomAnchorHeightPx = bottomAnchorHeightPx,
                 ),
         )
     }
@@ -155,7 +163,7 @@ private fun MessageListGalleryPreview(
                 )
             }
             item(key = MessageListGalleryBottomAnchorKey) {
-                Spacer(modifier = Modifier.height(1.dp))
+                Spacer(modifier = Modifier.height(MessageListGalleryBottomAnchorHeight))
             }
         }
 
@@ -177,21 +185,76 @@ private fun MessageListGalleryPreview(
                 },
             )
         }
+
+        MessageListAutoFollowIndicator(
+            thresholdMet = autoFollowThresholdMet,
+            autoFollowEnabled = autoFollowEnabled,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 12.dp),
+        )
     }
 }
 
 private fun LazyListState.isPinnedToTimelineEnd(
     messageCount: Int,
     tolerancePx: Int,
+    bottomAnchorHeightPx: Int,
 ): Boolean {
     if (messageCount == 0) return true
 
     val bottomAnchorIndex = messageCount
     val bottomAnchor =
         layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
+    if (bottomAnchor != null) {
+        return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset + tolerancePx
+    }
+
+    val lastMessageIndex = messageCount - 1
+    val lastMessage =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastMessageIndex }
             ?: return false
 
-    return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset + tolerancePx
+    val lastVisible = layoutInfo.visibleItemsInfo.maxByOrNull { it.index } ?: return false
+    if (lastVisible.index < lastMessageIndex) return false
+
+    val estimatedContentEnd =
+        lastMessage.offset +
+            lastMessage.size +
+            layoutInfo.afterContentPadding +
+            bottomAnchorHeightPx
+    return estimatedContentEnd <= layoutInfo.viewportEndOffset + tolerancePx
+}
+
+@Composable
+private fun MessageListAutoFollowIndicator(
+    thresholdMet: Boolean,
+    autoFollowEnabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val label =
+        when {
+            thresholdMet && autoFollowEnabled -> "Auto-follow armed"
+            thresholdMet -> "Threshold met"
+            else -> "Threshold missed"
+        }
+
+    Text(
+        text = label,
+        modifier =
+            modifier
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(999.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(999.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color =
+            if (thresholdMet) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+    )
 }
 
 @Composable
