@@ -22,13 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 private const val MessageListGalleryBottomAnchorKey = "message-list-gallery-bottom"
@@ -74,25 +75,32 @@ private fun MessageListGalleryPreview(
     }
     val coroutineScope = rememberCoroutineScope()
     var previousMessageCount by remember { mutableStateOf(messages.size) }
-    var wasPinnedToEndBeforeMessageChange by remember { mutableStateOf(false) }
-    val isPinnedToEnd by remember(messages) {
-        derivedStateOf {
-            listState.isPinnedToTimelineEnd(messageCount = messages.size)
-        }
+    var shouldFollowNextAppend by remember { mutableStateOf(false) }
+
+    LaunchedEffect(listState, messages.size) {
+        snapshotFlow { listState.isPinnedToTimelineEnd(messageCount = messages.size) }
+            .distinctUntilChanged()
+            .collect { isPinnedToEnd ->
+                if (messages.size == previousMessageCount) {
+                    shouldFollowNextAppend = isPinnedToEnd
+                }
+            }
     }
 
-    SideEffect {
-        if (messages.size == previousMessageCount) {
-            wasPinnedToEndBeforeMessageChange = isPinnedToEnd
+    suspend fun animateToEndAndArmFollow() {
+        listState.animateScrollToTimelineEnd(messageCount = messages.size)
+        withFrameNanos { }
+        if (listState.isPinnedToTimelineEnd(messageCount = messages.size)) {
+            shouldFollowNextAppend = true
         }
     }
 
     LaunchedEffect(messages.size, autoFollowEnabled) {
         val oldCount = previousMessageCount
         previousMessageCount = messages.size
-        if (autoFollowEnabled && messages.size > oldCount && wasPinnedToEndBeforeMessageChange) {
+        if (autoFollowEnabled && messages.size > oldCount && shouldFollowNextAppend) {
             withFrameNanos { }
-            listState.animateScrollToTimelineEnd(messageCount = messages.size)
+            animateToEndAndArmFollow()
         }
     }
 
@@ -139,7 +147,7 @@ private fun MessageListGalleryPreview(
                 variant = OpenCodeActionPillVariant.ScrollToEnd,
                 onClick = {
                     coroutineScope.launch {
-                        listState.animateScrollToTimelineEnd(messageCount = messages.size)
+                        animateToEndAndArmFollow()
                     }
                 },
             )
