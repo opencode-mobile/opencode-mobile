@@ -113,9 +113,9 @@
   `renderedMarkdown` becoming available after the raw row appears, as a
   post-layout sticky-bottom recheck instead of relying only on content-height
   callbacks.
-- Production Session Chat removed the artificial bottom gap from the scroll
-  target path (Android bottom content padding, iOS clear bottom anchor height)
-  so send-time auto-follow does not settle upward after first reaching the end.
+- Production Session Chat keeps its visual bottom gap above the composer while
+  Android scroll math now includes bottom content padding, so send-time
+  auto-follow uses the same end position that the list settles to.
 - Android production Session Chat now performs the same one-time initial
   scroll-to-latest as iOS when a ready timeline first receives non-empty history.
 - Manual validation in local IDE runtime remains pending.

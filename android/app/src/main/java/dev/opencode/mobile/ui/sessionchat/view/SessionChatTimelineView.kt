@@ -253,7 +253,7 @@ internal fun SessionChatTimelineView(
                                 start = 16.dp,
                                 end = 16.dp,
                                 top = 12.dp,
-                                bottom = 0.dp,
+                                bottom = 12.dp,
                             ),
                     ) {
                         itemsIndexed(props.messages, key = { _, message -> message.id }) { index, message ->

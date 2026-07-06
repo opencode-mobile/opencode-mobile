@@ -256,7 +256,7 @@ private struct SessionChatTimelineMessageStack: View {
             }
 
             Color.clear
-                .frame(height: 1)
+                .frame(height: 12)
                 .id(sessionChatTimelineBottomAnchorID)
                 .accessibilityHidden(true)
         }
