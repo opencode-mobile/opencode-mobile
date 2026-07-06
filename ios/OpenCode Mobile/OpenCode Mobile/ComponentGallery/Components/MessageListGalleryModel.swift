@@ -17,6 +17,25 @@ final class MessageListGalleryModel {
     private var liveSequence = 0
     private var liveTask: Task<Void, Never>?
 
+    func addMessage() {
+        appendLiveMessage()
+    }
+
+    func removeLastMessage() {
+        guard !messages.isEmpty else { return }
+        messages.removeLast()
+    }
+
+    func resizeLastMessage() {
+        guard let lastMessage = messages.last else { return }
+        messages[messages.count - 1] = MessageListGalleryMessage(
+            id: lastMessage.id,
+            role: lastMessage.role,
+            text: lastMessage.text.toggledResizeText,
+            metadataLabel: lastMessage.metadataLabel
+        )
+    }
+
     private func syncLiveMessages() {
         if liveMessagesEnabled {
             startLiveMessages()
@@ -48,5 +67,22 @@ final class MessageListGalleryModel {
             lastRole: messages.last?.role
         )
         messages.append(message)
+    }
+
+    fileprivate static let resizeMarker = "[gallery-resized]"
+}
+
+private extension String {
+    var toggledResizeText: String {
+        if contains(MessageListGalleryModel.resizeMarker) {
+            return components(separatedBy: MessageListGalleryModel.resizeMarker)[0]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return self +
+            "\n\n" +
+            MessageListGalleryModel.resizeMarker +
+            "\n" +
+            "This extra gallery-only paragraph expands the final message so the scroll harness can verify resize behavior. Tap the resize control again to shrink the message back to its original height."
     }
 }

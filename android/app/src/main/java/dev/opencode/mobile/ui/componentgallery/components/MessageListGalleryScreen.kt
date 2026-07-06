@@ -5,9 +5,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
@@ -55,6 +60,9 @@ fun MessageListGalleryScreen(
     MessageListGalleryPreview(
         messages = viewModel.messages,
         autoFollowEnabled = viewModel.autoFollowEnabled,
+        onAddMessage = viewModel::addMessage,
+        onRemoveLastMessage = viewModel::removeLastMessage,
+        onResizeLastMessage = viewModel::resizeLastMessage,
         modifier = modifier.fillMaxSize(),
     )
 }
@@ -63,6 +71,9 @@ fun MessageListGalleryScreen(
 private fun MessageListGalleryPreview(
     messages: List<MessageListGalleryMessage>,
     autoFollowEnabled: Boolean,
+    onAddMessage: () -> Unit,
+    onRemoveLastMessage: () -> Unit,
+    onResizeLastMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -193,7 +204,55 @@ private fun MessageListGalleryPreview(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
+                    .padding(top = 64.dp),
+        )
+
+        MessageListGalleryFloatingControls(
+            canRemove = messages.isNotEmpty(),
+            onAddMessage = onAddMessage,
+            onRemoveLastMessage = onRemoveLastMessage,
+            onResizeLastMessage = onResizeLastMessage,
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
                     .padding(top = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun MessageListGalleryFloatingControls(
+    canRemove: Boolean,
+    onAddMessage: () -> Unit,
+    onRemoveLastMessage: () -> Unit,
+    onResizeLastMessage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(999.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(999.dp))
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("+"),
+            onClick = onAddMessage,
+            contrast = OpenCodeButtonContrast.Low,
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("-"),
+            onClick = onRemoveLastMessage,
+            enabled = canRemove,
+            contrast = OpenCodeButtonContrast.Low,
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("/"),
+            onClick = onResizeLastMessage,
+            enabled = canRemove,
+            contrast = OpenCodeButtonContrast.Low,
         )
     }
 }

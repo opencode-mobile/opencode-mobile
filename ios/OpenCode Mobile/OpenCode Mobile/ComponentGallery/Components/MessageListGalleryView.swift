@@ -10,7 +10,10 @@ struct MessageListGalleryView: View {
     var body: some View {
         MessageListGalleryPreview(
             messages: model.messages,
-            autoFollowEnabled: model.autoFollowEnabled
+            autoFollowEnabled: model.autoFollowEnabled,
+            onAddMessage: { model.addMessage() },
+            onRemoveLastMessage: { model.removeLastMessage() },
+            onResizeLastMessage: { model.resizeLastMessage() }
         )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -19,6 +22,9 @@ struct MessageListGalleryView: View {
 private struct MessageListGalleryPreview: View {
     let messages: [MessageListGalleryMessage]
     let autoFollowEnabled: Bool
+    let onAddMessage: () -> Void
+    let onRemoveLastMessage: () -> Void
+    let onResizeLastMessage: () -> Void
 
     @State private var scrollPositionID: String?
     @State private var scrollDistanceFromBottom = CGFloat.greatestFiniteMagnitude
@@ -98,9 +104,18 @@ private struct MessageListGalleryPreview: View {
                 thresholdMet: isPinnedToEnd,
                 autoFollowEnabled: autoFollowEnabled
             )
-            .padding(.top, 12)
+            .padding(.top, 64)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
+
+            MessageListGalleryFloatingControls(
+                canRemove: !messages.isEmpty,
+                onAddMessage: onAddMessage,
+                onRemoveLastMessage: onRemoveLastMessage,
+                onResizeLastMessage: onResizeLastMessage
+            )
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .onAppear {
@@ -132,6 +147,42 @@ private struct MessageListGalleryPreview: View {
             await Task.yield()
             autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
         }
+    }
+}
+
+private struct MessageListGalleryFloatingControls: View {
+    let canRemove: Bool
+    let onAddMessage: () -> Void
+    let onRemoveLastMessage: () -> Void
+    let onResizeLastMessage: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            OpenCodeButton(
+                variant: .compactText(title: "+"),
+                contrast: .low,
+                action: onAddMessage
+            )
+            OpenCodeButton(
+                variant: .compactText(title: "-"),
+                enabled: canRemove,
+                contrast: .low,
+                action: onRemoveLastMessage
+            )
+            OpenCodeButton(
+                variant: .compactText(title: "/"),
+                enabled: canRemove,
+                contrast: .low,
+                action: onResizeLastMessage
+            )
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .background(OpenCodeColors.surfaceBase, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+        )
     }
 }
 

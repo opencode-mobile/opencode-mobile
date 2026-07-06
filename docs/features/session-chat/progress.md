@@ -118,6 +118,9 @@
   auto-follow uses the same end position that the list settles to.
 - Android production Session Chat now performs the same one-time initial
   scroll-to-latest as iOS when a ready timeline first receives non-empty history.
+- Message List Component Gallery now has floating `+`, `-`, and `/` controls to
+  append a message, remove the last message, and toggle the last message height
+  for direct scroll behavior testing.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
