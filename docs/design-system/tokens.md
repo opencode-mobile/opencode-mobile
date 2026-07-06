@@ -347,8 +347,6 @@ Reusable outgoing prompt card for session conversations.
 | `outgoingMessage.controlItemSpacing` | 8 (logical px) |
 | `outgoingMessage.actionIconTouchTarget` | 28 (logical px) |
 | `outgoingMessage.actionIconSize` | 16 (logical px) |
-| `outgoingMessage.chevronTouchTarget` | 28 (logical px) |
-| `outgoingMessage.chevronIconSize` | 16 (logical px) |
 
 ## Platform Mappings
 

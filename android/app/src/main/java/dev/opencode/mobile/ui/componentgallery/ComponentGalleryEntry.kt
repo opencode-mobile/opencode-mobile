@@ -57,7 +57,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.OutgoingMessage,
             title = "Outgoing Message",
-            description = "Trailing prompt card with five-line collapse behavior.",
+            description = "Trailing prompt card that renders sent prompts at full height.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

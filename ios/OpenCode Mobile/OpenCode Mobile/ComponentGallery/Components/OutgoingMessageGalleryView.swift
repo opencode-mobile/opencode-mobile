@@ -36,7 +36,7 @@ struct OutgoingMessageGalleryView: View {
             Text("Interactive")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            Text("Switch samples, then use the chevron on long messages to expand or collapse.")
+            Text("Switch samples to review short and long outgoing messages at full height.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
 

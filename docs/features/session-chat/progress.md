@@ -127,6 +127,9 @@
 - Production Session Chat now uses non-animated sticky-bottom correction for
   layout growth, matching the smoother gallery resize behavior while keeping
   append and manual scroll-to-end actions animated.
+- `OpenCodeOutgoingMessage` now always renders outgoing prompts at full height;
+  the expand/collapse affordance was removed to avoid uncertain row height in
+  Session Chat auto-follow.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
