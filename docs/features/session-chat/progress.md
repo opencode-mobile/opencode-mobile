@@ -105,6 +105,10 @@
   and iOS simulator build passed on 2026-07-06. Full iOS test action still has a
   benchmark fixture failure in
   `SessionChatViewModelTests.benchmark_loadMessages_longMarkdownHistory`.
+- OPE-30 production sticky-bottom follow now handles layout drift while armed:
+  markdown/render growth, streaming row height changes, composer/keyboard
+  viewport changes, and status/notice rows can keep the bottom anchored without
+  requiring a new message count.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

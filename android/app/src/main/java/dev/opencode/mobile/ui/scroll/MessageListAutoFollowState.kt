@@ -19,6 +19,11 @@ internal class MessageListAutoFollowState(
         shouldFollowNextAppend = isPinnedToEnd
     }
 
+    fun shouldFollowLayoutChange(
+        autoFollowEnabled: Boolean,
+        isPinnedToEnd: Boolean,
+    ): Boolean = autoFollowEnabled && shouldFollowNextAppend && !isPinnedToEnd
+
     fun onMessageCountChanged(
         messageCount: Int,
         autoFollowEnabled: Boolean,

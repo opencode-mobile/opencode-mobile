@@ -152,6 +152,12 @@ private struct SessionChatTimelineReadyView: View {
         .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
         }
+        .onChange(of: contentHeight) { _, _ in
+            followLayoutChangeIfNeeded()
+        }
+        .onChange(of: viewportHeight) { _, _ in
+            followLayoutChangeIfNeeded()
+        }
         .onChange(of: props.messages.count) { _, newCount in
             guard autoFollowState.onMessageCountChanged(
                 messageCount: newCount,
@@ -160,6 +166,23 @@ private struct SessionChatTimelineReadyView: View {
 
             scrollToLastMessage()
         }
+    }
+
+    private func followLayoutChangeIfNeeded() {
+        if isUserScrolling || isPinnedToEnd {
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
+            return
+        }
+
+        guard autoFollowState.shouldFollowLayoutChange(
+            autoFollowEnabled: true,
+            isPinnedToEnd: isPinnedToEnd
+        ) else {
+            autoFollowState.updatePinnedState(isPinnedToEnd: false, messageCount: props.messages.count)
+            return
+        }
+
+        scrollToLastMessage()
     }
 
     private func scrollToLastMessage() {

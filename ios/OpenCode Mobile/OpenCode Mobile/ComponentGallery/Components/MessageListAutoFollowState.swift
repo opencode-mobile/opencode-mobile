@@ -16,6 +16,10 @@ struct MessageListAutoFollowState {
         shouldFollowNextAppend = isPinnedToEnd
     }
 
+    func shouldFollowLayoutChange(autoFollowEnabled: Bool, isPinnedToEnd: Bool) -> Bool {
+        autoFollowEnabled && shouldFollowNextAppend && !isPinnedToEnd
+    }
+
     mutating func onMessageCountChanged(messageCount: Int, autoFollowEnabled: Bool) -> Bool {
         let shouldFollow = autoFollowEnabled && messageCount > observedMessageCount && shouldFollowNextAppend
         observedMessageCount = messageCount

@@ -102,19 +102,22 @@
 ## Reintroduce pinned-bottom Follow Latest
 
 - Date: 2026-07-06
-- Decision: Session Chat reintroduces automatic follow for newly appended bottom
-  messages on both platforms. The viewport follows only while the user is
-  already pinned near the bottom; scrolling into history disarms follow, and
+- Decision: Session Chat reintroduces sticky-bottom follow on both platforms.
+  The viewport follows newly appended bottom messages, last-row growth from
+  streaming or markdown rendering, and timeline viewport changes while the user
+  is already pinned near the bottom. Scrolling into history disarms follow, and
   tapping the manual scroll-to-end pill re-arms follow after the programmatic
   scroll settles.
 - Consequence: new messages keep an active bottom-pinned chat readable without
   requiring repeated pill taps, while older-history reading is preserved.
 - Reason: the OPE-30 Component Gallery prototype proved the smaller state model:
-  track whether the current message count is pinned, follow only on count
-  increases, and re-check the bottom anchor after layout/render settles.
-- Revisit when: streaming updates mutate the latest row without increasing the
-  message count, or when iOS 17 needs a more precise near-bottom signal than the
-  current `scrollPosition(id:)` fallback.
+  track whether the current timeline is pinned, follow count increases and
+  bottom-anchor drift while armed, and re-check the bottom anchor after
+  layout/render settles. Production Session Chat needs the layout-drift branch
+  because markdown rendering, streaming text, composer height, keyboard padding,
+  and status/notice rows can move the bottom without changing message count.
+- Revisit when: iOS 17 needs a more precise near-bottom signal than the current
+  `scrollPosition(id:)` fallback.
 
 ## iOS scroll-to-end detection is degraded below iOS 18
 
