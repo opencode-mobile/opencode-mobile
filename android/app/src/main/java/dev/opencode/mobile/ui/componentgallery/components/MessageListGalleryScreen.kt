@@ -101,17 +101,6 @@ private fun MessageListGalleryPreview(
     val coroutineScope = rememberCoroutineScope()
     val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = messages.size) }
 
-    LaunchedEffect(listState, messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
-        snapshotFlow { autoFollowThresholdMet }
-            .distinctUntilChanged()
-            .collect { isPinnedToEnd ->
-                autoFollowState.updatePinnedState(
-                    isPinnedToEnd = isPinnedToEnd,
-                    messageCount = messages.size,
-                )
-            }
-    }
-
     suspend fun animateToEndAndArmFollow() {
         listState.animateScrollToTimelineEnd(messageCount = messages.size)
         withFrameNanos { }
@@ -166,6 +155,39 @@ private fun MessageListGalleryPreview(
                     messageCount = messages.size,
                 )
         }
+    }
+
+    LaunchedEffect(listState, messages.size, autoFollowTolerancePx, bottomAnchorHeightPx, autoFollowEnabled) {
+        snapshotFlow {
+            val bottomAnchor =
+                listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == messages.size }
+            MessageListGalleryAutoFollowLayoutSnapshot(
+                isPinnedToEnd = autoFollowThresholdMet,
+                isScrollInProgress = listState.isScrollInProgress,
+                viewportEndOffset = listState.layoutInfo.viewportEndOffset,
+                bottomAnchorOffset = bottomAnchor?.offset,
+                bottomAnchorSize = bottomAnchor?.size,
+            )
+        }
+            .distinctUntilChanged()
+            .collect { snapshot ->
+                when {
+                    snapshot.isScrollInProgress || snapshot.isPinnedToEnd ->
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = snapshot.isPinnedToEnd,
+                            messageCount = messages.size,
+                        )
+                    autoFollowState.shouldFollowLayoutChange(
+                        autoFollowEnabled = autoFollowEnabled,
+                        isPinnedToEnd = snapshot.isPinnedToEnd,
+                    ) -> followLayoutChangeAfterSettled()
+                    else ->
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = false,
+                            messageCount = messages.size,
+                        )
+                }
+            }
     }
 
     LaunchedEffect(messageLayoutSignature, autoFollowEnabled) {
@@ -299,6 +321,14 @@ private fun List<MessageListGalleryMessage>.layoutSignature(): Int =
             message.id.hashCode() +
             message.text.length
     }
+
+private data class MessageListGalleryAutoFollowLayoutSnapshot(
+    val isPinnedToEnd: Boolean,
+    val isScrollInProgress: Boolean,
+    val viewportEndOffset: Int,
+    val bottomAnchorOffset: Int?,
+    val bottomAnchorSize: Int?,
+)
 
 @Composable
 private fun MessageListAutoFollowIndicator(
