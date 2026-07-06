@@ -97,6 +97,7 @@ private fun MessageListGalleryPreview(
             )
         }
     }
+    val messageLayoutSignature = remember(messages) { messages.layoutSignature() }
     val coroutineScope = rememberCoroutineScope()
     val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = messages.size) }
 
@@ -136,6 +137,41 @@ private fun MessageListGalleryPreview(
                     bottomAnchorHeightPx = bottomAnchorHeightPx,
                 ),
         )
+    }
+
+    suspend fun followLayoutChangeAfterSettled() {
+        withFrameNanos { }
+        withFrameNanos { }
+
+        val pinned =
+            listState.isPinnedToTimelineEnd(
+                messageCount = messages.size,
+                tolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+            )
+
+        when {
+            listState.isScrollInProgress || pinned ->
+                autoFollowState.updatePinnedState(
+                    isPinnedToEnd = pinned,
+                    messageCount = messages.size,
+                )
+            autoFollowState.shouldFollowLayoutChange(
+                autoFollowEnabled = autoFollowEnabled,
+                isPinnedToEnd = false,
+            ) -> animateAppendToEndAndArmFollow()
+            else ->
+                autoFollowState.updatePinnedState(
+                    isPinnedToEnd = false,
+                    messageCount = messages.size,
+                )
+        }
+    }
+
+    LaunchedEffect(messageLayoutSignature, autoFollowEnabled) {
+        if (messages.isNotEmpty()) {
+            followLayoutChangeAfterSettled()
+        }
     }
 
     LaunchedEffect(messages.size, autoFollowEnabled) {
@@ -256,6 +292,13 @@ private fun MessageListGalleryFloatingControls(
         )
     }
 }
+
+private fun List<MessageListGalleryMessage>.layoutSignature(): Int =
+    fold(size) { result, message ->
+        31 * result +
+            message.id.hashCode() +
+            message.text.length
+    }
 
 @Composable
 private fun MessageListAutoFollowIndicator(

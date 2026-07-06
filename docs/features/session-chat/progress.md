@@ -121,6 +121,9 @@
 - Message List Component Gallery now has floating `+`, `-`, and `/` controls to
   append a message, remove the last message, and toggle the last message height
   for direct scroll behavior testing.
+- The gallery resize control now participates in sticky-bottom follow: changing
+  the final message height triggers a post-layout follow recheck when
+  auto-follow is armed.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

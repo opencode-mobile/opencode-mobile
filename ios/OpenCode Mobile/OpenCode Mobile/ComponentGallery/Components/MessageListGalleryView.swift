@@ -123,7 +123,20 @@ private struct MessageListGalleryPreview: View {
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
         }
         .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
-            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+            if isUserScrolling || isPinnedToEnd {
+                autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+            } else {
+                followLayoutChangeIfNeeded()
+            }
+        }
+        .onChange(of: contentHeight) { _, _ in
+            followLayoutChangeIfNeeded()
+        }
+        .onChange(of: viewportHeight) { _, _ in
+            followLayoutChangeIfNeeded()
+        }
+        .onChange(of: messages.layoutSignature) { _, _ in
+            followLayoutChangeIfNeededAfterLayoutSettles()
         }
         .onChange(of: messages.count) { _, newCount in
             guard autoFollowState.onMessageCountChanged(
@@ -136,6 +149,31 @@ private struct MessageListGalleryPreview: View {
         .background(OpenCodeColors.backgroundBase)
     }
 
+    private func followLayoutChangeIfNeeded() {
+        if isUserScrolling || isPinnedToEnd {
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+            return
+        }
+
+        guard autoFollowState.shouldFollowLayoutChange(
+            autoFollowEnabled: autoFollowEnabled,
+            isPinnedToEnd: isPinnedToEnd
+        ) else {
+            autoFollowState.updatePinnedState(isPinnedToEnd: false, messageCount: messages.count)
+            return
+        }
+
+        scrollToEnd()
+    }
+
+    private func followLayoutChangeIfNeededAfterLayoutSettles() {
+        Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+            followLayoutChangeIfNeeded()
+        }
+    }
+
     private func scrollToEnd() {
         guard !messages.isEmpty else { return }
         scrollPositionID = nil
@@ -146,6 +184,18 @@ private struct MessageListGalleryPreview: View {
             }
             await Task.yield()
             autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+        }
+    }
+}
+
+private extension Array where Element == MessageListGalleryMessage {
+    var layoutSignature: Int {
+        reduce(count) { result, message in
+            var hasher = Hasher()
+            hasher.combine(result)
+            hasher.combine(message.id)
+            hasher.combine(message.text.count)
+            return hasher.finalize()
         }
     }
 }
