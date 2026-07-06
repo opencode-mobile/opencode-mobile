@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.scroll
 
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 
 private const val BottomAnchorHeightPx = 1
@@ -102,9 +103,26 @@ suspend fun LazyListState.animateScrollToTimelineEndAfterAppend(messageCount: In
     }
 }
 
+suspend fun LazyListState.scrollToTimelineEndAfterLayoutChange(messageCount: Int) {
+    if (messageCount == 0) return
+
+    val distanceFromEnd = distanceFromTimelineEnd(messageCount)
+    if (distanceFromEnd != null && distanceFromEnd > 0 && distanceFromEnd <= layoutInfo.viewportSize.height) {
+        scrollBy(distanceFromEnd.toFloat())
+    } else {
+        scrollToTimelineEnd(messageCount)
+    }
+}
+
 suspend fun LazyListState.animateScrollToTimelineEnd(messageCount: Int) {
     if (messageCount > 0) {
         animateScrollToItem(messageCount)
+    }
+}
+
+suspend fun LazyListState.scrollToTimelineEnd(messageCount: Int) {
+    if (messageCount > 0) {
+        scrollToItem(messageCount)
     }
 }
 
