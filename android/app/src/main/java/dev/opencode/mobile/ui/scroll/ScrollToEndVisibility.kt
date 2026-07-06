@@ -28,7 +28,11 @@ fun LazyListState.shouldShowScrollToEnd(
     val bottomAnchor =
         layoutInfo.visibleItemsInfo.lastOrNull { it.index == bottomAnchorIndex }
     if (bottomAnchor != null) {
-        val trailingGap = bottomAnchor.offset + bottomAnchor.size - layoutInfo.viewportEndOffset
+        val trailingGap =
+            bottomAnchor.offset +
+                bottomAnchor.size +
+                layoutInfo.afterContentPadding -
+                layoutInfo.viewportEndOffset
         return trailingGap > revealThresholdPx
     }
 
@@ -64,7 +68,11 @@ fun LazyListState.isPinnedToTimelineEnd(
     val bottomAnchor =
         layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
     if (bottomAnchor != null) {
-        return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset + tolerancePx
+        val contentEnd =
+            bottomAnchor.offset +
+                bottomAnchor.size +
+                layoutInfo.afterContentPadding
+        return contentEnd <= layoutInfo.viewportEndOffset + tolerancePx
     }
 
     val lastMessageIndex = messageCount - 1
@@ -106,5 +114,8 @@ private fun LazyListState.distanceFromTimelineEnd(messageCount: Int): Int? {
         layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
             ?: return null
 
-    return bottomAnchor.offset + bottomAnchor.size - layoutInfo.viewportEndOffset
+    return bottomAnchor.offset +
+        bottomAnchor.size +
+        layoutInfo.afterContentPadding -
+        layoutInfo.viewportEndOffset
 }

@@ -113,6 +113,9 @@
   `renderedMarkdown` becoming available after the raw row appears, as a
   post-layout sticky-bottom recheck instead of relying only on content-height
   callbacks.
+- Production Session Chat removed the artificial bottom gap from the scroll
+  target path (Android bottom content padding, iOS clear bottom anchor height)
+  so send-time auto-follow does not settle upward after first reaching the end.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
