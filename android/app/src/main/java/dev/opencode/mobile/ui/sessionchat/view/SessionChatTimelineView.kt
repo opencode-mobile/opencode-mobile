@@ -47,6 +47,7 @@ import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
 import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
+import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -153,6 +154,19 @@ internal fun SessionChatTimelineView(
                 )
             }
 
+            suspend fun snapLayoutChangeToEndAndArmFollow() {
+                listState.scrollToTimelineEndAfterLayoutChange(messageCount = props.messages.size)
+                withFrameNanos { }
+                autoFollowState.markProgrammaticScrollSettled(
+                    isPinnedToEnd =
+                        listState.isPinnedToTimelineEnd(
+                            messageCount = props.messages.size,
+                            tolerancePx = autoFollowTolerancePx,
+                            bottomAnchorHeightPx = bottomAnchorHeightPx,
+                        ),
+                )
+            }
+
             suspend fun followLayoutChangeAfterSettled() {
                 withFrameNanos { }
                 withFrameNanos { }
@@ -173,7 +187,7 @@ internal fun SessionChatTimelineView(
                     autoFollowState.shouldFollowLayoutChange(
                         autoFollowEnabled = true,
                         isPinnedToEnd = false,
-                    ) -> animateAppendToEndAndArmFollow()
+                    ) -> snapLayoutChangeToEndAndArmFollow()
                     else ->
                         autoFollowState.updatePinnedState(
                             isPinnedToEnd = false,

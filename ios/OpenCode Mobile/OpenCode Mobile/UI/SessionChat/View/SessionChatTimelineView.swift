@@ -189,7 +189,7 @@ private struct SessionChatTimelineReadyView: View {
             return
         }
 
-        scrollToLastMessage()
+        snapToLastMessage()
     }
 
     private func followLayoutChangeIfNeededAfterLayoutSettles() {
@@ -206,6 +206,21 @@ private struct SessionChatTimelineReadyView: View {
         Task { @MainActor in
             await Task.yield()
             withAnimation(.easeOut(duration: 0.2)) {
+                scrollPositionID = sessionChatTimelineBottomAnchorID
+            }
+            await Task.yield()
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+        }
+    }
+
+    private func snapToLastMessage() {
+        guard !props.messages.isEmpty else { return }
+        scrollPositionID = nil
+        Task { @MainActor in
+            await Task.yield()
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
                 scrollPositionID = sessionChatTimelineBottomAnchorID
             }
             await Task.yield()

@@ -124,6 +124,9 @@
 - The gallery resize control now participates in sticky-bottom follow: changing
   the final message height triggers a post-layout follow recheck when
   auto-follow is armed.
+- Production Session Chat now uses non-animated sticky-bottom correction for
+  layout growth, matching the smoother gallery resize behavior while keeping
+  append and manual scroll-to-end actions animated.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
