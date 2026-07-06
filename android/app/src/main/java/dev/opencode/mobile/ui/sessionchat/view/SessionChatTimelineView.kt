@@ -26,8 +26,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -122,6 +124,7 @@ internal fun SessionChatTimelineView(
             val messageLayoutSignature = remember(props.messages) { props.messages.layoutSignature() }
             val coroutineScope = rememberCoroutineScope()
             val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = props.messages.size) }
+            var initialTimelineEndScrollDone by remember { mutableStateOf(false) }
 
             suspend fun animateToEndAndArmFollow() {
                 listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
@@ -215,6 +218,13 @@ internal fun SessionChatTimelineView(
             LaunchedEffect(messageLayoutSignature) {
                 if (props.messages.isNotEmpty()) {
                     followLayoutChangeAfterSettled()
+                }
+            }
+
+            LaunchedEffect(props.messages.firstOrNull()?.id, props.messages.lastOrNull()?.id) {
+                if (!initialTimelineEndScrollDone && props.messages.isNotEmpty()) {
+                    animateToEndAndArmFollow()
+                    initialTimelineEndScrollDone = true
                 }
             }
 

@@ -103,11 +103,11 @@
 
 - Date: 2026-07-06
 - Decision: Session Chat reintroduces sticky-bottom follow on both platforms.
-  The viewport follows newly appended bottom messages, last-row growth from
-  streaming or markdown rendering, and timeline viewport changes while the user
-  is already pinned near the bottom. Scrolling into history disarms follow, and
-  tapping the manual scroll-to-end pill re-arms follow after the programmatic
-  scroll settles.
+  Opening a session lands on the latest message. After entry, the viewport
+  follows newly appended bottom messages, last-row growth from streaming or
+  markdown rendering, and timeline viewport changes while the user is already
+  pinned near the bottom. Scrolling into history disarms follow, and tapping the
+  manual scroll-to-end pill re-arms follow after the programmatic scroll settles.
 - Consequence: new messages keep an active bottom-pinned chat readable without
   requiring repeated pill taps, while older-history reading is preserved.
 - Reason: the OPE-30 Component Gallery prototype proved the smaller state model:

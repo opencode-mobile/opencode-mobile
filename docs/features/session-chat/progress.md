@@ -116,6 +116,8 @@
 - Production Session Chat removed the artificial bottom gap from the scroll
   target path (Android bottom content padding, iOS clear bottom anchor height)
   so send-time auto-follow does not settle upward after first reaching the end.
+- Android production Session Chat now performs the same one-time initial
+  scroll-to-latest as iOS when a ready timeline first receives non-empty history.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
