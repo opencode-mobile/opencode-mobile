@@ -109,6 +109,10 @@
   markdown/render growth, streaming row height changes, composer/keyboard
   viewport changes, and status/notice rows can keep the bottom anchored without
   requiring a new message count.
+- Follow now also treats message layout-signature changes, including
+  `renderedMarkdown` becoming available after the raw row appears, as a
+  post-layout sticky-bottom recheck instead of relying only on content-height
+  callbacks.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

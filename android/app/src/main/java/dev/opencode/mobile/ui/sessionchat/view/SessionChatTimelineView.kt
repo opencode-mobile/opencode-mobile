@@ -119,6 +119,7 @@ internal fun SessionChatTimelineView(
                     )
                 }
             }
+            val messageLayoutSignature = remember(props.messages) { props.messages.layoutSignature() }
             val coroutineScope = rememberCoroutineScope()
             val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = props.messages.size) }
 
@@ -149,6 +150,35 @@ internal fun SessionChatTimelineView(
                 )
             }
 
+            suspend fun followLayoutChangeAfterSettled() {
+                withFrameNanos { }
+                withFrameNanos { }
+
+                val pinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+
+                when {
+                    listState.isScrollInProgress || pinned ->
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = pinned,
+                            messageCount = props.messages.size,
+                        )
+                    autoFollowState.shouldFollowLayoutChange(
+                        autoFollowEnabled = true,
+                        isPinnedToEnd = false,
+                    ) -> animateAppendToEndAndArmFollow()
+                    else ->
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = false,
+                            messageCount = props.messages.size,
+                        )
+                }
+            }
+
             LaunchedEffect(listState, props.messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
                 snapshotFlow {
                     val bottomAnchor =
@@ -172,14 +202,20 @@ internal fun SessionChatTimelineView(
                             autoFollowState.shouldFollowLayoutChange(
                                 autoFollowEnabled = true,
                                 isPinnedToEnd = snapshot.isPinnedToEnd,
-                            ) -> animateAppendToEndAndArmFollow()
+                            ) -> followLayoutChangeAfterSettled()
                             else ->
                                 autoFollowState.updatePinnedState(
                                     isPinnedToEnd = false,
                                     messageCount = props.messages.size,
                                 )
                         }
-                    }
+                }
+            }
+
+            LaunchedEffect(messageLayoutSignature) {
+                if (props.messages.isNotEmpty()) {
+                    followLayoutChangeAfterSettled()
+                }
             }
 
             LaunchedEffect(props.messages.size) {
@@ -324,6 +360,21 @@ private data class SessionChatAutoFollowLayoutSnapshot(
     val bottomAnchorOffset: Int?,
     val bottomAnchorSize: Int?,
 )
+
+private fun List<SessionChatMessageItem>.layoutSignature(): Int =
+    fold(size) { result, message ->
+        31 * result +
+            message.id.hashCode() +
+            message.text.length +
+            message.renderedMarkdown.layoutSignature() +
+            if (message.isStreaming) 1 else 0
+    }
+
+private fun MarkdownDocument?.layoutSignature(): Int =
+    when (this) {
+        null -> 0
+        else -> 31 * sourceHash + blocks.size
+    }
 
 @Composable
 private fun FallbackMessageBubble(

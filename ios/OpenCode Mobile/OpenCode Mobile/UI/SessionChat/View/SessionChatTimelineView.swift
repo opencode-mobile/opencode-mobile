@@ -150,13 +150,20 @@ private struct SessionChatTimelineReadyView: View {
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
         }
         .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
-            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
+            if isUserScrolling || isPinnedToEnd {
+                autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
+            } else {
+                followLayoutChangeIfNeeded()
+            }
         }
         .onChange(of: contentHeight) { _, _ in
             followLayoutChangeIfNeeded()
         }
         .onChange(of: viewportHeight) { _, _ in
             followLayoutChangeIfNeeded()
+        }
+        .onChange(of: props.messages.layoutSignature) { _, _ in
+            followLayoutChangeIfNeededAfterLayoutSettles()
         }
         .onChange(of: props.messages.count) { _, newCount in
             guard autoFollowState.onMessageCountChanged(
@@ -185,6 +192,14 @@ private struct SessionChatTimelineReadyView: View {
         scrollToLastMessage()
     }
 
+    private func followLayoutChangeIfNeededAfterLayoutSettles() {
+        Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+            followLayoutChangeIfNeeded()
+        }
+    }
+
     private func scrollToLastMessage() {
         guard !props.messages.isEmpty else { return }
         scrollPositionID = nil
@@ -195,6 +210,21 @@ private struct SessionChatTimelineReadyView: View {
             }
             await Task.yield()
             autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+        }
+    }
+}
+
+private extension Array where Element == SessionChatRow {
+    var layoutSignature: Int {
+        reduce(count) { result, message in
+            var hasher = Hasher()
+            hasher.combine(result)
+            hasher.combine(message.id)
+            hasher.combine(message.text.count)
+            hasher.combine(message.isStreaming)
+            hasher.combine(message.renderedMarkdown?.sourceHash ?? 0)
+            hasher.combine(message.renderedMarkdown?.blocks.count ?? 0)
+            return hasher.finalize()
         }
     }
 }
