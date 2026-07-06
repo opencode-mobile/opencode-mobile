@@ -27,7 +27,11 @@
   enabled and the list is already pinned to the bottom, newly appended gallery
   messages wait for layout/render and then advance to the bottom anchor. If the
   user is reading older messages, auto-follow does not pull the viewport forward.
-  Production Session Chat semantics remain a follow-up decision before promotion.
+- **2026-07-06 / OPE-30:** Promoted the tested pinned-bottom auto-follow behavior
+  from the Component Gallery into production Session Chat on iOS and Android.
+  The timeline follows newly appended messages only while the viewer is already
+  pinned near the bottom, and tapping the scroll-to-end pill re-arms follow for
+  later appends.
 
 ## Android
 
@@ -50,6 +54,9 @@
 - **2026-06-28:** Model-selection cache load/save and initial selection resolution
   live in `SessionChatComposer` on both platforms. See
   [Keep SessionChatViewModel as a thin facade](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade).
+- **2026-07-06 / OPE-30:** Production `SessionChatTimelineView` uses the shared
+  auto-follow state helper and pinned-bottom detector. Appended messages advance
+  to the bottom only when the user has not scrolled away from the latest message.
 
 ## iOS
 
@@ -73,6 +80,10 @@
   `MessageLiveStore`; `loadMessages()` loads catalog only (matches screen `.task` flow).
 - **2026-06-28:** Model-selection cache moved from `SessionChatViewModel` into
   `SessionChatComposer` (parity with Android).
+- **2026-07-06 / OPE-30:** Production `SessionChatTimelineView` uses the same
+  pinned-bottom auto-follow state as the Message List gallery. Appended messages
+  advance to the bottom only when the user has not scrolled away from the latest
+  message.
 
 ## Architecture guardrails
 
@@ -89,6 +100,11 @@
 - OPE-30 Component Gallery prototype: Android `:app:compileDebugKotlin`, iOS
   simulator build/run, Android emulator install/run, and manual Message List
   auto-follow verification passed on 2026-07-05.
+- OPE-30 production Session Chat auto-follow promotion: Android targeted
+  auto-follow state tests passed, iOS targeted auto-follow state tests passed,
+  and iOS simulator build passed on 2026-07-06. Full iOS test action still has a
+  benchmark fixture failure in
+  `SessionChatViewModelTests.benchmark_loadMessages_longMarkdownHistory`.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

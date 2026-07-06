@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
+import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

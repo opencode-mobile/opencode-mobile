@@ -53,6 +53,36 @@ fun LazyListState.shouldShowScrollToEndPill(
 ): Boolean =
     !isScrollInProgress && shouldShowScrollToEnd(messageCount, revealThresholdMinPx)
 
+fun LazyListState.isPinnedToTimelineEnd(
+    messageCount: Int,
+    tolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+): Boolean {
+    if (messageCount == 0) return true
+
+    val bottomAnchorIndex = messageCount
+    val bottomAnchor =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
+    if (bottomAnchor != null) {
+        return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset + tolerancePx
+    }
+
+    val lastMessageIndex = messageCount - 1
+    val lastMessage =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastMessageIndex }
+            ?: return false
+
+    val lastVisible = layoutInfo.visibleItemsInfo.maxByOrNull { it.index } ?: return false
+    if (lastVisible.index < lastMessageIndex) return false
+
+    val estimatedContentEnd =
+        lastMessage.offset +
+            lastMessage.size +
+            layoutInfo.afterContentPadding +
+            bottomAnchorHeightPx
+    return estimatedContentEnd <= layoutInfo.viewportEndOffset + tolerancePx
+}
+
 suspend fun LazyListState.animateScrollToTimelineEndAfterAppend(messageCount: Int) {
     if (messageCount == 0) return
 

@@ -1,4 +1,4 @@
-package dev.opencode.mobile.ui.componentgallery.components
+package dev.opencode.mobile.ui.scroll
 
 internal class MessageListAutoFollowState(
     initialMessageCount: Int,

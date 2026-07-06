@@ -95,8 +95,26 @@
 - Reason: the automatic follow behavior was unreliable across platforms and
   scroll backends (see the iOS sub-18 gap below); we are deferring it rather
   than shipping inconsistent auto-scroll.
-- Revisit when: Follow Latest is reintroduced with consistent, tested behavior
-  on both platforms (including a reliable near-bottom signal on iOS 17).
+- Superseded (2026-07-06): the pinned-bottom auto-follow prototype was promoted
+  from the Component Gallery into production Session Chat. See **Reintroduce
+  pinned-bottom Follow Latest** below.
+
+## Reintroduce pinned-bottom Follow Latest
+
+- Date: 2026-07-06
+- Decision: Session Chat reintroduces automatic follow for newly appended bottom
+  messages on both platforms. The viewport follows only while the user is
+  already pinned near the bottom; scrolling into history disarms follow, and
+  tapping the manual scroll-to-end pill re-arms follow after the programmatic
+  scroll settles.
+- Consequence: new messages keep an active bottom-pinned chat readable without
+  requiring repeated pill taps, while older-history reading is preserved.
+- Reason: the OPE-30 Component Gallery prototype proved the smaller state model:
+  track whether the current message count is pinned, follow only on count
+  increases, and re-check the bottom anchor after layout/render settles.
+- Revisit when: streaming updates mutate the latest row without increasing the
+  message count, or when iOS 17 needs a more precise near-bottom signal than the
+  current `scrollPosition(id:)` fallback.
 
 ## iOS scroll-to-end detection is degraded below iOS 18
 

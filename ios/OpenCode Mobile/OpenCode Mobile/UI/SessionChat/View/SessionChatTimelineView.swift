@@ -1,6 +1,8 @@
 import SwiftUI
 
 private let sessionChatTimelineBottomAnchorID = "session-chat-timeline-bottom-anchor"
+private let sessionChatPinnedTolerance: CGFloat = 8
+private let sessionChatAutoFollowExtraTolerance: CGFloat = 32
 
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
@@ -62,9 +64,21 @@ private struct SessionChatTimelineReadyView: View {
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var isUserScrolling = false
+    @State private var autoFollowState = MessageListAutoFollowState(initialMessageCount: 0)
 
     private var isScrollable: Bool {
         contentHeight > viewportHeight + 8
+    }
+
+    private var isPinnedToEnd: Bool {
+        guard isScrollable else { return true }
+
+        if #available(iOS 18, *) {
+            return scrollDistanceFromBottom <=
+                sessionChatPinnedTolerance + sessionChatAutoFollowExtraTolerance
+        }
+
+        return scrollPositionID == sessionChatTimelineBottomAnchorID
     }
 
     private var showScrollToEnd: Bool {
@@ -131,6 +145,21 @@ private struct SessionChatTimelineReadyView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
+        .onAppear {
+            autoFollowState = MessageListAutoFollowState(initialMessageCount: props.messages.count)
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
+        }
+        .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
+        }
+        .onChange(of: props.messages.count) { _, newCount in
+            guard autoFollowState.onMessageCountChanged(
+                messageCount: newCount,
+                autoFollowEnabled: true
+            ) else { return }
+
+            scrollToLastMessage()
+        }
     }
 
     private func scrollToLastMessage() {
@@ -141,6 +170,8 @@ private struct SessionChatTimelineReadyView: View {
             withAnimation(.easeOut(duration: 0.2)) {
                 scrollPositionID = sessionChatTimelineBottomAnchorID
             }
+            await Task.yield()
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
         }
     }
 }

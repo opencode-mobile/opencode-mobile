@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,8 +35,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
+import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -195,36 +196,6 @@ private fun MessageListGalleryPreview(
                     .padding(top = 12.dp),
         )
     }
-}
-
-private fun LazyListState.isPinnedToTimelineEnd(
-    messageCount: Int,
-    tolerancePx: Int,
-    bottomAnchorHeightPx: Int,
-): Boolean {
-    if (messageCount == 0) return true
-
-    val bottomAnchorIndex = messageCount
-    val bottomAnchor =
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
-    if (bottomAnchor != null) {
-        return bottomAnchor.offset + bottomAnchor.size <= layoutInfo.viewportEndOffset + tolerancePx
-    }
-
-    val lastMessageIndex = messageCount - 1
-    val lastMessage =
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastMessageIndex }
-            ?: return false
-
-    val lastVisible = layoutInfo.visibleItemsInfo.maxByOrNull { it.index } ?: return false
-    if (lastVisible.index < lastMessageIndex) return false
-
-    val estimatedContentEnd =
-        lastMessage.offset +
-            lastMessage.size +
-            layoutInfo.afterContentPadding +
-            bottomAnchorHeightPx
-    return estimatedContentEnd <= layoutInfo.viewportEndOffset + tolerancePx
 }
 
 @Composable

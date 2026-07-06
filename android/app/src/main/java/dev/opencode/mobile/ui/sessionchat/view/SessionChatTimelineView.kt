@@ -23,10 +23,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -38,11 +41,15 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
+import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
+import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
+import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.displayLabel
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 internal data class SessionChatTimelineViewProps(
@@ -93,6 +100,17 @@ internal fun SessionChatTimelineView(
         SessionChatTimelineState.Ready -> {
             val listState = rememberLazyListState()
             val revealThresholdMinPx = with(LocalDensity.current) { 120.dp.roundToPx() }
+            val autoFollowTolerancePx = with(LocalDensity.current) { SessionChatAutoFollowTolerance.roundToPx() }
+            val bottomAnchorHeightPx = with(LocalDensity.current) { SessionChatTimelineBottomAnchorHeight.roundToPx() }
+            val isPinnedToEnd by remember(props.messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
+                derivedStateOf {
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                }
+            }
             val showScrollToEnd by remember(props.messages, revealThresholdMinPx) {
                 derivedStateOf {
                     listState.shouldShowScrollToEndPill(
@@ -102,6 +120,56 @@ internal fun SessionChatTimelineView(
                 }
             }
             val coroutineScope = rememberCoroutineScope()
+            val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = props.messages.size) }
+
+            LaunchedEffect(listState, props.messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
+                snapshotFlow { isPinnedToEnd }
+                    .distinctUntilChanged()
+                    .collect { pinned ->
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = pinned,
+                            messageCount = props.messages.size,
+                        )
+                    }
+            }
+
+            suspend fun animateToEndAndArmFollow() {
+                listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
+                withFrameNanos { }
+                autoFollowState.markProgrammaticScrollSettled(
+                    isPinnedToEnd =
+                        listState.isPinnedToTimelineEnd(
+                            messageCount = props.messages.size,
+                            tolerancePx = autoFollowTolerancePx,
+                            bottomAnchorHeightPx = bottomAnchorHeightPx,
+                        ),
+                )
+            }
+
+            suspend fun animateAppendToEndAndArmFollow() {
+                withFrameNanos { }
+                listState.animateScrollToTimelineEndAfterAppend(messageCount = props.messages.size)
+                withFrameNanos { }
+                autoFollowState.markProgrammaticScrollSettled(
+                    isPinnedToEnd =
+                        listState.isPinnedToTimelineEnd(
+                            messageCount = props.messages.size,
+                            tolerancePx = autoFollowTolerancePx,
+                            bottomAnchorHeightPx = bottomAnchorHeightPx,
+                        ),
+                )
+            }
+
+            LaunchedEffect(props.messages.size) {
+                if (
+                    autoFollowState.onMessageCountChanged(
+                        messageCount = props.messages.size,
+                        autoFollowEnabled = true,
+                    )
+                ) {
+                    animateAppendToEndAndArmFollow()
+                }
+            }
 
             Box(modifier = modifier.fillMaxSize()) {
                 PullToRefreshBox(
@@ -131,7 +199,7 @@ internal fun SessionChatTimelineView(
                             )
                         }
                         item(key = SessionChatTimelineBottomAnchorKey) {
-                            Spacer(modifier = Modifier.height(1.dp))
+                            Spacer(modifier = Modifier.height(SessionChatTimelineBottomAnchorHeight))
                         }
                     }
                 }
@@ -149,7 +217,7 @@ internal fun SessionChatTimelineView(
                         variant = OpenCodeActionPillVariant.ScrollToEnd,
                         onClick = {
                             coroutineScope.launch {
-                                listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
+                                animateToEndAndArmFollow()
                             }
                         },
                     )
@@ -224,6 +292,8 @@ private fun AssistantMessageBubble(
 }
 
 private const val SessionChatTimelineBottomAnchorKey = "session-chat-timeline-bottom"
+private val SessionChatTimelineBottomAnchorHeight = 1.dp
+private val SessionChatAutoFollowTolerance = 32.dp
 
 @Composable
 private fun FallbackMessageBubble(
