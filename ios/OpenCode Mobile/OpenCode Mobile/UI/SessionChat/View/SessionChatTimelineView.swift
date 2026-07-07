@@ -185,9 +185,21 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private func followLayoutChangeIfNeeded() {
-        if isUserScrolling || isPinnedToEnd {
+        if isUserScrolling {
             logScroll("layout-check no-op count=\(props.messages.count) pinned=\(isPinnedToEnd) userScrolling=\(isUserScrolling)")
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
+            return
+        }
+
+        if isPinnedToEnd, autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: true) {
+            logScroll("layout-check ensure-end count=\(props.messages.count)")
+            snapToLastMessage()
+            return
+        }
+
+        if isPinnedToEnd {
+            logScroll("layout-check no-op count=\(props.messages.count) pinned=\(isPinnedToEnd) userScrolling=\(isUserScrolling)")
+            autoFollowState.updatePinnedState(isPinnedToEnd: true, messageCount: props.messages.count)
             return
         }
 

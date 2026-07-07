@@ -134,6 +134,10 @@
   pinned-state, content-size, layout-signature, append-follow, and layout-snap
   transitions. Android logs use the `SessionChatScroll` tag; iOS logs use the
   `session-chat` logger category with a `scroll` prefix.
+- Auto-follow now treats the bottom as an exact target, not just a tolerant
+  pinned zone: while follow is armed, post-append layout and viewport changes
+  perform a non-animated end snap so outgoing-message and composer/keyboard
+  resize phases cannot leave a small residual gap.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

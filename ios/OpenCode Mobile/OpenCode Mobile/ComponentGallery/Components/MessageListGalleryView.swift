@@ -150,8 +150,18 @@ private struct MessageListGalleryPreview: View {
     }
 
     private func followLayoutChangeIfNeeded() {
-        if isUserScrolling || isPinnedToEnd {
+        if isUserScrolling {
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+            return
+        }
+
+        if isPinnedToEnd, autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) {
+            snapToEnd()
+            return
+        }
+
+        if isPinnedToEnd {
+            autoFollowState.updatePinnedState(isPinnedToEnd: true, messageCount: messages.count)
             return
         }
 
@@ -180,6 +190,21 @@ private struct MessageListGalleryPreview: View {
         Task { @MainActor in
             await Task.yield()
             withAnimation(.easeOut(duration: 0.2)) {
+                scrollPositionID = messageListGalleryBottomAnchorID
+            }
+            await Task.yield()
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+        }
+    }
+
+    private func snapToEnd() {
+        guard !messages.isEmpty else { return }
+        scrollPositionID = nil
+        Task { @MainActor in
+            await Task.yield()
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
                 scrollPositionID = messageListGalleryBottomAnchorID
             }
             await Task.yield()

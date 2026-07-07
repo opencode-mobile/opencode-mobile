@@ -115,9 +115,10 @@ private fun MessageListGalleryPreview(
         )
     }
 
-    suspend fun animateAppendToEndAndArmFollow() {
+    suspend fun snapExactlyToEndAndArmFollow() {
         withFrameNanos { }
-        listState.animateScrollToTimelineEndAfterAppend(messageCount = messages.size)
+        withFrameNanos { }
+        listState.scrollToTimelineEndAfterLayoutChange(messageCount = messages.size)
         withFrameNanos { }
         autoFollowState.markProgrammaticScrollSettled(
             isPinnedToEnd =
@@ -127,6 +128,22 @@ private fun MessageListGalleryPreview(
                     bottomAnchorHeightPx = bottomAnchorHeightPx,
                 ),
         )
+    }
+
+    suspend fun animateAppendToEndAndArmFollow() {
+        withFrameNanos { }
+        listState.animateScrollToTimelineEndAfterAppend(messageCount = messages.size)
+        withFrameNanos { }
+        val settledPinned =
+            listState.isPinnedToTimelineEnd(
+                messageCount = messages.size,
+                tolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+            )
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+        if (settledPinned) {
+            snapExactlyToEndAndArmFollow()
+        }
     }
 
     suspend fun snapLayoutChangeToEndAndArmFollow() {
@@ -154,9 +171,16 @@ private fun MessageListGalleryPreview(
             )
 
         when {
-            listState.isScrollInProgress || pinned ->
+            listState.isScrollInProgress ->
                 autoFollowState.updatePinnedState(
                     isPinnedToEnd = pinned,
+                    messageCount = messages.size,
+                )
+            pinned && autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
+                snapExactlyToEndAndArmFollow()
+            pinned ->
+                autoFollowState.updatePinnedState(
+                    isPinnedToEnd = true,
                     messageCount = messages.size,
                 )
             autoFollowState.shouldFollowLayoutChange(

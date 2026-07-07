@@ -38,12 +38,21 @@ struct MessageListAutoFollowStateTests {
         #expect(state.shouldFollowLayoutChange(autoFollowEnabled: true, isPinnedToEnd: false))
     }
 
+    @Test func layoutChangeWhilePinnedAndArmedEnsuresEnd() {
+        var state = MessageListAutoFollowState(initialMessageCount: 8)
+
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+
+        #expect(state.shouldEnsureLayoutEnd(autoFollowEnabled: true))
+    }
+
     @Test func layoutGrowthAfterScrollAwayDoesNotFollow() {
         var state = MessageListAutoFollowState(initialMessageCount: 8)
 
         state.updatePinnedState(isPinnedToEnd: false, messageCount: 8)
 
         #expect(!state.shouldFollowLayoutChange(autoFollowEnabled: true, isPinnedToEnd: false))
+        #expect(!state.shouldEnsureLayoutEnd(autoFollowEnabled: true))
     }
 
     @Test func appendAfterPillScrollMissesEndDoesNotFollow() {

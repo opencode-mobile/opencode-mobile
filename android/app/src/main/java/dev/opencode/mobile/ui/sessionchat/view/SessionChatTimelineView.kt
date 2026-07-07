@@ -145,6 +145,25 @@ internal fun SessionChatTimelineView(
                 )
             }
 
+            suspend fun snapExactlyToEndAndArmFollow(reason: String) {
+                logScrollD("$reason exact-snap start count=${props.messages.size}")
+                withFrameNanos { }
+                withFrameNanos { }
+                listState.scrollToTimelineEndAfterLayoutChange(messageCount = props.messages.size)
+                withFrameNanos { }
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                logScrollD(
+                    "$reason exact-snap settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
+                )
+            }
+
             suspend fun animateAppendToEndAndArmFollow() {
                 logScrollD("append-follow start count=${props.messages.size}")
                 withFrameNanos { }
@@ -161,6 +180,9 @@ internal fun SessionChatTimelineView(
                     "append-follow settled count=${props.messages.size} pinned=$settledPinned " +
                         "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
                 )
+                if (settledPinned) {
+                    snapExactlyToEndAndArmFollow(reason = "append-follow")
+                }
             }
 
             suspend fun snapLayoutChangeToEndAndArmFollow() {
@@ -193,13 +215,27 @@ internal fun SessionChatTimelineView(
                     )
 
                 when {
-                    listState.isScrollInProgress || pinned -> {
+                    listState.isScrollInProgress -> {
                         logScrollD(
                             "layout-check no-op count=${props.messages.size} pinned=$pinned " +
                                 "scrolling=${listState.isScrollInProgress}",
                         )
                         autoFollowState.updatePinnedState(
                             isPinnedToEnd = pinned,
+                            messageCount = props.messages.size,
+                        )
+                    }
+                    pinned && autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = true) -> {
+                        logScrollD("layout-check ensure-end count=${props.messages.size}")
+                        snapExactlyToEndAndArmFollow(reason = "layout-check")
+                    }
+                    pinned -> {
+                        logScrollD(
+                            "layout-check no-op count=${props.messages.size} pinned=$pinned " +
+                                "scrolling=${listState.isScrollInProgress}",
+                        )
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = true,
                             messageCount = props.messages.size,
                         )
                     }

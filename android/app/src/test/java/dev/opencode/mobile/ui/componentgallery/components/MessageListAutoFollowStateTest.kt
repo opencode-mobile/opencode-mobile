@@ -44,12 +44,22 @@ class MessageListAutoFollowStateTest {
     }
 
     @Test
+    fun layoutChangeWhilePinnedAndArmed_ensuresEnd() {
+        val state = MessageListAutoFollowState(initialMessageCount = 8)
+
+        state.updatePinnedState(isPinnedToEnd = true, messageCount = 8)
+
+        assertTrue(state.shouldEnsureLayoutEnd(autoFollowEnabled = true))
+    }
+
+    @Test
     fun layoutGrowthAfterScrollAway_doesNotFollow() {
         val state = MessageListAutoFollowState(initialMessageCount = 8)
 
         state.updatePinnedState(isPinnedToEnd = false, messageCount = 8)
 
         assertFalse(state.shouldFollowLayoutChange(autoFollowEnabled = true, isPinnedToEnd = false))
+        assertFalse(state.shouldEnsureLayoutEnd(autoFollowEnabled = true))
     }
 
     @Test
