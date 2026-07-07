@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,20 +20,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private const val VisibleSessionIdCharacters = 9
 private val SessionStatusBarHeight = 36.dp
 private val SessionStatusTouchSize = 22.dp
-private val SessionStatusIconSize = 13.dp
 private val SessionStatusDotSize = 6.dp
 private val SessionStatusContextRingSize = 14.dp
 private val SessionStatusConnectionShape = RoundedCornerShape(11.dp)
@@ -49,10 +43,8 @@ enum class OpenCodeSessionConnectionStatus(
 
 @Composable
 fun OpenCodeSessionStatusBar(
-    sessionId: String,
     connectionStatus: OpenCodeSessionConnectionStatus,
     contextUsageFraction: Float?,
-    onCopySessionId: () -> Unit,
     onConnectionClick: () -> Unit,
     onContextClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -63,46 +55,13 @@ fun OpenCodeSessionStatusBar(
                 .fillMaxWidth()
                 .height(SessionStatusBarHeight)
                 .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Session: ${sessionId.takeLast(VisibleSessionIdCharacters)}",
-                modifier = Modifier.weight(1f, fill = false),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
-            )
-            Surface(
-                onClick = onCopySessionId,
-                modifier =
-                    Modifier
-                        .padding(start = 4.dp)
-                        .size(SessionStatusTouchSize)
-                        .semantics { contentDescription = "Copy session ID" },
-                shape = CircleShape,
-                color = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = OpenCodeIcons.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(SessionStatusIconSize),
-                    )
-                }
-            }
-        }
-
         Surface(
             onClick = onConnectionClick,
             modifier =
                 Modifier
-                    .padding(start = 10.dp)
                     .height(SessionStatusTouchSize)
                     .semantics { contentDescription = "Live updates ${connectionStatus.label}" },
             shape = SessionStatusConnectionShape,
@@ -185,13 +144,10 @@ private fun contextUsageDescription(fraction: Float?): String =
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeSessionStatusBarPreview() {
-    val context = LocalContext.current
     OpenCodeTheme(darkTheme = false) {
         OpenCodeSessionStatusBar(
-            sessionId = "ses_01HZX9TvS3EfE4",
             connectionStatus = OpenCodeSessionConnectionStatus.Live,
             contextUsageFraction = 0.42f,
-            onCopySessionId = { copySessionIdToClipboard(context, "ses_01HZX9TvS3EfE4") },
             onConnectionClick = {},
             onContextClick = {},
         )

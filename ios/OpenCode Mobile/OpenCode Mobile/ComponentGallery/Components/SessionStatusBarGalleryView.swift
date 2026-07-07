@@ -55,10 +55,8 @@ struct SessionStatusBarGalleryView: View {
             .padding(.horizontal, 16)
 
             OpenCodeSessionStatusBar(
-                sessionID: "ses_01HZX9TvS3EfE4",
                 connectionStatus: connectionStatus,
                 contextUsageFraction: contextAvailable ? Double(contextUsagePercent) / 100 : nil,
-                onCopySessionID: {},
                 onConnectionClick: {},
                 onContextClick: {}
             )

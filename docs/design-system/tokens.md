@@ -315,6 +315,23 @@ single-line title, and compact trailing actions.
 | `topBar.titleSpacing` | 12 (logical px) |
 | `topBar.dividerThickness` | 1 (logical px) |
 
+### Overflow menu
+
+Compact anchored popup menu for secondary top-bar actions with icon and label
+entries.
+
+| Token | Value |
+| --- | --- |
+| `overflowMenu.cornerRadius` | 8 (logical px) |
+| `overflowMenu.minWidth` | 200 (logical px) |
+| `overflowMenu.paddingVertical` | 4 (logical px) |
+| `overflowMenu.shadowElevation` | 4 (logical px) |
+| `overflowMenu.anchor.paddingEnd` | 12 (logical px) |
+| `overflowMenu.entry.minHeight` | 48 (logical px) |
+| `overflowMenu.entry.paddingHorizontal` | 12 (logical px) |
+| `overflowMenu.entry.iconSize` | 20 (logical px) |
+| `overflowMenu.entry.iconSpacing` | 12 (logical px) |
+
 ### Bottom sheet
 
 Reusable modal action sheet with a title, close affordance, and compact action

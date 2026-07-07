@@ -79,6 +79,7 @@ List intentional differences or link to `../divergences.md`.
 - `../icons.md` (shared Material icon catalog and sync workflow)
 - `outgoing-message.md`
 - `top-bar.md`
+- `overflow-menu.md`
 - `bottom-sheet.md`
 - `choice-badge.md`
 - `list-item.md`

@@ -33,7 +33,7 @@ struct ComponentGalleryDetailView: View {
                         ComponentGalleryControls(themeMode: $themeMode)
                             .padding(.horizontal, horizontalPadding)
 
-                        if entry.id == .topBar || entry.id == .sessionStatusBar {
+                        if entry.id == .topBar || entry.id == .overflowMenu || entry.id == .sessionStatusBar {
                             content
                         } else {
                             content
@@ -62,6 +62,8 @@ struct ComponentGalleryDetailView: View {
             OutgoingMessageGalleryView()
         case .topBar:
             TopBarGalleryView()
+        case .overflowMenu:
+            OverflowMenuGalleryView()
         case .bottomSheet:
             BottomSheetGalleryView()
         case .listItem:

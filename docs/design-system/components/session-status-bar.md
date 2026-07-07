@@ -2,18 +2,18 @@
 
 ## Intent
 
-Provide a compact session-scoped status strip for screens that need to expose a
-copyable session identifier, foreground live-update connection state, and context
-usage in one stable row.
+Provide a compact session-scoped status strip for screens that need foreground
+live-update connection state and context usage in one stable row.
 
 ## Public API
 
 - Variants: connection status `live`, `connecting`, `offline`.
 - States: default, pressed for each action, unavailable context usage.
-- Required content: full session id, connection status, copy action, connection
-  action, context action.
+- Required content: connection status, connection action, context action.
 - Optional content: context usage fraction. Missing context data renders as
   unavailable instead of 0%.
+- Session identity is not shown in this strip. Copy the full session id from the
+  Session screen top-bar overflow menu.
 
 ## Token Usage
 
@@ -26,8 +26,6 @@ usage in one stable row.
 
 ## Behavior
 
-- The visible id label is `Session: <last 9 characters>`.
-- Only the copy icon copies the raw full session id.
 - The connection label and trailing dot are one clickable target for connection
   details, with 4 logical px horizontal spacing.
 - Connection dot colors map to status tokens: `live` uses `success`,
@@ -38,7 +36,7 @@ usage in one stable row.
 - Context progress switches to `warning` at 70% and `error` at 85%.
 - Pressed feedback is circular for icon/ring actions and capsule-shaped for the
   connection action.
-- Accessibility labels announce `Copy session ID`, `Live updates <state>`, and
+- Accessibility labels announce `Live updates <state>` and
   `Context usage <percent> percent` or `Context usage unavailable`.
 
 ## Platform Notes

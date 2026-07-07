@@ -8,34 +8,14 @@ enum OpenCodeSessionConnectionStatus: String, Equatable, Sendable, CaseIterable 
 }
 
 struct OpenCodeSessionStatusBar: View {
-    let sessionID: String
     let connectionStatus: OpenCodeSessionConnectionStatus
     let contextUsageFraction: Double?
-    let onCopySessionID: () -> Void
     let onConnectionClick: () -> Void
     let onContextClick: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Text("Session: \(sessionID.suffix(Self.visibleSessionIDCharacters))")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                Button(action: onCopySessionID) {
-                    Image(OpenCodeIcon.contentCopy.rawValue)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 13, height: 13)
-                        .frame(width: Self.touchSize, height: Self.touchSize)
-                }
-                .buttonStyle(OpenCodeSessionStatusCircleButtonStyle())
-                .accessibilityLabel("Copy session ID")
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
 
             Button(action: onConnectionClick) {
                 HStack(alignment: .center, spacing: 4) {
@@ -51,7 +31,6 @@ struct OpenCodeSessionStatusBar: View {
             }
             .buttonStyle(OpenCodeSessionStatusCapsuleButtonStyle())
             .accessibilityLabel("Live updates \(connectionStatus.rawValue)")
-            .padding(.leading, 10)
 
             Button(action: onContextClick) {
                 ContextUsageRing(fraction: contextUsageFraction)
@@ -70,7 +49,6 @@ struct OpenCodeSessionStatusBar: View {
         return "Context usage \(Int(contextUsageFraction * 100)) percent"
     }
 
-    private static let visibleSessionIDCharacters = 9
     private static let touchSize: CGFloat = 22
 }
 
@@ -143,10 +121,8 @@ private extension OpenCodeSessionConnectionStatus {
 
 #Preview {
     OpenCodeSessionStatusBar(
-        sessionID: "ses_01HZX9TvS3EfE4",
         connectionStatus: .live,
         contextUsageFraction: 0.42,
-        onCopySessionID: {},
         onConnectionClick: {},
         onContextClick: {}
     )

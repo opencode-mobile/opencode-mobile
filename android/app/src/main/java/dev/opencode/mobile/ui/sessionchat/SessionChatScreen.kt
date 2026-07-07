@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,11 +23,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerViewProps
@@ -52,6 +57,7 @@ fun SessionChatScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
@@ -65,16 +71,46 @@ fun SessionChatScreen(
 
     Box(modifier = modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OpenCodeTopBar(
-                title = "Session",
-                leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
-                showDivider = true,
-            )
+            OpenCodeTopBarOverflowHost(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                entries =
+                    listOf(
+                        OpenCodeOverflowMenuEntry(
+                            title = "Session context",
+                            icon = OpenCodeIcons.Architecture,
+                            onClick = {
+                                menuExpanded = false
+                                onSessionContextClick()
+                            },
+                        ),
+                        OpenCodeOverflowMenuEntry(
+                            title = "Copy session ID",
+                            icon = OpenCodeIcons.ContentCopy,
+                            onClick = {
+                                menuExpanded = false
+                                copySessionIdToClipboard(context, uiState.sessionId)
+                            },
+                        ),
+                    ),
+            ) {
+                OpenCodeTopBar(
+                    title = "Session",
+                    leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+                    actions =
+                        listOf(
+                            OpenCodeTopBarAction.Icon(
+                                imageVector = OpenCodeIcons.MoreVert,
+                                contentDescription = "More options",
+                                onClick = { menuExpanded = true },
+                            ),
+                        ),
+                    showDivider = true,
+                )
+            }
             SessionStatusBar(
-                sessionId = uiState.sessionId,
                 connectionStatus = uiState.connectionStatus,
                 contextUsageFraction = uiState.contextUsageFraction,
-                onCopySessionId = { copySessionIdToClipboard(context, uiState.sessionId) },
                 onConnectionClick = {},
                 onContextClick = onSessionContextClick,
             )
@@ -181,19 +217,15 @@ fun SessionChatScreen(
 
 @Composable
 private fun SessionStatusBar(
-    sessionId: String,
     connectionStatus: SessionConnectionStatus,
     contextUsageFraction: Float?,
-    onCopySessionId: () -> Unit,
     onConnectionClick: () -> Unit,
     onContextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OpenCodeSessionStatusBar(
-        sessionId = sessionId,
         connectionStatus = connectionStatus.toOpenCodeSessionConnectionStatus(),
         contextUsageFraction = contextUsageFraction,
-        onCopySessionId = onCopySessionId,
         onConnectionClick = onConnectionClick,
         onContextClick = onContextClick,
         modifier = modifier,

@@ -9,6 +9,7 @@ struct SessionChatView: View {
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
     @State private var showSessionContext = false
+    @State private var menuExpanded = false
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -25,19 +26,25 @@ struct SessionChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "Session",
-                leading: .back(action: leaveSession),
-                showDivider: true
-            )
+            OpenCodeTopBarOverflowHost(
+                isPresented: $menuExpanded,
+                entries: sessionOverflowMenuEntries
+            ) {
+                OpenCodeTopBar(
+                    title: "Session",
+                    leading: .back(action: leaveSession),
+                    actions: [
+                        .icon(.moreVert, accessibilityLabel: "More options") {
+                            menuExpanded = true
+                        },
+                    ],
+                    showDivider: true
+                )
+            }
 
             OpenCodeSessionStatusBar(
-                sessionID: viewModel.uiState.sessionID,
                 connectionStatus: viewModel.uiState.connectionStatus.openCodeStatus,
                 contextUsageFraction: viewModel.uiState.contextUsageFraction,
-                onCopySessionID: {
-                    UIPasteboard.general.string = viewModel.uiState.sessionID
-                },
                 onConnectionClick: {},
                 onContextClick: { showSessionContext = true }
             )
@@ -104,6 +111,27 @@ struct SessionChatView: View {
     private func leaveSession() {
         viewModel.stopObserving()
         dismiss()
+    }
+
+    private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
+        [
+            OpenCodeOverflowMenuEntry(
+                title: "Session context",
+                icon: .architecture,
+                action: {
+                    menuExpanded = false
+                    showSessionContext = true
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Copy session ID",
+                icon: .contentCopy,
+                action: {
+                    menuExpanded = false
+                    UIPasteboard.general.string = viewModel.uiState.sessionID
+                }
+            ),
+        ]
     }
 
     private var composer: some View {

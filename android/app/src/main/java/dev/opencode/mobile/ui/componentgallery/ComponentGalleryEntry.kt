@@ -16,6 +16,7 @@ enum class ComponentGalleryEntryId {
     Icons,
     OutgoingMessage,
     TopBar,
+    OverflowMenu,
     BottomSheet,
     ListItem,
     ChoiceBadge,
@@ -64,6 +65,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.TopBar,
             title = "Top Bar",
             description = "Page-level navigation bar with leading affordance and actions.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.OverflowMenu,
+            title = "Overflow Menu",
+            description = "Compact anchored popup menu with icon and label entries.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

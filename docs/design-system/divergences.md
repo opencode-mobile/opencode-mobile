@@ -110,3 +110,22 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: replace the iOS SwiftUI scroll view with a UIKit-backed
   `UICollectionView`/`UITableView` timeline using hosted SwiftUI cells before
   treating long-history chat performance as production-ready.
+
+## Overflow menu presentation
+
+- Status: intentional
+- Area: component | accessibility
+- Shared intent: `OpenCodeOverflowMenu` exposes the same entry model, enabled
+  state, opaque elevated panel chrome, and dismissal behavior for compact
+  top-bar overflow actions with a leading icon and single-line label.
+- iOS behavior: presented with a styled popover anchored to the trigger supplied
+  through the component label closure. `OpenCodeOverflowMenuTrigger` provides the
+  standard `moreVert` button for top-bar placement.
+- Android behavior: presented with a styled window popup aligned to the
+  top-trailing overflow-button anchor. The overflow icon in `OpenCodeTopBar`
+  toggles an explicit `expanded` state.
+- Reason: each platform uses its native popup primitive for anchoring and
+  dismissal while sharing OpenCode surface, border, radius, and entry layout.
+- Review trigger: revisit if product design requires a single cross-platform
+  popup implementation or if a shared overflow trigger API is added directly to
+  `OpenCodeTopBar`.

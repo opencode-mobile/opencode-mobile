@@ -78,10 +78,8 @@ fun SessionStatusBarGalleryScreen(modifier: Modifier = Modifier) {
         }
 
         OpenCodeSessionStatusBar(
-            sessionId = "ses_01HZX9TvS3EfE4",
             connectionStatus = status,
             contextUsageFraction = contextUsageFraction,
-            onCopySessionId = {},
             onConnectionClick = {},
             onContextClick = {},
         )
