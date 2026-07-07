@@ -44,6 +44,7 @@ import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
 import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
+import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
 import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -118,7 +119,7 @@ private fun MessageListGalleryPreview(
     suspend fun snapExactlyToEndAndArmFollow() {
         withFrameNanos { }
         withFrameNanos { }
-        listState.scrollToTimelineEndAfterLayoutChange(messageCount = messages.size)
+        listState.scrollExactlyToTimelineEnd(messageCount = messages.size)
         withFrameNanos { }
         autoFollowState.markProgrammaticScrollSettled(
             isPinnedToEnd =

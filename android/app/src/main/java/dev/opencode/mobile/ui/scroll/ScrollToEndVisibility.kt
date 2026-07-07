@@ -126,6 +126,10 @@ suspend fun LazyListState.scrollToTimelineEnd(messageCount: Int) {
     }
 }
 
+suspend fun LazyListState.scrollExactlyToTimelineEnd(messageCount: Int) {
+    scrollToTimelineEnd(messageCount)
+}
+
 private fun LazyListState.distanceFromTimelineEnd(messageCount: Int): Int? {
     val bottomAnchorIndex = messageCount
     val bottomAnchor =

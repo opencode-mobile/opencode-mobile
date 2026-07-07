@@ -48,6 +48,7 @@ import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
 import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
+import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
 import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -149,7 +150,7 @@ internal fun SessionChatTimelineView(
                 logScrollD("$reason exact-snap start count=${props.messages.size}")
                 withFrameNanos { }
                 withFrameNanos { }
-                listState.scrollToTimelineEndAfterLayoutChange(messageCount = props.messages.size)
+                listState.scrollExactlyToTimelineEnd(messageCount = props.messages.size)
                 withFrameNanos { }
                 val settledPinned =
                     listState.isPinnedToTimelineEnd(
@@ -158,9 +159,13 @@ internal fun SessionChatTimelineView(
                         bottomAnchorHeightPx = bottomAnchorHeightPx,
                     )
                 autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                val bottomAnchor =
+                    listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == props.messages.size }
                 logScrollD(
                     "$reason exact-snap settled count=${props.messages.size} pinned=$settledPinned " +
-                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset} " +
+                        "viewportEnd=${listState.layoutInfo.viewportEndOffset} " +
+                        "bottom=${bottomAnchor?.offset}/${bottomAnchor?.size}",
                 )
             }
 
