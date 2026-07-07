@@ -144,7 +144,7 @@ private struct MessageListGalleryPreview: View {
                 autoFollowEnabled: autoFollowEnabled
             ) else { return }
 
-            scrollToEnd()
+            snapToEnd()
         }
         .background(OpenCodeColors.backgroundBase)
     }
@@ -155,25 +155,12 @@ private struct MessageListGalleryPreview: View {
             return
         }
 
-        if isPinnedToEnd, autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) {
+        if autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) {
             snapToEnd()
             return
         }
 
-        if isPinnedToEnd {
-            autoFollowState.updatePinnedState(isPinnedToEnd: true, messageCount: messages.count)
-            return
-        }
-
-        guard autoFollowState.shouldFollowLayoutChange(
-            autoFollowEnabled: autoFollowEnabled,
-            isPinnedToEnd: isPinnedToEnd
-        ) else {
-            autoFollowState.updatePinnedState(isPinnedToEnd: false, messageCount: messages.count)
-            return
-        }
-
-        scrollToEnd()
+        autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
     }
 
     private func followLayoutChangeIfNeededAfterLayoutSettles() {

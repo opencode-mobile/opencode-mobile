@@ -42,10 +42,8 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
-import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEndAfterAppend
 import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
 import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
-import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -116,39 +114,12 @@ private fun MessageListGalleryPreview(
         )
     }
 
-    suspend fun snapExactlyToEndAndArmFollow() {
-        withFrameNanos { }
-        withFrameNanos { }
-        listState.scrollExactlyToTimelineEnd(messageCount = messages.size)
-        withFrameNanos { }
-        autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd =
-                listState.isPinnedToTimelineEnd(
-                    messageCount = messages.size,
-                    tolerancePx = autoFollowTolerancePx,
-                    bottomAnchorHeightPx = bottomAnchorHeightPx,
-                ),
-        )
-    }
-
-    suspend fun animateAppendToEndAndArmFollow() {
-        withFrameNanos { }
-        listState.animateScrollToTimelineEndAfterAppend(messageCount = messages.size)
-        withFrameNanos { }
-        val settledPinned =
-            listState.isPinnedToTimelineEnd(
-                messageCount = messages.size,
-                tolerancePx = autoFollowTolerancePx,
-                bottomAnchorHeightPx = bottomAnchorHeightPx,
-            )
-        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
-        if (settledPinned) {
-            snapExactlyToEndAndArmFollow()
+    suspend fun snapExactlyToEndAndArmFollow(waitForLayout: Boolean = true) {
+        if (waitForLayout) {
+            withFrameNanos { }
+            withFrameNanos { }
         }
-    }
-
-    suspend fun snapLayoutChangeToEndAndArmFollow() {
-        listState.scrollToTimelineEndAfterLayoutChange(messageCount = messages.size)
+        listState.scrollExactlyToTimelineEnd(messageCount = messages.size)
         withFrameNanos { }
         autoFollowState.markProgrammaticScrollSettled(
             isPinnedToEnd =
@@ -177,20 +148,11 @@ private fun MessageListGalleryPreview(
                     isPinnedToEnd = pinned,
                     messageCount = messages.size,
                 )
-            pinned && autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
-                snapExactlyToEndAndArmFollow()
-            pinned ->
-                autoFollowState.updatePinnedState(
-                    isPinnedToEnd = true,
-                    messageCount = messages.size,
-                )
-            autoFollowState.shouldFollowLayoutChange(
-                autoFollowEnabled = autoFollowEnabled,
-                isPinnedToEnd = false,
-            ) -> snapLayoutChangeToEndAndArmFollow()
+            autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
+                snapExactlyToEndAndArmFollow(waitForLayout = false)
             else ->
                 autoFollowState.updatePinnedState(
-                    isPinnedToEnd = false,
+                    isPinnedToEnd = pinned,
                     messageCount = messages.size,
                 )
         }
@@ -216,10 +178,8 @@ private fun MessageListGalleryPreview(
                             isPinnedToEnd = snapshot.isPinnedToEnd,
                             messageCount = messages.size,
                         )
-                    autoFollowState.shouldFollowLayoutChange(
-                        autoFollowEnabled = autoFollowEnabled,
-                        isPinnedToEnd = snapshot.isPinnedToEnd,
-                    ) -> followLayoutChangeAfterSettled()
+                    autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
+                        followLayoutChangeAfterSettled()
                     else ->
                         autoFollowState.updatePinnedState(
                             isPinnedToEnd = false,
@@ -242,7 +202,7 @@ private fun MessageListGalleryPreview(
                 autoFollowEnabled = autoFollowEnabled,
             )
         ) {
-            animateAppendToEndAndArmFollow()
+            snapExactlyToEndAndArmFollow()
         }
     }
 

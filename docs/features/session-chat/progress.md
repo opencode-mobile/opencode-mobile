@@ -138,6 +138,10 @@
   pinned zone: while follow is armed, post-append layout and viewport changes
   perform a non-animated end snap so outgoing-message and composer/keyboard
   resize phases cannot leave a small residual gap.
+- Auto-follow logic is simplified so pinned detection only arms or disarms
+  follow. Initial load, message-count changes, rendered-content changes, and
+  viewport changes all use the same non-animated exact snap when follow is
+  armed.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
