@@ -209,6 +209,7 @@ internal fun SessionChatTimelineView(
                 }
             }
 
+            // AutoFollowPositionObserver: keeps follow armed only while the user remains at the timeline end.
             LaunchedEffect(listState, props.messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
                 snapshotFlow {
                     val bottomAnchor =
@@ -241,6 +242,7 @@ internal fun SessionChatTimelineView(
                 }
             }
 
+            // AutoFollowContentChangeEffect: snaps to the end when existing message content changes size.
             LaunchedEffect(messageLayoutSignature) {
                 logScrollD("layout-signature changed count=${props.messages.size} signature=$messageLayoutSignature")
                 if (props.messages.isNotEmpty()) {
@@ -248,6 +250,7 @@ internal fun SessionChatTimelineView(
                 }
             }
 
+            // InitialTimelineEndSnapEffect: opens a ready timeline at the latest message without animation.
             LaunchedEffect(props.messages.firstOrNull()?.id, props.messages.lastOrNull()?.id) {
                 if (!initialTimelineEndScrollDone && props.messages.isNotEmpty()) {
                     logScrollD("initial-scroll count=${props.messages.size}")
@@ -256,6 +259,7 @@ internal fun SessionChatTimelineView(
                 }
             }
 
+            // AutoFollowMessageCountEffect: snaps to the end when new messages arrive and follow is armed.
             LaunchedEffect(props.messages.size) {
                 logScrollD("message-count changed count=${props.messages.size}")
                 if (
