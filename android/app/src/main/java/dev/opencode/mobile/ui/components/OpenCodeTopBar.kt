@@ -1,11 +1,13 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -13,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -24,6 +28,8 @@ private val TopBarHorizontalPadding = 12.dp
 private val TopBarVerticalPadding = 12.dp
 private val TopBarItemSpacing = 8.dp
 private val TopBarTitleSpacing = 12.dp
+private val TopBarSubtitleSpacing = 0.dp
+private val TopBarTitleBlockHeight = 48.dp
 
 sealed interface OpenCodeTopBarLeading {
     data object None : OpenCodeTopBarLeading
@@ -64,6 +70,7 @@ sealed interface OpenCodeTopBarAction {
 fun OpenCodeTopBar(
     modifier: Modifier = Modifier,
     title: String? = null,
+    subtitle: String? = null,
     leading: OpenCodeTopBarLeading = OpenCodeTopBarLeading.None,
     actions: List<OpenCodeTopBarAction> = emptyList(),
     showDivider: Boolean = false,
@@ -74,6 +81,7 @@ fun OpenCodeTopBar(
     }
 
     val resolvedTitle = title?.takeIf { it.isNotBlank() }
+    val resolvedSubtitle = subtitle?.takeIf { it.isNotBlank() }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -88,13 +96,13 @@ fun OpenCodeTopBar(
             LeadingControl(leading = leading)
 
             if (resolvedTitle != null) {
-                Text(
-                    text = resolvedTitle,
-                    modifier = Modifier.weight(1f).padding(start = if (leading == OpenCodeTopBarLeading.None) 0.dp else TopBarTitleSpacing),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                TopBarTitleBlock(
+                    title = resolvedTitle,
+                    subtitle = resolvedSubtitle,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .padding(start = if (leading == OpenCodeTopBarLeading.None) 0.dp else TopBarTitleSpacing),
                 )
             } else {
                 Spacer(modifier = Modifier.weight(1f))
@@ -105,6 +113,59 @@ fun OpenCodeTopBar(
 
         if (showDivider) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
+}
+
+@Composable
+private fun TopBarTitleBlock(
+    title: String,
+    subtitle: String?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .height(TopBarTitleBlockHeight)
+                .semantics {
+                    contentDescription =
+                        if (subtitle != null) {
+                            "$title, $subtitle"
+                        } else {
+                            title
+                        }
+                },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (subtitle != null) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart),
+                verticalArrangement = Arrangement.spacedBy(TopBarSubtitleSpacing),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
+            Text(
+                text = title,
+                modifier = Modifier.align(Alignment.CenterStart),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -201,6 +262,15 @@ private fun OpenCodeTopBarPreviewContent() {
             title = "Rename session",
             leading = OpenCodeTopBarLeading.CustomIcon(OpenCodeIcons.Edit, "Edit", onClick = {}),
             actions = listOf(OpenCodeTopBarAction.Label("Save", enabled = false, onClick = {})),
+            showDivider = true,
+        )
+
+        Text(text = "Two-line title", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeTopBar(
+            title = "Session",
+            subtitle = "Importing icons explanation",
+            leading = OpenCodeTopBarLeading.Back(onClick = {}),
+            actions = listOf(OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", onClick = {})),
             showDivider = true,
         )
     }

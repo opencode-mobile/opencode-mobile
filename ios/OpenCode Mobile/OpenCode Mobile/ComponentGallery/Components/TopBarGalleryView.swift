@@ -36,6 +36,7 @@ struct TopBarGalleryView: View {
     @State private var leading: GalleryTopBarLeading = .none
     @State private var actions: GalleryTopBarActions = .none
     @State private var showDivider = false
+    @State private var showTwoLine = false
     @State private var actionsEnabled = true
 
     private var title: String {
@@ -47,6 +48,10 @@ struct TopBarGalleryView: View {
         case .label:
             "Project settings"
         }
+    }
+
+    private var subtitle: String? {
+        showTwoLine ? "Importing icons explanation" : nil
     }
 
     private var leadingVariant: OpenCodeTopBarLeading {
@@ -110,6 +115,11 @@ struct TopBarGalleryView: View {
                 ControlGroup(title: "State") {
                     HStack(spacing: 8) {
                         OpenCodeChoiceBadge(
+                            label: "Two-line",
+                            selected: showTwoLine,
+                            action: { showTwoLine.toggle() }
+                        )
+                        OpenCodeChoiceBadge(
                             label: "Divider",
                             selected: showDivider,
                             action: { showDivider.toggle() }
@@ -122,7 +132,7 @@ struct TopBarGalleryView: View {
                     }
                 }
 
-                Text("Switch controls to review the title-only, back, close, icon-action, labeled-action, divider, and disabled-action states.")
+                Text("Switch controls to review the title-only, two-line, back, close, icon-action, labeled-action, divider, and disabled-action states.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
             }
@@ -130,6 +140,7 @@ struct TopBarGalleryView: View {
 
             OpenCodeTopBar(
                 title: title,
+                subtitle: subtitle,
                 leading: leadingVariant,
                 actions: actionVariants,
                 showDivider: showDivider

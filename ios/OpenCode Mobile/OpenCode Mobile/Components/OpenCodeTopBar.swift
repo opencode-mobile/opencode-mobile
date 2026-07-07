@@ -4,6 +4,8 @@ private let topBarMinHeight: CGFloat = 56
 private let topBarHorizontalPadding: CGFloat = 12
 private let topBarVerticalPadding: CGFloat = 12
 private let topBarItemSpacing: CGFloat = 8
+private let topBarSubtitleSpacing: CGFloat = 0
+private let topBarTitleBlockHeight: CGFloat = 48
 
 enum OpenCodeTopBarLeading {
     case none
@@ -27,6 +29,7 @@ private struct TopBarSideWidthKey: PreferenceKey {
 
 struct OpenCodeTopBar: View {
     let title: String?
+    let subtitle: String?
     let leading: OpenCodeTopBarLeading
     let actions: [OpenCodeTopBarAction]
     let showDivider: Bool
@@ -35,6 +38,7 @@ struct OpenCodeTopBar: View {
 
     init(
         title: String? = nil,
+        subtitle: String? = nil,
         leading: OpenCodeTopBarLeading = .none,
         actions: [OpenCodeTopBarAction] = [],
         showDivider: Bool = false
@@ -46,8 +50,10 @@ struct OpenCodeTopBar: View {
         )
 
         let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSubtitle = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         self.title = normalizedTitle?.isEmpty == true ? nil : normalizedTitle
+        self.subtitle = normalizedSubtitle?.isEmpty == true ? nil : normalizedSubtitle
         self.leading = leading
         self.actions = actions
         self.showDivider = showDivider
@@ -114,16 +120,43 @@ struct OpenCodeTopBar: View {
     @ViewBuilder
     private var titleContent: some View {
         if let title {
-            Text(title)
-                .font(OpenCodeTypography.title)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            Group {
+                if let subtitle {
+                    VStack(spacing: topBarSubtitleSpacing) {
+                        titleLabel(title)
+                        subtitleLabel(subtitle)
+                    }
+                } else {
+                    titleLabel(title)
+                }
+            }
+            .frame(height: topBarTitleBlockHeight, alignment: .center)
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(subtitle.map { "\(title), \($0)" } ?? title)
         } else {
             Color.clear
                 .frame(width: 1, height: 1)
                 .accessibilityHidden(true)
         }
+    }
+
+    private func titleLabel(_ title: String) -> some View {
+        Text(title)
+            .font(OpenCodeTypography.title)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.center)
+    }
+
+    private func subtitleLabel(_ subtitle: String) -> some View {
+        Text(subtitle)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textBase)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.center)
     }
 
     @ViewBuilder
@@ -212,6 +245,16 @@ private struct OpenCodeTopBarPreviewContent: View {
                     title: "Rename session",
                     leading: .customIcon(.edit, accessibilityLabel: "Edit", action: {}),
                     actions: [.label(title: "Save", enabled: false, action: {})],
+                    showDivider: true
+                )
+            }
+
+            previewSection("Two-line title") {
+                OpenCodeTopBar(
+                    title: "Session",
+                    subtitle: "Importing icons explanation",
+                    leading: .back(action: {}),
+                    actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
                     showDivider: true
                 )
             }

@@ -37,6 +37,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     var leadingName by rememberSaveable { mutableStateOf(GalleryTopBarLeading.None.name) }
     var actionsName by rememberSaveable { mutableStateOf(GalleryTopBarActions.None.name) }
     var showDivider by rememberSaveable { mutableStateOf(false) }
+    var showTwoLine by rememberSaveable { mutableStateOf(false) }
     var actionsEnabled by rememberSaveable { mutableStateOf(true) }
 
     val leadingSelection =
@@ -57,6 +58,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             GalleryTopBarActions.Icons -> "Session actions"
             GalleryTopBarActions.Label -> "Project settings"
         }
+    val subtitle = if (showTwoLine) "Importing icons explanation" else null
     val leading =
         when (leadingSelection) {
             GalleryTopBarLeading.None -> OpenCodeTopBarLeading.None
@@ -116,6 +118,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             }
 
             ControlGroup(title = "State") {
+                OpenCodeChoiceBadge(label = "Two-line", selected = showTwoLine, onClick = { showTwoLine = !showTwoLine })
                 OpenCodeChoiceBadge(label = "Divider", selected = showDivider, onClick = { showDivider = !showDivider })
                 OpenCodeChoiceBadge(
                     label = "Actions enabled",
@@ -126,7 +129,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
 
             Text(
                 text =
-                    "Switch controls to review the title-only, back, close, icon-action, " +
+                    "Switch controls to review the title-only, two-line, back, close, icon-action, " +
                         "labeled-action, divider, and disabled-action states.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -136,6 +139,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeTopBar(
             modifier = Modifier.fillMaxWidth(),
             title = title,
+            subtitle = subtitle,
             leading = leading,
             actions = actions,
             showDivider = showDivider,
