@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 private let sessionChatTimelineBottomAnchorID = "session-chat-timeline-bottom-anchor"
@@ -138,6 +139,7 @@ private struct SessionChatTimelineReadyView: View {
 
             if showScrollToEnd {
                 OpenCodeActionPill(variant: .scrollToEnd) {
+                    logScroll("pill-click count=\(props.messages.count)")
                     scrollToLastMessage()
                 }
                 .padding(.bottom, 12)
@@ -146,10 +148,12 @@ private struct SessionChatTimelineReadyView: View {
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .onAppear {
+            logScroll("appear count=\(props.messages.count) pinned=\(isPinnedToEnd)")
             autoFollowState = MessageListAutoFollowState(initialMessageCount: props.messages.count)
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
         }
         .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
+            logScroll("pinned-change count=\(props.messages.count) pinned=\(isPinnedToEnd) userScrolling=\(isUserScrolling)")
             if isUserScrolling || isPinnedToEnd {
                 autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
             } else {
@@ -157,26 +161,32 @@ private struct SessionChatTimelineReadyView: View {
             }
         }
         .onChange(of: contentHeight) { _, _ in
+            logScroll("content-height count=\(props.messages.count) height=\(contentHeight) viewport=\(viewportHeight)")
             followLayoutChangeIfNeeded()
         }
         .onChange(of: viewportHeight) { _, _ in
+            logScroll("viewport-height count=\(props.messages.count) height=\(contentHeight) viewport=\(viewportHeight)")
             followLayoutChangeIfNeeded()
         }
         .onChange(of: props.messages.layoutSignature) { _, _ in
+            logScroll("layout-signature changed count=\(props.messages.count) signature=\(props.messages.layoutSignature)")
             followLayoutChangeIfNeededAfterLayoutSettles()
         }
         .onChange(of: props.messages.count) { _, newCount in
+            logScroll("message-count changed count=\(newCount)")
             guard autoFollowState.onMessageCountChanged(
                 messageCount: newCount,
                 autoFollowEnabled: true
             ) else { return }
 
+            logScroll("append-follow count=\(newCount)")
             scrollToLastMessage()
         }
     }
 
     private func followLayoutChangeIfNeeded() {
         if isUserScrolling || isPinnedToEnd {
+            logScroll("layout-check no-op count=\(props.messages.count) pinned=\(isPinnedToEnd) userScrolling=\(isUserScrolling)")
             autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
             return
         }
@@ -185,14 +195,17 @@ private struct SessionChatTimelineReadyView: View {
             autoFollowEnabled: true,
             isPinnedToEnd: isPinnedToEnd
         ) else {
+            logScroll("layout-check disarm count=\(props.messages.count)")
             autoFollowState.updatePinnedState(isPinnedToEnd: false, messageCount: props.messages.count)
             return
         }
 
+        logScroll("layout-check follow count=\(props.messages.count)")
         snapToLastMessage()
     }
 
     private func followLayoutChangeIfNeededAfterLayoutSettles() {
+        logScroll("layout-check scheduled count=\(props.messages.count)")
         Task { @MainActor in
             await Task.yield()
             await Task.yield()
@@ -202,6 +215,7 @@ private struct SessionChatTimelineReadyView: View {
 
     private func scrollToLastMessage() {
         guard !props.messages.isEmpty else { return }
+        logScroll("animate-to-end start count=\(props.messages.count)")
         scrollPositionID = nil
         Task { @MainActor in
             await Task.yield()
@@ -210,11 +224,13 @@ private struct SessionChatTimelineReadyView: View {
             }
             await Task.yield()
             autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+            logScroll("animate-to-end settled count=\(props.messages.count) pinned=\(isPinnedToEnd) position=\(scrollPositionID ?? "-")")
         }
     }
 
     private func snapToLastMessage() {
         guard !props.messages.isEmpty else { return }
+        logScroll("layout-snap start count=\(props.messages.count)")
         scrollPositionID = nil
         Task { @MainActor in
             await Task.yield()
@@ -225,7 +241,12 @@ private struct SessionChatTimelineReadyView: View {
             }
             await Task.yield()
             autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+            logScroll("layout-snap settled count=\(props.messages.count) pinned=\(isPinnedToEnd) position=\(scrollPositionID ?? "-")")
         }
+    }
+
+    private func logScroll(_ message: String) {
+        OpenCodeLog.sessionChat.debug("scroll \(message, privacy: .public)")
     }
 }
 

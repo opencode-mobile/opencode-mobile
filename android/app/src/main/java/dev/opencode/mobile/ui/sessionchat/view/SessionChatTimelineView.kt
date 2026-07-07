@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -128,46 +129,59 @@ internal fun SessionChatTimelineView(
             var initialTimelineEndScrollDone by remember { mutableStateOf(false) }
 
             suspend fun animateToEndAndArmFollow() {
+                logScrollD("animate-to-end start count=${props.messages.size}")
                 listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
                 withFrameNanos { }
-                autoFollowState.markProgrammaticScrollSettled(
-                    isPinnedToEnd =
-                        listState.isPinnedToTimelineEnd(
-                            messageCount = props.messages.size,
-                            tolerancePx = autoFollowTolerancePx,
-                            bottomAnchorHeightPx = bottomAnchorHeightPx,
-                        ),
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                logScrollD(
+                    "animate-to-end settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
                 )
             }
 
             suspend fun animateAppendToEndAndArmFollow() {
+                logScrollD("append-follow start count=${props.messages.size}")
                 withFrameNanos { }
                 listState.animateScrollToTimelineEndAfterAppend(messageCount = props.messages.size)
                 withFrameNanos { }
-                autoFollowState.markProgrammaticScrollSettled(
-                    isPinnedToEnd =
-                        listState.isPinnedToTimelineEnd(
-                            messageCount = props.messages.size,
-                            tolerancePx = autoFollowTolerancePx,
-                            bottomAnchorHeightPx = bottomAnchorHeightPx,
-                        ),
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                logScrollD(
+                    "append-follow settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
                 )
             }
 
             suspend fun snapLayoutChangeToEndAndArmFollow() {
+                logScrollD("layout-snap start count=${props.messages.size}")
                 listState.scrollToTimelineEndAfterLayoutChange(messageCount = props.messages.size)
                 withFrameNanos { }
-                autoFollowState.markProgrammaticScrollSettled(
-                    isPinnedToEnd =
-                        listState.isPinnedToTimelineEnd(
-                            messageCount = props.messages.size,
-                            tolerancePx = autoFollowTolerancePx,
-                            bottomAnchorHeightPx = bottomAnchorHeightPx,
-                        ),
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                logScrollD(
+                    "layout-snap settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
                 )
             }
 
             suspend fun followLayoutChangeAfterSettled() {
+                logScrollD("layout-check scheduled count=${props.messages.size}")
                 withFrameNanos { }
                 withFrameNanos { }
 
@@ -179,20 +193,30 @@ internal fun SessionChatTimelineView(
                     )
 
                 when {
-                    listState.isScrollInProgress || pinned ->
+                    listState.isScrollInProgress || pinned -> {
+                        logScrollD(
+                            "layout-check no-op count=${props.messages.size} pinned=$pinned " +
+                                "scrolling=${listState.isScrollInProgress}",
+                        )
                         autoFollowState.updatePinnedState(
                             isPinnedToEnd = pinned,
                             messageCount = props.messages.size,
                         )
+                    }
                     autoFollowState.shouldFollowLayoutChange(
                         autoFollowEnabled = true,
                         isPinnedToEnd = false,
-                    ) -> snapLayoutChangeToEndAndArmFollow()
-                    else ->
+                    ) -> {
+                        logScrollD("layout-check follow count=${props.messages.size}")
+                        snapLayoutChangeToEndAndArmFollow()
+                    }
+                    else -> {
+                        logScrollD("layout-check disarm count=${props.messages.size}")
                         autoFollowState.updatePinnedState(
                             isPinnedToEnd = false,
                             messageCount = props.messages.size,
                         )
+                    }
                 }
             }
 
@@ -210,6 +234,7 @@ internal fun SessionChatTimelineView(
                 }
                     .distinctUntilChanged()
                     .collect { snapshot ->
+                        logScrollD("snapshot count=${props.messages.size} $snapshot")
                         when {
                             snapshot.isScrollInProgress || snapshot.isPinnedToEnd ->
                                 autoFollowState.updatePinnedState(
@@ -230,6 +255,7 @@ internal fun SessionChatTimelineView(
             }
 
             LaunchedEffect(messageLayoutSignature) {
+                logScrollD("layout-signature changed count=${props.messages.size} signature=$messageLayoutSignature")
                 if (props.messages.isNotEmpty()) {
                     followLayoutChangeAfterSettled()
                 }
@@ -237,12 +263,14 @@ internal fun SessionChatTimelineView(
 
             LaunchedEffect(props.messages.firstOrNull()?.id, props.messages.lastOrNull()?.id) {
                 if (!initialTimelineEndScrollDone && props.messages.isNotEmpty()) {
+                    logScrollD("initial-scroll count=${props.messages.size}")
                     animateToEndAndArmFollow()
                     initialTimelineEndScrollDone = true
                 }
             }
 
             LaunchedEffect(props.messages.size) {
+                logScrollD("message-count changed count=${props.messages.size}")
                 if (
                     autoFollowState.onMessageCountChanged(
                         messageCount = props.messages.size,
@@ -299,6 +327,7 @@ internal fun SessionChatTimelineView(
                         variant = OpenCodeActionPillVariant.ScrollToEnd,
                         onClick = {
                             coroutineScope.launch {
+                                logScrollD("pill-click count=${props.messages.size}")
                                 animateToEndAndArmFollow()
                             }
                         },
@@ -384,6 +413,12 @@ private data class SessionChatAutoFollowLayoutSnapshot(
     val bottomAnchorOffset: Int?,
     val bottomAnchorSize: Int?,
 )
+
+private const val SessionChatScrollLogTag = "SessionChatScroll"
+
+private fun logScrollD(message: String) {
+    runCatching { Log.d(SessionChatScrollLogTag, message) }
+}
 
 private fun List<SessionChatMessageItem>.layoutSignature(): Int =
     fold(size) { result, message ->

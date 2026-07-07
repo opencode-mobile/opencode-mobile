@@ -130,6 +130,10 @@
 - `OpenCodeOutgoingMessage` now always renders outgoing prompts at full height;
   the expand/collapse affordance was removed to avoid uncertain row height in
   Session Chat auto-follow.
+- Production Session Chat now emits temporary scroll diagnostics around
+  pinned-state, content-size, layout-signature, append-follow, and layout-snap
+  transitions. Android logs use the `SessionChatScroll` tag; iOS logs use the
+  `session-chat` logger category with a `scroll` prefix.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and
