@@ -54,7 +54,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Switch samples, then use the chevron on long messages to expand or collapse.",
+            text = "Switch samples to review short and long outgoing messages at full height.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

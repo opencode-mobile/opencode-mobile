@@ -1,27 +1,51 @@
 import SwiftUI
 
 private let messageListGalleryBottomAnchorID = "message-list-gallery-bottom-anchor"
+private let messageListGalleryPinnedTolerance: CGFloat = 8
+private let messageListGalleryAutoFollowExtraTolerance: CGFloat = 32
 
 struct MessageListGalleryView: View {
     @Bindable var model: MessageListGalleryModel
 
     var body: some View {
-        MessageListGalleryPreview(messages: model.messages)
+        MessageListGalleryPreview(
+            messages: model.messages,
+            autoFollowEnabled: model.autoFollowEnabled,
+            onAddMessage: { model.addMessage() },
+            onRemoveLastMessage: { model.removeLastMessage() },
+            onResizeLastMessage: { model.resizeLastMessage() }
+        )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct MessageListGalleryPreview: View {
     let messages: [MessageListGalleryMessage]
+    let autoFollowEnabled: Bool
+    let onAddMessage: () -> Void
+    let onRemoveLastMessage: () -> Void
+    let onResizeLastMessage: () -> Void
 
     @State private var scrollPositionID: String?
     @State private var scrollDistanceFromBottom = CGFloat.greatestFiniteMagnitude
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var isUserScrolling = false
+    @State private var autoFollowState = MessageListAutoFollowState(initialMessageCount: 0)
 
     private var isScrollable: Bool {
         contentHeight > viewportHeight + 8
+    }
+
+    private var isPinnedToEnd: Bool {
+        guard isScrollable else { return true }
+
+        if #available(iOS 18, *) {
+            return scrollDistanceFromBottom <=
+                messageListGalleryPinnedTolerance + messageListGalleryAutoFollowExtraTolerance
+        }
+
+        return scrollPositionID == messageListGalleryBottomAnchorID
     }
 
     private var showScrollToEnd: Bool {
@@ -75,9 +99,76 @@ private struct MessageListGalleryPreview: View {
                 .padding(.bottom, 12)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
+
+            MessageListAutoFollowIndicator(
+                thresholdMet: isPinnedToEnd,
+                autoFollowEnabled: autoFollowEnabled
+            )
+            .padding(.top, 64)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
+
+            MessageListGalleryFloatingControls(
+                canRemove: !messages.isEmpty,
+                onAddMessage: onAddMessage,
+                onRemoveLastMessage: onRemoveLastMessage,
+                onResizeLastMessage: onResizeLastMessage
+            )
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
+        .onAppear {
+            autoFollowState = MessageListAutoFollowState(initialMessageCount: messages.count)
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+        }
+        .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
+            if isUserScrolling || isPinnedToEnd {
+                autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+            } else {
+                followLayoutChangeIfNeeded()
+            }
+        }
+        .onChange(of: contentHeight) { _, _ in
+            followLayoutChangeIfNeeded()
+        }
+        .onChange(of: viewportHeight) { _, _ in
+            followLayoutChangeIfNeeded()
+        }
+        .onChange(of: messages.layoutSignature) { _, _ in
+            followLayoutChangeIfNeededAfterLayoutSettles()
+        }
+        .onChange(of: messages.count) { _, newCount in
+            guard autoFollowState.onMessageCountChanged(
+                messageCount: newCount,
+                autoFollowEnabled: autoFollowEnabled
+            ) else { return }
+
+            snapToEnd()
+        }
         .background(OpenCodeColors.backgroundBase)
+    }
+
+    private func followLayoutChangeIfNeeded() {
+        if isUserScrolling {
+            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+            return
+        }
+
+        if autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) {
+            snapToEnd()
+            return
+        }
+
+        autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
+    }
+
+    private func followLayoutChangeIfNeededAfterLayoutSettles() {
+        Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+            followLayoutChangeIfNeeded()
+        }
     }
 
     private func scrollToEnd() {
@@ -88,7 +179,98 @@ private struct MessageListGalleryPreview: View {
             withAnimation(.easeOut(duration: 0.2)) {
                 scrollPositionID = messageListGalleryBottomAnchorID
             }
+            await Task.yield()
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
         }
+    }
+
+    private func snapToEnd() {
+        guard !messages.isEmpty else { return }
+        scrollPositionID = nil
+        Task { @MainActor in
+            await Task.yield()
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                scrollPositionID = messageListGalleryBottomAnchorID
+            }
+            await Task.yield()
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+        }
+    }
+}
+
+private extension Array where Element == MessageListGalleryMessage {
+    var layoutSignature: Int {
+        reduce(count) { result, message in
+            var hasher = Hasher()
+            hasher.combine(result)
+            hasher.combine(message.id)
+            hasher.combine(message.text.count)
+            return hasher.finalize()
+        }
+    }
+}
+
+private struct MessageListGalleryFloatingControls: View {
+    let canRemove: Bool
+    let onAddMessage: () -> Void
+    let onRemoveLastMessage: () -> Void
+    let onResizeLastMessage: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            OpenCodeButton(
+                variant: .compactText(title: "+"),
+                contrast: .low,
+                action: onAddMessage
+            )
+            OpenCodeButton(
+                variant: .compactText(title: "-"),
+                enabled: canRemove,
+                contrast: .low,
+                action: onRemoveLastMessage
+            )
+            OpenCodeButton(
+                variant: .compactText(title: "/"),
+                enabled: canRemove,
+                contrast: .low,
+                action: onResizeLastMessage
+            )
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .background(OpenCodeColors.surfaceBase, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+        )
+    }
+}
+
+private struct MessageListAutoFollowIndicator: View {
+    let thresholdMet: Bool
+    let autoFollowEnabled: Bool
+
+    private var label: String {
+        if thresholdMet && autoFollowEnabled {
+            return "Auto-follow armed"
+        }
+
+        return thresholdMet ? "Threshold met" : "Threshold missed"
+    }
+
+    var body: some View {
+        Text(label)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(thresholdMet ? OpenCodeColors.textInteractiveBase : OpenCodeColors.textBase)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(OpenCodeColors.surfaceBase, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+            )
     }
 }
 

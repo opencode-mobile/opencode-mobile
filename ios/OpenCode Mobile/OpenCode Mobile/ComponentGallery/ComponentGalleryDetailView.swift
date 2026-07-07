@@ -93,8 +93,12 @@ struct ComponentGalleryDetailView: View {
 
             Menu {
                 Toggle(
-                    "Enable live messages",
+                    "Live messages",
                     isOn: $messageListGalleryModel.liveMessagesEnabled
+                )
+                Toggle(
+                    "Auto-follow new messages",
+                    isOn: $messageListGalleryModel.autoFollowEnabled
                 )
             } label: {
                 OpenCodeButton(

@@ -51,7 +51,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .outgoingMessage,
         title: "Outgoing Message",
-        description: "Trailing prompt card with five-line collapse behavior.",
+        description: "Trailing prompt card that renders sent prompts at full height.",
         category: .components
     ),
     ComponentGalleryEntry(

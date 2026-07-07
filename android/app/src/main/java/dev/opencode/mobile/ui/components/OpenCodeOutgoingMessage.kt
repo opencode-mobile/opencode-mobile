@@ -18,10 +18,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,14 +28,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private const val OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT = 5
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.84f
-private val OutgoingMessageCollapsedRenderedMarkdownHeight = 140.dp
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
 private val OutgoingMessagePaddingHorizontal = 18.dp
 private val OutgoingMessagePaddingVertical = 14.dp
@@ -48,7 +41,6 @@ private val OutgoingMessageFooterSpacing = 6.dp
 private val OutgoingMessageControlItemSpacing = 8.dp
 private val OutgoingMessageActionIconTouchTarget = 28.dp
 private val OutgoingMessageActionIconSize = 16.dp
-private val OutgoingMessageChevronIconSize = 16.dp
 
 @Composable
 fun OpenCodeOutgoingMessage(
@@ -57,12 +49,7 @@ fun OpenCodeOutgoingMessage(
     onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier,
     renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument? = null,
-    initiallyExpanded: Boolean = false,
-    initialRenderedMarkdownHeight: Dp = 1.dp,
-    onRenderedMarkdownHeightChange: (Dp) -> Unit = {},
 ) {
-    var expanded by rememberSaveable(text) { mutableStateOf(initiallyExpanded) }
-    var expandable by rememberSaveable(text) { mutableStateOf(false) }
     val context = LocalContext.current
 
     BoxWithConstraints(
@@ -91,29 +78,13 @@ fun OpenCodeOutgoingMessage(
                         OpenCodeRenderedMarkdown(
                             document = renderedMarkdown,
                             variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
-                            initialHeight = initialRenderedMarkdownHeight,
-                            collapsedMaxHeight = OutgoingMessageCollapsedRenderedMarkdownHeight,
-                            expanded = expanded,
-                            onExpandableChange = { expandable = it },
-                            onContentHeightChange = { height ->
-                                onRenderedMarkdownHeightChange(minOf(height, OutgoingMessageCollapsedRenderedMarkdownHeight))
-                            },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
                         Text(
                             text = text,
                             style = MaterialTheme.typography.bodyLarge,
-                            maxLines = if (expanded) Int.MAX_VALUE else OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT,
                             overflow = TextOverflow.Clip,
-                            onTextLayout = { result ->
-                                expandable =
-                                    if (expanded) {
-                                        result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
-                                    } else {
-                                        result.hasVisualOverflow || result.lineCount > OUTGOING_MESSAGE_COLLAPSED_LINE_COUNT
-                                    }
-                            },
                         )
                     }
 
@@ -121,18 +92,6 @@ fun OpenCodeOutgoingMessage(
                         modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageContentSpacing),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (expandable) {
-                            OutgoingMessageIconButton(
-                                contentDescription = if (expanded) "Collapse message" else "Expand message",
-                                onClick = { expanded = !expanded },
-                            ) {
-                                Icon(
-                                    imageVector = if (expanded) OpenCodeIcons.CollapseContent else OpenCodeIcons.ExpandContent,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(OutgoingMessageChevronIconSize),
-                                )
-                            }
-                        }
                         Spacer(modifier = Modifier.weight(1f))
                         OutgoingMessageIconButton(
                             contentDescription = "Restore message to composer",
@@ -226,24 +185,11 @@ private fun OpenCodeOutgoingMessageShortPreview() {
 
 @Preview(showBackground = true)
 @Composable
-private fun OpenCodeOutgoingMessageCollapsedPreview() {
+private fun OpenCodeOutgoingMessageLongPreview() {
     OpenCodeTheme(darkTheme = true) {
         OpenCodeOutgoingMessage(
             text = OutgoingMessageLongPreviewText,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-            onRestoreClick = {},
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeOutgoingMessageExpandedPreview() {
-    OpenCodeTheme(darkTheme = true) {
-        OpenCodeOutgoingMessage(
-            text = OutgoingMessageLongPreviewText,
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-            initiallyExpanded = true,
             onRestoreClick = {},
         )
     }

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.scroll
 
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 
 private const val BottomAnchorHeightPx = 1
@@ -27,7 +29,11 @@ fun LazyListState.shouldShowScrollToEnd(
     val bottomAnchor =
         layoutInfo.visibleItemsInfo.lastOrNull { it.index == bottomAnchorIndex }
     if (bottomAnchor != null) {
-        val trailingGap = bottomAnchor.offset + bottomAnchor.size - layoutInfo.viewportEndOffset
+        val trailingGap =
+            bottomAnchor.offset +
+                bottomAnchor.size +
+                layoutInfo.afterContentPadding -
+                layoutInfo.viewportEndOffset
         return trailingGap > revealThresholdPx
     }
 
@@ -52,8 +58,86 @@ fun LazyListState.shouldShowScrollToEndPill(
 ): Boolean =
     !isScrollInProgress && shouldShowScrollToEnd(messageCount, revealThresholdMinPx)
 
+fun LazyListState.isPinnedToTimelineEnd(
+    messageCount: Int,
+    tolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+): Boolean {
+    if (messageCount == 0) return true
+
+    val bottomAnchorIndex = messageCount
+    val bottomAnchor =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
+    if (bottomAnchor != null) {
+        val contentEnd =
+            bottomAnchor.offset +
+                bottomAnchor.size +
+                layoutInfo.afterContentPadding
+        return contentEnd <= layoutInfo.viewportEndOffset + tolerancePx
+    }
+
+    val lastMessageIndex = messageCount - 1
+    val lastMessage =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastMessageIndex }
+            ?: return false
+
+    val lastVisible = layoutInfo.visibleItemsInfo.maxByOrNull { it.index } ?: return false
+    if (lastVisible.index < lastMessageIndex) return false
+
+    val estimatedContentEnd =
+        lastMessage.offset +
+            lastMessage.size +
+            layoutInfo.afterContentPadding +
+            bottomAnchorHeightPx
+    return estimatedContentEnd <= layoutInfo.viewportEndOffset + tolerancePx
+}
+
+suspend fun LazyListState.animateScrollToTimelineEndAfterAppend(messageCount: Int) {
+    if (messageCount == 0) return
+
+    val distanceFromEnd = distanceFromTimelineEnd(messageCount)
+    if (distanceFromEnd != null && distanceFromEnd > 0 && distanceFromEnd <= layoutInfo.viewportSize.height) {
+        animateScrollBy(distanceFromEnd.toFloat())
+    } else {
+        animateScrollToTimelineEnd(messageCount)
+    }
+}
+
+suspend fun LazyListState.scrollToTimelineEndAfterLayoutChange(messageCount: Int) {
+    if (messageCount == 0) return
+
+    val distanceFromEnd = distanceFromTimelineEnd(messageCount)
+    if (distanceFromEnd != null && distanceFromEnd > 0 && distanceFromEnd <= layoutInfo.viewportSize.height) {
+        scrollBy(distanceFromEnd.toFloat())
+    } else {
+        scrollToTimelineEnd(messageCount)
+    }
+}
+
 suspend fun LazyListState.animateScrollToTimelineEnd(messageCount: Int) {
     if (messageCount > 0) {
         animateScrollToItem(messageCount)
     }
+}
+
+suspend fun LazyListState.scrollToTimelineEnd(messageCount: Int) {
+    if (messageCount > 0) {
+        scrollToItem(messageCount)
+    }
+}
+
+suspend fun LazyListState.scrollExactlyToTimelineEnd(messageCount: Int) {
+    scrollToTimelineEnd(messageCount)
+}
+
+private fun LazyListState.distanceFromTimelineEnd(messageCount: Int): Int? {
+    val bottomAnchorIndex = messageCount
+    val bottomAnchor =
+        layoutInfo.visibleItemsInfo.firstOrNull { it.index == bottomAnchorIndex }
+            ?: return null
+
+    return bottomAnchor.offset +
+        bottomAnchor.size +
+        layoutInfo.afterContentPadding -
+        layoutInfo.viewportEndOffset
 }

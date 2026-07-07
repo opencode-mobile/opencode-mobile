@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,10 +24,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -38,11 +44,15 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
+import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
+import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
+import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.displayLabel
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 internal data class SessionChatTimelineViewProps(
@@ -93,6 +103,17 @@ internal fun SessionChatTimelineView(
         SessionChatTimelineState.Ready -> {
             val listState = rememberLazyListState()
             val revealThresholdMinPx = with(LocalDensity.current) { 120.dp.roundToPx() }
+            val autoFollowTolerancePx = with(LocalDensity.current) { SessionChatAutoFollowTolerance.roundToPx() }
+            val bottomAnchorHeightPx = with(LocalDensity.current) { SessionChatTimelineBottomAnchorHeight.roundToPx() }
+            val isPinnedToEnd by remember(props.messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
+                derivedStateOf {
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                }
+            }
             val showScrollToEnd by remember(props.messages, revealThresholdMinPx) {
                 derivedStateOf {
                     listState.shouldShowScrollToEndPill(
@@ -101,7 +122,155 @@ internal fun SessionChatTimelineView(
                     )
                 }
             }
+            val messageLayoutSignature = remember(props.messages) { props.messages.layoutSignature() }
             val coroutineScope = rememberCoroutineScope()
+            val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = props.messages.size) }
+            var initialTimelineEndScrollDone by remember { mutableStateOf(false) }
+
+            suspend fun animateToEndAndArmFollow() {
+                logScrollD("animate-to-end start count=${props.messages.size}")
+                listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
+                withFrameNanos { }
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                logScrollD(
+                    "animate-to-end settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
+                )
+            }
+
+            suspend fun snapExactlyToEndAndArmFollow(
+                reason: String,
+                waitForLayout: Boolean = true,
+            ) {
+                logScrollD("$reason exact-snap start count=${props.messages.size}")
+                if (waitForLayout) {
+                    withFrameNanos { }
+                    withFrameNanos { }
+                }
+                listState.scrollExactlyToTimelineEnd(messageCount = props.messages.size)
+                withFrameNanos { }
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                val bottomAnchor =
+                    listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == props.messages.size }
+                logScrollD(
+                    "$reason exact-snap settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset} " +
+                        "viewportEnd=${listState.layoutInfo.viewportEndOffset} " +
+                        "bottom=${bottomAnchor?.offset}/${bottomAnchor?.size}",
+                )
+            }
+
+            suspend fun followLayoutChangeAfterSettled() {
+                logScrollD("layout-check scheduled count=${props.messages.size}")
+                withFrameNanos { }
+                withFrameNanos { }
+
+                val pinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+
+                when {
+                    listState.isScrollInProgress -> {
+                        logScrollD(
+                            "layout-check no-op count=${props.messages.size} pinned=$pinned " +
+                                "scrolling=${listState.isScrollInProgress}",
+                        )
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = pinned,
+                            messageCount = props.messages.size,
+                        )
+                    }
+                    autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = true) -> {
+                        logScrollD("layout-check ensure-end count=${props.messages.size}")
+                        snapExactlyToEndAndArmFollow(reason = "layout-check", waitForLayout = false)
+                    }
+                    else -> {
+                        logScrollD("layout-check update-armed count=${props.messages.size} pinned=$pinned")
+                        autoFollowState.updatePinnedState(
+                            isPinnedToEnd = pinned,
+                            messageCount = props.messages.size,
+                        )
+                    }
+                }
+            }
+
+            // AutoFollowPositionObserver: keeps follow armed only while the user remains at the timeline end.
+            LaunchedEffect(listState, props.messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
+                snapshotFlow {
+                    val bottomAnchor =
+                        listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == props.messages.size }
+                    SessionChatAutoFollowLayoutSnapshot(
+                        isPinnedToEnd = isPinnedToEnd,
+                        isScrollInProgress = listState.isScrollInProgress,
+                        viewportEndOffset = listState.layoutInfo.viewportEndOffset,
+                        bottomAnchorOffset = bottomAnchor?.offset,
+                        bottomAnchorSize = bottomAnchor?.size,
+                    )
+                }
+                    .distinctUntilChanged()
+                    .collect { snapshot ->
+                        logScrollD("snapshot count=${props.messages.size} $snapshot")
+                        when {
+                            snapshot.isScrollInProgress || snapshot.isPinnedToEnd ->
+                                autoFollowState.updatePinnedState(
+                                    isPinnedToEnd = snapshot.isPinnedToEnd,
+                                    messageCount = props.messages.size,
+                                )
+                            autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = true) ->
+                                followLayoutChangeAfterSettled()
+                            else ->
+                                autoFollowState.updatePinnedState(
+                                    isPinnedToEnd = false,
+                                    messageCount = props.messages.size,
+                                )
+                        }
+                }
+            }
+
+            // AutoFollowContentChangeEffect: snaps to the end when existing message content changes size.
+            LaunchedEffect(messageLayoutSignature) {
+                logScrollD("layout-signature changed count=${props.messages.size} signature=$messageLayoutSignature")
+                if (props.messages.isNotEmpty()) {
+                    followLayoutChangeAfterSettled()
+                }
+            }
+
+            // InitialTimelineEndSnapEffect: opens a ready timeline at the latest message without animation.
+            LaunchedEffect(props.messages.firstOrNull()?.id, props.messages.lastOrNull()?.id) {
+                if (!initialTimelineEndScrollDone && props.messages.isNotEmpty()) {
+                    logScrollD("initial-scroll count=${props.messages.size}")
+                    snapExactlyToEndAndArmFollow(reason = "initial-scroll", waitForLayout = true)
+                    initialTimelineEndScrollDone = true
+                }
+            }
+
+            // AutoFollowMessageCountEffect: snaps to the end when new messages arrive and follow is armed.
+            LaunchedEffect(props.messages.size) {
+                logScrollD("message-count changed count=${props.messages.size}")
+                if (
+                    autoFollowState.onMessageCountChanged(
+                        messageCount = props.messages.size,
+                        autoFollowEnabled = true,
+                    )
+                ) {
+                    snapExactlyToEndAndArmFollow(reason = "message-count", waitForLayout = true)
+                }
+            }
 
             Box(modifier = modifier.fillMaxSize()) {
                 PullToRefreshBox(
@@ -131,7 +300,7 @@ internal fun SessionChatTimelineView(
                             )
                         }
                         item(key = SessionChatTimelineBottomAnchorKey) {
-                            Spacer(modifier = Modifier.height(1.dp))
+                            Spacer(modifier = Modifier.height(SessionChatTimelineBottomAnchorHeight))
                         }
                     }
                 }
@@ -149,7 +318,8 @@ internal fun SessionChatTimelineView(
                         variant = OpenCodeActionPillVariant.ScrollToEnd,
                         onClick = {
                             coroutineScope.launch {
-                                listState.animateScrollToTimelineEnd(messageCount = props.messages.size)
+                                logScrollD("pill-click count=${props.messages.size}")
+                                animateToEndAndArmFollow()
                             }
                         },
                     )
@@ -224,6 +394,37 @@ private fun AssistantMessageBubble(
 }
 
 private const val SessionChatTimelineBottomAnchorKey = "session-chat-timeline-bottom"
+private val SessionChatTimelineBottomAnchorHeight = 1.dp
+private val SessionChatAutoFollowTolerance = 32.dp
+
+private data class SessionChatAutoFollowLayoutSnapshot(
+    val isPinnedToEnd: Boolean,
+    val isScrollInProgress: Boolean,
+    val viewportEndOffset: Int,
+    val bottomAnchorOffset: Int?,
+    val bottomAnchorSize: Int?,
+)
+
+private const val SessionChatScrollLogTag = "SessionChatScroll"
+
+private fun logScrollD(message: String) {
+    runCatching { Log.d(SessionChatScrollLogTag, message) }
+}
+
+private fun List<SessionChatMessageItem>.layoutSignature(): Int =
+    fold(size) { result, message ->
+        31 * result +
+            message.id.hashCode() +
+            message.text.length +
+            message.renderedMarkdown.layoutSignature() +
+            if (message.isStreaming) 1 else 0
+    }
+
+private fun MarkdownDocument?.layoutSignature(): Int =
+    when (this) {
+        null -> 0
+        else -> 31 * sourceHash + blocks.size
+    }
 
 @Composable
 private fun FallbackMessageBubble(

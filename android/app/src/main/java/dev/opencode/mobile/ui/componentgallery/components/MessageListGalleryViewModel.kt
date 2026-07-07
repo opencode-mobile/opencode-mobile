@@ -14,6 +14,9 @@ class MessageListGalleryViewModel : ViewModel() {
     var liveMessagesEnabled by mutableStateOf(false)
         private set
 
+    var autoFollowEnabled by mutableStateOf(false)
+        private set
+
     var messages by mutableStateOf(MessageListGalleryMocks.messages)
         private set
 
@@ -28,6 +31,27 @@ class MessageListGalleryViewModel : ViewModel() {
         } else {
             stopLiveMessages()
         }
+    }
+
+    fun updateAutoFollow(enabled: Boolean) {
+        autoFollowEnabled = enabled
+    }
+
+    fun addMessage() {
+        appendLiveMessage()
+    }
+
+    fun removeLastMessage() {
+        messages = messages.dropLast(1)
+    }
+
+    fun resizeLastMessage() {
+        val lastMessage = messages.lastOrNull() ?: return
+        messages =
+            messages.dropLast(1) +
+                lastMessage.copy(
+                    text = lastMessage.text.toggledResizeText(),
+                )
     }
 
     private fun startLiveMessages() {
@@ -59,5 +83,21 @@ class MessageListGalleryViewModel : ViewModel() {
     override fun onCleared() {
         stopLiveMessages()
         super.onCleared()
+    }
+
+    private fun String.toggledResizeText(): String =
+        if (contains(ResizeMarker)) {
+            substringBefore(ResizeMarker).trimEnd()
+        } else {
+            this +
+                "\n\n" +
+                ResizeMarker +
+                "\n" +
+                "This extra gallery-only paragraph expands the final message so the scroll harness can verify resize behavior. " +
+                "Tap the resize control again to shrink the message back to its original height."
+        }
+
+    private companion object {
+        const val ResizeMarker = "[gallery-resized]"
     }
 }
