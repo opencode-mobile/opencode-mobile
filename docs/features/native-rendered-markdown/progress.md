@@ -198,6 +198,49 @@
   capture shorthand decoding, capture-depth recursion guards for C/C++-style
   `$self` loops, `java-basic` Joni/iOS-hybrid regression coverage, per-language
   smoke tests, and gallery language-sweep blocks for Java, C#, SQL, and TOML.
+- 2026-07-04: Expanded OPE-29 language recognition to the requested top-language
+  list through Shiki-backed smoke fixtures and bundled TextMate resources. The
+  manifest now has 62 language entries and 74 grammar JSON resources (~4.7 MB),
+  including Dart, MATLAB, Groovy, Objective-C, Clojure, CoffeeScript, Fortran
+  free/fixed form, Pascal, Visual Basic, Assembly, COBOL, Julia, SAS, ABAP, Apex,
+  Crystal, F#, AWK, Nim, Ada, Prolog, Smalltalk, OCaml, and Common Lisp. Scratch
+  remains a recognized plain-code fallback because Shiki 4.2.0 has no bundled
+  Scratch grammar. Added capture-array normalization for TextMate grammars such
+  as Smalltalk.
+- 2026-07-04: Fixed the Android `cpp` popularity-snippet regression where the
+  Joni TextMate path produced only comment/punctuation roles, leaving most C++
+  code grey. Production Android DI now builds the highlighter from app assets
+  with the injected application context, and the shared highlighter adds a
+  C/C++ lexical role enhancement for obvious comments, strings, keywords, types,
+  functions, constants, and numbers until full tokenizer parity covers those
+  scopes natively.
+- 2026-07-04: Fixed the PHP popularity-snippet regression where Android styled
+  `<?php` but left ordinary comments and code grey. The shared highlighter now
+  adds PHP lexical role enhancement for comments, strings, variables, keywords,
+  types, functions, constants, operators, and numbers while broader TextMate
+  tokenizer parity remains incremental.
+- 2026-07-04: Closed top-10 `*-basic` Shiki golden gates on both Android/Joni
+  (10/10) and iOS/libonig (10/10). iOS Kotlin/Swift/Go gaps required
+  `ONIG_OPTION_CAPTURE_GROUP` at libonig compile time. Shrunk layer-7
+  `normalizeWebSyntaxRoles` for JS/TS; retained `highlightPrivateFields` and
+  `highlightPythonTripleQuotedStrings` for regression fixtures. Added
+  capture-depth guards fixing `cpp-basic` stack overflow in smoke tests.
+- 2026-07-04: Documented Path A (enriched semantic roles + token mapping) and
+  Path B (scope-carrying render tree + bundled Shiki theme) in
+  `shiki-visual-parity-paths-plan.md` for layer-6+ visual parity work.
+- 2026-07-04: Added Path A implementation plan (`shiki-visual-parity-path-a-plan.md`):
+  PA0 audit, PA1 wire existing preset syntax tokens, PA2 mapper alignment.
+- 2026-07-04: Started Path A implementation with a multi-agent split. Added the
+  PA0 audit artifact and completed PA1 token wiring on Android and iOS:
+  `Variable` → `syntax-variable`, `Operator` → `syntax-operator`, and
+  `Punctuation` → `syntax-punctuation`, with `Plain` left on body text and
+  private field declaration behavior preserved. Added syntax token swatches,
+  resolver fallback coverage, and role-to-token tests on both platforms.
+- 2026-07-04: Completed the Path A PA2 audit without adding new roles. Raw Shiki
+  scope checks kept method-shorthand `async`, TypeScript type fields, JS
+  namespace/object receivers, Java `System.out.println`, and C# smoke samples in
+  existing semantic buckets. Added scope-mapper tests to lock those decisions and
+  marked PA3 role expansion skipped for this pass.
 
 ## Remaining
 
@@ -208,21 +251,42 @@
 - Keep iOS grammar packaging/resource-reader behavior covered as release
   packaging changes.
 - Review grammar bundle size before release; the bundled grammar set is about
-  3.6 MB across 48 JSON files (14 Milestone 0 languages plus 22 popular
-  languages).
-- Expand active Shiki golden comparisons beyond the Android/Joni `diff`, `json`,
-  `yaml`, `css`, and `html` subsets and remove the ignored full native-vs-Shiki
-  highlighter comparison once the native TextMate engine is in place.
+  4.7 MB across 74 JSON files for 62 manifest language entries plus the Scratch
+  plain fallback.
+- Expand active Shiki golden comparisons beyond the top-10 `*-basic` gates and
+  the Android/Joni `diff`, `json`, `yaml`, `css`, and `html` subsets and remove
+  the ignored full native-vs-Shiki highlighter comparison once broader language
+  coverage is in place.
 - Track OPE-29: add trusted Shiki/`vscode-textmate` highlighter oracle fixtures
   and CommonMark-capable parser oracle fixtures for high-risk rendered-markdown
   examples, including the large multi-language code sample that exposed recent
   visual regressions.
+- Continue broader Path A follow-up only if real Session Chat samples reveal
+  repeated visual gaps that justify a new role or the heavier Path B theme-key
+  model.
 - Add screenshot tests for both native renderers.
 - Tune outgoing markdown collapse thresholds after device review.
 - Run full manual scroll checks on long Session Chat timelines.
 
 ## Verification
 
+- 2026-07-04: `npm run markdown:highlighter:golden` regenerated Shiki fixtures,
+  the manifest, Kotlin fixture metadata, and 74 bundled grammar JSON files
+  (~4.7 MB) for 62 manifest language entries.
+- 2026-07-04: `./gradlew :markdown-core:testDebugUnitTest` passed after adding
+  top-language fixture coverage, Scratch plain-fallback coverage, and TextMate
+  capture-array normalization.
+- 2026-07-04: `./gradlew :markdown-core:iosSimulatorArm64Test` passed, covering
+  the iOS/libonig markdown-core path with the expanded grammar bundle.
+- 2026-07-04: Focused Android/Joni and shared backend C++ popularity-snippet
+  regressions passed with explicit role checks for comment, keyword, type,
+  string, function, and number spans.
+- 2026-07-04: Focused Android/Joni and shared backend PHP popularity-snippet
+  regressions passed with explicit role checks for comment, keyword, type,
+  string, function, number, variable, operator, and constant spans.
+- 2026-07-04: `./gradlew :app:assembleDebug` passed after wiring production
+  Android markdown highlighting to the injected application-context asset
+  reader.
 - 2026-06-21: `npm run markdown:highlighter:golden` regenerated Shiki fixtures,
   manifest, and 48 bundled grammar JSON files (~3.6 MB) for the popular-languages
   pack.

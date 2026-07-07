@@ -151,7 +151,8 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
     @Test func codeSpanColorsUseWebAlignedSyntaxTokens() {
         let darkTraits = UITraitCollection(userInterfaceStyle: .dark)
         let cases: [(NativeCodeTokenRole, String)] = [
-            (.variable, "text-strong"),
+            (.plain, "text-strong"),
+            (.variable, "syntax-variable"),
             (.keyword, "syntax-keyword"),
             (.type, "syntax-type"),
             (.function, "syntax-primitive"),
@@ -159,8 +160,8 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             (.constant, "syntax-constant"),
             (.number, "syntax-property"),
             (.string, "syntax-string"),
-            (.operatorToken, "text-strong"),
-            (.punctuation, "text-strong"),
+            (.operatorToken, "syntax-operator"),
+            (.punctuation, "syntax-punctuation"),
         ]
 
         for (role, token) in cases {

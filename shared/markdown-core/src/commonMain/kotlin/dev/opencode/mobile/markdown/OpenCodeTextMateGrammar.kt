@@ -114,7 +114,12 @@ object OpenCodeTextMateGrammarDecoder {
         }
 
     private fun normalizeCaptureMap(element: JsonElement): JsonElement {
-        val captureMap = element as? JsonObject ?: return element
+        val captureMap =
+            when (element) {
+                is JsonObject -> element.toList()
+                is JsonArray -> element.mapIndexed { index, value -> index.toString() to value }
+                else -> return element
+            }
         return buildJsonObject {
             captureMap.forEach { (key, value) ->
                 put(

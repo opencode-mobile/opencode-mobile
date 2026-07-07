@@ -14,6 +14,7 @@ import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import oniguruma.ONIG_ENCODING_UTF8
+import oniguruma.ONIG_OPTION_CAPTURE_GROUP
 import oniguruma.ONIG_OPTION_MULTILINE
 import oniguruma.ONIG_OPTION_NONE
 import oniguruma.ONIG_SYNTAX_RUBY
@@ -33,6 +34,10 @@ private sealed class LibOnigRegexCacheEntry {
         val regex: CPointer<OnigRegexType>,
     ) : LibOnigRegexCacheEntry()
 
+    data class Decomposed(
+        val candidates: List<String>,
+    ) : LibOnigRegexCacheEntry()
+
     data object Failed : LibOnigRegexCacheEntry()
 }
 
@@ -45,23 +50,24 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
 
     override val isOnigurumaCompatible: Boolean = true
 
-    private fun cachedRegex(pattern: String): CPointer<OnigRegexType>? {
-        libOnigRegexCache[pattern]?.let { entry ->
-            return when (entry) {
-                is LibOnigRegexCacheEntry.Compiled -> entry.regex
-                LibOnigRegexCacheEntry.Failed -> null
-            }
+    private fun resolvePattern(pattern: String): LibOnigRegexCacheEntry {
+        compilePattern(pattern)?.let { regex ->
+            return LibOnigRegexCacheEntry.Compiled(regex)
         }
 
-        val compiled = compilePattern(pattern)
-        libOnigRegexCache[pattern] = compiled
-        return when (compiled) {
-            is LibOnigRegexCacheEntry.Compiled -> compiled.regex
-            LibOnigRegexCacheEntry.Failed -> null
+        val candidates =
+            OpenCodeTextMateRegexAlternationSupport
+                .decompositionCandidates(pattern)
+                ?.filter { candidate -> compilePattern(candidate) != null }
+                .orEmpty()
+        if (candidates.isNotEmpty()) {
+            return LibOnigRegexCacheEntry.Decomposed(candidates)
         }
+
+        return LibOnigRegexCacheEntry.Failed
     }
 
-    private fun compilePattern(pattern: String): LibOnigRegexCacheEntry {
+    private fun compilePattern(pattern: String): CPointer<OnigRegexType>? {
         val patternBytes = pattern.encodeToByteArray()
         return memScoped {
             val regexOut = alloc<CPointerVar<OnigRegexType>>()
@@ -72,16 +78,15 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
                         regexOut.ptr,
                         patternStart,
                         patternEnd,
-                        ONIG_OPTION_MULTILINE,
+                        ONIG_OPTION_MULTILINE or ONIG_OPTION_CAPTURE_GROUP,
                         ONIG_ENCODING_UTF8,
                         ONIG_SYNTAX_RUBY,
                         errorInfo.ptr,
                     )
                 if (compileResult != 0) {
-                    LibOnigRegexCacheEntry.Failed
+                    null
                 } else {
-                    val compiled = regexOut.value ?: return@withUtf8Range LibOnigRegexCacheEntry.Failed
-                    LibOnigRegexCacheEntry.Compiled(compiled)
+                    regexOut.value
                 }
             }
         }
@@ -92,8 +97,64 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int,
+        contiguousAnchor: Int?,
     ): TextMateRegexMatch? {
-        val regex = cachedRegex(pattern) ?: return null
+        val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
+        val effectivePattern =
+            OpenCodeTextMateRegexContiguousAnchorSupport.effectivePattern(
+                pattern = normalizedPattern,
+                startIndex = startIndex,
+                contiguousAnchor = contiguousAnchor,
+            )
+
+        if (OpenCodeTextMateRegexContiguousAnchorSupport.rejectIfAnchorMismatch(effectivePattern, startIndex, contiguousAnchor)) {
+            return null
+        }
+
+        when {
+            effectivePattern == "\\G" ->
+                return OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+                    startIndex = startIndex,
+                    endIndex = endIndex,
+                    contiguousAnchor = contiguousAnchor,
+                )
+            effectivePattern.startsWith("\\G") -> {
+                val suffix = effectivePattern.removePrefix("\\G")
+                if (suffix.isEmpty()) {
+                    return OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
+                        startIndex = startIndex,
+                        endIndex = endIndex,
+                        contiguousAnchor = contiguousAnchor,
+                    )
+                }
+                return find(suffix, input, startIndex, endIndex, contiguousAnchor)
+                    ?.takeIf { match -> match.start == startIndex }
+            }
+        }
+
+        val entry = libOnigRegexCache.getOrPut(effectivePattern) { resolvePattern(effectivePattern) }
+
+        return when (entry) {
+            is LibOnigRegexCacheEntry.Compiled ->
+                OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
+                    pattern = effectivePattern,
+                    match = search(entry.regex, input, startIndex, endIndex),
+                    contiguousAnchor = contiguousAnchor,
+                )
+            is LibOnigRegexCacheEntry.Decomposed ->
+                entry.candidates
+                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor) }
+                    .minByOrNull { match -> match.start }
+            LibOnigRegexCacheEntry.Failed -> null
+        }
+    }
+
+    private fun search(
+        regex: CPointer<OnigRegexType>,
+        input: String,
+        startIndex: Int,
+        endIndex: Int,
+    ): TextMateRegexMatch? {
         val indexMap = Utf8IndexMap(input)
         val inputBytes = indexMap.bytes
 

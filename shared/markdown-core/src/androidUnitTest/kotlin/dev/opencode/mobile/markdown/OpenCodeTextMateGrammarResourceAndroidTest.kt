@@ -32,7 +32,11 @@ class OpenCodeTextMateGrammarResourceAndroidTest {
         )
 
         TextMateGrammarResourceFixtures.all.forEach { fixture ->
-            val payload = assertNotNull(bundle.grammarForScope(fixture.scopeName), fixture.scopeName)
+            val payload =
+                assertNotNull(
+                    bundle.grammarForScope(fixture.scopeName),
+                    "${fixture.scopeName} diagnostics=${bundle.diagnostics.joinToString { it.message }}",
+                )
             val summary = OpenCodeTextMateGrammarDecoder.summarize(payload.grammar)
 
             assertEquals(fixture.resourcePath, payload.descriptor.resourcePath)

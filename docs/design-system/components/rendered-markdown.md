@@ -21,9 +21,10 @@ surfaces, not for general web content.
 - Semantic tokens: background, raised surface, text, interactive, border,
   markdown, syntax, and diff tokens.
 - Code-block syntax colors follow the web-aligned `CodeTokenRole` mapping in
-  `docs/design-system/tokens.md` (`Variable` → `text-primary`, `Function` →
+  `docs/design-system/tokens.md` (`Variable` → `syntax-variable`, `Function` →
   `syntax-primitive`, `Property` / `Constant` → `syntax-constant`, `String` →
-  `syntax-string`, `Number` → `syntax-property`, punctuation → `text-primary`).
+  `syntax-string`, `Number` → `syntax-property`, `Operator` →
+  `syntax-operator`, punctuation → `syntax-punctuation`).
 - Component tokens: `outgoingMessage.*` when composed inside
   `OpenCodeOutgoingMessage`.
 - Typography roles: `type.body`, `type.bodySecondary`, `type.caption`,

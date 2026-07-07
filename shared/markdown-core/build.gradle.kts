@@ -9,6 +9,8 @@ plugins {
 }
 
 kotlin {
+    applyDefaultHierarchyTemplate()
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
@@ -147,5 +149,13 @@ android {
         getByName("test") {
             resources.srcDir("src/commonMain/resources")
         }
+    }
+}
+
+tasks.withType<org.gradle.api.tasks.Copy>().configureEach {
+    if (name.contains("iosSimulatorArm64Test", ignoreCase = true) &&
+        name.contains("ProcessResources", ignoreCase = true)
+    ) {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
 }

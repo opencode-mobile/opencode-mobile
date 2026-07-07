@@ -479,6 +479,9 @@ internal data class CodeColors(
     val type: androidx.compose.ui.graphics.Color,
     val property: androidx.compose.ui.graphics.Color,
     val primitive: androidx.compose.ui.graphics.Color,
+    val variable: androidx.compose.ui.graphics.Color,
+    val operator: androidx.compose.ui.graphics.Color,
+    val punctuation: androidx.compose.ui.graphics.Color,
     val info: androidx.compose.ui.graphics.Color,
     val inserted: androidx.compose.ui.graphics.Color,
     val deleted: androidx.compose.ui.graphics.Color,
@@ -497,6 +500,9 @@ private fun codeColors(): CodeColors =
         type = openCodeColor("syntax-type"),
         property = openCodeColor("syntax-property"),
         primitive = openCodeColor("syntax-primitive"),
+        variable = openCodeColor("syntax-variable"),
+        operator = openCodeColor("syntax-operator"),
+        punctuation = openCodeColor("syntax-punctuation"),
         info = openCodeColor("syntax-info"),
         inserted = openCodeColor("diff-add"),
         deleted = openCodeColor("diff-delete"),
@@ -510,17 +516,16 @@ private fun CodeColors.colorForRole(role: CodeTokenRole): androidx.compose.ui.gr
         CodeTokenRole.Comment -> comment
         CodeTokenRole.Keyword -> keyword
         CodeTokenRole.Type -> type
-        CodeTokenRole.Variable -> plain
-        CodeTokenRole.Property -> property
+        CodeTokenRole.Variable -> variable
+        CodeTokenRole.Property -> constant
         CodeTokenRole.Constant -> constant
         CodeTokenRole.Function -> primitive
         CodeTokenRole.Number,
         CodeTokenRole.Attribute,
         -> property
         CodeTokenRole.String -> string
-        CodeTokenRole.Operator,
-        CodeTokenRole.Punctuation,
-        -> plain
+        CodeTokenRole.Operator -> operator
+        CodeTokenRole.Punctuation -> punctuation
         CodeTokenRole.Tag -> info
         CodeTokenRole.Inserted -> inserted
         CodeTokenRole.Deleted -> deleted

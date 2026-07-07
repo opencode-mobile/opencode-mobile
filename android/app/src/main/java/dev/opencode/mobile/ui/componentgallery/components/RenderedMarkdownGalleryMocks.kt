@@ -51,6 +51,20 @@ object RenderedMarkdownGalleryMocks {
         ```
         """.trimIndent()
 
+    private val syntaxRolesMarkdown =
+        """
+        ```typescript
+        class HttpClient {
+          #baseUrl;
+
+          request(path: string) {
+            const url = `${'$'}{this.#baseUrl}${'$'}{path}`;
+            return url ?? "";
+          }
+        }
+        ```
+        """.trimIndent()
+
     private val languagesMarkdown =
         """
         ### Syntax language sweep
@@ -179,6 +193,13 @@ object RenderedMarkdownGalleryMocks {
                 variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
                 rawMarkdown = codeMarkdown,
                 document = OpenCodeMarkdownParser.parse(codeMarkdown, codeHighlighter = codeHighlighter),
+            ),
+            RenderedMarkdownGalleryMock(
+                id = "syntax-roles",
+                label = "Syntax roles",
+                variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                rawMarkdown = syntaxRolesMarkdown,
+                document = OpenCodeMarkdownParser.parse(syntaxRolesMarkdown, codeHighlighter = codeHighlighter),
             ),
             RenderedMarkdownGalleryMock(
                 id = "languages",

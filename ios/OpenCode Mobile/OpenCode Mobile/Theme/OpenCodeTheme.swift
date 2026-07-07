@@ -59,6 +59,9 @@ enum OpenCodeColors {
     static var syntaxPrimitive: Color { resolve("syntax-primitive") }
     static var syntaxProperty: Color { resolve("syntax-property") }
     static var syntaxType: Color { resolve("syntax-type") }
+    static var syntaxVariable: Color { resolve("syntax-variable") }
+    static var syntaxOperator: Color { resolve("syntax-operator") }
+    static var syntaxPunctuation: Color { resolve("syntax-punctuation") }
     static var syntaxSuccess: Color { resolve("syntax-success") }
     static var syntaxWarning: Color { resolve("syntax-warning") }
     static var syntaxInfo: Color { resolve("syntax-info") }
