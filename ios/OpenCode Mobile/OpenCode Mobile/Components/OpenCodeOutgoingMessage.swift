@@ -19,22 +19,16 @@ struct OpenCodeOutgoingMessage: View {
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
     let onRestoreClick: () -> Void
-    let initialRenderedMarkdownHeight: CGFloat
-    let onRenderedMarkdownHeightChange: (CGFloat) -> Void
 
     init(
         text: String,
         renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
-        initialRenderedMarkdownHeight: CGFloat = 1,
-        onRenderedMarkdownHeightChange: @escaping (CGFloat) -> Void = { _ in },
         onRestoreClick: @escaping () -> Void
     ) {
         self.text = text
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
-        self.initialRenderedMarkdownHeight = max(1, initialRenderedMarkdownHeight)
-        self.onRenderedMarkdownHeightChange = onRenderedMarkdownHeightChange
         self.onRestoreClick = onRestoreClick
     }
 
@@ -107,10 +101,7 @@ struct OpenCodeOutgoingMessage: View {
             if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
-                    variant: .outgoingMessage,
-                    initialHeight: initialRenderedMarkdownHeight,
-                    measuresHeight: true,
-                    onHeightChange: onRenderedMarkdownHeightChange
+                    variant: .outgoingMessage
                 )
             } else {
                 Text(text)

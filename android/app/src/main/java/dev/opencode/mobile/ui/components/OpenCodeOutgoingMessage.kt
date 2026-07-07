@@ -28,7 +28,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -50,8 +49,6 @@ fun OpenCodeOutgoingMessage(
     onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier,
     renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument? = null,
-    initialRenderedMarkdownHeight: Dp = 1.dp,
-    onRenderedMarkdownHeightChange: (Dp) -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -81,8 +78,6 @@ fun OpenCodeOutgoingMessage(
                         OpenCodeRenderedMarkdown(
                             document = renderedMarkdown,
                             variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
-                            initialHeight = initialRenderedMarkdownHeight,
-                            onContentHeightChange = onRenderedMarkdownHeightChange,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
