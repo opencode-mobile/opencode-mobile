@@ -15,17 +15,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
-import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 
 @Composable
 fun SessionStatusBarGalleryScreen(modifier: Modifier = Modifier) {
-    var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var contextAvailable by rememberSaveable { mutableStateOf(true) }
     var contextUsagePercent by rememberSaveable { mutableStateOf(50) }
-    val status =
-        runCatching { OpenCodeSessionConnectionStatus.valueOf(statusName) }
-            .getOrDefault(OpenCodeSessionConnectionStatus.Live)
     val contextUsageFraction = if (contextAvailable) contextUsagePercent / 100f else null
 
     Column(
@@ -41,16 +36,6 @@ fun SessionStatusBarGalleryScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-
-            ControlGroup(title = "Connection") {
-                OpenCodeSessionConnectionStatus.entries.forEach { option ->
-                    OpenCodeChoiceBadge(
-                        label = option.label,
-                        selected = option == status,
-                        onClick = { statusName = option.name },
-                    )
-                }
-            }
 
             ControlGroup(title = "Context") {
                 OpenCodeChoiceBadge(
@@ -78,9 +63,7 @@ fun SessionStatusBarGalleryScreen(modifier: Modifier = Modifier) {
         }
 
         OpenCodeSessionStatusBar(
-            connectionStatus = status,
             contextUsageFraction = contextUsageFraction,
-            onConnectionClick = {},
             onContextClick = {},
         )
     }

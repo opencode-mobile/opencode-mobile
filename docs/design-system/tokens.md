@@ -317,6 +317,14 @@ single-line title, and compact trailing actions.
 | `topBar.subtitleSpacing` | 0 (logical px) |
 | `topBar.dividerThickness` | 1 (logical px) |
 
+Connection status label tokens used by `OpenCodeConnectionStatusLabel` and top-bar
+`subtitleAccessory.statusDot`:
+
+| Token | Value |
+| --- | --- |
+| `connectionStatusLabel.dotSize` | 6 (logical px) |
+| `connectionStatusLabel.dotSpacing` | 4 (logical px) |
+
 ### Overflow menu
 
 Compact anchored popup menu for secondary top-bar actions with icon and label

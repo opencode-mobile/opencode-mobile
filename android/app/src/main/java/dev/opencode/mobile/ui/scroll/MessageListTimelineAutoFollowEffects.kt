@@ -136,7 +136,7 @@ internal fun MessageListAutoFollowArmingEffect(
                         autoFollowEnabled = currentAutoFollowEnabled,
                         isPinnedToEnd = false,
                     ) ->
-                        scrollController.snapToEnd(
+                        scrollController.snapToEndAfterLayoutChange(
                             messageCount = messageCount,
                             tolerancePx = autoFollowTolerancePx,
                             bottomAnchorHeightPx = bottomAnchorHeightPx,
@@ -194,13 +194,44 @@ internal fun rememberMessageListLastMessageContentSizeSettled(
     return remember(scrollController, autoFollowState, autoFollowTolerancePx, bottomAnchorHeightPx) {
         {
             if (autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled)) {
-                scrollController.snapToEnd(
+                scrollController.snapToEndAfterLayoutChange(
                     messageCount = currentMessageCount,
                     tolerancePx = autoFollowTolerancePx,
                     bottomAnchorHeightPx = bottomAnchorHeightPx,
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun MessageListViewportResizeFollowEffect(
+    listState: LazyListState,
+    autoFollowEnabled: Boolean,
+    autoFollowState: MessageListAutoFollowState,
+    onFollowLayoutChange: suspend () -> Unit,
+) {
+    val currentAutoFollowEnabled by rememberUpdatedState(autoFollowEnabled)
+
+    LaunchedEffect(listState, autoFollowState) {
+        var lastViewportHeightPx = -1
+        snapshotFlow { listState.layoutInfo.viewportSize.height }
+            .distinctUntilChanged()
+            .collect { viewportHeightPx ->
+                if (lastViewportHeightPx == -1) {
+                    lastViewportHeightPx = viewportHeightPx
+                    return@collect
+                }
+                if (viewportHeightPx == lastViewportHeightPx) {
+                    return@collect
+                }
+                lastViewportHeightPx = viewportHeightPx
+                if (autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled)) {
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    onFollowLayoutChange()
+                }
+            }
     }
 }
 

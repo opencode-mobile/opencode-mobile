@@ -31,6 +31,12 @@ private val TopBarTitleSpacing = 12.dp
 private val TopBarSubtitleSpacing = 0.dp
 private val TopBarTitleBlockHeight = 48.dp
 
+sealed interface OpenCodeTopBarSubtitleAccessory {
+    data class StatusDot(
+        val status: OpenCodeSessionConnectionStatus,
+    ) : OpenCodeTopBarSubtitleAccessory
+}
+
 sealed interface OpenCodeTopBarLeading {
     data object None : OpenCodeTopBarLeading
 
@@ -71,6 +77,7 @@ fun OpenCodeTopBar(
     modifier: Modifier = Modifier,
     title: String? = null,
     subtitle: String? = null,
+    subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = null,
     leading: OpenCodeTopBarLeading = OpenCodeTopBarLeading.None,
     actions: List<OpenCodeTopBarAction> = emptyList(),
     showDivider: Boolean = false,
@@ -99,6 +106,7 @@ fun OpenCodeTopBar(
                 TopBarTitleBlock(
                     title = resolvedTitle,
                     subtitle = resolvedSubtitle,
+                    subtitleAccessory = subtitleAccessory,
                     modifier =
                         Modifier
                             .weight(1f)
@@ -121,6 +129,7 @@ fun OpenCodeTopBar(
 private fun TopBarTitleBlock(
     title: String,
     subtitle: String?,
+    subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -128,16 +137,11 @@ private fun TopBarTitleBlock(
             modifier
                 .height(TopBarTitleBlockHeight)
                 .semantics {
-                    contentDescription =
-                        if (subtitle != null) {
-                            "$title, $subtitle"
-                        } else {
-                            title
-                        }
+                    contentDescription = titleBlockAccessibilityLabel(title, subtitle, subtitleAccessory)
                 },
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (subtitle != null) {
+        if (subtitle != null || subtitleAccessory != null) {
             Column(
                 modifier = Modifier.align(Alignment.CenterStart),
                 verticalArrangement = Arrangement.spacedBy(TopBarSubtitleSpacing),
@@ -149,12 +153,9 @@ private fun TopBarTitleBlock(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                TopBarSubtitleLine(
+                    subtitle = subtitle,
+                    subtitleAccessory = subtitleAccessory,
                 )
             }
         } else {
@@ -168,6 +169,40 @@ private fun TopBarTitleBlock(
             )
         }
     }
+}
+
+@Composable
+private fun TopBarSubtitleLine(
+    subtitle: String?,
+    subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
+) {
+    when (subtitleAccessory) {
+        is OpenCodeTopBarSubtitleAccessory.StatusDot ->
+            OpenCodeConnectionStatusLabel(status = subtitleAccessory.status)
+        null ->
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+    }
+}
+
+private fun titleBlockAccessibilityLabel(
+    title: String,
+    subtitle: String?,
+    subtitleAccessory: OpenCodeTopBarSubtitleAccessory?,
+): String {
+    val secondLine =
+        when (subtitleAccessory) {
+            is OpenCodeTopBarSubtitleAccessory.StatusDot -> "Live updates ${subtitleAccessory.status.label}"
+            null -> subtitle
+        }
+    return if (secondLine != null) "$title, $secondLine" else title
 }
 
 @Composable
@@ -269,6 +304,15 @@ private fun OpenCodeTopBarPreviewContent() {
         OpenCodeTopBar(
             title = "Session",
             subtitle = "Importing icons explanation",
+            leading = OpenCodeTopBarLeading.Back(onClick = {}),
+            actions = listOf(OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", onClick = {})),
+            showDivider = true,
+        )
+
+        Text(text = "Status subtitle", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeTopBar(
+            title = "Importing icons explanation",
+            subtitleAccessory = OpenCodeTopBarSubtitleAccessory.StatusDot(OpenCodeSessionConnectionStatus.Live),
             leading = OpenCodeTopBarLeading.Back(onClick = {}),
             actions = listOf(OpenCodeTopBarAction.Icon(OpenCodeIcons.MoreVert, "More actions", onClick = {})),
             showDivider = true,

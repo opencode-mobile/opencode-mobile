@@ -37,6 +37,17 @@ internal class MessageListTimelineScrollController(
         }
     }
 
+    fun snapToEndAfterLayoutChange(
+        messageCount: Int,
+        tolerancePx: Int,
+        bottomAnchorHeightPx: Int,
+    ) {
+        launchScroll {
+            listState.scrollToTimelineEndAfterLayoutChange(messageCount = messageCount)
+            markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
+        }
+    }
+
     private fun launchScroll(block: suspend () -> Unit) {
         scrollJob?.cancel()
         scrollJob =

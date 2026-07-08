@@ -41,9 +41,11 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
+import dev.opencode.mobile.ui.scroll.MessageListViewportResizeFollowEffect
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
 import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
+import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -114,6 +116,23 @@ private fun MessageListGalleryPreview(
         )
     }
 
+    suspend fun snapToEndAfterLayoutChangeAndArmFollow(waitForLayout: Boolean = true) {
+        if (waitForLayout) {
+            withFrameNanos { }
+            withFrameNanos { }
+        }
+        listState.scrollToTimelineEndAfterLayoutChange(messageCount = messages.size)
+        withFrameNanos { }
+        autoFollowState.markProgrammaticScrollSettled(
+            isPinnedToEnd =
+                listState.isPinnedToTimelineEnd(
+                    messageCount = messages.size,
+                    tolerancePx = autoFollowTolerancePx,
+                    bottomAnchorHeightPx = bottomAnchorHeightPx,
+                ),
+        )
+    }
+
     suspend fun snapExactlyToEndAndArmFollow(waitForLayout: Boolean = true) {
         if (waitForLayout) {
             withFrameNanos { }
@@ -149,7 +168,7 @@ private fun MessageListGalleryPreview(
                     messageCount = messages.size,
                 )
             autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
-                snapExactlyToEndAndArmFollow(waitForLayout = false)
+                snapToEndAfterLayoutChangeAndArmFollow(waitForLayout = false)
             else ->
                 autoFollowState.updatePinnedState(
                     isPinnedToEnd = pinned,
@@ -188,6 +207,13 @@ private fun MessageListGalleryPreview(
                 }
             }
     }
+
+    MessageListViewportResizeFollowEffect(
+        listState = listState,
+        autoFollowEnabled = autoFollowEnabled,
+        autoFollowState = autoFollowState,
+        onFollowLayoutChange = { followLayoutChangeAfterSettled() },
+    )
 
     LaunchedEffect(messageLayoutSignature, autoFollowEnabled) {
         if (messages.isNotEmpty()) {

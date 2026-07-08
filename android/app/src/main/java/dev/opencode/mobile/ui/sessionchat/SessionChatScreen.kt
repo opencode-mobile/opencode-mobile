@@ -30,6 +30,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
@@ -96,6 +97,10 @@ fun SessionChatScreen(
             ) {
                 OpenCodeTopBar(
                     title = "Session",
+                    subtitleAccessory =
+                        OpenCodeTopBarSubtitleAccessory.StatusDot(
+                            uiState.connectionStatus.toOpenCodeSessionConnectionStatus(),
+                        ),
                     leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
                     actions =
                         listOf(
@@ -109,9 +114,7 @@ fun SessionChatScreen(
                 )
             }
             SessionStatusBar(
-                connectionStatus = uiState.connectionStatus,
                 contextUsageFraction = uiState.contextUsageFraction,
-                onConnectionClick = {},
                 onContextClick = onSessionContextClick,
             )
             uiState.sessionStatusLabel?.let { statusLabel ->
@@ -217,16 +220,12 @@ fun SessionChatScreen(
 
 @Composable
 private fun SessionStatusBar(
-    connectionStatus: SessionConnectionStatus,
     contextUsageFraction: Float?,
-    onConnectionClick: () -> Unit,
     onContextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OpenCodeSessionStatusBar(
-        connectionStatus = connectionStatus.toOpenCodeSessionConnectionStatus(),
         contextUsageFraction = contextUsageFraction,
-        onConnectionClick = onConnectionClick,
         onContextClick = onContextClick,
         modifier = modifier,
     )

@@ -9,11 +9,13 @@
 
 - Home session rows reuse existing list-item patterns.
 - Session Chat scaffold uses existing platform theme tokens and typography.
-- Screen chrome uses **`OpenCodeTopBar`**: title **Session**, leading **back**
-  (pops the navigation stack), optional bottom divider; session identity stays in
-  a 36 dp/pt status bar under the top bar (not in the top-bar title).
-- Session status bar shows copyable session id, foreground SSE state, and a
-  context-usage ring when token and model-limit data are available.
+- Screen chrome uses **`OpenCodeTopBar`**: title **Session** on line 1, foreground
+  SSE status on line 2 via `subtitleAccessory.statusDot`, leading **back**
+  (pops the navigation stack), overflow menu, and optional bottom divider.
+- Session status bar shows only the context-usage ring when token and
+  model-limit data are available.
+- **2026-07-07 / OPE-31:** Moved foreground SSE connection state from
+  `OpenCodeSessionStatusBar` into the Session screen two-line top bar.
 - Session status bar is promoted to the shared Component Collection as
   **`OpenCodeSessionStatusBar`**.
 - Session status bar Component Gallery entries include connection, availability,
@@ -142,6 +144,11 @@
   follow. Initial load, message-count changes, rendered-content changes, and
   viewport changes all use the same non-animated exact snap when follow is
   armed.
+- Android production Session Chat now mirrors iOS viewport-height follow for IME
+  resize: when the keyboard opens or closes while auto-follow is armed, the
+  timeline observes `LazyList` viewport height changes and re-anchors with
+  `scrollToTimelineEndAfterLayoutChange` so the scroll-to-end pill does not
+  spuriously appear.
 - Manual validation in local IDE runtime remains pending.
 - Expected flow: tap row -> open chat -> send text -> local message appears.
 - Composer selectors: chip taps open bottom sheets for model, agent mode, and

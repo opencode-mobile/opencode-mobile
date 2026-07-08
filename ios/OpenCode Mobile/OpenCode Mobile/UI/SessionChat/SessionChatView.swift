@@ -32,6 +32,7 @@ struct SessionChatView: View {
             ) {
                 OpenCodeTopBar(
                     title: "Session",
+                    subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
                     leading: .back(action: leaveSession),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "More options") {
@@ -43,9 +44,7 @@ struct SessionChatView: View {
             }
 
             OpenCodeSessionStatusBar(
-                connectionStatus: viewModel.uiState.connectionStatus.openCodeStatus,
                 contextUsageFraction: viewModel.uiState.contextUsageFraction,
-                onConnectionClick: {},
                 onContextClick: { showSessionContext = true }
             )
 

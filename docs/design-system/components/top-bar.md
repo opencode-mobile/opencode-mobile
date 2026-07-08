@@ -15,7 +15,7 @@ search fields, or arbitrary custom content.
 
 - Variants:
   - default single-line title.
-  - two-line title when `subtitle` is provided.
+  - two-line title when `subtitle` and/or `subtitleAccessory` is provided.
 - Leading variants:
   - `none`
   - `back`
@@ -31,6 +31,7 @@ search fields, or arbitrary custom content.
 - Optional content:
   - single-line `title`
   - single-line `subtitle`
+  - `subtitleAccessory.statusDot` for foreground SSE connection state
   - trailing actions list, up to 3 total
 
 Trailing actions may be text or icon actions, but at most one trailing action
@@ -54,10 +55,14 @@ may use a text label in this version.
 The top bar sits on the screen background by default. An optional bottom divider
 adds separation when the screen needs stronger chrome.
 
-The title block always reserves `topBar.titleBlockHeight`, whether `subtitle`
-is present or omitted. A one-line title is vertically centered inside that
-fixed block so switching between one-line and two-line content does not change
-overall bar height.
+The title block always reserves `topBar.titleBlockHeight`, whether the second
+line uses plain `subtitle` text, a `subtitleAccessory`, or both. A one-line title
+is vertically centered inside that fixed block so switching between one-line and
+two-line content does not change overall bar height.
+
+When `subtitleAccessory.statusDot` is set, the second line renders through
+`OpenCodeConnectionStatusLabel` with lowercase status copy and a semantic dot.
+Plain `subtitle` text is ignored while a status-dot accessory is present.
 
 Leading actions use semantic meaning rather than arbitrary placement:
 
@@ -99,7 +104,8 @@ caller-provided per platform catalog types (`OpenCodeIcon` / `OpenCodeIcons`) in
 - Disabled: included through disabled trailing action examples.
 - Gallery interaction: the component gallery uses a single live top-bar preview
   with controls to switch leading action, trailing action mode, two-line title,
-  divider, and enabled state rather than rendering a static example matrix.
+  status-dot subtitle, divider, and enabled state rather than rendering a static
+  example matrix.
 - Loading: not applicable for this component version.
 - Error: not applicable for this component version.
 - Divider: shown and hidden variants are included.

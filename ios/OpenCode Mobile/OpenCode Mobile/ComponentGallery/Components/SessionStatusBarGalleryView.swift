@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct SessionStatusBarGalleryView: View {
-    @State private var connectionStatus: OpenCodeSessionConnectionStatus = .live
     @State private var contextAvailable = true
     @State private var contextUsagePercent = 50
 
@@ -11,18 +10,6 @@ struct SessionStatusBarGalleryView: View {
                 Text("Session status bar")
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(OpenCodeColors.textStrong)
-
-                ControlGroup(title: "Connection") {
-                    HStack(spacing: 8) {
-                        ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in
-                            OpenCodeChoiceBadge(
-                                label: status.rawValue,
-                                selected: connectionStatus == status,
-                                action: { connectionStatus = status }
-                            )
-                        }
-                    }
-                }
 
                 ControlGroup(title: "Context") {
                     HStack(spacing: 8) {
@@ -55,9 +42,7 @@ struct SessionStatusBarGalleryView: View {
             .padding(.horizontal, 16)
 
             OpenCodeSessionStatusBar(
-                connectionStatus: connectionStatus,
                 contextUsageFraction: contextAvailable ? Double(contextUsagePercent) / 100 : nil,
-                onConnectionClick: {},
                 onContextClick: {}
             )
         }

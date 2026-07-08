@@ -37,6 +37,8 @@ struct TopBarGalleryView: View {
     @State private var actions: GalleryTopBarActions = .none
     @State private var showDivider = false
     @State private var showTwoLine = false
+    @State private var showStatusDot = false
+    @State private var connectionStatus: OpenCodeSessionConnectionStatus = .live
     @State private var actionsEnabled = true
 
     private var title: String {
@@ -51,7 +53,12 @@ struct TopBarGalleryView: View {
     }
 
     private var subtitle: String? {
-        showTwoLine ? "Importing icons explanation" : nil
+        guard showTwoLine, !showStatusDot else { return nil }
+        return "Importing icons explanation"
+    }
+
+    private var subtitleAccessory: OpenCodeTopBarSubtitleAccessory? {
+        showStatusDot ? .statusDot(connectionStatus) : nil
     }
 
     private var leadingVariant: OpenCodeTopBarLeading {
@@ -120,6 +127,11 @@ struct TopBarGalleryView: View {
                             action: { showTwoLine.toggle() }
                         )
                         OpenCodeChoiceBadge(
+                            label: "Status dot",
+                            selected: showStatusDot,
+                            action: { showStatusDot.toggle() }
+                        )
+                        OpenCodeChoiceBadge(
                             label: "Divider",
                             selected: showDivider,
                             action: { showDivider.toggle() }
@@ -132,7 +144,21 @@ struct TopBarGalleryView: View {
                     }
                 }
 
-                Text("Switch controls to review the title-only, two-line, back, close, icon-action, labeled-action, divider, and disabled-action states.")
+                if showStatusDot {
+                    ControlGroup(title: "Connection") {
+                        HStack(spacing: 8) {
+                            ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in
+                                OpenCodeChoiceBadge(
+                                    label: status.rawValue,
+                                    selected: connectionStatus == status,
+                                    action: { connectionStatus = status }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text("Switch controls to review title-only, two-line, status-dot subtitle, back, close, icon-action, labeled-action, divider, and disabled-action states.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
             }
@@ -141,6 +167,7 @@ struct TopBarGalleryView: View {
             OpenCodeTopBar(
                 title: title,
                 subtitle: subtitle,
+                subtitleAccessory: subtitleAccessory,
                 leading: leadingVariant,
                 actions: actionVariants,
                 showDivider: showDivider

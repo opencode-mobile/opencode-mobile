@@ -7,6 +7,10 @@ private let topBarItemSpacing: CGFloat = 8
 private let topBarSubtitleSpacing: CGFloat = 0
 private let topBarTitleBlockHeight: CGFloat = 48
 
+enum OpenCodeTopBarSubtitleAccessory {
+    case statusDot(OpenCodeSessionConnectionStatus)
+}
+
 enum OpenCodeTopBarLeading {
     case none
     case back(accessibilityLabel: String = "Back", action: () -> Void)
@@ -30,6 +34,7 @@ private struct TopBarSideWidthKey: PreferenceKey {
 struct OpenCodeTopBar: View {
     let title: String?
     let subtitle: String?
+    let subtitleAccessory: OpenCodeTopBarSubtitleAccessory?
     let leading: OpenCodeTopBarLeading
     let actions: [OpenCodeTopBarAction]
     let showDivider: Bool
@@ -39,6 +44,7 @@ struct OpenCodeTopBar: View {
     init(
         title: String? = nil,
         subtitle: String? = nil,
+        subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = nil,
         leading: OpenCodeTopBarLeading = .none,
         actions: [OpenCodeTopBarAction] = [],
         showDivider: Bool = false
@@ -54,6 +60,7 @@ struct OpenCodeTopBar: View {
 
         self.title = normalizedTitle?.isEmpty == true ? nil : normalizedTitle
         self.subtitle = normalizedSubtitle?.isEmpty == true ? nil : normalizedSubtitle
+        self.subtitleAccessory = subtitleAccessory
         self.leading = leading
         self.actions = actions
         self.showDivider = showDivider
@@ -121,10 +128,10 @@ struct OpenCodeTopBar: View {
     private var titleContent: some View {
         if let title {
             Group {
-                if let subtitle {
+                if subtitle != nil || subtitleAccessory != nil {
                     VStack(spacing: topBarSubtitleSpacing) {
                         titleLabel(title)
-                        subtitleLabel(subtitle)
+                        subtitleLine
                     }
                 } else {
                     titleLabel(title)
@@ -133,12 +140,38 @@ struct OpenCodeTopBar: View {
             .frame(height: topBarTitleBlockHeight, alignment: .center)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(subtitle.map { "\(title), \($0)" } ?? title)
+            .accessibilityLabel(titleBlockAccessibilityLabel(title: title))
         } else {
             Color.clear
                 .frame(width: 1, height: 1)
                 .accessibilityHidden(true)
         }
+    }
+
+    @ViewBuilder
+    private var subtitleLine: some View {
+        switch subtitleAccessory {
+        case let .statusDot(status):
+            OpenCodeConnectionStatusLabel(status: status)
+        case nil:
+            if let subtitle {
+                subtitleLabel(subtitle)
+            }
+        }
+    }
+
+    private func titleBlockAccessibilityLabel(title: String) -> String {
+        let secondLine: String? =
+            switch subtitleAccessory {
+            case let .statusDot(status):
+                "Live updates \(status.rawValue)"
+            case nil:
+                subtitle
+            }
+        if let secondLine {
+            return "\(title), \(secondLine)"
+        }
+        return title
     }
 
     private func titleLabel(_ title: String) -> some View {
@@ -253,6 +286,16 @@ private struct OpenCodeTopBarPreviewContent: View {
                 OpenCodeTopBar(
                     title: "Session",
                     subtitle: "Importing icons explanation",
+                    leading: .back(action: {}),
+                    actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
+                    showDivider: true
+                )
+            }
+
+            previewSection("Status subtitle") {
+                OpenCodeTopBar(
+                    title: "Importing icons explanation",
+                    subtitleAccessory: .statusDot(.live),
                     leading: .back(action: {}),
                     actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
                     showDivider: true
