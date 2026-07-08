@@ -57,6 +57,9 @@
 - **2026-07-06 / OPE-30:** Production `SessionChatTimelineView` uses the shared
   auto-follow state helper and pinned-bottom detector. Appended messages advance
   to the bottom only when the user has not scrolled away from the latest message.
+- **2026-07-08 / OPE-32:** Composer agent mode (`Build` / `Plan`) is now
+  mapped to server agent names (`build` / `plan`) and sent with
+  `POST /session/{id}/prompt_async`.
 
 ## iOS
 
@@ -84,6 +87,9 @@
   pinned-bottom auto-follow state as the Message List gallery. Appended messages
   advance to the bottom only when the user has not scrolled away from the latest
   message.
+- **2026-07-08 / OPE-32:** Composer agent mode (`Build` / `Plan`) is now
+  mapped to server agent names (`build` / `plan`) and sent with
+  `POST /session/{id}/prompt_async`.
 
 ## Architecture guardrails
 

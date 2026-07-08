@@ -291,12 +291,29 @@ class SessionChatViewModelTest {
             assertEquals("anthropic", repository.sentOptions?.model?.providerId)
             assertEquals("claude-sonnet", repository.sentOptions?.model?.modelId)
             assertEquals(null, repository.sentOptions?.variant)
+            assertEquals("build", repository.sentOptions?.mode)
             assertEquals(
                 "Hello",
                 viewModel.uiState.value.messages
                     .single()
                     .text,
             )
+        }
+
+    @Test
+    fun sendPrompt_planMode_sendsPlanAgent() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.selectMode("Plan")
+            viewModel.updateComposerText("Plan me")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals("plan", repository.sentOptions?.mode)
         }
 
     @Test

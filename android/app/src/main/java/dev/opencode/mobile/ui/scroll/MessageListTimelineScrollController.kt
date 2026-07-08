@@ -22,7 +22,7 @@ internal class MessageListTimelineScrollController(
         bottomAnchorHeightPx: Int,
     ) {
         launchScroll {
-            listState.animateScrollToTimelineEndFromCurrentPosition(messageCount = messageCount)
+            listState.animateScrollToTimelineEndAfterAppend(messageCount = messageCount)
             markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
         }
     }

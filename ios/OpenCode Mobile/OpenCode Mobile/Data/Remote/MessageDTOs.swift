@@ -109,11 +109,13 @@ struct SendMessageRequestDTO: Codable, Sendable {
     let parts: [SendMessagePartDTO]
     let model: SendPromptModelDTO?
     let variant: String?
+    let agent: String?
 
-    init(parts: [SendMessagePartDTO], model: SendPromptModelDTO? = nil, variant: String? = nil) {
+    init(parts: [SendMessagePartDTO], model: SendPromptModelDTO? = nil, variant: String? = nil, agent: String? = nil) {
         self.parts = parts
         self.model = model
         self.variant = variant
+        self.agent = agent
     }
 }
 

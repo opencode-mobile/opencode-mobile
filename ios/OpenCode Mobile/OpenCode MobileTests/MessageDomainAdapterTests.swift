@@ -60,6 +60,30 @@ struct MessageDomainAdapterTests {
         #expect(body.variant == nil)
     }
 
+    @Test func sendRequest_mapsModeToAgent() throws {
+        let body = adapter.sendRequest(
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "anthropic", modelID: "claude-sonnet"),
+                mode: "plan"
+            )
+        )
+
+        #expect(body.agent == "plan")
+    }
+
+    @Test func sendRequest_omitsModeWhenNil() throws {
+        let body = adapter.sendRequest(
+            options: PromptSendOptions(
+                text: "Hello",
+                model: PromptModelSelection(providerID: "anthropic", modelID: "claude-sonnet"),
+                mode: nil
+            )
+        )
+
+        #expect(body.agent == nil)
+    }
+
     @Test func toolStatusLabel_nilState_returnsHourglass() {
         #expect(adapter.toolStatusLabel(toolName: "webfetch", state: nil) == "\u{231B} webfetch")
     }

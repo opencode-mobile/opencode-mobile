@@ -232,7 +232,8 @@ final class SessionChatComposer {
                         providerID: selectedModel.option.providerID,
                         modelID: selectedModel.option.modelID
                     ),
-                    variant: composer.selectedVariant
+                    variant: composer.selectedVariant,
+                    mode: agentMode(composer.selectedMode)
                 ),
                 directory: worktree
             )
@@ -356,6 +357,13 @@ final class SessionChatComposer {
 
     private func metadataLabel(mode: String, model: String?, variant: String?) -> String {
         [mode, model, variant, formatSentTime(Date())].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func agentMode(mode: String) -> String {
+        switch mode {
+        case "Plan": return "plan"
+        default: return "build"
+        }
     }
 
     private func formatSentTime(_ date: Date) -> String {

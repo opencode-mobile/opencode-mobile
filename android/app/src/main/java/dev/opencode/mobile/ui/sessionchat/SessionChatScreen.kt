@@ -78,15 +78,6 @@ fun SessionChatScreen(
                 onConnectionClick = {},
                 onContextClick = onSessionContextClick,
             )
-            uiState.sessionStatusLabel?.let { statusLabel ->
-                Text(
-                    text = statusLabel,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
             uiState.composer.modelNotice?.let { notice ->
                 Text(
                     text = notice,

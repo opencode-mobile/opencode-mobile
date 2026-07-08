@@ -124,6 +124,7 @@ data class SendMessageRequestDto(
     val parts: List<SendMessagePartDto>,
     val model: SendPromptModelDto? = null,
     val variant: String? = null,
+    val agent: String? = null,
 )
 
 @Serializable

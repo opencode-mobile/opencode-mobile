@@ -94,6 +94,7 @@ struct PromptSendOptions: Equatable, Sendable {
     let text: String
     let model: PromptModelSelection?
     let variant: String?
+    let mode: String?
 }
 
 struct PromptModelSelection: Equatable, Sendable {

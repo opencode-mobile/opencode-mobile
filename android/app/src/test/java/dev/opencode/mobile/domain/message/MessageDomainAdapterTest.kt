@@ -120,6 +120,33 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun toSendRequest_mapsModeToAgent() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "anthropic", modelId = "claude-sonnet"),
+                    mode = "plan",
+                ),
+            )
+
+        assertEquals("plan", body.agent)
+    }
+
+    @Test
+    fun toSendRequest_omitsModeWhenNull() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "Hello",
+                    model = PromptModelSelection(providerId = "anthropic", modelId = "claude-sonnet"),
+                ),
+            )
+
+        assertEquals(null, body.agent)
+    }
+
+    @Test
     fun toolStatusLabel_nilState_returnsHourglass() {
         assertEquals("\u231B webfetch", adapter.toolStatusLabel("webfetch", null))
     }
