@@ -48,15 +48,6 @@ struct SessionChatView: View {
                 onContextClick: { showSessionContext = true }
             )
 
-            if let statusLabel = viewModel.uiState.sessionStatusLabel {
-                Text(statusLabel)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textInteractiveBase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
-
             if let notice = viewModel.uiState.composer.modelNotice {
                 Text(notice)
                     .font(OpenCodeTypography.caption)

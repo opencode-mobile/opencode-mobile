@@ -102,20 +102,25 @@ internal fun SessionChatComposerView(
                 onClick = onAttachClick,
             )
             Spacer(Modifier.weight(1f))
-            if (props.showStop) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (props.showStop) {
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Stop, "Abort active work"),
+                        enabled = props.stopEnabled,
+                        contrast = OpenCodeButtonContrast.Low,
+                        onClick = onStopClick,
+                    )
+                }
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Stop, "Abort active work"),
-                    enabled = props.stopEnabled,
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
+                    enabled = props.sendEnabled,
                     contrast = OpenCodeButtonContrast.Low,
-                    onClick = onStopClick,
+                    onClick = onSendClick,
                 )
             }
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
-                enabled = props.sendEnabled,
-                contrast = OpenCodeButtonContrast.Low,
-                onClick = onSendClick,
-            )
         }
     }
 }

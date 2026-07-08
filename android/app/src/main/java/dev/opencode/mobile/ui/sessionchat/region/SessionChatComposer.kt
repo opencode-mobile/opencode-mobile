@@ -263,6 +263,7 @@ class SessionChatComposer(
                             text = prompt,
                             model = PromptModelSelection(selectedModel.option.providerId, selectedModel.option.modelId),
                             variant = composer.selectedVariant,
+                            mode = agentMode(composer.selectedMode),
                         ),
                     directory = worktree,
                 )
@@ -420,6 +421,12 @@ class SessionChatComposer(
             composer.selectedVariant,
             formatSentTime(System.currentTimeMillis()),
         ).joinToString(" · ")
+
+    private fun agentMode(mode: String): String =
+        when (mode) {
+            "Plan" -> "plan"
+            else -> "build"
+        }
 
     private fun updateComposer(transform: (SessionChatComposerState) -> SessionChatComposerState) {
         _state.update { it.copy(composer = transform(it.composer)) }

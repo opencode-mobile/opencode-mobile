@@ -92,7 +92,8 @@ struct MessageDomainAdapter: Sendable {
         SendMessageRequestDTO(
             parts: [SendMessagePartDTO(type: "text", text: options.text)],
             model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) },
-            variant: options.variant
+            variant: options.variant,
+            agent: options.mode
         )
     }
 

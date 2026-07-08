@@ -116,6 +116,7 @@ class MessageDomainAdapter {
             parts = listOf(SendMessagePartDto(type = "text", text = options.text)),
             model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
             variant = options.variant,
+            agent = options.mode,
         )
 
     fun mapError(throwable: Throwable): MessageError =

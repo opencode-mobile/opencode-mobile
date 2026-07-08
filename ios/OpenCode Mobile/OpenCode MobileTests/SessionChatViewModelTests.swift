@@ -92,7 +92,18 @@ struct SessionChatViewModelTests {
         #expect(repository.sentOptions?.model?.providerID == "anthropic")
         #expect(repository.sentOptions?.model?.modelID == "claude-sonnet")
         #expect(repository.sentOptions?.variant == nil)
+        #expect(repository.sentOptions?.mode == "build")
         #expect(messages.contains { $0.text == "Hello" })
+    }
+
+    @Test func sendPrompt_planMode_sendsPlanAgent() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.selectMode("Plan")
+        viewModel.updateComposerText("Plan me")
+        await viewModel.sendPrompt()
+        #expect(repository.sentOptions?.mode == "plan")
     }
 
     @Test func loadMessages_restoresCachedModelSelectionOverHistory() async {

@@ -55,21 +55,23 @@ struct SessionChatComposerView: View {
 
                 Spacer(minLength: 0)
 
-                if props.showStop {
+                HStack(spacing: 8) {
+                    if props.showStop {
+                        OpenCodeButton(
+                            variant: .iconCircle(.stop, accessibilityLabel: "Abort active work"),
+                            enabled: props.stopEnabled,
+                            contrast: .low,
+                            action: onStopClick
+                        )
+                    }
+
                     OpenCodeButton(
-                        variant: .iconCircle(.stop, accessibilityLabel: "Abort active work"),
-                        enabled: props.stopEnabled,
+                        variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
+                        enabled: props.sendEnabled,
                         contrast: .low,
-                        action: onStopClick
+                        action: onSendClick
                     )
                 }
-
-                OpenCodeButton(
-                    variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
-                    enabled: props.sendEnabled,
-                    contrast: .low,
-                    action: onSendClick
-                )
             }
         }
         .padding(.horizontal, 12)

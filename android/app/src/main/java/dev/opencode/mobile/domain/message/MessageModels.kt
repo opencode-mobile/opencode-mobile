@@ -50,6 +50,7 @@ data class PromptSendOptions(
     val text: String,
     val model: PromptModelSelection? = null,
     val variant: String? = null,
+    val mode: String? = null,
 )
 
 data class PromptModelSelection(
