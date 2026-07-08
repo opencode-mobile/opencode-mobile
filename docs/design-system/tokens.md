@@ -313,7 +313,34 @@ single-line title, and compact trailing actions.
 | `topBar.paddingVertical` | 12 (logical px) |
 | `topBar.itemSpacing` | 8 (logical px) |
 | `topBar.titleSpacing` | 12 (logical px) |
+| `topBar.titleBlockHeight` | 48 (logical px) |
+| `topBar.subtitleSpacing` | 0 (logical px) |
 | `topBar.dividerThickness` | 1 (logical px) |
+
+Connection status label tokens used by `OpenCodeConnectionStatusLabel` and top-bar
+`subtitleAccessory.statusDot`:
+
+| Token | Value |
+| --- | --- |
+| `connectionStatusLabel.dotSize` | 6 (logical px) |
+| `connectionStatusLabel.dotSpacing` | 4 (logical px) |
+
+### Overflow menu
+
+Compact anchored popup menu for secondary top-bar actions with icon and label
+entries.
+
+| Token | Value |
+| --- | --- |
+| `overflowMenu.cornerRadius` | 8 (logical px) |
+| `overflowMenu.minWidth` | 200 (logical px) |
+| `overflowMenu.paddingVertical` | 4 (logical px) |
+| `overflowMenu.shadowElevation` | 4 (logical px) |
+| `overflowMenu.anchor.paddingEnd` | 12 (logical px) |
+| `overflowMenu.entry.minHeight` | 48 (logical px) |
+| `overflowMenu.entry.paddingHorizontal` | 12 (logical px) |
+| `overflowMenu.entry.iconSize` | 20 (logical px) |
+| `overflowMenu.entry.iconSpacing` | 12 (logical px) |
 
 ### Bottom sheet
 

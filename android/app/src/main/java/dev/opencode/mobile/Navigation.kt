@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
@@ -155,6 +156,7 @@ fun MainNavigation() {
                                                     ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
                                                     ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                     ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
+                                                    ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                     ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                                                     ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                     ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()

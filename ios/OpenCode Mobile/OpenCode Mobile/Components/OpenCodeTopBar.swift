@@ -4,6 +4,12 @@ private let topBarMinHeight: CGFloat = 56
 private let topBarHorizontalPadding: CGFloat = 12
 private let topBarVerticalPadding: CGFloat = 12
 private let topBarItemSpacing: CGFloat = 8
+private let topBarSubtitleSpacing: CGFloat = 0
+private let topBarTitleBlockHeight: CGFloat = 48
+
+enum OpenCodeTopBarSubtitleAccessory {
+    case statusDot(OpenCodeSessionConnectionStatus)
+}
 
 enum OpenCodeTopBarLeading {
     case none
@@ -27,6 +33,8 @@ private struct TopBarSideWidthKey: PreferenceKey {
 
 struct OpenCodeTopBar: View {
     let title: String?
+    let subtitle: String?
+    let subtitleAccessory: OpenCodeTopBarSubtitleAccessory?
     let leading: OpenCodeTopBarLeading
     let actions: [OpenCodeTopBarAction]
     let showDivider: Bool
@@ -35,6 +43,8 @@ struct OpenCodeTopBar: View {
 
     init(
         title: String? = nil,
+        subtitle: String? = nil,
+        subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = nil,
         leading: OpenCodeTopBarLeading = .none,
         actions: [OpenCodeTopBarAction] = [],
         showDivider: Bool = false
@@ -46,8 +56,11 @@ struct OpenCodeTopBar: View {
         )
 
         let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSubtitle = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         self.title = normalizedTitle?.isEmpty == true ? nil : normalizedTitle
+        self.subtitle = normalizedSubtitle?.isEmpty == true ? nil : normalizedSubtitle
+        self.subtitleAccessory = subtitleAccessory
         self.leading = leading
         self.actions = actions
         self.showDivider = showDivider
@@ -114,16 +127,69 @@ struct OpenCodeTopBar: View {
     @ViewBuilder
     private var titleContent: some View {
         if let title {
-            Text(title)
-                .font(OpenCodeTypography.title)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            Group {
+                if subtitle != nil || subtitleAccessory != nil {
+                    VStack(spacing: topBarSubtitleSpacing) {
+                        titleLabel(title)
+                        subtitleLine
+                    }
+                } else {
+                    titleLabel(title)
+                }
+            }
+            .frame(height: topBarTitleBlockHeight, alignment: .center)
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(titleBlockAccessibilityLabel(title: title))
         } else {
             Color.clear
                 .frame(width: 1, height: 1)
                 .accessibilityHidden(true)
         }
+    }
+
+    @ViewBuilder
+    private var subtitleLine: some View {
+        switch subtitleAccessory {
+        case let .statusDot(status):
+            OpenCodeConnectionStatusLabel(status: status)
+        case nil:
+            if let subtitle {
+                subtitleLabel(subtitle)
+            }
+        }
+    }
+
+    private func titleBlockAccessibilityLabel(title: String) -> String {
+        let secondLine: String? =
+            switch subtitleAccessory {
+            case let .statusDot(status):
+                "Live updates \(status.rawValue)"
+            case nil:
+                subtitle
+            }
+        if let secondLine {
+            return "\(title), \(secondLine)"
+        }
+        return title
+    }
+
+    private func titleLabel(_ title: String) -> some View {
+        Text(title)
+            .font(OpenCodeTypography.title)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.center)
+    }
+
+    private func subtitleLabel(_ subtitle: String) -> some View {
+        Text(subtitle)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textBase)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.center)
     }
 
     @ViewBuilder
@@ -212,6 +278,26 @@ private struct OpenCodeTopBarPreviewContent: View {
                     title: "Rename session",
                     leading: .customIcon(.edit, accessibilityLabel: "Edit", action: {}),
                     actions: [.label(title: "Save", enabled: false, action: {})],
+                    showDivider: true
+                )
+            }
+
+            previewSection("Two-line title") {
+                OpenCodeTopBar(
+                    title: "Session",
+                    subtitle: "Importing icons explanation",
+                    leading: .back(action: {}),
+                    actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
+                    showDivider: true
+                )
+            }
+
+            previewSection("Status subtitle") {
+                OpenCodeTopBar(
+                    title: "Importing icons explanation",
+                    subtitleAccessory: .statusDot(.live),
+                    leading: .back(action: {}),
+                    actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
                     showDivider: true
                 )
             }

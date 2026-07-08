@@ -11,6 +11,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case icons
     case outgoingMessage
     case topBar
+    case overflowMenu
     case bottomSheet
     case listItem
     case choiceBadge
@@ -58,6 +59,12 @@ let componentGalleryEntries = [
         id: .topBar,
         title: "Top Bar",
         description: "Page-level navigation bar with leading affordance and actions.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .overflowMenu,
+        title: "Overflow Menu",
+        description: "Compact anchored popup menu with icon and label entries.",
         category: .components
     ),
     ComponentGalleryEntry(

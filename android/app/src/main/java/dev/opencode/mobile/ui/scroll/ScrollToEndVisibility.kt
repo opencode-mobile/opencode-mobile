@@ -103,6 +103,10 @@ suspend fun LazyListState.animateScrollToTimelineEndAfterAppend(messageCount: In
     }
 }
 
+suspend fun LazyListState.animateScrollToTimelineEndFromCurrentPosition(messageCount: Int) {
+    animateScrollToTimelineEndAfterAppend(messageCount)
+}
+
 suspend fun LazyListState.scrollToTimelineEndAfterLayoutChange(messageCount: Int) {
     if (messageCount == 0) return
 

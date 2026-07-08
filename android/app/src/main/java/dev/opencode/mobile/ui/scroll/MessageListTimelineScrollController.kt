@@ -4,7 +4,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -34,6 +33,17 @@ internal class MessageListTimelineScrollController(
     ) {
         launchScroll {
             listState.scrollToTimelineEnd(messageCount = messageCount)
+            markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
+        }
+    }
+
+    fun snapToEndAfterLayoutChange(
+        messageCount: Int,
+        tolerancePx: Int,
+        bottomAnchorHeightPx: Int,
+    ) {
+        launchScroll {
+            listState.scrollToTimelineEndAfterLayoutChange(messageCount = messageCount)
             markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
         }
     }

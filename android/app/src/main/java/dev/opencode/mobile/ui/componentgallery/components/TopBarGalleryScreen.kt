@@ -15,9 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryTopBarLeading {
@@ -37,6 +39,9 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     var leadingName by rememberSaveable { mutableStateOf(GalleryTopBarLeading.None.name) }
     var actionsName by rememberSaveable { mutableStateOf(GalleryTopBarActions.None.name) }
     var showDivider by rememberSaveable { mutableStateOf(false) }
+    var showTwoLine by rememberSaveable { mutableStateOf(false) }
+    var showStatusDot by rememberSaveable { mutableStateOf(false) }
+    var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var actionsEnabled by rememberSaveable { mutableStateOf(true) }
 
     val leadingSelection =
@@ -56,6 +61,16 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             GalleryTopBarActions.None -> "Component Gallery"
             GalleryTopBarActions.Icons -> "Session actions"
             GalleryTopBarActions.Label -> "Project settings"
+        }
+    val subtitle = if (showTwoLine && !showStatusDot) "Importing icons explanation" else null
+    val connectionStatus =
+        runCatching { OpenCodeSessionConnectionStatus.valueOf(statusName) }
+            .getOrDefault(OpenCodeSessionConnectionStatus.Live)
+    val subtitleAccessory =
+        if (showStatusDot) {
+            OpenCodeTopBarSubtitleAccessory.StatusDot(connectionStatus)
+        } else {
+            null
         }
     val leading =
         when (leadingSelection) {
@@ -116,6 +131,8 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
             }
 
             ControlGroup(title = "State") {
+                OpenCodeChoiceBadge(label = "Two-line", selected = showTwoLine, onClick = { showTwoLine = !showTwoLine })
+                OpenCodeChoiceBadge(label = "Status dot", selected = showStatusDot, onClick = { showStatusDot = !showStatusDot })
                 OpenCodeChoiceBadge(label = "Divider", selected = showDivider, onClick = { showDivider = !showDivider })
                 OpenCodeChoiceBadge(
                     label = "Actions enabled",
@@ -124,9 +141,21 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                 )
             }
 
+            if (showStatusDot) {
+                ControlGroup(title = "Connection") {
+                    OpenCodeSessionConnectionStatus.entries.forEach { option ->
+                        OpenCodeChoiceBadge(
+                            label = option.label,
+                            selected = option == connectionStatus,
+                            onClick = { statusName = option.name },
+                        )
+                    }
+                }
+            }
+
             Text(
                 text =
-                    "Switch controls to review the title-only, back, close, icon-action, " +
+                    "Switch controls to review title-only, two-line, status-dot subtitle, back, close, icon-action, " +
                         "labeled-action, divider, and disabled-action states.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -136,6 +165,8 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeTopBar(
             modifier = Modifier.fillMaxWidth(),
             title = title,
+            subtitle = subtitle,
+            subtitleAccessory = subtitleAccessory,
             leading = leading,
             actions = actions,
             showDivider = showDivider,

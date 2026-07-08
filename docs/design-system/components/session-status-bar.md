@@ -2,62 +2,56 @@
 
 ## Intent
 
-Provide a compact session-scoped status strip for screens that need to expose a
-copyable session identifier, foreground live-update connection state, and context
+Provide a compact session-scoped status strip for screens that need context
 usage in one stable row.
+
+Foreground SSE connection state belongs in the Session screen top-bar subtitle
+accessory instead of this strip.
 
 ## Public API
 
-- Variants: connection status `live`, `connecting`, `offline`.
-- States: default, pressed for each action, unavailable context usage.
-- Required content: full session id, connection status, copy action, connection
-  action, context action.
+- Variants: context usage available / unavailable.
+- States: default, pressed for the context action.
+- Required content: context action.
 - Optional content: context usage fraction. Missing context data renders as
   unavailable instead of 0%.
+- Session identity is not shown in this strip. Copy the full session id from the
+  Session screen top-bar overflow menu.
 
 ## Token Usage
 
-- Semantic tokens: `text-base`, `icon-base`, `icon-weak-base`,
-  `icon-strong-base`, `surface-base-hover`, `success`, `warning`, `error`,
-  `interactive`.
+- Semantic tokens: `icon-base`, `icon-strong-base`, `surface-base-hover`,
+  `warning`, `error`.
 - Component tokens: fixed 36 logical px height, 22 logical px action targets, 14
-  logical px context ring, 6 logical px connection dot.
-- Typography roles: `type.caption`.
+  logical px context ring.
+- Typography roles: not applicable for this component version.
 
 ## Behavior
 
-- The visible id label is `Session: <last 9 characters>`.
-- Only the copy icon copies the raw full session id.
-- The connection label and trailing dot are one clickable target for connection
-  details, with 4 logical px horizontal spacing.
-- Connection dot colors map to status tokens: `live` uses `success`,
-  `connecting` uses `warning`, and `offline` uses `error`.
 - The context ring is one clickable target for context details.
 - The context ring uses `icon-strong-base` for progress and `icon-base` for
   the track.
 - Context progress switches to `warning` at 70% and `error` at 85%.
-- Pressed feedback is circular for icon/ring actions and capsule-shaped for the
-  connection action.
-- Accessibility labels announce `Copy session ID`, `Live updates <state>`, and
-  `Context usage <percent> percent` or `Context usage unavailable`.
+- Pressed feedback is circular for the context action.
+- Accessibility labels announce `Context usage <percent> percent` or
+  `Context usage unavailable`.
 
 ## Platform Notes
 
-- iOS: uses SwiftUI `ButtonStyle` pressed feedback with circular and capsule
-  shapes.
-- Android: uses Compose `Surface(onClick)` for ripple feedback with matching
-  circular and capsule shapes.
+- iOS: uses SwiftUI `ButtonStyle` pressed feedback with a circular shape.
+- Android: uses Compose `Surface(onClick)` for ripple feedback with a matching
+  circular shape.
 
 ## Previews
 
-- Light: live state with populated context usage.
+- Light: populated context usage.
 - Dark: gallery theme control.
-- Default: live, connecting, offline, context availability, and context usage
-  preset states (`0%`, `50%`, `70%`, `85%`) available in gallery controls.
+- Default: context availability and context usage preset states (`0%`, `50%`,
+  `70%`, `85%`) available in gallery controls.
 - Pressed: covered by native pressed interaction behavior.
-- Disabled: not supported; all three actions are expected to be available.
-- Loading: represented by `connecting`.
-- Error: represented by `offline`.
+- Disabled: not supported; the context action is expected to be available.
+- Loading: not applicable for this component version.
+- Error: represented by high context usage colors at 70% and 85%.
 - Empty: context usage unavailable.
 
 ## Parity And Divergence

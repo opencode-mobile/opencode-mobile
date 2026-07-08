@@ -45,9 +45,11 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
+import dev.opencode.mobile.ui.scroll.MessageListViewportResizeFollowEffect
 import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
 import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
 import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
+import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
 import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -144,6 +146,34 @@ internal fun SessionChatTimelineView(
                 )
             }
 
+            suspend fun snapToEndAfterLayoutChangeAndArmFollow(
+                reason: String,
+                waitForLayout: Boolean = true,
+            ) {
+                logScrollD("$reason layout-snap start count=${props.messages.size}")
+                if (waitForLayout) {
+                    withFrameNanos { }
+                    withFrameNanos { }
+                }
+                listState.scrollToTimelineEndAfterLayoutChange(messageCount = props.messages.size)
+                withFrameNanos { }
+                val settledPinned =
+                    listState.isPinnedToTimelineEnd(
+                        messageCount = props.messages.size,
+                        tolerancePx = autoFollowTolerancePx,
+                        bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    )
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = settledPinned)
+                val bottomAnchor =
+                    listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == props.messages.size }
+                logScrollD(
+                    "$reason layout-snap settled count=${props.messages.size} pinned=$settledPinned " +
+                        "first=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset} " +
+                        "viewportEnd=${listState.layoutInfo.viewportEndOffset} " +
+                        "bottom=${bottomAnchor?.offset}/${bottomAnchor?.size}",
+                )
+            }
+
             suspend fun snapExactlyToEndAndArmFollow(
                 reason: String,
                 waitForLayout: Boolean = true,
@@ -197,7 +227,7 @@ internal fun SessionChatTimelineView(
                     }
                     autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = true) -> {
                         logScrollD("layout-check ensure-end count=${props.messages.size}")
-                        snapExactlyToEndAndArmFollow(reason = "layout-check", waitForLayout = false)
+                        snapToEndAfterLayoutChangeAndArmFollow(reason = "layout-check", waitForLayout = false)
                     }
                     else -> {
                         logScrollD("layout-check update-armed count=${props.messages.size} pinned=$pinned")
@@ -241,6 +271,14 @@ internal fun SessionChatTimelineView(
                         }
                 }
             }
+
+            // ViewportResizeFollowEffect: re-anchors the timeline end when the list viewport shrinks or grows (IME, rotation).
+            MessageListViewportResizeFollowEffect(
+                listState = listState,
+                autoFollowEnabled = true,
+                autoFollowState = autoFollowState,
+                onFollowLayoutChange = { followLayoutChangeAfterSettled() },
+            )
 
             // AutoFollowContentChangeEffect: snaps to the end when existing message content changes size.
             LaunchedEffect(messageLayoutSignature) {
