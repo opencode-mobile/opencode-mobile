@@ -2,8 +2,6 @@ import os
 import SwiftUI
 
 private let sessionChatTimelineBottomAnchorID = "session-chat-timeline-bottom-anchor"
-private let sessionChatPinnedTolerance: CGFloat = 8
-private let sessionChatAutoFollowExtraTolerance: CGFloat = 32
 
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
@@ -60,74 +58,51 @@ struct SessionChatTimelineView: View {
 private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
-    @State private var scrollPositionID: String?
-    @State private var scrollDistanceFromBottom = CGFloat.greatestFiniteMagnitude
-    @State private var contentHeight: CGFloat = 0
-    @State private var viewportHeight: CGFloat = 0
-    @State private var isUserScrolling = false
-    @State private var autoFollowState = MessageListAutoFollowState(initialMessageCount: 0)
+    @State private var timeline = MessageListTimelineState(
+        bottomAnchorID: sessionChatTimelineBottomAnchorID
+    )
 
-    private var isScrollable: Bool {
-        contentHeight > viewportHeight + 8
-    }
-
-    private var isPinnedToEnd: Bool {
-        guard isScrollable else { return true }
-
-        if #available(iOS 18, *) {
-            return scrollDistanceFromBottom <=
-                sessionChatPinnedTolerance + sessionChatAutoFollowExtraTolerance
-        }
-
-        return scrollPositionID == sessionChatTimelineBottomAnchorID
-    }
-
-    private var showScrollToEnd: Bool {
-        guard !props.messages.isEmpty, isScrollable else { return false }
-
-        if #available(iOS 18, *) {
-            return ScrollToEndVisibility.shouldShow(
-                scrollDistanceFromBottom: scrollDistanceFromBottom,
-                viewportHeight: viewportHeight,
-                isUserScrolling: isUserScrolling
-            )
-        }
-
-        guard !isUserScrolling else { return false }
-        return scrollPositionID != sessionChatTimelineBottomAnchorID
-    }
+    private var messageCount: Int { props.messages.count }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                SessionChatTimelineMessageStack(
-                    messages: props.messages,
-                    onRestoreComposerText: props.onRestoreComposerText
-                )
-                .scrollTargetLayout()
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onChange(of: geometry.size.height, initial: true) { _, height in
-                                contentHeight = height
-                            }
+                MessageListReversedTimelineStack(
+                    items: props.messages,
+                    bottomAnchorID: sessionChatTimelineBottomAnchorID,
+                    itemID: \.id,
+                    onLastMessageContentSizeSettled: {
+                        timeline.followLayoutChangeIfNeededAfterLayoutSettles(
+                            messageCount: messageCount,
+                            autoFollowEnabled: true,
+                            onLog: logScroll
+                        )
+                    }
+                ) { message, isNewestMessage, onContentSizeSettled in
+                    HStack {
+                        if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                            SessionChatMessageRow(
+                                message: message,
+                                onRestoreClick: { props.onRestoreComposerText(message.text) },
+                                animateSizeChanges: isNewestMessage,
+                                onContentSizeAnimationFinished: onContentSizeSettled
+                            )
+                            Spacer(minLength: 0)
+                        } else {
+                            Spacer(minLength: 0)
+                            SessionChatMessageRow(
+                                message: message,
+                                onRestoreClick: { props.onRestoreComposerText(message.text) },
+                                animateSizeChanges: isNewestMessage,
+                                onContentSizeAnimationFinished: onContentSizeSettled
+                            )
+                        }
                     }
                 }
+                .scrollTargetLayout()
+                .messageListTimelineContentHeight(timeline: timeline)
             }
-            .background {
-                GeometryReader { geometry in
-                    Color.clear
-                        .onChange(of: geometry.size.height, initial: true) { _, height in
-                            viewportHeight = height
-                        }
-                }
-            }
-            .scrollPosition(id: $scrollPositionID, anchor: .bottom)
-            .scrollToEndScrollObserver(
-                distanceFromBottom: $scrollDistanceFromBottom,
-                isUserScrolling: $isUserScrolling,
-                scrollPositionID: scrollPositionID
-            )
+            .messageListTimelineScrollChrome(timeline: timeline)
             .refreshable {
                 await props.onRefresh()
             }
@@ -137,110 +112,23 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            if showScrollToEnd {
-                OpenCodeActionPill(variant: .scrollToEnd) {
-                    logScroll("pill-click count=\(props.messages.count)")
-                    scrollToLastMessage()
-                }
-                .padding(.bottom, 12)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            MessageListScrollToEndOverlay(
+                visible: timeline.shouldShowScrollToEnd(messageCount: messageCount)
+            ) {
+                logScroll("pill-click count=\(messageCount)")
+                timeline.animateToEnd(messageCount: messageCount, onLog: logScroll)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
-        .onAppear {
-            logScroll("appear count=\(props.messages.count) pinned=\(isPinnedToEnd)")
-            autoFollowState = MessageListAutoFollowState(initialMessageCount: props.messages.count)
-            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
-            snapToLastMessage(reason: "initial-scroll")
-        }
-        .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
-            logScroll("pinned-change count=\(props.messages.count) pinned=\(isPinnedToEnd) userScrolling=\(isUserScrolling)")
-            if isUserScrolling || isPinnedToEnd {
-                autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
-            } else {
-                followLayoutChangeIfNeeded()
-            }
-        }
-        .onChange(of: contentHeight) { _, _ in
-            logScroll("content-height count=\(props.messages.count) height=\(contentHeight) viewport=\(viewportHeight)")
-            followLayoutChangeIfNeeded()
-        }
-        .onChange(of: viewportHeight) { _, _ in
-            logScroll("viewport-height count=\(props.messages.count) height=\(contentHeight) viewport=\(viewportHeight)")
-            followLayoutChangeIfNeeded()
-        }
-        .onChange(of: props.messages.layoutSignature) { _, _ in
-            logScroll("layout-signature changed count=\(props.messages.count) signature=\(props.messages.layoutSignature)")
-            followLayoutChangeIfNeededAfterLayoutSettles()
-        }
-        .onChange(of: props.messages.count) { _, newCount in
-            logScroll("message-count changed count=\(newCount)")
-            guard autoFollowState.onMessageCountChanged(
-                messageCount: newCount,
-                autoFollowEnabled: true
-            ) else { return }
-
-            logScroll("message-count follow count=\(newCount)")
-            snapToLastMessage(reason: "message-count")
-        }
-    }
-
-    private func followLayoutChangeIfNeeded() {
-        if isUserScrolling {
-            logScroll("layout-check no-op count=\(props.messages.count) pinned=\(isPinnedToEnd) userScrolling=\(isUserScrolling)")
-            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
-            return
-        }
-
-        if autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: true) {
-            logScroll("layout-check ensure-end count=\(props.messages.count)")
-            snapToLastMessage(reason: "layout-check")
-            return
-        }
-
-        logScroll("layout-check update-armed count=\(props.messages.count) pinned=\(isPinnedToEnd)")
-        autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: props.messages.count)
-    }
-
-    private func followLayoutChangeIfNeededAfterLayoutSettles() {
-        logScroll("layout-check scheduled count=\(props.messages.count)")
-        Task { @MainActor in
-            await Task.yield()
-            await Task.yield()
-            followLayoutChangeIfNeeded()
-        }
-    }
-
-    private func scrollToLastMessage() {
-        guard !props.messages.isEmpty else { return }
-        logScroll("animate-to-end start count=\(props.messages.count)")
-        scrollPositionID = nil
-        Task { @MainActor in
-            await Task.yield()
-            withAnimation(.easeOut(duration: 0.2)) {
-                scrollPositionID = sessionChatTimelineBottomAnchorID
-            }
-            await Task.yield()
-            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
-            logScroll("animate-to-end settled count=\(props.messages.count) pinned=\(isPinnedToEnd) position=\(scrollPositionID ?? "-")")
-        }
-    }
-
-    private func snapToLastMessage(reason: String = "layout-snap") {
-        guard !props.messages.isEmpty else { return }
-        logScroll("\(reason) snap start count=\(props.messages.count)")
-        scrollPositionID = nil
-        Task { @MainActor in
-            await Task.yield()
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                scrollPositionID = sessionChatTimelineBottomAnchorID
-            }
-            await Task.yield()
-            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
-            logScroll("\(reason) snap settled count=\(props.messages.count) pinned=\(isPinnedToEnd) position=\(scrollPositionID ?? "-")")
-        }
+        .animation(.easeOut(duration: 0.2), value: timeline.shouldShowScrollToEnd(messageCount: messageCount))
+        .messageListTimelineBehavior(
+            timeline: timeline,
+            messageCount: messageCount,
+            firstMessageID: props.messages.first?.id,
+            lastMessageID: props.messages.last?.id,
+            autoFollowEnabled: true,
+            layoutSignature: props.messages.layoutSignature,
+            onLog: logScroll
+        )
     }
 
     private func logScroll(_ message: String) {
@@ -263,66 +151,38 @@ private extension Array where Element == SessionChatRow {
     }
 }
 
-private struct SessionChatTimelineMessageStack: View {
-    let messages: [SessionChatRow]
-    let onRestoreComposerText: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                HStack {
-                    if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                        SessionChatMessageRow(
-                            message: message,
-                            onRestoreClick: { onRestoreComposerText(message.text) }
-                        )
-                        Spacer(minLength: 0)
-                    } else {
-                        Spacer(minLength: 0)
-                        SessionChatMessageRow(
-                            message: message,
-                            onRestoreClick: { onRestoreComposerText(message.text) }
-                        )
-                    }
-                }
-                .id(message.id)
-                .padding(.bottom, index == messages.count - 1 ? 0 : 8)
-            }
-
-            Color.clear
-                .frame(height: 12)
-                .id(sessionChatTimelineBottomAnchorID)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-    }
-}
-
 private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onRestoreClick: () -> Void
+    let animateSizeChanges: Bool
+    let onContentSizeAnimationFinished: (() -> Void)?
 
     var body: some View {
-        switch message.role {
-        case .user:
-            OpenCodeOutgoingMessage(
-                text: message.text,
-                renderedMarkdown: message.renderedMarkdown,
-                metadataLabel: message.metadataLabel,
-                onRestoreClick: onRestoreClick
-            )
-        case .assistant:
-            AssistantMessageBubble(
-                text: message.text,
-                renderedMarkdown: message.renderedMarkdown
-            )
-        case .command, .tool, .unknown:
-            FallbackMessageBubble(
-                roleLabel: message.role.displayLabel,
-                text: message.text
-            )
+        Group {
+            switch message.role {
+            case .user:
+                OpenCodeOutgoingMessage(
+                    text: message.text,
+                    renderedMarkdown: message.renderedMarkdown,
+                    metadataLabel: message.metadataLabel,
+                    onRestoreClick: onRestoreClick
+                )
+            case .assistant:
+                AssistantMessageBubble(
+                    text: message.text,
+                    renderedMarkdown: message.renderedMarkdown
+                )
+            case .command, .tool, .unknown:
+                FallbackMessageBubble(
+                    roleLabel: message.role.displayLabel,
+                    text: message.text
+                )
+            }
         }
+        .messageListAnimateLastMessageSize(
+            animateSizeChanges: animateSizeChanges,
+            onContentSizeAnimationFinished: onContentSizeAnimationFinished
+        )
     }
 }
 

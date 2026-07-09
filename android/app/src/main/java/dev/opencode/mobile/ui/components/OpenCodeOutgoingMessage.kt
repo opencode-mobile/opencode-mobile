@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -48,7 +49,7 @@ fun OpenCodeOutgoingMessage(
     metadataLabel: String,
     onRestoreClick: () -> Unit,
     modifier: Modifier = Modifier,
-    renderedMarkdown: dev.opencode.mobile.markdown.MarkdownDocument? = null,
+    renderedMarkdown: MarkdownDocument? = null,
 ) {
     val context = LocalContext.current
 
@@ -89,7 +90,9 @@ fun OpenCodeOutgoingMessage(
                     }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageContentSpacing),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = OutgoingMessageContentSpacing),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Spacer(modifier = Modifier.weight(1f))
@@ -111,7 +114,12 @@ fun OpenCodeOutgoingMessage(
                                     context.getSystemService(
                                         Context.CLIPBOARD_SERVICE,
                                     ) as android.content.ClipboardManager
-                                clipboardManager.setPrimaryClip(ClipData.newPlainText("Message", text))
+                                clipboardManager.setPrimaryClip(
+                                    ClipData.newPlainText(
+                                        "Message",
+                                        text
+                                    )
+                                )
                             },
                             modifier = Modifier.padding(start = OutgoingMessageControlItemSpacing),
                         ) {
@@ -126,7 +134,9 @@ fun OpenCodeOutgoingMessage(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = OutgoingMessageFooterSpacing),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = OutgoingMessageFooterSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(

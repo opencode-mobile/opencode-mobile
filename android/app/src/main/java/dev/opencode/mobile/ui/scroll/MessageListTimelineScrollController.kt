@@ -21,7 +21,7 @@ internal class MessageListTimelineScrollController(
         bottomAnchorHeightPx: Int,
     ) {
         launchScroll {
-            listState.animateScrollToTimelineEndAfterAppend(messageCount = messageCount)
+            listState.animateScrollToTimelineEndFromCurrentPosition(messageCount = messageCount)
             markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
         }
     }
@@ -32,18 +32,7 @@ internal class MessageListTimelineScrollController(
         bottomAnchorHeightPx: Int,
     ) {
         launchScroll {
-            listState.scrollToTimelineEnd(messageCount = messageCount)
-            markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
-        }
-    }
-
-    fun snapToEndAfterLayoutChange(
-        messageCount: Int,
-        tolerancePx: Int,
-        bottomAnchorHeightPx: Int,
-    ) {
-        launchScroll {
-            listState.scrollToTimelineEndAfterLayoutChange(messageCount = messageCount)
+            listState.scrollToTimelineEnd()
             markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
         }
     }

@@ -233,7 +233,7 @@ final class SessionChatComposer {
                         modelID: selectedModel.option.modelID
                     ),
                     variant: composer.selectedVariant,
-                    mode: agentMode(composer.selectedMode)
+                    mode: agentMode(mode: composer.selectedMode)
                 ),
                 directory: worktree
             )

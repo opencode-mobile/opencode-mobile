@@ -95,6 +95,18 @@ struct PromptSendOptions: Equatable, Sendable {
     let model: PromptModelSelection?
     let variant: String?
     let mode: String?
+
+    init(
+        text: String,
+        model: PromptModelSelection? = nil,
+        variant: String? = nil,
+        mode: String? = nil
+    ) {
+        self.text = text
+        self.model = model
+        self.variant = variant
+        self.mode = mode
+    }
 }
 
 struct PromptModelSelection: Equatable, Sendable {
