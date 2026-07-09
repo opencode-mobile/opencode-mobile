@@ -159,7 +159,13 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(items, id: itemID) { item in
+            Color.clear
+                .frame(height: MessageListTimelineDefaults.bottomAnchorHeight)
+                .id(bottomAnchorID)
+                .accessibilityHidden(true)
+                .scaleEffect(y: -1)
+
+            ForEach(items.reversed(), id: itemID) { item in
                 let isNewestMessage = item[keyPath: itemID] == items.last?[keyPath: itemID]
                 itemContent(
                     item,
@@ -167,13 +173,10 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
                     isNewestMessage ? onLastMessageContentSizeSettled : nil
                 )
                 .messageListTimelineItemSpacing(isNewestMessage: isNewestMessage)
+                .scaleEffect(y: -1)
             }
-
-            Color.clear
-                .frame(height: MessageListTimelineDefaults.bottomAnchorHeight)
-                .id(bottomAnchorID)
-                .accessibilityHidden(true)
         }
+        .scaleEffect(y: -1)
         .padding(.horizontal, MessageListTimelineDefaults.horizontalContentPadding)
         .padding(.top, MessageListTimelineDefaults.topContentPadding)
         .padding(.bottom, MessageListTimelineDefaults.bottomContentPadding)
@@ -182,7 +185,7 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
 
 extension View {
     func messageListTimelineItemSpacing(isNewestMessage: Bool) -> some View {
-        padding(.bottom, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
+        padding(.top, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
     }
 
     func messageListAnimateLastMessageSize(
@@ -301,10 +304,14 @@ extension View {
         let isPinnedToEnd = timeline.isPinnedToEnd(messageCount: messageCount)
 
         return self
+            .defaultScrollAnchor(.top)
             .onAppear {
                 onLog?("appear count=\(messageCount) pinned=\(isPinnedToEnd)")
                 timeline.reset(messageCount: messageCount)
-                timeline.snapToEnd(messageCount: messageCount, reason: "initial-scroll", onLog: onLog)
+                timeline.scrollPositionID = timeline.bottomAnchorID
+                timeline.autoFollowState.markProgrammaticScrollSettled(
+                    isPinnedToEnd: timeline.isPinnedToEnd(messageCount: messageCount)
+                )
             }
             .onChange(of: isPinnedToEnd, initial: true) { _, pinnedToEnd in
                 onLog?("pinned-change count=\(messageCount) pinned=\(pinnedToEnd) userScrolling=\(timeline.isUserScrolling)")
