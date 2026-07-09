@@ -30,6 +30,10 @@ private struct MessageListGalleryPreview: View {
 
     private var messageCount: Int { messages.count }
 
+    private var showScrollToEnd: Bool {
+        timeline.shouldShowScrollToEnd(messageCount: messageCount)
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
@@ -40,7 +44,8 @@ private struct MessageListGalleryPreview: View {
                     onLastMessageContentSizeSettled: {
                         timeline.followLayoutChangeIfNeededAfterLayoutSettles(
                             messageCount: messageCount,
-                            autoFollowEnabled: autoFollowEnabled
+                            autoFollowEnabled: autoFollowEnabled,
+                            scrollTargetID: messages.last?.id
                         )
                     }
                 ) { message, isNewestMessage, onContentSizeSettled in
@@ -65,12 +70,16 @@ private struct MessageListGalleryPreview: View {
                 .scrollTargetLayout()
                 .messageListTimelineContentHeight(timeline: timeline)
             }
+            .defaultScrollAnchor(.bottom)
             .messageListTimelineScrollChrome(timeline: timeline)
 
             MessageListScrollToEndOverlay(
-                visible: timeline.shouldShowScrollToEnd(messageCount: messageCount)
+                visible: showScrollToEnd
             ) {
-                timeline.animateToEnd(messageCount: messageCount)
+                timeline.animateToEnd(
+                    messageCount: messageCount,
+                    scrollTargetID: messages.last?.id
+                )
             }
 
             MessageListAutoFollowIndicator(
@@ -90,7 +99,7 @@ private struct MessageListGalleryPreview: View {
             .padding(.top, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .animation(.easeOut(duration: 0.2), value: timeline.shouldShowScrollToEnd(messageCount: messageCount))
+        .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .messageListTimelineBehavior(
             timeline: timeline,
             messageCount: messageCount,

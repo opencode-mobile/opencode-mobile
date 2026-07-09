@@ -64,6 +64,10 @@ private struct SessionChatTimelineReadyView: View {
 
     private var messageCount: Int { props.messages.count }
 
+    private var showScrollToEnd: Bool {
+        timeline.shouldShowScrollToEnd(messageCount: messageCount)
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
@@ -75,6 +79,7 @@ private struct SessionChatTimelineReadyView: View {
                         timeline.followLayoutChangeIfNeededAfterLayoutSettles(
                             messageCount: messageCount,
                             autoFollowEnabled: true,
+                            scrollTargetID: props.messages.last?.id,
                             onLog: logScroll
                         )
                     }
@@ -102,6 +107,7 @@ private struct SessionChatTimelineReadyView: View {
                 .scrollTargetLayout()
                 .messageListTimelineContentHeight(timeline: timeline)
             }
+            .defaultScrollAnchor(.bottom)
             .messageListTimelineScrollChrome(timeline: timeline)
             .refreshable {
                 await props.onRefresh()
@@ -113,13 +119,17 @@ private struct SessionChatTimelineReadyView: View {
             }
 
             MessageListScrollToEndOverlay(
-                visible: timeline.shouldShowScrollToEnd(messageCount: messageCount)
+                visible: showScrollToEnd
             ) {
                 logScroll("pill-click count=\(messageCount)")
-                timeline.animateToEnd(messageCount: messageCount, onLog: logScroll)
+                timeline.animateToEnd(
+                    messageCount: messageCount,
+                    scrollTargetID: props.messages.last?.id,
+                    onLog: logScroll
+                )
             }
         }
-        .animation(.easeOut(duration: 0.2), value: timeline.shouldShowScrollToEnd(messageCount: messageCount))
+        .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .messageListTimelineBehavior(
             timeline: timeline,
             messageCount: messageCount,

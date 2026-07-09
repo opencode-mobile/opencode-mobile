@@ -22,6 +22,7 @@ final class MessageListTimelineState {
     var contentHeight: CGFloat = 0
     var viewportHeight: CGFloat = 0
     var isUserScrolling = false
+    var isProgrammaticScrolling = false
     var autoFollowState: MessageListAutoFollowState
 
     init(bottomAnchorID: String, initialMessageCount: Int = 0) {
@@ -37,8 +38,7 @@ final class MessageListTimelineState {
         guard isScrollable(messageCount: messageCount) else { return true }
 
         if #available(iOS 18, *) {
-            return scrollDistanceFromBottom <=
-                MessageListTimelineDefaults.pinnedTolerance + MessageListTimelineDefaults.autoFollowTolerance
+            return scrollDistanceFromBottom <= MessageListTimelineDefaults.pinnedTolerance
         }
 
         return scrollPositionID == bottomAnchorID
@@ -67,50 +67,106 @@ final class MessageListTimelineState {
         )
     }
 
-    func snapToEnd(messageCount: Int, reason: String = "layout-snap", onLog: ((String) -> Void)? = nil) {
+    func snapToEnd(
+        messageCount: Int,
+        scrollTargetID: String? = nil,
+        autoFollowEnabled: Bool = true,
+        reason: String = "layout-snap",
+        onLog: ((String) -> Void)? = nil
+    ) {
         guard messageCount > 0 else { return }
 
-        onLog?("\(reason) snap start count=\(messageCount)")
+        let targetID = scrollTargetID ?? bottomAnchorID
+        onLog?("\(reason) snap start count=\(messageCount) target=\(targetID)")
+        isProgrammaticScrolling = true
         scrollPositionID = nil
         Task { @MainActor in
             await Task.yield()
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
+                if let scrollTargetID, scrollTargetID != bottomAnchorID {
+                    scrollPositionID = scrollTargetID
+                }
+            }
+            if scrollTargetID != nil, scrollTargetID != bottomAnchorID {
+                await Task.yield()
+                await Task.yield()
+            }
+            withTransaction(transaction) {
                 scrollPositionID = bottomAnchorID
             }
             await Task.yield()
-            autoFollowState.markProgrammaticScrollSettled(
-                isPinnedToEnd: isPinnedToEnd(messageCount: messageCount)
+            await Task.yield()
+            isProgrammaticScrolling = false
+            settleProgrammaticScroll(
+                messageCount: messageCount,
+                autoFollowEnabled: autoFollowEnabled,
+                reason: reason,
+                onLog: onLog
             )
-            onLog?("\(reason) snap settled count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount)) position=\(scrollPositionID ?? "-")")
         }
     }
 
-    func animateToEnd(messageCount: Int, onLog: ((String) -> Void)? = nil) {
+    func animateToEnd(
+        messageCount: Int,
+        scrollTargetID: String? = nil,
+        autoFollowEnabled: Bool = true,
+        onLog: ((String) -> Void)? = nil
+    ) {
         guard messageCount > 0 else { return }
 
-        onLog?("animate-to-end start count=\(messageCount)")
+        let targetID = scrollTargetID ?? bottomAnchorID
+        onLog?("animate-to-end start count=\(messageCount) target=\(targetID)")
+        isProgrammaticScrolling = true
         scrollPositionID = nil
         Task { @MainActor in
             await Task.yield()
+            if let scrollTargetID, scrollTargetID != bottomAnchorID {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    scrollPositionID = scrollTargetID
+                }
+                await Task.yield()
+                await Task.yield()
+            }
             withAnimation(.easeOut(duration: 0.2)) {
                 scrollPositionID = bottomAnchorID
             }
             await Task.yield()
-            autoFollowState.markProgrammaticScrollSettled(
-                isPinnedToEnd: isPinnedToEnd(messageCount: messageCount)
+            await Task.yield()
+            isProgrammaticScrolling = false
+            settleProgrammaticScroll(
+                messageCount: messageCount,
+                autoFollowEnabled: autoFollowEnabled,
+                reason: "animate-to-end",
+                onLog: onLog
             )
-            onLog?("animate-to-end settled count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount)) position=\(scrollPositionID ?? "-")")
+        }
+    }
+
+    private func settleProgrammaticScroll(
+        messageCount: Int,
+        autoFollowEnabled: Bool,
+        reason: String,
+        onLog: ((String) -> Void)?
+    ) {
+        let pinned = isPinnedToEnd(messageCount: messageCount)
+        if autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled), !pinned {
+            onLog?("\(reason) snap miss count=\(messageCount) pinned=\(pinned) position=\(scrollPositionID ?? "-")")
+        } else {
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: pinned)
+            onLog?("\(reason) snap settled count=\(messageCount) pinned=\(pinned) position=\(scrollPositionID ?? "-")")
         }
     }
 
     func followLayoutChangeIfNeeded(
         messageCount: Int,
         autoFollowEnabled: Bool,
+        scrollTargetID: String? = nil,
         onLog: ((String) -> Void)? = nil
     ) {
-        if isUserScrolling {
+        let ensureLayoutEnd = autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled)
+        if isUserScrolling, !ensureLayoutEnd {
             onLog?("layout-check no-op count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount)) userScrolling=\(isUserScrolling)")
             autoFollowState.updatePinnedState(
                 isPinnedToEnd: isPinnedToEnd(messageCount: messageCount),
@@ -119,9 +175,15 @@ final class MessageListTimelineState {
             return
         }
 
-        if autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) {
+        if ensureLayoutEnd {
             onLog?("layout-check ensure-end count=\(messageCount)")
-            snapToEnd(messageCount: messageCount, reason: "layout-check", onLog: onLog)
+            snapToEnd(
+                messageCount: messageCount,
+                scrollTargetID: scrollTargetID,
+                autoFollowEnabled: autoFollowEnabled,
+                reason: "layout-check",
+                onLog: onLog
+            )
             return
         }
 
@@ -135,6 +197,7 @@ final class MessageListTimelineState {
     func followLayoutChangeIfNeededAfterLayoutSettles(
         messageCount: Int,
         autoFollowEnabled: Bool,
+        scrollTargetID: String? = nil,
         onLog: ((String) -> Void)? = nil
     ) {
         onLog?("layout-check scheduled count=\(messageCount)")
@@ -144,6 +207,7 @@ final class MessageListTimelineState {
             followLayoutChangeIfNeeded(
                 messageCount: messageCount,
                 autoFollowEnabled: autoFollowEnabled,
+                scrollTargetID: scrollTargetID,
                 onLog: onLog
             )
         }
@@ -157,35 +221,60 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
     let onLastMessageContentSizeSettled: (() -> Void)?
     let itemContent: (Item, Bool, (() -> Void)?) -> ItemContent
 
+    private var newestItemID: String? {
+        items.last?[keyPath: itemID]
+    }
+
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(items, id: itemID) { item in
+                MessageListTimelineRow(
+                    item: item,
+                    itemID: itemID,
+                    newestItemID: newestItemID,
+                    onLastMessageContentSizeSettled: onLastMessageContentSizeSettled,
+                    itemContent: itemContent
+                )
+            }
+
+            Color.clear
+                .frame(height: MessageListTimelineDefaults.bottomContentPadding)
+                .accessibilityHidden(true)
+
             Color.clear
                 .frame(height: MessageListTimelineDefaults.bottomAnchorHeight)
                 .id(bottomAnchorID)
                 .accessibilityHidden(true)
-                .scaleEffect(y: -1)
-
-            ForEach(items.reversed(), id: itemID) { item in
-                let isNewestMessage = item[keyPath: itemID] == items.last?[keyPath: itemID]
-                itemContent(
-                    item,
-                    isNewestMessage,
-                    isNewestMessage ? onLastMessageContentSizeSettled : nil
-                )
-                .messageListTimelineItemSpacing(isNewestMessage: isNewestMessage)
-                .scaleEffect(y: -1)
-            }
         }
-        .scaleEffect(y: -1)
         .padding(.horizontal, MessageListTimelineDefaults.horizontalContentPadding)
         .padding(.top, MessageListTimelineDefaults.topContentPadding)
-        .padding(.bottom, MessageListTimelineDefaults.bottomContentPadding)
+    }
+}
+
+private struct MessageListTimelineRow<Item, ItemContent: View>: View {
+    let item: Item
+    let itemID: KeyPath<Item, String>
+    let newestItemID: String?
+    let onLastMessageContentSizeSettled: (() -> Void)?
+    let itemContent: (Item, Bool, (() -> Void)?) -> ItemContent
+
+    private var isNewestMessage: Bool {
+        item[keyPath: itemID] == newestItemID
+    }
+
+    var body: some View {
+        itemContent(
+            item,
+            isNewestMessage,
+            isNewestMessage ? onLastMessageContentSizeSettled : nil
+        )
+        .messageListTimelineItemSpacing(isNewestMessage: isNewestMessage)
     }
 }
 
 extension View {
     func messageListTimelineItemSpacing(isNewestMessage: Bool) -> some View {
-        padding(.top, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
+        padding(.bottom, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
     }
 
     func messageListAnimateLastMessageSize(
@@ -254,7 +343,8 @@ private struct MessageListTimelineScrollModifier: ViewModifier {
             .scrollToEndScrollObserver(
                 distanceFromBottom: $timeline.scrollDistanceFromBottom,
                 isUserScrolling: $timeline.isUserScrolling,
-                scrollPositionID: timeline.scrollPositionID
+                scrollPositionID: timeline.scrollPositionID,
+                isProgrammaticScrolling: { timeline.isProgrammaticScrolling }
             )
             .background {
                 GeometryReader { geometry in
@@ -304,13 +394,21 @@ extension View {
         let isPinnedToEnd = timeline.isPinnedToEnd(messageCount: messageCount)
 
         return self
-            .defaultScrollAnchor(.top)
             .onAppear {
                 onLog?("appear count=\(messageCount) pinned=\(isPinnedToEnd)")
                 timeline.reset(messageCount: messageCount)
-                timeline.scrollPositionID = timeline.bottomAnchorID
-                timeline.autoFollowState.markProgrammaticScrollSettled(
-                    isPinnedToEnd: timeline.isPinnedToEnd(messageCount: messageCount)
+            }
+            .task(id: "\(firstMessageID ?? "")|\(lastMessageID ?? "")") {
+                guard messageCount > 0 else { return }
+                onLog?("initial-scroll scheduled count=\(messageCount)")
+                await Task.yield()
+                await Task.yield()
+                timeline.snapToEnd(
+                    messageCount: messageCount,
+                    scrollTargetID: lastMessageID,
+                    autoFollowEnabled: autoFollowEnabled,
+                    reason: "initial-scroll",
+                    onLog: onLog
                 )
             }
             .onChange(of: isPinnedToEnd, initial: true) { _, pinnedToEnd in
@@ -324,6 +422,7 @@ extension View {
                     timeline.followLayoutChangeIfNeeded(
                         messageCount: messageCount,
                         autoFollowEnabled: autoFollowEnabled,
+                        scrollTargetID: lastMessageID,
                         onLog: onLog
                     )
                 }
@@ -333,6 +432,7 @@ extension View {
                 timeline.followLayoutChangeIfNeeded(
                     messageCount: messageCount,
                     autoFollowEnabled: autoFollowEnabled,
+                    scrollTargetID: lastMessageID,
                     onLog: onLog
                 )
             }
@@ -341,6 +441,7 @@ extension View {
                 timeline.followLayoutChangeIfNeeded(
                     messageCount: messageCount,
                     autoFollowEnabled: autoFollowEnabled,
+                    scrollTargetID: lastMessageID,
                     onLog: onLog
                 )
             }
@@ -349,6 +450,7 @@ extension View {
                 timeline.followLayoutChangeIfNeededAfterLayoutSettles(
                     messageCount: messageCount,
                     autoFollowEnabled: autoFollowEnabled,
+                    scrollTargetID: lastMessageID,
                     onLog: onLog
                 )
             }
@@ -360,7 +462,13 @@ extension View {
                 ) else { return }
 
                 onLog?("message-count follow count=\(newCount)")
-                timeline.snapToEnd(messageCount: newCount, reason: "message-count", onLog: onLog)
+                timeline.snapToEnd(
+                    messageCount: newCount,
+                    scrollTargetID: lastMessageID,
+                    autoFollowEnabled: autoFollowEnabled,
+                    reason: "message-count",
+                    onLog: onLog
+                )
             }
     }
 }
