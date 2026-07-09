@@ -31,6 +31,7 @@ struct ScrollToEndScrollObserver: ViewModifier {
     @Binding var distanceFromBottom: CGFloat
     @Binding var isUserScrolling: Bool
     let scrollPositionID: String?
+    let isProgrammaticScrolling: () -> Bool
 
     @State private var scrollEndTask: Task<Void, Never>?
     @State private var lastContentOffsetY: CGFloat?
@@ -49,7 +50,7 @@ struct ScrollToEndScrollObserver: ViewModifier {
                 } action: { _, current in
                     distanceFromBottom = current.distanceFromBottom
                     if let lastContentOffsetY, lastContentOffsetY != current.contentOffsetY {
-                        markUserScrolling()
+                        markUserScrollingIfNeeded()
                     }
                     lastContentOffsetY = current.contentOffsetY
                 }
@@ -57,9 +58,14 @@ struct ScrollToEndScrollObserver: ViewModifier {
             content
                 .onChange(of: scrollPositionID) { oldValue, newValue in
                     guard oldValue != newValue else { return }
-                    markUserScrolling()
+                    markUserScrollingIfNeeded()
                 }
         }
+    }
+
+    private func markUserScrollingIfNeeded() {
+        guard !isProgrammaticScrolling() else { return }
+        markUserScrolling()
     }
 
     private func markUserScrolling() {
@@ -77,13 +83,15 @@ extension View {
     func scrollToEndScrollObserver(
         distanceFromBottom: Binding<CGFloat>,
         isUserScrolling: Binding<Bool>,
-        scrollPositionID: String?
+        scrollPositionID: String?,
+        isProgrammaticScrolling: @escaping () -> Bool = { false }
     ) -> some View {
         modifier(
             ScrollToEndScrollObserver(
                 distanceFromBottom: distanceFromBottom,
                 isUserScrolling: isUserScrolling,
-                scrollPositionID: scrollPositionID
+                scrollPositionID: scrollPositionID,
+                isProgrammaticScrolling: isProgrammaticScrolling
             )
         )
     }

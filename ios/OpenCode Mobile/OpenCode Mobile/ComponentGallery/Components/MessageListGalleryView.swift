@@ -1,8 +1,6 @@
 import SwiftUI
 
 private let messageListGalleryBottomAnchorID = "message-list-gallery-bottom-anchor"
-private let messageListGalleryPinnedTolerance: CGFloat = 8
-private let messageListGalleryAutoFollowExtraTolerance: CGFloat = 32
 
 struct MessageListGalleryView: View {
     @Bindable var model: MessageListGalleryModel
@@ -15,7 +13,7 @@ struct MessageListGalleryView: View {
             onRemoveLastMessage: { model.removeLastMessage() },
             onResizeLastMessage: { model.resizeLastMessage() }
         )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -26,82 +24,66 @@ private struct MessageListGalleryPreview: View {
     let onRemoveLastMessage: () -> Void
     let onResizeLastMessage: () -> Void
 
-    @State private var scrollPositionID: String?
-    @State private var scrollDistanceFromBottom = CGFloat.greatestFiniteMagnitude
-    @State private var contentHeight: CGFloat = 0
-    @State private var viewportHeight: CGFloat = 0
-    @State private var isUserScrolling = false
-    @State private var autoFollowState = MessageListAutoFollowState(initialMessageCount: 0)
+    @State private var timeline = MessageListTimelineState(
+        bottomAnchorID: messageListGalleryBottomAnchorID
+    )
 
-    private var isScrollable: Bool {
-        contentHeight > viewportHeight + 8
-    }
-
-    private var isPinnedToEnd: Bool {
-        guard isScrollable else { return true }
-
-        if #available(iOS 18, *) {
-            return scrollDistanceFromBottom <=
-                messageListGalleryPinnedTolerance + messageListGalleryAutoFollowExtraTolerance
-        }
-
-        return scrollPositionID == messageListGalleryBottomAnchorID
-    }
+    private var messageCount: Int { messages.count }
 
     private var showScrollToEnd: Bool {
-        guard !messages.isEmpty, isScrollable else { return false }
-
-        if #available(iOS 18, *) {
-            return ScrollToEndVisibility.shouldShow(
-                scrollDistanceFromBottom: scrollDistanceFromBottom,
-                viewportHeight: viewportHeight,
-                isUserScrolling: isUserScrolling
-            )
-        }
-
-        guard !isUserScrolling else { return false }
-        return scrollPositionID != messageListGalleryBottomAnchorID
+        timeline.shouldShowScrollToEnd(messageCount: messageCount)
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                MessageListGalleryMessageStack(messages: messages)
-                    .scrollTargetLayout()
-                    .background {
-                        GeometryReader { geometry in
-                            Color.clear
-                                .onChange(of: geometry.size.height, initial: true) { _, height in
-                                    contentHeight = height
-                                }
+                MessageListReversedTimelineStack(
+                    items: messages,
+                    bottomAnchorID: messageListGalleryBottomAnchorID,
+                    itemID: \.id,
+                    onLastMessageContentSizeSettled: {
+                        timeline.followLayoutChangeIfNeededAfterLayoutSettles(
+                            messageCount: messageCount,
+                            autoFollowEnabled: autoFollowEnabled,
+                            scrollTargetID: messages.last?.id
+                        )
+                    }
+                ) { message, isNewestMessage, onContentSizeSettled in
+                    HStack {
+                        if message.role == .assistant {
+                            MessageListGalleryMessageRow(
+                                message: message,
+                                animateSizeChanges: isNewestMessage,
+                                onContentSizeAnimationFinished: onContentSizeSettled
+                            )
+                            Spacer(minLength: 0)
+                        } else {
+                            Spacer(minLength: 0)
+                            MessageListGalleryMessageRow(
+                                message: message,
+                                animateSizeChanges: isNewestMessage,
+                                onContentSizeAnimationFinished: onContentSizeSettled
+                            )
                         }
                     }
-            }
-            .background {
-                GeometryReader { geometry in
-                    Color.clear
-                        .onChange(of: geometry.size.height, initial: true) { _, height in
-                            viewportHeight = height
-                        }
                 }
+                .scrollTargetLayout()
+                .messageListTimelineContentHeight(timeline: timeline)
             }
-            .scrollPosition(id: $scrollPositionID, anchor: .bottom)
-            .scrollToEndScrollObserver(
-                distanceFromBottom: $scrollDistanceFromBottom,
-                isUserScrolling: $isUserScrolling,
-                scrollPositionID: scrollPositionID
-            )
+            .defaultScrollAnchor(.bottom)
+            .messageListTimelineScrollChrome(timeline: timeline)
 
-            if showScrollToEnd {
-                OpenCodeActionPill(variant: .scrollToEnd) {
-                    scrollToEnd()
-                }
-                .padding(.bottom, 12)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            MessageListScrollToEndOverlay(
+                visible: showScrollToEnd
+            ) {
+                timeline.animateToEnd(
+                    messageCount: messageCount,
+                    scrollTargetID: messages.last?.id
+                )
             }
 
             MessageListAutoFollowIndicator(
-                thresholdMet: isPinnedToEnd,
+                thresholdMet: timeline.isPinnedToEnd(messageCount: messageCount),
                 autoFollowEnabled: autoFollowEnabled
             )
             .padding(.top, 64)
@@ -118,85 +100,15 @@ private struct MessageListGalleryPreview: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
-        .onAppear {
-            autoFollowState = MessageListAutoFollowState(initialMessageCount: messages.count)
-            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
-        }
-        .onChange(of: isPinnedToEnd, initial: true) { _, isPinnedToEnd in
-            if isUserScrolling || isPinnedToEnd {
-                autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
-            } else {
-                followLayoutChangeIfNeeded()
-            }
-        }
-        .onChange(of: contentHeight) { _, _ in
-            followLayoutChangeIfNeeded()
-        }
-        .onChange(of: viewportHeight) { _, _ in
-            followLayoutChangeIfNeeded()
-        }
-        .onChange(of: messages.layoutSignature) { _, _ in
-            followLayoutChangeIfNeededAfterLayoutSettles()
-        }
-        .onChange(of: messages.count) { _, newCount in
-            guard autoFollowState.onMessageCountChanged(
-                messageCount: newCount,
-                autoFollowEnabled: autoFollowEnabled
-            ) else { return }
-
-            snapToEnd()
-        }
+        .messageListTimelineBehavior(
+            timeline: timeline,
+            messageCount: messageCount,
+            firstMessageID: messages.first?.id,
+            lastMessageID: messages.last?.id,
+            autoFollowEnabled: autoFollowEnabled,
+            layoutSignature: messages.layoutSignature
+        )
         .background(OpenCodeColors.backgroundBase)
-    }
-
-    private func followLayoutChangeIfNeeded() {
-        if isUserScrolling {
-            autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
-            return
-        }
-
-        if autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled) {
-            snapToEnd()
-            return
-        }
-
-        autoFollowState.updatePinnedState(isPinnedToEnd: isPinnedToEnd, messageCount: messages.count)
-    }
-
-    private func followLayoutChangeIfNeededAfterLayoutSettles() {
-        Task { @MainActor in
-            await Task.yield()
-            await Task.yield()
-            followLayoutChangeIfNeeded()
-        }
-    }
-
-    private func scrollToEnd() {
-        guard !messages.isEmpty else { return }
-        scrollPositionID = nil
-        Task { @MainActor in
-            await Task.yield()
-            withAnimation(.easeOut(duration: 0.2)) {
-                scrollPositionID = messageListGalleryBottomAnchorID
-            }
-            await Task.yield()
-            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
-        }
-    }
-
-    private func snapToEnd() {
-        guard !messages.isEmpty else { return }
-        scrollPositionID = nil
-        Task { @MainActor in
-            await Task.yield()
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                scrollPositionID = messageListGalleryBottomAnchorID
-            }
-            await Task.yield()
-            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
-        }
     }
 }
 
@@ -274,58 +186,37 @@ private struct MessageListAutoFollowIndicator: View {
     }
 }
 
-private struct MessageListGalleryMessageStack: View {
-    let messages: [MessageListGalleryMessage]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                HStack {
-                    if message.role == .assistant {
-                        MessageListGalleryMessageRow(message: message)
-                        Spacer(minLength: 0)
-                    } else {
-                        Spacer(minLength: 0)
-                        MessageListGalleryMessageRow(message: message)
-                    }
-                }
-                .id(message.id)
-                .padding(.bottom, index == messages.count - 1 ? 0 : 8)
-            }
-
-            Color.clear
-                .frame(height: 12)
-                .id(messageListGalleryBottomAnchorID)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-    }
-}
-
 private struct MessageListGalleryMessageRow: View {
     let message: MessageListGalleryMessage
+    let animateSizeChanges: Bool
+    let onContentSizeAnimationFinished: (() -> Void)?
 
     var body: some View {
-        switch message.role {
-        case .user:
-            OpenCodeOutgoingMessage(
-                text: message.text,
-                metadataLabel: message.metadataLabel ?? "",
-                onRestoreClick: {}
-            )
-        case .assistant:
-            Text(message.text.isEmpty ? "…" : message.text)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+        Group {
+            switch message.role {
+            case .user:
+                OpenCodeOutgoingMessage(
+                    text: message.text,
+                    metadataLabel: message.metadataLabel ?? "",
+                    onRestoreClick: {}
                 )
+            case .assistant:
+                Text(message.text.isEmpty ? "…" : message.text)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                    )
+            }
         }
+        .messageListAnimateLastMessageSize(
+            animateSizeChanges: animateSizeChanges,
+            onContentSizeAnimationFinished: onContentSizeAnimationFinished
+        )
     }
 }
 

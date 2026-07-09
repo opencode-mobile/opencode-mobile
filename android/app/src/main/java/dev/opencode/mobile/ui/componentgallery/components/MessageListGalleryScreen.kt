@@ -1,65 +1,40 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeActionPill
-import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
-import dev.opencode.mobile.ui.scroll.MessageListAutoFollowState
-import dev.opencode.mobile.ui.scroll.MessageListViewportResizeFollowEffect
-import dev.opencode.mobile.ui.scroll.animateScrollToTimelineEnd
-import dev.opencode.mobile.ui.scroll.isPinnedToTimelineEnd
-import dev.opencode.mobile.ui.scroll.scrollExactlyToTimelineEnd
-import dev.opencode.mobile.ui.scroll.scrollToTimelineEndAfterLayoutChange
-import dev.opencode.mobile.ui.scroll.shouldShowScrollToEndPill
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
+import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
+import dev.opencode.mobile.ui.scroll.MessageListScrollToEndOverlay
+import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
+import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
+import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 
-private const val MessageListGalleryBottomAnchorKey = "message-list-gallery-bottom"
-private val MessageListGalleryBottomAnchorHeight = 1.dp
-private val MessageListGalleryAutoFollowTolerance = 32.dp
+private const val GALLERY_BOTTOM_ANCHOR_KEY = "message-list-gallery-bottom"
 
 @Composable
 fun MessageListGalleryScreen(
     modifier: Modifier = Modifier,
     viewModel: MessageListGalleryViewModel = viewModel(),
 ) {
-    MessageListGalleryPreview(
+    GalleryPreview(
         messages = viewModel.messages,
         autoFollowEnabled = viewModel.autoFollowEnabled,
         onAddMessage = viewModel::addMessage,
@@ -70,7 +45,7 @@ fun MessageListGalleryScreen(
 }
 
 @Composable
-private fun MessageListGalleryPreview(
+private fun GalleryPreview(
     messages: List<MessageListGalleryMessage>,
     autoFollowEnabled: Boolean,
     onAddMessage: () -> Unit,
@@ -78,211 +53,50 @@ private fun MessageListGalleryPreview(
     onResizeLastMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState()
-    val revealThresholdMinPx = with(LocalDensity.current) { 120.dp.roundToPx() }
-    val autoFollowTolerancePx = with(LocalDensity.current) { MessageListGalleryAutoFollowTolerance.roundToPx() }
-    val bottomAnchorHeightPx = with(LocalDensity.current) { MessageListGalleryBottomAnchorHeight.roundToPx() }
-    val autoFollowThresholdMet by remember(messages.size, autoFollowTolerancePx, bottomAnchorHeightPx) {
-        derivedStateOf {
-            listState.isPinnedToTimelineEnd(
-                messageCount = messages.size,
-                tolerancePx = autoFollowTolerancePx,
-                bottomAnchorHeightPx = bottomAnchorHeightPx,
-            )
-        }
-    }
-    val showScrollToEnd by remember(messages, revealThresholdMinPx) {
-        derivedStateOf {
-            listState.shouldShowScrollToEndPill(
-                messageCount = messages.size,
-                revealThresholdMinPx = revealThresholdMinPx,
-            )
-        }
-    }
-    val messageLayoutSignature = remember(messages) { messages.layoutSignature() }
-    val coroutineScope = rememberCoroutineScope()
-    val autoFollowState = remember { MessageListAutoFollowState(initialMessageCount = messages.size) }
-
-    suspend fun animateToEndAndArmFollow() {
-        listState.animateScrollToTimelineEnd(messageCount = messages.size)
-        withFrameNanos { }
-        autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd =
-                listState.isPinnedToTimelineEnd(
-                    messageCount = messages.size,
-                    tolerancePx = autoFollowTolerancePx,
-                    bottomAnchorHeightPx = bottomAnchorHeightPx,
-                ),
+    val timeline =
+        rememberMessageListTimeline(
+            messageCount = messages.size,
+            firstMessageId = messages.firstOrNull()?.id,
+            lastMessageId = messages.lastOrNull()?.id,
+            layoutSignature = messages.layoutSignature(),
+            autoFollowEnabled = autoFollowEnabled,
         )
-    }
-
-    suspend fun snapToEndAfterLayoutChangeAndArmFollow(waitForLayout: Boolean = true) {
-        if (waitForLayout) {
-            withFrameNanos { }
-            withFrameNanos { }
-        }
-        listState.scrollToTimelineEndAfterLayoutChange(messageCount = messages.size)
-        withFrameNanos { }
-        autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd =
-                listState.isPinnedToTimelineEnd(
-                    messageCount = messages.size,
-                    tolerancePx = autoFollowTolerancePx,
-                    bottomAnchorHeightPx = bottomAnchorHeightPx,
-                ),
-        )
-    }
-
-    suspend fun snapExactlyToEndAndArmFollow(waitForLayout: Boolean = true) {
-        if (waitForLayout) {
-            withFrameNanos { }
-            withFrameNanos { }
-        }
-        listState.scrollExactlyToTimelineEnd(messageCount = messages.size)
-        withFrameNanos { }
-        autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd =
-                listState.isPinnedToTimelineEnd(
-                    messageCount = messages.size,
-                    tolerancePx = autoFollowTolerancePx,
-                    bottomAnchorHeightPx = bottomAnchorHeightPx,
-                ),
-        )
-    }
-
-    suspend fun followLayoutChangeAfterSettled() {
-        withFrameNanos { }
-        withFrameNanos { }
-
-        val pinned =
-            listState.isPinnedToTimelineEnd(
-                messageCount = messages.size,
-                tolerancePx = autoFollowTolerancePx,
-                bottomAnchorHeightPx = bottomAnchorHeightPx,
-            )
-
-        when {
-            listState.isScrollInProgress ->
-                autoFollowState.updatePinnedState(
-                    isPinnedToEnd = pinned,
-                    messageCount = messages.size,
-                )
-            autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
-                snapToEndAfterLayoutChangeAndArmFollow(waitForLayout = false)
-            else ->
-                autoFollowState.updatePinnedState(
-                    isPinnedToEnd = pinned,
-                    messageCount = messages.size,
-                )
-        }
-    }
-
-    LaunchedEffect(listState, messages.size, autoFollowTolerancePx, bottomAnchorHeightPx, autoFollowEnabled) {
-        snapshotFlow {
-            val bottomAnchor =
-                listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == messages.size }
-            MessageListGalleryAutoFollowLayoutSnapshot(
-                isPinnedToEnd = autoFollowThresholdMet,
-                isScrollInProgress = listState.isScrollInProgress,
-                viewportEndOffset = listState.layoutInfo.viewportEndOffset,
-                bottomAnchorOffset = bottomAnchor?.offset,
-                bottomAnchorSize = bottomAnchor?.size,
-            )
-        }
-            .distinctUntilChanged()
-            .collect { snapshot ->
-                when {
-                    snapshot.isScrollInProgress || snapshot.isPinnedToEnd ->
-                        autoFollowState.updatePinnedState(
-                            isPinnedToEnd = snapshot.isPinnedToEnd,
-                            messageCount = messages.size,
-                        )
-                    autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
-                        followLayoutChangeAfterSettled()
-                    else ->
-                        autoFollowState.updatePinnedState(
-                            isPinnedToEnd = false,
-                            messageCount = messages.size,
-                        )
-                }
-            }
-    }
-
-    MessageListViewportResizeFollowEffect(
-        listState = listState,
-        autoFollowEnabled = autoFollowEnabled,
-        autoFollowState = autoFollowState,
-        onFollowLayoutChange = { followLayoutChangeAfterSettled() },
-    )
-
-    LaunchedEffect(messageLayoutSignature, autoFollowEnabled) {
-        if (messages.isNotEmpty()) {
-            followLayoutChangeAfterSettled()
-        }
-    }
-
-    LaunchedEffect(messages.size, autoFollowEnabled) {
-        if (
-            autoFollowState.onMessageCountChanged(
-                messageCount = messages.size,
-                autoFollowEnabled = autoFollowEnabled,
-            )
-        ) {
-            snapExactlyToEndAndArmFollow()
-        }
-    }
 
     Box(
         modifier =
             modifier
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        LazyColumn(
-            state = listState,
+        MessageListReversedTimelineColumn(
+            timeline = timeline,
+            items = messages,
+            bottomAnchorKey = GALLERY_BOTTOM_ANCHOR_KEY,
             modifier = Modifier.fillMaxSize(),
-            contentPadding =
-                PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 12.dp,
-                    bottom = 12.dp,
-                ),
-        ) {
-            itemsIndexed(messages, key = { _, message -> message.id }) { index, message ->
-                MessageListGalleryMessageRow(
-                    message = message,
-                    modifier =
-                        Modifier.padding(
-                            bottom = if (index == messages.lastIndex) 0.dp else 8.dp,
-                        ),
-                )
-            }
-            item(key = MessageListGalleryBottomAnchorKey) {
-                Spacer(modifier = Modifier.height(MessageListGalleryBottomAnchorHeight))
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showScrollToEnd,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp),
-        ) {
-            OpenCodeActionPill(
-                variant = OpenCodeActionPillVariant.ScrollToEnd,
-                onClick = {
-                    coroutineScope.launch {
-                        animateToEndAndArmFollow()
-                    }
-                },
+            key = { message -> message.id },
+        ) { message, isNewestMessage, onContentSizeSettled ->
+            GalleryMessageRow(
+                message = message,
+                animateSizeChanges = isNewestMessage,
+                onContentSizeAnimationFinished = onContentSizeSettled,
+                modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
             )
         }
 
-        MessageListAutoFollowIndicator(
-            thresholdMet = autoFollowThresholdMet,
+        MessageListScrollToEndOverlay(
+            visible = timeline.showScrollToEnd,
+            onClick = {
+                timeline.scrollController.animateToEnd(
+                    messageCount = timeline.messageCount,
+                    tolerancePx = timeline.autoFollowTolerancePx,
+                    bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                    autoFollowEnabled = autoFollowEnabled,
+                )
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+
+        AutoFollowIndicator(
+            thresholdMet = timeline.isPinnedToEnd,
             autoFollowEnabled = autoFollowEnabled,
             modifier =
                 Modifier
@@ -290,7 +104,7 @@ private fun MessageListGalleryPreview(
                     .padding(top = 64.dp),
         )
 
-        MessageListGalleryFloatingControls(
+        FloatingControls(
             canRemove = messages.isNotEmpty(),
             onAddMessage = onAddMessage,
             onRemoveLastMessage = onRemoveLastMessage,
@@ -304,7 +118,7 @@ private fun MessageListGalleryPreview(
 }
 
 @Composable
-private fun MessageListGalleryFloatingControls(
+private fun FloatingControls(
     canRemove: Boolean,
     onAddMessage: () -> Unit,
     onRemoveLastMessage: () -> Unit,
@@ -340,23 +154,8 @@ private fun MessageListGalleryFloatingControls(
     }
 }
 
-private fun List<MessageListGalleryMessage>.layoutSignature(): Int =
-    fold(size) { result, message ->
-        31 * result +
-            message.id.hashCode() +
-            message.text.length
-    }
-
-private data class MessageListGalleryAutoFollowLayoutSnapshot(
-    val isPinnedToEnd: Boolean,
-    val isScrollInProgress: Boolean,
-    val viewportEndOffset: Int,
-    val bottomAnchorOffset: Int?,
-    val bottomAnchorSize: Int?,
-)
-
 @Composable
-private fun MessageListAutoFollowIndicator(
+private fun AutoFollowIndicator(
     thresholdMet: Boolean,
     autoFollowEnabled: Boolean,
     modifier: Modifier = Modifier,
@@ -386,12 +185,20 @@ private fun MessageListAutoFollowIndicator(
 }
 
 @Composable
-private fun MessageListGalleryMessageRow(
+private fun GalleryMessageRow(
     message: MessageListGalleryMessage,
+    animateSizeChanges: Boolean,
+    onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .messageListAnimateLastMessageSize(
+                    animateSizeChanges = animateSizeChanges,
+                    onContentSizeAnimationFinished = onContentSizeAnimationFinished,
+                ),
         horizontalAlignment =
             if (message.role == MessageListGalleryRole.User) {
                 Alignment.End
@@ -407,17 +214,30 @@ private fun MessageListGalleryMessageRow(
                     onRestoreClick = {},
                     modifier = Modifier.fillMaxWidth(),
                 )
+
             MessageListGalleryRole.Assistant ->
                 Text(
                     text = message.text.ifBlank { "…" },
                     modifier =
                         Modifier
-                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .background(
+                                MaterialTheme.colorScheme.surface,
+                                RoundedCornerShape(8.dp),
+                            ).border(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(8.dp),
+                            ).padding(horizontal = 12.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
         }
     }
 }
+
+private fun List<MessageListGalleryMessage>.layoutSignature(): Int =
+    fold(size) { result, message ->
+        31 * result +
+            message.id.hashCode() +
+            message.text.length
+    }

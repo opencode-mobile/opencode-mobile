@@ -16,7 +16,7 @@ protocol MessageRepository: Sendable {
 
 extension MessageRepository {
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
-        try await sendPromptAsync(sessionID: sessionID, options: PromptSendOptions(text: text, model: nil, variant: nil), directory: directory)
+        try await sendPromptAsync(sessionID: sessionID, options: PromptSendOptions(text: text, model: nil, variant: nil, mode: nil), directory: directory)
     }
 }
 
