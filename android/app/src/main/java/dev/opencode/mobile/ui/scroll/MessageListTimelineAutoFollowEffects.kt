@@ -64,13 +64,14 @@ internal fun MessageListInitialEndSnapEffect(
     firstMessageId: String?,
     lastMessageId: String?,
     messageCount: Int,
+    autoFollowEnabled: Boolean,
     autoFollowTolerancePx: Int,
     bottomAnchorHeightPx: Int,
     scrollController: MessageListTimelineScrollController,
 ) {
-    var initialEndScrollDone by remember { mutableStateOf(false) }
+    var initialEndScrollDone by remember(firstMessageId, lastMessageId) { mutableStateOf(false) }
 
-    LaunchedEffect(firstMessageId, lastMessageId) {
+    LaunchedEffect(firstMessageId, lastMessageId, messageCount) {
         if (!initialEndScrollDone && messageCount > 0) {
             withFrameNanos { }
             withFrameNanos { }
@@ -78,6 +79,7 @@ internal fun MessageListInitialEndSnapEffect(
                 messageCount = messageCount,
                 tolerancePx = autoFollowTolerancePx,
                 bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = autoFollowEnabled,
             )
             initialEndScrollDone = true
         }
@@ -132,14 +134,15 @@ internal fun MessageListAutoFollowArmingEffect(
                             messageCount = messageCount,
                         )
 
-                    autoFollowState.shouldFollowLayoutChange(
-                        autoFollowEnabled = currentAutoFollowEnabled,
-                        isPinnedToEnd = false,
-                    ) ->
-                        scrollController.snapToEnd(
+                    autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled) ->
+                        followMessageListLayoutChangeIfNeeded(
+                            listState = listState,
                             messageCount = messageCount,
-                            tolerancePx = autoFollowTolerancePx,
+                            autoFollowEnabled = currentAutoFollowEnabled,
+                            autoFollowTolerancePx = autoFollowTolerancePx,
                             bottomAnchorHeightPx = bottomAnchorHeightPx,
+                            autoFollowState = autoFollowState,
+                            scrollController = scrollController,
                         )
 
                     else ->
@@ -174,8 +177,66 @@ internal fun MessageListAutoFollowAppendEffect(
                 messageCount = messageCount,
                 tolerancePx = autoFollowTolerancePx,
                 bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = autoFollowEnabled,
             )
         }
+    }
+}
+
+@Composable
+internal fun MessageListAutoFollowLayoutSignatureEffect(
+    layoutSignature: Int,
+    messageCount: Int,
+    autoFollowEnabled: Boolean,
+    listState: LazyListState,
+    autoFollowTolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+    autoFollowState: MessageListAutoFollowState,
+    scrollController: MessageListTimelineScrollController,
+) {
+    LaunchedEffect(layoutSignature, autoFollowEnabled) {
+        if (messageCount > 0) {
+            followMessageListLayoutChangeIfNeeded(
+                listState = listState,
+                messageCount = messageCount,
+                autoFollowEnabled = autoFollowEnabled,
+                autoFollowTolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowState = autoFollowState,
+                scrollController = scrollController,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun MessageListViewportResizeFollowEffect(
+    listState: LazyListState,
+    autoFollowEnabled: Boolean,
+    autoFollowState: MessageListAutoFollowState,
+    onFollowLayoutChange: suspend () -> Unit,
+) {
+    val currentAutoFollowEnabled by rememberUpdatedState(autoFollowEnabled)
+
+    LaunchedEffect(listState, autoFollowState) {
+        var lastViewportHeightPx = -1
+        snapshotFlow { listState.layoutInfo.viewportSize.height }
+            .distinctUntilChanged()
+            .collect { viewportHeightPx ->
+                if (lastViewportHeightPx == -1) {
+                    lastViewportHeightPx = viewportHeightPx
+                    return@collect
+                }
+                if (viewportHeightPx == lastViewportHeightPx) {
+                    return@collect
+                }
+                lastViewportHeightPx = viewportHeightPx
+                if (autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled)) {
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    onFollowLayoutChange()
+                }
+            }
     }
 }
 
@@ -194,13 +255,56 @@ internal fun rememberMessageListLastMessageContentSizeSettled(
     return remember(scrollController, autoFollowState, autoFollowTolerancePx, bottomAnchorHeightPx) {
         {
             if (autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled)) {
-                scrollController.snapToEnd(
+                scrollController.snapToEndAfterLayoutChange(
                     messageCount = currentMessageCount,
                     tolerancePx = autoFollowTolerancePx,
                     bottomAnchorHeightPx = bottomAnchorHeightPx,
+                    autoFollowEnabled = currentAutoFollowEnabled,
                 )
             }
         }
+    }
+}
+
+internal suspend fun followMessageListLayoutChangeIfNeeded(
+    listState: LazyListState,
+    messageCount: Int,
+    autoFollowEnabled: Boolean,
+    autoFollowTolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+    autoFollowState: MessageListAutoFollowState,
+    scrollController: MessageListTimelineScrollController,
+) {
+    withFrameNanos { }
+    withFrameNanos { }
+
+    val pinned =
+        listState.isPinnedToTimelineEnd(
+            messageCount = messageCount,
+            tolerancePx = autoFollowTolerancePx,
+            bottomAnchorHeightPx = bottomAnchorHeightPx,
+        )
+
+    when {
+        listState.isScrollInProgress ->
+            autoFollowState.updatePinnedState(
+                isPinnedToEnd = pinned,
+                messageCount = messageCount,
+            )
+
+        autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) ->
+            scrollController.snapToEndAfterLayoutChange(
+                messageCount = messageCount,
+                tolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = autoFollowEnabled,
+            )
+
+        else ->
+            autoFollowState.updatePinnedState(
+                isPinnedToEnd = pinned,
+                messageCount = messageCount,
+            )
     }
 }
 

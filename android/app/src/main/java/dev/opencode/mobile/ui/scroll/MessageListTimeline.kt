@@ -56,6 +56,7 @@ internal fun rememberMessageListTimeline(
     messageCount: Int,
     firstMessageId: String?,
     lastMessageId: String?,
+    layoutSignature: Int,
     autoFollowEnabled: Boolean,
 ): MessageListTimelineHandle {
     val listState = rememberLazyListState()
@@ -108,6 +109,7 @@ internal fun rememberMessageListTimeline(
         firstMessageId = firstMessageId,
         lastMessageId = lastMessageId,
         messageCount = messageCount,
+        autoFollowEnabled = autoFollowEnabled,
         autoFollowTolerancePx = autoFollowTolerancePx,
         bottomAnchorHeightPx = bottomAnchorHeightPx,
         scrollController = scrollController,
@@ -120,6 +122,34 @@ internal fun rememberMessageListTimeline(
         autoFollowTolerancePx = autoFollowTolerancePx,
         bottomAnchorHeightPx = bottomAnchorHeightPx,
         isPinnedToEnd = isPinnedToEnd,
+        autoFollowState = autoFollowState,
+        scrollController = scrollController,
+    )
+
+    MessageListViewportResizeFollowEffect(
+        listState = listState,
+        autoFollowEnabled = autoFollowEnabled,
+        autoFollowState = autoFollowState,
+        onFollowLayoutChange = {
+            followMessageListLayoutChangeIfNeeded(
+                listState = listState,
+                messageCount = messageCount,
+                autoFollowEnabled = autoFollowEnabled,
+                autoFollowTolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowState = autoFollowState,
+                scrollController = scrollController,
+            )
+        },
+    )
+
+    MessageListAutoFollowLayoutSignatureEffect(
+        layoutSignature = layoutSignature,
+        messageCount = messageCount,
+        autoFollowEnabled = autoFollowEnabled,
+        listState = listState,
+        autoFollowTolerancePx = autoFollowTolerancePx,
+        bottomAnchorHeightPx = bottomAnchorHeightPx,
         autoFollowState = autoFollowState,
         scrollController = scrollController,
     )

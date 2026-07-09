@@ -106,6 +106,7 @@ private fun SessionChatTimelineReadyView(
             messageCount = messages.size,
             firstMessageId = messages.firstOrNull()?.id,
             lastMessageId = messages.lastOrNull()?.id,
+            layoutSignature = messages.layoutSignature(),
             autoFollowEnabled = true,
         )
 
@@ -139,6 +140,7 @@ private fun SessionChatTimelineReadyView(
                     messageCount = timeline.messageCount,
                     tolerancePx = timeline.autoFollowTolerancePx,
                     bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                    autoFollowEnabled = true,
                 )
             },
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -225,6 +227,21 @@ private fun AssistantMessageBubble(
 }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
+
+private fun List<SessionChatMessageItem>.layoutSignature(): Int =
+    fold(size) { result, message ->
+        31 * result +
+            message.id.hashCode() +
+            message.text.length +
+            message.renderedMarkdown.layoutSignature() +
+            if (message.isStreaming) 1 else 0
+    }
+
+private fun MarkdownDocument?.layoutSignature(): Int =
+    when (this) {
+        null -> 0
+        else -> 31 * sourceHash + blocks.size
+    }
 
 @Composable
 private fun FallbackMessageBubble(

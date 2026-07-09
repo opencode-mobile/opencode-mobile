@@ -58,6 +58,7 @@ private fun GalleryPreview(
             messageCount = messages.size,
             firstMessageId = messages.firstOrNull()?.id,
             lastMessageId = messages.lastOrNull()?.id,
+            layoutSignature = messages.layoutSignature(),
             autoFollowEnabled = autoFollowEnabled,
         )
 
@@ -88,6 +89,7 @@ private fun GalleryPreview(
                     messageCount = timeline.messageCount,
                     tolerancePx = timeline.autoFollowTolerancePx,
                     bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                    autoFollowEnabled = autoFollowEnabled,
                 )
             },
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -232,3 +234,10 @@ private fun GalleryMessageRow(
         }
     }
 }
+
+private fun List<MessageListGalleryMessage>.layoutSignature(): Int =
+    fold(size) { result, message ->
+        31 * result +
+            message.id.hashCode() +
+            message.text.length
+    }

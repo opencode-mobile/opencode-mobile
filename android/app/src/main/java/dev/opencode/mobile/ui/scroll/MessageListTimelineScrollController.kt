@@ -4,6 +4,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -19,10 +20,16 @@ internal class MessageListTimelineScrollController(
         messageCount: Int,
         tolerancePx: Int,
         bottomAnchorHeightPx: Int,
+        autoFollowEnabled: Boolean = true,
     ) {
         launchScroll {
             listState.animateScrollToTimelineEndFromCurrentPosition(messageCount = messageCount)
-            markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
+            settleScroll(
+                messageCount = messageCount,
+                tolerancePx = tolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = autoFollowEnabled,
+            )
         }
     }
 
@@ -30,10 +37,35 @@ internal class MessageListTimelineScrollController(
         messageCount: Int,
         tolerancePx: Int,
         bottomAnchorHeightPx: Int,
+        autoFollowEnabled: Boolean = true,
     ) {
         launchScroll {
+            withFrameNanos { }
+            withFrameNanos { }
             listState.scrollToTimelineEnd()
-            markSettled(messageCount, tolerancePx, bottomAnchorHeightPx)
+            settleScroll(
+                messageCount = messageCount,
+                tolerancePx = tolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = autoFollowEnabled,
+            )
+        }
+    }
+
+    fun snapToEndAfterLayoutChange(
+        messageCount: Int,
+        tolerancePx: Int,
+        bottomAnchorHeightPx: Int,
+        autoFollowEnabled: Boolean = true,
+    ) {
+        launchScroll {
+            listState.scrollToTimelineEndAfterLayoutChange(messageCount = messageCount)
+            settleScroll(
+                messageCount = messageCount,
+                tolerancePx = tolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = autoFollowEnabled,
+            )
         }
     }
 
@@ -45,19 +77,23 @@ internal class MessageListTimelineScrollController(
             }
     }
 
-    private fun markSettled(
+    private suspend fun settleScroll(
         messageCount: Int,
         tolerancePx: Int,
         bottomAnchorHeightPx: Int,
+        autoFollowEnabled: Boolean,
     ) {
-        autoFollowState.markProgrammaticScrollSettled(
-            isPinnedToEnd =
-                listState.isPinnedToTimelineEnd(
-                    messageCount = messageCount,
-                    tolerancePx = tolerancePx,
-                    bottomAnchorHeightPx = bottomAnchorHeightPx,
-                ),
-        )
+        withFrameNanos { }
+        val pinned =
+            listState.isPinnedToTimelineEnd(
+                messageCount = messageCount,
+                tolerancePx = tolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+            )
+        if (autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = autoFollowEnabled) && !pinned) {
+            return
+        }
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = pinned)
     }
 }
 

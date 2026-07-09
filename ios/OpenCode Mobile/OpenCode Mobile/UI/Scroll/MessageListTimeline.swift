@@ -38,7 +38,7 @@ final class MessageListTimelineState {
         guard isScrollable(messageCount: messageCount) else { return true }
 
         if #available(iOS 18, *) {
-            return scrollDistanceFromBottom <= MessageListTimelineDefaults.pinnedTolerance
+            return scrollDistanceFromBottom <= MessageListTimelineDefaults.autoFollowTolerance
         }
 
         return scrollPositionID == bottomAnchorID
