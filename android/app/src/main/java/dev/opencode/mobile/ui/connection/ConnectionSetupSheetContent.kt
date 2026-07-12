@@ -5,17 +5,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
+import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 
 @Composable
 fun ConnectionSetupSheetContent(
@@ -33,23 +31,23 @@ fun ConnectionSetupSheetContent(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
     ) {
-        ConnectionField(
+        OpenCodeTextInput(
             label = "Server URL",
             value = uiState.baseUrl,
             onValueChange = onBaseUrlChanged,
         )
         Spacer(modifier = Modifier.height(12.dp))
-        ConnectionField(
+        OpenCodeTextInput(
             label = "Username",
             value = uiState.username,
             onValueChange = onUsernameChanged,
         )
         Spacer(modifier = Modifier.height(12.dp))
-        ConnectionField(
+        OpenCodeTextInput(
             label = "Password",
             value = uiState.password,
             onValueChange = onPasswordChanged,
-            secure = true,
+            kind = OpenCodeTextInputKind.Password,
         )
         if (uiState.testResultMessage != null) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -70,36 +68,6 @@ fun ConnectionSetupSheetContent(
             variant = OpenCodeButtonVariant.FullWidthText("Save"),
             enabled = uiState.canSave && !uiState.isSaving,
             onClick = onSave,
-        )
-    }
-}
-
-@Composable
-private fun ConnectionField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    secure: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            visualTransformation = if (secure) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-            keyboardOptions =
-                KeyboardOptions(
-                    keyboardType = if (secure) KeyboardType.Password else KeyboardType.Uri,
-                    autoCorrectEnabled = false,
-                ),
         )
     }
 }

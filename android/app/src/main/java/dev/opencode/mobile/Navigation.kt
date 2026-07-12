@@ -45,6 +45,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelector
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -162,6 +163,7 @@ fun MainNavigation() {
                                                     ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                     ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                     ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                                    ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                     ComponentGalleryEntryId.ProjectSessionSelector ->
                                                         ProjectSessionSelectorGalleryScreen()
                                                     ComponentGalleryEntryId.SessionStatusBar ->

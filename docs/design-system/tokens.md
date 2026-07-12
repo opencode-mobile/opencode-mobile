@@ -301,6 +301,18 @@ without competing with primary actions.
 | `button.iconCircle.size` | 40 (logical px; width equals height) |
 | `button.icon.size` | 18 (logical px) |
 
+### Text input
+
+Reusable labeled, single-line form control. Focus and error borders map to the
+shared `interactive` and `error` semantic tokens.
+
+| Token | Value |
+| --- | --- |
+| `textInput.cornerRadius` | 8 (logical px) |
+| `textInput.minHeight` | 48 (logical px) |
+| `textInput.paddingHorizontal` | 12 (logical px) |
+| `textInput.labelSpacing` | 6 (logical px) |
+
 ### Top bar
 
 Reusable page-level navigation bar with an optional leading navigation affordance,

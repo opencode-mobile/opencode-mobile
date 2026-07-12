@@ -9,7 +9,8 @@
 
 - [x] Reuse `OpenCodeBottomSheet`, `OpenCodeButton`, `OpenCodeTopBar`.
 - [x] Extend `OpenCodeBottomSheet` with Android `keyboardAware` for form sheets.
-- [x] Feature-local form fields (no new reusable input component).
+- [x] Shared `OpenCodeTextInput` component and gallery entry on both platforms.
+- [x] Connection setup URL, username, and password fields migrated to it.
 
 ## iOS
 

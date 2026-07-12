@@ -22,6 +22,7 @@ enum class ComponentGalleryEntryId {
     ChoiceBadge,
     ActionPill,
     Button,
+    TextInput,
     ProjectSessionSelector,
     SessionStatusBar,
     RenderedMarkdown,
@@ -101,6 +102,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Button,
             title = "Button",
             description = "Reusable action component with text and icon variants.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.TextInput,
+            title = "Text Input",
+            description = "Labeled single-line entry for text, URLs, usernames, and passwords.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

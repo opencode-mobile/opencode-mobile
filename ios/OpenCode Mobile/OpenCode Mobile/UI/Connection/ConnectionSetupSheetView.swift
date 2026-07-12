@@ -6,9 +6,9 @@ struct ConnectionSetupSheetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            connectionField(title: "Server URL", text: $viewModel.baseURL, secure: false)
-            connectionField(title: "Username", text: $viewModel.username, secure: false)
-            connectionField(title: "Password", text: $viewModel.password, secure: true)
+            OpenCodeTextInput(label: "Server URL", text: $viewModel.baseURL, kind: .url)
+            OpenCodeTextInput(label: "Username", text: $viewModel.username, kind: .username)
+            OpenCodeTextInput(label: "Password", text: $viewModel.password, kind: .password)
 
             statusMessage
 
@@ -32,28 +32,6 @@ struct ConnectionSetupSheetView: View {
         .onChange(of: viewModel.baseURL) { _, _ in viewModel.onFieldChanged() }
         .onChange(of: viewModel.username) { _, _ in viewModel.onFieldChanged() }
         .onChange(of: viewModel.password) { _, _ in viewModel.onFieldChanged() }
-    }
-
-    private func connectionField(title: String, text: Binding<String>, secure: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-            Group {
-                if secure {
-                    SecureField(title, text: text)
-                } else {
-                    TextField(title, text: text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-            }
-            .font(OpenCodeTypography.body)
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
-        }
     }
 
     private var statusMessage: some View {
