@@ -3,12 +3,35 @@ import SwiftUI
 struct ConnectionSetupSheetView: View {
     @Bindable var viewModel: ConnectionSetupViewModel
     let onDismiss: () -> Void
+    @State private var urlFocused = false
+    @State private var usernameFocused = false
+    @State private var passwordFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            OpenCodeTextInput(label: "Server URL", text: $viewModel.baseURL, kind: .url, submitAction: .next)
-            OpenCodeTextInput(label: "Username", text: $viewModel.username, kind: .username, submitAction: .next)
-            OpenCodeTextInput(label: "Password", text: $viewModel.password, kind: .password)
+            OpenCodeTextInput(
+                label: "Server URL",
+                text: $viewModel.baseURL,
+                kind: .url,
+                submitAction: .next,
+                isFocused: $urlFocused,
+                onSubmit: { usernameFocused = true }
+            )
+            OpenCodeTextInput(
+                label: "Username",
+                text: $viewModel.username,
+                kind: .username,
+                submitAction: .next,
+                isFocused: $usernameFocused,
+                onSubmit: { passwordFocused = true }
+            )
+            OpenCodeTextInput(
+                label: "Password",
+                text: $viewModel.password,
+                kind: .password,
+                isFocused: $passwordFocused,
+                onSubmit: { passwordFocused = false }
+            )
 
             statusMessage
 

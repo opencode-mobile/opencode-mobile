@@ -20,6 +20,8 @@ struct OpenCodeTextInput: View {
     var enabled = true
     var errorMessage: String?
     var submitAction: OpenCodeTextInputSubmitAction = .done
+    var isFocused: Binding<Bool>?
+    var onSubmit: (() -> Void)?
 
     @FocusState private var focused: Bool
 
@@ -36,6 +38,7 @@ struct OpenCodeTextInput: View {
                 .autocorrectionDisabled(kind != .text)
                 .focused($focused)
                 .submitLabel(submitAction == .next ? .next : .done)
+                .onSubmit { onSubmit?() }
                 .padding(.horizontal, 12)
                 .frame(minHeight: 48)
                 .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
@@ -53,6 +56,16 @@ struct OpenCodeTextInput: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: focused) { _, value in
+            if isFocused?.wrappedValue != value {
+                isFocused?.wrappedValue = value
+            }
+        }
+        .onChange(of: isFocused?.wrappedValue, initial: true) { _, value in
+            if let value, focused != value {
+                focused = value
+            }
+        }
     }
 
     @ViewBuilder

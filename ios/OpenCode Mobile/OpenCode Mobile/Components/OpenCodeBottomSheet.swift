@@ -169,7 +169,7 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 
     func body(content: Content) -> some View {
         content
-            .ignoresSafeArea(.keyboard)
+            .modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
             .sheet(isPresented: $isPresented) {
                 OpenCodeBottomSheetSheetBody(
                     title: title,
@@ -181,6 +181,19 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
                     sheetContent: sheetContent,
                 )
             }
+    }
+}
+
+private struct BottomSheetKeyboardHostPolicy: ViewModifier {
+    let contentMode: OpenCodeBottomSheetContentMode
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if contentMode == .form {
+            content.ignoresSafeArea(.keyboard)
+        } else {
+            content
+        }
     }
 }
 
@@ -422,7 +435,8 @@ extension View {
         contentMode: OpenCodeBottomSheetContentMode = .actionList,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        sheet(item: item) { value in
+        modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+            .sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
                 leadingAction: leadingAction,
@@ -444,7 +458,8 @@ extension View {
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        sheet(item: item) { value in
+        modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+            .sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
                 leadingAction: leadingAction,

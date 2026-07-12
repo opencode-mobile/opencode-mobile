@@ -33,6 +33,8 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 - Password values use native secure-entry behavior and are not revealed by the
   component.
 - Labels remain visible when values or placeholders are empty.
+- `next` advances to the next focusable field; `done` clears field focus and
+  dismisses the keyboard according to native behavior.
 
 ## Platform Notes
 

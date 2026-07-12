@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -12,6 +13,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -42,6 +45,7 @@ fun OpenCodeTextInput(
     errorMessage: String? = null,
     submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
 ) {
+    val focusManager = LocalFocusManager.current
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = label,
@@ -74,6 +78,11 @@ fun OpenCodeTextInput(
                             OpenCodeTextInputKind.Text, OpenCodeTextInputKind.Username -> KeyboardType.Text
                         },
                     autoCorrectEnabled = kind == OpenCodeTextInputKind.Text,
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Next) },
+                    onDone = { focusManager.clearFocus() },
                 ),
             colors =
                 OutlinedTextFieldDefaults.colors(
