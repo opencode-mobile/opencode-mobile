@@ -74,6 +74,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             trailing()
                 .foregroundStyle(OpenCodeColors.iconBase)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background {

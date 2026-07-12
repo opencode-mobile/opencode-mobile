@@ -73,13 +73,15 @@ fun OpenCodeListItem(
 
     Surface(
         modifier =
-            modifier.then(
-                if (onClick != null) {
-                    Modifier.clickable(enabled = enabled, onClick = onClick)
-                } else {
-                    Modifier
-                },
-            ),
+            modifier
+                .fillMaxWidth()
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(enabled = enabled, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ),
         shape = containerShape,
         color = containerColor,
         contentColor = contentColor,

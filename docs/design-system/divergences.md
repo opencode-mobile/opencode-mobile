@@ -78,10 +78,9 @@ implementation belong in the feature's `parity-gaps.md`.
 - Area: component
 - Shared intent: outgoing prompt cards are trailing aligned, shrink to content
   width, and cap at `outgoingMessage.maxWidthFraction` (80% of the row).
-- iOS behavior: `OpenCodeOutgoingMessage` reads the available row width from a
-  background `GeometryReader` preference and applies a `maxWidth` cap to the
-  bubble and footer. Content drives row height; the reader does not wrap the
-  message body.
+- iOS behavior: `OpenCodeOutgoingMessage` uses a trailing `Layout` that caps
+  content at `outgoingMessage.maxWidthFraction` (80% of the row) while content
+  drives row height. The layout reader does not wrap the message body.
 - Android behavior: `OpenCodeOutgoingMessage` uses `BoxWithConstraints` with
   `widthIn(max = …)` on the bubble column and content so the same max-width cap
   applies without a minimum width.
