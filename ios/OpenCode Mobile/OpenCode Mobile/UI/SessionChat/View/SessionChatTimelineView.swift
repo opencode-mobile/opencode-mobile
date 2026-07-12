@@ -180,28 +180,32 @@ private struct SessionChatMessageRow: View {
         Group {
             switch message.role {
             case .user:
-                Button(action: { openMessageActions(showsRevertMessage: true) }) {
-                    OpenCodeOutgoingMessage(
-                        text: message.text,
-                        renderedMarkdown: message.renderedMarkdown,
-                        metadataLabel: message.metadataLabel
-                    )
-                }
-                .buttonStyle(.plain)
+                OpenCodeOutgoingMessage(
+                    text: message.text,
+                    renderedMarkdown: message.renderedMarkdown,
+                    metadataLabel: message.metadataLabel
+                )
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .accessibilityLabel("Outgoing message")
-                .accessibilityHint("Shows message actions")
-            case .assistant:
-                Button(action: { openMessageActions(showsRevertMessage: false) }) {
-                    AssistantMessageBubble(
-                        text: message.text,
-                        renderedMarkdown: message.renderedMarkdown
+                .modifier(
+                    SessionChatMessageActionsGestureModifier(
+                        renderedMarkdown: message.renderedMarkdown,
+                        accessibilityLabel: "Outgoing message",
+                        onOpenMessageActions: { openMessageActions(showsRevertMessage: true) }
                     )
-                }
-                .buttonStyle(.plain)
+                )
+            case .assistant:
+                AssistantMessageBubble(
+                    text: message.text,
+                    renderedMarkdown: message.renderedMarkdown
+                )
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel("Assistant message")
-                .accessibilityHint("Shows message actions")
+                .modifier(
+                    SessionChatMessageActionsGestureModifier(
+                        renderedMarkdown: message.renderedMarkdown,
+                        accessibilityLabel: "Assistant message",
+                        onOpenMessageActions: { openMessageActions(showsRevertMessage: false) }
+                    )
+                )
             case .command, .tool, .unknown:
                 FallbackMessageBubble(
                     roleLabel: message.role.displayLabel,
@@ -213,6 +217,26 @@ private struct SessionChatMessageRow: View {
             animateSizeChanges: animateSizeChanges,
             onContentSizeAnimationFinished: onContentSizeAnimationFinished
         )
+    }
+}
+
+private struct SessionChatMessageActionsGestureModifier: ViewModifier {
+    let renderedMarkdown: NativeMarkdownDocument?
+    let accessibilityLabel: String
+    let onOpenMessageActions: () -> Void
+
+    func body(content: Content) -> some View {
+        if renderedMarkdown != nil {
+            content
+                .onLongPressGesture(perform: onOpenMessageActions)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint("Long press to show message actions")
+        } else {
+            content
+                .onTapGesture(perform: onOpenMessageActions)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint("Shows message actions")
+        }
     }
 }
 

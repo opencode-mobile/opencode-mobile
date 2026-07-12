@@ -5,20 +5,10 @@ private let outgoingMessagePaddingVertical: CGFloat = 8
 
 private let outgoingMessageMaxWidthFraction: CGFloat = 0.8
 
-private struct OutgoingMessageAvailableWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 struct OpenCodeOutgoingMessage: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
-
-    @State private var availableMaxWidth: CGFloat = 0
 
     init(
         text: String,
@@ -31,82 +21,55 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            textPill
-            metadataFooter
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .background {
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: OutgoingMessageAvailableWidthKey.self,
-                    value: geometry.size.width * outgoingMessageMaxWidthFraction
-                )
+        GeometryReader { geometry in
+            let maxBubbleWidth = geometry.size.width * outgoingMessageMaxWidthFraction
+
+            VStack(alignment: .trailing, spacing: 6) {
+                textPill(maxBubbleWidth: maxBubbleWidth)
+                metadataFooter(maxBubbleWidth: maxBubbleWidth)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .onPreferenceChange(OutgoingMessageAvailableWidthKey.self) { width in
-            guard width > 0, availableMaxWidth != width else { return }
-            availableMaxWidth = width
-        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var textPill: some View {
-        pillContent
+    private func textPill(maxBubbleWidth: CGFloat) -> some View {
+        pillContent(maxBubbleWidth: maxBubbleWidth)
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
     }
 
-    private var metadataFooter: some View {
-        constrainedToMaxWidth(usesContentInset: false) {
-            Text(metadataLabel)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textWeak)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.trailing)
-        }
+    private func metadataFooter(maxBubbleWidth: CGFloat) -> some View {
+        Text(metadataLabel)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textWeak)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.trailing)
+            .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
     }
 
     @ViewBuilder
-    private var pillContent: some View {
+    private func pillContent(maxBubbleWidth: CGFloat) -> some View {
+        let contentMaxWidth = max(maxBubbleWidth - (outgoingMessagePaddingHorizontal * 2), 0)
+
         if let renderedMarkdown {
-            constrainedToMaxWidth(usesContentInset: true) {
-                OpenCodeRenderedMarkdown(
-                    document: renderedMarkdown,
-                    variant: .outgoingMessage
-                )
-            }
+            OpenCodeRenderedMarkdown(
+                document: renderedMarkdown,
+                variant: .outgoingMessage
+            )
+            .frame(maxWidth: contentMaxWidth, alignment: .trailing)
         } else {
-            constrainedToMaxWidth(usesContentInset: true) {
-                Text(text)
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .multilineTextAlignment(.trailing)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(text)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: contentMaxWidth, alignment: .trailing)
         }
-    }
-
-    @ViewBuilder
-    private func constrainedToMaxWidth<Content: View>(
-        usesContentInset: Bool,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if availableMaxWidth > 0 {
-            content()
-                .frame(
-                    maxWidth: usesContentInset ? contentMaxWidth : availableMaxWidth,
-                    alignment: .trailing
-                )
-        } else {
-            content()
-        }
-    }
-
-    private var contentMaxWidth: CGFloat {
-        max(availableMaxWidth - (outgoingMessagePaddingHorizontal * 2), 0)
     }
 }
 

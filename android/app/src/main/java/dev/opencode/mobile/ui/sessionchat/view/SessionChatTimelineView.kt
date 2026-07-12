@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat.view
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -170,6 +171,19 @@ private fun SessionChatMessageRow(
         )
     }
 
+    val showsRevertMessage = message.role == MessageRole.User
+    val messageActionsModifier =
+        messageActionsModifier(
+            renderedMarkdown = message.renderedMarkdown,
+            onOpenMessageActions = { openMessageActions(showsRevertMessage = showsRevertMessage) },
+            messageDescription =
+                if (showsRevertMessage) {
+                    "Outgoing message"
+                } else {
+                    "Assistant message"
+                },
+        )
+
     Column(
         modifier =
             modifier
@@ -191,26 +205,14 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = { openMessageActions(showsRevertMessage = true) })
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = "Outgoing message. Shows message actions"
-                            },
+                    modifier = Modifier.fillMaxWidth().then(messageActionsModifier),
                 )
 
             MessageRole.Assistant ->
                 AssistantMessageBubble(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
-                    modifier =
-                        Modifier.clickable(onClick = { openMessageActions(showsRevertMessage = false) })
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = "Assistant message. Shows message actions"
-                            },
+                    modifier = messageActionsModifier,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -221,6 +223,27 @@ private fun SessionChatMessageRow(
         }
     }
 }
+
+private fun messageActionsModifier(
+    renderedMarkdown: MarkdownDocument?,
+    onOpenMessageActions: () -> Unit,
+    messageDescription: String,
+): Modifier =
+    if (renderedMarkdown != null) {
+        Modifier.combinedClickable(
+            onClick = {},
+            onLongClick = onOpenMessageActions,
+            onLongClickLabel = "Show message actions",
+            role = Role.Button,
+        ).semantics {
+            contentDescription = "$messageDescription. Long press to show message actions"
+        }
+    } else {
+        Modifier.clickable(onClick = onOpenMessageActions).semantics {
+            role = Role.Button
+            contentDescription = "$messageDescription. Shows message actions"
+        }
+    }
 
 @Composable
 private fun AssistantMessageBubble(
