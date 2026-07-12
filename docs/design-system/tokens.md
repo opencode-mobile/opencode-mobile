@@ -375,6 +375,7 @@ entries.
 | `bottomSheet.motion.exitDuration` | 280 ms |
 | `bottomSheet.scrim.alpha` | 0.32 |
 | `bottomSheet.drag.dismissThreshold` | 96 (logical px) |
+| `bottomSheet.formHeight` | 560 (logical px; iOS stable form detent) |
 
 ### Outgoing message
 

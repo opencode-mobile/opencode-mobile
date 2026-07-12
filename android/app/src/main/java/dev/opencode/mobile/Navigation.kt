@@ -8,8 +8,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -49,6 +50,7 @@ import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.connection.ConnectionSetupSheetContent
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
@@ -92,7 +94,10 @@ fun MainNavigation() {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     AppRootState.Home ->
                         NavDisplay(
-                            modifier = Modifier.safeDrawingPadding(),
+                            modifier =
+                                Modifier
+                                    .systemBarsPadding()
+                                    .displayCutoutPadding(),
                             backStack = backStack,
                             onBack = { backStack.removeLastOrNull() },
                             transitionSpec = { forwardRouteTransition() },
@@ -206,7 +211,7 @@ fun MainNavigation() {
                     visible = connectionSetupVisible,
                     title = "Connect to server",
                     onDismissRequest = { connectionSetupVisible = false },
-                    keyboardAware = false,
+                    contentMode = OpenCodeBottomSheetContentMode.Form,
                 ) {
                     ConnectionSetupSheetContent(
                         uiState = setupUiState,

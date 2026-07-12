@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,11 @@ enum class OpenCodeTextInputKind {
     Url,
     Username,
     Password,
+}
+
+enum class OpenCodeTextInputSubmitAction {
+    Next,
+    Done,
 }
 
 @Composable
@@ -34,6 +40,7 @@ fun OpenCodeTextInput(
     kind: OpenCodeTextInputKind = OpenCodeTextInputKind.Text,
     enabled: Boolean = true,
     errorMessage: String? = null,
+    submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -59,6 +66,7 @@ fun OpenCodeTextInput(
             visualTransformation = if (kind == OpenCodeTextInputKind.Password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions =
                 KeyboardOptions(
+                    imeAction = if (submitAction == OpenCodeTextInputSubmitAction.Next) ImeAction.Next else ImeAction.Done,
                     keyboardType =
                         when (kind) {
                             OpenCodeTextInputKind.Url -> KeyboardType.Uri

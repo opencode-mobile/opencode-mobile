@@ -11,7 +11,8 @@ of styling native text fields locally.
 - Variants: `text`, `url`, `username`, `password`.
 - States: empty, populated, focused, disabled, and error.
 - Required content: label, value binding/callback.
-- Optional content: placeholder, error message, enabled state.
+- Optional content: placeholder, error message, enabled state, and semantic
+  submit action (`next` or `done`).
 
 The variant selects secure entry, capitalization, autocorrection, keyboard, and
 content-type behavior. Visual styling is not exposed for feature-level override.

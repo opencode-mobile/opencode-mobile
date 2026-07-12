@@ -6,8 +6,8 @@ struct ConnectionSetupSheetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            OpenCodeTextInput(label: "Server URL", text: $viewModel.baseURL, kind: .url)
-            OpenCodeTextInput(label: "Username", text: $viewModel.username, kind: .username)
+            OpenCodeTextInput(label: "Server URL", text: $viewModel.baseURL, kind: .url, submitAction: .next)
+            OpenCodeTextInput(label: "Username", text: $viewModel.username, kind: .username, submitAction: .next)
             OpenCodeTextInput(label: "Password", text: $viewModel.password, kind: .password)
 
             statusMessage

@@ -78,7 +78,11 @@ struct ProjectListHomeView: View {
                 }
             }
         }
-        .openCodeBottomSheet(item: $connectionSetupPresentation, title: "Connect to server") { presentation in
+        .openCodeBottomSheet(
+            item: $connectionSetupPresentation,
+            title: "Connect to server",
+            contentMode: .form
+        ) { presentation in
             ConnectionSetupSheetView(
                 viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
                 onDismiss: {

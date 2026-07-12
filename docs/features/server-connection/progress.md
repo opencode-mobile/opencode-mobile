@@ -8,7 +8,11 @@
 ## Design-system
 
 - [x] Reuse `OpenCodeBottomSheet`, `OpenCodeButton`, `OpenCodeTopBar`.
-- [x] Extend `OpenCodeBottomSheet` with Android `keyboardAware` for form sheets.
+- [x] Extend `OpenCodeBottomSheet` with cross-platform `form` mode: fixed
+  presenting screen, keyboard-following sheet boundary, fixed header, and
+  internally scrolling form body.
+- [x] Android navigation root excludes IME from global insets; system bars and
+  display cutouts remain protected while keyboard handling stays screen-local.
 - [x] Shared `OpenCodeTextInput` component and gallery entry on both platforms.
 - [x] Connection setup URL, username, and password fields migrated to it.
 

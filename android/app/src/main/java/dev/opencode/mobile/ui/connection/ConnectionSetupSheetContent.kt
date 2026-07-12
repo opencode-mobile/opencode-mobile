@@ -14,6 +14,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
+import dev.opencode.mobile.ui.components.OpenCodeTextInputSubmitAction
 
 @Composable
 fun ConnectionSetupSheetContent(
@@ -35,12 +36,14 @@ fun ConnectionSetupSheetContent(
             label = "Server URL",
             value = uiState.baseUrl,
             onValueChange = onBaseUrlChanged,
+            submitAction = OpenCodeTextInputSubmitAction.Next,
         )
         Spacer(modifier = Modifier.height(12.dp))
         OpenCodeTextInput(
             label = "Username",
             value = uiState.username,
             onValueChange = onUsernameChanged,
+            submitAction = OpenCodeTextInputSubmitAction.Next,
         )
         Spacer(modifier = Modifier.height(12.dp))
         OpenCodeTextInput(

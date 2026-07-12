@@ -21,6 +21,8 @@ struct BottomSheetGalleryView: View {
     @State private var itemCount = 2
     @State private var startDecorator: GalleryBottomSheetDecoratorKind = .icon
     @State private var endDecorator: GalleryBottomSheetDecoratorKind = .none
+    @State private var formMode = false
+    @State private var formValue = "http://127.0.0.1:4096/"
 
     private var entryStartDecorator: BottomSheetEntryDecorator {
         switch startDecorator {
@@ -58,6 +60,11 @@ struct BottomSheetGalleryView: View {
                         selected: showsHeaderBack,
                         action: { showsHeaderBack.toggle() }
                     )
+                    OpenCodeChoiceBadge(
+                        label: "Form mode",
+                        selected: formMode,
+                        action: { formMode.toggle() }
+                    )
                 }
             }
 
@@ -89,8 +96,30 @@ struct BottomSheetGalleryView: View {
                     accessibilityLabel: "Back to providers",
                     action: { showsHeaderBack = false }
                 )
-                : nil
+                : nil,
+            contentMode: formMode ? .form : .actionList
         ) {
+            if formMode {
+                OpenCodeTextInput(
+                    label: "Server URL",
+                    text: $formValue,
+                    kind: .url
+                )
+                .padding(.horizontal, 20)
+                OpenCodeTextInput(
+                    label: "Password",
+                    text: .constant("gallery password"),
+                    kind: .password
+                )
+                .padding(.horizontal, 20)
+            } else {
+                actionEntries
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var actionEntries: some View {
             OpenCodeBottomSheetEntry(
                 title: "Open current project",
                 enabled: entryEnabled,
@@ -127,7 +156,6 @@ struct BottomSheetGalleryView: View {
                     action: { isPresented = false }
                 )
             }
-        }
     }
 }
 

@@ -7,6 +7,11 @@ enum OpenCodeTextInputKind: CaseIterable {
     case password
 }
 
+enum OpenCodeTextInputSubmitAction {
+    case next
+    case done
+}
+
 struct OpenCodeTextInput: View {
     let label: String
     @Binding var text: String
@@ -14,6 +19,7 @@ struct OpenCodeTextInput: View {
     var kind: OpenCodeTextInputKind = .text
     var enabled = true
     var errorMessage: String?
+    var submitAction: OpenCodeTextInputSubmitAction = .done
 
     @FocusState private var focused: Bool
 
@@ -29,6 +35,7 @@ struct OpenCodeTextInput: View {
                 .textInputAutocapitalization(kind == .text ? .sentences : .never)
                 .autocorrectionDisabled(kind != .text)
                 .focused($focused)
+                .submitLabel(submitAction == .next ? .next : .done)
                 .padding(.horizontal, 12)
                 .frame(minHeight: 48)
                 .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
