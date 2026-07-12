@@ -12,7 +12,8 @@ private let bottomSheetEntryIconSize: CGFloat = 20
 private let bottomSheetInitialHeight: CGFloat = 176
 private let bottomSheetScrollableDetentFraction: CGFloat = 0.55
 private let bottomSheetCompactMaxHeight: CGFloat = 360
-private let bottomSheetFormHeight: CGFloat = 560
+private let bottomSheetFormInitialHeight: CGFloat = 460
+private let bottomSheetFormMaxHeight: CGFloat = 560
 private let bottomSheetEstimatedHeaderHeight: CGFloat =
     bottomSheetHeaderTopPadding + bottomSheetHeaderBottomPadding + 40
 
@@ -72,7 +73,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
     @State private var mode: BottomSheetPresentationMode = .scrollable
-    @State private var compactHeight: CGFloat = bottomSheetInitialHeight
+    @State private var compactHeight: CGFloat = bottomSheetFormInitialHeight
     @State private var contentHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var pinnedContentHeight: CGFloat = 0
@@ -83,7 +84,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     }
 
     private var presentationDetents: Set<PresentationDetent> {
-        if contentMode == .form { return [.height(bottomSheetFormHeight)] }
+        if contentMode == .form { return [.height(compactHeight)] }
         switch mode {
         case .scrollable:
             return [.fraction(bottomSheetScrollableDetentFraction)]
@@ -140,11 +141,18 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     }
 
     private func updatePresentationMode() {
-        guard contentMode == .actionList else { return }
         guard contentHeight > 0 else { return }
 
         let totalHeight =
             resolvedHeaderHeight + pinnedContentHeight + contentHeight + bottomSheetContentBottomPadding
+        if contentMode == .form {
+            let measuredHeight = min(max(totalHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
+            guard abs(compactHeight - measuredHeight) > 1 else { return }
+            compactHeight = measuredHeight
+            selectedDetent = .height(measuredHeight)
+            return
+        }
+
         if totalHeight <= bottomSheetCompactMaxHeight {
             compactHeight = max(totalHeight, bottomSheetInitialHeight)
             if mode != .compact {

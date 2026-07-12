@@ -78,10 +78,10 @@ accessibility label or description using the platform convention.
 
 ## Platform Notes
 
-- iOS: presented with SwiftUI `.sheet` and native dismissal. Form sheets use a
-  stable 560pt detent so they remain bottom sheets before the keyboard appears;
-  keyboard-safe-area changes resize the internal scroll region rather than
-  recomputing the detent. Short entry lists use
+- iOS: presented with SwiftUI `.sheet` and native dismissal. Form sheets measure
+  their natural header and body height, capped at 560pt, so the sheet fits its
+  content before the keyboard appears. Keyboard-safe-area changes resize the
+  internal scroll region rather than the measured content. Short entry lists use
   a measured compact height detent. Longer lists switch to a fixed 55% height
   detent with an internal `ScrollView`. Scrollable sheets disable interactive
   swipe-to-dismiss so list scrolling does not close the sheet; use the close
