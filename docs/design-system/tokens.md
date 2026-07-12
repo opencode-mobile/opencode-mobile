@@ -371,14 +371,10 @@ Reusable outgoing prompt card for session conversations.
 | Token | Value |
 | --- | --- |
 | `outgoingMessage.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
-| `outgoingMessage.maxWidthFraction` | 0.84 of the available row width |
-| `outgoingMessage.paddingHorizontal` | 18 (logical px) |
-| `outgoingMessage.paddingVertical` | 14 (logical px) |
-| `outgoingMessage.contentSpacing` | 4 (logical px) |
+| `outgoingMessage.maxWidthFraction` | 0.80 of the available row width |
+| `outgoingMessage.paddingHorizontal` | 12 (logical px) |
+| `outgoingMessage.paddingVertical` | 8 (logical px) |
 | `outgoingMessage.footerSpacing` | 6 (logical px) |
-| `outgoingMessage.controlItemSpacing` | 8 (logical px) |
-| `outgoingMessage.actionIconTouchTarget` | 28 (logical px) |
-| `outgoingMessage.actionIconSize` | 16 (logical px) |
 
 ## Platform Mappings
 

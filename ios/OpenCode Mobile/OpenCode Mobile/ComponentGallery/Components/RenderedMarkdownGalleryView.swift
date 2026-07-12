@@ -19,15 +19,15 @@ struct RenderedMarkdownGalleryView: View {
                 OpenCodeOutgoingMessage(
                     text: viewModel.selectedSample.rawMarkdown,
                     renderedMarkdown: viewModel.selectedSample.document,
-                    metadataLabel: "Build · Claude Sonnet · just now",
-                    onRestoreClick: {}
+                    metadataLabel: "Build · Claude Sonnet · just now"
                 )
             } else {
                 OpenCodeRenderedMarkdown(
                     document: viewModel.selectedSample.document,
                     variant: viewModel.selectedSample.variant
                 )
-                .padding(12)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)

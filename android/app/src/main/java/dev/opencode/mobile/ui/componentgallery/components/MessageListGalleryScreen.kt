@@ -211,7 +211,6 @@ private fun GalleryMessageRow(
                 OpenCodeOutgoingMessage(
                     text = message.text,
                     metadataLabel = message.metadataLabel.orEmpty(),
-                    onRestoreClick = {},
                     modifier = Modifier.fillMaxWidth(),
                 )
 

@@ -9,6 +9,10 @@ trailing-aligned message card.
 This component is intentionally outgoing-only. Assistant and tool messages need
 separate treatment before they become reusable design-system components.
 
+Message actions such as restore and copy are not part of this component. Session
+Chat handles those through a feature-local bottom sheet when the user taps an
+outgoing message.
+
 ## Public API
 
 - Variants:
@@ -18,19 +22,16 @@ separate treatment before they become reusable design-system components.
 - Required content:
   - message text.
   - metadata label using dot-separated sent-message context.
-  - restore action.
 - Optional content:
   - rendered markdown document and initial height cache for prepared content.
 
 ## Token Usage
 
 - Semantic tokens: `color.surface.inset`, `color.text.primary`,
-  `color.text.tertiary`, `color.icon.default`.
+  `color.text.tertiary`.
 - Component tokens: `outgoingMessage.cornerRadius`,
   `outgoingMessage.maxWidthFraction`, `outgoingMessage.paddingHorizontal`,
-  `outgoingMessage.paddingVertical`, `outgoingMessage.contentSpacing`,
-  `outgoingMessage.controlItemSpacing`,
-  `outgoingMessage.actionIconTouchTarget`, `outgoingMessage.actionIconSize`.
+  `outgoingMessage.paddingVertical`, `outgoingMessage.footerSpacing`.
 - Typography roles:
   - `type.body` for message text.
   - `type.caption` for footer metadata.
@@ -38,10 +39,11 @@ separate treatment before they become reusable design-system components.
 ## Behavior
 
 Messages render trailing aligned in their parent conversation row. The rounded
-bubble uses the shared width intent from `outgoingMessage.maxWidthFraction` so
-outgoing prompts read as a consistent column, even when the message text is
-short. The message text is shown without a role prefix; alignment communicates
-that the message is outgoing. The bubble uses `color.surface.inset` so it
+bubble may grow with message content up to the shared
+`outgoingMessage.maxWidthFraction` cap so long prompts wrap naturally. Short
+prompts shrink to their content width; there is no minimum bubble width. The
+message text is shown without a role prefix; alignment communicates that the
+message is outgoing. The bubble uses `color.surface.inset` so it
 remains distinct from the page background in light mode without introducing a
 component-only raw color. Bubble corners match `listItem.cornerRadius`.
 
@@ -54,20 +56,12 @@ The right-aligned footer label uses compact caption typography and combines
 sent-message context as `mode · model · time`, for example
 `Build · DeepSeek V4 Flash · 9:05 PM`.
 
-The bubble's bottom control row places compact restore/copy actions on the
-right. The restore action must not delete or resend the original message. The
-controls expose `Restore message to composer` and `Copy message` accessibility
-labels.
-
 ## Platform Notes
 
-- iOS: implemented with SwiftUI text and catalog icon buttons inside the rounded
-  message surface (`undo` and `content_copy` from the shared catalog). The
-  trailing column uses a stable leading gutter instead of SwiftUI
-  `containerRelativeFrame`; see
-  `../divergences.md#outgoing-message-width-measurement`.
-- Android: implemented with Compose text and icon buttons inside a Material 3
-  surface (`OpenCodeIcons.Undo`, `OpenCodeIcons.ContentCopy`).
+- iOS: implemented with SwiftUI text inside the rounded message surface. The
+  bubble caps at `outgoingMessage.maxWidthFraction` and otherwise shrink-wraps
+  to content width.
+- Android: implemented with Compose text inside a Material 3 surface.
 
 ## Previews
 
@@ -75,7 +69,7 @@ labels.
 - Dark: included.
 - Default: included with short copy.
 - Long: included with long copy.
-- Pressed: covered by footer button feedback.
+- Pressed: not applicable in this component version.
 - Disabled: not applicable in this component version.
 - Loading: not applicable in this component version.
 - Error: not applicable in this component version.

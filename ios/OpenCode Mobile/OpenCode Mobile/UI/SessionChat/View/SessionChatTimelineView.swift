@@ -9,7 +9,7 @@ struct SessionChatTimelineViewProps {
     let isRefreshing: Bool
     let errorMessage: String?
     let onRefresh: () async -> Void
-    let onRestoreComposerText: (String) -> Void
+    let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
 }
 
 struct SessionChatTimelineView: View {
@@ -88,7 +88,7 @@ private struct SessionChatTimelineReadyView: View {
                         if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
                             SessionChatMessageRow(
                                 message: message,
-                                onRestoreClick: { props.onRestoreComposerText(message.text) },
+                                onMessageActionsTap: props.onMessageActionsTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -97,7 +97,7 @@ private struct SessionChatTimelineReadyView: View {
                             Spacer(minLength: 0)
                             SessionChatMessageRow(
                                 message: message,
-                                onRestoreClick: { props.onRestoreComposerText(message.text) },
+                                onMessageActionsTap: props.onMessageActionsTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -163,25 +163,45 @@ private extension Array where Element == SessionChatRow {
 
 private struct SessionChatMessageRow: View {
     let message: SessionChatRow
-    let onRestoreClick: () -> Void
+    let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let animateSizeChanges: Bool
     let onContentSizeAnimationFinished: (() -> Void)?
+
+    private func openMessageActions(showsRevertMessage: Bool) {
+        onMessageActionsTap(
+            SessionChatMessageActionsTarget(
+                text: message.text,
+                showsRevertMessage: showsRevertMessage
+            )
+        )
+    }
 
     var body: some View {
         Group {
             switch message.role {
             case .user:
-                OpenCodeOutgoingMessage(
-                    text: message.text,
-                    renderedMarkdown: message.renderedMarkdown,
-                    metadataLabel: message.metadataLabel,
-                    onRestoreClick: onRestoreClick
-                )
+                Button(action: { openMessageActions(showsRevertMessage: true) }) {
+                    OpenCodeOutgoingMessage(
+                        text: message.text,
+                        renderedMarkdown: message.renderedMarkdown,
+                        metadataLabel: message.metadataLabel
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("Outgoing message")
+                .accessibilityHint("Shows message actions")
             case .assistant:
-                AssistantMessageBubble(
-                    text: message.text,
-                    renderedMarkdown: message.renderedMarkdown
-                )
+                Button(action: { openMessageActions(showsRevertMessage: false) }) {
+                    AssistantMessageBubble(
+                        text: message.text,
+                        renderedMarkdown: message.renderedMarkdown
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("Assistant message")
+                .accessibilityHint("Shows message actions")
             case .command, .tool, .unknown:
                 FallbackMessageBubble(
                     roleLabel: message.role.displayLabel,

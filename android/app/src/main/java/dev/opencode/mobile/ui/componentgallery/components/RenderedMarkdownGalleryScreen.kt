@@ -41,7 +41,6 @@ fun RenderedMarkdownGalleryScreen(
                 text = selected.rawMarkdown,
                 renderedMarkdown = selected.document,
                 metadataLabel = "Build · Claude Sonnet · just now",
-                onRestoreClick = {},
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
@@ -52,7 +51,7 @@ fun RenderedMarkdownGalleryScreen(
                     Modifier
                         .fillMaxWidth()
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                        .padding(12.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
     }

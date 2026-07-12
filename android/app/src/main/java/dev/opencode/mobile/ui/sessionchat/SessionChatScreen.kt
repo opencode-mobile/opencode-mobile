@@ -36,6 +36,8 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
@@ -62,6 +64,7 @@ fun SessionChatScreen(
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
+    var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -145,7 +148,7 @@ fun SessionChatScreen(
                         isRefreshing = uiState.isRefreshing,
                         errorMessage = uiState.errorMessage,
                         onRefresh = viewModel::refreshMessages,
-                        onRestoreComposerText = viewModel::restoreComposerText,
+                        onMessageActionsTap = { messageActionsTarget = it },
                     ),
                 modifier = Modifier.weight(1f),
             )
@@ -174,6 +177,12 @@ fun SessionChatScreen(
                 onStopClick = viewModel::abort,
             )
         }
+
+        SessionChatMessageActionsSheet(
+            target = messageActionsTarget,
+            onDismiss = { messageActionsTarget = null },
+            onRestoreToComposer = viewModel::restoreComposerText,
+        )
 
         SessionChatPickerSheet(
             activePicker = activePicker,
