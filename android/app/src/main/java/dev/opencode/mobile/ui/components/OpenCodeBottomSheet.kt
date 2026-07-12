@@ -109,6 +109,11 @@ private enum class BottomSheetLayoutMode {
     Scrollable,
 }
 
+enum class OpenCodeBottomSheetContentMode {
+    ActionList,
+    Form,
+}
+
 sealed class BottomSheetEntryDecorator {
     data object None : BottomSheetEntryDecorator()
 
@@ -131,7 +136,7 @@ fun OpenCodeBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null,
-    keyboardAware: Boolean = false,
+    contentMode: OpenCodeBottomSheetContentMode = OpenCodeBottomSheetContentMode.ActionList,
     pinnedContent: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -204,7 +209,12 @@ fun OpenCodeBottomSheet(
         ) {
             AnimatedVisibility(
                 visible = sheetVisible,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .then(
+                            if (contentMode == OpenCodeBottomSheetContentMode.Form) Modifier.imePadding() else Modifier,
+                        ),
                 enter =
                     slideInVertically(
                         animationSpec = tween(BottomSheetEnterDurationMillis, easing = FastOutSlowInEasing),
@@ -233,7 +243,7 @@ fun OpenCodeBottomSheet(
                     BottomSheetContent(
                         title = title,
                         headerLeadingAction = headerLeadingAction,
-                        keyboardAware = keyboardAware,
+                        contentMode = contentMode,
                         onDismissRequest = ::dismissWithAnimation,
                         headerDragModifier =
                             Modifier.draggable(
@@ -260,7 +270,7 @@ fun OpenCodeBottomSheet(
 private fun BottomSheetContent(
     title: String,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
-    keyboardAware: Boolean,
+    contentMode: OpenCodeBottomSheetContentMode,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
     pinnedContent: @Composable ColumnScope.() -> Unit,
@@ -268,7 +278,9 @@ private fun BottomSheetContent(
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
-    val maxSheetHeight = configuration.screenHeightDp.dp * BottomSheetScrollableHeightFraction
+    val maxSheetHeight =
+        configuration.screenHeightDp.dp *
+            if (contentMode == OpenCodeBottomSheetContentMode.Form) 0.9f else BottomSheetScrollableHeightFraction
     var contentHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedContentHeight by remember { mutableStateOf(0.dp) }
@@ -283,7 +295,9 @@ private fun BottomSheetContent(
                     if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
                 val total =
                     resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
-                if (total <= BottomSheetCompactMaxHeight) {
+                if (contentMode == OpenCodeBottomSheetContentMode.Form) {
+                    BottomSheetLayoutMode.Scrollable
+                } else if (total <= BottomSheetCompactMaxHeight) {
                     BottomSheetLayoutMode.Compact
                 } else {
                     BottomSheetLayoutMode.Scrollable
@@ -342,7 +356,7 @@ private fun BottomSheetContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .then(if (keyboardAware) Modifier.imePadding() else Modifier),
+                                .wrapContentHeight(),
                     ) {
                         content()
                     }
@@ -355,7 +369,6 @@ private fun BottomSheetContent(
                             Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = scrollBodyMaxHeight)
-                                .then(if (keyboardAware) Modifier.imePadding() else Modifier)
                                 .verticalScroll(scrollState),
                     ) {
                         content()

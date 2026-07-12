@@ -24,6 +24,11 @@
 - [x] Shared **Project Session Selector** is the only project/session selector
   on home on iOS and Android, fully wired to existing added-project/session
   data and actions and available in the Component Gallery
+- [x] `OpenCodeListItem` full-row tap target on iOS and Android (session rows
+  and other list items)
+- [x] iOS home **Browse projects** and **See all sessions** use
+  `OpenCodeBottomSheet` instead of native platform sheets (Android already used
+  design-system bottom sheet)
 
 ## Manual
 

@@ -17,6 +17,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case choiceBadge
     case actionPill
     case button
+    case textInput
     case projectSessionSelector
     case sessionStatusBar
     case renderedMarkdown
@@ -95,6 +96,12 @@ let componentGalleryEntries = [
         id: .button,
         title: "Button",
         description: "Reusable action component with text and icon variants.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .textInput,
+        title: "Text Input",
+        description: "Labeled single-line entry for text, URLs, usernames, and passwords.",
         category: .components
     ),
     ComponentGalleryEntry(

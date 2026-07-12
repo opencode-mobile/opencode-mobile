@@ -44,13 +44,45 @@ struct ProjectListHomeView: View {
                 viewModel.consumePendingSessionOpen()
             }
         }
-        .sheet(isPresented: addProjectSheetBinding) {
-            addProjectSheet
+        .openCodeBottomSheet(isPresented: addProjectSheetBinding, title: "Browse projects") {
+            if addProjectCandidates.isEmpty {
+                OpenCodeBottomSheetEntry(
+                    title: "No more projects on this server",
+                    enabled: false,
+                    action: {}
+                )
+            } else {
+                ForEach(addProjectCandidates) { candidate in
+                    OpenCodeBottomSheetEntry(
+                        title: candidate.displayName,
+                        action: {
+                            Task { await viewModel.addProject(worktree: candidate.worktree) }
+                        }
+                    )
+                }
+            }
         }
-        .sheet(item: seeAllSheetBinding) { sheet in
-            seeAllSheet(sheet)
+        .openCodeBottomSheet(
+            isPresented: seeAllSheetPresentedBinding,
+            title: seeAllSheetState?.projectName ?? "Sessions"
+        ) {
+            if let sheet = seeAllSheetState {
+                ForEach(sheet.sessions) { session in
+                    OpenCodeBottomSheetEntry(
+                        title: seeAllSessionEntryTitle(session),
+                        action: {
+                            viewModel.dismissSeeAllSessions()
+                            selectedSession = session
+                        }
+                    )
+                }
+            }
         }
-        .openCodeBottomSheet(item: $connectionSetupPresentation, title: "Connect to server") { presentation in
+        .openCodeBottomSheet(
+            item: $connectionSetupPresentation,
+            title: "Connect to server",
+            contentMode: .form
+        ) { presentation in
             ConnectionSetupSheetView(
                 viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
                 onDismiss: {
@@ -165,74 +197,44 @@ struct ProjectListHomeView: View {
         )
     }
 
-    @ViewBuilder
-    private var addProjectSheet: some View {
-        let candidates: [AddProjectCandidateItem] = {
-            switch viewModel.state {
-            case let .empty(_, items, _), let .loaded(_, _, items, _, _, _):
-                items
-            default:
-                []
-            }
-        }()
-        NavigationStack {
-            List {
-                if candidates.isEmpty {
-                    Text("No more projects on this server")
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .listRowSeparator(.hidden)
-                } else {
-                    ForEach(candidates) { candidate in
-                        Button(candidate.displayName) {
-                            Task {
-                                await viewModel.addProject(worktree: candidate.worktree)
-                            }
-                        }
-                        .listRowSeparator(.hidden)
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .navigationTitle("Browse projects")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { viewModel.dismissAddProjectSheet() }
-                }
-            }
+    private var addProjectCandidates: [AddProjectCandidateItem] {
+        switch viewModel.state {
+        case let .empty(_, items, _), let .loaded(_, _, items, _, _, _):
+            items
+        default:
+            []
         }
-        .presentationDetents([.medium, .large])
     }
 
-    private var seeAllSheetBinding: Binding<SeeAllSessionsSheetState?> {
+    private var seeAllSheetPresentedBinding: Binding<Bool> {
         Binding(
             get: {
-                if case let .loaded(_, _, _, sheet, _, _) = viewModel.state { sheet }
-                else { nil }
+                if case let .loaded(_, _, _, sheet, _, _) = viewModel.state {
+                    sheet != nil
+                } else {
+                    false
+                }
             },
-            set: { _ in viewModel.dismissSeeAllSessions() }
+            set: { isPresented in
+                if !isPresented { viewModel.dismissSeeAllSessions() }
+            }
         )
     }
 
-    private func seeAllSheet(_ sheet: SeeAllSessionsSheetState) -> some View {
-        NavigationStack {
-            List(sheet.sessions) { session in
-                Button(session.title) {
-                    viewModel.dismissSeeAllSessions()
-                    selectedSession = session
-                }
-                .listRowSeparator(.hidden)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .navigationTitle(sheet.projectName)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { viewModel.dismissSeeAllSessions() }
-                }
-            }
+    private var seeAllSheetState: SeeAllSessionsSheetState? {
+        if case let .loaded(_, _, _, sheet, _, _) = viewModel.state {
+            sheet
+        } else {
+            nil
         }
-        .presentationDetents([.medium, .large])
+    }
+}
+
+private func seeAllSessionEntryTitle(_ session: SessionListItem) -> String {
+    if let statusLabel = session.statusLabel {
+        "\(session.title) · \(statusLabel)"
+    } else {
+        session.title
     }
 }
 
@@ -275,10 +277,6 @@ private extension SessionListItem {
             subtitle: updatedAtLabel ?? statusLabel
         )
     }
-}
-
-extension SeeAllSessionsSheetState: Identifiable {
-    var id: String { worktree }
 }
 
 #Preview {

@@ -59,13 +59,17 @@
   home decisions.
 - See: [Project List Home decisions](../project-list-home/decisions.md).
 
-## Android connection setup uses keyboard-aware bottom sheet
+## Connection setup uses form-mode bottom sheet
 
-- Date: 2026-05-27
-- Decision: connection setup stays on shared `OpenCodeBottomSheet` with
-  `keyboardAware = true`; do not use a separate Dialog wrapper for the form.
-- Reason: nested scrolling inside `ModalBottomSheet` conflicted with IME resize;
-  `skipPartiallyExpanded`, zero sheet window insets, and `imePadding()` on the
-  sheet body keep the form usable with the on-screen keyboard.
-- Revisit when: Material3 adds first-class form-sheet IME behavior or a reusable
-  design-system text-field component changes layout constraints.
+- Date: 2026-07-12
+- Decision: connection setup stays on shared `OpenCodeBottomSheet` in semantic
+  `form` mode on both platforms. The presenting screen does not resize for the
+  keyboard; the sheet boundary follows the keyboard and the form scrolls under
+  a fixed header.
+- Reason: content-height detents and IME padding inside measured content caused
+  feedback loops, jumps, and obscured controls. Keyboard insets belong at the
+  modal boundary, while overflow belongs in one component-owned scroll region.
+- Revisit when: native platform sheet APIs provide the same stable keyboard
+  contract without component-specific presentation policy.
+- Supersedes: the Android-only `keyboardAware` bottom-sheet option from
+  2026-05-27.

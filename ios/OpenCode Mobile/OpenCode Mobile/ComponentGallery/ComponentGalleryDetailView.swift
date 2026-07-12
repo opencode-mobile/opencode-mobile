@@ -74,6 +74,8 @@ struct ComponentGalleryDetailView: View {
             ActionPillGalleryView()
         case .button:
             ButtonGalleryView()
+        case .textInput:
+            TextInputGalleryView()
         case .projectSessionSelector:
             ProjectSessionSelectorGalleryView()
         case .sessionStatusBar:

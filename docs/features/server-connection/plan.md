@@ -26,7 +26,6 @@ connection before saving, and return to edit server details when needed.
 - Multiple saved profiles or server switcher.
 - Disconnect / delete profile flow.
 - Standalone Sync Probe screen.
-- New design-system text-field component.
 - Android emulator auto-rewrite of loopback URLs in saved profiles.
 
 ## Server APIs
@@ -66,7 +65,7 @@ connection before saving, and return to edit server details when needed.
 ## Design-System Components
 
 - Reuse `OpenCodeBottomSheet`, `OpenCodeButton`, `OpenCodeTopBar`.
-- Feature-local styled text fields (no reusable input component yet).
+- Reuse `OpenCodeTextInput` for URL, username, and password entry.
 
 ## Platform Entry Points
 

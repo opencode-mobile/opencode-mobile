@@ -12,12 +12,19 @@ private let bottomSheetEntryIconSize: CGFloat = 20
 private let bottomSheetInitialHeight: CGFloat = 176
 private let bottomSheetScrollableDetentFraction: CGFloat = 0.55
 private let bottomSheetCompactMaxHeight: CGFloat = 360
+private let bottomSheetFormInitialHeight: CGFloat = 460
+private let bottomSheetFormMaxHeight: CGFloat = 560
 private let bottomSheetEstimatedHeaderHeight: CGFloat =
     bottomSheetHeaderTopPadding + bottomSheetHeaderBottomPadding + 40
 
 enum BottomSheetEntryDecorator {
     case none
     case icon(OpenCodeIcon, accessibilityLabel: String? = nil)
+}
+
+enum OpenCodeBottomSheetContentMode {
+    case actionList
+    case form
 }
 
 struct OpenCodeBottomSheetHeaderAction {
@@ -61,11 +68,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     let title: String
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
+    let contentMode: OpenCodeBottomSheetContentMode
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
     @State private var mode: BottomSheetPresentationMode = .scrollable
-    @State private var compactHeight: CGFloat = bottomSheetInitialHeight
+    @State private var compactHeight: CGFloat = bottomSheetFormInitialHeight
     @State private var contentHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var pinnedContentHeight: CGFloat = 0
@@ -76,11 +84,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     }
 
     private var presentationDetents: Set<PresentationDetent> {
+        if contentMode == .form { return [.height(compactHeight)] }
         switch mode {
         case .scrollable:
-            [.fraction(bottomSheetScrollableDetentFraction)]
+            return [.fraction(bottomSheetScrollableDetentFraction)]
         case .compact:
-            [.height(compactHeight)]
+            return [.height(compactHeight)]
         }
     }
 
@@ -98,7 +107,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 title: title,
                 leadingAction: leadingAction,
                 onDismiss: onDismiss,
-                mode: mode,
+                mode: resolvedMode,
                 scrollAreaHeight: scrollAreaHeight,
                 scrollTargetID: scrollTargetID,
                 contentHeight: contentHeight,
@@ -120,11 +129,15 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             updatePresentationMode()
         }
         .presentationDetents(presentationDetents, selection: $selectedDetent)
-        .presentationContentInteraction(mode == .scrollable ? .scrolls : .automatic)
-        .interactiveDismissDisabled(mode == .scrollable)
+        .presentationContentInteraction(resolvedMode == .scrollable ? .scrolls : .automatic)
+        .interactiveDismissDisabled(resolvedMode == .scrollable)
         .presentationCornerRadius(24)
         .presentationBackground(OpenCodeColors.surfaceBase)
-        .presentationDragIndicator(mode == .scrollable ? .hidden : .visible)
+        .presentationDragIndicator(resolvedMode == .scrollable ? .hidden : .visible)
+    }
+
+    private var resolvedMode: BottomSheetPresentationMode {
+        contentMode == .form ? .scrollable : mode
     }
 
     private func updatePresentationMode() {
@@ -132,6 +145,14 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
 
         let totalHeight =
             resolvedHeaderHeight + pinnedContentHeight + contentHeight + bottomSheetContentBottomPadding
+        if contentMode == .form {
+            let measuredHeight = min(max(totalHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
+            guard abs(compactHeight - measuredHeight) > 1 else { return }
+            compactHeight = measuredHeight
+            selectedDetent = .height(measuredHeight)
+            return
+        }
+
         if totalHeight <= bottomSheetCompactMaxHeight {
             compactHeight = max(totalHeight, bottomSheetInitialHeight)
             if mode != .compact {
@@ -150,21 +171,37 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
     let title: String
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
+    let contentMode: OpenCodeBottomSheetContentMode
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
 
     func body(content: Content) -> some View {
         content
+            .modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
             .sheet(isPresented: $isPresented) {
                 OpenCodeBottomSheetSheetBody(
                     title: title,
                     leadingAction: leadingAction,
                     scrollTargetID: scrollTargetID,
+                    contentMode: contentMode,
                     onDismiss: { isPresented = false },
                     pinnedContent: pinnedContent,
                     sheetContent: sheetContent,
                 )
             }
+    }
+}
+
+private struct BottomSheetKeyboardHostPolicy: ViewModifier {
+    let contentMode: OpenCodeBottomSheetContentMode
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if contentMode == .form {
+            content.ignoresSafeArea(.keyboard)
+        } else {
+            content
+        }
     }
 }
 
@@ -362,6 +399,7 @@ extension View {
         title: String,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
+        contentMode: OpenCodeBottomSheetContentMode = .actionList,
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
         openCodeBottomSheet(
@@ -369,6 +407,7 @@ extension View {
             title: title,
             leadingAction: leadingAction,
             scrollTargetID: scrollTargetID,
+            contentMode: contentMode,
             pinnedContent: { EmptyView() },
             content: content
         )
@@ -379,6 +418,7 @@ extension View {
         title: String,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
+        contentMode: OpenCodeBottomSheetContentMode = .actionList,
         @ViewBuilder pinnedContent: @escaping () -> PinnedContent,
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
@@ -388,6 +428,7 @@ extension View {
                 title: title,
                 leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
+                contentMode: contentMode,
                 pinnedContent: pinnedContent,
                 sheetContent: content
             )
@@ -399,13 +440,16 @@ extension View {
         title: String,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
+        contentMode: OpenCodeBottomSheetContentMode = .actionList,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        sheet(item: item) { value in
+        modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+            .sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
                 leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
+                contentMode: contentMode,
                 onDismiss: { item.wrappedValue = nil },
                 pinnedContent: { EmptyView() },
                 sheetContent: { content(value) }
@@ -418,14 +462,17 @@ extension View {
         title: String,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
+        contentMode: OpenCodeBottomSheetContentMode = .actionList,
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        sheet(item: item) { value in
+        modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+            .sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
                 leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
+                contentMode: contentMode,
                 onDismiss: { item.wrappedValue = nil },
                 pinnedContent: { pinnedContent(value) },
                 sheetContent: { content(value) }

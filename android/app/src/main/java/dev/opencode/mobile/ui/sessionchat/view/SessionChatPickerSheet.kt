@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -82,7 +83,7 @@ internal fun SessionChatPickerSheet(
         title = modelSheetTitle,
         onDismissRequest = onDismiss,
         headerLeadingAction = modelHeaderLeadingAction,
-        keyboardAware = showsModelFilter,
+        contentMode = if (showsModelFilter) OpenCodeBottomSheetContentMode.Form else OpenCodeBottomSheetContentMode.ActionList,
         pinnedContent = {
             if (showsModelFilter) {
                 ModelPickerFilterField(

@@ -5,6 +5,39 @@ private let outgoingMessagePaddingVertical: CGFloat = 8
 
 private let outgoingMessageMaxWidthFraction: CGFloat = 0.8
 
+private struct OutgoingMessageTrailingMaxWidthLayout: Layout {
+    let maxWidthFraction: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+
+        let containerWidth = proposal.width ?? 0
+        guard containerWidth > 0 else {
+            return subview.sizeThatFits(proposal)
+        }
+
+        let maxContentWidth = containerWidth * maxWidthFraction
+        let contentSize = subview.sizeThatFits(
+            ProposedViewSize(width: maxContentWidth, height: proposal.height)
+        )
+        return CGSize(width: containerWidth, height: contentSize.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let subview = subviews.first else { return }
+
+        let maxContentWidth = bounds.width * maxWidthFraction
+        let contentSize = subview.sizeThatFits(
+            ProposedViewSize(width: maxContentWidth, height: proposal.height)
+        )
+        subview.place(
+            at: CGPoint(x: bounds.maxX, y: bounds.minY),
+            anchor: .topTrailing,
+            proposal: ProposedViewSize(width: contentSize.width, height: contentSize.height)
+        )
+    }
+}
+
 struct OpenCodeOutgoingMessage: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
@@ -21,54 +54,44 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            let maxBubbleWidth = geometry.size.width * outgoingMessageMaxWidthFraction
-
+        OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
             VStack(alignment: .trailing, spacing: 6) {
-                textPill(maxBubbleWidth: maxBubbleWidth)
-                metadataFooter(maxBubbleWidth: maxBubbleWidth)
+                textPill
+                metadataFooter
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func textPill(maxBubbleWidth: CGFloat) -> some View {
-        pillContent(maxBubbleWidth: maxBubbleWidth)
+    private var textPill: some View {
+        pillContent
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
     }
 
-    private func metadataFooter(maxBubbleWidth: CGFloat) -> some View {
+    private var metadataFooter: some View {
         Text(metadataLabel)
             .font(OpenCodeTypography.caption)
             .foregroundStyle(OpenCodeColors.textWeak)
             .lineLimit(1)
             .truncationMode(.tail)
             .multilineTextAlignment(.trailing)
-            .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
     }
 
     @ViewBuilder
-    private func pillContent(maxBubbleWidth: CGFloat) -> some View {
-        let contentMaxWidth = max(maxBubbleWidth - (outgoingMessagePaddingHorizontal * 2), 0)
-
+    private var pillContent: some View {
         if let renderedMarkdown {
             OpenCodeRenderedMarkdown(
                 document: renderedMarkdown,
                 variant: .outgoingMessage
             )
-            .frame(maxWidth: contentMaxWidth, alignment: .trailing)
         } else {
             Text(text)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: contentMaxWidth, alignment: .trailing)
         }
     }
 }

@@ -8,12 +8,10 @@ clear title, an explicit close affordance, and one or more tappable entries.
 
 ## Public API
 
-- Variants: default modal sheet.
+- Variants: `actionList` and `form` content modes.
 - States:
   - sheet: presented, dismissed.
   - entries: enabled, disabled.
-- Android-only option: `keyboardAware` for multi-field form content inside the
-  sheet (see Behavior).
 - Required content: sheet `title`, close action, and entry `title`.
 - Optional content:
   - sheet leading header action: an icon button before the title for in-sheet
@@ -59,10 +57,15 @@ presentation state.
 Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
 
-On Android, pass `keyboardAware = true` when the sheet hosts text fields rather
-than action entries. That mode applies `imePadding()` inside the sheet content
-area so the keyboard lifts form content without shifting the full sheet by the
-IME height.
+Use `form` mode when the sheet hosts text fields. The presenting screen ignores
+keyboard-driven safe-area resizing. Only the sheet responds: its header remains
+fixed, its body scrolls, and its available bottom edge follows the keyboard.
+This avoids remeasuring compact content against a changing keyboard safe area.
+
+`actionList` keeps content-measured compact sizing and switches to an internal
+scroll region only when the content exceeds the compact threshold. `form`
+always uses a scrollable body because keyboard appearance can reduce the
+available height at any time.
 
 On Android, the component owns vertical scrolling for long content. Feature
 content inside the sheet body should not add its own vertical scroll container.
@@ -75,12 +78,20 @@ accessibility label or description using the platform convention.
 
 ## Platform Notes
 
-- iOS: presented with SwiftUI `.sheet` and native dismissal. Short entry lists use
+- iOS: presented with SwiftUI `.sheet` and native dismissal. Form sheets measure
+  their natural header and body height, capped at 560pt, so the sheet fits its
+  content before the keyboard appears. Keyboard-safe-area changes resize the
+  internal scroll region rather than the measured content. Short entry lists use
   a measured compact height detent. Longer lists switch to a fixed 55% height
   detent with an internal `ScrollView`. Scrollable sheets disable interactive
   swipe-to-dismiss so list scrolling does not close the sheet; use the close
   button instead. Short compact sheets keep the default swipe-to-dismiss behavior.
-- Android: presented with a full-window Compose popup so the component can use
+- Android: presented with a full-window Compose popup so the underlying activity
+  remains fixed with `adjustNothing`. Form mode applies `imePadding()` to the
+  sheet boundary—not its measured content—so the sheet follows IME animation
+  while its body scrolls. The app navigation host handles system bars and display
+  cutouts explicitly rather than using `safeDrawing`, because `safeDrawing`
+  includes the IME and would resize every route behind a focused form. The component can use
   its own bottom-sheet motion timing while preserving close, scrim tap, back
   press, and downward drag dismissal. Short entry lists wrap to content height.
   Longer lists cap at 55% of screen height and scroll inside the sheet body.
