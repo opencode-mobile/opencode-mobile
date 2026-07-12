@@ -197,8 +197,7 @@ private struct MessageListGalleryMessageRow: View {
             case .user:
                 OpenCodeOutgoingMessage(
                     text: message.text,
-                    metadataLabel: message.metadataLabel ?? "",
-                    onRestoreClick: {}
+                    metadataLabel: message.metadataLabel ?? ""
                 )
             case .assistant:
                 Text(message.text.isEmpty ? "…" : message.text)

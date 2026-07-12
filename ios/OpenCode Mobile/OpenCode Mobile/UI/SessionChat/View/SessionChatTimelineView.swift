@@ -9,7 +9,7 @@ struct SessionChatTimelineViewProps {
     let isRefreshing: Bool
     let errorMessage: String?
     let onRefresh: () async -> Void
-    let onRestoreComposerText: (String) -> Void
+    let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
 }
 
 struct SessionChatTimelineView: View {
@@ -88,7 +88,7 @@ private struct SessionChatTimelineReadyView: View {
                         if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
                             SessionChatMessageRow(
                                 message: message,
-                                onRestoreClick: { props.onRestoreComposerText(message.text) },
+                                onMessageActionsTap: props.onMessageActionsTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -97,7 +97,7 @@ private struct SessionChatTimelineReadyView: View {
                             Spacer(minLength: 0)
                             SessionChatMessageRow(
                                 message: message,
-                                onRestoreClick: { props.onRestoreComposerText(message.text) },
+                                onMessageActionsTap: props.onMessageActionsTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -163,9 +163,18 @@ private extension Array where Element == SessionChatRow {
 
 private struct SessionChatMessageRow: View {
     let message: SessionChatRow
-    let onRestoreClick: () -> Void
+    let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let animateSizeChanges: Bool
     let onContentSizeAnimationFinished: (() -> Void)?
+
+    private func openMessageActions(showsRevertMessage: Bool) {
+        onMessageActionsTap(
+            SessionChatMessageActionsTarget(
+                text: message.text,
+                showsRevertMessage: showsRevertMessage
+            )
+        )
+    }
 
     var body: some View {
         Group {
@@ -174,13 +183,28 @@ private struct SessionChatMessageRow: View {
                 OpenCodeOutgoingMessage(
                     text: message.text,
                     renderedMarkdown: message.renderedMarkdown,
-                    metadataLabel: message.metadataLabel,
-                    onRestoreClick: onRestoreClick
+                    metadataLabel: message.metadataLabel
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .modifier(
+                    SessionChatMessageActionsGestureModifier(
+                        renderedMarkdown: message.renderedMarkdown,
+                        accessibilityLabel: "Outgoing message",
+                        onOpenMessageActions: { openMessageActions(showsRevertMessage: true) }
+                    )
                 )
             case .assistant:
                 AssistantMessageBubble(
                     text: message.text,
                     renderedMarkdown: message.renderedMarkdown
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(
+                    SessionChatMessageActionsGestureModifier(
+                        renderedMarkdown: message.renderedMarkdown,
+                        accessibilityLabel: "Assistant message",
+                        onOpenMessageActions: { openMessageActions(showsRevertMessage: false) }
+                    )
                 )
             case .command, .tool, .unknown:
                 FallbackMessageBubble(
@@ -193,6 +217,26 @@ private struct SessionChatMessageRow: View {
             animateSizeChanges: animateSizeChanges,
             onContentSizeAnimationFinished: onContentSizeAnimationFinished
         )
+    }
+}
+
+private struct SessionChatMessageActionsGestureModifier: ViewModifier {
+    let renderedMarkdown: NativeMarkdownDocument?
+    let accessibilityLabel: String
+    let onOpenMessageActions: () -> Void
+
+    func body(content: Content) -> some View {
+        if renderedMarkdown != nil {
+            content
+                .onLongPressGesture(perform: onOpenMessageActions)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint("Long press to show message actions")
+        } else {
+            content
+                .onTapGesture(perform: onOpenMessageActions)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint("Shows message actions")
+        }
     }
 }
 

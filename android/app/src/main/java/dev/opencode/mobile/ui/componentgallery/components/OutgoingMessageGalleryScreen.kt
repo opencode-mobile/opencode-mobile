@@ -24,26 +24,13 @@ private enum class OutgoingMessageSample(
         label = "Short",
         text = "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
     ),
-    FiveLines(
-        label = "Five lines",
-        text =
-            """
-            Confirm the package class.
-            Compare the standard options.
-            Include the likely dimensions.
-            Mention weight limits.
-            End with one recommendation.
-            """.trimIndent(),
-    ),
     Long(
         label = "Long",
         text =
-            """
-            Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options.
-            Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it.
-            Keep the answer practical and note where pricing depends on the booking channel or destination.
-            Then summarize the recommendation in one concise sentence for a mobile chat user.
-            """.trimIndent(),
+            "Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options. " +
+                "Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it. " +
+                "Keep the answer practical and note where pricing depends on the booking channel or destination. " +
+                "Then summarize the recommendation in one concise sentence for a mobile chat user.",
     ),
 }
 
@@ -72,7 +59,6 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeOutgoingMessage(
             text = sample.text,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
-            onRestoreClick = {},
             modifier = Modifier.fillMaxWidth(),
         )
     }

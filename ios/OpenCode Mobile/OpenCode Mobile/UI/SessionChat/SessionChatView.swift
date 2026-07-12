@@ -10,6 +10,7 @@ struct SessionChatView: View {
     @State private var modelFilterText = ""
     @State private var showSessionContext = false
     @State private var menuExpanded = false
+    @State private var messageActionsTarget: SessionChatMessageActionsTarget?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -64,12 +65,16 @@ struct SessionChatView: View {
                     isRefreshing: viewModel.uiState.isRefreshing,
                     errorMessage: viewModel.uiState.errorMessage,
                     onRefresh: { await viewModel.refreshMessages() },
-                    onRestoreComposerText: { viewModel.restoreComposerText($0) }
+                    onMessageActionsTap: { messageActionsTarget = $0 }
                 )
             )
             composer
         }
         .background(OpenCodeColors.backgroundBase)
+        .sessionChatMessageActionsSheet(
+            target: $messageActionsTarget,
+            onRestoreToComposer: { viewModel.restoreComposerText($0) }
+        )
         .sessionChatPickerSheet(
             activePicker: $activePicker,
             activeModelProviderID: $activeModelProviderID,

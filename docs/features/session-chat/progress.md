@@ -20,10 +20,15 @@
   **`OpenCodeSessionStatusBar`**.
 - Session status bar Component Gallery entries include connection, availability,
   and context usage presets (`0%`, `50%`, `70%`, `85%`) for threshold review.
-- Composer chips use `OpenCodeChoiceBadge`; tapping a chip opens the shared
-  design-system **`OpenCodeBottomSheet`** with **`OpenCodeBottomSheetEntry`** rows
-  (checkmark on the current selection). Circular actions use the reusable
-  low-contrast **`OpenCodeButton`** component.
+- **2026-07-12 / OPE-33:** Simplified **`OpenCodeOutgoingMessage`** to a
+  display-only bubble (text/markdown + metadata footer). Inline restore/copy
+  icons removed; Session Chat opens **`OpenCodeBottomSheet`** message actions
+  instead. Outgoing messages: Revert message + Copy message. Assistant
+  messages: Copy message only. Tool/command/unknown rows stay non-interactive.
+  Outgoing width caps at 80% with shrink-wrap content (no min width). Pill
+  padding is 12×8 for outgoing and assistant bubbles. iOS timeline overlap fix:
+  outgoing message no longer uses a root `GeometryReader` that collapsed row
+  height in `LazyVStack`.
 - **2026-07-05 / OPE-30:** Message List Component Gallery prototype now has
   live-message and auto-follow controls on iOS and Android. When auto-follow is
   enabled and the list is already pinned to the bottom, newly appended gallery

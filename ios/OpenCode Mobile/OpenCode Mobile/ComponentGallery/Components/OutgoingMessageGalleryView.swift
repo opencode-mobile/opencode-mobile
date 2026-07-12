@@ -2,28 +2,14 @@ import SwiftUI
 
 private enum OutgoingMessageSample: String, CaseIterable {
     case short = "Short"
-    case fiveLines = "Five lines"
     case long = "Long"
 
     var text: String {
         switch self {
         case .short:
-            return "Based on the standard 2026 pricing for DHL in Germany, confirm the package class."
-        case .fiveLines:
-            return """
-            Confirm the package class.
-            Compare the standard options.
-            Include the likely dimensions.
-            Mention weight limits.
-            End with one recommendation.
-            """
+            "Based on the standard 2026 pricing for DHL in Germany, confirm the package class."
         case .long:
-            return """
-            Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options.
-            Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it.
-            Keep the answer practical and note where pricing depends on the booking channel or destination.
-            Then summarize the recommendation in one concise sentence for a mobile chat user.
-            """
+            "Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options. Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it. Keep the answer practical and note where pricing depends on the booking channel or destination. Then summarize the recommendation in one concise sentence for a mobile chat user."
         }
     }
 }
@@ -52,8 +38,7 @@ struct OutgoingMessageGalleryView: View {
 
             OpenCodeOutgoingMessage(
                 text: sample.text,
-                metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
-                onRestoreClick: {}
+                metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM"
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

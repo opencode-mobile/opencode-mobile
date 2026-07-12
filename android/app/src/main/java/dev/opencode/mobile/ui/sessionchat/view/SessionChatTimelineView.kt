@@ -2,6 +2,8 @@ package dev.opencode.mobile.ui.sessionchat.view
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +18,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -37,7 +43,7 @@ internal data class SessionChatTimelineViewProps(
     val isRefreshing: Boolean,
     val errorMessage: String?,
     val onRefresh: () -> Unit,
-    val onRestoreComposerText: (String) -> Unit,
+    val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,7 +91,7 @@ internal fun SessionChatTimelineView(
                 messages = props.messages,
                 isRefreshing = props.isRefreshing,
                 onRefresh = props.onRefresh,
-                onRestoreComposerText = props.onRestoreComposerText,
+                onMessageActionsTap = props.onMessageActionsTap,
                 modifier = modifier,
             )
         }
@@ -98,7 +104,7 @@ private fun SessionChatTimelineReadyView(
     messages: List<SessionChatMessageItem>,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    onRestoreComposerText: (String) -> Unit,
+    onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val timeline =
@@ -125,7 +131,7 @@ private fun SessionChatTimelineReadyView(
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
                     message = message,
-                    onRestoreClick = { onRestoreComposerText(message.text) },
+                    onMessageActionsTap = onMessageActionsTap,
                     animateSizeChanges = isNewestMessage,
                     onContentSizeAnimationFinished = onContentSizeSettled,
                     modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
@@ -151,11 +157,33 @@ private fun SessionChatTimelineReadyView(
 @Composable
 private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
-    onRestoreClick: () -> Unit,
+    onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    fun openMessageActions(showsRevertMessage: Boolean) {
+        onMessageActionsTap(
+            SessionChatMessageActionsTarget(
+                text = message.text,
+                showsRevertMessage = showsRevertMessage,
+            ),
+        )
+    }
+
+    val showsRevertMessage = message.role == MessageRole.User
+    val messageActionsModifier =
+        messageActionsModifier(
+            renderedMarkdown = message.renderedMarkdown,
+            onOpenMessageActions = { openMessageActions(showsRevertMessage = showsRevertMessage) },
+            messageDescription =
+                if (showsRevertMessage) {
+                    "Outgoing message"
+                } else {
+                    "Assistant message"
+                },
+        )
+
     Column(
         modifier =
             modifier
@@ -177,14 +205,14 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
-                    onRestoreClick = onRestoreClick,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().then(messageActionsModifier),
                 )
 
             MessageRole.Assistant ->
                 AssistantMessageBubble(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
+                    modifier = messageActionsModifier,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -195,6 +223,27 @@ private fun SessionChatMessageRow(
         }
     }
 }
+
+private fun messageActionsModifier(
+    renderedMarkdown: MarkdownDocument?,
+    onOpenMessageActions: () -> Unit,
+    messageDescription: String,
+): Modifier =
+    if (renderedMarkdown != null) {
+        Modifier.combinedClickable(
+            onClick = {},
+            onLongClick = onOpenMessageActions,
+            onLongClickLabel = "Show message actions",
+            role = Role.Button,
+        ).semantics {
+            contentDescription = "$messageDescription. Long press to show message actions"
+        }
+    } else {
+        Modifier.clickable(onClick = onOpenMessageActions).semantics {
+            role = Role.Button
+            contentDescription = "$messageDescription. Shows message actions"
+        }
+    }
 
 @Composable
 private fun AssistantMessageBubble(

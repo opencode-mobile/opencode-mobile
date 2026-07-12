@@ -76,22 +76,19 @@ implementation belong in the feature's `parity-gaps.md`.
 
 - Status: intentional
 - Area: component
-- Shared intent: outgoing prompt cards should render as a stable trailing
-  column that visually matches the `outgoingMessage.maxWidthFraction` width
-  intent without shifting when new messages are appended.
-- iOS behavior: `OpenCodeOutgoingMessage` uses a fixed leading gutter to produce
-  the trailing column. This avoids SwiftUI `containerRelativeFrame` remeasurement
-  during the send/auto-scroll update, which could shift the visible message-list
-  padding.
-- Android behavior: `OpenCodeOutgoingMessage` uses the shared
-  `outgoingMessage.maxWidthFraction` value directly with Compose layout
-  modifiers.
-- Reason: the shared fractional width semantics remain visually aligned, but
-  SwiftUI's relative container measurement was unstable in the session timeline
-  after an optimistic send.
-- Review trigger: revisit if the iOS timeline stops using lazy scroll
-  relayout/auto-scroll, or if a stable shared row-width primitive replaces the
-  current platform-specific measurement.
+- Shared intent: outgoing prompt cards are trailing aligned, shrink to content
+  width, and cap at `outgoingMessage.maxWidthFraction` (80% of the row).
+- iOS behavior: `OpenCodeOutgoingMessage` reads the available row width from a
+  background `GeometryReader` preference and applies a `maxWidth` cap to the
+  bubble and footer. Content drives row height; the reader does not wrap the
+  message body.
+- Android behavior: `OpenCodeOutgoingMessage` uses `BoxWithConstraints` with
+  `widthIn(max = …)` on the bubble column and content so the same max-width cap
+  applies without a minimum width.
+- Reason: short prompts should not stretch to the full outgoing column; only
+  long wrapped content should expand toward the shared max-width intent.
+- Review trigger: revisit if a shared row-width primitive replaces the current
+  platform-specific max-width measurement.
 
 ## Session chat scroll-to-end on iOS
 
