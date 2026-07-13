@@ -42,21 +42,27 @@ struct OpenCodeOutgoingMessage: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
+    let onTap: (() -> Void)?
+    let onLongPress: (() -> Void)?
 
     init(
         text: String,
         renderedMarkdown: NativeMarkdownDocument? = nil,
-        metadataLabel: String
+        metadataLabel: String,
+        onTap: (() -> Void)? = nil,
+        onLongPress: (() -> Void)? = nil
     ) {
         self.text = text
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
+        self.onTap = onTap
+        self.onLongPress = onLongPress
     }
 
     var body: some View {
         OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
             VStack(alignment: .trailing, spacing: 6) {
-                textPill
+                interactiveTextPill
                 metadataFooter
             }
         }
@@ -68,6 +74,23 @@ struct OpenCodeOutgoingMessage: View {
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var interactiveTextPill: some View {
+        if let onLongPress {
+            textPill
+                .onLongPressGesture(perform: onLongPress)
+                .accessibilityLabel("Outgoing message")
+                .accessibilityHint("Long press to show message actions")
+        } else if let onTap {
+            textPill
+                .onTapGesture(perform: onTap)
+                .accessibilityLabel("Outgoing message")
+                .accessibilityHint("Shows message actions")
+        } else {
+            textPill
+        }
     }
 
     private var metadataFooter: some View {

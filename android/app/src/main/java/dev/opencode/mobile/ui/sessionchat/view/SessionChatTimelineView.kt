@@ -171,19 +171,6 @@ private fun SessionChatMessageRow(
         )
     }
 
-    val showsRevertMessage = message.role == MessageRole.User
-    val messageActionsModifier =
-        messageActionsModifier(
-            renderedMarkdown = message.renderedMarkdown,
-            onOpenMessageActions = { openMessageActions(showsRevertMessage = showsRevertMessage) },
-            messageDescription =
-                if (showsRevertMessage) {
-                    "Outgoing message"
-                } else {
-                    "Assistant message"
-                },
-        )
-
     Column(
         modifier =
             modifier
@@ -205,14 +192,31 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
-                    modifier = Modifier.fillMaxWidth().then(messageActionsModifier),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick =
+                        if (message.renderedMarkdown == null) {
+                            { openMessageActions(showsRevertMessage = true) }
+                        } else {
+                            null
+                        },
+                    onLongClick =
+                        if (message.renderedMarkdown != null) {
+                            { openMessageActions(showsRevertMessage = true) }
+                        } else {
+                            null
+                        },
                 )
 
             MessageRole.Assistant ->
                 AssistantMessageBubble(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
-                    modifier = messageActionsModifier,
+                    modifier =
+                        messageActionsModifier(
+                            renderedMarkdown = message.renderedMarkdown,
+                            onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
+                            messageDescription = "Assistant message",
+                        ),
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->

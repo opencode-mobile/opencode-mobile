@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +14,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -31,6 +38,8 @@ fun OpenCodeOutgoingMessage(
     metadataLabel: String,
     modifier: Modifier = Modifier,
     renderedMarkdown: MarkdownDocument? = null,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
@@ -43,7 +52,11 @@ fun OpenCodeOutgoingMessage(
             horizontalAlignment = Alignment.End,
         ) {
             Surface(
-                modifier = Modifier.widthIn(max = maxBubbleWidth),
+                modifier =
+                    Modifier
+                        .widthIn(max = maxBubbleWidth)
+                        .clip(OutgoingMessageShape)
+                        .then(outgoingMessageInteractionModifier(onClick, onLongClick)),
                 shape = OutgoingMessageShape,
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = MaterialTheme.colorScheme.onSurface,
@@ -88,6 +101,33 @@ fun OpenCodeOutgoingMessage(
         }
     }
 }
+
+private fun outgoingMessageInteractionModifier(
+    onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)?,
+): Modifier =
+    when {
+        onLongClick != null ->
+            Modifier
+                .combinedClickable(
+                    onClick = onClick ?: {},
+                    onLongClick = onLongClick,
+                    onLongClickLabel = "Show message actions",
+                    role = Role.Button,
+                ).semantics {
+                    contentDescription = "Outgoing message. Long press to show message actions"
+                }
+
+        onClick != null ->
+            Modifier
+                .clickable(onClick = onClick)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = "Outgoing message. Shows message actions"
+                }
+
+        else -> Modifier
+    }
 
 @Preview(showBackground = true)
 @Composable
