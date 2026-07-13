@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.domain.session.PermissionRequest
 
 data class SessionChatComposerState(
     val text: String = "",
@@ -41,6 +42,10 @@ data class SessionChatUiState(
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
+    val permissionRequest: PermissionRequest? = null,
+    val permissionQueueCount: Int = 0,
+    val permissionSubmitting: Boolean = false,
+    val permissionErrorMessage: String? = null,
 ) {
     companion object {
         fun initial(

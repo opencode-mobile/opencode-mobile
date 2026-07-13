@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.session
 
 interface SessionRepository {
+    suspend fun listPendingPermissions(directory: String? = null): List<PermissionRequest> = emptyList()
+
     suspend fun listSessions(directory: String? = null): List<Session>
 
     suspend fun createSession(

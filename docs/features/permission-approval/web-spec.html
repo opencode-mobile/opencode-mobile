@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Permission Approval — opencode Web Reference Specification</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f6f8; --panel:#fff; --text:#20242b; --muted:#626b78; --line:#d9dde4; --accent:#2864dc; --warn:#9a5b00; --bad:#b3261e; --good:#18794e; --code:#eef1f5; }
+    @media (prefers-color-scheme:dark){:root{--bg:#111318;--panel:#191c22;--text:#edf0f5;--muted:#aab2bf;--line:#343a45;--accent:#8ab4ff;--warn:#ffc66d;--bad:#ffb4ab;--good:#75d6a7;--code:#242932}}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} main{max-width:1120px;margin:auto;padding:38px 22px 72px} h1{font-size:clamp(28px,5vw,46px);line-height:1.08;margin:0 0 12px;letter-spacing:-.03em} h2{font-size:23px;margin:34px 0 13px} h3{font-size:17px;margin:22px 0 8px} p{margin:8px 0} a{color:var(--accent)} code{background:var(--code);padding:.12em .35em;border-radius:5px} .eyebrow{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:12px}.lead{font-size:18px;color:var(--muted);max-width:850px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}.metric{font-size:25px;font-weight:750}.label{color:var(--muted);font-size:13px}.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.step{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}.step b{display:block;color:var(--accent);margin-bottom:6px}.step:not(:last-child):after{content:"→";position:absolute;right:-10px;top:43%;z-index:2;color:var(--muted)} table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line)} th,td{text-align:left;vertical-align:top;padding:11px;border-bottom:1px solid var(--line)} th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)} ul,ol{padding-left:22px}.callout{border-left:4px solid var(--warn);padding:12px 16px;background:var(--panel);margin:18px 0}.bad{color:var(--bad);font-weight:700}.good{color:var(--good);font-weight:700}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.button{border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-weight:650}.primary{background:var(--accent);color:white;border-color:var(--accent)}.source{font-size:13px;color:var(--muted)} @media(max-width:800px){.grid,.flow{grid-template-columns:1fr}.step:not(:last-child):after{content:"↓";right:50%;top:auto;bottom:-17px}.wide{overflow-x:auto}}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">Web reference · inspected 12 July 2026</div>
+  <h1>Permission approval for mobile</h1>
+  <p class="lead">The web client already provides the interaction model: receive and queue blocking requests, explain the requested capability, respond once/always/reject, and recover from live events. Mobile has the response endpoint, but not the approval process.</p>
+
+  <div class="grid">
+    <div class="card"><div class="metric">2 actions</div><div class="label">Mobile v1: Allow once + Deny</div></div>
+    <div class="card"><div class="metric">3 values</div><div class="label">Server: once · always · reject</div></div>
+    <div class="card"><div class="metric bad">Contract gap</div><div class="label">Mobile still contains approve / deny wire values</div></div>
+  </div>
+
+  <h2>How opencode web works</h2>
+  <div class="flow">
+    <div class="step"><b>1 · Ask</b>SSE emits <code>permission.asked</code>.</div>
+    <div class="step"><b>2 · Queue</b>Deduplicate by id and store under session.</div>
+    <div class="step"><b>3 · Present</b>Show the first request in the open parent/child tree.</div>
+    <div class="step"><b>4 · Respond</b>Disable actions and POST the decision.</div>
+    <div class="step"><b>5 · Resolve</b><code>permission.replied</code> removes the matching item.</div>
+  </div>
+
+  <div class="section">
+    <h3>Visible prompt</h3>
+    <p>Web docks a persistent warning prompt in the composer region. It shows a permission-specific description and every requested pattern as wrapping code.</p>
+    <div class="actions"><span class="button">Deny</span><span class="button">Allow always</span><span class="button primary">Allow once</span></div>
+    <p class="source">Mobile v1 removes “Allow always”; it must not create remembered decisions.</p>
+  </div>
+
+  <h2>Server contract</h2>
+  <div class="wide"><table>
+    <thead><tr><th>Concern</th><th>Contract</th><th>Required mobile behavior</th></tr></thead>
+    <tbody>
+      <tr><td>Live arrival</td><td><code>permission.asked</code></td><td>Insert/update idempotently by request id.</td></tr>
+      <tr><td>Recovery</td><td><code>GET /permission?directory=…</code></td><td>Reconcile on first connection, resume, and SSE reconnect.</td></tr>
+      <tr><td>Response</td><td><code>POST /session/{sessionID}/permissions/{permissionID}</code><br><code>{ "response": "once" | "always" | "reject" }</code></td><td>Send only <code>once</code> or <code>reject</code>.</td></tr>
+      <tr><td>Live resolution</td><td><code>permission.replied</code> with <code>requestID</code></td><td>Remove only the matching request and advance the queue.</td></tr>
+      <tr><td>Stale response</td><td><code>404</code></td><td>Refresh pending requests and explain already handled/expired.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Request data to retain</h2>
+  <div class="wide"><table>
+    <thead><tr><th>Field</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code>, <code>sessionID</code></td><td>Identity, routing, deduplication, response.</td></tr>
+      <tr><td><code>permission</code></td><td>Capability category and localized explanation.</td></tr>
+      <tr><td><code>patterns[]</code></td><td>Display every target/command verbatim as selectable, wrapping code.</td></tr>
+      <tr><td><code>metadata</code></td><td>Preserve; display only deliberately supported safe fields.</td></tr>
+      <tr><td><code>always[]</code></td><td>Preserve for contract compatibility; never expose as a v1 action.</td></tr>
+      <tr><td><code>tool.messageID</code>, <code>tool.callID</code></td><td>Correlation and diagnostics.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><strong>Important:</strong> permission approval is an awareness and control mechanism, not a security sandbox. Displayed patterns are untrusted text and must never be transformed or executed.</div>
+
+  <h2>Mobile v1 product behavior</h2>
+  <div class="grid">
+    <div class="card"><h3>Presentation</h3><ul><li>Persistent, non-dismissible Session Chat surface.</li><li>Permission category, explanation, and all patterns.</li><li>One request at a time with queue count.</li><li>Parent screen can surface child-session requests.</li></ul></div>
+    <div class="card"><h3>Submission</h3><ul><li>Allow once → <code>once</code>.</li><li>Deny → <code>reject</code>.</li><li>Disable both actions during submission.</li><li>Keep request visible until authoritative resolution.</li></ul></div>
+    <div class="card"><h3>Recovery</h3><ul><li>Never infer success after a disconnect.</li><li>Reconcile pending requests on reconnect.</li><li>Keep failures actionable with retry.</li><li>Use foreground in-app attention only.</li></ul></div>
+  </div>
+
+  <h2>What is missing today</h2>
+  <ol>
+    <li><strong>Correct wire values.</strong> Replace Android/iOS <code>approve</code>/<code>deny</code> serialization with <code>once</code>/<code>reject</code>.</li>
+    <li><strong>Pending request contract.</strong> Add typed request DTOs, list API, and ask/reply event payloads.</li>
+    <li><strong>Live store.</strong> Add idempotent reducers and reconnect reconciliation.</li>
+    <li><strong>Domain state.</strong> Add queue selection across parent and child sessions, response state, errors, and unseen attention.</li>
+    <li><strong>Reusable component.</strong> Build the state-aware design-system prompt before composing Session Chat.</li>
+    <li><strong>Native integration and tests.</strong> Match behavior, copy semantics, accessibility intent, and recovery on iOS and Android.</li>
+  </ol>
+
+  <h2>Acceptance gates</h2>
+  <div class="section"><ul>
+    <li>Live and recovered requests appear exactly once in the correct session tree.</li>
+    <li>Every pattern is visible without data loss.</li>
+    <li class="good">Allow once sends exactly <code>once</code>; Deny sends exactly <code>reject</code>.</li>
+    <li>Repeated taps cannot duplicate a response; failure gives a retry path.</li>
+    <li>A reply removes only its matching request and advances the queue.</li>
+    <li>No mobile API or UI offers always, remember, auto-accept, or permission configuration.</li>
+  </ul></div>
+
+  <h2>Scope boundary</h2>
+  <p>Excluded: persistent decisions, auto-accept, permission-rule editing, background SSE, push delivery, resolved history, and question-request UI.</p>
+
+  <h2>Research sources</h2>
+  <p class="source">Upstream baseline: <a href="https://github.com/anomalyco/opencode/tree/34e58090595d44e3e7cc37498f16753a98627456">opencode 34e5809</a>. Key files: <a href="https://github.com/anomalyco/opencode/blob/34e58090595d44e3e7cc37498f16753a98627456/packages/app/src/pages/session/composer/session-permission-dock.tsx">permission dock</a>, <a href="https://github.com/anomalyco/opencode/blob/34e58090595d44e3e7cc37498f16753a98627456/packages/app/src/pages/session/composer/session-composer-state.ts">composer state</a>, <a href="https://github.com/anomalyco/opencode/blob/34e58090595d44e3e7cc37498f16753a98627456/packages/app/src/context/server-session.ts">live session store</a>, <a href="https://github.com/anomalyco/opencode/blob/34e58090595d44e3e7cc37498f16753a98627456/packages/app/src/context/global-sync/bootstrap.ts">initial pending-request sync</a>, <a href="https://github.com/anomalyco/opencode/blob/34e58090595d44e3e7cc37498f16753a98627456/packages/app/src/context/permission.tsx">permission context</a>, and <a href="https://github.com/anomalyco/opencode/blob/34e58090595d44e3e7cc37498f16753a98627456/packages/app/src/pages/layout.tsx">off-screen alerts</a>.</p>
+  <p class="source">Canonical repository text: <a href="web-spec.md">web-spec.md</a>.</p>
+</main></body></html>

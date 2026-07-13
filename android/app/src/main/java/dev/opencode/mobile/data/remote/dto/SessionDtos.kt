@@ -3,6 +3,7 @@ package dev.opencode.mobile.data.remote.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class SessionDto(
@@ -78,6 +79,23 @@ data class RevertSessionRequestDto(
 @Serializable
 data class PermissionResponseRequestDto(
     val response: String,
+)
+
+@Serializable
+data class PermissionRequestDto(
+    val id: String,
+    @SerialName("sessionID") val sessionId: String,
+    val permission: String,
+    val patterns: List<String> = emptyList(),
+    val metadata: JsonObject = JsonObject(emptyMap()),
+    val always: List<String> = emptyList(),
+    val tool: PermissionToolDto? = null,
+)
+
+@Serializable
+data class PermissionToolDto(
+    @SerialName("messageID") val messageId: String,
+    @SerialName("callID") val callId: String,
 )
 
 @Serializable

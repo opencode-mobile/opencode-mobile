@@ -1,6 +1,7 @@
 import Foundation
 
 protocol SessionRepository: Sendable {
+    func listPendingPermissions(directory: String?) async throws -> [PermissionRequest]
     func listSessions(directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
@@ -22,6 +23,8 @@ protocol SessionRepository: Sendable {
 }
 
 extension SessionRepository {
+    func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] { [] }
+
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
     }
@@ -38,6 +41,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listSessions(directory: String?) async throws -> [Session] {
         try await run { try await api.listSessions(directory: directory).map(adapter.session) }
+    }
+
+    func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
+        try await run { try await api.listPendingPermissions(directory: directory).map { adapter.permissionRequest(from: $0) } }
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {

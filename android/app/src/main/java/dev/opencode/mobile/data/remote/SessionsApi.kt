@@ -5,6 +5,7 @@ import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
+import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
@@ -26,6 +27,13 @@ class SessionsApi(
     private val httpClient: OpencodeHttpClient,
     private val json: Json,
 ) {
+    suspend fun listPendingPermissions(directory: String? = null): List<PermissionRequestDto> =
+        httpClient
+            .get()
+            .get("permission") {
+                applyDirectory(directory)
+            }.body()
+
     suspend fun listSessions(directory: String? = null): List<SessionDto> =
         httpClient
             .get()

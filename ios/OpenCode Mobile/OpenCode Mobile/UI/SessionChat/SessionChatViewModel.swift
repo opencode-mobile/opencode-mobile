@@ -14,6 +14,12 @@ final class SessionChatViewModel {
     private let timeline: SessionChatTimeline
     private let composer: SessionChatComposer
     private let sessionInfo: SessionInfo
+    private let sessionRepository: any SessionRepository
+    private let permissionLiveStore: any PermissionLiveStore
+    private var permissionTask: Task<Void, Never>?
+    private var permissionRequests: [PermissionRequest] = []
+    private var permissionSubmittingID: String?
+    private var permissionError: String?
 
     init(
         sessionID: String,
@@ -22,6 +28,7 @@ final class SessionChatViewModel {
         messageRepository: any MessageRepository,
         modelRepository: any ModelRepository,
         sessionRepository: any SessionRepository,
+        permissionLiveStore: (any PermissionLiveStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
@@ -31,6 +38,8 @@ final class SessionChatViewModel {
         self.sessionTitle = sessionTitle
         self.worktree = worktree
         self.uiState = .initial(sessionID: sessionID, sessionTitle: sessionTitle)
+        self.sessionRepository = sessionRepository
+        self.permissionLiveStore = permissionLiveStore ?? EmptyPermissionLiveStore()
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -64,6 +73,7 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionInfo.startObserving()
         timeline.startObserving()
+        startPermissionObservation()
     }
 
     func loadMessages() async {
@@ -122,10 +132,53 @@ final class SessionChatViewModel {
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
     }
 
+    func allowPermissionOnce() async { await respondToPermission(.allowOnce) }
+
+    func denyPermission() async { await respondToPermission(.deny) }
+
+    private func startPermissionObservation() {
+        permissionTask?.cancel()
+        permissionTask = Task {
+            let sessions = (try? await sessionRepository.listSessions(directory: worktree)) ?? []
+            let children = Dictionary(grouping: sessions.compactMap { session in session.parentID.map { ($0, session.id) } }, by: \.0)
+            var ids: Set<String> = [sessionID]
+            var queue = [sessionID]
+            while let parent = queue.first {
+                queue.removeFirst()
+                for pair in children[parent] ?? [] {
+                    if ids.insert(pair.1).inserted { queue.append(pair.1) }
+                }
+            }
+            for await requests in permissionLiveStore.observePermissions(directory: worktree) {
+                permissionRequests = requests.filter { ids.contains($0.sessionID) }
+                if let submitting = permissionSubmittingID, !permissionRequests.contains(where: { $0.id == submitting }) {
+                    permissionSubmittingID = nil
+                    permissionError = nil
+                }
+                publishUiState()
+            }
+        }
+    }
+
+    private func respondToPermission(_ decision: PermissionDecision) async {
+        guard let request = permissionRequests.first, permissionSubmittingID == nil else { return }
+        permissionSubmittingID = request.id
+        permissionError = nil
+        publishUiState()
+        do {
+            _ = try await sessionRepository.respondToPermission(sessionID: request.sessionID, permissionID: request.id, decision: decision)
+        } catch {
+            permissionSubmittingID = nil
+            permissionError = error.localizedDescription
+            publishUiState()
+        }
+    }
+
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID, privacy: .public)")
         timeline.stopObserving()
         sessionInfo.stopObserving()
+        permissionTask?.cancel()
     }
 
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
@@ -166,7 +219,11 @@ final class SessionChatViewModel {
             errorMessage: mergedErrorMessage(
                 timelineState: timelineState,
                 composerState: composerState
-            )
+            ),
+            permissionRequest: permissionRequests.first,
+            permissionQueueCount: permissionRequests.count,
+            permissionSubmitting: permissionSubmittingID != nil,
+            permissionErrorMessage: permissionError
         )
     }
 
@@ -185,4 +242,11 @@ final class SessionChatViewModel {
         }
         return timelineState.errorMessage
     }
+}
+
+private final class EmptyPermissionLiveStore: PermissionLiveStore {
+    func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
+        AsyncStream { $0.yield([]); $0.finish() }
+    }
+    func clearCache() {}
 }

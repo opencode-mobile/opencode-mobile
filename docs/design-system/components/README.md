@@ -88,4 +88,5 @@ List intentional differences or link to `../divergences.md`.
 - `action-pill.md`
 - `project-session-selector.md`
 - `session-status-bar.md`
+- `session-chat-composer.md`
 - `rendered-markdown.md`

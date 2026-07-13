@@ -142,7 +142,16 @@ struct SessionChatView: View {
                 showVariant: composer.canSelectVariant,
                 sendEnabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,
                 showStop: viewModel.uiState.sessionStatusLabel != nil,
-                stopEnabled: !viewModel.uiState.isAborting
+                stopEnabled: !viewModel.uiState.isAborting,
+                permission: viewModel.uiState.permissionRequest.map { request in
+                    SessionChatComposerPermissionProps(
+                        permission: request.permission,
+                        patterns: request.patterns,
+                        queueCount: viewModel.uiState.permissionQueueCount,
+                        submitting: viewModel.uiState.permissionSubmitting,
+                        errorMessage: viewModel.uiState.permissionErrorMessage
+                    )
+                }
             ),
             onTextChange: { viewModel.updateComposerText($0) },
             onModelClick: {
@@ -153,7 +162,9 @@ struct SessionChatView: View {
             onVariantClick: { activePicker = .variant },
             onAttachClick: {},
             onSendClick: { Task { await viewModel.sendPrompt() } },
-            onStopClick: { Task { await viewModel.abortSession() } }
+            onStopClick: { Task { await viewModel.abortSession() } },
+            onAllowPermissionOnce: { Task { await viewModel.allowPermissionOnce() } },
+            onDenyPermission: { Task { await viewModel.denyPermission() } }
         )
     }
 }

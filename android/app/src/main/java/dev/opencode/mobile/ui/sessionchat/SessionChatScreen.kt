@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.sessionchat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +34,7 @@ import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerView
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerPermissionProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
@@ -164,6 +164,16 @@ fun SessionChatScreen(
                         sendEnabled = uiState.composer.text.isNotBlank() && uiState.composer.selectedModel != null && !uiState.isSending,
                         showStop = uiState.sessionStatusLabel != null,
                         stopEnabled = !uiState.isAborting,
+                        permission =
+                            uiState.permissionRequest?.let { request ->
+                                SessionChatComposerPermissionProps(
+                                    permission = request.permission,
+                                    patterns = request.patterns,
+                                    queueCount = uiState.permissionQueueCount,
+                                    submitting = uiState.permissionSubmitting,
+                                    errorMessage = uiState.permissionErrorMessage,
+                                )
+                            },
                     ),
                 onTextChange = viewModel::updateComposerText,
                 onModelClick = {
@@ -175,6 +185,8 @@ fun SessionChatScreen(
                 onAttachClick = {},
                 onSendClick = viewModel::sendPrompt,
                 onStopClick = viewModel::abort,
+                onAllowPermissionOnce = viewModel::allowPermissionOnce,
+                onDenyPermission = viewModel::denyPermission,
             )
         }
 

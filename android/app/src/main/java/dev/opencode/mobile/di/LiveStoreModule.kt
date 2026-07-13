@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.DefaultPermissionLiveStore
+import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -16,6 +18,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class LiveStoreModule {
+    @Binds
+    @Singleton
+    abstract fun bindPermissionLiveStore(impl: DefaultPermissionLiveStore): PermissionLiveStore
+
     @Binds
     @Singleton
     abstract fun bindSessionStatusLiveStore(impl: DefaultSessionStatusLiveStore): SessionStatusLiveStore

@@ -6,6 +6,18 @@ info:
 servers:
   - url: http://127.0.0.1:4096
 paths:
+  /permission:
+    get:
+      operationId: listPendingPermissions
+      responses:
+        "200":
+          description: Pending permission requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PermissionRequest"
   /session:
     get:
       operationId: listSessions
@@ -377,4 +389,33 @@ components:
       properties:
         response:
           type: string
-          enum: [approve, deny, once]
+          enum: [once, always, reject]
+    PermissionRequest:
+      type: object
+      required: [id, sessionID, permission, patterns, metadata, always]
+      properties:
+        id:
+          type: string
+        sessionID:
+          type: string
+        permission:
+          type: string
+        patterns:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        always:
+          type: array
+          items:
+            type: string
+        tool:
+          type: object
+          required: [messageID, callID]
+          properties:
+            messageID:
+              type: string
+            callID:
+              type: string
