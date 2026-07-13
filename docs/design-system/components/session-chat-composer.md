@@ -2,14 +2,14 @@
 
 ## Intent
 
-`SessionChatComposerView` is the persistent interaction surface at the bottom of
+`OpenCodeSessionComposer` is the persistent interaction surface at the bottom of
 Session Chat. It owns one shell and changes its content when the session needs a
 blocking user decision, ensuring prompt entry and permission approval have
 identical width, shape, inset, background, and border behavior.
 
 ## Public API
 
-- Variants: prompt entry and permission approval.
+- Component state: `prompt` or `permission`.
 - Prompt-entry states: empty, populated, sending-disabled, stop available, and
   model/mode/variant selection.
 - Permission states: pending, submitting/disabled, queued, and response error.
@@ -17,8 +17,12 @@ identical width, shape, inset, background, and border behavior.
   and deny action.
 - Optional permission content: queue position/count and error message.
 
-The feature supplies semantic content and callbacks. It does not choose shell
-colors, radii, spacing, or other visual overrides.
+The public native API accepts one semantic state value and one action callback.
+Prompt actions are text changed, select model, select mode, select variant,
+attach, send, and stop. Permission actions are allow once and deny. The feature
+supplies product content and handles actions; it does not choose shell colors,
+radii, spacing, motion, or other visual overrides. Domain models, server DTOs,
+session identifiers, repositories, and Screen Models are not component inputs.
 
 ## Token Usage
 
@@ -69,9 +73,13 @@ colors, radii, spacing, or other visual overrides.
 
 ## Previews
 
-Both platform composer files include permission-state previews with stable
-shell-command examples for light and dark theme review. Prompt-entry behavior is
-reviewed in Session Chat.
+Both platform component files include permission-state previews with stable
+shell-command examples for light and dark theme review. Both Component
+Galleries expose one live, edge-to-edge composer with interactive controls for
+empty prompt, populated prompt, active work, pending permission, queued
+permission, submitting, and error states. The live composer is anchored to the
+bottom of the available gallery page below its controls so screen-edge geometry
+and resize motion can be reviewed in a realistic Session Chat placement.
 
 ## Parity And Divergence
 

@@ -21,6 +21,16 @@
   composer shell itself expands
 - [x] Android prompt/permission content switching coordinated with shell resize
   using `AnimatedContent` and `SizeTransform`
+- [x] Composer promoted to the Component Collection as
+  `OpenCodeSessionComposer` on Android and iOS
+- [x] Feature-independent prompt/permission state and action API defined on both
+  platforms
+- [x] Interactive, edge-to-edge Component Gallery page added on both platforms
+  for empty, prompt, active, permission, queued, submitting, and error states
+- [x] Component Gallery composer anchored to the bottom of the available page
+  on both platforms for realistic Session Chat placement
+- [x] Session Chat updated to consume the design-system component on both
+  platforms
 
 ## Android
 
@@ -44,6 +54,7 @@
 
 - [x] Android debug build and focused permission tests
 - [x] iOS app build
+- [x] Android and iOS app builds after Component Collection extraction
 - [ ] Full iOS test run (Xcode test action stalled twice on 2026-07-12)
 - [ ] Light/dark composer permission-state preview review on both platforms
 - [x] Manual approval against `opencode serve` confirmed in the mobile app

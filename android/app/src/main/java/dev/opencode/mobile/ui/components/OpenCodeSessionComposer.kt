@@ -1,4 +1,4 @@
-package dev.opencode.mobile.ui.sessionchat.view
+package dev.opencode.mobile.ui.components
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
@@ -35,62 +35,63 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-internal data class SessionChatComposerViewProps(
-    val text: String,
-    val selectedModelLabel: String,
-    val selectedMode: String,
-    val selectedVariantLabel: String,
-    val showVariant: Boolean,
-    val sendEnabled: Boolean,
-    val showStop: Boolean,
-    val stopEnabled: Boolean,
-    val permission: SessionChatComposerPermissionProps? = null,
-)
-
-internal data class SessionChatComposerPermissionProps(
-    val permission: String,
-    val patterns: List<String>,
-    val queuePosition: Int = 1,
-    val queueCount: Int = 1,
-    val submitting: Boolean = false,
-    val errorMessage: String? = null,
-)
-
-private sealed interface SessionChatComposerContent {
-    data object Prompt : SessionChatComposerContent
+sealed interface OpenCodeSessionComposerState {
+    data class Prompt(
+        val text: String,
+        val selectedModelLabel: String,
+        val selectedModeLabel: String,
+        val selectedVariantLabel: String,
+        val showVariant: Boolean,
+        val sendEnabled: Boolean,
+        val showStop: Boolean,
+        val stopEnabled: Boolean,
+    ) : OpenCodeSessionComposerState
 
     data class Permission(
-        val props: SessionChatComposerPermissionProps,
-    ) : SessionChatComposerContent
+        val permission: String,
+        val patterns: List<String>,
+        val queuePosition: Int = 1,
+        val queueCount: Int = 1,
+        val submitting: Boolean = false,
+        val errorMessage: String? = null,
+    ) : OpenCodeSessionComposerState
+}
+
+sealed interface OpenCodeSessionComposerAction {
+    data class TextChanged(
+        val text: String,
+    ) : OpenCodeSessionComposerAction
+
+    data object SelectModel : OpenCodeSessionComposerAction
+
+    data object SelectMode : OpenCodeSessionComposerAction
+
+    data object SelectVariant : OpenCodeSessionComposerAction
+
+    data object Attach : OpenCodeSessionComposerAction
+
+    data object Send : OpenCodeSessionComposerAction
+
+    data object Stop : OpenCodeSessionComposerAction
+
+    data object AllowPermissionOnce : OpenCodeSessionComposerAction
+
+    data object DenyPermission : OpenCodeSessionComposerAction
 }
 
 @Composable
-internal fun SessionChatComposerView(
-    props: SessionChatComposerViewProps,
-    onTextChange: (String) -> Unit,
-    onModelClick: () -> Unit,
-    onModeClick: () -> Unit,
-    onVariantClick: () -> Unit,
-    onAttachClick: () -> Unit,
-    onSendClick: () -> Unit,
-    onStopClick: () -> Unit,
-    onAllowPermissionOnce: () -> Unit,
-    onDenyPermission: () -> Unit,
+fun OpenCodeSessionComposer(
+    state: OpenCodeSessionComposerState,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val permission = props.permission
-    val content = permission?.let(SessionChatComposerContent::Permission) ?: SessionChatComposerContent.Prompt
     val outlineColor =
-        when {
-            permission?.errorMessage != null -> openCodeColor("error")
-            permission != null -> openCodeColor("warning")
-            else -> MaterialTheme.colorScheme.outlineVariant
+        when (state) {
+            is OpenCodeSessionComposerState.Permission ->
+                if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
+            is OpenCodeSessionComposerState.Prompt -> MaterialTheme.colorScheme.outlineVariant
         }
     Column(
         modifier =
@@ -101,10 +102,16 @@ internal fun SessionChatComposerView(
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(26.dp))
                 .border(1.dp, outlineColor, RoundedCornerShape(26.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp)
-                .then(if (permission != null) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier),
+                .then(
+                    if (state is OpenCodeSessionComposerState.Permission) {
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         AnimatedContent(
-            targetState = content,
+            targetState = state,
             modifier = Modifier.fillMaxWidth(),
             transitionSpec = {
                 (
@@ -125,23 +132,16 @@ internal fun SessionChatComposerView(
         ) { state ->
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (state) {
-                    SessionChatComposerContent.Prompt ->
+                    is OpenCodeSessionComposerState.Prompt ->
                         PromptEntryContent(
-                            props = props,
-                            onTextChange = onTextChange,
-                            onModelClick = onModelClick,
-                            onModeClick = onModeClick,
-                            onVariantClick = onVariantClick,
-                            onAttachClick = onAttachClick,
-                            onSendClick = onSendClick,
-                            onStopClick = onStopClick,
+                            state = state,
+                            onAction = onAction,
                         )
 
-                    is SessionChatComposerContent.Permission ->
+                    is OpenCodeSessionComposerState.Permission ->
                         PermissionApprovalContent(
-                            permission = state.props,
-                            onAllowOnce = onAllowPermissionOnce,
-                            onDeny = onDenyPermission,
+                            state = state,
+                            onAction = onAction,
                         )
                 }
             }
@@ -151,24 +151,18 @@ internal fun SessionChatComposerView(
 
 @Composable
 private fun PromptEntryContent(
-    props: SessionChatComposerViewProps,
-    onTextChange: (String) -> Unit,
-    onModelClick: () -> Unit,
-    onModeClick: () -> Unit,
-    onVariantClick: () -> Unit,
-    onAttachClick: () -> Unit,
-    onSendClick: () -> Unit,
-    onStopClick: () -> Unit,
+    state: OpenCodeSessionComposerState.Prompt,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     BasicTextField(
-        value = props.text,
-        onValueChange = onTextChange,
+        value = state.text,
+        onValueChange = { onAction(OpenCodeSessionComposerAction.TextChanged(it)) },
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         decorationBox = { innerTextField ->
             Box {
-                if (props.text.isBlank()) {
+                if (state.text.isBlank()) {
                     Text(
                         text = "Ask anything...",
                         style = MaterialTheme.typography.bodyLarge,
@@ -185,10 +179,22 @@ private fun PromptEntryContent(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OpenCodeChoiceBadge(label = props.selectedModelLabel, selected = false, onClick = onModelClick)
-        OpenCodeChoiceBadge(label = props.selectedMode, selected = false, onClick = onModeClick)
-        if (props.showVariant) {
-            OpenCodeChoiceBadge(label = props.selectedVariantLabel, selected = false, onClick = onVariantClick)
+        OpenCodeChoiceBadge(
+            label = state.selectedModelLabel,
+            selected = false,
+            onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
+        )
+        OpenCodeChoiceBadge(
+            label = state.selectedModeLabel,
+            selected = false,
+            onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+        )
+        if (state.showVariant) {
+            OpenCodeChoiceBadge(
+                label = state.selectedVariantLabel,
+                selected = false,
+                onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
+            )
         }
     }
 
@@ -199,26 +205,26 @@ private fun PromptEntryContent(
         OpenCodeButton(
             variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Attach context"),
             contrast = OpenCodeButtonContrast.Low,
-            onClick = onAttachClick,
+            onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
         )
         Spacer(Modifier.weight(1f))
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (props.showStop) {
+            if (state.showStop) {
                 OpenCodeButton(
                     variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Stop, "Abort active work"),
-                    enabled = props.stopEnabled,
+                    enabled = state.stopEnabled,
                     contrast = OpenCodeButtonContrast.Low,
-                    onClick = onStopClick,
+                    onClick = { onAction(OpenCodeSessionComposerAction.Stop) },
                 )
             }
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
-                enabled = props.sendEnabled,
+                enabled = state.sendEnabled,
                 contrast = OpenCodeButtonContrast.Low,
-                onClick = onSendClick,
+                onClick = { onAction(OpenCodeSessionComposerAction.Send) },
             )
         }
     }
@@ -226,9 +232,8 @@ private fun PromptEntryContent(
 
 @Composable
 private fun PermissionApprovalContent(
-    permission: SessionChatComposerPermissionProps,
-    onAllowOnce: () -> Unit,
-    onDeny: () -> Unit,
+    state: OpenCodeSessionComposerState.Permission,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -236,17 +241,17 @@ private fun PermissionApprovalContent(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Permission requested", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (permission.queueCount > 1) {
-                Text("${permission.queuePosition} of ${permission.queueCount}", style = MaterialTheme.typography.bodySmall)
+            if (state.queueCount > 1) {
+                Text("${state.queuePosition} of ${state.queueCount}", style = MaterialTheme.typography.bodySmall)
             }
         }
-        Text(permission.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
+        Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
         SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                permission.patterns.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                state.patterns.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
-        permission.errorMessage?.let {
+        state.errorMessage?.let {
             Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -256,18 +261,18 @@ private fun PermissionApprovalContent(
     ) {
         OpenCodeButton(
             OpenCodeButtonVariant.CompactText("Deny"),
-            onClick = onDeny,
-            enabled = !permission.submitting,
+            onClick = { onAction(OpenCodeSessionComposerAction.DenyPermission) },
+            enabled = !state.submitting,
             contrast = OpenCodeButtonContrast.Low,
         )
         Spacer(Modifier.weight(1f))
-        if (permission.submitting) {
+        if (state.submitting) {
             CircularProgressIndicator(modifier = Modifier.padding(horizontal = 8.dp), strokeWidth = 2.dp)
         }
         OpenCodeButton(
             OpenCodeButtonVariant.CompactText("Allow once"),
-            onClick = onAllowOnce,
-            enabled = !permission.submitting,
+            onClick = { onAction(OpenCodeSessionComposerAction.AllowPermissionOnce) },
+            enabled = !state.submitting,
         )
     }
 }
@@ -287,28 +292,14 @@ private fun PermissionComposerDarkPreview() {
 @Composable
 private fun PermissionComposerPreviewContent() {
     OpenCodeTheme {
-        SessionChatComposerView(
-            props =
-                SessionChatComposerViewProps(
-                    text = "",
-                    selectedModelLabel = "Claude Sonnet 4",
-                    selectedMode = "Build",
-                    selectedVariantLabel = "Default",
-                    showVariant = false,
-                    sendEnabled = false,
-                    showStop = false,
-                    stopEnabled = false,
-                    permission = SessionChatComposerPermissionProps("bash", listOf("git status", "git diff --stat"), queueCount = 2),
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.Permission(
+                    permission = "bash",
+                    patterns = listOf("git status", "git diff --stat"),
+                    queueCount = 2,
                 ),
-            onTextChange = {},
-            onModelClick = {},
-            onModeClick = {},
-            onVariantClick = {},
-            onAttachClick = {},
-            onSendClick = {},
-            onStopClick = {},
-            onAllowPermissionOnce = {},
-            onDenyPermission = {},
+            onAction = {},
         )
     }
 }

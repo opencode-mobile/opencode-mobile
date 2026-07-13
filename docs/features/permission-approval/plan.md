@@ -71,8 +71,9 @@ Permission prompts are an awareness/control mechanism, not a security sandbox.
 
 ## Design-System Components
 
-- Extend `SessionChatComposerView` with a permission-approval state on both
-  platforms so prompt entry and approval share one shell implementation.
+- Use the Component Collection's `OpenCodeSessionComposer` with prompt-entry and
+  permission-approval states on both platforms so both modes share one shell
+  implementation.
 - Reuse `OpenCodeButton`, icon catalog, semantic error color, body,
   caption, code, and button typography.
 - Do not introduce a separate permission container or duplicate composer shell.

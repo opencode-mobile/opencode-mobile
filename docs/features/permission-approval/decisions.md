@@ -28,3 +28,15 @@ The shared container keeps state-specific feedback: neutral outline for prompt
 entry, warning for a pending permission, and error after a failed response. Its
 height animates when content changes, while permission copy and actions align to
 the same inner insets and leading/trailing anchors as composer input and actions.
+
+## Keep the design-system API semantic and feature-independent
+
+`OpenCodeSessionComposer` is a Component Collection component on Android and
+iOS. Its public input is a semantic prompt-or-permission state and its output is
+a single semantic action callback. It does not accept repositories, transport
+DTOs, session identifiers, or Session Chat Screen Models.
+
+Session Chat owns the mapping between feature state/actions and the component
+contract. This keeps the exact production composer available to other screens,
+previews, and an interactive Component Gallery page without duplicating the
+shell or importing feature-domain dependencies into the design system.

@@ -313,6 +313,27 @@ shared `interactive` and `error` semantic tokens.
 | `textInput.paddingHorizontal` | 12 (logical px) |
 | `textInput.labelSpacing` | 6 (logical px) |
 
+### Session composer
+
+Persistent Session Chat interaction surface that switches between prompt entry
+and permission approval without changing its ownership boundary.
+
+| Token | Value |
+| --- | --- |
+| `sessionComposer.cornerRadius` | 26 (logical px) |
+| `sessionComposer.screenPaddingHorizontal` | 12 (logical px) |
+| `sessionComposer.screenPaddingBottom` | 10 (logical px) |
+| `sessionComposer.contentPaddingHorizontal` | 12 (logical px) |
+| `sessionComposer.contentPaddingVertical` | 12 (logical px) |
+| `sessionComposer.primaryContentInset` | 4 (logical px) |
+| `sessionComposer.rowSpacing` | 10 (logical px) |
+| `sessionComposer.actionSpacing` | 8 (logical px) |
+| `sessionComposer.outlineWidth` | 1 (logical px) |
+| `sessionComposer.motion.resizeDuration` | 240 ms |
+| `sessionComposer.motion.outgoingFadeDuration` | 80 ms |
+| `sessionComposer.motion.incomingFadeDelay` | 80 ms |
+| `sessionComposer.motion.incomingFadeDuration` | 120 ms |
+
 ### Top bar
 
 Reusable page-level navigation bar with an optional leading navigation affordance,
