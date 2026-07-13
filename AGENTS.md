@@ -169,6 +169,23 @@ them.
 - Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
   feature docs directory, merge checklist, and pull request for a feature task.
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in Linear; use `gh` for GitHub repository and pull-request
+operations. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five default canonical labels. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses the single-context layout. See
+`docs/agents/domain.md`.
+
 ## Documentation Rules
 
 - Keep `CONTEXT.md` focused on domain terms meaningful to users and product

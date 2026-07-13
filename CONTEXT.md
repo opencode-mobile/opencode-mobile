@@ -169,10 +169,24 @@ not create persistent `remember` decisions from mobile.
 
 ### diff
 
-The set of file changes associated with a session or message.
+The line-level representation of one file's changes inside a **Change Set**.
 
 The mobile client may show diffs so the user can understand the result of remote
 work. In v1, diff viewing does not imply mobile file editing.
+
+### Change Set
+
+A collection of file diffs selected for review from one of three sources:
+
+- **Last turn**: changes attributed to the latest user turn in the session.
+- **Working tree**: current uncommitted changes in the project's Git working
+  tree.
+- **Main branch**: current branch changes relative to its default branch.
+
+**Main branch** is available only when the server reports that the project uses
+Git and the current branch differs from the default branch. A Change Set is a
+read-only review projection; it does not imply mobile file editing or patch
+application.
 
 ### Session Context
 
