@@ -17,6 +17,7 @@ final class SessionChatViewModel {
     private let sessionRepository: any SessionRepository
     private let permissionLiveStore: any PermissionLiveStore
     private var permissionTask: Task<Void, Never>?
+    private var permissionSessions: [Session] = []
     private var permissionRequests: [PermissionRequest] = []
     private var permissionSubmittingID: String?
     private var permissionError: String?
@@ -139,23 +140,8 @@ final class SessionChatViewModel {
     private func startPermissionObservation() {
         permissionTask?.cancel()
         permissionTask = Task {
-            let sessions = (try? await sessionRepository.listSessions(directory: worktree)) ?? []
-            let children = Dictionary(grouping: sessions.compactMap { session in session.parentID.map { ($0, session.id) } }, by: \.0)
-            var ids: Set<String> = [sessionID]
-            var queue = [sessionID]
-            while let parent = queue.first {
-                queue.removeFirst()
-                for pair in children[parent] ?? [] {
-                    if ids.insert(pair.1).inserted { queue.append(pair.1) }
-                }
-            }
             for await requests in permissionLiveStore.observePermissions(directory: worktree) {
-                permissionRequests = requests.filter { ids.contains($0.sessionID) }
-                if let submitting = permissionSubmittingID, !permissionRequests.contains(where: { $0.id == submitting }) {
-                    permissionSubmittingID = nil
-                    permissionError = nil
-                }
-                publishUiState()
+                await applyPermissionSnapshot(requests)
             }
         }
     }
@@ -166,12 +152,74 @@ final class SessionChatViewModel {
         permissionError = nil
         publishUiState()
         do {
-            _ = try await sessionRepository.respondToPermission(sessionID: request.sessionID, permissionID: request.id, decision: decision)
+            _ = try await sessionRepository.respondToPermission(
+                sessionID: request.sessionID,
+                permissionID: request.id,
+                decision: decision,
+                directory: worktree
+            )
         } catch {
             permissionSubmittingID = nil
-            permissionError = error.localizedDescription
+            if case let .http(statusCode, _) = error as? SessionError, statusCode == 404 {
+                let refreshed = await refreshPermissionSnapshot()
+                if refreshed, !permissionRequests.contains(where: { $0.id == request.id }) {
+                    permissionError = nil
+                    publishUiState()
+                    return
+                }
+                permissionError = "Permission request is no longer available"
+            } else {
+                permissionError = error.localizedDescription
+            }
             publishUiState()
         }
+    }
+
+    private func refreshPermissionSnapshot() async -> Bool {
+        do {
+            let requests = try await sessionRepository.listPendingPermissions(directory: worktree)
+            await applyPermissionSnapshot(requests)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
+        if let sessions = try? await sessionRepository.listSessions(directory: worktree) {
+            permissionSessions = sessions
+        }
+        permissionRequests = Self.orderedPermissionRequests(
+            rootSessionID: sessionID,
+            sessions: permissionSessions,
+            requests: requests
+        )
+        if let submitting = permissionSubmittingID, !permissionRequests.contains(where: { $0.id == submitting }) {
+            permissionSubmittingID = nil
+            permissionError = nil
+        }
+        publishUiState()
+    }
+
+    nonisolated static func orderedPermissionRequests(
+        rootSessionID: String,
+        sessions: [Session],
+        requests: [PermissionRequest]
+    ) -> [PermissionRequest] {
+        let children = Dictionary(grouping: sessions.compactMap { session in
+            session.parentID.map { ($0, session.id) }
+        }, by: \.0)
+        var sessionOrder: [String] = []
+        var visited: Set<String> = []
+        var queue = [rootSessionID]
+        while let sessionID = queue.first {
+            queue.removeFirst()
+            guard visited.insert(sessionID).inserted else { continue }
+            sessionOrder.append(sessionID)
+            queue.append(contentsOf: (children[sessionID] ?? []).map(\.1))
+        }
+        let requestsBySession = Dictionary(grouping: requests, by: \.sessionID)
+        return sessionOrder.flatMap { requestsBySession[$0] ?? [] }
     }
 
     func stopObserving() {

@@ -8,8 +8,12 @@ import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
-import dev.opencode.mobile.domain.message.MessageListUpdate
+import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageContentPreparer
+import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
@@ -19,31 +23,29 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionError
+import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
-import dev.opencode.mobile.domain.session.SessionRepository
-import dev.opencode.mobile.domain.session.SessionStatus
-import dev.opencode.mobile.domain.message.DisplayMessage
-import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
-import dev.opencode.mobile.domain.message.MessageContentPreparer
-import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
-import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
-import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
-import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -73,6 +75,58 @@ class SessionChatViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun orderedPermissionRequests_prioritizesRootAndIncludesNewDescendants() {
+        val rootRequest = permissionRequest("root-request", "root")
+        val childRequest = permissionRequest("child-request", "child")
+        val newChildRequest = permissionRequest("new-child-request", "new-child")
+
+        val ordered =
+            orderedPermissionRequests(
+                rootSessionId = "root",
+                sessions =
+                    listOf(
+                        Session(id = "child", title = "Child", parentId = "root"),
+                        Session(id = "new-child", title = "New child", parentId = "root"),
+                    ),
+                requests = listOf(childRequest, newChildRequest, rootRequest),
+            )
+
+        assertEquals(listOf("root-request", "child-request", "new-child-request"), ordered.map { it.id })
+    }
+
+    @Test
+    fun stalePermissionResponse_refreshesAndRemovesMissingRequest() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions = listOf(Session(id = "ses-1", title = "Title")),
+                    pendingPermissions = emptyList(),
+                    permissionResponseError = SessionError.Http(404, "Missing"),
+                )
+            val permissionLiveStore = FakePermissionLiveStore(listOf(request))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = permissionLiveStore,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(
+                "permission-1",
+                viewModel.uiState.value.permissionRequest?.id,
+            )
+
+            viewModel.allowPermissionOnce()
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.permissionRequest)
+            assertEquals(1, sessionRepository.pendingPermissionLoads)
+        }
 
     @Test
     fun loadMessages_success() =
@@ -950,9 +1004,10 @@ class SessionChatViewModelTest {
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
+        sessionRepository: FakeSessionRepository = FakeSessionRepository(),
+        permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
-        val sessionRepository = FakeSessionRepository()
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
         val json = Json { ignoreUnknownKeys = true }
@@ -976,6 +1031,7 @@ class SessionChatViewModelTest {
             messageRepository = repository,
             modelRepository = modelRepository,
             sessionRepository = sessionRepository,
+            permissionLiveStore = permissionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(json),
@@ -1213,8 +1269,20 @@ private class FakeModelRepository(
     }
 }
 
-private class FakeSessionRepository : SessionRepository {
-    override suspend fun listSessions(directory: String?) = error("unused")
+private class FakeSessionRepository(
+    private val sessions: List<Session> = emptyList(),
+    private val pendingPermissions: List<PermissionRequest> = emptyList(),
+    private val permissionResponseError: SessionError? = null,
+) : SessionRepository {
+    var pendingPermissionLoads: Int = 0
+        private set
+
+    override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
+        pendingPermissionLoads += 1
+        return pendingPermissions
+    }
+
+    override suspend fun listSessions(directory: String?) = sessions
 
     override suspend fun createSession(
         parentId: String?,
@@ -1310,5 +1378,32 @@ private class FakeSessionRepository : SessionRepository {
         permissionId: String,
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        permissionResponseError?.let { throw it }
+        return true
+    }
 }
+
+private class FakePermissionLiveStore(
+    initialRequests: List<PermissionRequest>,
+) : PermissionLiveStore {
+    private val requests = MutableStateFlow(initialRequests)
+
+    override fun observePermissions(directory: String): Flow<List<PermissionRequest>> = requests
+
+    override fun clearCache() = Unit
+}
+
+private fun permissionRequest(
+    id: String,
+    sessionId: String,
+) = PermissionRequest(
+    id = id,
+    sessionId = sessionId,
+    permission = "bash",
+    patterns = listOf("git status"),
+    metadata = kotlinx.serialization.json.JsonObject(emptyMap()),
+    always = emptyList(),
+    toolMessageId = null,
+    toolCallId = null,
+)

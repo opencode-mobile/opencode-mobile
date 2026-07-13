@@ -11,6 +11,23 @@ Foreground events update state incrementally, but `GET /permission` replaces
 the pending set after initial connection and reconnect. Mobile never infers a
 response succeeded merely because the connection dropped.
 
+The same rule applies when a response returns `404`: immediately reload the
+pending list. If the request is absent, remove the stale prompt without waiting
+for another event or reconnect. If reconciliation fails or the request remains,
+show that the permission is no longer available.
+
+## Project permission snapshots through fresh session topology
+
+Every permission snapshot is projected through a freshly loaded session tree,
+with the active session first followed by its descendants in parent-first
+order. This makes root-session requests deterministic and allows permissions
+from children created after Session Chat opened to appear without rebinding the
+screen. A transient session-list failure retains the last successful topology.
+
+Permission reads and responses are scoped to the active worktree on both
+platforms so identical session or permission identifiers in another project
+cannot affect the open Session Chat.
+
 ## Keep persistent approval out of v1
 
 The server and web support `always`; mobile intentionally does not. This keeps

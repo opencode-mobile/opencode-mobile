@@ -19,7 +19,7 @@ protocol SessionRepository: Sendable {
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
 }
 
 extension SessionRepository {
@@ -27,6 +27,10 @@ extension SessionRepository {
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
+    }
+
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
+        try await respondToPermission(sessionID: sessionID, permissionID: permissionID, decision: decision, directory: nil)
     }
 }
 
@@ -127,12 +131,18 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { try await api.unrevertSession(id: id) }
     }
 
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?
+    ) async throws -> Bool {
         try await run {
             try await api.respondToPermission(
                 sessionID: sessionID,
                 permissionID: permissionID,
-                body: PermissionResponseRequestDTO(response: adapter.permissionResponse(decision))
+                body: PermissionResponseRequestDTO(response: adapter.permissionResponse(decision)),
+                directory: directory
             )
         }
     }

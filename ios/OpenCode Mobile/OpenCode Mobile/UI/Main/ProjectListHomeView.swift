@@ -355,7 +355,12 @@ private struct PreviewSessionRepository: SessionRepository {
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
     func unrevertSession(id: String) async throws -> Bool { fatalError() }
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool { fatalError() }
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?
+    ) async throws -> Bool { fatalError() }
 }
 
 @MainActor
