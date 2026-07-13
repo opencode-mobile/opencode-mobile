@@ -1,202 +1,62 @@
 ---
 name: pull-app-logs
-description: Pull and summarize runtime logs from the opencode-mobile Android and iOS apps on connected devices or simulators. Use when the user asks for app logs, logcat, device logs, simulator logs, debugging runtime behavior, or investigating API/SSE/session-chat issues on a device.
+description: Capture and interpret OpenCode Mobile runtime logs. Use when the user asks for app or device logs, a live tail, or runtime diagnosis on connected Android or iOS targets.
 ---
 
 # Pull App Logs
 
-Read runtime logs for **OpenCode Mobile** on connected hardware. Both apps share bundle/application id `dev.opencode.mobile`.
+Capture evidence from `dev.opencode.mobile`; do not ask the user to run commands unless no usable target is available or device-service access remains blocked.
 
-Run commands yourself — do not tell the user to run them unless a device is missing or access fails.
+## Steps
 
-## Workflow
+### 1. Select the target
 
-1. Detect what is connected.
-2. Pull recent logs for the running app process.
-3. Filter to app-owned tags/subsystems (skip system noise unless needed).
-4. Summarize: connection state, active session, errors, and anything relevant to the user's question.
+Detect Android devices, booted iOS simulators, and connected iOS devices. Honor an explicitly named platform or target. Otherwise select a target only when exactly one connected target exists, or exactly one target has the app running. For a cross-platform comparison, apply that rule independently to each platform. If multiple candidates remain, report their identifiers and ask the user to choose; do not silently use `booted` or the first device.
 
-```text
-Task progress:
-- [ ] Detect Android device/emulator
-- [ ] Detect iOS simulator or physical device
-- [ ] Pull app-scoped logs
-- [ ] Summarize findings
-```
+Read the applicable platform reference before capturing:
 
-## Detect devices
+- [Android capture](ANDROID.md) for an Android device or emulator.
+- [iOS capture](IOS.md) for an iOS simulator or physical device.
 
-**Android**
+This step is complete when every requested platform maps to exactly one target identifier, or every unresolved ambiguity is shown to the user.
 
-```bash
-adb devices -l
-```
+### 2. Capture app-scoped evidence
 
-**iOS simulator**
+Prefer a bounded recent capture. Use a live tail only when the user asks for one or is reproducing a problem now. Scope output by the running app process on Android and by the app subsystem on iOS.
 
-```bash
-xcrun simctl list devices booted
-```
+If the app process is absent, do not run a PID-filtered command. Capture bounded historical output using the platform fallback, label it as historical, and do not infer current app state from it. If an app-scoped capture is empty, broaden the time or line window once and verify the filter; then report that no app logs were available rather than substituting unrelated system noise.
 
-**iOS physical device**
+This step is complete when each selected target has either app-scoped output with a stated interval/mode, or an explicit evidence gap: app not running, no matching output after one broadened capture, or access failure.
 
-```bash
-xcrun devicectl list devices
-```
+### 3. Analyze against the question
 
-On macOS, `simctl` and `adb` need unsandboxed shell access (`required_permissions: ["all"]`) when CoreSimulatorService or adb is blocked.
+Trace the user's symptom through relevant events, preserving timestamps and error context. Separate observed facts from inference. Ignore platform noise unless it participates in the reported failure.
 
----
+For general diagnostics, account for:
 
-## Android
+- app running state;
+- server/API reachability;
+- foreground event-stream state;
+- active session evidence;
+- app-owned warnings and errors.
 
-### App identity
+This step is complete when every symptom or requested area has supporting log evidence, a clearly marked inference, or an explicit statement that the capture contains no evidence for it.
 
-| Field | Value |
-|---|---|
-| Application id | `dev.opencode.mobile` |
-| Source | `android/app/build.gradle.kts` |
+### 4. Report the evidence
 
-### Pull recent logs (preferred)
+Report:
 
-Filter by process PID so output is app-only:
+1. target platform, name, and identifier;
+2. capture mode and interval;
+3. app running state;
+4. findings tied to timestamps or concise log excerpts;
+5. app-owned errors before relevant system errors;
+6. evidence gaps and the next discriminating capture, if one is needed.
 
-```bash
-PID=$(adb shell pidof -s dev.opencode.mobile 2>/dev/null)
-if [ -n "$PID" ]; then
-  adb logcat -d --pid="$PID" -t 300
-else
-  echo "App not running"
-  adb logcat -d -t 500 | grep -iE "opencode|dev\.opencode\.mobile" | tail -100
-fi
-```
+When comparing platforms, distinguish observed differences from expected networking differences. Do not offer a live tail unless reproduction would resolve a stated evidence gap.
 
-### Live tail
+This step is complete when every selected target and every requested symptom is accounted for in the report.
 
-```bash
-adb logcat --pid=$(adb shell pidof -s dev.opencode.mobile)
-```
+## Troubleshooting branch
 
-### Filter by log tag
-
-App-defined tags (see `android/app/src/main/java/`):
-
-| Tag | Area |
-|---|---|
-| `OpencodeApi` | HTTP requests/responses |
-| `OpencodeSse` | Foreground SSE stream |
-| `SessionChat` | Chat screen / ViewModel |
-| `MessageRepo` | Message fetch |
-| `MessageLiveStore` | Live message store |
-| `MarkdownMapper` | Markdown enrichment |
-| `ThemeManager` | Theme preset load/apply |
-
-```bash
-adb logcat --pid=$(adb shell pidof -s dev.opencode.mobile) \
-  OpencodeApi:* OpencodeSse:* SessionChat:* MessageRepo:* MessageLiveStore:* ThemeManager:* *:S
-```
-
-### Errors only
-
-```bash
-adb logcat -d --pid=$(adb shell pidof -s dev.opencode.mobile) *:E *:W
-```
-
-### Emulator networking note
-
-The Android emulator reaches the host opencode server at `http://10.0.2.2:4096`, not `127.0.0.1`.
-
----
-
-## iOS
-
-### App identity
-
-| Field | Value |
-|---|---|
-| Bundle id | `dev.opencode.mobile` |
-| Process name | `OpenCode Mobile` |
-| OSLog subsystem | `dev.opencode.mobile` |
-| Source | `ios/OpenCode Mobile/OpenCode Mobile/OpenCodeLogging.swift` |
-
-### Pull recent logs (preferred)
-
-Filter by subsystem. Include `--info --debug` — debug logs carry SSE heartbeats and session-chat state:
-
-```bash
-xcrun simctl spawn booted log show \
-  --predicate 'subsystem == "dev.opencode.mobile"' \
-  --style compact --last 10m --info --debug
-```
-
-If multiple simulators are booted, target one explicitly:
-
-```bash
-xcrun simctl spawn <UDID> log show \
-  --predicate 'subsystem == "dev.opencode.mobile"' \
-  --style compact --last 10m --info --debug
-```
-
-### Live tail
-
-```bash
-xcrun simctl spawn booted log stream \
-  --predicate 'subsystem == "dev.opencode.mobile"' \
-  --level debug
-```
-
-### Log categories
-
-| Category | Area |
-|---|---|
-| `dev.opencode.mobile:api` | HTTP requests/responses/failures |
-| `dev.opencode.mobile:sse` | Foreground SSE stream |
-| `dev.opencode.mobile:session-chat` | Chat bind/observe/state |
-
-### Errors and warnings
-
-```bash
-xcrun simctl spawn booted log show \
-  --predicate 'subsystem == "dev.opencode.mobile" AND (messageType == error OR messageType == fault)' \
-  --style compact --last 30m --info
-```
-
-### Simulator networking note
-
-The iOS simulator uses `http://127.0.0.1:4096` for the host opencode server.
-
-### Physical device
-
-When a device is connected, prefer **Console.app** or stream via Xcode. CLI option:
-
-```bash
-xcrun devicectl device info logs --device <UDID>
-```
-
-Filter in Console by subsystem `dev.opencode.mobile` or process `OpenCode Mobile`.
-
----
-
-## Summarize for the user
-
-After pulling logs, report:
-
-1. **Device** — emulator/simulator model or physical device name
-2. **App state** — running or not; PID on Android
-3. **Connection** — server URL, SSE state (Connected / Reconnecting / failed)
-4. **Session** — active session id and message count if visible in logs
-5. **Errors** — app errors first; ignore emulator/simulator system noise (HWUI, FrameTracker, SecTrustReportNetworkingAnalytics) unless the user asked about rendering or launch metrics
-6. **Parity** — when comparing platforms, note URL differences (`10.0.2.2` vs `127.0.0.1`) and that Android may show SSE socket-timeout reconnect loops while iOS often stays connected with heartbeats
-
-Offer to tail live logs if the user is actively reproducing a bug.
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `adb: no devices` | Start emulator or connect device; enable USB debugging |
-| Android app not running | Launch app first, or grep logcat without PID filter |
-| `CoreSimulatorService connection became invalid` | Re-run with full permissions; ensure Xcode/simulator is running |
-| No booted iOS simulator | Boot one in Xcode or `xcrun simctl boot <UDID>` |
-| Empty iOS subsystem logs | Add `--info --debug`; default `log show` hides debug-level entries |
-| Linux VM (Cursor Cloud) | Android logs only — iOS simulators require macOS + Xcode |
+When target discovery, device services, or filtering fails, read [connection and capture troubleshooting](TROUBLESHOOTING.md) and apply the matching branch. Do not load it for a successful capture.

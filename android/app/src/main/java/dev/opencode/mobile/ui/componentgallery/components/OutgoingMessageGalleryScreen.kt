@@ -60,6 +60,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
             text = sample.text,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
             modifier = Modifier.fillMaxWidth(),
+            onClick = {},
         )
     }
 }

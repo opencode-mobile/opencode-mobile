@@ -86,6 +86,7 @@ class SessionChatViewModel
         private var permissionRequests: List<PermissionRequest> = emptyList()
         private var permissionSubmittingId: String? = null
         private var permissionError: String? = null
+        private var permissionTopologyError: String? = null
         private var permissionObservationJob: kotlinx.coroutines.Job? = null
 
         init {
@@ -178,9 +179,15 @@ class SessionChatViewModel
             composer.abort()
         }
 
-        fun allowPermissionOnce() = respondToPermission(PermissionDecision.AllowOnce)
+        fun allowPermissionOnce(
+            requestId: String,
+            sessionId: String,
+        ) = respondToPermission(requestId, sessionId, PermissionDecision.AllowOnce)
 
-        fun denyPermission() = respondToPermission(PermissionDecision.Deny)
+        fun denyPermission(
+            requestId: String,
+            sessionId: String,
+        ) = respondToPermission(requestId, sessionId, PermissionDecision.Deny)
 
         private fun observePermissions(
             sessionId: String,
@@ -194,8 +201,14 @@ class SessionChatViewModel
             }
         }
 
-        private fun respondToPermission(decision: PermissionDecision) {
-            val request = permissionRequests.firstOrNull() ?: return
+        private fun respondToPermission(
+            requestId: String,
+            sessionId: String,
+            decision: PermissionDecision,
+        ) {
+            val request =
+                permissionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId }
+                    ?: return
             if (permissionSubmittingId != null) return
             permissionSubmittingId = request.id
             permissionError = null
@@ -236,7 +249,14 @@ class SessionChatViewModel
             requests: List<PermissionRequest>,
         ) {
             runCatching { sessionRepository.listSessions(worktree) }
-                .onSuccess { permissionSessions = it }
+                .onSuccess {
+                    permissionSessions = it
+                    permissionTopologyError = null
+                }
+                .onFailure {
+                    permissionSessions = emptyList()
+                    permissionTopologyError = "Unable to refresh permission session tree"
+                }
             permissionRequests = orderedPermissionRequests(sessionId, permissionSessions, requests)
             if (
                 permissionSubmittingId != null &&
@@ -267,6 +287,7 @@ class SessionChatViewModel
                     timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
                     composerState.errorMessage != null -> composerState.errorMessage
                     composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                    permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
                     else -> timelineState.errorMessage
                 }
             return SessionChatUiState(
@@ -290,7 +311,7 @@ class SessionChatViewModel
                 permissionRequest = permissionRequests.firstOrNull(),
                 permissionQueueCount = permissionRequests.size,
                 permissionSubmitting = permissionSubmittingId != null,
-                permissionErrorMessage = permissionError,
+                permissionErrorMessage = permissionError ?: permissionTopologyError,
             )
         }
 

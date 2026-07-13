@@ -183,16 +183,15 @@ private struct SessionChatMessageRow: View {
                 OpenCodeOutgoingMessage(
                     text: message.text,
                     renderedMarkdown: message.renderedMarkdown,
-                    metadataLabel: message.metadataLabel
+                    metadataLabel: message.metadataLabel,
+                    onTap: message.renderedMarkdown == nil
+                        ? { openMessageActions(showsRevertMessage: true) }
+                        : nil,
+                    onLongPress: message.renderedMarkdown != nil
+                        ? { openMessageActions(showsRevertMessage: true) }
+                        : nil
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .modifier(
-                    SessionChatMessageActionsGestureModifier(
-                        renderedMarkdown: message.renderedMarkdown,
-                        accessibilityLabel: "Outgoing message",
-                        onOpenMessageActions: { openMessageActions(showsRevertMessage: true) }
-                    )
-                )
             case .assistant:
                 AssistantMessageBubble(
                     text: message.text,

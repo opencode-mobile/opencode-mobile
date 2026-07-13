@@ -16,6 +16,18 @@ docs/features/<feature-slug>/
 └── decisions.md
 ```
 
+The four feature-wide files describe shared intent and state. Add these artifacts
+as needed for focused execution work:
+
+```text
+docs/features/<feature-slug>/<ticket-or-task>-plan.md
+docs/features/<feature-slug>/<ticket-or-task>-plan.html
+```
+
+A task-specific plan does not replace `plan.md`. An HTML file is an optional
+visual companion with the same basename as its Markdown source, not a separate
+source of truth.
+
 ## `plan.md`
 
 Use `plan.md` to define the shared product intent before implementation.
@@ -28,10 +40,15 @@ Include:
 - server APIs involved;
 - expected platform logs for API calls, live updates, and important mutations;
 - domain objects involved;
-- UI states;
+- Screen Model UI states and user actions or events;
+- native navigation entry points;
 - error states;
 - permission request behavior, if relevant;
-- design-system components needed.
+- design-system components needed and whether each is existing, new or extended,
+  or intentionally feature-local.
+
+Record a reason for any field that does not apply instead of leaving its status
+ambiguous.
 
 ## `progress.md`
 
@@ -43,9 +60,12 @@ Track:
 - design-system dependencies;
 - iOS implementation status;
 - Android implementation status;
-- test or preview status;
-- logcat/Console evidence for network, live-update, and mutation paths;
+- blockers affecting implementation;
 - remaining work.
+
+Keep transient command output, screenshots, and debug evidence out of canonical
+feature progress. Record any durable status or decision revealed by that
+evidence instead of copying the raw artifact.
 
 ## `parity-gaps.md`
 

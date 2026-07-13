@@ -24,6 +24,7 @@ outgoing message.
   - metadata label using dot-separated sent-message context.
 - Optional content:
   - rendered markdown document and initial height cache for prepared content.
+  - tap or long-press interaction handled by the owning feature.
 
 ## Token Usage
 
@@ -56,12 +57,17 @@ The right-aligned footer label uses compact caption typography and combines
 sent-message context as `mode · model · time`, for example
 `Build · DeepSeek V4 Flash · 9:05 PM`.
 
+When the owning feature enables message actions, only the rounded message pill
+is interactive. Press feedback is clipped to the pill shape; the metadata
+footer and unused conversation-row width do not activate the message.
+
 ## Platform Notes
 
 - iOS: implemented with SwiftUI text inside the rounded message surface. The
   bubble caps at `outgoingMessage.maxWidthFraction` and otherwise shrink-wraps
-  to content width.
-- Android: implemented with Compose text inside a Material 3 surface.
+  to content width. Feature-owned tap or long-press gestures attach to the pill.
+- Android: implemented with Compose text inside a Material 3 surface. Ripple
+  feedback is clipped to the pill shape.
 
 ## Previews
 
@@ -69,7 +75,9 @@ sent-message context as `mode · model · time`, for example
 - Dark: included.
 - Default: included with short copy.
 - Long: included with long copy.
-- Pressed: not applicable in this component version.
+- Pressed: Android uses its native clipped ripple in the interactive gallery;
+  iOS has no persistent pressed styling, so a separate pressed preview is not
+  applicable.
 - Disabled: not applicable in this component version.
 - Loading: not applicable in this component version.
 - Error: not applicable in this component version.

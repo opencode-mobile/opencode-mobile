@@ -32,11 +32,12 @@
 ## Use fixed selected-project context temporarily
 
 - Date: 2026-05-06
+- Status: **Superseded** by
+  [Project Selection](../project-selection/decisions.md).
 - Decision: home shows a fixed selected project label (`opencode-mobile`) above
   session rows.
 - Reason: project selection and switching are intentionally split into a
   separate feature slice, while session-first home behavior is needed now.
-- Revisit when: project selection/switching flow is implemented.
 
 ## Avoid List disclosure chevrons on session rows (iOS)
 

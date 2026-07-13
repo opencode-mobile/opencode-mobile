@@ -1,11 +1,29 @@
 # Component Documentation
 
-Each reusable design-system component should have a document in this directory
-once the component is defined.
+This directory is the authoritative contract for reusable design-system
+components. Add one document for each component once its shared intent is
+defined.
 
-Use this template for `docs/design-system/components/<component-name>.md`.
+## Component Contract
+
+- Define public APIs through semantic variants and explicit states.
+- Do not expose raw hex colors, one-off gradients, ad-hoc radius values, or
+  arbitrary typography overrides as public customization.
+- Promote feature-local UI into the Component Collection when it duplicates an
+  existing component role, is needed on both platforms, or is likely to recur.
+  Feature-local custom UI is appropriate only when reuse or a reusable
+  component extension does not fit; document that decision in the feature docs.
+- Give iOS and Android one shared intent while preserving native implementation
+  and accessibility behavior.
+
+Cover each state that applies: default, pressed or active, focused when
+platform-relevant, disabled, loading, error, empty, and selected. Do not invent
+unsupported states to fill the list. Record each omitted state as not applicable
+in the component document or implementation completion ledger.
 
 ## Component Template
+
+Use this template for `docs/design-system/components/<component-name>.md`:
 
 ```markdown
 # Component Name
@@ -17,7 +35,7 @@ What product need this component serves and when feature screens should use it.
 ## Public API
 
 - Variants:
-- States:
+- States (including not-applicable states and reasons):
 - Required content:
 - Optional content:
 
@@ -36,43 +54,45 @@ Describe interaction, loading, disabled, error, and accessibility behavior.
 - iOS:
 - Android:
 
-## Previews
+## Review Surfaces
 
-- Light:
-- Dark:
-- Default:
-- Pressed:
-- Disabled:
-- Loading:
-- Error:
-
-When a Component Gallery entry exists, prefer one live component preview plus
-interactive controls that switch variants and states instead of a static matrix
-of separate samples.
+List the applicable iOS and Android gallery entries or previews. Follow the
+Gallery And Preview Contract in this document.
 
 ## Parity And Divergence
 
-List intentional differences or link to `../divergences.md`.
+List temporary parity gaps in the feature's `parity-gaps.md`. List intentional
+differences or link to `../divergences.md`.
 ```
+
+## Gallery And Preview Contract
+
+- Register the component in both platform Component Galleries when a gallery
+  entry is useful for review, and ensure both detail screens or preview routes
+  open successfully.
+- Prefer one live preview with interactive controls for variants and states,
+  rather than a static matrix of duplicate examples.
+- Provide light and dark appearances with stable copy and realistic data.
+- When a component must be judged edge-to-edge, such as `OpenCodeTopBar`, its
+  gallery entry may render full width while the page header, theme controls, and
+  other entries keep the normal horizontal inset.
 
 ## Definition Of Done
 
-- The component intent and public API are documented.
-- Android and iOS implementations are added together once app projects exist.
-- Both platform Component Gallery registries list the component when a gallery
-  entry is useful for review.
-- Both Component Gallery detail screens or platform previews open successfully.
-- Gallery-driven components prefer a single live preview with controls for
-  variants and states instead of a static matrix of duplicate examples.
-- When a component must be judged edge-to-edge (for example `OpenCodeTopBar`),
-  the gallery detail shell may render that entry’s content full width while
-  keeping the header, theme controls, and other gallery entries on the normal
-  horizontal inset.
-- Light and dark previews exist.
-- Relevant states are covered with stable copy and realistic data.
-- Token and typography usage maps back to `docs/design-system/tokens.md` and
-  `docs/design-system/typography.md`.
-- Intentional platform differences are documented in the same change.
+For every item, record `complete`, `not applicable` with a reason, or `blocked`
+with evidence:
+
+- The documented and implemented public API satisfies the Component Contract.
+- Token and typography usage points to
+  [`../tokens.md`](../tokens.md) and [`../typography.md`](../typography.md).
+- Android and iOS implementations both satisfy the shared intent.
+- Applicable review surfaces satisfy the Gallery And Preview Contract.
+- Every platform difference is resolved, recorded as intentional in
+  [`../divergences.md`](../divergences.md), or tracked as temporary in the
+  feature's `parity-gaps.md`.
+
+The component is complete only when every item is accounted for and every
+applicable item is complete.
 
 ## Current Component Docs
 

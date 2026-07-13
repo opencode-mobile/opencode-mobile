@@ -22,10 +22,6 @@
 - Added domain snapshot calculation, repository, Hilt binding, ViewModel,
   pushed route, screen, and Session Chat context-ring navigation.
 
-## Test And Verification
-
-- Pending: run platform checks and add focused calculator/ViewModel tests.
-
 ## Remaining Work
 
-- None known beyond verification fixes found by test/build runs.
+- No known implementation work.

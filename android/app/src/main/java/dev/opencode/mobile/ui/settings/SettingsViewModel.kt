@@ -8,9 +8,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.theme.ThemeManager
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,6 +23,7 @@ class SettingsViewModel
         @ApplicationContext private val context: Context,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val foregroundEventStream: ForegroundEventStream,
+        private val permissionLiveStore: PermissionLiveStore,
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val messageRepository: MessageRepository,
@@ -30,6 +32,7 @@ class SettingsViewModel
             viewModelScope.launch {
                 foregroundEventStream.stop()
                 connectionSessionCoordinator.clearConnectionData()
+                permissionLiveStore.clearCache()
                 sessionLiveStore.clearCache()
                 sessionStatusLiveStore.clearCache()
                 messageRepository.clearMessageCache()

@@ -21,6 +21,7 @@ final class SessionChatViewModel {
     private var permissionRequests: [PermissionRequest] = []
     private var permissionSubmittingID: String?
     private var permissionError: String?
+    private var permissionTopologyError: String?
 
     init(
         sessionID: String,
@@ -133,9 +134,13 @@ final class SessionChatViewModel {
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
     }
 
-    func allowPermissionOnce() async { await respondToPermission(.allowOnce) }
+    func allowPermissionOnce(requestID: String, sessionID: String) async {
+        await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .allowOnce)
+    }
 
-    func denyPermission() async { await respondToPermission(.deny) }
+    func denyPermission(requestID: String, sessionID: String) async {
+        await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .deny)
+    }
 
     private func startPermissionObservation() {
         permissionTask?.cancel()
@@ -146,8 +151,13 @@ final class SessionChatViewModel {
         }
     }
 
-    private func respondToPermission(_ decision: PermissionDecision) async {
-        guard let request = permissionRequests.first, permissionSubmittingID == nil else { return }
+    private func respondToPermission(
+        requestID: String,
+        sessionID: String,
+        decision: PermissionDecision
+    ) async {
+        guard let request = permissionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
+              permissionSubmittingID == nil else { return }
         permissionSubmittingID = request.id
         permissionError = nil
         publishUiState()
@@ -186,8 +196,13 @@ final class SessionChatViewModel {
     }
 
     private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
-        if let sessions = try? await sessionRepository.listSessions(directory: worktree) {
+        do {
+            let sessions = try await sessionRepository.listSessions(directory: worktree)
             permissionSessions = sessions
+            permissionTopologyError = nil
+        } catch {
+            permissionSessions = []
+            permissionTopologyError = "Unable to refresh permission session tree"
         }
         permissionRequests = Self.orderedPermissionRequests(
             rootSessionID: sessionID,
@@ -271,7 +286,7 @@ final class SessionChatViewModel {
             permissionRequest: permissionRequests.first,
             permissionQueueCount: permissionRequests.count,
             permissionSubmitting: permissionSubmittingID != nil,
-            permissionErrorMessage: permissionError
+            permissionErrorMessage: permissionError ?? permissionTopologyError
         )
     }
 
@@ -286,6 +301,9 @@ final class SessionChatViewModel {
             return error
         }
         if let error = composerState.abortErrorMessage {
+            return error
+        }
+        if permissionRequests.isEmpty, let error = permissionTopologyError {
             return error
         }
         return timelineState.errorMessage

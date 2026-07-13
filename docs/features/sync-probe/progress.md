@@ -1,5 +1,8 @@
 # Sync Probe Progress
 
+Status: inline home and Connection Profile probing is implemented on Android
+and iOS. No implementation work remains in this slice.
+
 ## Shared Planning
 
 - [x] Feature slice documentation scaffold created.
@@ -8,31 +11,25 @@
 ## Design System
 
 - [x] Confirmed no new reusable component is required for initial probe states.
-- [ ] Validate loading/error visuals against existing component semantics on both
-  platforms during implementation.
+- [x] Reused existing loading, error, and Retry semantics in project home on
+  both platforms.
 
 ## Android
 
-- [ ] Add probe status to home ViewModel state model.
-- [ ] Call probe endpoint before treating connection as usable.
-- [ ] Map transport/auth failures to shared product probe statuses.
-- [ ] Add retry interaction coverage in tests.
+- [x] Added probing and probe-failure states to the home ViewModel state model.
+- [x] Call `GET /global/health` before treating the connection as usable.
+- [x] Map transport, authentication, and unhealthy responses to shared product
+  probe language.
+- [x] Wire Retry from the probe-failure UI back through the home load path.
 
 ## iOS
 
-- [ ] Add probe status to home Screen Model state.
-- [ ] Call probe endpoint before treating connection as usable.
-- [ ] Map transport/auth failures to shared product probe statuses.
-- [ ] Add retry interaction coverage in tests.
-
-## Validation Status
-
-- [ ] Android compile/test checks after implementation.
-- [ ] iOS simulator build/test checks after implementation.
-- [ ] Manual probe validation against `opencode serve` on `:4096`.
+- [x] Added probing and probe-failure states to the home Screen Model.
+- [x] Call `GET /global/health` before treating the connection as usable.
+- [x] Map transport, authentication, and unhealthy responses to shared product
+  probe language.
+- [x] Wire Retry from the probe-failure UI back through the home load path.
 
 ## Remaining Work
 
-- Implement probe repository/service adapter on both platforms.
-- Integrate probe state into home entry flow.
-- Close or document any parity gaps discovered during implementation.
+- No remaining implementation work.

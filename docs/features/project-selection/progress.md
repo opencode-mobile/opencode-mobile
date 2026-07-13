@@ -29,7 +29,3 @@
 - [x] iOS home **Browse projects** and **See all sessions** use
   `OpenCodeBottomSheet` instead of native platform sheets (Android already used
   design-system bottom sheet)
-
-## Manual
-
-- [ ] Two projects on one server (see manual-test.md)

@@ -2,8 +2,10 @@
 
 ## Shared Planning
 
-- Status: complete for session-first home with real `GET /session` list.
-- Root destination is session list home on both apps.
+- Status: complete for the original session-first home slice and superseded by
+  [Project Selection](../project-selection/progress.md) for current home
+  behavior.
+- Root destination remains session-oriented home on both apps.
 
 ## Design System
 
@@ -13,31 +15,28 @@
 
 ## Android
 
-- Hardcoded endpoint constant (`AppConfig.SERVER_BASE_URL`); emulators rewrite
-  to `10.0.2.2` (see [`session-repository`](../session-repository/manual-test.md)).
-- Session-list layout with loading/empty/error states; loads via
-  `SessionRepository.listSessions()` and Hilt.
-- Fixed selected project context (`opencode-mobile`).
+- The original slice shipped a hardcoded endpoint and fixed project context.
+  [Server Connection](../server-connection/progress.md) now supplies the active
+  Connection Profile and [Project Selection](../project-selection/progress.md)
+  supplies curated worktree selection.
+- Session-list loading/empty/error states continue to load through
+  `SessionRepository` and Hilt.
 - "Developer Components" action from session home.
 
 ## iOS
 
-- Hardcoded endpoint (`AppConfig.serverBaseURL`).
-- `ProjectListHomeView` + `ProjectListHomeViewModel` with loading/loaded/empty/error.
-- Loads via `SessionRepository.listSessions()` and Factory.
-- Fixed selected project context (`opencode-mobile`).
+- The original slice shipped a hardcoded endpoint and fixed project context.
+  [Server Connection](../server-connection/progress.md) now supplies the active
+  Connection Profile and [Project Selection](../project-selection/progress.md)
+  supplies curated worktree selection.
+- `ProjectListHomeView` and `ProjectListHomeViewModel` retain
+  loading/loaded/empty/error behavior and load through `SessionRepository` and
+  Factory.
 - "Developer Components" action from session home.
-
-## Validation Status
-
-- Component previews for List Item on both platforms.
-- ViewModel unit tests with fake `SessionRepository` on both platforms.
-- Manual: `opencode serve` on `:4096` — see
-  [`session-repository/manual-test.md`](../session-repository/manual-test.md).
 
 ## Remaining Work
 
-- Implement project selection/switch flow and remove fixed selected-project
-  placeholder.
-- Introduce Connection Profile flow and remove hardcoded endpoint.
-- Session chat real messages (`MessageRepository` slice).
+- None in this superseded slice. Current implementation and remaining work live
+  under [Project Selection](../project-selection/progress.md),
+  [Server Connection](../server-connection/progress.md), and
+  [Message Repository](../message-repository/progress.md).

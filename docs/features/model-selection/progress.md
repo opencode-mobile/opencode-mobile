@@ -11,7 +11,7 @@
   non-default.
 - [x] Unit coverage added for provider parsing and prompt request mapping.
 
-## Persistent Session Cache (planned)
+## Persistent Session Cache (delivered)
 
 - [x] Domain `SessionModelSelectionStore` on Android and iOS.
 - [x] DataStore / UserDefaults persistence scoped by server + worktree.
@@ -22,11 +22,3 @@
 - [x] Clear All Data clears model-selection cache.
 - [x] Unit tests for store, composer bootstrap/persist paths, stale-cache
   notice, re-bind restore, and clear-data integration.
-
-## Verification
-
-- Android unit tests were attempted with `./gradlew testDebugUnitTest` on
-  2026-05-30, but this environment has no Java runtime (`JAVA_HOME` unset and
-  `java` missing).
-- iOS tests were attempted with `xcodebuild test` on 2026-05-30, but this
-  environment does not include `xcodebuild`.

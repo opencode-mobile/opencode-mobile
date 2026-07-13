@@ -31,12 +31,6 @@
   `SessionModelSelectionStore.clearAll()`)
 - [x] `SettingsViewModel` + `SettingsScreen` UI + `Navigation.kt` wiring
 
-## Verification
-
-- [x] iOS builds without errors (pre-existing deprecation warnings only).
-- [x] Android builds without errors.
-- [x] Android unit tests pass.
-
 ## Post-implementation UX change
 
 After the initial implementation, the user requested that instead of showing a

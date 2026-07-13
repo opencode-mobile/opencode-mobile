@@ -89,6 +89,8 @@ struct SessionComposerGalleryView: View {
     ) -> OpenCodeSessionComposerState {
         .permission(
             .init(
+                requestID: "permission-gallery",
+                sessionID: "session-gallery",
                 permission: "bash",
                 patterns: ["git status", "git diff --stat"],
                 queueCount: queueCount,

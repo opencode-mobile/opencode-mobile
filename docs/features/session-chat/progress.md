@@ -67,6 +67,9 @@
 - **2026-07-08 / OPE-32:** Composer agent mode (`Build` / `Plan`) is now
   mapped to server agent names (`build` / `plan`) and sent with
   `POST /session/{id}/prompt_async`.
+- **2026-07-13:** Native composer permission state observes pending requests,
+  prioritizes the root session before descendants, and resolves allow-once or
+  deny decisions with stale-request reconciliation.
 
 ## iOS
 
@@ -97,6 +100,9 @@
 - **2026-07-08 / OPE-32:** Composer agent mode (`Build` / `Plan`) is now
   mapped to server agent names (`build` / `plan`) and sent with
   `POST /session/{id}/prompt_async`.
+- **2026-07-13:** Native composer permission state observes pending requests,
+  prioritizes the root session before descendants, and resolves allow-once or
+  deny decisions with stale-request reconciliation.
 
 ## Architecture guardrails
 
@@ -104,70 +110,31 @@
   [Keep SessionChatViewModel as a thin facade](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade)
   before editing `SessionChatViewModel` on either platform.
 
-## Validation Status
+## Behavior hardening
 
-- Android `:app:compileDebugKotlin` passed on 2026-06-01.
-- Android `:app:testDebugUnitTest` passed on 2026-06-01.
-- iOS simulator debug build passed on 2026-06-01.
-- iOS `OpenCode Mobile` test action passed on 2026-06-01.
-- OPE-30 Component Gallery prototype: Android `:app:compileDebugKotlin`, iOS
-  simulator build/run, Android emulator install/run, and manual Message List
-  auto-follow verification passed on 2026-07-05.
-- OPE-30 production Session Chat auto-follow promotion: Android targeted
-  auto-follow state tests passed, iOS targeted auto-follow state tests passed,
-  and iOS simulator build passed on 2026-07-06. Full iOS test action still has a
-  benchmark fixture failure in
-  `SessionChatViewModelTests.benchmark_loadMessages_longMarkdownHistory`.
-- OPE-30 production sticky-bottom follow now handles layout drift while armed:
-  markdown/render growth, streaming row height changes, composer/keyboard
-  viewport changes, and status/notice rows can keep the bottom anchored without
-  requiring a new message count.
-- Follow now also treats message layout-signature changes, including
-  `renderedMarkdown` becoming available after the raw row appears, as a
-  post-layout sticky-bottom recheck instead of relying only on content-height
-  callbacks.
-- Production Session Chat keeps its visual bottom gap above the composer while
-  Android scroll math now includes bottom content padding, so send-time
-  auto-follow uses the same end position that the list settles to.
-- Android production Session Chat now performs the same one-time initial
-  scroll-to-latest as iOS when a ready timeline first receives non-empty history.
-- Message List Component Gallery now has floating `+`, `-`, and `/` controls to
-  append a message, remove the last message, and toggle the last message height
-  for direct scroll behavior testing.
-- The gallery resize control now participates in sticky-bottom follow: changing
-  the final message height triggers a post-layout follow recheck when
-  auto-follow is armed.
-- Production Session Chat now uses non-animated sticky-bottom correction for
-  layout growth, matching the smoother gallery resize behavior while keeping
-  append and manual scroll-to-end actions animated.
-- `OpenCodeOutgoingMessage` now always renders outgoing prompts at full height;
-  the expand/collapse affordance was removed to avoid uncertain row height in
-  Session Chat auto-follow.
-- Production Session Chat now emits temporary scroll diagnostics around
-  pinned-state, content-size, layout-signature, append-follow, and layout-snap
-  transitions. Android logs use the `SessionChatScroll` tag; iOS logs use the
-  `session-chat` logger category with a `scroll` prefix.
-- Auto-follow now treats the bottom as an exact target, not just a tolerant
-  pinned zone: while follow is armed, post-append layout and viewport changes
-  perform a non-animated end snap so outgoing-message and composer/keyboard
-  resize phases cannot leave a small residual gap.
-- Auto-follow logic is simplified so pinned detection only arms or disarms
-  follow. Initial load, message-count changes, rendered-content changes, and
-  viewport changes all use the same non-animated exact snap when follow is
-  armed.
-- Android production Session Chat now mirrors iOS viewport-height follow for IME
-  resize: when the keyboard opens or closes while auto-follow is armed, the
-  timeline observes `LazyList` viewport height changes and re-anchors with
-  `scrollToTimelineEndAfterLayoutChange` so the scroll-to-end pill does not
-  spuriously appear.
-- Manual validation in local IDE runtime remains pending.
-- Expected flow: tap row -> open chat -> send text -> local message appears.
-- Composer selectors: chip taps open bottom sheets for model, agent mode, and
-  Variant; attachment remains a no-op.
+- Production sticky-bottom follow handles markdown/render growth, streaming row
+  height changes, composer/keyboard viewport changes, and status/notice rows
+  while follow is armed.
+- Message layout-signature changes, including `renderedMarkdown` becoming
+  available after the raw row appears, trigger a post-layout follow recheck.
+- Android scroll math includes bottom content padding and performs the same
+  one-time initial scroll-to-latest as iOS.
+- Production Session Chat uses non-animated exact end correction for layout and
+  viewport growth; append and manual scroll-to-end actions remain animated.
+- Android observes IME-driven viewport height changes and re-anchors while
+  follow is armed.
+- `OpenCodeOutgoingMessage` always renders outgoing prompts at full height so
+  uncertain collapse height does not destabilize follow behavior.
+- Temporary scroll diagnostics remain available through Android
+  `SessionChatScroll` logs and the iOS `session-chat` logger category.
+- Composer selector chips open bottom sheets for model, agent mode, and Variant;
+  attachment remains a no-op.
 
 ## Remaining Work
 
-- Permission request handling remains tracked outside this status-bar slice.
+- No remaining implementation work in the current Session Chat slice.
+- Dedicated diff viewing and real attachment handling remain separate feature
+  work.
 
 ## Big Session Performance Investigation
 
