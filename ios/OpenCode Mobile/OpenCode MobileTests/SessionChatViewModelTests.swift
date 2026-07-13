@@ -1080,7 +1080,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func abortSession(id: String, directory: String?) async throws -> Bool { fatalError() }
     func shareSession(id: String) async throws -> Session { fatalError() }
     func unshareSession(id: String) async throws -> Session { fatalError() }
-    func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] { fatalError() }
+    func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] { fatalError() }
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
     func unrevertSession(id: String) async throws -> Bool { fatalError() }

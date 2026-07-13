@@ -9,6 +9,7 @@ struct SessionChatView: View {
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
     @State private var showSessionContext = false
+    @State private var changesTarget: ChangesNavigationTarget?
     @State private var menuExpanded = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
 
@@ -88,6 +89,13 @@ struct SessionChatView: View {
         .navigationDestination(isPresented: $showSessionContext) {
             SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
         }
+        .navigationDestination(item: $changesTarget) { target in
+            ChangesView(
+                sessionID: target.sessionID,
+                worktree: target.worktree,
+                messageID: target.messageID
+            )
+        }
         .task {
             viewModel.startObserving()
             await viewModel.loadMessages()
@@ -110,6 +118,14 @@ struct SessionChatView: View {
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
         [
+            OpenCodeOverflowMenuEntry(
+                title: "Review changes",
+                icon: .description,
+                action: {
+                    menuExpanded = false
+                    changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                }
+            ),
             OpenCodeOverflowMenuEntry(
                 title: "Session context",
                 icon: .architecture,

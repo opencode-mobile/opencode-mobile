@@ -21,6 +21,7 @@ enum class ComponentGalleryEntryId {
     ListItem,
     ChoiceBadge,
     ActionPill,
+    UnifiedDiff,
     Button,
     TextInput,
     ProjectSessionSelector,
@@ -97,6 +98,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ActionPill,
             title = "Action Pill",
             description = "Floating pill for contextual overlay actions such as scroll to end.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.UnifiedDiff,
+            title = "Unified Diff",
+            description = "Read-only file changes with stable old and new line gutters.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

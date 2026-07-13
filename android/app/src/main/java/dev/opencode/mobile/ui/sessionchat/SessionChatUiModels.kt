@@ -1,12 +1,12 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
-import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 
 data class SessionChatComposerState(
     val text: String = "",
@@ -47,6 +47,27 @@ data class SessionChatUiState(
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
 ) {
+    val latestCompletedUserMessageId: String?
+        get() {
+            var latest: String? = null
+            var candidate: SessionChatMessageItem? = null
+            messages.forEach { message ->
+                if (message.role == MessageRole.User) {
+                    candidate = message.takeUnless { it.isPending || it.isStreaming }
+                } else if (candidate != null && !message.isPending && !message.isStreaming) {
+                    latest = candidate?.id
+                }
+            }
+            return latest
+        }
+
+    fun changesNavigationTarget(worktree: String) =
+        ChangesNavigationTarget(
+            sessionId = sessionId,
+            worktree = worktree,
+            messageId = latestCompletedUserMessageId,
+        )
+
     companion object {
         fun initial(
             sessionId: String,
@@ -59,6 +80,12 @@ data class SessionChatUiState(
             )
     }
 }
+
+data class ChangesNavigationTarget(
+    val sessionId: String,
+    val worktree: String,
+    val messageId: String?,
+)
 
 data class SessionChatTimelineRegionState(
     val timeline: SessionChatTimelineState = SessionChatTimelineState.Loading,

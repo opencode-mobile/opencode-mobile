@@ -25,8 +25,19 @@ struct SessionTodo: Sendable, Equatable {
     let raw: String
 }
 
-struct FileDiff: Sendable, Equatable {
-    let raw: String
+enum FileDiffStatus: String, Sendable, Equatable {
+    case added
+    case deleted
+    case modified
+}
+
+struct FileDiff: Sendable, Equatable, Identifiable {
+    var id: String { path }
+    let path: String
+    let patch: String?
+    let additions: Int
+    let deletions: Int
+    let status: FileDiffStatus
 }
 
 enum PermissionDecision: Sendable {

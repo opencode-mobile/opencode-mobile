@@ -75,4 +75,35 @@ struct PermissionToolDTO: Codable, Sendable {
 
 struct TodoDTO: Codable, Sendable {}
 
-struct FileDiffDTO: Codable, Sendable {}
+struct FileDiffDTO: Decodable, Sendable {
+    let file: String
+    let patch: String?
+    let before: String?
+    let after: String?
+    let additions: Int
+    let deletions: Int
+    let status: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case file
+        case path
+        case patch
+        case before
+        case after
+        case additions
+        case deletions
+        case status
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        file = try container.decodeIfPresent(String.self, forKey: .file)
+            ?? container.decode(String.self, forKey: .path)
+        patch = try container.decodeIfPresent(String.self, forKey: .patch)
+        before = try container.decodeIfPresent(String.self, forKey: .before)
+        after = try container.decodeIfPresent(String.self, forKey: .after)
+        additions = try container.decodeIfPresent(Int.self, forKey: .additions) ?? 0
+        deletions = try container.decodeIfPresent(Int.self, forKey: .deletions) ?? 0
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+    }
+}

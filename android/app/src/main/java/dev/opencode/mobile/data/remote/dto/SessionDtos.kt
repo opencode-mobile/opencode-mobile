@@ -105,5 +105,15 @@ data class TodoDto(
 
 @Serializable
 data class FileDiffDto(
-    val value: JsonElement? = null,
-)
+    @SerialName("file") val file: String? = null,
+    val path: String? = null,
+    val patch: String? = null,
+    val before: String? = null,
+    val after: String? = null,
+    val additions: Int = 0,
+    val deletions: Int = 0,
+    val status: String? = null,
+) {
+    val resolvedPath: String
+        get() = file ?: requireNotNull(path) { "File diff requires file or path" }
+}

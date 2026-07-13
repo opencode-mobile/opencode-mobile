@@ -24,3 +24,9 @@ import kotlinx.serialization.Serializable
     val sessionId: String,
     val worktree: String,
 ) : NavKey
+
+@Serializable data class Changes(
+    val sessionId: String,
+    val worktree: String,
+    val messageId: String? = null,
+) : NavKey

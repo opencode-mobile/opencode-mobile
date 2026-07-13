@@ -8,11 +8,16 @@ enum SessionsAPIError: Error {
 
 struct SessionsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
+    private let urlSession: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession = .shared
+    ) {
         self.connectionProvider = connectionProvider
+        self.urlSession = urlSession
     }
 
     private func requireConnection() throws -> ServerConnection {
@@ -81,16 +86,20 @@ struct SessionsAPIClient: Sendable {
     }
 
     func unshareSession(id: String, directory: String? = nil) async throws -> SessionDTO {
-        var request = try requireConnection().authorizedRequest(path: "session/\(id)/share", method: "DELETE", directory: directory)
+        let request = try requireConnection().authorizedRequest(path: "session/\(id)/share", method: "DELETE", directory: directory)
         return try await send(request)
     }
 
     func getSessionDiff(id: String, messageID: String?, directory: String? = nil) async throws -> [FileDiffDTO] {
-        var path = "session/\(id)/diff"
-        if let messageID {
-            path += "?messageID=\(messageID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? messageID)"
+        var request = try requireConnection().authorizedRequest(path: "session/\(id)/diff", directory: directory)
+        if let messageID, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            items.append(URLQueryItem(name: "messageID", value: messageID))
+            components.queryItems = items
+            request.url = components.url
         }
-        return try await get(path: path, directory: directory)
+        return try decoder.decode([FileDiffDTO].self, from: try await data(for: request))
     }
 
     func summarizeSession(id: String, body: SummarizeSessionRequestDTO, directory: String? = nil) async throws -> Bool {
@@ -165,7 +174,7 @@ struct SessionsAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await urlSession.data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

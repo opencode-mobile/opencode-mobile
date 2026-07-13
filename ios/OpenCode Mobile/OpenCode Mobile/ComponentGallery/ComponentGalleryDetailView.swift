@@ -86,6 +86,8 @@ struct ComponentGalleryDetailView: View {
             ChoiceBadgeGalleryView()
         case .actionPill:
             ActionPillGalleryView()
+        case .unifiedDiff:
+            UnifiedDiffGalleryView()
         case .button:
             ButtonGalleryView()
         case .textInput:

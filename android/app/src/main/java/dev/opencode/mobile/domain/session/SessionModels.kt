@@ -34,8 +34,18 @@ data class SessionTodo(
     val raw: String,
 )
 
+enum class FileDiffStatus {
+    Added,
+    Deleted,
+    Modified,
+}
+
 data class FileDiff(
-    val raw: String,
+    val path: String,
+    val patch: String?,
+    val additions: Int,
+    val deletions: Int,
+    val status: FileDiffStatus,
 )
 
 enum class PermissionDecision {
