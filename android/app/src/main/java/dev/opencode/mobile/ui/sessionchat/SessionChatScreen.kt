@@ -51,6 +51,7 @@ fun SessionChatScreen(
     modifier: Modifier = Modifier,
     onNavigateBack: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
+    onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
     val context = LocalContext.current
@@ -80,6 +81,14 @@ fun SessionChatScreen(
                 onDismissRequest = { menuExpanded = false },
                 entries =
                     listOf(
+                        OpenCodeOverflowMenuEntry(
+                            title = "Review changes",
+                            icon = OpenCodeIcons.Description,
+                            onClick = {
+                                menuExpanded = false
+                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                            },
+                        ),
                         OpenCodeOverflowMenuEntry(
                             title = "Session context",
                             icon = OpenCodeIcons.Architecture,

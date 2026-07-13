@@ -5,6 +5,7 @@ enum OpenCodeLog {
     static let api = Logger(subsystem: subsystem, category: "api")
     static let sse = Logger(subsystem: subsystem, category: "sse")
     static let sessionChat = Logger(subsystem: subsystem, category: "session-chat")
+    static let changes = Logger(subsystem: subsystem, category: "changes")
 
     private static let subsystem = "dev.opencode.mobile"
 }

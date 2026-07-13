@@ -55,7 +55,24 @@ class SessionDomainAdapter {
 
     fun toTodo(dto: TodoDto): SessionTodo = SessionTodo(raw = dto.value.toString())
 
-    fun toFileDiff(dto: FileDiffDto): FileDiff = FileDiff(raw = dto.value.toString())
+    fun toFileDiff(dto: FileDiffDto): FileDiff =
+        FileDiff(
+            path = dto.resolvedPath,
+            patch = dto.patch?.takeIf(String::isNotEmpty) ?: unifiedPatch(dto.before, dto.after),
+            additions = dto.additions,
+            deletions = dto.deletions,
+            status =
+                when (dto.status?.lowercase()) {
+                    "added", "add" -> FileDiffStatus.Added
+                    "deleted", "delete", "removed" -> FileDiffStatus.Deleted
+                    else ->
+                        when {
+                            dto.before?.isEmpty() == true && dto.after?.isNotEmpty() == true -> FileDiffStatus.Added
+                            dto.after?.isEmpty() == true && dto.before?.isNotEmpty() == true -> FileDiffStatus.Deleted
+                            else -> FileDiffStatus.Modified
+                        }
+                },
+        )
 
     fun toPermissionResponse(decision: PermissionDecision): String =
         when (decision) {
@@ -92,6 +109,22 @@ class SessionDomainAdapter {
             .ofEpochMilli(epochMs)
             .atZone(ZoneId.systemDefault())
             .format(updatedAtFormatter)
+
+    private fun unifiedPatch(
+        before: String?,
+        after: String?,
+    ): String? {
+        if (before == null || after == null || before == after) return null
+        val oldLines = before.takeIf(String::isNotEmpty)?.split("\n").orEmpty()
+        val newLines = after.takeIf(String::isNotEmpty)?.split("\n").orEmpty()
+        val oldStart = if (oldLines.isEmpty()) 0 else 1
+        val newStart = if (newLines.isEmpty()) 0 else 1
+        return buildList {
+            add("@@ -$oldStart,${oldLines.size} +$newStart,${newLines.size} @@")
+            addAll(oldLines.map { "-$it" })
+            addAll(newLines.map { "+$it" })
+        }.joinToString("\n")
+    }
 
     private companion object {
         val updatedAtFormatter: DateTimeFormatter =

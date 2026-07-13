@@ -77,6 +77,23 @@ struct SessionChatUiState: Equatable {
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
 
+    var latestCompletedUserMessageID: String? {
+        var latest: String?
+        var candidate: SessionChatRow?
+        for message in messages {
+            if message.role == .user {
+                candidate = message.isPending || message.isStreaming ? nil : message
+            } else if let candidate, !message.isPending, !message.isStreaming {
+                latest = candidate.id
+            }
+        }
+        return latest
+    }
+
+    func changesNavigationTarget(worktree: String) -> ChangesNavigationTarget {
+        ChangesNavigationTarget(sessionID: sessionID, worktree: worktree, messageID: latestCompletedUserMessageID)
+    }
+
     static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
         SessionChatUiState(
             sessionID: sessionID,
@@ -93,6 +110,12 @@ struct SessionChatUiState: Equatable {
             )
         )
     }
+}
+
+struct ChangesNavigationTarget: Hashable {
+    let sessionID: String
+    let worktree: String
+    let messageID: String?
 }
 
 struct SessionChatTimelineRegionState: Equatable {

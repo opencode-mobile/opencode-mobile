@@ -15,7 +15,7 @@ protocol SessionRepository: Sendable {
     func abortSession(id: String, directory: String?) async throws -> Bool
     func shareSession(id: String) async throws -> Session
     func unshareSession(id: String) async throws -> Session
-    func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff]
+    func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff]
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
@@ -31,6 +31,10 @@ extension SessionRepository {
 
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
         try await respondToPermission(sessionID: sessionID, permissionID: permissionID, decision: decision, directory: nil)
+    }
+
+    func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] {
+        try await getSessionDiff(id: id, messageID: messageID, directory: nil)
     }
 }
 
@@ -108,8 +112,11 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { adapter.session(from: try await api.unshareSession(id: id)) }
     }
 
-    func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] {
-        try await run { try await api.getSessionDiff(id: id, messageID: messageID).map(adapter.fileDiff) }
+    func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
+        try await run {
+            try await api.getSessionDiff(id: id, messageID: messageID, directory: directory)
+                .map(adapter.fileDiff)
+        }
     }
 
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {

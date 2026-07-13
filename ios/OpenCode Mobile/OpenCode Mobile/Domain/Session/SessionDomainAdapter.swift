@@ -38,7 +38,26 @@ struct SessionDomainAdapter: Sendable {
     }
 
     func fileDiff(from dto: FileDiffDTO) -> FileDiff {
-        FileDiff(raw: String(describing: dto))
+        let status: FileDiffStatus
+        switch dto.status?.lowercased() {
+        case "added", "add": status = .added
+        case "deleted", "delete", "removed": status = .deleted
+        default:
+            if dto.before?.isEmpty == true, dto.after?.isEmpty == false {
+                status = .added
+            } else if dto.after?.isEmpty == true, dto.before?.isEmpty == false {
+                status = .deleted
+            } else {
+                status = .modified
+            }
+        }
+        return FileDiff(
+            path: dto.file,
+            patch: dto.patch?.nilIfEmpty ?? UnifiedPatchBuilder.patch(before: dto.before, after: dto.after),
+            additions: dto.additions,
+            deletions: dto.deletions,
+            status: status
+        )
     }
 
     func permissionResponse(_ decision: PermissionDecision) -> String {
@@ -78,6 +97,24 @@ struct SessionDomainAdapter: Sendable {
         }
         return .transport(error.localizedDescription)
     }
+}
+
+private enum UnifiedPatchBuilder {
+    static func patch(before: String?, after: String?) -> String? {
+        guard let before, let after, before != after else { return nil }
+        let oldLines = before.isEmpty ? [] : before.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let newLines = after.isEmpty ? [] : after.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let oldStart = oldLines.isEmpty ? 0 : 1
+        let newStart = newLines.isEmpty ? 0 : 1
+        var rows = ["@@ -\(oldStart),\(oldLines.count) +\(newStart),\(newLines.count) @@"]
+        rows.append(contentsOf: oldLines.map { "-" + $0 })
+        rows.append(contentsOf: newLines.map { "+" + $0 })
+        return rows.joined(separator: "\n")
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 private extension SessionDomainAdapter {

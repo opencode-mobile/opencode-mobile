@@ -28,6 +28,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
@@ -48,6 +49,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGallery
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -168,6 +170,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
+                                                        ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                         ComponentGalleryEntryId.ProjectSessionSelector ->
@@ -194,6 +197,9 @@ fun MainNavigation() {
                                                 onSessionContextClick = {
                                                     backStack.add(SessionContext(key.sessionId, key.worktree))
                                                 },
+                                                onReviewChangesClick = { target ->
+                                                    backStack.add(Changes(target.sessionId, target.worktree, target.messageId))
+                                                },
                                             )
                                         }
                                     }
@@ -202,6 +208,16 @@ fun MainNavigation() {
                                             SessionContextScreen(
                                                 sessionId = key.sessionId,
                                                 worktree = key.worktree,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
+                                        }
+                                    }
+                                    entry<Changes> { key ->
+                                        RouteSurface {
+                                            ChangesScreen(
+                                                sessionId = key.sessionId,
+                                                worktree = key.worktree,
+                                                messageId = key.messageId,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                             )
                                         }

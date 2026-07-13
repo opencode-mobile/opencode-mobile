@@ -4,8 +4,8 @@ import dev.opencode.mobile.data.remote.dto.CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
+import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
 import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
@@ -14,6 +14,7 @@ import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.setJsonBody
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -22,11 +23,17 @@ import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import javax.inject.Inject
 
-class SessionsApi(
-    private val httpClient: OpencodeHttpClient,
+class SessionsApi private constructor(
+    private val httpClient: ClientProvider,
     private val json: Json,
 ) {
+    @Inject
+    constructor(httpClient: OpencodeHttpClient, json: Json) : this(ClientProvider(httpClient::get), json)
+
+    internal constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
+
     suspend fun listPendingPermissions(directory: String? = null): List<PermissionRequestDto> =
         httpClient
             .get()
@@ -223,4 +230,8 @@ class SessionsApi(
                 applyDirectory(directory)
                 setJsonBody(json, body)
             }.body()
+
+    private fun interface ClientProvider {
+        fun get(): HttpClient
+    }
 }
