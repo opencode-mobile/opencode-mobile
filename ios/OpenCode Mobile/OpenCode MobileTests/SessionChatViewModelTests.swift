@@ -5,6 +5,46 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
+    @Test func orderedPermissionRequests_prioritizesRootAndIncludesNewDescendants() {
+        let rootRequest = permissionRequest(id: "root-request", sessionID: "root")
+        let childRequest = permissionRequest(id: "child-request", sessionID: "child")
+        let newChildRequest = permissionRequest(id: "new-child-request", sessionID: "new-child")
+
+        let ordered = SessionChatViewModel.orderedPermissionRequests(
+            rootSessionID: "root",
+            sessions: [
+                Session(id: "child", title: "Child", slug: nil, projectID: nil, directory: nil, parentID: "root", updatedAtEpochMs: nil),
+                Session(id: "new-child", title: "New child", slug: nil, projectID: nil, directory: nil, parentID: "root", updatedAtEpochMs: nil),
+            ],
+            requests: [childRequest, newChildRequest, rootRequest]
+        )
+
+        #expect(ordered.map(\.id) == ["root-request", "child-request", "new-child-request"])
+    }
+
+    @Test func stalePermissionResponse_refreshesAndUsesWorktree() async {
+        let request = permissionRequest(id: "permission-1", sessionID: "ses-1")
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil)
+            ],
+            pendingPermissions: [],
+            permissionResponseError: .http(statusCode: 404, message: "Missing")
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [request])
+        )
+        defer { viewModel.stopObserving() }
+
+        await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" }
+        await viewModel.allowPermissionOnce()
+        await waitUntil { viewModel.uiState.permissionRequest == nil }
+
+        #expect(sessionRepository.responseDirectory == "/repo")
+        #expect(sessionRepository.pendingPermissionLoads == 1)
+    }
+
     @Test func loadMessages_success() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
         await viewModel.loadMessages()
@@ -576,10 +616,12 @@ struct SessionChatViewModelTests {
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
-        modelRepository: FakeModelRepository = FakeModelRepository()
+        modelRepository: FakeModelRepository = FakeModelRepository(),
+        sessionRepository: FakeChatSessionRepository? = nil,
+        permissionLiveStore: (any PermissionLiveStore)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
-        let sessionRepository = FakeChatSessionRepository()
+        let sessionRepository = sessionRepository ?? FakeChatSessionRepository()
         let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
             sessionRepository: sessionRepository,
             eventStream: eventStream
@@ -607,6 +649,7 @@ struct SessionChatViewModelTests {
             messageRepository: repo,
             modelRepository: modelRepository,
             sessionRepository: sessionRepository,
+            permissionLiveStore: permissionLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
@@ -951,8 +994,29 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
     }
 }
 
-private struct FakeChatSessionRepository: SessionRepository {
-    func listSessions(directory: String?) async throws -> [Session] { fatalError() }
+private final class FakeChatSessionRepository: SessionRepository, @unchecked Sendable {
+    private let sessions: [Session]
+    private let pendingPermissions: [PermissionRequest]
+    private let permissionResponseError: SessionError?
+    private(set) var responseDirectory: String?
+    private(set) var pendingPermissionLoads = 0
+
+    init(
+        sessions: [Session] = [],
+        pendingPermissions: [PermissionRequest] = [],
+        permissionResponseError: SessionError? = nil
+    ) {
+        self.sessions = sessions
+        self.pendingPermissions = pendingPermissions
+        self.permissionResponseError = permissionResponseError
+    }
+
+    func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
+        pendingPermissionLoads += 1
+        return pendingPermissions
+    }
+
+    func listSessions(directory: String?) async throws -> [Session] { sessions }
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
@@ -971,5 +1035,48 @@ private struct FakeChatSessionRepository: SessionRepository {
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
     func unrevertSession(id: String) async throws -> Bool { fatalError() }
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool { fatalError() }
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?
+    ) async throws -> Bool {
+        responseDirectory = directory
+        if let permissionResponseError { throw permissionResponseError }
+        return true
+    }
+}
+
+@MainActor
+private final class FakePermissionLiveStore: PermissionLiveStore {
+    private let requests: [PermissionRequest]
+
+    init(requests: [PermissionRequest]) {
+        self.requests = requests
+    }
+
+    func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
+        AsyncStream { continuation in
+            continuation.yield(requests)
+            continuation.finish()
+        }
+    }
+
+    func clearCache() {}
+}
+
+private func permissionRequest(
+    id: String,
+    sessionID: String
+) -> PermissionRequest {
+    PermissionRequest(
+        id: id,
+        sessionID: sessionID,
+        permission: "bash",
+        patterns: ["git status"],
+        metadata: [:],
+        always: [],
+        toolMessageID: nil,
+        toolCallID: nil
+    )
 }

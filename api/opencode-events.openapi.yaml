@@ -46,7 +46,7 @@ components:
       properties:
         type:
           type: string
-          description: Bus event type (e.g. server.connected, message.updated, session.status)
+          description: Bus event type (e.g. server.connected, message.updated, session.status, permission.asked, permission.replied)
         properties:
           type: object
           additionalProperties: true

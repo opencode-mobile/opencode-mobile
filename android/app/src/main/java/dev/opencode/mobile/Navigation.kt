@@ -44,9 +44,10 @@ import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGallery
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -157,25 +158,27 @@ fun MainNavigation() {
                                                     onNavigateBack = { backStack.removeLastOrNull() },
                                                 ) {
                                                     when (key.entryId) {
-                                                    ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
-                                                    ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
-                                                    ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
-                                                    ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
-                                                    ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
-                                                    ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
-                                                    ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
-                                                    ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
-                                                    ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
-                                                    ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
-                                                    ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
-                                                    ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
-                                                    ComponentGalleryEntryId.ProjectSessionSelector ->
-                                                        ProjectSessionSelectorGalleryScreen()
-                                                    ComponentGalleryEntryId.SessionStatusBar ->
-                                                        SessionStatusBarGalleryScreen()
-                                                    ComponentGalleryEntryId.RenderedMarkdown ->
-                                                        RenderedMarkdownGalleryScreen()
-                                                    ComponentGalleryEntryId.MessageList -> Unit
+                                                        ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
+                                                        ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
+                                                        ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
+                                                        ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
+                                                        ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
+                                                        ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
+                                                        ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
+                                                        ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
+                                                        ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
+                                                        ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
+                                                        ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                                        ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
+                                                        ComponentGalleryEntryId.ProjectSessionSelector ->
+                                                            ProjectSessionSelectorGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionStatusBar ->
+                                                            SessionStatusBarGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionComposer ->
+                                                            SessionComposerGalleryScreen()
+                                                        ComponentGalleryEntryId.RenderedMarkdown ->
+                                                            RenderedMarkdownGalleryScreen()
+                                                        ComponentGalleryEntryId.MessageList -> Unit
                                                     }
                                                 }
                                             }

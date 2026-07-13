@@ -25,6 +25,7 @@ enum class ComponentGalleryEntryId {
     TextInput,
     ProjectSessionSelector,
     SessionStatusBar,
+    SessionComposer,
     RenderedMarkdown,
     MessageList,
 }
@@ -120,6 +121,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionStatusBar,
             title = "Session Status Bar",
             description = "Compact session id, live-update status, and context usage strip.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionComposer,
+            title = "Session Composer",
+            description = "Prompt entry and blocking permission states in one persistent session surface.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

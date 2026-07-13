@@ -1,0 +1,225 @@
+import SwiftUI
+
+enum OpenCodeSessionComposerState {
+    struct Prompt {
+        let text: String
+        let selectedModelLabel: String
+        let selectedModeLabel: String
+        let selectedVariantLabel: String
+        let showVariant: Bool
+        let sendEnabled: Bool
+        let showStop: Bool
+        let stopEnabled: Bool
+    }
+
+    struct Permission {
+        let permission: String
+        let patterns: [String]
+        let queuePosition: Int
+        let queueCount: Int
+        let submitting: Bool
+        let errorMessage: String?
+
+        init(
+            permission: String,
+            patterns: [String],
+            queuePosition: Int = 1,
+            queueCount: Int = 1,
+            submitting: Bool = false,
+            errorMessage: String? = nil
+        ) {
+            self.permission = permission
+            self.patterns = patterns
+            self.queuePosition = queuePosition
+            self.queueCount = queueCount
+            self.submitting = submitting
+            self.errorMessage = errorMessage
+        }
+    }
+
+    case prompt(Prompt)
+    case permission(Permission)
+}
+
+enum OpenCodeSessionComposerAction {
+    case textChanged(String)
+    case selectModel
+    case selectMode
+    case selectVariant
+    case attach
+    case send
+    case stop
+    case allowPermissionOnce
+    case denyPermission
+}
+
+struct OpenCodeSessionComposer: View {
+    let state: OpenCodeSessionComposerState
+    let onAction: (OpenCodeSessionComposerAction) -> Void
+
+    private var textBinding: Binding<String> {
+        Binding(
+            get: {
+                guard case let .prompt(prompt) = state else { return "" }
+                return prompt.text
+            },
+            set: { onAction(.textChanged($0)) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            switch state {
+            case let .permission(permission):
+                permissionApprovalContent(permission)
+            case let .prompt(prompt):
+                promptEntryContent(prompt)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 26))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26)
+                .stroke(outlineColor, lineWidth: 1)
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+        .animation(.easeInOut(duration: 0.24), value: isPermission)
+    }
+
+    @ViewBuilder
+    private func promptEntryContent(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
+            TextField("Ask anything...", text: textBinding, axis: .vertical)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(label: prompt.selectedModelLabel, selected: false, action: { onAction(.selectModel) })
+                    OpenCodeChoiceBadge(label: prompt.selectedModeLabel, selected: false, action: { onAction(.selectMode) })
+                    if prompt.showVariant {
+                        OpenCodeChoiceBadge(label: prompt.selectedVariantLabel, selected: false, action: { onAction(.selectVariant) })
+                    }
+                }
+            }
+
+            HStack {
+                OpenCodeButton(
+                    variant: .iconCircle(.add, accessibilityLabel: "Attach context"),
+                    contrast: .low,
+                    action: { onAction(.attach) }
+                )
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 8) {
+                    if prompt.showStop {
+                        OpenCodeButton(
+                            variant: .iconCircle(.stop, accessibilityLabel: "Abort active work"),
+                            enabled: prompt.stopEnabled,
+                            contrast: .low,
+                            action: { onAction(.stop) }
+                        )
+                    }
+
+                    OpenCodeButton(
+                        variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
+                        enabled: prompt.sendEnabled,
+                        contrast: .low,
+                        action: { onAction(.send) }
+                    )
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func permissionApprovalContent(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Permission requested").font(OpenCodeTypography.heading)
+                Spacer()
+                if permission.queueCount > 1 {
+                    Text("\(permission.queuePosition) of \(permission.queueCount)")
+                        .font(OpenCodeTypography.caption)
+                }
+            }
+            Text(permission.permission.replacingOccurrences(of: "_", with: " "))
+                .font(OpenCodeTypography.bodySecondary)
+            ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
+                Text(pattern)
+                    .font(OpenCodeTypography.code)
+                    .textSelection(.enabled)
+            }
+            if let errorMessage = permission.errorMessage {
+                Text(errorMessage)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.error)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        HStack {
+            OpenCodeButton(
+                variant: .compactText(title: "Deny"),
+                enabled: !permission.submitting,
+                contrast: .low,
+                action: { onAction(.denyPermission) }
+            )
+            Spacer(minLength: 0)
+            if permission.submitting {
+                ProgressView().controlSize(.small)
+            }
+            OpenCodeButton(
+                variant: .compactText(title: "Allow once"),
+                enabled: !permission.submitting,
+                action: { onAction(.allowPermissionOnce) }
+            )
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var outlineColor: Color {
+        switch state {
+        case .prompt:
+            OpenCodeColors.borderWeakerBase
+        case let .permission(permission):
+            permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
+        }
+    }
+
+    private var isPermission: Bool {
+        if case .permission = state { return true }
+        return false
+    }
+}
+
+#Preview("Permission composer") {
+    OpenCodeSessionComposer(
+        state: .permission(
+            .init(
+                permission: "bash",
+                patterns: ["git status", "git diff --stat"],
+                queueCount: 2
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Permission composer dark") {
+    OpenCodeSessionComposer(
+        state: .permission(
+            .init(
+                permission: "external_directory",
+                patterns: ["/Users/ivan/Projects/opencode-web/**"]
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}

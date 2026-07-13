@@ -58,6 +58,21 @@ struct PermissionResponseRequestDTO: Codable, Sendable {
     let response: String
 }
 
+struct PermissionRequestDTO: Codable, Sendable {
+    let id: String
+    let sessionID: String
+    let permission: String
+    let patterns: [String]
+    let metadata: [String: AnyCodable]
+    let always: [String]
+    let tool: PermissionToolDTO?
+}
+
+struct PermissionToolDTO: Codable, Sendable {
+    let messageID: String
+    let callID: String
+}
+
 struct TodoDTO: Codable, Sendable {}
 
 struct FileDiffDTO: Codable, Sendable {}

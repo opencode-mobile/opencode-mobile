@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.session
 
+import kotlinx.serialization.json.JsonObject
+
 data class Session(
     val id: String,
     val title: String,
@@ -37,10 +39,20 @@ data class FileDiff(
 )
 
 enum class PermissionDecision {
-    Approve,
+    AllowOnce,
     Deny,
-    Once,
 }
+
+data class PermissionRequest(
+    val id: String,
+    val sessionId: String,
+    val permission: String,
+    val patterns: List<String>,
+    val metadata: JsonObject,
+    val always: List<String>,
+    val toolMessageId: String?,
+    val toolCallId: String?,
+)
 
 sealed class SessionError : Exception() {
     data class Transport(

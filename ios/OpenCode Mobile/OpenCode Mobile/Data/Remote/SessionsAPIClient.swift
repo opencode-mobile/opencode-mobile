@@ -26,6 +26,10 @@ struct SessionsAPIClient: Sendable {
         try await get(path: "session", directory: directory)
     }
 
+    func listPendingPermissions(directory: String? = nil) async throws -> [PermissionRequestDTO] {
+        try await get(path: "permission", directory: directory)
+    }
+
     func createSession(parentID: String?, title: String?, directory: String? = nil) async throws -> SessionDTO {
         try await post(path: "session", body: CreateSessionRequestDTO(parentID: parentID, title: title), directory: directory)
     }

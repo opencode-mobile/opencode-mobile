@@ -33,34 +33,56 @@ fun ComponentGalleryDetailScreen(
             showDivider = true,
         )
 
-        LazyColumn(
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            item {
+        if (entry.id == ComponentGalleryEntryId.SessionComposer) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(top = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
                 Text(
                     text = entry.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = horizontalPadding),
                 )
-            }
-            item {
                 ComponentGalleryControls(
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
                 )
-            }
-            item {
-                if (entry.id == ComponentGalleryEntryId.TopBar ||
-                    entry.id == ComponentGalleryEntryId.OverflowMenu ||
-                    entry.id == ComponentGalleryEntryId.SessionStatusBar
-                ) {
+                Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     content()
-                } else {
-                    Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+                }
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                item {
+                    Text(
+                        text = entry.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = horizontalPadding),
+                    )
+                }
+                item {
+                    ComponentGalleryControls(
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
+                    )
+                }
+                item {
+                    if (entry.id == ComponentGalleryEntryId.TopBar ||
+                        entry.id == ComponentGalleryEntryId.OverflowMenu ||
+                        entry.id == ComponentGalleryEntryId.SessionStatusBar
+                    ) {
                         content()
+                    } else {
+                        Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+                            content()
+                        }
                     }
                 }
             }

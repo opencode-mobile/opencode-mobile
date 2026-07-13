@@ -7,12 +7,17 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.session.PermissionDecision
+import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
@@ -32,7 +37,8 @@ class SessionChatViewModel
     constructor(
         messageRepository: MessageRepository,
         modelRepository: ModelRepository,
-        sessionRepository: SessionRepository,
+        private val sessionRepository: SessionRepository,
+        private val permissionLiveStore: PermissionLiveStore = EmptyPermissionLiveStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
         eventDomainAdapter: EventDomainAdapter,
@@ -76,6 +82,11 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
+        private var permissionSessions: List<Session> = emptyList()
+        private var permissionRequests: List<PermissionRequest> = emptyList()
+        private var permissionSubmittingId: String? = null
+        private var permissionError: String? = null
+        private var permissionObservationJob: kotlinx.coroutines.Job? = null
 
         init {
             timeline.ioDispatcher = ioDispatcher
@@ -109,6 +120,7 @@ class SessionChatViewModel
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             sessionInfo.bind(sessionId, sessionTitle, worktree)
+            observePermissions(sessionId, worktree)
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -166,10 +178,84 @@ class SessionChatViewModel
             composer.abort()
         }
 
+        fun allowPermissionOnce() = respondToPermission(PermissionDecision.AllowOnce)
+
+        fun denyPermission() = respondToPermission(PermissionDecision.Deny)
+
+        private fun observePermissions(
+            sessionId: String,
+            worktree: String,
+        ) {
+            permissionObservationJob?.cancel()
+            permissionObservationJob = viewModelScope.launch(ioDispatcher) {
+                permissionLiveStore.observePermissions(worktree).collect { requests ->
+                    applyPermissionSnapshot(sessionId, worktree, requests)
+                }
+            }
+        }
+
+        private fun respondToPermission(decision: PermissionDecision) {
+            val request = permissionRequests.firstOrNull() ?: return
+            if (permissionSubmittingId != null) return
+            permissionSubmittingId = request.id
+            permissionError = null
+            publishUiState()
+            viewModelScope.launch(ioDispatcher) {
+                runCatching {
+                    sessionRepository.respondToPermission(request.sessionId, request.id, decision, boundWorktree)
+                }
+                    .onFailure {
+                        permissionSubmittingId = null
+                        if (it is SessionError.Http && it.statusCode == 404) {
+                            val refreshed = refreshPermissionSnapshot()
+                            if (refreshed && permissionRequests.none { pending -> pending.id == request.id }) {
+                                permissionError = null
+                                publishUiState()
+                                return@onFailure
+                            }
+                            permissionError = "Permission request is no longer available"
+                        } else {
+                            permissionError = it.message ?: "Permission response failed"
+                        }
+                        publishUiState()
+                    }
+            }
+        }
+
+        private suspend fun refreshPermissionSnapshot(): Boolean {
+            val sessionId = boundSessionId ?: return false
+            val worktree = boundWorktree ?: return false
+            return runCatching { sessionRepository.listPendingPermissions(worktree) }
+                .onSuccess { applyPermissionSnapshot(sessionId, worktree, it) }
+                .isSuccess
+        }
+
+        private suspend fun applyPermissionSnapshot(
+            sessionId: String,
+            worktree: String,
+            requests: List<PermissionRequest>,
+        ) {
+            runCatching { sessionRepository.listSessions(worktree) }
+                .onSuccess { permissionSessions = it }
+            permissionRequests = orderedPermissionRequests(sessionId, permissionSessions, requests)
+            if (
+                permissionSubmittingId != null &&
+                permissionRequests.none { request -> request.id == permissionSubmittingId }
+            ) {
+                permissionSubmittingId = null
+                permissionError = null
+            }
+            publishUiState()
+        }
+
         internal fun toMessageItem(
             message: Message,
             previous: SessionChatMessageItem? = null,
         ): SessionChatMessageItem = timeline.toMessageItem(message, previous)
+
+        private fun publishUiState() {
+            _uiState.value = mergeUiState(timeline.state.value, composer.state.value, sessionInfo.state.value)
+        }
 
         private fun mergeUiState(
             timelineState: SessionChatTimelineRegionState,
@@ -201,6 +287,10 @@ class SessionChatViewModel
                         composerState.composer.selectedModel,
                     ),
                 errorMessage = errorMessage,
+                permissionRequest = permissionRequests.firstOrNull(),
+                permissionQueueCount = permissionRequests.size,
+                permissionSubmitting = permissionSubmittingId != null,
+                permissionErrorMessage = permissionError,
             )
         }
 
@@ -214,3 +304,29 @@ class SessionChatViewModel
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
         }
     }
+
+private object EmptyPermissionLiveStore : PermissionLiveStore {
+    override fun observePermissions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<PermissionRequest>())
+    override fun clearCache() = Unit
+}
+
+internal fun orderedPermissionRequests(
+    rootSessionId: String,
+    sessions: List<Session>,
+    requests: List<PermissionRequest>,
+): List<PermissionRequest> {
+    val children = sessions.groupBy { it.parentId }
+    val sessionOrder = buildList {
+        val queue = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+        queue.add(rootSessionId)
+        while (queue.isNotEmpty()) {
+            val sessionId = queue.removeFirst()
+            if (!visited.add(sessionId)) continue
+            add(sessionId)
+            children[sessionId].orEmpty().forEach { queue.add(it.id) }
+        }
+    }
+    val requestsBySession = requests.groupBy { it.sessionId }
+    return sessionOrder.flatMap { requestsBySession[it].orEmpty() }
+}

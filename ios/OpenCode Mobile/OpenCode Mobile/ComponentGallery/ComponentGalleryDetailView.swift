@@ -22,6 +22,20 @@ struct ComponentGalleryDetailView: View {
             if entry.id == .messageList {
                 MessageListGalleryView(model: messageListGalleryModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if entry.id == .sessionComposer {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(entry.description)
+                        .font(OpenCodeTypography.bodySecondary)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .padding(.horizontal, horizontalPadding)
+
+                    ComponentGalleryControls(themeMode: $themeMode)
+                        .padding(.horizontal, horizontalPadding)
+
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .padding(.top, 16)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -80,6 +94,8 @@ struct ComponentGalleryDetailView: View {
             ProjectSessionSelectorGalleryView()
         case .sessionStatusBar:
             SessionStatusBarGalleryView()
+        case .sessionComposer:
+            SessionComposerGalleryView()
         case .renderedMarkdown:
             RenderedMarkdownGalleryView()
         case .messageList:

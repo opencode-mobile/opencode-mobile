@@ -29,10 +29,20 @@ struct FileDiff: Sendable, Equatable {
     let raw: String
 }
 
-enum PermissionDecision: String, Sendable {
-    case approve
+enum PermissionDecision: Sendable {
+    case allowOnce
     case deny
-    case once
+}
+
+struct PermissionRequest: Sendable, Equatable, Identifiable {
+    let id: String
+    let sessionID: String
+    let permission: String
+    let patterns: [String]
+    let metadata: [String: AnyCodable]
+    let always: [String]
+    let toolMessageID: String?
+    let toolCallID: String?
 }
 
 enum SessionError: Error, Equatable {

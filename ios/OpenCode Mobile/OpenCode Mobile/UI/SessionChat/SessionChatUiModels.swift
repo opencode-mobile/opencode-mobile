@@ -72,6 +72,10 @@ struct SessionChatUiState: Equatable {
     var connectionStatus: SessionConnectionStatus = .offline
     var contextUsageFraction: Double?
     var errorMessage: String?
+    var permissionRequest: PermissionRequest?
+    var permissionQueueCount: Int = 0
+    var permissionSubmitting: Bool = false
+    var permissionErrorMessage: String?
 
     static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
         SessionChatUiState(

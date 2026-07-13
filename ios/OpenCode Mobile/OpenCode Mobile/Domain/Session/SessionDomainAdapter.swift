@@ -42,7 +42,23 @@ struct SessionDomainAdapter: Sendable {
     }
 
     func permissionResponse(_ decision: PermissionDecision) -> String {
-        decision.rawValue
+        switch decision {
+        case .allowOnce: "once"
+        case .deny: "reject"
+        }
+    }
+
+    func permissionRequest(from dto: PermissionRequestDTO) -> PermissionRequest {
+        PermissionRequest(
+            id: dto.id,
+            sessionID: dto.sessionID,
+            permission: dto.permission,
+            patterns: dto.patterns,
+            metadata: dto.metadata,
+            always: dto.always,
+            toolMessageID: dto.tool?.messageID,
+            toolCallID: dto.tool?.callID
+        )
     }
 
     func mapError(_ error: Error) -> SessionError {

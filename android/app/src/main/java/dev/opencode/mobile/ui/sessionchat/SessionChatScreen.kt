@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.sessionchat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +23,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
+import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
+import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
+import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -34,8 +36,6 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerView
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatComposerViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
@@ -153,28 +153,46 @@ fun SessionChatScreen(
                 modifier = Modifier.weight(1f),
             )
 
-            SessionChatComposerView(
-                props =
-                    SessionChatComposerViewProps(
-                        text = uiState.composer.text,
-                        selectedModelLabel = uiState.composer.selectedModelLabel,
-                        selectedMode = uiState.composer.selectedMode,
-                        selectedVariantLabel = uiState.composer.selectedVariantLabel,
-                        showVariant = uiState.composer.canSelectVariant,
-                        sendEnabled = uiState.composer.text.isNotBlank() && uiState.composer.selectedModel != null && !uiState.isSending,
-                        showStop = uiState.sessionStatusLabel != null,
-                        stopEnabled = !uiState.isAborting,
-                    ),
-                onTextChange = viewModel::updateComposerText,
-                onModelClick = {
-                    activeModelProviderId = uiState.composer.selectedModel?.option?.providerId
-                    activePicker = ComposerPickerKind.Model
+            val composerState =
+                uiState.permissionRequest?.let { request ->
+                    OpenCodeSessionComposerState.Permission(
+                        permission = request.permission,
+                        patterns = request.patterns,
+                        queueCount = uiState.permissionQueueCount,
+                        submitting = uiState.permissionSubmitting,
+                        errorMessage = uiState.permissionErrorMessage,
+                    )
+                } ?: OpenCodeSessionComposerState.Prompt(
+                    text = uiState.composer.text,
+                    selectedModelLabel = uiState.composer.selectedModelLabel,
+                    selectedModeLabel = uiState.composer.selectedMode,
+                    selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                    showVariant = uiState.composer.canSelectVariant,
+                    sendEnabled = uiState.composer.text.isNotBlank() && uiState.composer.selectedModel != null && !uiState.isSending,
+                    showStop = uiState.sessionStatusLabel != null,
+                    stopEnabled = !uiState.isAborting,
+                )
+            OpenCodeSessionComposer(
+                state = composerState,
+                onAction = { action ->
+                    when (action) {
+                        is OpenCodeSessionComposerAction.TextChanged -> viewModel.updateComposerText(action.text)
+                        OpenCodeSessionComposerAction.SelectModel -> {
+                            activeModelProviderId =
+                                uiState.composer.selectedModel
+                                    ?.option
+                                    ?.providerId
+                            activePicker = ComposerPickerKind.Model
+                        }
+                        OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
+                        OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
+                        OpenCodeSessionComposerAction.Attach -> Unit
+                        OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
+                        OpenCodeSessionComposerAction.Stop -> viewModel.abort()
+                        OpenCodeSessionComposerAction.AllowPermissionOnce -> viewModel.allowPermissionOnce()
+                        OpenCodeSessionComposerAction.DenyPermission -> viewModel.denyPermission()
+                    }
                 },
-                onModeClick = { activePicker = ComposerPickerKind.Mode },
-                onVariantClick = { activePicker = ComposerPickerKind.Variant },
-                onAttachClick = {},
-                onSendClick = viewModel::sendPrompt,
-                onStopClick = viewModel::abort,
             )
         }
 

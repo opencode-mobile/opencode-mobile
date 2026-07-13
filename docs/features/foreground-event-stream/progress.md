@@ -34,4 +34,5 @@
 
 ## Remaining
 
-- Permission request UI slice
+- [x] Permission request UI slice implemented under
+  [`permission-approval`](../permission-approval/progress.md); live-server QA remains there.

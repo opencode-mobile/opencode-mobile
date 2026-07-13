@@ -132,28 +132,58 @@ struct SessionChatView: View {
     private var composer: some View {
         let composer = viewModel.uiState.composer
         let isSending = viewModel.uiState.isSending
+        let state: OpenCodeSessionComposerState
 
-        return SessionChatComposerView(
-            props: SessionChatComposerViewProps(
-                text: composer.text,
-                selectedModelLabel: composer.selectedModelLabel,
-                selectedMode: composer.selectedMode,
-                selectedVariantLabel: composer.selectedVariantLabel,
-                showVariant: composer.canSelectVariant,
-                sendEnabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,
-                showStop: viewModel.uiState.sessionStatusLabel != nil,
-                stopEnabled: !viewModel.uiState.isAborting
-            ),
-            onTextChange: { viewModel.updateComposerText($0) },
-            onModelClick: {
-                activeModelProviderID = composer.selectedModel?.option.providerID
-                activePicker = .model
-            },
-            onModeClick: { activePicker = .mode },
-            onVariantClick: { activePicker = .variant },
-            onAttachClick: {},
-            onSendClick: { Task { await viewModel.sendPrompt() } },
-            onStopClick: { Task { await viewModel.abortSession() } }
+        if let request = viewModel.uiState.permissionRequest {
+            state = .permission(
+                .init(
+                    permission: request.permission,
+                    patterns: request.patterns,
+                    queueCount: viewModel.uiState.permissionQueueCount,
+                    submitting: viewModel.uiState.permissionSubmitting,
+                    errorMessage: viewModel.uiState.permissionErrorMessage
+                )
+            )
+        } else {
+            state = .prompt(
+                .init(
+                    text: composer.text,
+                    selectedModelLabel: composer.selectedModelLabel,
+                    selectedModeLabel: composer.selectedMode,
+                    selectedVariantLabel: composer.selectedVariantLabel,
+                    showVariant: composer.canSelectVariant,
+                    sendEnabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,
+                    showStop: viewModel.uiState.sessionStatusLabel != nil,
+                    stopEnabled: !viewModel.uiState.isAborting
+                )
+            )
+        }
+
+        return OpenCodeSessionComposer(
+            state: state,
+            onAction: { action in
+                switch action {
+                case let .textChanged(text):
+                    viewModel.updateComposerText(text)
+                case .selectModel:
+                    activeModelProviderID = composer.selectedModel?.option.providerID
+                    activePicker = .model
+                case .selectMode:
+                    activePicker = .mode
+                case .selectVariant:
+                    activePicker = .variant
+                case .attach:
+                    break
+                case .send:
+                    Task { await viewModel.sendPrompt() }
+                case .stop:
+                    Task { await viewModel.abortSession() }
+                case .allowPermissionOnce:
+                    Task { await viewModel.allowPermissionOnce() }
+                case .denyPermission:
+                    Task { await viewModel.denyPermission() }
+                }
+            }
         )
     }
 }

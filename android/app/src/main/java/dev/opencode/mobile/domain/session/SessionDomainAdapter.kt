@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
+import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
@@ -58,10 +59,21 @@ class SessionDomainAdapter {
 
     fun toPermissionResponse(decision: PermissionDecision): String =
         when (decision) {
-            PermissionDecision.Approve -> "approve"
-            PermissionDecision.Deny -> "deny"
-            PermissionDecision.Once -> "once"
+            PermissionDecision.AllowOnce -> "once"
+            PermissionDecision.Deny -> "reject"
         }
+
+    fun toPermissionRequest(dto: PermissionRequestDto): PermissionRequest =
+        PermissionRequest(
+            id = dto.id,
+            sessionId = dto.sessionId,
+            permission = dto.permission,
+            patterns = dto.patterns,
+            metadata = dto.metadata,
+            always = dto.always,
+            toolMessageId = dto.tool?.messageId,
+            toolCallId = dto.tool?.callId,
+        )
 
     fun mapError(throwable: Throwable): SessionError =
         when (throwable) {

@@ -16,6 +16,10 @@ class DefaultSessionRepository
         private val api: SessionsApi,
         private val adapter: SessionDomainAdapter,
     ) : SessionRepository {
+        override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
+            runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun listSessions(directory: String?): List<Session> =
             runCatching { api.listSessions(directory).map(adapter::toSession) }
                 .getOrElse { throw adapter.mapError(it) }
