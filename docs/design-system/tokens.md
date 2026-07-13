@@ -281,6 +281,34 @@ surfaces as documented in `docs/design-system/components/action-pill.md`.
 | `actionPill.iconSpacing` | 6 (logical px) |
 | `actionPill.shadowElevation` | 4 (logical px) |
 
+### Review changes pill
+
+Contextual floating entry point for reviewing the latest completed turn's
+changes. It is a separate component from Action pill even though both use the
+same compact raised geometry.
+
+| Token | Value |
+| --- | --- |
+| `reviewChangesPill.minHeight` | 36 (logical px; enforced via vertical padding) |
+| `reviewChangesPill.paddingHorizontal` | 14 (logical px) |
+| `reviewChangesPill.paddingVertical` | 8 (logical px) |
+| `reviewChangesPill.iconSize` | 16 (logical px) |
+| `reviewChangesPill.iconSpacing` | 6 (logical px) |
+| `reviewChangesPill.shadowElevation` | 4 (logical px) |
+
+### Unified diff
+
+Read-only line-oriented diff surface with stable gutters and horizontally
+scrollable source rows.
+
+| Token | Value |
+| --- | --- |
+| `unifiedDiff.lineMinHeight` | 20 (logical px) |
+| `unifiedDiff.linePaddingHorizontal` | 8 (logical px) |
+| `unifiedDiff.markerWidth` | 20 (logical px) |
+| `unifiedDiff.lineNumberGutterWidth` | 48 (logical px per old/new gutter pair) |
+| `unifiedDiff.hunkSpacing` | 8 (logical px) |
+
 ### Button
 
 Reusable action component with text and icon-only variants.
