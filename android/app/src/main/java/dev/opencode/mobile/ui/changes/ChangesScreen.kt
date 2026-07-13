@@ -2,27 +2,41 @@ package dev.opencode.mobile.ui.changes
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.domain.session.FileDiff
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun ChangesScreen(
@@ -41,9 +55,7 @@ fun ChangesScreen(
             ChangesUiState.Loading -> Centered { CircularProgressIndicator() }
             ChangesUiState.NoTurn -> EmptyMessage("No completed turn", "Send a prompt and wait for it to complete, then try again.")
             ChangesUiState.NoChanges -> EmptyMessage("No changes", "The latest completed turn did not change any files.")
-            is ChangesUiState.UnavailablePatch -> EmptyMessage(current.file.path, "A text preview is unavailable for this file.")
-            is ChangesUiState.Content ->
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) { OpenCodeUnifiedDiff(current.file) }
+            is ChangesUiState.Content -> ChangeSetContent(current.changeSet, viewModel)
             is ChangesUiState.Error ->
                 Centered {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -59,14 +71,142 @@ fun ChangesScreen(
     }
 }
 
-@Composable private fun Centered(content: @Composable () -> Unit) =
+@Composable
+private fun ChangeSetContent(
+    changeSet: ChangesContentState,
+    viewModel: ChangesViewModel,
+) {
+    var pickerVisible by remember { mutableStateOf(false) }
+    val selectedFile = changeSet.selectedFile
+
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            text = "${changeSet.files.size} files  ·  +${changeSet.additions}  −${changeSet.deletions}",
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = changeSet.aggregateAccessibilityLabel }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        OpenCodeListItem(
+            title = selectedFile.path,
+            subtitle = changeSet.selectedFileSummary,
+            style = OpenCodeListItemStyle.Card,
+            onClick = { pickerVisible = true },
+            modifier =
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .semantics { contentDescription = "Choose file. ${changeSet.selectedFileAccessibilityLabel}" },
+            trailing = {
+                Icon(OpenCodeIcons.ChevronRight, contentDescription = null)
+            },
+        )
+
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Previous file"),
+                onClick = viewModel::selectPreviousFile,
+                enabled = changeSet.canSelectPrevious,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Next file"),
+                onClick = viewModel::selectNextFile,
+                enabled = changeSet.canSelectNext,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+        }
+
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
+            if (selectedFile.patch.isNullOrEmpty()) {
+                EmptyMessage(selectedFile.path, "A text preview is unavailable for this file.")
+            } else {
+                OpenCodeUnifiedDiff(selectedFile)
+            }
+        }
+    }
+
+    OpenCodeBottomSheet(
+        visible = pickerVisible,
+        title = "Changed files",
+        onDismissRequest = { pickerVisible = false },
+        pinnedContent = {
+            FileFilter(changeSet, viewModel)
+        },
+    ) {
+        if (changeSet.filteredFiles.isEmpty()) {
+            EmptyMessage("No matching files", "Try another path or clear the filter.")
+        } else {
+            changeSet.filteredFiles.forEach { file ->
+                FilePickerEntry(file, changeSet, selectedFile.path == file.path) {
+                    viewModel.selectFile(file.path)
+                    pickerVisible = false
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileFilter(
+    changeSet: ChangesContentState,
+    viewModel: ChangesViewModel,
+) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OpenCodeTextInput(
+            label = "Filter paths",
+            value = changeSet.filter,
+            onValueChange = viewModel::updateFilter,
+            placeholder = "Search changed paths",
+        )
+        if (changeSet.filter.isNotEmpty()) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Clear filter"),
+                onClick = viewModel::clearFilter,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilePickerEntry(
+    file: FileDiff,
+    changeSet: ChangesContentState,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    OpenCodeListItem(
+        title = file.path,
+        subtitle = changeSet.filePickerSummary(file),
+        selected = selected,
+        onClick = onClick,
+        modifier =
+            Modifier
+                .padding(horizontal = 12.dp)
+                .semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
+        trailing = {
+            if (selected) Text("Selected", style = MaterialTheme.typography.labelMedium)
+        },
+    )
+}
+
+@Composable
+private fun Centered(content: @Composable () -> Unit) =
     Column(
         Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) { content() }
 
-@Composable private fun EmptyMessage(
+@Composable
+private fun EmptyMessage(
     title: String,
     detail: String,
 ) {

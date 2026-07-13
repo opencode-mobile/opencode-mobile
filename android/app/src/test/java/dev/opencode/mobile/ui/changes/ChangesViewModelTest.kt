@@ -15,6 +15,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -32,14 +33,89 @@ class ChangesViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    @Test fun loadsFirstPathSortedFileAndScopesRequest() =
+    @Test fun loadsPathSortedChangeSetWithAggregateCountsAndScopesRequest() =
         runTest(dispatcher) {
-            val repository = FakeRepository(ArrayDeque(listOf(Result.success(listOf(file("file2.kt"), file("file10.kt"))))))
+            val repository =
+                FakeRepository(
+                    ArrayDeque(
+                        listOf(
+                            Result.success(
+                                listOf(
+                                    file("file2.kt", additions = 3, deletions = 2),
+                                    file("file10.kt", additions = 2, deletions = 1),
+                                ),
+                            ),
+                        ),
+                    ),
+                )
             val viewModel = ChangesViewModel(repository)
             viewModel.bind("ses-1", "/repo", "msg-1")
             advanceUntilIdle()
-            assertEquals(ChangesUiState.Content(file("file10.kt")), viewModel.uiState.value)
+            val content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(listOf("file10.kt", "file2.kt"), content.files.map(FileDiff::path))
+            assertEquals("file10.kt", content.selectedFile.path)
+            assertEquals(5, content.additions)
+            assertEquals(3, content.deletions)
+            assertEquals("2 changed files, 5 additions, 3 deletions", content.aggregateAccessibilityLabel)
             assertEquals(listOf(Request("ses-1", "msg-1", "/repo")), repository.requests)
+        }
+
+    @Test fun filtersSelectsAndClearsWithExplicitNoMatchesState() =
+        runTest(dispatcher) {
+            val viewModel = loadedViewModel("app/Main.kt", "docs/Plan.md", "test/MainTest.kt")
+
+            viewModel.updateFilter("main")
+            var content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(listOf("app/Main.kt", "test/MainTest.kt"), content.filteredFiles.map(FileDiff::path))
+            assertEquals("app/Main.kt", content.selectedFile.path)
+
+            viewModel.selectFile("test/MainTest.kt")
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals("test/MainTest.kt", content.selectedFile.path)
+
+            viewModel.updateFilter("missing")
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(emptyList<FileDiff>(), content.filteredFiles)
+            assertEquals("test/MainTest.kt", content.selectedFile.path)
+
+            viewModel.clearFilter()
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(3, content.filteredFiles.size)
+            assertEquals("test/MainTest.kt", content.selectedFile.path)
+        }
+
+    @Test fun previousAndNextMoveWithinFilteredFilesAndExposeEnabledStates() =
+        runTest(dispatcher) {
+            val viewModel = loadedViewModel("app/A.kt", "app/B.kt", "docs/C.md")
+            viewModel.updateFilter("app/")
+
+            var content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(false, content.canSelectPrevious)
+            assertEquals(true, content.canSelectNext)
+
+            viewModel.selectNextFile()
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals("app/B.kt", content.selectedFile.path)
+            assertEquals(true, content.canSelectPrevious)
+            assertEquals(false, content.canSelectNext)
+
+            viewModel.selectPreviousFile()
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals("app/A.kt", content.selectedFile.path)
+        }
+
+    @Test fun exposesSelectedFileStatusPositionCountsAndAccessibilityLabel() =
+        runTest(dispatcher) {
+            val viewModel = loadedViewModel("Sources/App.kt", "Sources/New.kt")
+            viewModel.selectFile("Sources/New.kt")
+            val content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+
+            assertEquals("Added · 2 of 2", content.selectedFileSummary)
+            assertEquals("Added · +1 −1", content.filePickerSummary(content.selectedFile))
+            assertEquals(
+                "Sources/New.kt, Added, file 2 of 2, 1 addition, 1 deletion",
+                content.selectedFileAccessibilityLabel,
+            )
         }
 
     @Test fun coversNoTurnNoChangesUnavailablePatchErrorAndRetry() =
@@ -66,13 +142,13 @@ class ChangesViewModelTest {
             assertEquals(ChangesUiState.NoChanges, viewModel.uiState.value)
             viewModel.retry()
             advanceUntilIdle()
-            assertEquals(ChangesUiState.UnavailablePatch(binary), viewModel.uiState.value)
+            assertEquals(binary, (viewModel.uiState.value as ChangesUiState.Content).changeSet.selectedFile)
             viewModel.retry()
             advanceUntilIdle()
             assertEquals(ChangesUiState.Error("offline"), viewModel.uiState.value)
             viewModel.retry()
             advanceUntilIdle()
-            assertEquals(ChangesUiState.Content(file("ok.kt")), viewModel.uiState.value)
+            assertEquals(file("ok.kt"), (viewModel.uiState.value as ChangesUiState.Content).changeSet.selectedFile)
         }
 
     @Test fun reviewChangesNavigationCapturesSessionWorktreeAndLatestCompletedUserMessage() {
@@ -100,7 +176,31 @@ class ChangesViewModelTest {
         pending: Boolean = false,
     ) = SessionChatMessageItem(id, role, "", "", pending)
 
-    private fun file(path: String) = FileDiff(path, "@@ -1,1 +1,1 @@\n-old\n+new", 1, 1, FileDiffStatus.Modified)
+    private suspend fun TestScope.loadedViewModel(vararg paths: String): ChangesViewModel {
+        val files =
+            paths.mapIndexed { index, path ->
+                file(
+                    path,
+                    status =
+                        if (index == 1) {
+                            FileDiffStatus.Added
+                        } else {
+                            FileDiffStatus.Modified
+                        },
+                )
+            }
+        val viewModel = ChangesViewModel(FakeRepository(ArrayDeque(listOf(Result.success(files)))))
+        viewModel.bind("s", "/w", "m")
+        advanceUntilIdle()
+        return viewModel
+    }
+
+    private fun file(
+        path: String,
+        additions: Int = 1,
+        deletions: Int = 1,
+        status: FileDiffStatus = FileDiffStatus.Modified,
+    ) = FileDiff(path, "@@ -1,1 +1,1 @@\n-old\n+new", additions, deletions, status)
 }
 
 private data class Request(

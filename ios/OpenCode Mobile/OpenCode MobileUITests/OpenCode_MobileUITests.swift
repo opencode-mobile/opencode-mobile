@@ -14,6 +14,46 @@ final class OpenCode_MobileUITests: XCTestCase {
     }
 
     @MainActor
+    func testChangesScreenMultiFileAccessibilityAndFiltering() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCODE_UI_TEST_CHANGES"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["3 changed files, 4 additions, 3 deletions"].waitForExistence(timeout: 10))
+        let picker = app.buttons["Choose file. Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Previous file"].isEnabled)
+        picker.tap()
+
+        let filter = app.textFields.firstMatch
+        XCTAssertTrue(filter.waitForExistence(timeout: 5))
+        filter.tap()
+        filter.typeText("missing")
+        XCTAssertTrue(app.staticTexts["No matching files"].waitForExistence(timeout: 5))
+        app.buttons["Clear filter"].tap()
+
+        let newFile = app.buttons["Sources/New.swift, Added, file 2 of 3, 2 additions, 0 deletions"]
+        XCTAssertTrue(newFile.waitForExistence(timeout: 5))
+        newFile.tap()
+
+        XCTAssertTrue(
+            app.buttons["Choose file. Sources/New.swift, Added, file 2 of 3, 2 additions, 0 deletions"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertTrue(app.buttons["Previous file"].isEnabled)
+        XCTAssertTrue(app.buttons["Next file"].isEnabled)
+        app.buttons["Next file"].tap()
+        XCTAssertFalse(app.buttons["Next file"].isEnabled)
+        XCTAssertTrue(
+            app.buttons["Choose file. Sources/Removed.swift, Deleted, file 3 of 3, 1 addition, 2 deletions"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertFalse(
+            app.buttons["Choose file. Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"].exists
+        )
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()

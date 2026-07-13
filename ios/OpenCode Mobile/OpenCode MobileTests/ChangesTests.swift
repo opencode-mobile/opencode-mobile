@@ -45,15 +45,72 @@ struct UnifiedDiffParserTests {
 
 @MainActor
 struct ChangesViewModelTests {
-    @Test func loadsFirstPathSortedFileAndScopesRequest() async {
+    @Test func loadsPathSortedChangeSetWithAggregateCountsAndScopesRequest() async {
         let repository = ChangesSessionRepository(results: [.success([
-            Self.file("file2.swift"), Self.file("file10.swift"),
+            Self.file("file2.swift", additions: 3, deletions: 2),
+            Self.file("file10.swift", additions: 2, deletions: 1),
         ])])
         let viewModel = ChangesViewModel(sessionID: "ses-1", worktree: "/repo", messageID: "msg-1", repository: repository)
         await viewModel.load()
 
-        #expect(viewModel.state == ChangesState.content(Self.file("file10.swift")))
+        guard case let .content(content) = viewModel.state else { Issue.record("Expected content"); return }
+        #expect(content.files.map(\.path) == ["file10.swift", "file2.swift"])
+        #expect(content.selectedFile.path == "file10.swift")
+        #expect(content.additions == 5)
+        #expect(content.deletions == 3)
+        #expect(content.aggregateAccessibilityLabel == "2 changed files, 5 additions, 3 deletions")
         #expect(repository.requests == [ChangesSessionRepository.Request(sessionID: "ses-1", messageID: "msg-1", directory: "/repo")])
+    }
+
+    @Test func filtersSelectsAndClearsWithExplicitNoMatchesState() async {
+        let viewModel = await loadedViewModel("app/Main.swift", "docs/Plan.md", "test/MainTests.swift")
+
+        viewModel.updateFilter("main")
+        var content = try! #require(viewModel.content)
+        #expect(content.filteredFiles.map(\.path) == ["app/Main.swift", "test/MainTests.swift"])
+        #expect(content.selectedFile.path == "app/Main.swift")
+
+        viewModel.selectFile("test/MainTests.swift")
+        content = try! #require(viewModel.content)
+        #expect(content.selectedFile.path == "test/MainTests.swift")
+
+        viewModel.updateFilter("missing")
+        content = try! #require(viewModel.content)
+        #expect(content.filteredFiles.isEmpty)
+        #expect(content.selectedFile.path == "test/MainTests.swift")
+
+        viewModel.clearFilter()
+        content = try! #require(viewModel.content)
+        #expect(content.filteredFiles.count == 3)
+        #expect(content.selectedFile.path == "test/MainTests.swift")
+    }
+
+    @Test func previousAndNextMoveWithinFilteredFilesAndExposeEnabledStates() async {
+        let viewModel = await loadedViewModel("app/A.swift", "app/B.swift", "docs/C.md")
+        viewModel.updateFilter("app/")
+
+        var content = try! #require(viewModel.content)
+        #expect(!content.canSelectPrevious)
+        #expect(content.canSelectNext)
+
+        viewModel.selectNextFile()
+        content = try! #require(viewModel.content)
+        #expect(content.selectedFile.path == "app/B.swift")
+        #expect(content.canSelectPrevious)
+        #expect(!content.canSelectNext)
+
+        viewModel.selectPreviousFile()
+        #expect(viewModel.content?.selectedFile.path == "app/A.swift")
+    }
+
+    @Test func exposesSelectedFileStatusPositionCountsAndAccessibilityLabel() async {
+        let viewModel = await loadedViewModel("Sources/App.swift", "Sources/New.swift")
+        viewModel.selectFile("Sources/New.swift")
+        let content = try! #require(viewModel.content)
+
+        #expect(content.selectedFileSummary == "Added · 2 of 2")
+        #expect(content.filePickerSummary(content.selectedFile) == "Added · +1 −1")
+        #expect(content.selectedFileAccessibilityLabel == "Sources/New.swift, Added, file 2 of 2, 1 addition, 1 deletion")
     }
 
     @Test func coversNoTurnNoChangesUnavailablePatchErrorAndRetry() async {
@@ -69,9 +126,9 @@ struct ChangesViewModelTests {
         ])
         let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
         await viewModel.load(); #expect(viewModel.state == .noChanges)
-        await viewModel.retry(); #expect(viewModel.state == .unavailablePatch(FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified)))
+        await viewModel.retry(); #expect(viewModel.content?.selectedFile == FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified))
         await viewModel.retry(); #expect(viewModel.state == .error("offline"))
-        await viewModel.retry(); #expect(viewModel.state == .content(Self.file("ok.swift")))
+        await viewModel.retry(); #expect(viewModel.content?.selectedFile == Self.file("ok.swift"))
     }
 
     @Test func reviewChangesNavigationCapturesSessionWorktreeAndLatestCompletedUserMessage() {
@@ -80,8 +137,27 @@ struct ChangesViewModelTests {
         #expect(state.changesNavigationTarget(worktree: "/repo") == ChangesNavigationTarget(sessionID: "s", worktree: "/repo", messageID: "user-1"))
     }
 
-    private static func file(_ path: String) -> FileDiff {
-        FileDiff(path: path, patch: "@@ -1,1 +1,1 @@\n-old\n+new", additions: 1, deletions: 1, status: .modified)
+    private func loadedViewModel(_ paths: String...) async -> ChangesViewModel {
+        let files = paths.enumerated().map { index, path in
+            Self.file(path, status: index == 1 ? .added : .modified)
+        }
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            repository: ChangesSessionRepository(results: [.success(files)])
+        )
+        await viewModel.load()
+        return viewModel
+    }
+
+    private static func file(
+        _ path: String,
+        additions: Int = 1,
+        deletions: Int = 1,
+        status: FileDiffStatus = .modified
+    ) -> FileDiff {
+        FileDiff(path: path, patch: "@@ -1,1 +1,1 @@\n-old\n+new", additions: additions, deletions: deletions, status: status)
     }
 
     private func row(_ id: String, role: MessageRole, pending: Bool = false) -> SessionChatRow {
