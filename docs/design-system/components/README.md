@@ -106,6 +106,8 @@ applicable item is complete.
 - `button.md`
 - `text-input.md`
 - `action-pill.md`
+- `review-changes-pill.md`
+- `unified-diff.md`
 - `project-session-selector.md`
 - `session-status-bar.md`
 - `session-chat-composer.md`
