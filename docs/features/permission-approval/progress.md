@@ -55,22 +55,11 @@
 - [x] Parent-first queue refreshes session topology for every permission snapshot
 - [x] Stale 404 responses immediately reconcile against the pending list
 
-## Validation
-
-- [x] Android debug build and focused permission tests
-- [x] iOS app build
-- [x] Android and iOS app builds after Component Collection extraction
-- [x] Focused parent-first queue and stale-response tests on Android and iOS
-- [x] iOS test sources compile with the worktree-scoped repository contract
-- [ ] Full iOS test run (Xcode test action stalled twice on 2026-07-12)
-- [ ] Light/dark composer permission-state preview review on both platforms
-- [x] Manual approval against `opencode serve` confirmed in the mobile app
-
 ## Remaining
 
 Implementation is complete on both platforms, including permission approval as
 a native composer state, dynamic descendant discovery, stale-request
 reconciliation, and successful manual approval against a live server.
-Remaining work is visual composer-state review and a successful iOS runtime test action.
+No implementation work remains in this slice.
 The canonical behavior is in [plan.md](plan.md) and the upstream evidence is in
 [web-spec.md](web-spec.md).

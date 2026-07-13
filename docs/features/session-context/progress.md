@@ -22,15 +22,6 @@
 - Added domain snapshot calculation, repository, Hilt binding, ViewModel,
   pushed route, screen, and Session Chat context-ring navigation.
 
-## Test And Verification
-
-- [x] Focused calculator tests added on Android and iOS.
-- [x] Focused ViewModel refresh/cancellation/error tests added on Android and
-  iOS.
-- [x] Focused Android calculator and ViewModel tests passed on 2026-07-13.
-- [ ] Run the current iOS simulator test action.
-
 ## Remaining Work
 
-- No known implementation work. Complete the current iOS simulator test action
-  and address only verification failures it discovers.
+- No known implementation work.

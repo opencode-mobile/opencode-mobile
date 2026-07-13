@@ -22,11 +22,6 @@
 - [x] Home ViewModel wired to `listSessions()`
 - [x] ViewModel unit tests
 
-## Tests / manual
-
-- [x] JVM / Swift unit tests for home ViewModel
-- [ ] Manual: `opencode serve` on `:4096`, open home, confirm real sessions
-
 ## Remaining
 
 - Connection Profile persistence shipped in

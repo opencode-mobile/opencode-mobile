@@ -41,23 +41,6 @@
   callback guards, and per-message height caching for smoother timeline scroll.
 - Added gallery preview.
 
-## Validation Status
-
-- Renderer JS smoke test passed on 2026-06-17:
-  `npm run rendered-markdown:test`.
-- Android debug Kotlin compile passed on 2026-06-17:
-  `./gradlew :app:compileDebugKotlin`.
-- Android focused detector unit test passed on 2026-06-17:
-  `./gradlew :app:testDebugUnitTest --tests dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownDetectorTest`.
-- iOS simulator debug build passed on 2026-06-17:
-  `xcodebuild -project 'ios/OpenCode Mobile/OpenCode Mobile.xcodeproj' -scheme 'OpenCode Mobile' -destination 'generic/platform=iOS Simulator' -configuration Debug build`.
-- iOS focused detector test passed on 2026-06-17:
-  `xcodebuild test -project 'ios/OpenCode Mobile/OpenCode Mobile.xcodeproj' -scheme 'OpenCode Mobile' -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:'OpenCode MobileTests/OpenCodeRenderedMarkdownDetectorTests'`.
-- Android ktlint remains blocked by pre-existing unrelated violations in
-  `DefaultMessageLiveStore.kt`, `MessageDomainAdapter.kt`,
-  `BottomSheetGalleryScreen.kt`, `SessionContextViewModel.kt`,
-  `OpenCodeSessionStatusBar.kt`, and test sources.
-
 ## Remaining Work
 
 - Dedicated session diff viewer.

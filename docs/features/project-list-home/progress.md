@@ -34,13 +34,6 @@
   Factory.
 - "Developer Components" action from session home.
 
-## Validation Status
-
-- Component previews for List Item on both platforms.
-- ViewModel unit tests with fake `SessionRepository` on both platforms.
-- Manual: `opencode serve` on `:4096` — see
-  [`session-repository/manual-test.md`](../session-repository/manual-test.md).
-
 ## Remaining Work
 
 - None in this superseded slice. Current implementation and remaining work live

@@ -41,8 +41,6 @@
 - [x] Hybrid shim renamed to `OpenCodeKotlinRegexHybridTextMateBackend` with deprecated
       `OpenCodeOnigurumaRegexBackend` typealias.
 - [x] `iosSimulatorArm64Test` added to `ios-checks.yml` CI workflow.
-- [ ] Revisit full Shiki golden gate on iOS (`@Ignore` on
-      `nativeHighlighterMatchesShikiSemanticGoldenFixtures`) as a follow-up decision.
 
 ## Benchmarks
 

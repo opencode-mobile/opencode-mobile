@@ -43,9 +43,11 @@ Track:
 - design-system dependencies;
 - iOS implementation status;
 - Android implementation status;
-- test or preview status;
-- logcat/Console evidence for network, live-update, and mutation paths;
 - remaining work.
+
+Keep verification runs, manual QA checklists, screenshots, and temporary debug
+evidence out of canonical feature progress. Store reusable procedures separately
+when they remain useful, but do not treat them as planned feature work.
 
 ## `parity-gaps.md`
 

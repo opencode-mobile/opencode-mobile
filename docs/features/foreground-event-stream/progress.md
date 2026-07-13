@@ -26,13 +26,7 @@
 - [x] Session status on list rows and chat
 - [x] Unit tests
 
-## Validation
-
-- [x] Android `:app:testDebugUnitTest`
-- [x] iOS `OpenCode MobileTests` on simulator
-- [ ] Manual against `opencode serve` on `:4096`
-
 ## Remaining
 
 - [x] Permission request UI slice implemented under
-  [`permission-approval`](../permission-approval/progress.md); live-server QA remains there.
+  [`permission-approval`](../permission-approval/progress.md).
