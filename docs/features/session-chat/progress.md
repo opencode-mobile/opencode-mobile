@@ -67,6 +67,9 @@
 - **2026-07-08 / OPE-32:** Composer agent mode (`Build` / `Plan`) is now
   mapped to server agent names (`build` / `plan`) and sent with
   `POST /session/{id}/prompt_async`.
+- **2026-07-13:** Native composer permission state observes pending requests,
+  prioritizes the root session before descendants, and resolves allow-once or
+  deny decisions with stale-request reconciliation.
 
 ## iOS
 
@@ -97,6 +100,9 @@
 - **2026-07-08 / OPE-32:** Composer agent mode (`Build` / `Plan`) is now
   mapped to server agent names (`build` / `plan`) and sent with
   `POST /session/{id}/prompt_async`.
+- **2026-07-13:** Native composer permission state observes pending requests,
+  prioritizes the root session before descendants, and resolves allow-once or
+  deny decisions with stale-request reconciliation.
 
 ## Architecture guardrails
 
@@ -167,7 +173,9 @@
 
 ## Remaining Work
 
-- Permission request handling remains tracked outside this status-bar slice.
+- No remaining implementation work in the current Session Chat slice.
+- Manual local-runtime validation remains listed above. Dedicated diff viewing
+  and real attachment handling remain separate feature work.
 
 ## Big Session Performance Investigation
 

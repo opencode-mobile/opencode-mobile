@@ -20,11 +20,19 @@ Chat screen with visible messages and a composer ready for new prompts.
 - SSE streaming and reconnect behavior (see Message Repository + future event stream slices).
 - Provider auth or model configuration management.
 
-## Delivered via Message Repository slice
+## Delivered after the scaffold slice
 
 - Real server-backed message history and async prompt send are implemented in
   [Message Repository](../message-repository/plan.md) and wired into Session Chat.
-- Abort, permission request, and diff interactions.
+- Foreground SSE observation, reconnect refresh, and live session/message state
+  shipped in [Foreground Event Stream](../foreground-event-stream/progress.md).
+- Abort/stop is wired through `SessionRepository` from the composer.
+- Permission requests are observed and resolved from the native composer state;
+  mobile exposes allow-once and deny only.
+
+## Still Out Of Scope
+
+- Dedicated session diff viewer interactions.
 - Real attachment handling or mobile file upload.
 
 ## Server APIs Involved
@@ -62,7 +70,9 @@ is a thin facade. Any change to the facade is an architectural decision — see
 
 ## Permission Behavior
 
-- Not applicable in this scaffold slice.
+- The delivered Session Chat observes pending permission requests for the open
+  session and its descendants. The composer exposes allow-once and deny; it does
+  not expose persistent `remember` decisions.
 
 ## Composer Behavior
 

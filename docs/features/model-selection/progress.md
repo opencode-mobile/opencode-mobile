@@ -11,7 +11,7 @@
   non-default.
 - [x] Unit coverage added for provider parsing and prompt request mapping.
 
-## Persistent Session Cache (planned)
+## Persistent Session Cache (delivered)
 
 - [x] Domain `SessionModelSelectionStore` on Android and iOS.
 - [x] DataStore / UserDefaults persistence scoped by server + worktree.

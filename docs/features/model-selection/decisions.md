@@ -12,8 +12,8 @@ The mobile composer uses **Variant** for the server-provided model variant keys.
   `server + worktree + sessionId`. Restore cached selection before history
   bootstrap or catalog defaults. Write cache on explicit user model/variant
   changes and successful prompt send. **Store I/O lives in
-  `SessionChatComposer`**, not `SessionChatViewModel` (Android shipped;
-  iOS parity pending).
+  `SessionChatComposer`**, not `SessionChatViewModel` (shipped on Android and
+  iOS).
 - Reason: match OpenCode desktop session-local model memory without writing
   server config or adding global workspace defaults.
 - Revisit when: agent selection becomes server-backed or cross-session defaults

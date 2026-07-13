@@ -32,5 +32,9 @@
 
 ## Remaining
 
-- Server-backed composer options
-- Connection Profile persistence
+- No remaining implementation work in this repository slice.
+- Server-backed model and Variant options shipped in
+  [Model Selection](../model-selection/progress.md); agent mode is also sent with
+  async prompts from Session Chat.
+- Connection Profile persistence shipped in
+  [Server Connection](../server-connection/progress.md).

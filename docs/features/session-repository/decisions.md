@@ -24,7 +24,11 @@ built-in Kotlin on AGP 9.
 
 ## Connection
 
-`ServerConnection` holds base URL and optional Basic Auth; modules provide it from `AppConfig` until Connection Profile exists.
+`ServerConnection` holds base URL and Basic Auth credentials. Runtime modules
+resolve it from the persisted active Connection Profile; URL and username use
+ordinary preferences while the password uses iOS Keychain or Android
+Keystore-backed storage. `AppConfig` is no longer the runtime source after the
+[Server Connection](../server-connection/decisions.md) slice.
 
 ## Permission API
 

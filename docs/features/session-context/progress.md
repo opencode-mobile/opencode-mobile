@@ -24,8 +24,13 @@
 
 ## Test And Verification
 
-- Pending: run platform checks and add focused calculator/ViewModel tests.
+- [x] Focused calculator tests added on Android and iOS.
+- [x] Focused ViewModel refresh/cancellation/error tests added on Android and
+  iOS.
+- [x] Focused Android calculator and ViewModel tests passed on 2026-07-13.
+- [ ] Run the current iOS simulator test action.
 
 ## Remaining Work
 
-- None known beyond verification fixes found by test/build runs.
+- No known implementation work. Complete the current iOS simulator test action
+  and address only verification failures it discovers.
