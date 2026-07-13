@@ -1,231 +1,116 @@
 ---
 name: linear-project-tracking
-description: Keep opencode-mobile Linear issues in sync with repo feature docs and implementation work. Use when planning features, implementing changes, updating docs/features progress, closing todos, starting or finishing work, or when the user mentions Linear, issues, backlog, or project tracking. Creates and maintains a live work-plan canvas beside the chat for visibility on active issues.
+description: Sync opencode-mobile feature docs with Linear when feature scope or implementation state changes, or when the user asks about Linear, issues, backlog, or project tracking.
 ---
 
 # Linear Project Tracking
 
-All product and implementation work for this repo should be reflected in Linear.
-`docs/features/<slug>/progress.md` is the detailed source of truth; Linear is the
-execution board.
+Keep Linear as the execution board for work whose detailed source of truth lives
+under `docs/features/<slug>/`. A sync is complete only when the reconciliation
+contract below holds.
 
-## Linear Workspace
+Use the available Linear app or connector to read and mutate current state. Tool
+names vary by runtime; select tools by capability rather than relying on a fixed
+MCP server name. If Linear is unavailable, finish safe repo work, report exactly
+what remains unsynced, and do not claim reconciliation.
 
-| Item | Value |
-| --- | --- |
-| Team | `Opencode-mobile` (key `OPE`) |
-| Project | `opencode apps` |
-| Status doc | [Implementation Status](https://linear.app/opencode-mobile/document/implementation-status-d505a23348e6) |
-| Project URL | https://linear.app/opencode-mobile/project/opencode-apps-f7d80fb00b5a |
+## Reconciliation Contract
 
-Authenticate the Linear MCP server (`plugin-linear-linear`) with `mcp_auth` if
-tools are unavailable.
+For the active feature slice, all of these statements must be true:
 
-## Milestones
+1. Exactly one parent Linear issue represents the slice unless the docs record
+   an intentional split.
+2. The issue links `docs/features/<slug>/` and its title uses the product name,
+   not the slug.
+3. Every actionable item that is incomplete in the canonical docs appears once
+   under **Remaining** or in a linked child issue.
+4. No item completed or removed in the canonical docs remains open in Linear.
+5. Every unresolved parity gap that requires work appears under **Remaining**
+   or in a linked follow-up issue; documented intentional differences do not.
+6. The issue state matches the repo signal in [reference.md](reference.md), and
+   its project, milestone, labels, and dependency links match the documented
+   scope.
 
-Map feature slices to project milestones:
+The feature is reconciled only after every statement has been checked against
+fresh reads of both the docs and Linear.
 
-| Milestone | Feature slices |
-| --- | --- |
-| V1 Foundations | `server-connection`, `project-list-home`, `project-selection`, `session-repository`, `message-repository`, `foreground-event-stream` |
-| Session Chat & Control | `session-chat`, `model-selection`, `session-context`, `clear-data`, permission UI, session CRUD/fork, abort |
-| Rendered Markdown | `native-rendered-markdown`, `rendered-markdown` (superseded), `ios-oniguruma-backend`, session diff viewer |
-| Polish & Validation | `theme`, `sync-probe`, manual QA |
+## Sync Loop
 
-For milestone-to-issue mapping and label conventions, see
-[reference.md](reference.md).
+### 1. Resolve the canonical slice
 
-## Core Rules
+Identify the feature slug, then read every existing planning artifact under
+`docs/features/<slug>/` that can affect scope or state, especially `progress.md`,
+`plan.md`, and `parity-gaps.md`.
 
-**Never finish feature work without updating Linear.**
+If the directory or the planning artifact needed to establish scope is missing,
+use the `documentation-planning` skill to create it before changing Linear. For
+a new synchronized iOS and Android feature slice, use `synced-native-feature`
+for the feature plan, then resume this loop.
 
-When you change code or docs for a feature slice:
+**Complete when:** the canonical docs path exists and every documented scope,
+remaining item, completed item, parity gap, and intentional deferral relevant to
+the slice has been accounted for.
 
-1. Update `docs/features/<slug>/progress.md` (and `parity-gaps.md` if needed).
-2. Update the matching Linear issue in the same session.
-3. If no issue exists, create one before or as part of the work.
+### 2. Resolve the Linear issue
 
-**Always maintain a work-plan canvas for the active Linear issue.**
+Read current issues in the `opencode apps` project and match by docs path first,
+then by product title or recorded issue key. Do not rely on a remembered issue
+inventory.
 
-The canvas is the live execution dashboard the user opens beside the chat. Keep
-it current — not a one-time snapshot.
+If no issue matches, create one using the conventions in
+[reference.md](reference.md). If multiple issues match without a documented
+split, stop mutation and report the ambiguity rather than creating another.
 
-## Work Plan Canvas
+When implementation work is about to start, set the issue to **In Progress**
+before the first implementation mutation. Merely reading, planning, or updating
+the tracking artifacts does not make work active.
 
-Read the `canvas` skill for file rules (`cursor/canvas` only, no network, token
-colors). For layout and section templates, see [canvas.md](canvas.md).
+**Complete when:** one issue is identified, its intended relationship to the
+feature slice is unambiguous, and its state reflects whether implementation has
+started.
 
-### When to create
+### 3. Mirror each observable transition
 
-Create or open the canvas **before writing code**, right after you identify the
-Linear issue and read `progress.md` / `plan.md`. Do this for every issue you
-work on — not only large features.
+Reconcile after any of these transitions:
 
-### Naming and location
+- a canonical item changes between incomplete, completed, removed, or deferred;
+- scope is added, split, or moved to a follow-up;
+- a parity gap is opened, resolved, or declared intentional;
+- implementation changes between not started, active, blocked, complete,
+  superseded, or abandoned;
+- a branch, dependency, milestone, platform scope, or docs path changes.
 
-```text
-~/.cursor/projects/<workspace>/canvases/<issue-key>-<slug>-work-plan.canvas.tsx
-```
+Update the canonical docs first, then update the issue description, child or
+related issues, metadata, and state. Use one parent issue per cross-platform
+slice unless the docs or user explicitly require separate platform issues.
 
-Example: `ope-17-theme-work-plan.canvas.tsx`. Reuse the same file when returning
-to an issue; do not create duplicates.
+**Complete when:** the reconciliation contract passes after the transition and
+there is no stale open item or undocumented issue-only scope.
 
-### What to include
+### 4. Reconcile before handoff
 
-Seed from `progress.md` unchecked items, `plan.md` phases, and the Linear issue
-**Remaining** list:
+Read the docs and Linear again rather than trusting earlier snapshots. Apply the
+contract exhaustively. Post a project status update only when a milestone
+materially changes; describe the concrete milestone change.
 
-- Issue key + title, milestone, feature slug, docs path, branch name
-- Summary stats (checklist %, phases left, todos done)
-- **Implementation phases** — ordered blocks with platform scope, files to
-  touch, and status (`pending` / `in_progress` / `completed`)
-- **Execution todos** — `TodoListCard` mirroring the session plan; update
-  statuses as work lands
-- **Callout** — one-line current focus ("Working on Phase 2: Android import UI")
-- Optional: manual QA table, shipped-on-branch summary when closing out
+Report the issue key and state, docs path, changes made, and any blocker that
+prevents full reconciliation.
 
-### When to update
+**Complete when:** all six contract statements pass on fresh state, or the
+handoff explicitly names each failed statement and the external action needed
+to satisfy it.
 
-Update the canvas in the **same turn** as meaningful progress:
+## Authority Boundaries
 
-| Event | Canvas action |
-| --- | --- |
-| Phase or todo completed | Mark done; refresh stats and callout |
-| Scope grows | Add phase/todo; note in Linear issue too |
-| Branch created or renamed | Update header metadata |
-| Blocked or descoped | Callout tone + note what is deferred |
-| Issue closed or handed off | Final state; todos reflect remaining QA only |
+- Canonical docs own product scope, implementation progress, parity gaps,
+  decisions, and intentional platform differences.
+- Linear owns scheduling, assignment, priority, status, dependencies, and a
+  concise projection of remaining work.
+- Never resolve a disagreement by copying undocumented Linear scope into the
+  repo. Confirm the scope with the user or add it through
+  `documentation-planning` first.
+- Agent-only maintenance and CI changes without product impact stay out of
+  Linear unless the user asks to track them.
 
-Do not wait until the end of a session. The user relies on the canvas for
-mid-task visibility.
-
-### Introducing the canvas
-
-Link the canvas file in chat when you create or materially update it:
-
-`[OPE-17 theme plan](/Users/ivan/.cursor/projects/.../ope-17-theme-work-plan.canvas.tsx)`
-
-## Workflow
-
-### Before starting work
-
-1. Read `docs/features/<slug>/progress.md` and `plan.md`.
-2. `list_issues` filtered by project `opencode apps`; find the issue for this
-   slice (title usually matches the feature name).
-3. If missing, `save_issue` with:
-   - `team`: `Opencode-mobile`
-   - `project`: `opencode apps`
-   - `milestone`: from table above
-   - `labels`: `Feature` plus `iOS`, `Android`, and/or `Shared` as appropriate
-   - `description`: user goal, doc path, remaining checklist
-4. Move issue to **In Progress** (`state`: `In Progress`).
-5. **Create or refresh the work-plan canvas** from remaining scope; link it in
-   chat.
-
-### While implementing
-
-- Update the work-plan canvas after each completed phase or meaningful chunk.
-- Add sub-items to the issue description when scope grows.
-- Link related issues with `relatedTo` / `blockedBy` when dependencies exist.
-- For cross-platform slices, keep one issue per feature slice (not separate iOS
-  and Android issues unless the user asks).
-
-### After completing work
-
-1. Mark checklist items done in `progress.md`.
-2. Update the work-plan canvas to final state (stats, callout, remaining QA).
-3. Update the Linear issue:
-   - **Done** when the slice is complete for both platforms (or intentionally
-     scoped subset is done and remainder is split to a new issue).
-   - **In Progress** when meaningful work landed but docs list remaining items.
-   - **Todo** when planned but not started.
-4. Move remaining items from `progress.md` into the issue description under
-   **Remaining**.
-5. Post a project status update (`save_status_update`) when a milestone
-   materially advances or a major slice ships.
-
-### New feature slice
-
-1. Create docs under `docs/features/<slug>/` (use `synced-native-feature` skill).
-2. Create a Linear issue in **Todo** or **Backlog**.
-3. Add a row to the Implementation Status document (`save_document` on the
-   existing doc).
-
-### Manual QA / verification
-
-Use issue **OPE-20** (Manual QA) or create focused **Manual QA**-labeled
-issues. Check off items in the issue description as validation completes.
-
-## Issue Conventions
-
-**Title:** Product name, not slug — e.g. `Session Chat`, `Native Rendered Markdown`.
-
-**Description template:**
-
-```markdown
-[One-line summary of the slice.]
-
-**Remaining:**
-- [ ] item from progress.md
-
-Docs: `docs/features/<slug>/progress.md`
-```
-
-**States:**
-
-| Repo signal | Linear state |
-| --- | --- |
-| Not planned / V1 backlog | Backlog |
-| Planned, not started | Todo |
-| Active development | In Progress |
-| Shipped per progress.md | Done |
-| Superseded or abandoned | Canceled |
-
-**Priority:** High for V1 blockers and in-progress slices; Medium for polish; Low
-for follow-ups and optional items.
-
-## What To Sync From Docs
-
-From each `progress.md`, mirror into Linear:
-
-- Completed platform milestones → mark issue Done or trim **Remaining**
-- Unchecked `- [ ]` items → issue **Remaining** or child Todo issues
-- "Remaining Work" / "Remaining" sections → issue description
-- New parity gaps → comment on issue or create Improvement-labeled follow-up
-- Verification gaps → Manual QA issue or checklist on the feature issue
-
-## MCP Quick Reference
-
-| Action | Tool |
-| --- | --- |
-| Find work | `list_issues` with `project: opencode apps` |
-| Create/update issue | `save_issue` |
-| Project overview | `get_project`, `save_project` |
-| Status snapshot | `save_document` on Implementation Status |
-| Progress broadcast | `save_status_update` with `type: project`, `health: onTrack` |
-| Labels | `create_issue_label` only when a new category is needed |
-
-Always pass markdown with real newlines, not `\n` escape sequences.
-
-## Integration
-
-- **Feature implementation:** use with `synced-native-feature` — docs first,
-  then Linear, then code.
-- **Design-system work:** track under the relevant feature issue or create an
-  Improvement issue linked to the parent feature.
-- **Do not** duplicate planning in Linear alone; docs remain canonical for
-  decisions, parity gaps, and ADR-worthy trade-offs.
-
-## Checklist (copy per task)
-
-```
-- [ ] Read docs/features/<slug>/progress.md
-- [ ] Find or create Linear issue in opencode apps
-- [ ] Set state to In Progress before coding
-- [ ] Create or refresh work-plan canvas; link in chat
-- [ ] Implement + update progress.md
-- [ ] Update canvas after each completed phase/chunk
-- [ ] Update Linear issue state and Remaining list
-- [ ] Final canvas update before closing issue
-- [ ] Post project status update if milestone-level progress
-```
+Read [reference.md](reference.md) when creating an issue, choosing its state,
+milestone, labels, description, or dependency relationships.

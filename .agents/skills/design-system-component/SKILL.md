@@ -1,75 +1,88 @@
 ---
 name: design-system-component
-description: Develop opencode-mobile design-system tokens, typography, reusable components, component variants, previews, and galleries. Use when adding or changing native iOS or Android design-system components or when feature work needs reusable UI.
+description: Design-system development for opencode-mobile. Use when changing semantic or component tokens; defining typography roles or platform mappings; adding or changing reusable native components, variants, states, previews, or galleries; or when feature work needs reusable UI.
 ---
 
-# Design System Component
+# Design System Development
 
-Use this skill when adding or changing the shared Design System or Component
-Collection for opencode-mobile.
+Keep one conceptual Design System across the native apps while using native
+SwiftUI and Material 3 implementations.
 
-## Ground Rules
+## Route The Work
 
-- The canonical source is `docs/design-system/`.
-- One conceptual component system serves both native apps.
-- Implement Android and iOS together once app projects exist.
-- Public APIs should be variant-first and state-aware.
-- Do not expose raw hex colors, one-off gradients, ad-hoc radius values, or
-  arbitrary typography overrides as public customization.
-- Promote feature-local UI into the Component Collection when it duplicates an
-  existing component role, is needed on both platforms, or is likely to recur.
-  Feature-local custom UI should remain the last resort after reuse and
-  reusable-component creation or extension are considered.
-- Record intentional platform differences in the same change.
+Classify the request into every applicable branch, then load only that branch's
+reference:
 
-## Workflow
+| Branch | Use for | Required reference |
+| --- | --- | --- |
+| Token | Semantic or component tokens, theme resolution, platform token mappings | Read the relevant sections of [`docs/design-system/tokens.md`](../../../docs/design-system/tokens.md). |
+| Typography | Semantic type roles, fonts, or platform typography mappings | Read [`docs/design-system/typography.md`](../../../docs/design-system/typography.md). |
+| Component | Reusable component intent, API, variants, states, implementation, gallery, or previews | Read [`docs/design-system/components/README.md`](../../../docs/design-system/components/README.md) and the component's existing document, if any. |
 
-1. Read `docs/design-system/tokens.md`,
-   `docs/design-system/typography.md`,
-   `docs/design-system/components/README.md`, and
-   `docs/design-system/divergences.md`.
-2. Define the component's shared intent before platform implementation.
-3. Add or update `docs/design-system/components/<component-name>.md`.
-4. If needed, update token or typography docs before writing component code.
-5. Design the public API around semantic variants and explicit states.
-6. Once app projects exist, implement iOS and Android in the same change.
-7. Update both platform Component Gallery registries, detail screens, controls,
-   or preview routes that help review the component. For gallery entries,
-   prefer **one live preview** plus **interactive controls** that switch variants
-   and states (see `docs/design-system/components/README.md` template and
-   Definition of Done). If the component must be reviewed **full width**
-   (for example a page top bar), wire the gallery detail shell so that entry’s
-   content is edge-to-edge while the page header and theme controls stay padded.
-8. Add light and dark previews with stable copy and realistic states.
-9. Document every intentional iOS/Android difference in
-   `docs/design-system/divergences.md`.
-10. Run the relevant platform build, preview, lint, or test checks when they
-    exist.
+For a Component branch, also consult the token or typography reference when the
+component selects, adds, or changes those roles. Read
+[`docs/design-system/divergences.md`](../../../docs/design-system/divergences.md)
+only when the work introduces, changes, or discovers different native behavior.
 
-## Required States
+Routing is complete when every requested change has a branch, affected
+platforms and canonical documents are identified, and every loaded reference
+is required by an active branch.
 
-Cover the states that apply to the component:
+## Steps
 
-- default;
-- pressed or active;
-- focused, if platform-relevant;
-- disabled;
-- loading;
-- error;
-- empty;
-- selected.
+1. **Define the shared contract before implementation.**
+   - Token: specify its semantic purpose, level, light/dark behavior, and both
+     platform mappings.
+   - Typography: specify the role's meaning and both native mappings.
+   - Component: specify intent, public API, variants, applicable states,
+     content, behavior, and accessibility using the Component Documentation
+     contract.
 
-Do not invent unsupported states just to fill a checklist. State omissions should
-be intentional and clear from the component docs.
+   This step is complete when every changed public decision has one shared
+   meaning and an iOS and Android mapping, or an explicit `not applicable`
+   reason.
 
-## Definition Of Done
+2. **Update the canonical design-system documents before dependent code.**
+   Update `tokens.md`, `typography.md`, or
+   `components/<component-name>.md` for the active branches. For Component work,
+   use the template and authoritative Definition of Done in the Component
+   Documentation reference.
 
-- Component intent and public API are documented.
-- Tokens and typography roles map back to the design-system docs.
-- iOS and Android implementations are both complete when app projects exist.
-- Both platform Component Gallery registries list the component when relevant.
-- Light and dark previews exist on both platforms.
-- Key states use stable copy and realistic data.
-- Temporary mismatches are tracked in the relevant feature `parity-gaps.md`.
-- Intentional design-system differences are recorded in
-  `docs/design-system/divergences.md`.
+   This step is complete when every changed semantic decision has one
+   authoritative document and component documents point to token, typography,
+   gallery, and state contracts instead of redefining them.
+
+3. **Implement the requested native changes.**
+   Keep iOS and Android behavior aligned to the shared contract. For Component
+   work, implement against the Component Contract in the Component
+   Documentation reference.
+
+   This step is complete when every affected platform implements the contract,
+   or a concrete blocker is recorded in the completion ledger.
+
+4. **Add review surfaces for Component work.**
+   Apply the gallery and preview contract from the Component Documentation
+   reference. Do not create gallery or preview work for Token or Typography
+   branches unless the requested change needs a visual review surface.
+
+   This step is complete when every applicable native gallery and preview item
+   satisfies that contract, and each omitted surface has a reason.
+
+5. **Classify every platform difference.**
+   Record intentional design-system differences in `divergences.md`. Record a
+   temporary mismatch caused by feature implementation in that feature's
+   `parity-gaps.md`; do not place unfinished work in `divergences.md`.
+
+   This step is complete when every observed iOS/Android mismatch is resolved,
+   intentional with a divergence entry, temporary with a parity-gap entry, or
+   blocked with evidence.
+
+6. **Close the completion ledger.**
+   Account for canonical docs, iOS, Android, variants and applicable states,
+   gallery and previews, divergences or parity gaps, and automated checks. Mark
+   each item `complete`, `not applicable` with a reason, or `blocked` with
+   evidence. Run the build, lint, test, or preview checks affected by the
+   change; do not claim completion while any applicable ledger item is blocked.
+
+The work is complete only when every ledger item is accounted for and every
+applicable item is complete.

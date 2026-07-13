@@ -1,158 +1,137 @@
 ---
 name: run-github-actions
-description: Trigger, monitor, and troubleshoot opencode-mobile GitHub Actions workflows using the gh CLI. Use when the user asks to run CI, trigger a workflow, check GitHub Actions status, follow up on a failed run, or debug Android/iOS build or check jobs.
+description: "Run opencode-mobile GitHub Actions with `gh`: dispatch a workflow, monitor a specific run, or diagnose a failed run."
 ---
 
 # Run GitHub Actions
 
-Use the `gh` CLI for all GitHub Actions work in this repo. Do not use the GitHub web UI unless the user asks.
+Use `gh` from the repository root. Treat the selected file under
+`.github/workflows/` as the executable authority for triggers, jobs, runner
+environment, working directories, and commands. Read that file before acting;
+do not rely on copied command lists.
 
-All workflows are **manual only** (`workflow_dispatch`). Nothing runs on push or pull request.
+Keep a **run identity** throughout the task:
 
-## Workflows
+- workflow name or file;
+- requested ref and resolved head SHA when available;
+- event and dispatch time for a new run;
+- run ID and URL once resolved.
 
-| User intent | Workflow name | File | What it runs |
-|---|---|---|---|
-| Build Android app | `Android Build` | `.github/workflows/android-build.yml` | `./gradlew :app:assembleDebug` |
-| Android lint/style/tests | `Android Checks` | `.github/workflows/android-checks.yml` | `ktlintCheck`, `lintDebug`, `testDebugUnitTest` |
-| Build iOS app | `iOS Build` | `.github/workflows/ios-build.yml` | Simulator build, no signing |
-| iOS analyze/tests | `iOS Checks` | `.github/workflows/ios-checks.yml` | Build, `xcodebuild analyze`, unit tests |
+Never watch or diagnose “the newest run” after candidates exist. Resolve one
+run identity first, and use its ID for every later command. Diagnose by default;
+edit code, rerun, cancel, delete, or open a browser only when the user asks.
 
-Notes:
-- Android static analysis uses **ktlint**, not detekt.
-- iOS has no SwiftLint yet; checks use build + analyzer + unit tests.
-- iOS CI needs the shared scheme at `ios/OpenCode Mobile/OpenCode Mobile.xcodeproj/xcshareddata/xcschemes/OpenCode Mobile.xcscheme`.
+## Route the request
 
-## Trigger a workflow
+1. Confirm `gh auth status` succeeds and inspect `gh workflow list` plus the
+   relevant workflow YAML.
+2. Choose exactly one branch below: **dispatch**, **monitor**, or **diagnose**.
+3. If the user supplied a run ID or URL, use it. Otherwise collect enough
+   selectors to identify one run without guessing.
 
-1. Confirm `gh auth status` succeeds.
-2. Use the current branch unless the user names another ref:
+This step is complete when the workflow or run is unambiguous and the selected
+branch matches the requested action.
 
-```bash
-REF="$(git branch --show-current)"
-gh workflow run "Android Checks" --ref "$REF"
-```
+## Dispatch
 
-3. Tell the user which workflow and ref were triggered.
+1. Select the workflow and ref. Use the current branch when the user did not
+   name a ref:
 
-Common triggers:
+   ```bash
+   REF="$(git branch --show-current)"
+   ```
 
-```bash
-gh workflow run "Android Build" --ref main
-gh workflow run "Android Checks" --ref main
-gh workflow run "iOS Build" --ref main
-gh workflow run "iOS Checks" --ref main
-```
+   If that is empty (for example, detached HEAD), stop and request a ref. Do not
+   substitute `main`. Confirm the ref exists on GitHub before dispatching.
 
-List workflows if names are unclear:
+2. Record an ISO-8601 UTC dispatch time, then dispatch the selected workflow:
 
-```bash
-gh workflow list
-```
+   ```bash
+   DISPATCHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+   gh workflow run "<workflow>" --ref "$REF"
+   ```
 
-## Check status
+3. Poll runs filtered by workflow, `workflow_dispatch`, and ref. Inspect the
+   returned `createdAt`, `headSha`, `databaseId`, and `url`; accept only a run
+   created at or after `DISPATCHED_AT`. If more than one candidate remains,
+   report the ambiguity instead of choosing by list order.
 
-After triggering, find and watch the run:
+   ```bash
+   gh run list \
+     --workflow "<workflow>" \
+     --event workflow_dispatch \
+     --branch "$REF" \
+     --limit 20 \
+     --json databaseId,url,workflowName,headBranch,headSha,event,createdAt,status,conclusion
+   ```
 
-```bash
-# Latest runs for one workflow
-gh run list --workflow="Android Checks" --limit 5
+4. From this point forward, address the resolved run only as
+   `gh run view <run-id>` or `gh run watch <run-id>`.
 
-# Watch the newest run until it finishes
-gh run watch
+Dispatch is complete when exactly one run ID and URL are tied to the selected
+workflow, ref, `workflow_dispatch` event, and dispatch time. Report all of those
+fields, the head SHA if available, and whether monitoring was requested.
 
-# Watch a specific run
-gh run watch <run-id>
+## Monitor
 
-# Summary only
-gh run view <run-id>
-```
+1. Resolve one run ID from the user's ID or URL. Without one, filter by the
+   workflow, ref, event, and time window the user means; never infer identity
+   from ordering alone.
+2. Fetch its identity and state:
 
-If the user did not just trigger a run, start from `gh run list --limit 10` or filter by workflow name.
+   ```bash
+   gh run view <run-id> \
+     --json databaseId,url,workflowName,headBranch,headSha,event,createdAt,status,conclusion,jobs
+   ```
 
-Open in browser only when asked:
+3. For continuous monitoring, use `gh run watch <run-id>`. For a status check,
+   return the current snapshot without waiting.
 
-```bash
-gh run view <run-id> --web
-```
+Monitoring is complete when the requested snapshot is reported or the exact
+run reaches a terminal conclusion. Report the run identity, status or
+conclusion, and any failed job and step names.
 
-## Follow-up troubleshooting
+## Diagnose
 
-When the user asks about a failed run, stale status, or "what went wrong":
+1. Resolve and report the run identity before reading failure output.
+2. Inspect the run summary and failed logs:
 
-1. Identify the run:
-   - Use a run ID the user gave, or
-   - `gh run list --workflow="<Workflow Name>" --limit 1`
-2. Inspect it:
+   ```bash
+   gh run view <run-id>
+   gh run view <run-id> --log-failed
+   ```
 
-```bash
-gh run view <run-id>
-gh run view <run-id> --log-failed
-```
+3. Find the first actionable failure, separating it from later cancellations
+   and cascading errors. Read the workflow YAML from the run's `headSha`, not
+   merely the current working tree, when the two may differ.
+4. Classify every conclusion:
+   - **Observed:** directly present in the run metadata or log.
+   - **Supported cause:** an explanation backed by the workflow and log evidence.
+   - **Hypothesis:** a plausible explanation whose missing evidence and next
+     discriminating check are stated.
+5. After extracting the failing error block, consult
+   [`FAILURE-PATTERNS.md`](FAILURE-PATTERNS.md) only when the observed symptom
+   matches a pattern or you need hypothesis prompts.
+6. If local reproduction is within the user's request and the platform is
+   available, derive the working directory and exact command from the workflow
+   at the run's SHA. Record any deliberate local deviation. A passing local run
+   does not disprove a CI-only failure; compare runner, toolchain, checkout, and
+   generated state using evidence from the workflow and logs.
 
-3. Find the first failing step and extract the error block. Summarize:
-   - workflow + job + step
-   - error message
-   - likely cause
-4. Reproduce locally with the matching command:
+Diagnosis is complete when the exact failed job and step, the decisive error
+block, and the strongest evidence-supported explanation are reported. Include
+hypotheses only with a validation check. State whether local reproduction was
+run and its result. Do not fix or retrigger unless requested.
 
-**Android Build**
-```bash
-cd android && ./gradlew :app:assembleDebug --stacktrace
-```
+## Report contract
 
-**Android Checks**
-```bash
-cd android && ./gradlew ktlintCheck lintDebug testDebugUnitTest --stacktrace
-```
+Every response includes the run identity fields currently known and a direct
+run URL once available. Then report only the selected branch's result:
 
-**iOS Build**
-```bash
-cd "ios/OpenCode Mobile"
-xcodebuild -resolvePackageDependencies -project "OpenCode Mobile.xcodeproj" -scheme "OpenCode Mobile"
-xcodebuild build \
-  -project "OpenCode Mobile.xcodeproj" \
-  -scheme "OpenCode Mobile" \
-  -configuration Debug \
-  -destination 'generic/platform=iOS Simulator' \
-  CODE_SIGNING_ALLOWED=NO
-```
+- **Dispatch:** dispatch accepted, resolved run ID, and monitoring disposition.
+- **Monitor:** current or terminal state and failed job/step names, if any.
+- **Diagnose:** observed failure, supported cause, bounded hypotheses, and the
+  next evidence-producing action.
 
-**iOS Checks**
-```bash
-cd "ios/OpenCode Mobile"
-GITHUB_OUTPUT=/tmp/ios-sim.txt bash ../../.github/scripts/select-ios-simulator.sh
-DEST="$(grep '^destination=' /tmp/ios-sim.txt | cut -d= -f2-)"
-xcodebuild build -project "OpenCode Mobile.xcodeproj" -scheme "OpenCode Mobile" -configuration Debug -destination "$DEST" CODE_SIGNING_ALLOWED=NO
-xcodebuild analyze -project "OpenCode Mobile.xcodeproj" -scheme "OpenCode Mobile" -configuration Debug -destination "$DEST" CODE_SIGNING_ALLOWED=NO
-xcodebuild test -project "OpenCode Mobile.xcodeproj" -scheme "OpenCode Mobile" -configuration Debug -destination "$DEST" -only-testing:"OpenCode MobileTests" CODE_SIGNING_ALLOWED=NO
-```
-
-5. If local repro fails, fix the code and offer to re-trigger the same workflow.
-6. If local repro passes but CI fails, compare environment differences:
-   - Android: JDK 17, Ubuntu, clean checkout
-   - iOS: `macos-15`, Xcode on the runner, simulator picked by `.github/scripts/select-ios-simulator.sh`
-
-## Common failure patterns
-
-| Symptom | Likely cause | Next step |
-|---|---|---|
-| `ktlintCheck` failed | Kotlin style violation | Run `./gradlew ktlintCheck` locally; fix or `ktlintFormat` |
-| `lintDebug` failed | Android Lint issue | Read lint report from CI log; run `./gradlew lintDebug` locally |
-| `testDebugUnitTest` failed | Unit test regression | Run failing test class locally |
-| Scheme not found (iOS) | Shared scheme missing from branch | Ensure `xcshareddata/xcschemes/OpenCode Mobile.xcscheme` is committed |
-| Simulator destination error (iOS) | Runner has no matching device name | CI uses `select-ios-simulator.sh`; inspect that script output in logs |
-| SPM resolve failed | Package checkout/network issue | Re-run; check `Package.resolved` and Factory dependency |
-| Signing error (iOS) | CI should disable signing | Confirm workflow passes `CODE_SIGNING_ALLOWED=NO` |
-
-## Response pattern
-
-**After trigger:**
-- Workflow name, ref, and command used
-- Run ID if available
-- Whether you are watching it or how to check later
-
-**After troubleshooting:**
-- What failed (step + error)
-- Local repro result
-- Recommended fix or re-run command
+If identity remains ambiguous, report the candidate IDs and missing selector;
+do not present any candidate's state as the requested run.

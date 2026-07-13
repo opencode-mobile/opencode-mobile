@@ -1,83 +1,113 @@
 ---
 name: documentation-planning
-description: Plan and maintain opencode-mobile documentation artifacts, including feature docs, task plans, progress updates, decisions, parity gaps, and companion HTML visual plans. Use when creating or updating plans, deciding where docs should live, adding durable planning artifacts, or documenting implementation progress.
+description: Route durable opencode-mobile documentation when creating or maintaining feature plans, task plans, progress, decisions, parity gaps, or companion HTML artifacts.
 ---
 
 # Documentation Planning
 
-Use this skill when creating or updating durable project documentation,
-especially feature plans and task-specific plans that should survive handoff.
+Treat documentation work as **artifact routing**: identify the durable fact, put
+it in its canonical artifact, and keep every affected artifact consistent.
 
-## Storage Rules
+## Steps
 
-- Store durable feature documentation under `docs/features/<feature-slug>/`.
-- Keep feature-wide source docs in:
-  - `plan.md`
-  - `progress.md`
-  - `decisions.md`
-  - `parity-gaps.md`
-- Store task-specific plans beside the feature docs:
-  - `<ticket-or-task>-plan.md`
-  - `<ticket-or-task>-plan.html`
-- Keep scratch notes, debug dumps, and temporary investigations out of tracked
-  feature docs unless they become useful review or handoff material.
+### 1. Route the request
 
-## Markdown And HTML Plans
+Identify the feature slug and classify every applicable branch:
 
-- Markdown is the source of truth when the repo needs canonical planning text.
-- HTML is a companion visual review artifact for plans that benefit from layout,
-  comparison tables, flow diagrams, or scan-friendly status views.
-- When creating a meaningful plan, create or update the HTML companion alongside
-  the markdown plan unless the user asks for text only.
-- Do not treat HTML plans as runtime assets.
-- Commit manually curated HTML plans. If an HTML plan becomes mechanically
-  generated later, document the regeneration command and reconsider whether to
-  commit generated output.
+| Branch | Canonical artifact |
+| --- | --- |
+| Feature scope or implementation strategy | `docs/features/<feature-slug>/plan.md` |
+| Focused ticket or task plan | `docs/features/<feature-slug>/<ticket-or-task>-plan.md` |
+| Implementation status or remaining work | `docs/features/<feature-slug>/progress.md` |
+| Durable feature-level choice | `docs/features/<feature-slug>/decisions.md` |
+| Temporary or intentional platform difference | `docs/features/<feature-slug>/parity-gaps.md` |
+| Visual companion to a plan | Adjacent `.html` with the same basename |
 
-## Planning Workflow
+Use an ADR only for a hard-to-reverse project decision that is surprising
+without context and resulted from a real trade-off.
 
-1. Identify the feature slug and existing docs directory.
-2. Read existing `plan.md`, `progress.md`, `decisions.md`, and `parity-gaps.md`
-   before changing docs.
-3. For a new feature, use `docs/features/README.md` as the structure guide.
-4. For task-specific work, add a focused task plan beside the feature docs
-   instead of overloading the feature-wide `plan.md`.
-5. Keep plans scoped to product behavior, implementation strategy, risks,
-   validation, and handoff notes.
-6. Update `progress.md` after meaningful implementation progress.
-7. Record surprising or durable choices in `decisions.md`; use an ADR only for
-   hard-to-reverse project decisions with real trade-offs.
-8. Record cross-platform mismatches in `parity-gaps.md` as soon as they are
-   discovered.
+This step is complete when the feature slug, every applicable branch, and every
+artifact that may need inspection are identified.
 
-## HTML Plan Guidance
+### 2. Load the canonical contract
 
-Use a self-contained `.html` file with inline CSS so it opens directly in a
-browser. Prefer:
+For any creation or maintenance work under `docs/features/`, read
+[`docs/features/README.md`](../../../docs/features/README.md), then inspect the
+feature directory and every routed artifact before editing.
 
-- a short title and summary;
-- status cards for scope, risks, and validation gates;
-- tables for artifacts, phases, risks, and test plans;
-- compact flow sections for implementation sequence;
-- restrained colors that work in light and dark mode.
+Handle missing paths explicitly:
 
-Avoid:
+- For a new feature, create its directory and the feature-wide files required by
+  the README before populating them.
+- For an existing feature, create a missing routed artifact only when the
+  request or another affected artifact requires it. Do not create unrelated
+  empty files merely to complete the standard set.
+- Create a missing HTML companion when the HTML branch applies; otherwise its
+  absence is expected.
+- If the feature slug or canonical owner remains ambiguous after inspecting the
+  repository, stop and report the competing candidates instead of guessing.
 
-- marketing-style landing pages;
-- decorative-only graphics;
-- JavaScript unless interaction is genuinely needed;
-- content that diverges from the markdown source of truth.
+This step is complete when every routed artifact is either loaded, confirmed
+absent with an applicable rule above, or recorded as blocked.
 
-## Commit Guidance
+### 3. Update the routed artifacts
 
-Commit docs that explain durable scope, implementation strategy, decisions,
-progress, or handoff state. Do not commit local scratch artifacts, generated
-debug output, or exploratory notes that are not useful to future contributors.
+- Keep feature-wide intent in `plan.md`; use a task plan for focused execution
+  detail instead of overloading it.
+- Update `progress.md` whenever implementation status or remaining work changes.
+- Record a durable choice in `decisions.md` and a cross-platform mismatch in
+  `parity-gaps.md` as soon as it affects the documented feature state.
+- When one change affects several artifacts, update them in the same pass so
+  scope, status, decisions, and parity do not contradict one another.
+
+This step is complete when every applicable branch is updated, explicitly
+unchanged with a reason, or blocked with the missing dependency named.
+
+### 4. Handle HTML only when routed
+
+Create or update an HTML companion when the user requests one or when a new or
+substantially revised plan contains multiple phases, mappings, or risks that are
+materially easier to review visually. Do not create one when the user asks for
+text only. When this branch applies, read [`HTML-PLANS.md`](HTML-PLANS.md) before
+editing the companion.
+
+Markdown remains the source of truth. HTML is a committed visual review
+artifact, not a runtime asset.
+
+This step is complete when the companion is either synchronized with its
+Markdown source, intentionally omitted by request, not applicable with a
+reason, or blocked with the cause recorded.
+
+### 5. Apply the durability boundary
+
+Keep durable scope, strategy, status, decisions, parity, handoff context, and
+reusable acceptance expectations in tracked documentation. Keep scratch notes,
+debug dumps, command output, screenshots, and other transient evidence out.
+When transient evidence reveals a durable fact, record the fact in its routed
+artifact rather than copying the raw evidence.
+
+This step is complete when every addition is durable in its current form and no
+transient evidence has entered the canonical artifacts.
+
+## Completion Gate
+
+Do not finish until every routed artifact and required companion is accounted
+for as **updated**, **unchanged with a reason**, **not applicable with a reason**,
+or **blocked with a named dependency**. Confirm that:
+
+- all affected Markdown artifacts agree on scope, status, decisions, and parity;
+- every applicable HTML companion agrees with its Markdown source;
+- new or changed relative links resolve;
+- no transient evidence or unrelated empty artifact was added; and
+- the final diff contains only the intended durable documentation changes.
+
+Report the artifact ledger and any blockers in the handoff.
 
 ## Skill Coordination
 
-- Use with `synced-native-feature` for feature slices that span iOS and Android.
-- Use with `design-system-component` when documentation adds or changes reusable
-  UI components, tokens, variants, previews, or galleries.
-- Use with `linear-project-tracking` only when the work should also be reflected
-  in Linear; documentation planning itself does not require Linear.
+- Use `synced-native-feature` when the work plans or records a feature slice
+  across iOS and Android.
+- Use `design-system-component` when the documentation changes reusable UI
+  components, tokens, variants, previews, or galleries.
+- Use `linear-project-tracking` only when the same work must be reflected in
+  Linear; repository documentation does not require Linear.
