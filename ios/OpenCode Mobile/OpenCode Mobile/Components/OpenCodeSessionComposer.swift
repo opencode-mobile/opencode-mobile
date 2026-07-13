@@ -13,6 +13,8 @@ enum OpenCodeSessionComposerState {
     }
 
     struct Permission {
+        let requestID: String
+        let sessionID: String
         let permission: String
         let patterns: [String]
         let queuePosition: Int
@@ -21,6 +23,8 @@ enum OpenCodeSessionComposerState {
         let errorMessage: String?
 
         init(
+            requestID: String,
+            sessionID: String,
             permission: String,
             patterns: [String],
             queuePosition: Int = 1,
@@ -28,6 +32,8 @@ enum OpenCodeSessionComposerState {
             submitting: Bool = false,
             errorMessage: String? = nil
         ) {
+            self.requestID = requestID
+            self.sessionID = sessionID
             self.permission = permission
             self.patterns = patterns
             self.queuePosition = queuePosition
@@ -49,8 +55,8 @@ enum OpenCodeSessionComposerAction {
     case attach
     case send
     case stop
-    case allowPermissionOnce
-    case denyPermission
+    case allowPermissionOnce(requestID: String, sessionID: String)
+    case denyPermission(requestID: String, sessionID: String)
 }
 
 struct OpenCodeSessionComposer: View {
@@ -166,7 +172,9 @@ struct OpenCodeSessionComposer: View {
                 variant: .compactText(title: "Deny"),
                 enabled: !permission.submitting,
                 contrast: .low,
-                action: { onAction(.denyPermission) }
+                action: {
+                    onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
+                }
             )
             Spacer(minLength: 0)
             if permission.submitting {
@@ -175,7 +183,9 @@ struct OpenCodeSessionComposer: View {
             OpenCodeButton(
                 variant: .compactText(title: "Allow once"),
                 enabled: !permission.submitting,
-                action: { onAction(.allowPermissionOnce) }
+                action: {
+                    onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
+                }
             )
         }
         .accessibilityElement(children: .contain)
@@ -200,6 +210,8 @@ struct OpenCodeSessionComposer: View {
     OpenCodeSessionComposer(
         state: .permission(
             .init(
+                requestID: "permission-preview",
+                sessionID: "session-preview",
                 permission: "bash",
                 patterns: ["git status", "git diff --stat"],
                 queueCount: 2
@@ -214,6 +226,8 @@ struct OpenCodeSessionComposer: View {
     OpenCodeSessionComposer(
         state: .permission(
             .init(
+                requestID: "permission-preview",
+                sessionID: "session-preview",
                 permission: "external_directory",
                 patterns: ["/Users/ivan/Projects/opencode-web/**"]
             )

@@ -50,6 +50,8 @@ sealed interface OpenCodeSessionComposerState {
     ) : OpenCodeSessionComposerState
 
     data class Permission(
+        val requestId: String,
+        val sessionId: String,
         val permission: String,
         val patterns: List<String>,
         val queuePosition: Int = 1,
@@ -76,9 +78,15 @@ sealed interface OpenCodeSessionComposerAction {
 
     data object Stop : OpenCodeSessionComposerAction
 
-    data object AllowPermissionOnce : OpenCodeSessionComposerAction
+    data class AllowPermissionOnce(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
 
-    data object DenyPermission : OpenCodeSessionComposerAction
+    data class DenyPermission(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
 }
 
 @Composable
@@ -261,7 +269,9 @@ private fun PermissionApprovalContent(
     ) {
         OpenCodeButton(
             OpenCodeButtonVariant.CompactText("Deny"),
-            onClick = { onAction(OpenCodeSessionComposerAction.DenyPermission) },
+            onClick = {
+                onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
+            },
             enabled = !state.submitting,
             contrast = OpenCodeButtonContrast.Low,
         )
@@ -271,7 +281,9 @@ private fun PermissionApprovalContent(
         }
         OpenCodeButton(
             OpenCodeButtonVariant.CompactText("Allow once"),
-            onClick = { onAction(OpenCodeSessionComposerAction.AllowPermissionOnce) },
+            onClick = {
+                onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
+            },
             enabled = !state.submitting,
         )
     }
@@ -295,6 +307,8 @@ private fun PermissionComposerPreviewContent() {
         OpenCodeSessionComposer(
             state =
                 OpenCodeSessionComposerState.Permission(
+                    requestId = "permission-preview",
+                    sessionId = "session-preview",
                     permission = "bash",
                     patterns = listOf("git status", "git diff --stat"),
                     queueCount = 2,

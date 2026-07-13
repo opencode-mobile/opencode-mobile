@@ -121,11 +121,60 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.permissionRequest?.id,
             )
 
-            viewModel.allowPermissionOnce()
+            viewModel.allowPermissionOnce(request.id, request.sessionId)
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.permissionRequest)
             assertEquals(1, sessionRepository.pendingPermissionLoads)
+            assertEquals("permission-1", sessionRepository.respondedPermissionId)
+            assertEquals("ses-1", sessionRepository.respondedSessionId)
+        }
+
+    @Test
+    fun latePermissionDecision_usesRenderedRequestIdentity() =
+        runTest(testDispatcher) {
+            val first = permissionRequest("permission-1", "ses-1")
+            val second = permissionRequest("permission-2", "child")
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Child", parentId = "ses-1"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(first, second)),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.allowPermissionOnce(second.id, second.sessionId)
+            advanceUntilIdle()
+
+            assertEquals("permission-2", sessionRepository.respondedPermissionId)
+            assertEquals("child", sessionRepository.respondedSessionId)
+        }
+
+    @Test
+    fun permissionTopologyFailure_isReported() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(listSessionsError = IllegalStateException("offline")),
+                    permissionLiveStore =
+                        FakePermissionLiveStore(listOf(permissionRequest("permission-1", "child"))),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.permissionRequest)
+            assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1273,8 +1322,13 @@ private class FakeSessionRepository(
     private val sessions: List<Session> = emptyList(),
     private val pendingPermissions: List<PermissionRequest> = emptyList(),
     private val permissionResponseError: SessionError? = null,
+    private val listSessionsError: Throwable? = null,
 ) : SessionRepository {
     var pendingPermissionLoads: Int = 0
+        private set
+    var respondedPermissionId: String? = null
+        private set
+    var respondedSessionId: String? = null
         private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
@@ -1282,7 +1336,10 @@ private class FakeSessionRepository(
         return pendingPermissions
     }
 
-    override suspend fun listSessions(directory: String?) = sessions
+    override suspend fun listSessions(directory: String?): List<Session> {
+        listSessionsError?.let { throw it }
+        return sessions
+    }
 
     override suspend fun createSession(
         parentId: String?,
@@ -1379,6 +1436,8 @@ private class FakeSessionRepository(
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
     ): Boolean {
+        respondedSessionId = sessionId
+        respondedPermissionId = permissionId
         permissionResponseError?.let { throw it }
         return true
     }

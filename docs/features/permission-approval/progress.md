@@ -41,7 +41,10 @@
 - [x] Session Chat integration
 - [x] Decision contract unit tests
 - [x] Parent-first queue refreshes session topology for every permission snapshot
+- [x] Decision actions preserve the rendered request and session identifiers
+- [x] Session-topology refresh failures are surfaced instead of hiding silently
 - [x] Stale 404 responses immediately reconcile against the pending list
+- [x] Clear-data removes cached permission snapshots
 
 ## iOS
 
@@ -53,13 +56,16 @@
 - [x] Decision contract tests added
 - [x] Permission responses include the active worktree directory
 - [x] Parent-first queue refreshes session topology for every permission snapshot
+- [x] Decision actions preserve the rendered request and session identifiers
+- [x] Session-topology refresh failures are surfaced instead of hiding silently
 - [x] Stale 404 responses immediately reconcile against the pending list
+- [x] Clear-data removes cached permission snapshots
 
 ## Remaining
 
 Implementation is complete on both platforms, including permission approval as
 a native composer state, dynamic descendant discovery, stale-request
-reconciliation, and successful manual approval against a live server.
+reconciliation, and live-server permission response handling.
 No implementation work remains in this slice.
 The canonical behavior is in [plan.md](plan.md) and the upstream evidence is in
 [web-spec.md](web-spec.md).

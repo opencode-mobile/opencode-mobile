@@ -137,6 +137,8 @@ struct SessionChatView: View {
         if let request = viewModel.uiState.permissionRequest {
             state = .permission(
                 .init(
+                    requestID: request.id,
+                    sessionID: request.sessionID,
                     permission: request.permission,
                     patterns: request.patterns,
                     queueCount: viewModel.uiState.permissionQueueCount,
@@ -178,10 +180,10 @@ struct SessionChatView: View {
                     Task { await viewModel.sendPrompt() }
                 case .stop:
                     Task { await viewModel.abortSession() }
-                case .allowPermissionOnce:
-                    Task { await viewModel.allowPermissionOnce() }
-                case .denyPermission:
-                    Task { await viewModel.denyPermission() }
+                case let .allowPermissionOnce(requestID, sessionID):
+                    Task { await viewModel.allowPermissionOnce(requestID: requestID, sessionID: sessionID) }
+                case let .denyPermission(requestID, sessionID):
+                    Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
                 }
             }
         )

@@ -13,16 +13,17 @@ identical width, shape, inset, background, and border behavior.
 - Prompt-entry states: empty, populated, sending-disabled, stop available, and
   model/mode/variant selection.
 - Permission states: pending, submitting/disabled, queued, and response error.
-- Required permission content: category, one or more patterns, allow-once action,
-  and deny action.
+- Required permission content: opaque request and session identifiers, category,
+  one or more patterns, allow-once action, and deny action.
 - Optional permission content: queue position/count and error message.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed, select model, select mode, select variant,
-attach, send, and stop. Permission actions are allow once and deny. The feature
-supplies product content and handles actions; it does not choose shell colors,
-radii, spacing, motion, or other visual overrides. Domain models, server DTOs,
-session identifiers, repositories, and Screen Models are not component inputs.
+attach, send, and stop. Permission actions are allow once and deny, and return
+the opaque request and session identifiers rendered with the decision. The
+feature supplies product content and handles actions; it does not choose shell
+colors, radii, spacing, motion, or other visual overrides. Domain models,
+server DTOs, repositories, and Screen Models are not component inputs.
 
 ## Token Usage
 

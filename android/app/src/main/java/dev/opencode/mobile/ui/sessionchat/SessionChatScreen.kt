@@ -156,6 +156,8 @@ fun SessionChatScreen(
             val composerState =
                 uiState.permissionRequest?.let { request ->
                     OpenCodeSessionComposerState.Permission(
+                        requestId = request.id,
+                        sessionId = request.sessionId,
                         permission = request.permission,
                         patterns = request.patterns,
                         queueCount = uiState.permissionQueueCount,
@@ -189,8 +191,10 @@ fun SessionChatScreen(
                         OpenCodeSessionComposerAction.Attach -> Unit
                         OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                         OpenCodeSessionComposerAction.Stop -> viewModel.abort()
-                        OpenCodeSessionComposerAction.AllowPermissionOnce -> viewModel.allowPermissionOnce()
-                        OpenCodeSessionComposerAction.DenyPermission -> viewModel.denyPermission()
+                        is OpenCodeSessionComposerAction.AllowPermissionOnce ->
+                            viewModel.allowPermissionOnce(action.requestId, action.sessionId)
+                        is OpenCodeSessionComposerAction.DenyPermission ->
+                            viewModel.denyPermission(action.requestId, action.sessionId)
                     }
                 },
             )

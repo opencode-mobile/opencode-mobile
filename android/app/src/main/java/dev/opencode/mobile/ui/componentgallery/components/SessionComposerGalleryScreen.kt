@@ -116,6 +116,8 @@ private fun permissionState(
     submitting: Boolean = false,
     errorMessage: String? = null,
 ) = OpenCodeSessionComposerState.Permission(
+    requestId = "permission-gallery",
+    sessionId = "session-gallery",
     permission = "bash",
     patterns = listOf("git status", "git diff --stat"),
     queueCount = queueCount,
@@ -133,6 +135,6 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Attach -> "Attach"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.Stop -> "Stop"
-            OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
-            OpenCodeSessionComposerAction.DenyPermission -> "Deny"
+            is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
+            is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
         }
