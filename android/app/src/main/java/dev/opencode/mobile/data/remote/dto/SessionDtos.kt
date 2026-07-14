@@ -117,3 +117,9 @@ data class FileDiffDto(
     val resolvedPath: String
         get() = file ?: requireNotNull(path) { "File diff requires file or path" }
 }
+
+@Serializable
+data class VcsInfoDto(
+    val branch: String? = null,
+    @SerialName("default_branch") val defaultBranch: String? = null,
+)

@@ -40,6 +40,22 @@ struct FileDiff: Sendable, Equatable, Identifiable {
     let status: FileDiffStatus
 }
 
+struct VcsInfo: Sendable, Equatable {
+    let currentBranch: String?
+    let defaultBranch: String?
+
+    var supportsGit: Bool { currentBranch != nil || defaultBranch != nil }
+    var hasDistinctMainBranch: Bool {
+        guard let currentBranch, let defaultBranch else { return false }
+        return currentBranch != defaultBranch
+    }
+}
+
+enum VcsDiffMode: String, Sendable {
+    case workingTree = "git"
+    case mainBranch = "branch"
+}
+
 enum PermissionDecision: Sendable {
     case allowOnce
     case deny

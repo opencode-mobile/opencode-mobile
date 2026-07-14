@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.session
 import dev.opencode.mobile.data.remote.SessionsApi
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
@@ -44,4 +45,64 @@ class SessionDiffRepositoryTest {
             assertEquals("/repo work", captured?.url?.parameters?.get("directory"))
             assertTrue(captured?.url.toString().contains("session/ses-1/diff"))
         }
+
+    @Test fun loadsVcsMetadataAndGitDiffWithWorktreeScopeAndContext() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val responses =
+                ArrayDeque(
+                    listOf(
+                        """{"branch":"feature/review","default_branch":"main"}""",
+                        """[{"file":"App.kt","patch":"@@ -1 +1 @@\n-old\n+new","additions":1,"deletions":1,"status":"modified"}]""",
+                    ),
+                )
+            val json = Json { ignoreUnknownKeys = true }
+            val client =
+                testClient(json) { request ->
+                    requests += request
+                    respond(
+                        content = responses.removeFirst(),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val repository = DefaultSessionRepository(SessionsApi(client, json), SessionDomainAdapter())
+
+            val info = repository.getVcsInfo("/repo work")
+            val files = repository.getVcsDiff(VcsDiffMode.WorkingTree, "/repo work", context = 12)
+
+            assertEquals(VcsInfo("feature/review", "main"), info)
+            assertEquals("App.kt", files.single().path)
+            assertEquals("/repo work", requests[0].url.parameters["directory"])
+            assertTrue(requests[0].url.toString().contains("/vcs"))
+            assertEquals("git", requests[1].url.parameters["mode"])
+            assertEquals("12", requests[1].url.parameters["context"])
+            assertEquals("/repo work", requests[1].url.parameters["directory"])
+            assertTrue(requests[1].url.toString().contains("/vcs/diff"))
+        }
+
+    @Test fun mapsBranchSourceToBranchMode() =
+        runTest {
+            var captured: HttpRequestData? = null
+            val json = Json { ignoreUnknownKeys = true }
+            val client =
+                testClient(json) { request ->
+                    captured = request
+                    respond(
+                        content = "[]",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val repository = DefaultSessionRepository(SessionsApi(client, json), SessionDomainAdapter())
+
+            repository.getVcsDiff(VcsDiffMode.MainBranch, "/repo", context = 12)
+
+            assertEquals("branch", captured?.url?.parameters?.get("mode"))
+        }
+
+    private fun testClient(
+        json: Json,
+        handler: MockRequestHandler,
+    ) = HttpClient(MockEngine(handler)) { install(ContentNegotiation) { json(json) } }
 }

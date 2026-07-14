@@ -74,6 +74,14 @@ interface SessionRepository {
         directory: String? = null,
     ): List<FileDiff>
 
+    suspend fun getVcsInfo(directory: String? = null): VcsInfo = throw SessionError.Http(404, "VCS endpoints are unavailable")
+
+    suspend fun getVcsDiff(
+        mode: VcsDiffMode,
+        directory: String? = null,
+        context: Int = 12,
+    ): List<FileDiff> = throw SessionError.Http(404, "VCS endpoints are unavailable")
+
     suspend fun summarizeSession(
         id: String,
         providerId: String,

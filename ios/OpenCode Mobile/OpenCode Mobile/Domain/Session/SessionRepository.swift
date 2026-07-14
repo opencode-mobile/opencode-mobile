@@ -16,6 +16,8 @@ protocol SessionRepository: Sendable {
     func shareSession(id: String) async throws -> Session
     func unshareSession(id: String) async throws -> Session
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff]
+    func getVcsInfo(directory: String?) async throws -> VcsInfo
+    func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff]
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
@@ -35,6 +37,14 @@ extension SessionRepository {
 
     func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] {
         try await getSessionDiff(id: id, messageID: messageID, directory: nil)
+    }
+
+    func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        throw SessionError.http(statusCode: 404, message: "VCS endpoints are unavailable")
+    }
+
+    func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int = 12) async throws -> [FileDiff] {
+        throw SessionError.http(statusCode: 404, message: "VCS endpoints are unavailable")
     }
 }
 
@@ -115,6 +125,17 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
         try await run {
             try await api.getSessionDiff(id: id, messageID: messageID, directory: directory)
+                .map(adapter.fileDiff)
+        }
+    }
+
+    func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        try await run { adapter.vcsInfo(from: try await api.getVcsInfo(directory: directory)) }
+    }
+
+    func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
+        try await run {
+            try await api.getVcsDiff(mode: mode, directory: directory, context: context)
                 .map(adapter.fileDiff)
         }
     }

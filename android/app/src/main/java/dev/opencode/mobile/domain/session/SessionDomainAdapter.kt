@@ -5,6 +5,7 @@ import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
+import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
@@ -73,6 +74,8 @@ class SessionDomainAdapter {
                         }
                 },
         )
+
+    fun toVcsInfo(dto: VcsInfoDto) = VcsInfo(dto.branch, dto.defaultBranch)
 
     fun toPermissionResponse(decision: PermissionDecision): String =
         when (decision) {

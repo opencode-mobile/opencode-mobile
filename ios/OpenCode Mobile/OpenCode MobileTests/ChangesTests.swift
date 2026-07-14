@@ -90,6 +90,12 @@ struct UnifiedDiffParserTests {
 
 @MainActor
 struct ChangesViewModelTests {
+    @Test func exposesSourceSpecificEmptyCopy() {
+        #expect(ChangeSource.lastTurn.emptyTitle == "No changes")
+        #expect(ChangeSource.workingTree.emptyDetail == "The working tree has no uncommitted changes.")
+        #expect(ChangeSource.mainBranch.emptyTitle == "No Main branch changes")
+    }
+
     @Test func loadsPathSortedChangeSetWithAggregateCountsAndScopesRequest() async {
         let repository = ChangesSessionRepository(results: [.success([
             Self.file("file2.swift", additions: 3, deletions: 2),
@@ -98,7 +104,7 @@ struct ChangesViewModelTests {
         let viewModel = ChangesViewModel(sessionID: "ses-1", worktree: "/repo", messageID: "msg-1", repository: repository)
         await viewModel.load()
 
-        guard case let .content(content) = viewModel.state else { Issue.record("Expected content"); return }
+        guard case let .content(content) = viewModel.state.phase else { Issue.record("Expected content"); return }
         #expect(content.files.map(\.path) == ["file10.swift", "file2.swift"])
         #expect(content.selectedFile.path == "file10.swift")
         #expect(content.additions == 5)
@@ -216,10 +222,118 @@ struct ChangesViewModelTests {
         #expect(repository.requests.count == 2)
     }
 
+    @Test func repositoryUpdatesDoNotMutateOpenSnapshotUntilExplicitRefresh() async {
+        let repository = ChangesSessionRepository(results: [
+            .success([Self.file("snapshot.swift")]),
+            .success([Self.file("refreshed.swift")]),
+        ])
+        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
+        await viewModel.load()
+
+        // Foreground events update other live stores; Changes intentionally owns no event or polling subscription.
+        await Task.yield()
+        #expect(viewModel.content?.selectedFile.path == "snapshot.swift")
+        #expect(repository.requests.count == 1)
+
+        await viewModel.refresh()
+        #expect(viewModel.content?.selectedFile.path == "refreshed.swift")
+        #expect(repository.requests.count == 2)
+    }
+
+    @Test func workingTreeEntryLoadsVcsSourcesAndGitDiff() async {
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main"))],
+            vcsDiffResults: [.success([Self.file("working.swift")])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: repository
+        )
+
+        await viewModel.load()
+
+        #expect(viewModel.state.selectedSource == .workingTree)
+        #expect(viewModel.state.availableSources == [.lastTurn, .workingTree, .mainBranch])
+        #expect(viewModel.content?.selectedFile.path == "working.swift")
+        #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
+    }
+
+    @Test func unsupportedVcsFallsBackToLastTurnButTransientFailureIsRetryable() async {
+        let unsupported = ChangesSessionRepository(
+            results: [.success([Self.file("last.swift")])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: nil, defaultBranch: nil))]
+        )
+        let fallback = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: unsupported
+        )
+        await fallback.load()
+        #expect(fallback.state.selectedSource == .lastTurn)
+        #expect(fallback.content?.selectedFile.path == "last.swift")
+
+        let transient = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.failure(SessionError.transport("offline"))]
+        )
+        let retryable = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: transient
+        )
+        await retryable.load()
+        #expect(retryable.state.phase == .error("offline"))
+        #expect(transient.requests.isEmpty)
+    }
+
+    @Test func sourceSwitchAndRefreshReloadSelectedStableSnapshotAndResetControls() async {
+        let repository = ChangesSessionRepository(
+            results: [.success([Self.file("last.swift")])],
+            vcsInfoResults: [
+                .success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main")),
+                .success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main")),
+            ],
+            vcsDiffResults: [
+                .success([Self.file("working.swift")]),
+                .success([Self.file("main.swift")]),
+                .success([Self.file("main-refreshed.swift")]),
+            ]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: repository
+        )
+        await viewModel.load()
+        viewModel.toggleContextMode()
+        viewModel.toggleSelectedFileReviewed()
+
+        await viewModel.selectSource(.lastTurn)
+        await viewModel.selectSource(.mainBranch)
+        #expect(viewModel.content?.selectedFile.path == "main.swift")
+        #expect(viewModel.content?.reviewedPaths.isEmpty == true)
+        #expect(viewModel.content?.contextMode == .collapsed)
+
+        await viewModel.refresh()
+        #expect(viewModel.content?.selectedFile.path == "main-refreshed.swift")
+        #expect(viewModel.state.selectedSource == .mainBranch)
+    }
+
+    @Test func missingVcsDiffEndpointFallsBackToLastTurn() async {
+        let repository = ChangesSessionRepository(
+            results: [.success([Self.file("last.swift")])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main"))],
+            vcsDiffResults: [.failure(SessionError.http(statusCode: 404, message: "missing"))]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: repository
+        )
+
+        await viewModel.load()
+
+        #expect(viewModel.state.selectedSource == .lastTurn)
+        #expect(viewModel.state.availableSources == [.lastTurn])
+        #expect(viewModel.content?.selectedFile.path == "last.swift")
+    }
+
     @Test func coversNoTurnNoChangesUnavailablePatchErrorAndRetry() async {
         let noTurn = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: nil, repository: ChangesSessionRepository(results: []))
         await noTurn.load()
-        #expect(noTurn.state == .noTurn)
+        #expect(noTurn.state.phase == .noTurn)
 
         let repository = ChangesSessionRepository(results: [
             .success([]),
@@ -228,11 +342,11 @@ struct ChangesViewModelTests {
             .success([Self.file("ok.swift")]),
         ])
         let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
-        await viewModel.load(); #expect(viewModel.state == .noChanges)
+        await viewModel.load(); #expect(viewModel.state.phase == .noChanges)
         await viewModel.retry()
         #expect(viewModel.content?.selectedFile == FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified))
         #expect(viewModel.content?.selectedFileHasPreview == false)
-        await viewModel.retry(); #expect(viewModel.state == .error("offline"))
+        await viewModel.retry(); #expect(viewModel.state.phase == .error("offline"))
         await viewModel.retry(); #expect(viewModel.content?.selectedFile == Self.file("ok.swift"))
     }
 
@@ -272,11 +386,31 @@ struct ChangesViewModelTests {
 
 private final class ChangesSessionRepository: SessionRepository, @unchecked Sendable {
     struct Request: Equatable { let sessionID: String; let messageID: String?; let directory: String? }
+    struct VcsRequest: Equatable { let mode: VcsDiffMode; let directory: String?; let context: Int }
     var requests: [Request] = []
+    var vcsRequests: [VcsRequest] = []
     private var results: [Result<[FileDiff], Error>]
-    init(results: [Result<[FileDiff], Error>]) { self.results = results }
+    private var vcsInfoResults: [Result<VcsInfo, Error>]
+    private var vcsDiffResults: [Result<[FileDiff], Error>]
+    init(
+        results: [Result<[FileDiff], Error>],
+        vcsInfoResults: [Result<VcsInfo, Error>] = [],
+        vcsDiffResults: [Result<[FileDiff], Error>] = []
+    ) {
+        self.results = results
+        self.vcsInfoResults = vcsInfoResults
+        self.vcsDiffResults = vcsDiffResults
+    }
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
         requests.append(.init(sessionID: id, messageID: messageID, directory: directory)); return try results.removeFirst().get()
+    }
+    func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        guard !vcsInfoResults.isEmpty else { throw SessionError.http(statusCode: 404, message: "unsupported") }
+        return try vcsInfoResults.removeFirst().get()
+    }
+    func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
+        vcsRequests.append(.init(mode: mode, directory: directory, context: context))
+        return try vcsDiffResults.removeFirst().get()
     }
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] { [] }
     func listSessions(directory: String?) async throws -> [Session] { [] }

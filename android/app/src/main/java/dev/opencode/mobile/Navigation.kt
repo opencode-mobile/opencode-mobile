@@ -198,7 +198,9 @@ fun MainNavigation() {
                                                     backStack.add(SessionContext(key.sessionId, key.worktree))
                                                 },
                                                 onReviewChangesClick = { target ->
-                                                    backStack.add(Changes(target.sessionId, target.worktree, target.messageId))
+                                                    backStack.add(
+                                                        Changes(target.sessionId, target.worktree, target.messageId, target.initialSource),
+                                                    )
                                                 },
                                             )
                                         }
@@ -218,6 +220,7 @@ fun MainNavigation() {
                                                 sessionId = key.sessionId,
                                                 worktree = key.worktree,
                                                 messageId = key.messageId,
+                                                initialSource = key.initialSource,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                             )
                                         }

@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,9 +33,12 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -44,20 +48,50 @@ fun ChangesScreen(
     sessionId: String,
     worktree: String,
     messageId: String?,
+    initialSource: ChangeSource = ChangeSource.LastTurn,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ChangesViewModel = hiltViewModel(key = "$sessionId-$worktree-$messageId"),
+    viewModel: ChangesViewModel = hiltViewModel(key = "$sessionId-$worktree-$messageId-$initialSource"),
 ) {
-    LaunchedEffect(sessionId, worktree, messageId) { viewModel.bind(sessionId, worktree, messageId) }
+    LaunchedEffect(sessionId, worktree, messageId, initialSource) {
+        viewModel.bind(sessionId, worktree, messageId, initialSource)
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     Column(modifier.fillMaxSize()) {
-        OpenCodeTopBar(title = "Changes", leading = OpenCodeTopBarLeading.Back(onNavigateBack), showDivider = true)
-        when (val current = state) {
-            ChangesUiState.Loading -> Centered { CircularProgressIndicator() }
-            ChangesUiState.NoTurn -> EmptyMessage("No completed turn", "Send a prompt and wait for it to complete, then try again.")
-            ChangesUiState.NoChanges -> EmptyMessage("No changes", "The latest completed turn did not change any files.")
-            is ChangesUiState.Content -> ChangeSetContent(current.changeSet, viewModel)
-            is ChangesUiState.Error ->
+        OpenCodeTopBarOverflowHost(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            entries =
+                state.availableSources.map { source ->
+                    OpenCodeOverflowMenuEntry(
+                        title = source.displayName + if (source == state.selectedSource) " (selected)" else "",
+                        icon = OpenCodeIcons.Description,
+                        onClick = { viewModel.selectSource(source) },
+                    )
+                },
+        ) {
+            OpenCodeTopBar(
+                title = "Changes",
+                subtitle = state.selectedSource.displayName,
+                leading = OpenCodeTopBarLeading.Back(onNavigateBack),
+                actions =
+                    listOf(
+                        OpenCodeTopBarAction.Icon(
+                            imageVector = OpenCodeIcons.MoreVert,
+                            contentDescription = "Choose change source",
+                            onClick = { menuExpanded = true },
+                        ),
+                    ),
+                showDivider = true,
+            )
+        }
+        when (val current = state.phase) {
+            ChangesPhase.Loading -> Centered { CircularProgressIndicator() }
+            ChangesPhase.NoTurn -> EmptyMessage("No completed turn", "Send a prompt and wait for it to complete, then try again.")
+            ChangesPhase.NoChanges -> EmptyMessage(state.selectedSource.emptyTitle, state.selectedSource.emptyDetail)
+            is ChangesPhase.Content -> ChangeSetContent(current.changeSet, viewModel)
+            is ChangesPhase.Error ->
                 Centered {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         EmptyMessage("Unable to load changes", current.message)

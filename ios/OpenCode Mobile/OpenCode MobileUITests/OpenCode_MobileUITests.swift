@@ -20,6 +20,11 @@ final class OpenCode_MobileUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["3 changed files, 4 additions, 3 deletions"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Working tree"].waitForExistence(timeout: 5))
+        app.buttons["Choose change source"].tap()
+        XCTAssertTrue(app.buttons["Working tree (selected)"].waitForExistence(timeout: 5))
+        app.buttons["Main branch"].tap()
+        XCTAssertTrue(app.staticTexts["Main branch"].waitForExistence(timeout: 5))
         let picker = app.buttons["Choose file. Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Previous file"].isEnabled)

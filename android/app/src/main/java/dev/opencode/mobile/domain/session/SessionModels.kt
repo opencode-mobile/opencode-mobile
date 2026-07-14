@@ -48,6 +48,24 @@ data class FileDiff(
     val status: FileDiffStatus,
 )
 
+data class VcsInfo(
+    val currentBranch: String?,
+    val defaultBranch: String?,
+) {
+    val supportsGit: Boolean
+        get() = currentBranch != null || defaultBranch != null
+
+    val hasDistinctMainBranch: Boolean
+        get() = currentBranch != null && defaultBranch != null && currentBranch != defaultBranch
+}
+
+enum class VcsDiffMode(
+    val wireValue: String,
+) {
+    WorkingTree("git"),
+    MainBranch("branch"),
+}
+
 enum class PermissionDecision {
     AllowOnce,
     Deny,

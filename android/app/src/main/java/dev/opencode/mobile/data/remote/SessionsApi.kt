@@ -11,6 +11,7 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.setJsonBody
@@ -182,6 +183,26 @@ class SessionsApi private constructor(
             .get("session/$id/diff") {
                 applyDirectory(directory)
                 messageId?.let { parameter("messageID", it) }
+            }.body()
+
+    suspend fun getVcsInfo(directory: String? = null): VcsInfoDto =
+        httpClient
+            .get()
+            .get("vcs") {
+                applyDirectory(directory)
+            }.body()
+
+    suspend fun getVcsDiff(
+        mode: String,
+        directory: String? = null,
+        context: Int = 12,
+    ): List<FileDiffDto> =
+        httpClient
+            .get()
+            .get("vcs/diff") {
+                applyDirectory(directory)
+                parameter("mode", mode)
+                parameter("context", context)
             }.body()
 
     suspend fun summarizeSession(

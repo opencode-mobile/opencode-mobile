@@ -211,6 +211,44 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/FileDiff"
+  /vcs:
+    get:
+      operationId: getVcsInfo
+      parameters:
+        - $ref: "#/components/parameters/Directory"
+      responses:
+        "200":
+          description: VCS metadata for the scoped worktree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VcsInfo"
+  /vcs/diff:
+    get:
+      operationId: getVcsDiff
+      parameters:
+        - $ref: "#/components/parameters/Directory"
+        - name: mode
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [git, branch]
+        - name: context
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 12
+      responses:
+        "200":
+          description: Working-tree or default-branch file diffs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileDiff"
   /session/{id}/summarize:
     post:
       operationId: summarizeSession
@@ -290,6 +328,11 @@ components:
       required: true
       schema:
         type: string
+    Directory:
+      name: directory
+      in: query
+      schema:
+        type: string
   schemas:
     Session:
       type: object
@@ -340,6 +383,13 @@ components:
     FileDiff:
       type: object
       additionalProperties: true
+    VcsInfo:
+      type: object
+      properties:
+        branch:
+          type: string
+        default_branch:
+          type: string
     CreateSessionRequest:
       type: object
       properties:

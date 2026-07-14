@@ -33,6 +33,7 @@ struct OpenCode_MobileApp: App {
                     sessionID: "ui-test-session",
                     worktree: "/ui-test",
                     messageID: "ui-test-message",
+                    initialSource: .workingTree,
                     files: Self.changesUITestFiles
                 )
             )

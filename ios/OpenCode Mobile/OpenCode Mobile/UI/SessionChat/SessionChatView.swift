@@ -93,7 +93,8 @@ struct SessionChatView: View {
             ChangesView(
                 sessionID: target.sessionID,
                 worktree: target.worktree,
-                messageID: target.messageID
+                messageID: target.messageID,
+                initialSource: target.initialSource
             )
         }
         .task {
