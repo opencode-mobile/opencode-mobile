@@ -130,6 +130,18 @@ class DefaultSessionRepository
             runCatching { api.getSessionDiff(id, messageId, directory).map(adapter::toFileDiff) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun getVcsInfo(directory: String?): VcsInfo =
+            runCatching { adapter.toVcsInfo(api.getVcsInfo(directory)) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun getVcsDiff(
+            mode: VcsDiffMode,
+            directory: String?,
+            context: Int,
+        ): List<FileDiff> =
+            runCatching { api.getVcsDiff(mode.wireValue, directory, context).map(adapter::toFileDiff) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun summarizeSession(
             id: String,
             providerId: String,

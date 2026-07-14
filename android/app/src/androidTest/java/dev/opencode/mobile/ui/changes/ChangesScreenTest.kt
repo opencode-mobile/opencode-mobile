@@ -18,6 +18,8 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.session.VcsDiffMode
+import dev.opencode.mobile.domain.session.VcsInfo
 import org.junit.Rule
 import org.junit.Test
 
@@ -32,6 +34,7 @@ class ChangesScreenTest {
                 sessionId = "session",
                 worktree = "/repo",
                 messageId = "message",
+                initialSource = ChangeSource.WorkingTree,
                 onNavigateBack = {},
                 viewModel = viewModel,
             )
@@ -40,6 +43,11 @@ class ChangesScreenTest {
         composeTestRule
             .onNodeWithContentDescription("3 changed files, 4 additions, 3 deletions")
             .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Working tree").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Choose change source").performClick()
+        composeTestRule.onNodeWithText("Working tree (selected)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Main branch").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("Main branch").assertIsDisplayed()
         val picker =
             composeTestRule.onNodeWithContentDescription(
                 "Choose file. Sources/App.kt, Modified, file 1 of 3, 1 addition, 1 deletion",
@@ -76,11 +84,21 @@ class ChangesScreenTest {
 }
 
 private object ChangesScreenRepository : SessionRepository {
+    override suspend fun getVcsInfo(directory: String?) = VcsInfo("feature/review", "main")
+
+    override suspend fun getVcsDiff(
+        mode: VcsDiffMode,
+        directory: String?,
+        context: Int,
+    ) = files()
+
     override suspend fun getSessionDiff(
         id: String,
         messageId: String?,
         directory: String?,
-    ) =
+    ) = files()
+
+    private fun files() =
         listOf(
             file("Sources/Removed.kt", "old-removed", 1, 2, FileDiffStatus.Deleted),
             file("Sources/New.kt", "old-new", 2, 0, FileDiffStatus.Added),
@@ -96,13 +114,40 @@ private object ChangesScreenRepository : SessionRepository {
     ) = FileDiff(path, "@@ -1,1 +1,1 @@\n-$oldLine\n+new", additions, deletions, status)
 
     override suspend fun listSessions(directory: String?) = emptyList<Session>()
-    override suspend fun createSession(parentId: String?, title: String?, directory: String?) = error("unused")
+
+    override suspend fun createSession(
+        parentId: String?,
+        title: String?,
+        directory: String?,
+    ) = error("unused")
+
     override suspend fun getAllSessionStatuses(directory: String?) = emptyList<SessionStatus>()
-    override suspend fun getSession(id: String, directory: String?) = error("unused")
-    override suspend fun updateSession(id: String, title: String?, directory: String?) = error("unused")
-    override suspend fun deleteSession(id: String, directory: String?) = false
-    override suspend fun listChildSessions(id: String, directory: String?) = emptyList<Session>()
-    override suspend fun listSessionTodos(id: String, directory: String?) = emptyList<SessionTodo>()
+
+    override suspend fun getSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
+
+    override suspend fun updateSession(
+        id: String,
+        title: String?,
+        directory: String?,
+    ) = error("unused")
+
+    override suspend fun deleteSession(
+        id: String,
+        directory: String?,
+    ) = false
+
+    override suspend fun listChildSessions(
+        id: String,
+        directory: String?,
+    ) = emptyList<Session>()
+
+    override suspend fun listSessionTodos(
+        id: String,
+        directory: String?,
+    ) = emptyList<SessionTodo>()
 
     override suspend fun initializeSessionAgents(
         id: String,
@@ -112,10 +157,26 @@ private object ChangesScreenRepository : SessionRepository {
         directory: String?,
     ) = false
 
-    override suspend fun forkSession(id: String, atMessageId: String?, directory: String?) = error("unused")
-    override suspend fun abortSession(id: String, directory: String?) = false
-    override suspend fun shareSession(id: String, directory: String?) = error("unused")
-    override suspend fun unshareSession(id: String, directory: String?) = error("unused")
+    override suspend fun forkSession(
+        id: String,
+        atMessageId: String?,
+        directory: String?,
+    ) = error("unused")
+
+    override suspend fun abortSession(
+        id: String,
+        directory: String?,
+    ) = false
+
+    override suspend fun shareSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
+
+    override suspend fun unshareSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
 
     override suspend fun summarizeSession(
         id: String,

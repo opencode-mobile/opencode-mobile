@@ -102,6 +102,22 @@ struct SessionsAPIClient: Sendable {
         return try decoder.decode([FileDiffDTO].self, from: try await data(for: request))
     }
 
+    func getVcsInfo(directory: String? = nil) async throws -> VcsInfoDTO {
+        try await get(path: "vcs", directory: directory)
+    }
+
+    func getVcsDiff(mode: VcsDiffMode, directory: String? = nil, context: Int = 12) async throws -> [FileDiffDTO] {
+        var request = try requireConnection().authorizedRequest(path: "vcs/diff", directory: directory)
+        if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            items.append(URLQueryItem(name: "mode", value: mode.rawValue))
+            items.append(URLQueryItem(name: "context", value: String(context)))
+            components.queryItems = items
+            request.url = components.url
+        }
+        return try decoder.decode([FileDiffDTO].self, from: try await data(for: request))
+    }
+
     func summarizeSession(id: String, body: SummarizeSessionRequestDTO, directory: String? = nil) async throws -> Bool {
         try await postEmpty(path: "session/\(id)/summarize", body: body, directory: directory)
     }

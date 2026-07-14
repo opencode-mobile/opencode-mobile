@@ -1,6 +1,7 @@
 package dev.opencode.mobile
 
 import androidx.navigation3.runtime.NavKey
+import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import kotlinx.serialization.Serializable
 
@@ -29,4 +30,5 @@ import kotlinx.serialization.Serializable
     val sessionId: String,
     val worktree: String,
     val messageId: String? = null,
+    val initialSource: ChangeSource = ChangeSource.LastTurn,
 ) : NavKey

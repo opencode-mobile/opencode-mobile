@@ -2,12 +2,40 @@ import Foundation
 import Observation
 import OSLog
 
-enum ChangesState: Equatable {
+enum ChangeSource: String, CaseIterable, Sendable, Equatable, Hashable {
+    case lastTurn
+    case workingTree
+    case mainBranch
+
+    private var metadata: (displayName: String, emptyTitle: String, emptyDetail: String, logValue: String) {
+        switch self {
+        case .lastTurn:
+            ("Last turn", "No changes", "The latest completed turn did not change any files.", "last-turn")
+        case .workingTree:
+            ("Working tree", "No Working tree changes", "The working tree has no uncommitted changes.", "working-tree")
+        case .mainBranch:
+            ("Main branch", "No Main branch changes", "The current branch has no changes relative to the default branch.", "main-branch")
+        }
+    }
+
+    var displayName: String { metadata.displayName }
+    var emptyTitle: String { metadata.emptyTitle }
+    var emptyDetail: String { metadata.emptyDetail }
+    var logValue: String { metadata.logValue }
+}
+
+enum ChangesPhase: Equatable {
     case loading
     case noTurn
     case noChanges
     case content(ChangesContentState)
     case error(String)
+}
+
+struct ChangesState: Equatable {
+    var phase: ChangesPhase = .loading
+    var selectedSource: ChangeSource = .lastTurn
+    var availableSources: [ChangeSource] = [.lastTurn]
 }
 
 struct ChangesContentState: Equatable {
@@ -107,61 +135,126 @@ final class ChangesViewModel {
     private let sessionID: String
     private let worktree: String
     private let messageID: String?
-    private let loadFiles: () async throws -> [FileDiff]
+    private let repository: SessionRepository
+    private var availableSources: [ChangeSource] = [.lastTurn]
+    private var loadRevision = 0
 
-    private(set) var state: ChangesState = .loading
+    private(set) var state = ChangesState()
 
     var content: ChangesContentState? {
-        guard case let .content(content) = state else { return nil }
+        guard case let .content(content) = state.phase else { return nil }
         return content
     }
 
-    init(sessionID: String, worktree: String, messageID: String?, repository: SessionRepository) {
+    init(
+        sessionID: String,
+        worktree: String,
+        messageID: String?,
+        initialSource: ChangeSource = .lastTurn,
+        repository: SessionRepository
+    ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageID = messageID
-        loadFiles = {
-            try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree)
-        }
+        self.repository = repository
+        state.selectedSource = initialSource
     }
 
     #if DEBUG
-    init(sessionID: String, worktree: String, messageID: String?, files: [FileDiff]) {
+    init(sessionID: String, worktree: String, messageID: String?, initialSource: ChangeSource = .lastTurn, files: [FileDiff]) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageID = messageID
-        loadFiles = { files }
+        repository = PreviewChangesRepository(files: files)
+        state.selectedSource = initialSource
     }
     #endif
 
-    func load() async {
-        guard messageID != nil else {
-            state = .noTurn
-            return
-        }
-        state = .loading
+    func load() async { await load(refreshAvailability: true) }
+    func retry() async { await load(refreshAvailability: true) }
+    func refresh() async { await load(refreshAvailability: true) }
+
+    func selectSource(_ source: ChangeSource) async {
+        guard source != state.selectedSource, availableSources.contains(source) else { return }
+        state = ChangesState(phase: .loading, selectedSource: source, availableSources: availableSources)
+        await load(refreshAvailability: false)
+    }
+
+    private func load(refreshAvailability: Bool) async {
+        loadRevision += 1
+        let revision = loadRevision
+        let requestedSource = state.selectedSource
+        var activeSource = requestedSource
+        state = ChangesState(phase: .loading, selectedSource: requestedSource, availableSources: availableSources)
         let startedAt = Date()
         do {
-            let files = try await loadFiles()
-                .sorted { $0.path < $1.path }
+            if refreshAvailability {
+                availableSources = try await resolveAvailableSources()
+            }
+            guard revision == loadRevision else { return }
+            var selectedSource = availableSources.contains(requestedSource) ? requestedSource : .lastTurn
+            if selectedSource != requestedSource {
+                log(source: requestedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
+            }
+            activeSource = selectedSource
+            state = ChangesState(phase: .loading, selectedSource: selectedSource, availableSources: availableSources)
+            let loadedFiles: [FileDiff]
+            do {
+                loadedFiles = try await loadFiles(source: selectedSource)
+            } catch let SessionError.http(statusCode, _) where statusCode == 404 && selectedSource != .lastTurn {
+                log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
+                availableSources = [.lastTurn]
+                selectedSource = .lastTurn
+                activeSource = selectedSource
+                state = ChangesState(phase: .loading, selectedSource: selectedSource, availableSources: availableSources)
+                loadedFiles = try await loadFiles(source: selectedSource)
+            }
+            let files = loadedFiles.sorted { $0.path < $1.path }
+            guard revision == loadRevision else { return }
             guard let first = files.first else {
-                log(fileCount: 0, startedAt: startedAt, result: "empty")
-                state = .noChanges
+                log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "empty")
+                state.phase = selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges
                 return
             }
-            log(fileCount: files.count, startedAt: startedAt, result: "success")
+            log(source: selectedSource, fileCount: files.count, startedAt: startedAt, result: "success")
             let firstHunkID = UnifiedDiffParser.parse(first.patch ?? "").hunks.first?.id
-            state = .content(ChangesContentState(files: files, selectedPath: first.path, selectedHunkID: firstHunkID))
+            state.phase = .content(ChangesContentState(files: files, selectedPath: first.path, selectedHunkID: firstHunkID))
         } catch is CancellationError {
             return
         } catch {
-            log(fileCount: 0, startedAt: startedAt, result: "failure")
-            state = .error(error.localizedDescription)
+            guard revision == loadRevision else { return }
+            log(source: activeSource, fileCount: 0, startedAt: startedAt, result: "failure")
+            state = ChangesState(
+                phase: .error(error.localizedDescription),
+                selectedSource: activeSource,
+                availableSources: availableSources
+            )
         }
     }
 
-    func retry() async { await load() }
-    func refresh() async { await load() }
+    private func resolveAvailableSources() async throws -> [ChangeSource] {
+        do {
+            let info = try await repository.getVcsInfo(directory: worktree)
+            var sources: [ChangeSource] = [.lastTurn]
+            if info.supportsGit { sources.append(.workingTree) }
+            if info.hasDistinctMainBranch { sources.append(.mainBranch) }
+            return sources
+        } catch let SessionError.http(statusCode, _) where statusCode == 404 {
+            return [.lastTurn]
+        }
+    }
+
+    private func loadFiles(source: ChangeSource) async throws -> [FileDiff] {
+        switch source {
+        case .lastTurn:
+            guard let messageID else { return [] }
+            return try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree)
+        case .workingTree:
+            return try await repository.getVcsDiff(mode: .workingTree, directory: worktree, context: 12)
+        case .mainBranch:
+            return try await repository.getVcsDiff(mode: .mainBranch, directory: worktree, context: 12)
+        }
+    }
 
     func updateFilter(_ filter: String) {
         updateContent { content in
@@ -233,17 +326,46 @@ final class ChangesViewModel {
     }
 
     private func updateContent(_ transform: (ChangesContentState) -> ChangesContentState) {
-        guard case let .content(content) = state else { return }
-        state = .content(transform(content))
+        guard case let .content(content) = state.phase else { return }
+        state.phase = .content(transform(content))
     }
 
-    private func log(fileCount: Int, startedAt: Date, result: String) {
+    private func log(source: ChangeSource, fileCount: Int, startedAt: Date, result: String) {
         let duration = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
         OpenCodeLog.changes.info(
-            "load source=last-turn session=\(self.sessionID, privacy: .public) directory=\(self.worktree, privacy: .private) files=\(fileCount) result=\(result, privacy: .public) durationMs=\(duration)"
+            "load source=\(source.logValue, privacy: .public) session=\(self.sessionID, privacy: .public) directory=\(self.worktree, privacy: .private) files=\(fileCount) result=\(result, privacy: .public) durationMs=\(duration)"
         )
     }
 }
+
+#if DEBUG
+private struct PreviewChangesRepository: SessionRepository {
+    let files: [FileDiff]
+
+    func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] { files }
+    func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        VcsInfo(currentBranch: "feature/review", defaultBranch: "main")
+    }
+    func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] { files }
+    func listSessions(directory: String?) async throws -> [Session] { [] }
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
+    func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
+    func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
+    func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
+    func deleteSession(id: String) async throws -> Bool { false }
+    func listChildSessions(id: String) async throws -> [Session] { [] }
+    func listSessionTodos(id: String) async throws -> [SessionTodo] { [] }
+    func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { false }
+    func forkSession(id: String, atMessageID: String?) async throws -> Session { fatalError() }
+    func abortSession(id: String, directory: String?) async throws -> Bool { false }
+    func shareSession(id: String) async throws -> Session { fatalError() }
+    func unshareSession(id: String) async throws -> Session { fatalError() }
+    func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { false }
+    func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { false }
+    func unrevertSession(id: String) async throws -> Bool { false }
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool { false }
+}
+#endif
 
 private extension FileDiffStatus {
     var displayName: String { rawValue.capitalized }

@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 
 data class SessionChatComposerState(
@@ -66,6 +67,7 @@ data class SessionChatUiState(
             sessionId = sessionId,
             worktree = worktree,
             messageId = latestCompletedUserMessageId,
+            initialSource = ChangeSource.WorkingTree,
         )
 
     companion object {
@@ -85,6 +87,7 @@ data class ChangesNavigationTarget(
     val sessionId: String,
     val worktree: String,
     val messageId: String?,
+    val initialSource: ChangeSource = ChangeSource.WorkingTree,
 )
 
 data class SessionChatTimelineRegionState(

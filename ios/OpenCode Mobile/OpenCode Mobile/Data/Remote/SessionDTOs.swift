@@ -107,3 +107,13 @@ struct FileDiffDTO: Decodable, Sendable {
         status = try container.decodeIfPresent(String.self, forKey: .status)
     }
 }
+
+struct VcsInfoDTO: Decodable, Sendable {
+    let branch: String?
+    let defaultBranch: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case branch
+        case defaultBranch = "default_branch"
+    }
+}

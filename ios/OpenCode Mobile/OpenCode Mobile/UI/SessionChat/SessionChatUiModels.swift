@@ -91,7 +91,12 @@ struct SessionChatUiState: Equatable {
     }
 
     func changesNavigationTarget(worktree: String) -> ChangesNavigationTarget {
-        ChangesNavigationTarget(sessionID: sessionID, worktree: worktree, messageID: latestCompletedUserMessageID)
+        ChangesNavigationTarget(
+            sessionID: sessionID,
+            worktree: worktree,
+            messageID: latestCompletedUserMessageID,
+            initialSource: .workingTree
+        )
     }
 
     static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
@@ -116,6 +121,14 @@ struct ChangesNavigationTarget: Hashable {
     let sessionID: String
     let worktree: String
     let messageID: String?
+    let initialSource: ChangeSource
+
+    init(sessionID: String, worktree: String, messageID: String?, initialSource: ChangeSource = .workingTree) {
+        self.sessionID = sessionID
+        self.worktree = worktree
+        self.messageID = messageID
+        self.initialSource = initialSource
+    }
 }
 
 struct SessionChatTimelineRegionState: Equatable {

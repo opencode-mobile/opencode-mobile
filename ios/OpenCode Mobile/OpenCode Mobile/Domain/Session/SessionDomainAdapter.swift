@@ -60,6 +60,10 @@ struct SessionDomainAdapter: Sendable {
         )
     }
 
+    func vcsInfo(from dto: VcsInfoDTO) -> VcsInfo {
+        VcsInfo(currentBranch: dto.branch, defaultBranch: dto.defaultBranch)
+    }
+
     func permissionResponse(_ decision: PermissionDecision) -> String {
         switch decision {
         case .allowOnce: "once"

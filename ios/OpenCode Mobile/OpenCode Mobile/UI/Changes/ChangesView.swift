@@ -5,19 +5,42 @@ struct ChangesView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ChangesViewModel
     @State private var filePickerPresented = false
+    @State private var sourceMenuPresented = false
 
-    init(sessionID: String, worktree: String, messageID: String?, viewModel: ChangesViewModel? = nil) {
+    init(
+        sessionID: String,
+        worktree: String,
+        messageID: String?,
+        initialSource: ChangeSource = .lastTurn,
+        viewModel: ChangesViewModel? = nil
+    ) {
         _viewModel = State(initialValue: viewModel ?? ChangesViewModel(
             sessionID: sessionID,
             worktree: worktree,
             messageID: messageID,
+            initialSource: initialSource,
             repository: Container.shared.sessionRepository()
         ))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(title: "Changes", leading: .back(action: { dismiss() }), showDivider: true)
+            OpenCodeTopBarOverflowHost(
+                isPresented: $sourceMenuPresented,
+                entries: sourceMenuEntries
+            ) {
+                OpenCodeTopBar(
+                    title: "Changes",
+                    subtitle: viewModel.state.selectedSource.displayName,
+                    leading: .back(action: { dismiss() }),
+                    actions: [
+                        .icon(.moreVert, accessibilityLabel: "Choose change source") {
+                            sourceMenuPresented = true
+                        },
+                    ],
+                    showDivider: true
+                )
+            }
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
@@ -32,13 +55,13 @@ struct ChangesView: View {
     }
 
     @ViewBuilder private var content: some View {
-        switch viewModel.state {
+        switch viewModel.state.phase {
         case .loading:
             ProgressView("Loading changes…")
         case .noTurn:
             message("No completed turn", detail: "Send a prompt and wait for it to complete, then try again.")
         case .noChanges:
-            message("No changes", detail: "The latest completed turn did not change any files.")
+            message(viewModel.state.selectedSource.emptyTitle, detail: viewModel.state.selectedSource.emptyDetail)
         case let .content(changeSet):
             changeSetContent(changeSet)
         case let .error(error):
@@ -46,6 +69,17 @@ struct ChangesView: View {
                 message("Unable to load changes", detail: error)
                 OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) { Task { await viewModel.retry() } }
             }
+        }
+    }
+
+    private var sourceMenuEntries: [OpenCodeOverflowMenuEntry] {
+        viewModel.state.availableSources.map { source in
+            OpenCodeOverflowMenuEntry(
+                id: source.rawValue,
+                title: source.displayName + (source == viewModel.state.selectedSource ? " (selected)" : ""),
+                icon: .description,
+                action: { Task { await viewModel.selectSource(source) } }
+            )
         }
     }
 

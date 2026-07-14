@@ -16,7 +16,7 @@
 
 ## iOS
 
-- Status: OPE-35, OPE-36, and OPE-39 complete.
+- Status: OPE-35, OPE-36, OPE-37, and OPE-39 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -30,10 +30,16 @@
   context on request, navigates and focuses previous/next hunks, preserves long
   unwrapped lines through horizontal scrolling, and supports viewer-local
   reviewed markers that clear on reload or exit.
+- The Session Chat overflow opens Working tree by default. Changes discovers
+  worktree-scoped VCS metadata, exposes Last turn, Working tree, and conditional
+  Main branch sources, keeps each loaded snapshot stable, and reloads only for
+  source selection, retry, or explicit refresh. Non-Git projects and servers
+  without VCS endpoints fall back to Last turn; transient failures stay
+  retryable.
 
 ## Android
 
-- Status: OPE-35, OPE-36, and OPE-39 complete.
+- Status: OPE-35, OPE-36, OPE-37, and OPE-39 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -47,6 +53,12 @@
   context on request, navigates and focuses previous/next hunks, preserves long
   unwrapped lines through horizontal scrolling, and supports viewer-local
   reviewed markers that clear on reload or exit.
+- The Session Chat overflow opens Working tree by default. Changes discovers
+  worktree-scoped VCS metadata, exposes Last turn, Working tree, and conditional
+  Main branch sources, keeps each loaded snapshot stable, and reloads only for
+  source selection, retry, or explicit refresh. Non-Git projects and servers
+  without VCS endpoints fall back to Last turn; transient failures stay
+  retryable.
 
 ## Blockers
 
@@ -55,12 +67,16 @@
 
 ## Remaining Work
 
-- [`OPE-37`](https://linear.app/opencode-mobile/issue/OPE-37) — Review Git
-  Change Sets from Working tree and Main branch.
 - [`OPE-38`](https://linear.app/opencode-mobile/issue/OPE-38) — Surface the
   completed-turn Review changes pill.
 
 ## Completed Work
+
+- [`OPE-37`](https://linear.app/opencode-mobile/issue/OPE-37) — Add
+  worktree-scoped VCS metadata and diff clients, Working tree and conditional
+  Main branch sources, source switching, source-specific empty states, stable
+  snapshots, explicit refresh, and non-Git or unsupported-server fallback on
+  iOS and Android.
 
 - [`OPE-39`](https://linear.app/opencode-mobile/issue/OPE-39) — Add typed
   unified hunks and rows, collapsed/expanded context, hunk navigation,
