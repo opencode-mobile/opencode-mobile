@@ -156,7 +156,7 @@ fun SessionChatScreen(
                         messages = uiState.messages,
                         isRefreshing = uiState.isRefreshing,
                         errorMessage = uiState.errorMessage,
-                        reviewChangesFileCount = uiState.reviewChangesFileCount,
+                        reviewChangesSummary = uiState.reviewChangesSummary,
                         onRefresh = viewModel::refreshMessages,
                         onReviewChangesClick = {
                             uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)

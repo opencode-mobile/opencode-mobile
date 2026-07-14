@@ -302,7 +302,7 @@ final class SessionChatViewModel {
             permissionSubmitting: permissionSubmittingID != nil,
             permissionErrorMessage: permissionError ?? permissionTopologyError,
             reviewChangesMessageID: reviewChangesState.messageID,
-            reviewChangesFileCount: reviewChangesState.fileCount
+            reviewChangesSummary: reviewChangesState.summary
         )
     }
 

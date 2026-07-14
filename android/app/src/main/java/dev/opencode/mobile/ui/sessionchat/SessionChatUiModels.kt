@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
@@ -48,7 +49,7 @@ data class SessionChatUiState(
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
-    val reviewChangesFileCount: Int? = null,
+    val reviewChangesSummary: ReviewChangesSummary? = null,
 ) {
     val latestCompletedUserMessageId: String?
         get() {
@@ -74,7 +75,7 @@ data class SessionChatUiState(
 
     fun reviewChangesNavigationTarget(worktree: String): ChangesNavigationTarget? {
         val messageId = reviewChangesMessageId ?: return null
-        if ((reviewChangesFileCount ?: 0) <= 0) return null
+        if ((reviewChangesSummary?.fileCount ?: 0) <= 0) return null
         return ChangesNavigationTarget(
             sessionId = sessionId,
             worktree = worktree,
@@ -98,10 +99,27 @@ data class SessionChatUiState(
 
 object ReviewChangesPillVisibility {
     fun shouldShow(
-        fileCount: Int?,
+        summary: ReviewChangesSummary?,
         isPinnedToEnd: Boolean,
         showScrollToEnd: Boolean,
-    ): Boolean = (fileCount ?: 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    ): Boolean = (summary?.fileCount ?: 0) > 0 && isPinnedToEnd && !showScrollToEnd
+}
+
+data class ReviewChangesSummary(
+    val fileCount: Int,
+    val additions: Int,
+    val deletions: Int,
+) {
+    companion object {
+        fun from(files: List<FileDiff>): ReviewChangesSummary? =
+            files.takeIf { it.isNotEmpty() }?.let {
+                ReviewChangesSummary(
+                    fileCount = it.size,
+                    additions = it.sumOf(FileDiff::additions),
+                    deletions = it.sumOf(FileDiff::deletions),
+                )
+            }
+    }
 }
 
 data class ChangesNavigationTarget(
@@ -136,7 +154,7 @@ data class SessionInfoRegionState(
 
 data class SessionChatReviewChangesRegionState(
     val messageId: String? = null,
-    val fileCount: Int? = null,
+    val summary: ReviewChangesSummary? = null,
 )
 
 data class LatestModelHint(

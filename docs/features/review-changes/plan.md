@@ -57,10 +57,10 @@ source is unsupported.
 
 ## Expected Platform Logs
 
-Log source, session identifier, directory, file count, request duration, and
-success or mapped failure for each load, source switch, refresh, and pill-count
-request. Do not log patch contents, source lines, credentials, or authorization
-headers.
+Log source, session identifier, directory, file, addition, and deletion totals,
+request duration, and success or mapped failure for each load, source switch,
+refresh, and pill-summary request. Do not log patch contents, source lines,
+credentials, or authorization headers.
 
 ## Domain Objects
 
@@ -112,7 +112,7 @@ events do not mutate an open snapshot.
 - Non-Git or unsupported VCS source fallback.
 - No files matching the current filter.
 - Missing or empty patch preview, including binary files.
-- A failed pill-count request hides the pill without hiding the overflow entry.
+- A failed pill-summary request hides the pill without hiding the overflow entry.
 
 ## Permission Requests
 

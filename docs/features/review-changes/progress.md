@@ -19,7 +19,7 @@
 
 ## iOS
 
-- Status: OPE-35 through OPE-40 complete.
+- Status: OPE-35 through OPE-41 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -39,18 +39,20 @@
   source selection, retry, or explicit refresh. Non-Git projects and servers
   without VCS endpoints fall back to Last turn; transient failures stay
   retryable.
-- Session Chat requests a worktree-scoped diff count only after the latest user
-  turn completes. A positive result shows the Review Changes Pill only while
+- Session Chat requests a worktree-scoped diff only after the latest user turn
+  completes and derives one file, addition, and deletion summary from that
+  response. A positive result shows the Review Changes Pill only while
   the timeline is pinned to its end; pending, empty, and failed results keep it
   hidden. The pill is mutually exclusive with Scroll to end and opens Last
   turn with the captured completed-user-message identifier.
 - OPE-40 refines the reusable pill API and presentation for file, addition, and
-  deletion totals. Session Chat supplies zero line totals until OPE-41 wires
-  the latest-turn aggregate values.
+  deletion totals. OPE-41 supplies the pill with the latest-turn aggregate
+  values without an additional network request and prevents stale or cancelled
+  loads from publishing a summary.
 
 ## Android
 
-- Status: OPE-35 through OPE-40 complete.
+- Status: OPE-35 through OPE-41 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -70,14 +72,16 @@
   source selection, retry, or explicit refresh. Non-Git projects and servers
   without VCS endpoints fall back to Last turn; transient failures stay
   retryable.
-- Session Chat requests a worktree-scoped diff count only after the latest user
-  turn completes. A positive result shows the Review Changes Pill only while
+- Session Chat requests a worktree-scoped diff only after the latest user turn
+  completes and derives one file, addition, and deletion summary from that
+  response. A positive result shows the Review Changes Pill only while
   the timeline is pinned to its end; pending, empty, and failed results keep it
   hidden. The pill is mutually exclusive with Scroll to end and opens Last
   turn with the captured completed-user-message identifier.
 - OPE-40 refines the reusable pill API and presentation for file, addition, and
-  deletion totals. Session Chat supplies zero line totals until OPE-41 wires
-  the latest-turn aggregate values.
+  deletion totals. OPE-41 supplies the pill with the latest-turn aggregate
+  values without an additional network request and prevents stale or cancelled
+  loads from publishing a summary.
 
 ## Blockers
 
@@ -85,11 +89,14 @@
 
 ## Remaining Work
 
-- [`OPE-41`](https://linear.app/opencode-mobile/issue/OPE-41) — Supply the
-  reusable pill with latest-turn addition and deletion aggregates from Session
-  Chat on both platforms.
+- None in the current Review Changes slice.
 
 ## Completed Work
+
+- [`OPE-41`](https://linear.app/opencode-mobile/issue/OPE-41) — Derive and
+  propagate latest-turn file, addition, and deletion totals from the existing
+  Session Chat diff request, with failure and stale-request protection on iOS
+  and Android.
 
 - [`OPE-40`](https://linear.app/opencode-mobile/issue/OPE-40) — Refine the
   Review Changes Pill contract, native implementations, galleries, previews,

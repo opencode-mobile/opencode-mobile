@@ -77,7 +77,7 @@ struct SessionChatUiState: Equatable {
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
     var reviewChangesMessageID: String?
-    var reviewChangesFileCount: Int?
+    var reviewChangesSummary: ReviewChangesSummary?
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -102,7 +102,7 @@ struct SessionChatUiState: Equatable {
     }
 
     func reviewChangesNavigationTarget(worktree: String) -> ChangesNavigationTarget? {
-        guard reviewChangesFileCount ?? 0 > 0, let messageID = reviewChangesMessageID else { return nil }
+        guard reviewChangesSummary?.fileCount ?? 0 > 0, let messageID = reviewChangesMessageID else { return nil }
         return ChangesNavigationTarget(
             sessionID: sessionID,
             worktree: worktree,
@@ -130,8 +130,29 @@ struct SessionChatUiState: Equatable {
 }
 
 enum ReviewChangesPillVisibility {
-    static func shouldShow(fileCount: Int?, isPinnedToEnd: Bool, showScrollToEnd: Bool) -> Bool {
-        (fileCount ?? 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    static func shouldShow(summary: ReviewChangesSummary?, isPinnedToEnd: Bool, showScrollToEnd: Bool) -> Bool {
+        (summary?.fileCount ?? 0) > 0 && isPinnedToEnd && !showScrollToEnd
+    }
+}
+
+struct ReviewChangesSummary: Equatable {
+    let fileCount: Int
+    let additions: Int
+    let deletions: Int
+
+    init(fileCount: Int, additions: Int, deletions: Int) {
+        self.fileCount = fileCount
+        self.additions = additions
+        self.deletions = deletions
+    }
+
+    init?(files: [FileDiff]) {
+        guard !files.isEmpty else { return nil }
+        self.init(
+            fileCount: files.count,
+            additions: files.reduce(0) { $0 + $1.additions },
+            deletions: files.reduce(0) { $0 + $1.deletions }
+        )
     }
 }
 
@@ -181,7 +202,7 @@ struct SessionInfoRegionState: Equatable {
 
 struct SessionChatReviewChangesRegionState: Equatable {
     var messageID: String?
-    var fileCount: Int?
+    var summary: ReviewChangesSummary?
 }
 
 struct LatestModelHint: Equatable {

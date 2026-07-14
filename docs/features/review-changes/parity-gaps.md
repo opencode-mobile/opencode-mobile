@@ -3,3 +3,5 @@
 No known parity gaps. The OPE-35 Last turn path, OPE-36 multi-file navigation,
 OPE-37 Git Change Sets, OPE-38 Review Changes Pill, OPE-39 practical diff, and
 OPE-40 compact pill summary review tools are aligned on iOS and Android.
+OPE-41 latest-turn file and line-total aggregation is also aligned, including
+empty, failed, cancelled, and stale-request behavior.

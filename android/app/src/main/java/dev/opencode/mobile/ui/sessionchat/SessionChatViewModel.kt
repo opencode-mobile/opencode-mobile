@@ -346,7 +346,7 @@ class SessionChatViewModel
                 permissionSubmitting = permissionSubmittingId != null,
                 permissionErrorMessage = permissionError ?: permissionTopologyError,
                 reviewChangesMessageId = reviewChangesState.messageId,
-                reviewChangesFileCount = reviewChangesState.fileCount,
+                reviewChangesSummary = reviewChangesState.summary,
             )
         }
 

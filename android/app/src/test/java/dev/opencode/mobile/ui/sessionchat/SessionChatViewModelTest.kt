@@ -37,11 +37,13 @@ import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
@@ -53,6 +55,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
@@ -193,7 +196,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun completedLatestTurnLoadsReviewChangesCountWithWorktree() =
+    fun completedLatestTurnLoadsReviewChangesSummaryWithWorktree() =
         runTest(testDispatcher) {
             val sessionRepository =
                 FakeSessionRepository(
@@ -203,8 +206,15 @@ class SessionChatViewModelTest {
                                 path = "one.kt",
                                 patch = null,
                                 additions = 1,
-                                deletions = 0,
+                                deletions = 2,
                                 status = FileDiffStatus.Modified,
+                            ),
+                            FileDiff(
+                                path = "two.kt",
+                                patch = null,
+                                additions = 3,
+                                deletions = 0,
+                                status = FileDiffStatus.Added,
                             ),
                         ),
                 )
@@ -224,8 +234,40 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(1, viewModel.uiState.value.reviewChangesFileCount)
+            assertEquals(ReviewChangesSummary(2, 4, 2), viewModel.uiState.value.reviewChangesSummary)
             assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+        }
+
+    @Test
+    fun newerLatestTurnCancelsStaleReviewChangesSummary() =
+        runTest(testDispatcher) {
+            val staleDiff = FileDiff("stale.kt", null, 99, 99, FileDiffStatus.Modified)
+            val latestDiff = FileDiff("latest.kt", null, 5, 3, FileDiffStatus.Modified)
+            val repository =
+                FakeSessionRepository(
+                    sessionDiffsByMessageId = mapOf("user-1" to listOf(staleDiff), "user-2" to listOf(latestDiff)),
+                    sessionDiffDelayMsByMessageId = mapOf("user-1" to 1_000L),
+                )
+            val region = SessionChatReviewChanges(repository, backgroundScope).apply { ioDispatcher = testDispatcher }
+            region.bind("ses-1", "/repo")
+
+            region.updateCandidate(
+                messages = listOf(reviewChangesMessage("user-1")),
+                hasResolvedSessionStatus = true,
+                isTurnActive = false,
+                isSending = false,
+            )
+            runCurrent()
+            region.updateCandidate(
+                messages = listOf(reviewChangesMessage("user-1"), reviewChangesMessage("user-2")),
+                hasResolvedSessionStatus = true,
+                isTurnActive = false,
+                isSending = false,
+            )
+            runCurrent()
+
+            assertEquals("user-2", region.state.value.messageId)
+            assertEquals(ReviewChangesSummary(1, 5, 3), region.state.value.summary)
         }
 
     @Test
@@ -251,7 +293,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(null, viewModel.uiState.value.reviewChangesFileCount)
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
             assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
         }
 
@@ -276,7 +318,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, sessionRepository.diffRequest)
-            assertEquals(null, viewModel.uiState.value.reviewChangesFileCount)
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
         }
 
     @Test
@@ -301,7 +343,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, sessionRepository.diffRequest)
-            assertEquals(null, viewModel.uiState.value.reviewChangesFileCount)
+            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
         }
 
     @Test
@@ -1225,6 +1267,14 @@ class SessionChatViewModelTest {
         block()
         return (System.nanoTime() - startedAt) / 1_000_000
     }
+
+    private fun reviewChangesMessage(id: String) =
+        SessionChatMessageItem(
+            id = id,
+            role = MessageRole.User,
+            text = "Change it",
+            metadataLabel = "Build",
+        )
 }
 
 private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
@@ -1438,6 +1488,8 @@ private class FakeSessionRepository(
     private val permissionResponseError: SessionError? = null,
     private val listSessionsError: Throwable? = null,
     private val sessionDiffs: List<FileDiff> = emptyList(),
+    private val sessionDiffsByMessageId: Map<String, List<FileDiff>> = emptyMap(),
+    private val sessionDiffDelayMsByMessageId: Map<String, Long> = emptyMap(),
     private val sessionDiffError: SessionError? = null,
     private val sessionStatusType: String = "idle",
     private val sessionStatusError: SessionError? = null,
@@ -1539,8 +1591,9 @@ private class FakeSessionRepository(
         directory: String?,
     ): List<FileDiff> {
         diffRequest = DiffRequest(id, messageId, directory)
+        sessionDiffDelayMsByMessageId[messageId]?.let { delay(it) }
         sessionDiffError?.let { throw it }
-        return sessionDiffs
+        return sessionDiffsByMessageId[messageId] ?: sessionDiffs
     }
 
     override suspend fun summarizeSession(

@@ -46,18 +46,19 @@ final class SessionChatReviewChanges {
                     directory: worktree
                 )
                 guard !Task.isCancelled, candidateMessageID == eligibleMessageID else { return }
+                let summary = ReviewChangesSummary(files: files)
                 state = SessionChatReviewChangesRegionState(
                     messageID: eligibleMessageID,
-                    fileCount: files.isEmpty ? nil : files.count
+                    summary: summary
                 )
-                logRequest(fileCount: files.count, result: "success", startedAt: startedAt)
+                logRequest(summary: summary, result: "success", startedAt: startedAt)
                 notifyChange()
             } catch is CancellationError {
                 return
             } catch {
                 guard candidateMessageID == eligibleMessageID else { return }
                 state = SessionChatReviewChangesRegionState()
-                logRequest(fileCount: 0, result: "failure:\(failureCategory(error))", startedAt: startedAt)
+                logRequest(summary: nil, result: "failure:\(failureCategory(error))", startedAt: startedAt)
                 notifyChange()
             }
         }
@@ -79,10 +80,10 @@ final class SessionChatReviewChanges {
         }
     }
 
-    private func logRequest(fileCount: Int, result: String, startedAt: Date) {
+    private func logRequest(summary: ReviewChangesSummary?, result: String, startedAt: Date) {
         let duration = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
         OpenCodeLog.sessionChat.info(
-            "pill-count source=last-turn session=\(self.sessionID, privacy: .public) directory=\(self.worktree, privacy: .private) files=\(fileCount) result=\(result, privacy: .public) durationMs=\(duration)"
+            "pill-summary source=last-turn session=\(self.sessionID, privacy: .public) directory=\(self.worktree, privacy: .private) files=\(summary?.fileCount ?? 0) additions=\(summary?.additions ?? 0) deletions=\(summary?.deletions ?? 0) result=\(result, privacy: .public) durationMs=\(duration)"
         )
     }
 

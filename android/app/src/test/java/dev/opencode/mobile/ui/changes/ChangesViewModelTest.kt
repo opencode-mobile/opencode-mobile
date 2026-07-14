@@ -17,6 +17,7 @@ import dev.opencode.mobile.ui.components.reviewChangesPillAccessibilityLabel
 import dev.opencode.mobile.ui.components.reviewChangesPillSummary
 import dev.opencode.mobile.ui.sessionchat.ChangesNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
@@ -390,7 +391,7 @@ class ChangesViewModelTest {
                 SessionChatTimelineState.Ready,
                 messages = listOf(row("user-1", MessageRole.User), row("assistant", MessageRole.Assistant)),
                 reviewChangesMessageId = "user-1",
-                reviewChangesFileCount = 2,
+                reviewChangesSummary = ReviewChangesSummary(2, 4, 2),
             )
 
         assertEquals(
@@ -411,13 +412,13 @@ class ChangesViewModelTest {
                         row("assistant", MessageRole.Assistant),
                         row("user-2", MessageRole.User, true),
                     ),
-                reviewChangesFileCount = 3,
+                reviewChangesSummary = ReviewChangesSummary(3, 4, 2),
             )
 
         assertEquals(null, state.reviewChangesNavigationTarget("/repo"))
         assertFalse(ReviewChangesPillVisibility.shouldShow(null, isPinnedToEnd = true, showScrollToEnd = false))
-        assertFalse(ReviewChangesPillVisibility.shouldShow(3, isPinnedToEnd = false, showScrollToEnd = true))
-        assertTrue(ReviewChangesPillVisibility.shouldShow(3, isPinnedToEnd = true, showScrollToEnd = false))
+        assertFalse(ReviewChangesPillVisibility.shouldShow(state.reviewChangesSummary, isPinnedToEnd = false, showScrollToEnd = true))
+        assertTrue(ReviewChangesPillVisibility.shouldShow(state.reviewChangesSummary, isPinnedToEnd = true, showScrollToEnd = false))
     }
 
     @Test fun reviewChangesPillFormatsSummaryAndOmitsZeroLineTotals() {

@@ -361,7 +361,7 @@ struct ChangesViewModelTests {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
         state.messages = [row("user-1", role: .user), row("assistant", role: .assistant)]
         state.reviewChangesMessageID = "user-1"
-        state.reviewChangesFileCount = 2
+        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 2)
 
         #expect(
             state.reviewChangesNavigationTarget(worktree: "/repo") ==
@@ -372,12 +372,12 @@ struct ChangesViewModelTests {
     @Test func reviewChangesPillHidesForPendingLatestTurnOrUnavailableCount() {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
         state.messages = [row("user-1", role: .user), row("assistant", role: .assistant), row("user-2", role: .user, pending: true)]
-        state.reviewChangesFileCount = 3
+        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 3, additions: 4, deletions: 2)
 
         #expect(state.reviewChangesNavigationTarget(worktree: "/repo") == nil)
-        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: nil, isPinnedToEnd: true, showScrollToEnd: false) == false)
-        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: 3, isPinnedToEnd: false, showScrollToEnd: true) == false)
-        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: 3, isPinnedToEnd: true, showScrollToEnd: false))
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: nil, isPinnedToEnd: true, showScrollToEnd: false) == false)
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary, isPinnedToEnd: false, showScrollToEnd: true) == false)
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary, isPinnedToEnd: true, showScrollToEnd: false))
     }
 
     @Test func reviewChangesPillFormatsSummaryAndOmitsZeroLineTotals() {

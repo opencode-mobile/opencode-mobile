@@ -4,6 +4,7 @@ import android.util.Log
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatReviewChangesRegionState
 import kotlinx.coroutines.CancellationException
@@ -66,18 +67,19 @@ class SessionChatReviewChanges(
                         sessionRepository.getSessionDiff(sessionId, messageId, worktree)
                     }
                     if (candidateMessageId != messageId) return@launch
+                    val summary = ReviewChangesSummary.from(files)
                     _state.value =
                         SessionChatReviewChangesRegionState(
                             messageId = messageId,
-                            fileCount = files.size.takeIf { it > 0 },
+                            summary = summary,
                         )
-                    logRequest(sessionId, worktree, files.size, "success", startedAt)
+                    logRequest(sessionId, worktree, summary, "success", startedAt)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
                     if (candidateMessageId != messageId) return@launch
                     _state.value = SessionChatReviewChangesRegionState()
-                    logRequest(sessionId, worktree, 0, "failure:${failureCategory(error)}", startedAt)
+                    logRequest(sessionId, worktree, null, "failure:${failureCategory(error)}", startedAt)
                 }
             }
     }
@@ -93,15 +95,17 @@ class SessionChatReviewChanges(
     private fun logRequest(
         sessionId: String,
         worktree: String,
-        fileCount: Int,
+        summary: ReviewChangesSummary?,
         result: String,
         startedAt: Long,
     ) {
         runCatching {
             Log.i(
                 TAG,
-                "pill-count source=last-turn session=$sessionId directory=$worktree " +
-                    "files=$fileCount result=$result durationMs=${System.currentTimeMillis() - startedAt}",
+                "pill-summary source=last-turn session=$sessionId directory=$worktree " +
+                    "files=${summary?.fileCount ?: 0} additions=${summary?.additions ?: 0} " +
+                    "deletions=${summary?.deletions ?: 0} result=$result " +
+                    "durationMs=${System.currentTimeMillis() - startedAt}",
             )
         }
     }
