@@ -16,6 +16,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case listItem
     case choiceBadge
     case actionPill
+    case reviewChangesPill
     case unifiedDiff
     case button
     case textInput
@@ -92,6 +93,12 @@ let componentGalleryEntries = [
         id: .actionPill,
         title: "Action Pill",
         description: "Floating pill for contextual overlay actions such as scroll to end.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .reviewChangesPill,
+        title: "Review Changes Pill",
+        description: "Contextual shortcut to files changed by the latest completed turn.",
         category: .components
     ),
     ComponentGalleryEntry(

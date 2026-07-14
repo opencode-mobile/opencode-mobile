@@ -21,6 +21,7 @@ enum class ComponentGalleryEntryId {
     ListItem,
     ChoiceBadge,
     ActionPill,
+    ReviewChangesPill,
     UnifiedDiff,
     Button,
     TextInput,
@@ -98,6 +99,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ActionPill,
             title = "Action Pill",
             description = "Floating pill for contextual overlay actions such as scroll to end.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ReviewChangesPill,
+            title = "Review Changes Pill",
+            description = "Contextual shortcut to files changed by the latest completed turn.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

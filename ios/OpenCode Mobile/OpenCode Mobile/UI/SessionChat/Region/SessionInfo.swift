@@ -54,6 +54,7 @@ final class SessionInfo {
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: worktree) else { return }
         let status = statuses.first(where: { $0.sessionID == state.sessionID })
         state.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
+        state.hasResolvedSessionStatus = true
         notifyChange()
     }
 
@@ -82,6 +83,7 @@ final class SessionInfo {
                 "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
             )
             state.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
+            state.hasResolvedSessionStatus = true
             notifyChange()
         }
     }

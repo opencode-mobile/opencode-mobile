@@ -11,8 +11,11 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsDiffMode
 import dev.opencode.mobile.domain.session.VcsInfo
+import dev.opencode.mobile.ui.components.ReviewChangesPillPreviewCase
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.components.reviewChangesPillLabel
 import dev.opencode.mobile.ui.sessionchat.ChangesNavigationTarget
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
@@ -26,6 +29,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -374,6 +379,56 @@ class ChangesViewModelTest {
             ChangesNavigationTarget("s", "/repo", "user-1"),
             state.changesNavigationTarget("/repo"),
         )
+    }
+
+    @Test fun reviewChangesPillUsesLatestCompletedTurnAndLastTurnSource() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages = listOf(row("user-1", MessageRole.User), row("assistant", MessageRole.Assistant)),
+                reviewChangesMessageId = "user-1",
+                reviewChangesFileCount = 2,
+            )
+
+        assertEquals(
+            ChangesNavigationTarget("s", "/repo", "user-1", ChangeSource.LastTurn),
+            state.reviewChangesNavigationTarget("/repo"),
+        )
+    }
+
+    @Test fun reviewChangesPillHidesForPendingLatestTurnOrUnavailableCount() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages =
+                    listOf(
+                        row("user-1", MessageRole.User),
+                        row("assistant", MessageRole.Assistant),
+                        row("user-2", MessageRole.User, true),
+                    ),
+                reviewChangesFileCount = 3,
+            )
+
+        assertEquals(null, state.reviewChangesNavigationTarget("/repo"))
+        assertFalse(ReviewChangesPillVisibility.shouldShow(null, isPinnedToEnd = true, showScrollToEnd = false))
+        assertFalse(ReviewChangesPillVisibility.shouldShow(3, isPinnedToEnd = false, showScrollToEnd = true))
+        assertTrue(ReviewChangesPillVisibility.shouldShow(3, isPinnedToEnd = true, showScrollToEnd = false))
+    }
+
+    @Test fun reviewChangesPillPluralizesAccessibleLabel() {
+        assertEquals("Review 1 changed file", reviewChangesPillLabel(1))
+        assertEquals("Review 4 changed files", reviewChangesPillLabel(4))
+    }
+
+    @Test fun reviewChangesPillPreviewMatrixCoversLightAndDarkStates() {
+        assertEquals(6, ReviewChangesPillPreviewCase.entries.size)
+        assertEquals(setOf(false, true), ReviewChangesPillPreviewCase.entries.map { it.darkTheme }.toSet())
+        assertEquals(setOf(false, true), ReviewChangesPillPreviewCase.entries.map { it.enabled }.toSet())
+        assertEquals(setOf(1, 4), ReviewChangesPillPreviewCase.entries.map { it.changedFileCount }.toSet())
     }
 
     private fun row(

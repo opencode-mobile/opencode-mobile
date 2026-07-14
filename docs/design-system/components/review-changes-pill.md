@@ -50,12 +50,24 @@ pressed feedback uses the shared semantic surface mapping.
 
 ## Review Surfaces
 
-- Register an interactive Review changes pill entry in both Component
-  Galleries with count and enabled controls.
-- Provide stable light and dark previews for singular, plural, and disabled
-  states.
+- Both Component Galleries register an interactive Review Changes Pill entry
+  with singular/plural count and enabled controls.
+- SwiftUI previews and Compose previews provide stable light and dark singular,
+  plural, and disabled states.
 
 ## Parity And Divergence
 
 The public copy, visibility contract, interaction, geometry, and accessibility
 meaning are shared. No intentional platform divergence is planned.
+
+## Completion Ledger
+
+- Public API and applicable enabled/disabled states: complete.
+- Token and typography mappings: complete; the implementations use the
+  documented `reviewChangesPill.*` geometry, raised semantic surfaces, and
+  button typography.
+- iOS and Android implementations: complete.
+- Gallery entries and native previews: complete.
+- Automated interaction, accessibility-label, pluralization, visibility, and
+  navigation checks: complete.
+- Parity and divergences: complete; no observable divergence is known.

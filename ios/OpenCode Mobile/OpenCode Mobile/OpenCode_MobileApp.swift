@@ -37,6 +37,8 @@ struct OpenCode_MobileApp: App {
                     files: Self.changesUITestFiles
                 )
             )
+        } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] == "1" {
+            ReviewChangesPillUITestView()
         } else {
             AppRootView()
         }
@@ -71,3 +73,17 @@ struct OpenCode_MobileApp: App {
     ]
     #endif
 }
+
+#if DEBUG
+private struct ReviewChangesPillUITestView: View {
+    @State private var tapped = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 1) { tapped = true }
+            OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 4, enabled: false, action: {})
+            Text(tapped ? "Review changes tapped" : "Waiting for review")
+        }
+    }
+}
+#endif

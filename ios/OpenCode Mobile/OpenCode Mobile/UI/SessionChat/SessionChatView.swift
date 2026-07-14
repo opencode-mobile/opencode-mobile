@@ -65,7 +65,11 @@ struct SessionChatView: View {
                     messages: viewModel.uiState.messages,
                     isRefreshing: viewModel.uiState.isRefreshing,
                     errorMessage: viewModel.uiState.errorMessage,
+                    reviewChangesFileCount: viewModel.uiState.reviewChangesFileCount,
                     onRefresh: { await viewModel.refreshMessages() },
+                    onReviewChangesTap: {
+                        changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
+                    },
                     onMessageActionsTap: { messageActionsTarget = $0 }
                 )
             )

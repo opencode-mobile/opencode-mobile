@@ -1,9 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
-import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
-import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
-import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -11,6 +8,9 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
+import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -57,6 +57,7 @@ class SessionInfo(
             )
         logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
         startObserving(sessionId, worktree)
+        refreshStatus()
     }
 
     fun stopObserving() {
@@ -73,7 +74,9 @@ class SessionInfo(
                     if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
                     val status = statuses.firstOrNull { it.sessionId == sessionId }
                     val label = status?.let(eventDomainAdapter::statusLabel)
-                    _state.update { it.copy(sessionStatusLabel = label) }
+                    _state.update {
+                        it.copy(sessionStatusLabel = label, hasResolvedSessionStatus = true)
+                    }
                 }
         }
     }
@@ -114,7 +117,10 @@ class SessionInfo(
                                 "live status session=$sessionId type=${status?.raw?.get("type") ?: "-"}",
                             )
                             _state.update {
-                                it.copy(sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel))
+                                it.copy(
+                                    sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
+                                    hasResolvedSessionStatus = it.hasResolvedSessionStatus || status != null,
+                                )
                             }
                         }
                     }
