@@ -98,9 +98,12 @@ struct SessionChatViewModelTests {
         #expect(messages[0].text == "Hello")
     }
 
-    @Test func completedLatestTurnLoadsReviewChangesCountWithWorktree() async {
+    @Test func completedLatestTurnLoadsReviewChangesSummaryWithWorktree() async {
         let sessionRepository = FakeChatSessionRepository(
-            sessionDiffs: [FileDiff(path: "one.swift", patch: nil, additions: 1, deletions: 0, status: .modified)]
+            sessionDiffs: [
+                FileDiff(path: "one.swift", patch: nil, additions: 1, deletions: 2, status: .modified),
+                FileDiff(path: "two.swift", patch: nil, additions: 3, deletions: 0, status: .added),
+            ]
         )
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(messages: [
@@ -112,9 +115,44 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         await viewModel.loadMessages()
-        await waitUntil { viewModel.uiState.reviewChangesFileCount == 1 }
+        await waitUntil { viewModel.uiState.reviewChangesSummary != nil }
 
+        #expect(viewModel.uiState.reviewChangesSummary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 2))
         #expect(sessionRepository.diffRequest == .init(sessionID: "ses-1", messageID: "user-1", directory: "/repo"))
+    }
+
+    @Test func newerLatestTurnCancelsStaleReviewChangesSummary() async {
+        let sessionRepository = FakeChatSessionRepository(
+            sessionDiffProvider: { messageID in
+                if messageID == "user-1" {
+                    try await Task.sleep(for: .seconds(1))
+                    return [FileDiff(path: "stale.swift", patch: nil, additions: 99, deletions: 99, status: .modified)]
+                }
+                return [FileDiff(path: "latest.swift", patch: nil, additions: 5, deletions: 3, status: .modified)]
+            }
+        )
+        let region = SessionChatReviewChanges(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            sessionRepository: sessionRepository
+        )
+
+        region.updateCandidate(
+            messages: [reviewChangesRow(id: "user-1")],
+            hasResolvedSessionStatus: true,
+            isTurnActive: false,
+            isSending: false
+        )
+        await Task.yield()
+        region.updateCandidate(
+            messages: [reviewChangesRow(id: "user-1"), reviewChangesRow(id: "user-2")],
+            hasResolvedSessionStatus: true,
+            isTurnActive: false,
+            isSending: false
+        )
+        await waitUntil { region.state.messageID == "user-2" }
+
+        #expect(region.state.summary == ReviewChangesSummary(fileCount: 1, additions: 5, deletions: 3))
     }
 
     @Test func failedReviewChangesCountStaysHidden() async {
@@ -131,7 +169,7 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         await waitUntil { sessionRepository.diffRequest != nil }
 
-        #expect(viewModel.uiState.reviewChangesFileCount == nil)
+        #expect(viewModel.uiState.reviewChangesSummary == nil)
     }
 
     @Test func activeLatestTurnDoesNotLoadReviewChangesCount() async {
@@ -149,7 +187,7 @@ struct SessionChatViewModelTests {
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(sessionRepository.diffRequest == nil)
-        #expect(viewModel.uiState.reviewChangesFileCount == nil)
+        #expect(viewModel.uiState.reviewChangesSummary == nil)
     }
 
     @Test func benchmark_loadMessages_longMarkdownHistory() async {
@@ -191,6 +229,21 @@ struct SessionChatViewModelTests {
             "messages=20 code-lines=3000\n"
         print(String(line.dropLast()))
         fputs(line, stderr)
+    }
+
+    private func reviewChangesRow(id: String) -> SessionChatRow {
+        SessionChatRow(
+            id: id,
+            role: .user,
+            text: "Change it",
+            metadataLabel: "Build",
+            isPending: false,
+            isStreaming: false,
+            renderedMarkdown: nil,
+            modelProviderID: nil,
+            modelID: nil,
+            contextInputTokens: nil
+        )
     }
 
     @Test func loadMessages_empty() async {
@@ -1102,6 +1155,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let listSessionsError: SessionError?
     private let sessionDiffs: [FileDiff]
     private let sessionDiffError: SessionError?
+    private let sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])?
     private let sessionStatusType: String
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
@@ -1116,7 +1170,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         listSessionsError: SessionError? = nil,
         sessionDiffs: [FileDiff] = [],
         sessionDiffError: SessionError? = nil,
-        sessionStatusType: String = "idle"
+        sessionStatusType: String = "idle",
+        sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -1125,6 +1180,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.sessionDiffs = sessionDiffs
         self.sessionDiffError = sessionDiffError
         self.sessionStatusType = sessionStatusType
+        self.sessionDiffProvider = sessionDiffProvider
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
@@ -1152,6 +1208,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func unshareSession(id: String) async throws -> Session { fatalError() }
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
         diffRequest = DiffRequest(sessionID: id, messageID: messageID, directory: directory)
+        if let sessionDiffProvider { return try await sessionDiffProvider(messageID) }
         if let sessionDiffError { throw sessionDiffError }
         return sessionDiffs
     }

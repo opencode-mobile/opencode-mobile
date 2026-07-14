@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.displayLabel
@@ -49,7 +50,7 @@ internal data class SessionChatTimelineViewProps(
     val messages: List<SessionChatMessageItem>,
     val isRefreshing: Boolean,
     val errorMessage: String?,
-    val reviewChangesFileCount: Int?,
+    val reviewChangesSummary: ReviewChangesSummary?,
     val onRefresh: () -> Unit,
     val onReviewChangesClick: () -> Unit,
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
@@ -99,7 +100,7 @@ internal fun SessionChatTimelineView(
             SessionChatTimelineReadyView(
                 messages = props.messages,
                 isRefreshing = props.isRefreshing,
-                reviewChangesFileCount = props.reviewChangesFileCount,
+                reviewChangesSummary = props.reviewChangesSummary,
                 onRefresh = props.onRefresh,
                 onReviewChangesClick = props.onReviewChangesClick,
                 onMessageActionsTap = props.onMessageActionsTap,
@@ -114,7 +115,7 @@ internal fun SessionChatTimelineView(
 private fun SessionChatTimelineReadyView(
     messages: List<SessionChatMessageItem>,
     isRefreshing: Boolean,
-    reviewChangesFileCount: Int?,
+    reviewChangesSummary: ReviewChangesSummary?,
     onRefresh: () -> Unit,
     onReviewChangesClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
@@ -167,7 +168,7 @@ private fun SessionChatTimelineReadyView(
 
         val showReviewChanges =
             ReviewChangesPillVisibility.shouldShow(
-                fileCount = reviewChangesFileCount,
+                summary = reviewChangesSummary,
                 isPinnedToEnd = timeline.isPinnedToEnd,
                 showScrollToEnd = timeline.showScrollToEnd,
             )
@@ -180,10 +181,12 @@ private fun SessionChatTimelineReadyView(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = MessageListTimelineDefaults.scrollToEndPillBottomPadding),
         ) {
-            reviewChangesFileCount?.let { fileCount ->
+            reviewChangesSummary?.let { summary ->
                 OpenCodeReviewChangesPill(
                     variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                    changedFileCount = fileCount,
+                    changedFileCount = summary.fileCount,
+                    additions = summary.additions,
+                    deletions = summary.deletions,
                     onClick = onReviewChangesClick,
                 )
             }

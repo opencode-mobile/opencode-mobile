@@ -8,14 +8,18 @@
 ## Design System
 
 - Status: Unified Diff and Review Changes Pill are implemented and registered
-  in both Component Galleries with interactive and native preview states.
+  in both Component Galleries with interactive and native preview states. The
+  pill accepts a positive file count and nonnegative line totals, displays
+  compact singular/plural file copy with independently omitted addition and
+  deletion totals, and exposes the same action summary to accessibility on both
+  platforms.
 - New dependencies: Review Changes Pill and Unified Diff.
 - Reused: top bar, overflow menu, bottom sheet, list item, button, semantic diff
   and syntax tokens, and existing typography roles.
 
 ## iOS
 
-- Status: OPE-35 through OPE-39 complete.
+- Status: OPE-35 through OPE-41 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -35,15 +39,20 @@
   source selection, retry, or explicit refresh. Non-Git projects and servers
   without VCS endpoints fall back to Last turn; transient failures stay
   retryable.
-- Session Chat requests a worktree-scoped diff count only after the latest user
-  turn completes. A positive result shows the Review Changes Pill only while
+- Session Chat requests a worktree-scoped diff only after the latest user turn
+  completes and derives one file, addition, and deletion summary from that
+  response. A positive result shows the Review Changes Pill only while
   the timeline is pinned to its end; pending, empty, and failed results keep it
   hidden. The pill is mutually exclusive with Scroll to end and opens Last
   turn with the captured completed-user-message identifier.
+- OPE-40 refines the reusable pill API and presentation for file, addition, and
+  deletion totals. OPE-41 supplies the pill with the latest-turn aggregate
+  values without an additional network request and prevents stale or cancelled
+  loads from publishing a summary.
 
 ## Android
 
-- Status: OPE-35 through OPE-39 complete.
+- Status: OPE-35 through OPE-41 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -63,11 +72,16 @@
   source selection, retry, or explicit refresh. Non-Git projects and servers
   without VCS endpoints fall back to Last turn; transient failures stay
   retryable.
-- Session Chat requests a worktree-scoped diff count only after the latest user
-  turn completes. A positive result shows the Review Changes Pill only while
+- Session Chat requests a worktree-scoped diff only after the latest user turn
+  completes and derives one file, addition, and deletion summary from that
+  response. A positive result shows the Review Changes Pill only while
   the timeline is pinned to its end; pending, empty, and failed results keep it
   hidden. The pill is mutually exclusive with Scroll to end and opens Last
   turn with the captured completed-user-message identifier.
+- OPE-40 refines the reusable pill API and presentation for file, addition, and
+  deletion totals. OPE-41 supplies the pill with the latest-turn aggregate
+  values without an additional network request and prevents stale or cancelled
+  loads from publishing a summary.
 
 ## Blockers
 
@@ -75,9 +89,19 @@
 
 ## Remaining Work
 
-- No remaining implementation work in the current Review Changes slice.
+- None in the current Review Changes slice.
 
 ## Completed Work
+
+- [`OPE-41`](https://linear.app/opencode-mobile/issue/OPE-41) — Derive and
+  propagate latest-turn file, addition, and deletion totals from the existing
+  Session Chat diff request, with failure and stale-request protection on iOS
+  and Android.
+
+- [`OPE-40`](https://linear.app/opencode-mobile/issue/OPE-40) — Refine the
+  Review Changes Pill contract, native implementations, galleries, previews,
+  formatting checks, and accessibility to present compact file and line totals
+  on iOS and Android.
 
 - [`OPE-38`](https://linear.app/opencode-mobile/issue/OPE-38) — Add the
   completed-turn Review Changes Pill component, count loading, visibility and

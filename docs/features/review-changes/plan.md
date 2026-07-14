@@ -57,10 +57,10 @@ source is unsupported.
 
 ## Expected Platform Logs
 
-Log source, session identifier, directory, file count, request duration, and
-success or mapped failure for each load, source switch, refresh, and pill-count
-request. Do not log patch contents, source lines, credentials, or authorization
-headers.
+Log source, session identifier, directory, file, addition, and deletion totals,
+request duration, and success or mapped failure for each load, source switch,
+refresh, and pill-summary request. Do not log patch contents, source lines,
+credentials, or authorization headers.
 
 ## Domain Objects
 
@@ -112,7 +112,7 @@ events do not mutate an open snapshot.
 - Non-Git or unsupported VCS source fallback.
 - No files matching the current filter.
 - Missing or empty patch preview, including binary files.
-- A failed pill-count request hides the pill without hiding the overflow entry.
+- A failed pill-summary request hides the pill without hiding the overflow entry.
 
 ## Permission Requests
 
@@ -121,8 +121,9 @@ perform mutations.
 
 ## Design-System Components Needed
 
-- New `OpenCodeReviewChangesPill`, documented in
-  `docs/design-system/components/review-changes-pill.md`.
+- Extended `OpenCodeReviewChangesPill`, documented in
+  `docs/design-system/components/review-changes-pill.md`, with a compact latest
+  turn file/addition/deletion summary and equivalent native accessibility.
 - New reusable native `OpenCodeUnifiedDiff`, documented in
   `docs/design-system/components/unified-diff.md`.
 - Reuse `OpenCodeTopBar`, `OpenCodeOverflowMenu`, `OpenCodeBottomSheet`,
@@ -143,5 +144,5 @@ perform mutations.
 - Verify filtering, selection, file/hunk navigation, context, reviewed-state
   lifecycle, horizontal scrolling, and empty/error recovery.
 - Verify pill visibility, mutual exclusion with Scroll to end, singular/plural
-  copy, navigation source, accessibility labels, and light/dark component
-  states.
+  file copy, zero-valued line-total omission, navigation source, accessibility
+  labels, semantic summary colors, and light/dark component states.

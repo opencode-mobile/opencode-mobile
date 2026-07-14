@@ -361,7 +361,7 @@ struct ChangesViewModelTests {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
         state.messages = [row("user-1", role: .user), row("assistant", role: .assistant)]
         state.reviewChangesMessageID = "user-1"
-        state.reviewChangesFileCount = 2
+        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 2)
 
         #expect(
             state.reviewChangesNavigationTarget(worktree: "/repo") ==
@@ -372,25 +372,36 @@ struct ChangesViewModelTests {
     @Test func reviewChangesPillHidesForPendingLatestTurnOrUnavailableCount() {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
         state.messages = [row("user-1", role: .user), row("assistant", role: .assistant), row("user-2", role: .user, pending: true)]
-        state.reviewChangesFileCount = 3
+        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 3, additions: 4, deletions: 2)
 
         #expect(state.reviewChangesNavigationTarget(worktree: "/repo") == nil)
-        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: nil, isPinnedToEnd: true, showScrollToEnd: false) == false)
-        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: 3, isPinnedToEnd: false, showScrollToEnd: true) == false)
-        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: 3, isPinnedToEnd: true, showScrollToEnd: false))
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: nil, isPinnedToEnd: true, showScrollToEnd: false) == false)
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary, isPinnedToEnd: false, showScrollToEnd: true) == false)
+        #expect(ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary, isPinnedToEnd: true, showScrollToEnd: false))
     }
 
-    @Test func reviewChangesPillPluralizesAccessibleLabel() {
-        #expect(OpenCodeReviewChangesPill.label(changedFileCount: 1) == "Review 1 changed file")
-        #expect(OpenCodeReviewChangesPill.label(changedFileCount: 4) == "Review 4 changed files")
+    @Test func reviewChangesPillFormatsSummaryAndOmitsZeroLineTotals() {
+        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 1, additions: 12, deletions: 3) == "1 file  +12  −3")
+        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 5, additions: 12, deletions: 0) == "5 files  +12")
+        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 5, additions: 0, deletions: 3) == "5 files  −3")
+        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 5, additions: 0, deletions: 0) == "5 files")
+
+        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 1, additions: 1, deletions: 1) == "Review changes, 1 file, 1 addition, 1 deletion")
+        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 5, additions: 12, deletions: 0) == "Review changes, 5 files, 12 additions")
+        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 5, additions: 0, deletions: 3) == "Review changes, 5 files, 3 deletions")
+        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 5, additions: 0, deletions: 0) == "Review changes, 5 files")
     }
 
     @Test func reviewChangesPillPreviewMatrixCoversLightAndDarkStates() {
         let cases = ReviewChangesPillPreviewCase.allCases
-        #expect(cases.count == 6)
+        #expect(cases.count == 8)
         #expect(Set(cases.map(\.colorScheme)) == Set([.light, .dark]))
         #expect(Set(cases.map(\.enabled)) == Set([true, false]))
         #expect(Set(cases.map(\.changedFileCount)) == Set([1, 4]))
+        #expect(cases.contains { $0.additions > 0 && $0.deletions > 0 })
+        #expect(cases.contains { $0.additions > 0 && $0.deletions == 0 })
+        #expect(cases.contains { $0.additions == 0 && $0.deletions > 0 })
+        #expect(cases.contains { $0.additions == 0 && $0.deletions == 0 })
     }
 
     private func loadedViewModel(_ paths: String...) async -> ChangesViewModel {

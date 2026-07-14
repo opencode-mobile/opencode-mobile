@@ -8,7 +8,7 @@ struct SessionChatTimelineViewProps {
     let messages: [SessionChatRow]
     let isRefreshing: Bool
     let errorMessage: String?
-    let reviewChangesFileCount: Int?
+    let reviewChangesSummary: ReviewChangesSummary?
     let onRefresh: () async -> Void
     let onReviewChangesTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
@@ -72,7 +72,7 @@ private struct SessionChatTimelineReadyView: View {
 
     private var showReviewChanges: Bool {
         ReviewChangesPillVisibility.shouldShow(
-            fileCount: props.reviewChangesFileCount,
+            summary: props.reviewChangesSummary,
             isPinnedToEnd: timeline.isPinnedToEnd(messageCount: messageCount),
             showScrollToEnd: showScrollToEnd
         )
@@ -139,10 +139,12 @@ private struct SessionChatTimelineReadyView: View {
                 )
             }
 
-            if showReviewChanges, let fileCount = props.reviewChangesFileCount {
+            if showReviewChanges, let summary = props.reviewChangesSummary {
                 OpenCodeReviewChangesPill(
                     variant: .latestTurn,
-                    changedFileCount: fileCount,
+                    changedFileCount: summary.fileCount,
+                    additions: summary.additions,
+                    deletions: summary.deletions,
                     action: props.onReviewChangesTap
                 )
                     .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)

@@ -13,9 +13,11 @@ import dev.opencode.mobile.domain.session.VcsDiffMode
 import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.ui.components.ReviewChangesPillPreviewCase
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
-import dev.opencode.mobile.ui.components.reviewChangesPillLabel
+import dev.opencode.mobile.ui.components.reviewChangesPillAccessibilityLabel
+import dev.opencode.mobile.ui.components.reviewChangesPillSummary
 import dev.opencode.mobile.ui.sessionchat.ChangesNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
@@ -389,7 +391,7 @@ class ChangesViewModelTest {
                 SessionChatTimelineState.Ready,
                 messages = listOf(row("user-1", MessageRole.User), row("assistant", MessageRole.Assistant)),
                 reviewChangesMessageId = "user-1",
-                reviewChangesFileCount = 2,
+                reviewChangesSummary = ReviewChangesSummary(2, 4, 2),
             )
 
         assertEquals(
@@ -410,25 +412,36 @@ class ChangesViewModelTest {
                         row("assistant", MessageRole.Assistant),
                         row("user-2", MessageRole.User, true),
                     ),
-                reviewChangesFileCount = 3,
+                reviewChangesSummary = ReviewChangesSummary(3, 4, 2),
             )
 
         assertEquals(null, state.reviewChangesNavigationTarget("/repo"))
         assertFalse(ReviewChangesPillVisibility.shouldShow(null, isPinnedToEnd = true, showScrollToEnd = false))
-        assertFalse(ReviewChangesPillVisibility.shouldShow(3, isPinnedToEnd = false, showScrollToEnd = true))
-        assertTrue(ReviewChangesPillVisibility.shouldShow(3, isPinnedToEnd = true, showScrollToEnd = false))
+        assertFalse(ReviewChangesPillVisibility.shouldShow(state.reviewChangesSummary, isPinnedToEnd = false, showScrollToEnd = true))
+        assertTrue(ReviewChangesPillVisibility.shouldShow(state.reviewChangesSummary, isPinnedToEnd = true, showScrollToEnd = false))
     }
 
-    @Test fun reviewChangesPillPluralizesAccessibleLabel() {
-        assertEquals("Review 1 changed file", reviewChangesPillLabel(1))
-        assertEquals("Review 4 changed files", reviewChangesPillLabel(4))
+    @Test fun reviewChangesPillFormatsSummaryAndOmitsZeroLineTotals() {
+        assertEquals("1 file  +12  −3", reviewChangesPillSummary(1, 12, 3))
+        assertEquals("5 files  +12", reviewChangesPillSummary(5, 12, 0))
+        assertEquals("5 files  −3", reviewChangesPillSummary(5, 0, 3))
+        assertEquals("5 files", reviewChangesPillSummary(5, 0, 0))
+
+        assertEquals("Review changes, 1 file, 1 addition, 1 deletion", reviewChangesPillAccessibilityLabel(1, 1, 1))
+        assertEquals("Review changes, 5 files, 12 additions", reviewChangesPillAccessibilityLabel(5, 12, 0))
+        assertEquals("Review changes, 5 files, 3 deletions", reviewChangesPillAccessibilityLabel(5, 0, 3))
+        assertEquals("Review changes, 5 files", reviewChangesPillAccessibilityLabel(5, 0, 0))
     }
 
     @Test fun reviewChangesPillPreviewMatrixCoversLightAndDarkStates() {
-        assertEquals(6, ReviewChangesPillPreviewCase.entries.size)
+        assertEquals(8, ReviewChangesPillPreviewCase.entries.size)
         assertEquals(setOf(false, true), ReviewChangesPillPreviewCase.entries.map { it.darkTheme }.toSet())
         assertEquals(setOf(false, true), ReviewChangesPillPreviewCase.entries.map { it.enabled }.toSet())
         assertEquals(setOf(1, 4), ReviewChangesPillPreviewCase.entries.map { it.changedFileCount }.toSet())
+        assertTrue(ReviewChangesPillPreviewCase.entries.any { it.additions > 0 && it.deletions > 0 })
+        assertTrue(ReviewChangesPillPreviewCase.entries.any { it.additions > 0 && it.deletions == 0 })
+        assertTrue(ReviewChangesPillPreviewCase.entries.any { it.additions == 0 && it.deletions > 0 })
+        assertTrue(ReviewChangesPillPreviewCase.entries.any { it.additions == 0 && it.deletions == 0 })
     }
 
     private fun row(
