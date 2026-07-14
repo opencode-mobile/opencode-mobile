@@ -14,6 +14,9 @@ struct ChangesContentState: Equatable {
     let files: [FileDiff]
     var selectedPath: String
     var filter = ""
+    var contextMode: UnifiedDiffContextMode = .collapsed
+    var reviewedPaths: Set<String> = []
+    var selectedHunkID: Int?
 
     var filteredFiles: [FileDiff] {
         let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -22,6 +25,18 @@ struct ChangesContentState: Equatable {
 
     var selectedFile: FileDiff {
         files.first { $0.path == selectedPath }!
+    }
+
+    var selectedDocument: UnifiedDiffDocument { UnifiedDiffParser.parse(selectedFile.patch ?? "") }
+    var selectedFileHasPreview: Bool { !selectedDocument.hunks.isEmpty }
+    var selectedFileReviewed: Bool { reviewedPaths.contains(selectedPath) }
+    var selectedHunkPositionLabel: String {
+        selectedHunkIndex.map { "Hunk \($0 + 1) of \(selectedDocument.hunks.count)" } ?? "No hunks"
+    }
+    var canSelectPreviousHunk: Bool { (selectedHunkIndex ?? -1) > 0 }
+    var canSelectNextHunk: Bool {
+        guard let selectedHunkIndex else { return false }
+        return selectedHunkIndex < selectedDocument.hunks.count - 1
     }
 
     var additions: Int { files.reduce(0) { $0 + $1.additions } }
@@ -42,12 +57,14 @@ struct ChangesContentState: Equatable {
     var canSelectNext: Bool { filteredSelectedIndex >= 0 && filteredSelectedIndex < filteredFiles.count - 1 }
 
     func filePickerSummary(_ file: FileDiff) -> String {
-        "\(file.status.displayName) · +\(file.additions) −\(file.deletions)"
+        let reviewed = reviewedPaths.contains(file.path) ? "Reviewed · " : ""
+        return "\(reviewed)\(file.status.displayName) · +\(file.additions) −\(file.deletions)"
     }
 
     func fileAccessibilityLabel(_ file: FileDiff) -> String {
         let position = max(0, positionFiles.firstIndex { $0.path == file.path } ?? 0)
-        return "\(file.path), \(file.status.displayName), file \(position + 1) of \(positionFiles.count), "
+        let reviewed = reviewedPaths.contains(file.path) ? "reviewed, " : ""
+        return "\(file.path), \(reviewed)\(file.status.displayName), file \(position + 1) of \(positionFiles.count), "
             + "\(file.additions) \(plural(file.additions, singular: "addition", plural: "additions")), "
             + "\(file.deletions) \(plural(file.deletions, singular: "deletion", plural: "deletions"))"
     }
@@ -62,6 +79,26 @@ struct ChangesContentState: Equatable {
 
     private var selectedPosition: Int {
         max(0, positionFiles.firstIndex { $0.path == selectedPath } ?? 0)
+    }
+
+    private var selectedHunkIndex: Int? {
+        selectedDocument.hunks.firstIndex { $0.id == selectedHunkID }
+    }
+
+    func selecting(path: String) -> ChangesContentState {
+        guard let file = files.first(where: { $0.path == path }) else { return self }
+        var next = self
+        next.selectedPath = path
+        next.selectedHunkID = UnifiedDiffParser.parse(file.patch ?? "").hunks.first?.id
+        return next
+    }
+
+    func resettingViewerControls() -> ChangesContentState {
+        var next = self
+        next.contextMode = .collapsed
+        next.reviewedPaths = []
+        next.selectedHunkID = selectedDocument.hunks.first?.id
+        return next
     }
 }
 
@@ -113,7 +150,8 @@ final class ChangesViewModel {
                 return
             }
             log(fileCount: files.count, startedAt: startedAt, result: "success")
-            state = .content(ChangesContentState(files: files, selectedPath: first.path))
+            let firstHunkID = UnifiedDiffParser.parse(first.patch ?? "").hunks.first?.id
+            state = .content(ChangesContentState(files: files, selectedPath: first.path, selectedHunkID: firstHunkID))
         } catch is CancellationError {
             return
         } catch {
@@ -123,6 +161,7 @@ final class ChangesViewModel {
     }
 
     func retry() async { await load() }
+    func refresh() async { await load() }
 
     func updateFilter(_ filter: String) {
         updateContent { content in
@@ -131,7 +170,7 @@ final class ChangesViewModel {
             if !next.filteredFiles.contains(where: { $0.path == content.selectedPath }),
                let first = next.filteredFiles.first
             {
-                next.selectedPath = first.path
+                next = next.selecting(path: first.path)
             }
             return next
         }
@@ -142,22 +181,53 @@ final class ChangesViewModel {
     func selectFile(_ path: String) {
         updateContent { content in
             guard content.filteredFiles.contains(where: { $0.path == path }) else { return content }
-            var next = content
-            next.selectedPath = path
-            return next
+            return content.selecting(path: path)
         }
     }
 
     func selectPreviousFile() { moveSelection(by: -1) }
     func selectNextFile() { moveSelection(by: 1) }
+    func selectPreviousHunk() { moveHunk(by: -1) }
+    func selectNextHunk() { moveHunk(by: 1) }
+
+    func toggleContextMode() {
+        updateContent { content in
+            var next = content
+            next.contextMode = content.contextMode == .collapsed ? .expanded : .collapsed
+            return next
+        }
+    }
+
+    func toggleSelectedFileReviewed() {
+        updateContent { content in
+            var next = content
+            if !next.reviewedPaths.insert(content.selectedPath).inserted {
+                next.reviewedPaths.remove(content.selectedPath)
+            }
+            return next
+        }
+    }
+
+    func prepareForSourceSwitch() {
+        updateContent { $0.resettingViewerControls() }
+    }
 
     private func moveSelection(by offset: Int) {
         updateContent { content in
             guard let index = content.filteredFiles.firstIndex(where: { $0.path == content.selectedPath }) else { return content }
             let target = index + offset
             guard content.filteredFiles.indices.contains(target) else { return content }
+            return content.selecting(path: content.filteredFiles[target].path)
+        }
+    }
+
+    private func moveHunk(by offset: Int) {
+        updateContent { content in
+            guard let index = content.selectedDocument.hunks.firstIndex(where: { $0.id == content.selectedHunkID }) else { return content }
+            let target = index + offset
+            guard content.selectedDocument.hunks.indices.contains(target) else { return content }
             var next = content
-            next.selectedPath = content.filteredFiles[target].path
+            next.selectedHunkID = content.selectedDocument.hunks[target].id
             return next
         }
     }

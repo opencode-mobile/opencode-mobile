@@ -36,6 +36,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
+import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -80,16 +81,23 @@ private fun ChangeSetContent(
     val selectedFile = changeSet.selectedFile
 
     Column(Modifier.fillMaxSize()) {
-        Text(
-            text = "${changeSet.files.size} files  ·  +${changeSet.additions}  −${changeSet.deletions}",
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = changeSet.aggregateAccessibilityLabel }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${changeSet.files.size} files  ·  +${changeSet.additions}  −${changeSet.deletions}",
+                modifier = Modifier.semantics { contentDescription = changeSet.aggregateAccessibilityLabel },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Refresh"),
+                onClick = viewModel::refresh,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+        }
 
         OpenCodeListItem(
             title = selectedFile.path,
@@ -123,11 +131,64 @@ private fun ChangeSetContent(
             )
         }
 
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            OpenCodeButton(
+                variant =
+                    OpenCodeButtonVariant.CompactText(
+                        if (changeSet.contextMode == UnifiedDiffContextMode.Collapsed) "Expand context" else "Collapse context",
+                    ),
+                onClick = viewModel::toggleContextMode,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+            OpenCodeButton(
+                variant =
+                    OpenCodeButtonVariant.CompactText(
+                        if (changeSet.selectedFileReviewed) "Mark unreviewed" else "Mark reviewed",
+                    ),
+                onClick = viewModel::toggleSelectedFileReviewed,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+        }
+
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Previous hunk"),
+                onClick = viewModel::selectPreviousHunk,
+                enabled = changeSet.canSelectPreviousHunk,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+            Text(
+                changeSet.selectedHunkPositionLabel,
+                modifier = Modifier.semantics { contentDescription = changeSet.selectedHunkPositionLabel },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Next hunk"),
+                onClick = viewModel::selectNextHunk,
+                enabled = changeSet.canSelectNextHunk,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+        }
+
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            if (selectedFile.patch.isNullOrEmpty()) {
+            if (!changeSet.selectedFileHasPreview) {
                 EmptyMessage(selectedFile.path, "A text preview is unavailable for this file.")
             } else {
-                OpenCodeUnifiedDiff(selectedFile)
+                OpenCodeUnifiedDiff(
+                    file = selectedFile,
+                    document = changeSet.selectedDocument,
+                    contextMode = changeSet.contextMode,
+                    reviewed = changeSet.selectedFileReviewed,
+                    selectedHunkId = changeSet.selectedHunkId,
+                )
             }
         }
     }
@@ -192,7 +253,11 @@ private fun FilePickerEntry(
                 .padding(horizontal = 12.dp)
                 .semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
         trailing = {
-            if (selected) Text("Selected", style = MaterialTheme.typography.labelMedium)
+            if (file.path in changeSet.reviewedPaths) {
+                Text("Reviewed", style = MaterialTheme.typography.labelMedium)
+            } else if (selected) {
+                Text("Selected", style = MaterialTheme.typography.labelMedium)
+            }
         },
     )
 }

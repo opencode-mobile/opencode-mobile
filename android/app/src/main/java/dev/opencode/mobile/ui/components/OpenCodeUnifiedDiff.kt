@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -31,53 +35,142 @@ enum class UnifiedDiffRowKind { Hunk, Metadata, Context, Addition, Deletion }
 enum class UnifiedDiffContextMode { Collapsed, Expanded }
 
 data class UnifiedDiffRow(
-    val index: Int,
+    val id: Int,
     val kind: UnifiedDiffRowKind,
     val oldLine: Int?,
     val newLine: Int?,
     val text: String,
 )
 
+data class UnifiedDiffHunk(
+    val id: Int,
+    val header: String,
+    val oldStart: Int,
+    val oldCount: Int,
+    val newStart: Int,
+    val newCount: Int,
+    val rows: List<UnifiedDiffRow>,
+)
+
+data class UnifiedDiffDocument(
+    val rows: List<UnifiedDiffRow>,
+    val hunks: List<UnifiedDiffHunk>,
+) {
+    fun visibleRows(
+        contextMode: UnifiedDiffContextMode,
+        contextLines: Int = 3,
+    ): List<UnifiedDiffRow> {
+        if (contextMode == UnifiedDiffContextMode.Expanded) return rows
+        val changedIndices =
+            rows.indices.filter { index ->
+                rows[index].kind == UnifiedDiffRowKind.Addition || rows[index].kind == UnifiedDiffRowKind.Deletion
+            }
+        return rows.filterIndexed { index, row ->
+            row.kind != UnifiedDiffRowKind.Context || changedIndices.any { changed -> kotlin.math.abs(index - changed) <= contextLines }
+        }
+    }
+}
+
 object UnifiedDiffParser {
-    fun parse(patch: String): List<UnifiedDiffRow> {
+    private val hunkHeader = Regex("^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@(?: .*)?$")
+
+    fun parse(patch: String): UnifiedDiffDocument {
+        if (patch.isEmpty()) return UnifiedDiffDocument(emptyList(), emptyList())
         var oldLine: Int? = null
         var newLine: Int? = null
-        return patch.split("\n").mapIndexed { index, line ->
-            when {
-                line.startsWith("@@") -> {
-                    val starts =
-                        line.split(" ").mapNotNull { token ->
-                            token
-                                .takeIf { it.startsWith("-") || it.startsWith("+") }
-                                ?.drop(1)
-                                ?.substringBefore(",")
-                                ?.toIntOrNull()
-                        }
-                    oldLine = starts.firstOrNull()
-                    newLine = starts.getOrNull(1)
-                    UnifiedDiffRow(index, UnifiedDiffRowKind.Hunk, null, null, line)
-                }
-                line.startsWith("+") && !line.startsWith("+++") ->
-                    UnifiedDiffRow(index, UnifiedDiffRowKind.Addition, null, newLine, line.drop(1))
-                        .also { newLine = newLine?.plus(1) }
-                line.startsWith("-") && !line.startsWith("---") ->
-                    UnifiedDiffRow(index, UnifiedDiffRowKind.Deletion, oldLine, null, line.drop(1))
-                        .also { oldLine = oldLine?.plus(1) }
-                line.startsWith("\\ No newline at end of file") ->
-                    UnifiedDiffRow(index, UnifiedDiffRowKind.Metadata, null, null, line)
-                else ->
-                    UnifiedDiffRow(
-                        index,
-                        UnifiedDiffRowKind.Context,
-                        oldLine,
-                        newLine,
-                        line.removePrefix(" "),
-                    ).also {
-                        oldLine = oldLine?.plus(1)
-                        newLine = newLine?.plus(1)
-                    }
+        var insideHunk = false
+        var malformed = false
+        val headers = mutableListOf<HunkHeader>()
+        val lines =
+            patch.split("\n").let { split ->
+                if (patch.endsWith("\n") && split.lastOrNull().isNullOrEmpty()) split.dropLast(1) else split
             }
-        }
+        val rows =
+            lines.mapIndexed { index, line ->
+                val header = hunkHeader.matchEntire(line)
+                when {
+                    header != null -> {
+                        val values = header.groupValues
+                        val oldStart = values[1].toIntOrNull()
+                        val oldCount = values[2].ifEmpty { "1" }.toIntOrNull()
+                        val newStart = values[3].toIntOrNull()
+                        val newCount = values[4].ifEmpty { "1" }.toIntOrNull()
+                        if (oldStart == null || oldCount == null || newStart == null || newCount == null) {
+                            malformed = true
+                            insideHunk = false
+                            UnifiedDiffRow(index, UnifiedDiffRowKind.Metadata, null, null, line)
+                        } else {
+                            oldLine = oldStart
+                            newLine = newStart
+                            insideHunk = true
+                            headers += HunkHeader(index, line, oldStart, oldCount, newStart, newCount)
+                            UnifiedDiffRow(index, UnifiedDiffRowKind.Hunk, null, null, line)
+                        }
+                    }
+                    insideHunk && line.startsWith("+") -> {
+                        headers.last().actualNewCount += 1
+                        UnifiedDiffRow(index, UnifiedDiffRowKind.Addition, null, newLine, line.drop(1))
+                            .also { newLine = newLine?.plus(1) }
+                    }
+                    insideHunk && line.startsWith("-") -> {
+                        headers.last().actualOldCount += 1
+                        UnifiedDiffRow(index, UnifiedDiffRowKind.Deletion, oldLine, null, line.drop(1))
+                            .also { oldLine = oldLine?.plus(1) }
+                    }
+                    line.startsWith("\\ No newline at end of file") ->
+                        UnifiedDiffRow(index, UnifiedDiffRowKind.Metadata, null, null, line)
+                    insideHunk && line.startsWith(" ") -> {
+                        headers.last().actualOldCount += 1
+                        headers.last().actualNewCount += 1
+                        UnifiedDiffRow(
+                            index,
+                            UnifiedDiffRowKind.Context,
+                            oldLine,
+                            newLine,
+                            line.removePrefix(" "),
+                        ).also {
+                            oldLine = oldLine?.plus(1)
+                            newLine = newLine?.plus(1)
+                        }
+                    }
+                    insideHunk -> {
+                        malformed = true
+                        UnifiedDiffRow(index, UnifiedDiffRowKind.Metadata, null, null, line)
+                    }
+                    else -> {
+                        if (line.startsWith("@@")) malformed = true
+                        UnifiedDiffRow(index, UnifiedDiffRowKind.Metadata, null, null, line)
+                    }
+                }
+            }
+        if (malformed || headers.any { !it.isValid }) return UnifiedDiffDocument(rows, emptyList())
+        val hunks =
+            headers.mapIndexed { index, header ->
+                val end = headers.getOrNull(index + 1)?.rowIndex ?: rows.size
+                UnifiedDiffHunk(
+                    id = header.rowIndex,
+                    header = header.text,
+                    oldStart = header.oldStart,
+                    oldCount = header.oldCount,
+                    newStart = header.newStart,
+                    newCount = header.newCount,
+                    rows = rows.subList(header.rowIndex + 1, end),
+                )
+            }
+        return UnifiedDiffDocument(rows, hunks)
+    }
+
+    private data class HunkHeader(
+        val rowIndex: Int,
+        val text: String,
+        val oldStart: Int,
+        val oldCount: Int,
+        val newStart: Int,
+        val newCount: Int,
+        var actualOldCount: Int = 0,
+        var actualNewCount: Int = 0,
+    ) {
+        val isValid: Boolean get() = actualOldCount == oldCount && actualNewCount == newCount
     }
 }
 
@@ -87,7 +180,8 @@ fun OpenCodeUnifiedDiff(
     modifier: Modifier = Modifier,
     contextMode: UnifiedDiffContextMode = UnifiedDiffContextMode.Collapsed,
     reviewed: Boolean = false,
-    selectedHunkIndex: Int? = null,
+    selectedHunkId: Int? = null,
+    document: UnifiedDiffDocument,
 ) {
     val shape = RoundedCornerShape(8.dp)
     Column(
@@ -107,20 +201,18 @@ fun OpenCodeUnifiedDiff(
             )
         }
         Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            val rows = UnifiedDiffParser.parse(file.patch.orEmpty())
-            rows
-                .filterIndexed { index, row ->
-                    contextMode == UnifiedDiffContextMode.Expanded ||
-                        row.kind != UnifiedDiffRowKind.Context ||
-                        (maxOf(0, index - 3)..minOf(rows.lastIndex, index + 3)).any {
-                            rows[it].kind != UnifiedDiffRowKind.Context
-                        }
-                }.forEach { row ->
-                    UnifiedDiffRowView(
-                        row,
-                        selected = row.index == selectedHunkIndex && row.kind == UnifiedDiffRowKind.Hunk,
-                    )
+            document.visibleRows(contextMode).forEach { row ->
+                val selected = row.id == selectedHunkId && row.kind == UnifiedDiffRowKind.Hunk
+                val bringIntoViewRequester = remember(row.id) { BringIntoViewRequester() }
+                LaunchedEffect(selected) {
+                    if (selected) bringIntoViewRequester.bringIntoView()
                 }
+                UnifiedDiffRowView(
+                    row,
+                    selected = selected,
+                    modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+                )
+            }
         }
     }
 }
@@ -129,6 +221,7 @@ fun OpenCodeUnifiedDiff(
 private fun UnifiedDiffRowView(
     row: UnifiedDiffRow,
     selected: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val background =
         when (row.kind) {
@@ -151,7 +244,7 @@ private fun UnifiedDiffRowView(
         }
     Row(
         modifier =
-            Modifier
+            modifier
                 .background(background)
                 .heightIn(min = 20.dp)
                 .clearAndSetSemantics { contentDescription = row.accessibilityLabel() },
