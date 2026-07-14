@@ -7,6 +7,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.components.UnifiedDiffDocument
+import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +37,9 @@ data class ChangesContentState(
     val files: List<FileDiff>,
     val selectedPath: String,
     val filter: String = "",
+    val contextMode: UnifiedDiffContextMode = UnifiedDiffContextMode.Collapsed,
+    val reviewedPaths: Set<String> = emptySet(),
+    val selectedHunkId: Int? = null,
 ) {
     val filteredFiles: List<FileDiff>
         get() {
@@ -44,11 +50,29 @@ data class ChangesContentState(
     val selectedFile: FileDiff
         get() = files.first { it.path == selectedPath }
 
-    val additions: Int
-        get() = files.sumOf(FileDiff::additions)
+    val selectedDocument: UnifiedDiffDocument
+        get() = UnifiedDiffParser.parse(selectedFile.patch.orEmpty())
 
-    val deletions: Int
-        get() = files.sumOf(FileDiff::deletions)
+    val selectedFileHasPreview: Boolean
+        get() = selectedDocument.hunks.isNotEmpty()
+
+    val selectedFileReviewed: Boolean
+        get() = selectedPath in reviewedPaths
+
+    val selectedHunkPositionLabel: String
+        get() =
+            selectedHunkIndex.takeIf { it >= 0 }?.let { "Hunk ${it + 1} of ${selectedDocument.hunks.size}" }
+                ?: "No hunks"
+
+    val canSelectPreviousHunk: Boolean
+        get() = selectedHunkIndex > 0
+
+    val canSelectNextHunk: Boolean
+        get() = selectedHunkIndex >= 0 && selectedHunkIndex < selectedDocument.hunks.lastIndex
+
+    val additions: Int get() = files.sumOf(FileDiff::additions)
+
+    val deletions: Int get() = files.sumOf(FileDiff::deletions)
 
     val aggregateAccessibilityLabel: String
         get() =
@@ -70,13 +94,16 @@ data class ChangesContentState(
     val canSelectNext: Boolean
         get() = filteredSelectedIndex >= 0 && filteredSelectedIndex < filteredFiles.lastIndex
 
-    fun filePickerSummary(file: FileDiff) = "${file.status.displayName()} · +${file.additions} −${file.deletions}"
+    fun filePickerSummary(file: FileDiff): String {
+        val reviewed = if (file.path in reviewedPaths) "Reviewed · " else ""
+        return "$reviewed${file.status.displayName()} · +${file.additions} −${file.deletions}"
+    }
 
     fun fileAccessibilityLabel(file: FileDiff): String {
         val position = positionFiles.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
         return listOf(
             file.path,
-            file.status.displayName(),
+            if (file.path in reviewedPaths) "reviewed ${file.status.displayName()}" else file.status.displayName(),
             "file ${position + 1} of ${positionFiles.size}",
             countLabel(file.additions, "addition", "additions"),
             countLabel(file.deletions, "deletion", "deletions"),
@@ -91,6 +118,16 @@ data class ChangesContentState(
 
     private val selectedPosition: Int
         get() = positionFiles.indexOfFirst { it.path == selectedPath }.coerceAtLeast(0)
+
+    private val selectedHunkIndex: Int
+        get() = selectedDocument.hunks.indexOfFirst { it.id == selectedHunkId }
+
+    fun resettingViewerControls(): ChangesContentState =
+        copy(
+            contextMode = UnifiedDiffContextMode.Collapsed,
+            reviewedPaths = emptySet(),
+            selectedHunkId = selectedDocument.hunks.firstOrNull()?.id,
+        )
 }
 
 @HiltViewModel
@@ -117,17 +154,19 @@ class ChangesViewModel
 
         fun retry() = load()
 
+        fun refresh() = load()
+
         fun updateFilter(filter: String) =
             updateContent { current ->
                 val filtered = current.copy(filter = filter).filteredFiles
-                current.copy(
+                val nextPath =
+                    if (filtered.any { it.path == current.selectedPath }) {
+                        current.selectedPath
+                    } else {
+                        filtered.firstOrNull()?.path ?: current.selectedPath
+                    }
+                current.selectPath(nextPath).copy(
                     filter = filter,
-                    selectedPath =
-                        if (filtered.any { it.path == current.selectedPath }) {
-                            current.selectedPath
-                        } else {
-                            filtered.firstOrNull()?.path ?: current.selectedPath
-                        },
                 )
             }
 
@@ -135,12 +174,37 @@ class ChangesViewModel
 
         fun selectFile(path: String) =
             updateContent { current ->
-                if (current.filteredFiles.any { it.path == path }) current.copy(selectedPath = path) else current
+                if (current.filteredFiles.any { it.path == path }) current.selectPath(path) else current
             }
 
         fun selectPreviousFile() = moveSelection(-1)
 
         fun selectNextFile() = moveSelection(1)
+
+        fun selectPreviousHunk() = moveHunk(-1)
+
+        fun selectNextHunk() = moveHunk(1)
+
+        fun toggleContextMode() =
+            updateContent { current ->
+                current.copy(
+                    contextMode =
+                        if (current.contextMode == UnifiedDiffContextMode.Collapsed) {
+                            UnifiedDiffContextMode.Expanded
+                        } else {
+                            UnifiedDiffContextMode.Collapsed
+                        },
+                )
+            }
+
+        fun toggleSelectedFileReviewed() =
+            updateContent { current ->
+                val reviewed = current.reviewedPaths.toMutableSet()
+                if (!reviewed.add(current.selectedPath)) reviewed.remove(current.selectedPath)
+                current.copy(reviewedPaths = reviewed)
+            }
+
+        fun prepareForSourceSwitch() = updateContent(ChangesContentState::resettingViewerControls)
 
         private fun load() {
             val target = target ?: return
@@ -165,7 +229,12 @@ class ChangesViewModel
                     _uiState.value =
                         when {
                             first == null -> ChangesUiState.NoChanges
-                            else -> ChangesUiState.Content(ChangesContentState(sortedFiles, first.path))
+                            else -> {
+                                val document = UnifiedDiffParser.parse(first.patch.orEmpty())
+                                ChangesUiState.Content(
+                                    ChangesContentState(sortedFiles, first.path, selectedHunkId = document.hunks.firstOrNull()?.id),
+                                )
+                            }
                         }
                 } catch (error: CancellationException) {
                     throw error
@@ -186,7 +255,15 @@ class ChangesViewModel
             updateContent { current ->
                 val index = current.filteredFiles.indexOfFirst { it.path == current.selectedPath }
                 val next = current.filteredFiles.getOrNull(index + offset)
-                if (next == null) current else current.copy(selectedPath = next.path)
+                if (next == null) current else current.selectPath(next.path)
+            }
+
+        private fun moveHunk(offset: Int) =
+            updateContent { current ->
+                val hunks = current.selectedDocument.hunks
+                val index = hunks.indexOfFirst { it.id == current.selectedHunkId }
+                val next = hunks.getOrNull(index + offset)
+                if (next == null) current else current.copy(selectedHunkId = next.id)
             }
 
         private inline fun updateContent(transform: (ChangesContentState) -> ChangesContentState) {
@@ -204,6 +281,17 @@ class ChangesViewModel
             const val TAG = "Changes"
         }
     }
+
+private fun ChangesContentState.selectPath(path: String): ChangesContentState {
+    val file = files.first { it.path == path }
+    val firstHunk =
+        UnifiedDiffParser
+            .parse(file.patch.orEmpty())
+            .hunks
+            .firstOrNull()
+            ?.id
+    return copy(selectedPath = path, selectedHunkId = firstHunk)
+}
 
 private fun FileDiffStatus.displayName() = name.replaceFirstChar(Char::uppercase)
 

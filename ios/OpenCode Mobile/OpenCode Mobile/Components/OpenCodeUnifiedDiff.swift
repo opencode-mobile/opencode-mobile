@@ -8,7 +8,7 @@ enum UnifiedDiffRowKind: String, Sendable, Equatable {
     case deletion
 }
 
-enum UnifiedDiffContextMode: Sendable {
+enum UnifiedDiffContextMode: Sendable, Equatable {
     case collapsed
     case expanded
 }
@@ -21,32 +21,71 @@ struct UnifiedDiffRow: Identifiable, Sendable, Equatable {
     let text: String
 }
 
+struct UnifiedDiffHunk: Identifiable, Sendable, Equatable {
+    let id: Int
+    let header: String
+    let oldStart: Int
+    let oldCount: Int
+    let newStart: Int
+    let newCount: Int
+    let rows: [UnifiedDiffRow]
+}
+
+struct UnifiedDiffDocument: Sendable, Equatable {
+    let rows: [UnifiedDiffRow]
+    let hunks: [UnifiedDiffHunk]
+
+    func visibleRows(contextMode: UnifiedDiffContextMode, contextLines: Int = 3) -> [UnifiedDiffRow] {
+        guard contextMode == .collapsed else { return rows }
+        let changedIndices = rows.indices.filter { rows[$0].kind == .addition || rows[$0].kind == .deletion }
+        return rows.enumerated().compactMap { index, row in
+            guard row.kind == .context else { return row }
+            return changedIndices.contains { abs(index - $0) <= contextLines } ? row : nil
+        }
+    }
+}
+
 enum UnifiedDiffParser {
-    static func parse(_ patch: String) -> [UnifiedDiffRow] {
+    static func parse(_ patch: String) -> UnifiedDiffDocument {
+        guard !patch.isEmpty else { return UnifiedDiffDocument(rows: [], hunks: []) }
         var oldLine: Int?
         var newLine: Int?
-        return patch.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map { index, slice in
-            let line = String(slice)
-            if line.hasPrefix("@@") {
-                let starts = line.split(separator: " ").compactMap { token -> Int? in
-                    guard token.first == "-" || token.first == "+" else { return nil }
-                    return Int(token.dropFirst().split(separator: ",").first ?? "")
-                }
-                oldLine = starts.first
-                newLine = starts.dropFirst().first
+        var insideHunk = false
+        var malformed = false
+        var headers: [HunkHeader] = []
+        var lines = patch.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if patch.hasSuffix("\n"), lines.last?.isEmpty == true { lines.removeLast() }
+        let rows = lines.enumerated().map { index, line in
+            if let header = parseHeader(line, rowID: index) {
+                oldLine = header.oldStart
+                newLine = header.newStart
+                insideHunk = true
+                headers.append(header)
                 return UnifiedDiffRow(id: index, kind: .hunk, oldLine: nil, newLine: nil, text: line)
             }
-            if line.hasPrefix("+") && !line.hasPrefix("+++") {
+            if insideHunk, line.hasPrefix("+") {
+                headers[headers.count - 1].actualNewCount += 1
                 defer { newLine = newLine.map { $0 + 1 } }
                 return UnifiedDiffRow(id: index, kind: .addition, oldLine: nil, newLine: newLine, text: String(line.dropFirst()))
             }
-            if line.hasPrefix("-") && !line.hasPrefix("---") {
+            if insideHunk, line.hasPrefix("-") {
+                headers[headers.count - 1].actualOldCount += 1
                 defer { oldLine = oldLine.map { $0 + 1 } }
                 return UnifiedDiffRow(id: index, kind: .deletion, oldLine: oldLine, newLine: nil, text: String(line.dropFirst()))
             }
             if line.hasPrefix("\\ No newline at end of file") {
                 return UnifiedDiffRow(id: index, kind: .metadata, oldLine: nil, newLine: nil, text: line)
             }
+            guard insideHunk else {
+                if line.hasPrefix("@@") { malformed = true }
+                return UnifiedDiffRow(id: index, kind: .metadata, oldLine: nil, newLine: nil, text: line)
+            }
+            guard line.hasPrefix(" ") else {
+                malformed = true
+                return UnifiedDiffRow(id: index, kind: .metadata, oldLine: nil, newLine: nil, text: line)
+            }
+            headers[headers.count - 1].actualOldCount += 1
+            headers[headers.count - 1].actualNewCount += 1
             let row = UnifiedDiffRow(
                 id: index,
                 kind: .context,
@@ -58,11 +97,65 @@ enum UnifiedDiffParser {
             newLine = newLine.map { $0 + 1 }
             return row
         }
+        guard !malformed, headers.allSatisfy(\.isValid) else {
+            return UnifiedDiffDocument(rows: rows, hunks: [])
+        }
+        let hunks = headers.enumerated().map { index, header in
+            let end = headers.indices.contains(index + 1) ? headers[index + 1].rowID : rows.count
+            return UnifiedDiffHunk(
+                id: header.rowID,
+                header: header.text,
+                oldStart: header.oldStart,
+                oldCount: header.oldCount,
+                newStart: header.newStart,
+                newCount: header.newCount,
+                rows: Array(rows[(header.rowID + 1)..<end])
+            )
+        }
+        return UnifiedDiffDocument(rows: rows, hunks: hunks)
+    }
+
+    private static func parseHeader(_ line: String, rowID: Int) -> HunkHeader? {
+        let tokens = line.split(separator: " ", omittingEmptySubsequences: true)
+        guard tokens.count >= 4, tokens[0] == "@@", tokens[3] == "@@",
+              let oldRange = parseRange(tokens[1], prefix: "-"),
+              let newRange = parseRange(tokens[2], prefix: "+")
+        else { return nil }
+        return HunkHeader(
+            rowID: rowID,
+            text: line,
+            oldStart: oldRange.start,
+            oldCount: oldRange.count,
+            newStart: newRange.start,
+            newCount: newRange.count
+        )
+    }
+
+    private static func parseRange(_ token: Substring, prefix: Character) -> (start: Int, count: Int)? {
+        guard token.first == prefix else { return nil }
+        let values = token.dropFirst().split(separator: ",", omittingEmptySubsequences: false)
+        guard let start = Int(values[0]) else { return nil }
+        let count = values.count > 1 ? Int(values[1]) : 1
+        guard let count else { return nil }
+        return (start, count)
+    }
+
+    private struct HunkHeader {
+        let rowID: Int
+        let text: String
+        let oldStart: Int
+        let oldCount: Int
+        let newStart: Int
+        let newCount: Int
+        var actualOldCount = 0
+        var actualNewCount = 0
+        var isValid: Bool { actualOldCount == oldCount && actualNewCount == newCount }
     }
 }
 
 struct OpenCodeUnifiedDiff: View {
     let file: FileDiff
+    let document: UnifiedDiffDocument
     var contextMode: UnifiedDiffContextMode = .collapsed
     var reviewed = false
     var selectedHunkID: Int?
@@ -75,6 +168,7 @@ struct OpenCodeUnifiedDiff: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(rows) { row in
                         rowView(row)
+                            .id(row.id)
                     }
                 }
             }
@@ -87,13 +181,7 @@ struct OpenCodeUnifiedDiff: View {
     }
 
     private var rows: [UnifiedDiffRow] {
-        let rows = UnifiedDiffParser.parse(file.patch ?? "")
-        guard contextMode == .collapsed else { return rows }
-        return rows.enumerated().compactMap { index, row in
-            guard row.kind == .context else { return row }
-            let range = max(0, index - 3) ... min(rows.count - 1, index + 3)
-            return range.contains { rows[$0].kind != .context } ? row : nil
-        }
+        document.visibleRows(contextMode: contextMode)
     }
 
     private var fileSummary: some View {

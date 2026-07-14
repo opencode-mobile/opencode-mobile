@@ -7,15 +7,16 @@
 
 ## Design System
 
-- Status: Unified Diff is implemented and registered in both Component
-  Galleries for OPE-35; Review Changes Pill remains planned under OPE-38.
+- Status: Unified Diff is implemented as a practical review component and
+  registered in both Component Galleries; Review Changes Pill remains planned
+  under OPE-38.
 - New dependencies: Review Changes Pill and Unified Diff.
 - Reused: top bar, overflow menu, bottom sheet, list item, button, semantic diff
   and syntax tokens, and existing typography roles.
 
 ## iOS
 
-- Status: OPE-35 and OPE-36 complete.
+- Status: OPE-35, OPE-36, and OPE-39 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -24,10 +25,15 @@
   feedback, selection, and previous/next movement through the filtered set.
 - Loading, no completed turn, no changes, unavailable patch, retryable error,
   retry, accessibility labels, and navigation enablement are implemented.
+- Unified patches decode into typed hunk and row models with stable old/new
+  line numbers. Changes defaults to collapsed context, expands all loaded
+  context on request, navigates and focuses previous/next hunks, preserves long
+  unwrapped lines through horizontal scrolling, and supports viewer-local
+  reviewed markers that clear on reload or exit.
 
 ## Android
 
-- Status: OPE-35 and OPE-36 complete.
+- Status: OPE-35, OPE-36, and OPE-39 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -36,6 +42,11 @@
   feedback, selection, and previous/next movement through the filtered set.
 - Loading, no completed turn, no changes, unavailable patch, retryable error,
   retry, accessibility labels, and navigation enablement are implemented.
+- Unified patches decode into typed hunk and row models with stable old/new
+  line numbers. Changes defaults to collapsed context, expands all loaded
+  context on request, navigates and focuses previous/next hunks, preserves long
+  unwrapped lines through horizontal scrolling, and supports viewer-local
+  reviewed markers that clear on reload or exit.
 
 ## Blockers
 
@@ -48,10 +59,13 @@
   Change Sets from Working tree and Main branch.
 - [`OPE-38`](https://linear.app/opencode-mobile/issue/OPE-38) — Surface the
   completed-turn Review changes pill.
-- [`OPE-39`](https://linear.app/opencode-mobile/issue/OPE-39) — Add practical
-  diff review tools.
 
 ## Completed Work
+
+- [`OPE-39`](https://linear.app/opencode-mobile/issue/OPE-39) — Add typed
+  unified hunks and rows, collapsed/expanded context, hunk navigation,
+  horizontal long-line review, viewer-local reviewed markers, refresh, and
+  equivalent native gallery/test fixtures on iOS and Android.
 
 - [`OPE-36`](https://linear.app/opencode-mobile/issue/OPE-36) — Navigate
   multi-file Change Sets with aggregate context, a filterable file picker, and

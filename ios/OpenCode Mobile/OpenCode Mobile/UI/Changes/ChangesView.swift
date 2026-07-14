@@ -52,13 +52,18 @@ struct ChangesView: View {
     private func changeSetContent(_ changeSet: ChangesContentState) -> some View {
         let selectedFile = changeSet.selectedFile
         return VStack(spacing: 0) {
-            Text("\(changeSet.files.count) files  ·  +\(changeSet.additions)  −\(changeSet.deletions)")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .accessibilityLabel(changeSet.aggregateAccessibilityLabel)
+            HStack {
+                Text("\(changeSet.files.count) files  ·  +\(changeSet.additions)  −\(changeSet.deletions)")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(changeSet.aggregateAccessibilityLabel)
+                OpenCodeButton(variant: .compactText(title: "Refresh"), contrast: .low) {
+                    Task { await viewModel.refresh() }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
 
             OpenCodeListItem(
                 title: selectedFile.path,
@@ -91,14 +96,64 @@ struct ChangesView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            ScrollView {
-                if selectedFile.patch?.isEmpty == false {
-                    OpenCodeUnifiedDiff(file: selectedFile)
-                } else {
-                    message(selectedFile.path, detail: "A text preview is unavailable for this file.")
+            HStack {
+                OpenCodeButton(
+                    variant: .compactText(title: changeSet.contextMode == .collapsed ? "Expand context" : "Collapse context"),
+                    contrast: .low,
+                    action: viewModel.toggleContextMode
+                )
+                Spacer()
+                OpenCodeButton(
+                    variant: .compactText(title: changeSet.selectedFileReviewed ? "Mark unreviewed" : "Mark reviewed"),
+                    contrast: .low,
+                    action: viewModel.toggleSelectedFileReviewed
+                )
+            }
+            .padding(.horizontal, 16)
+
+            HStack {
+                OpenCodeButton(
+                    variant: .compactText(title: "Previous hunk"),
+                    enabled: changeSet.canSelectPreviousHunk,
+                    contrast: .low,
+                    action: viewModel.selectPreviousHunk
+                )
+                Spacer()
+                Text(changeSet.selectedHunkPositionLabel)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .accessibilityLabel(changeSet.selectedHunkPositionLabel)
+                Spacer()
+                OpenCodeButton(
+                    variant: .compactText(title: "Next hunk"),
+                    enabled: changeSet.canSelectNextHunk,
+                    contrast: .low,
+                    action: viewModel.selectNextHunk
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if changeSet.selectedFileHasPreview {
+                        OpenCodeUnifiedDiff(
+                            file: selectedFile,
+                            document: changeSet.selectedDocument,
+                            contextMode: changeSet.contextMode,
+                            reviewed: changeSet.selectedFileReviewed,
+                            selectedHunkID: changeSet.selectedHunkID
+                        )
+                    } else {
+                        message(selectedFile.path, detail: "A text preview is unavailable for this file.")
+                    }
+                }
+                .padding(16)
+                .onChange(of: changeSet.selectedHunkID) { _, selectedHunkID in
+                    guard let selectedHunkID else { return }
+                    withAnimation { proxy.scrollTo(selectedHunkID, anchor: .top) }
                 }
             }
-            .padding(16)
         }
     }
 
@@ -142,7 +197,9 @@ struct ChangesView: View {
                                 filePickerPresented = false
                             }
                         ) {
-                            if file.path == changeSet.selectedPath {
+                            if changeSet.reviewedPaths.contains(file.path) {
+                                Text("Reviewed").font(OpenCodeTypography.caption)
+                            } else if file.path == changeSet.selectedPath {
                                 Text("Selected").font(OpenCodeTypography.caption)
                             }
                         }

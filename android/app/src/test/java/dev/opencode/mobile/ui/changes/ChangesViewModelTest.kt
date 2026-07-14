@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.sessionchat.ChangesNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -118,6 +119,67 @@ class ChangesViewModelTest {
             )
         }
 
+    @Test fun navigatesHunksTogglesContextAndKeepsReviewedFilesVisible() =
+        runTest(dispatcher) {
+            val patch = "@@ -1 +1 @@\n-old\n+new\n@@ -20 +20 @@\n-before\n+after"
+            val files =
+                listOf(
+                    FileDiff("A.kt", patch, 2, 2, FileDiffStatus.Modified),
+                    file("B.kt"),
+                )
+            val viewModel = ChangesViewModel(FakeRepository(ArrayDeque(listOf(Result.success(files)))))
+            viewModel.bind("s", "/w", "m")
+            advanceUntilIdle()
+
+            var content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals("Hunk 1 of 2", content.selectedHunkPositionLabel)
+            assertEquals(false, content.canSelectPreviousHunk)
+            assertEquals(true, content.canSelectNextHunk)
+            assertEquals(UnifiedDiffContextMode.Collapsed, content.contextMode)
+
+            viewModel.selectNextHunk()
+            viewModel.toggleContextMode()
+            viewModel.toggleSelectedFileReviewed()
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals("Hunk 2 of 2", content.selectedHunkPositionLabel)
+            assertEquals(true, content.canSelectPreviousHunk)
+            assertEquals(false, content.canSelectNextHunk)
+            assertEquals(UnifiedDiffContextMode.Expanded, content.contextMode)
+            assertEquals(true, content.selectedFileReviewed)
+            assertEquals(2, content.files.size)
+
+            viewModel.selectFile("B.kt")
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(false, content.selectedFileReviewed)
+            assertEquals(setOf("A.kt"), content.reviewedPaths)
+            assertEquals("Hunk 1 of 1", content.selectedHunkPositionLabel)
+
+            viewModel.prepareForSourceSwitch()
+            content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(emptySet<String>(), content.reviewedPaths)
+            assertEquals(UnifiedDiffContextMode.Collapsed, content.contextMode)
+        }
+
+    @Test fun explicitRefreshClearsReviewedMarkersAndViewerControls() =
+        runTest(dispatcher) {
+            val files = listOf(file("A.kt"))
+            val repository = FakeRepository(ArrayDeque(listOf(Result.success(files), Result.success(files))))
+            val viewModel = ChangesViewModel(repository)
+            viewModel.bind("s", "/w", "m")
+            advanceUntilIdle()
+            viewModel.toggleSelectedFileReviewed()
+            viewModel.toggleContextMode()
+
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            val content = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(emptySet<String>(), content.reviewedPaths)
+            assertEquals(UnifiedDiffContextMode.Collapsed, content.contextMode)
+            assertEquals("Hunk 1 of 1", content.selectedHunkPositionLabel)
+            assertEquals(2, repository.requests.size)
+        }
+
     @Test fun coversNoTurnNoChangesUnavailablePatchErrorAndRetry() =
         runTest(dispatcher) {
             val noTurn = ChangesViewModel(FakeRepository(ArrayDeque()))
@@ -142,7 +204,9 @@ class ChangesViewModelTest {
             assertEquals(ChangesUiState.NoChanges, viewModel.uiState.value)
             viewModel.retry()
             advanceUntilIdle()
-            assertEquals(binary, (viewModel.uiState.value as ChangesUiState.Content).changeSet.selectedFile)
+            val binaryContent = (viewModel.uiState.value as ChangesUiState.Content).changeSet
+            assertEquals(binary, binaryContent.selectedFile)
+            assertEquals(false, binaryContent.selectedFileHasPreview)
             viewModel.retry()
             advanceUntilIdle()
             assertEquals(ChangesUiState.Error("offline"), viewModel.uiState.value)

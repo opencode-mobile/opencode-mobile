@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.components.UnifiedDiffParser
 
 @Composable
 fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
@@ -31,10 +32,11 @@ fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
             FileDiff(
                 path = "Sources/ChangesScreen.kt",
                 patch =
-                    "@@ -10,3 +10,3 @@\n context\n-old value\n+" +
-                        "val newValue = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()",
-                additions = 1,
-                deletions = 1,
+                    "@@ -1,8 +1,8 @@\n one\n two\n three\n four\n-old value\n+" +
+                        "val newValue = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()\n" +
+                        " six\n seven\n eight\n@@ -20 +20 @@\n-before\n+naïve 🚀\n\\ No newline at end of file",
+                additions = 2,
+                deletions = 2,
                 status = FileDiffStatus.Modified,
             ),
             FileDiff("Sources/NewFile.kt", "@@ -0,0 +1,2 @@\n+val value = 1\n+println(value)", 2, 0, FileDiffStatus.Added),
@@ -55,7 +57,8 @@ fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
                 file = it,
                 contextMode = if (expanded) UnifiedDiffContextMode.Expanded else UnifiedDiffContextMode.Collapsed,
                 reviewed = reviewed,
-                selectedHunkIndex = 0,
+                selectedHunkId = 0,
+                document = UnifiedDiffParser.parse(it.patch.orEmpty()),
             )
         } ?: Text(
             "A text preview is unavailable for assets/logo.png.",

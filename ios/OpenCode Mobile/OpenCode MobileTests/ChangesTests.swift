@@ -33,13 +33,58 @@ import Testing
 
 struct UnifiedDiffParserTests {
     @Test func parsesHunksAndAdvancesOldAndNewLineNumbers() {
-        let rows = UnifiedDiffParser.parse("@@ -2,3 +2,3 @@\n same\n-old\n\\ No newline at end of file\n+new\n next")
-        #expect(rows.map(\.kind) == [.hunk, .context, .deletion, .metadata, .addition, .context])
+        let document = UnifiedDiffParser.parse("@@ -2,3 +2,3 @@ first\n same\n-old\n\\ No newline at end of file\n+new\n next\n@@ -20 +20,2 @@ second\n+naïve 🚀\n tail")
+        let rows = document.rows
+        #expect(rows.prefix(6).map(\.kind) == [.hunk, .context, .deletion, .metadata, .addition, .context])
         #expect(rows[1].oldLine == 2 && rows[1].newLine == 2)
         #expect(rows[2].oldLine == 3 && rows[2].newLine == nil)
         #expect(rows[3].oldLine == nil && rows[3].newLine == nil)
         #expect(rows[4].oldLine == nil && rows[4].newLine == 3)
         #expect(rows[5].oldLine == 4 && rows[5].newLine == 4)
+        #expect(document.hunks.count == 2)
+        #expect(document.hunks[0].oldStart == 2 && document.hunks[0].oldCount == 3)
+        #expect(document.hunks[0].newStart == 2 && document.hunks[0].newCount == 3)
+        #expect(document.hunks[1].oldStart == 20 && document.hunks[1].oldCount == 1)
+        #expect(document.hunks[1].newStart == 20 && document.hunks[1].newCount == 2)
+        #expect(document.hunks[1].rows.contains { $0.text == "naïve 🚀" })
+    }
+
+    @Test func collapsedProjectionKeepsThreeContextLinesAroundChanges() {
+        let contextBefore = (1...8).map { " before \($0)" }.joined(separator: "\n")
+        let contextAfter = (1...8).map { " after \($0)" }.joined(separator: "\n")
+        let document = UnifiedDiffParser.parse("@@ -1,17 +1,17 @@\n\(contextBefore)\n-old\n+new\n\(contextAfter)")
+
+        #expect(document.visibleRows(contextMode: .expanded).count == 19)
+        let collapsed = document.visibleRows(contextMode: .collapsed)
+        #expect(collapsed.count == 9)
+        #expect(!collapsed.contains { $0.text == "before 4" })
+        #expect(collapsed.contains { $0.text == "before 6" })
+        #expect(collapsed.contains { $0.text == "after 3" })
+        #expect(!collapsed.contains { $0.text == "after 4" })
+    }
+
+    @Test func metadataEmptyAndBinaryPatchesDoNotCreatePhantomHunks() {
+        #expect(UnifiedDiffParser.parse("").hunks.isEmpty)
+        #expect(UnifiedDiffParser.parse("Binary files a/image.png and b/image.png differ").hunks.isEmpty)
+        let document = UnifiedDiffParser.parse("--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new")
+        #expect(document.rows.prefix(2).allSatisfy { $0.kind == .metadata })
+    }
+
+    @Test func rejectsMalformedHunksAndIgnoresOneTrailingPatchNewline() {
+        #expect(UnifiedDiffParser.parse("@@ -1,2 +1,2 @@\n-old\n+new").hunks.isEmpty)
+        #expect(UnifiedDiffParser.parse("@@ -1 +1 @@\nbare row").hunks.isEmpty)
+        #expect(UnifiedDiffParser.parse("@@ -1 +1 @@garbage\n-old\n+new").hunks.isEmpty)
+        #expect(UnifiedDiffParser.parse("@@ -99999999999999999999 +1 @@\n-old\n+new").hunks.isEmpty)
+
+        let trailingNewline = UnifiedDiffParser.parse("@@ -1 +1 @@\n-old\n+new\n")
+        #expect(trailingNewline.hunks.count == 1)
+        #expect(trailingNewline.rows.count == 3)
+    }
+
+    @Test func preservesLongSourceLinesExactly() {
+        let longLine = "result = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()"
+        let document = UnifiedDiffParser.parse("@@ -0,0 +1 @@\n+\(longLine)")
+        #expect(document.hunks.first?.rows.first?.text == longLine)
     }
 }
 
@@ -113,6 +158,64 @@ struct ChangesViewModelTests {
         #expect(content.selectedFileAccessibilityLabel == "Sources/New.swift, Added, file 2 of 2, 1 addition, 1 deletion")
     }
 
+    @Test func navigatesHunksTogglesContextAndKeepsReviewedFilesVisible() async {
+        let patch = "@@ -1 +1 @@\n-old\n+new\n@@ -20 +20 @@\n-before\n+after"
+        let files = [
+            FileDiff(path: "A.swift", patch: patch, additions: 2, deletions: 2, status: .modified),
+            Self.file("B.swift"),
+        ]
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "m",
+            repository: ChangesSessionRepository(results: [.success(files)])
+        )
+        await viewModel.load()
+
+        var content = try! #require(viewModel.content)
+        #expect(content.selectedHunkPositionLabel == "Hunk 1 of 2")
+        #expect(!content.canSelectPreviousHunk && content.canSelectNextHunk)
+        #expect(content.contextMode == .collapsed)
+
+        viewModel.selectNextHunk()
+        viewModel.toggleContextMode()
+        viewModel.toggleSelectedFileReviewed()
+        content = try! #require(viewModel.content)
+        #expect(content.selectedHunkPositionLabel == "Hunk 2 of 2")
+        #expect(content.canSelectPreviousHunk && !content.canSelectNextHunk)
+        #expect(content.contextMode == .expanded)
+        #expect(content.selectedFileReviewed)
+        #expect(content.files.count == 2)
+
+        viewModel.selectFile("B.swift")
+        content = try! #require(viewModel.content)
+        #expect(!content.selectedFileReviewed)
+        #expect(content.reviewedPaths == ["A.swift"])
+        #expect(content.selectedHunkPositionLabel == "Hunk 1 of 1")
+
+        viewModel.prepareForSourceSwitch()
+        content = try! #require(viewModel.content)
+        #expect(content.reviewedPaths.isEmpty)
+        #expect(content.contextMode == .collapsed)
+    }
+
+    @Test func explicitRefreshClearsReviewedMarkersAndViewerControls() async {
+        let files = [Self.file("A.swift")]
+        let repository = ChangesSessionRepository(results: [.success(files), .success(files)])
+        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
+        await viewModel.load()
+        viewModel.toggleSelectedFileReviewed()
+        viewModel.toggleContextMode()
+
+        await viewModel.refresh()
+
+        let content = try! #require(viewModel.content)
+        #expect(content.reviewedPaths.isEmpty)
+        #expect(content.contextMode == .collapsed)
+        #expect(content.selectedHunkPositionLabel == "Hunk 1 of 1")
+        #expect(repository.requests.count == 2)
+    }
+
     @Test func coversNoTurnNoChangesUnavailablePatchErrorAndRetry() async {
         let noTurn = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: nil, repository: ChangesSessionRepository(results: []))
         await noTurn.load()
@@ -126,7 +229,9 @@ struct ChangesViewModelTests {
         ])
         let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
         await viewModel.load(); #expect(viewModel.state == .noChanges)
-        await viewModel.retry(); #expect(viewModel.content?.selectedFile == FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified))
+        await viewModel.retry()
+        #expect(viewModel.content?.selectedFile == FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified))
+        #expect(viewModel.content?.selectedFileHasPreview == false)
         await viewModel.retry(); #expect(viewModel.state == .error("offline"))
         await viewModel.retry(); #expect(viewModel.content?.selectedFile == Self.file("ok.swift"))
     }

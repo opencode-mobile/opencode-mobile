@@ -11,8 +11,9 @@ exposing editing actions.
 
 - Variants: collapsed context and expanded available context.
 - States: default, reviewed, and selected hunk.
-- Required content: file path, file status, additions, deletions, and parsed
-  hunks with old/new line numbers and row kinds.
+- Required content: file path, file status, additions, deletions, and a parsed
+  Unified Diff document containing typed hunks and rows with old/new line
+  numbers and row kinds.
 - Optional content: selected hunk identifier.
 - Loading, error, and empty states are not applicable; the owning screen
   presents those states before constructing the renderer.
@@ -29,11 +30,14 @@ exposing editing actions.
 
 - Render old/new line-number gutters and addition, deletion, context, and hunk
   header rows.
+- Keep parsing deterministic across platforms: hunk headers expose old/new
+  ranges, rows retain stable patch-line identifiers, metadata does not advance
+  source line numbers, and malformed or non-text patches produce no hunks.
 - Keep source rows unwrapped and horizontally scrollable while the owning page
   scrolls vertically.
 - Collapsed context is the default and shows limited unchanged lines around
-  each hunk. Expanded mode reveals all unchanged context present in the loaded
-  patch.
+  each change. Expanded mode reveals all unchanged context present in the
+  loaded patch without requesting or inventing additional source lines.
 - Reviewed presentation remains readable but reduces diff emphasis. It does not
   remove or collapse the file.
 - A selected hunk receives semantic focus/selection treatment without changing
@@ -65,3 +69,20 @@ markers twice.
 Row meaning, line numbering, context behavior, syntax roles, reviewed emphasis,
 and accessibility meaning are shared. Native scrolling mechanics may differ
 internally but should not create observable behavior differences.
+
+## Completion Ledger
+
+- Shared public API and semantic states: complete.
+- Token and typography usage: complete; the component uses the documented
+  semantic diff, syntax, surface, border, caption, and code roles.
+- iOS implementation: complete, including typed hunks and rows, selected-hunk
+  focus, horizontal source scrolling, context variants, and reviewed emphasis.
+- Android implementation: complete with the equivalent behavior and native
+  bring-into-view handling for selected hunks.
+- Component Galleries: complete on both platforms with interactive modified,
+  added, deleted, unavailable, reviewed, collapsed/expanded context, Unicode,
+  no-newline, multi-hunk, and long-line fixtures under gallery light/dark theme
+  controls.
+- Parity and divergences: complete; no observable divergence is known.
+- Automated checks: complete for focused parser and Changes Screen Model tests,
+  Android debug assembly, and the iOS simulator build and tests.
