@@ -52,6 +52,7 @@ data class ChangesUiState(
     val phase: ChangesPhase = ChangesPhase.Loading,
     val selectedSource: ChangeSource = ChangeSource.LastTurn,
     val availableSources: List<ChangeSource> = listOf(ChangeSource.LastTurn),
+    val isRefreshing: Boolean = false,
 )
 
 data class ChangesContentState(
@@ -180,7 +181,7 @@ class ChangesViewModel
 
         fun retry() = load(refreshAvailability = true)
 
-        fun refresh() = load(refreshAvailability = true)
+        fun refresh() = load(refreshAvailability = true, preserveContent = true)
 
         fun selectSource(source: ChangeSource) {
             if (source == _uiState.value.selectedSource || source !in availableSources) return
@@ -243,15 +244,20 @@ class ChangesViewModel
 
         fun prepareForSourceSwitch() = updateContent(ChangesContentState::resettingViewerControls)
 
-        private fun load(refreshAvailability: Boolean) {
+        private fun load(
+            refreshAvailability: Boolean,
+            preserveContent: Boolean = false,
+        ) {
             val target = target ?: return
             val requestedSource = _uiState.value.selectedSource
             loadJob?.cancel()
+            val preservedPhase = _uiState.value.phase.takeIf { preserveContent && it is ChangesPhase.Content }
             _uiState.value =
                 ChangesUiState(
-                    phase = ChangesPhase.Loading,
+                    phase = preservedPhase ?: ChangesPhase.Loading,
                     selectedSource = requestedSource,
                     availableSources = availableSources,
+                    isRefreshing = preservedPhase != null,
                 )
             loadJob =
                 viewModelScope.launch {
@@ -270,7 +276,9 @@ class ChangesViewModel
                             )
                         }
                         activeSource = selectedSource
-                        _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
+                        if (preservedPhase == null) {
+                            _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
+                        }
                         val files =
                             try {
                                 loadFiles(target, selectedSource)
@@ -286,7 +294,9 @@ class ChangesViewModel
                                 availableSources = listOf(ChangeSource.LastTurn)
                                 selectedSource = ChangeSource.LastTurn
                                 activeSource = selectedSource
-                                _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
+                                if (preservedPhase == null) {
+                                    _uiState.value = ChangesUiState(ChangesPhase.Loading, selectedSource, availableSources)
+                                }
                                 loadFiles(target, selectedSource)
                             }
                         val sortedFiles = files.sortedBy(FileDiff::path)

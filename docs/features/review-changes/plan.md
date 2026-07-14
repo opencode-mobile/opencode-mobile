@@ -24,13 +24,19 @@ to its default branch.
 - Present one file at a time with a filterable changed-file picker, file status,
   addition/deletion counts, previous/next file navigation, and previous/next
   hunk navigation.
+- Replace the Changes screen's previous/next file text-button row with a
+  bottom-centered floating File Navigation Pill. The pill always presents
+  previous and next chevrons around the selected file's addition and deletion
+  totals, keeps both totals visible when either value is zero, disables
+  unavailable directions and both directions during refresh, respects the
+  active path filter, and resets a newly selected file to the top of its diff.
 - Render a native unified diff with line numbers, syntax roles, horizontally
   scrollable long lines, collapsed context by default, and an expanded
   available-context mode.
 - Allow files to be marked reviewed for the current viewer lifetime. Reviewed
   files remain visible and markers clear on source switch, refresh, or exit.
-- Load a stable snapshot on entry or source switch and reload only through an
-  explicit refresh or retry.
+- Load a stable snapshot on entry or source switch and reload only through
+  pull-to-refresh or retry.
 
 ## Out Of Scope
 
@@ -121,6 +127,9 @@ perform mutations.
 
 ## Design-System Components Needed
 
+- New reusable native `OpenCodeFileNavigationPill` with equivalent iOS and
+  Android enabled, direction-disabled, refresh-disabled, zero-count,
+  accessibility, gallery, preview, and light/dark states.
 - Extended `OpenCodeReviewChangesPill`, documented in
   `docs/design-system/components/review-changes-pill.md`, with a compact latest
   turn file/addition/deletion summary and equivalent native accessibility.
@@ -143,6 +152,10 @@ perform mutations.
   actions.
 - Verify filtering, selection, file/hunk navigation, context, reviewed-state
   lifecycle, horizontal scrolling, and empty/error recovery.
+- Verify the File Navigation Pill's selected-file totals, stable two-count
+  formatting, always-visible chevrons, boundary and refresh disabling,
+  filtered navigation, top reset, floating placement, accessibility, and
+  replacement of the previous/next text-button row.
 - Verify pill visibility, mutual exclusion with Scroll to end, singular/plural
   file copy, zero-valued line-total omission, navigation source, accessibility
   labels, semantic summary colors, and light/dark component states.

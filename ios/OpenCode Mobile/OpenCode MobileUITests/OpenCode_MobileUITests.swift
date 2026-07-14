@@ -20,9 +20,11 @@ final class OpenCode_MobileUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["3 changed files, 4 additions, 3 deletions"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Refresh"].exists)
         XCTAssertTrue(app.staticTexts["Working tree"].waitForExistence(timeout: 5))
         app.buttons["Choose change source"].tap()
-        XCTAssertTrue(app.buttons["Working tree (selected)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Working tree, selected"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Working tree (selected)"].exists)
         app.buttons["Main branch"].tap()
         XCTAssertTrue(app.staticTexts["Main branch"].waitForExistence(timeout: 5))
         let picker = app.buttons["Choose file. Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"]
@@ -45,10 +47,14 @@ final class OpenCode_MobileUITests: XCTestCase {
             app.buttons["Choose file. Sources/New.swift, Added, file 2 of 3, 2 additions, 0 deletions"]
                 .waitForExistence(timeout: 5)
         )
+        XCTAssertFalse(app.staticTexts["Previous file"].exists)
+        XCTAssertFalse(app.staticTexts["Next file"].exists)
+        XCTAssertTrue(app.staticTexts["2 additions, 0 deletions"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Previous file"].isEnabled)
         XCTAssertTrue(app.buttons["Next file"].isEnabled)
         app.buttons["Next file"].tap()
         XCTAssertFalse(app.buttons["Next file"].isEnabled)
+        XCTAssertTrue(app.staticTexts["1 addition, 2 deletions"].waitForExistence(timeout: 5))
         XCTAssertTrue(
             app.buttons["Choose file. Sources/Removed.swift, Deleted, file 3 of 3, 1 addition, 2 deletions"]
                 .waitForExistence(timeout: 5)

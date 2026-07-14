@@ -294,6 +294,20 @@ same compact raised geometry.
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px) |
 
+### File navigation pill
+
+Bottom-centered file stepping control for read-only change review. It shares
+the raised capsule language with the other floating pills, while its larger
+minimum height preserves a native touch target for each directional action.
+
+| Token | Value |
+| --- | --- |
+| `fileNavigationPill.minHeight` | 44 (logical px) |
+| `fileNavigationPill.iconButtonSize` | 44 (logical px) |
+| `fileNavigationPill.iconSize` | 20 (logical px) |
+| `fileNavigationPill.summaryPaddingHorizontal` | 12 (logical px) |
+| `fileNavigationPill.shadowElevation` | 4 (logical px) |
+
 ### Unified diff
 
 Read-only line-oriented diff surface with stable gutters and horizontally

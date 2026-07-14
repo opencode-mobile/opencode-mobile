@@ -26,6 +26,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var entriesEnabled by rememberSaveable { mutableStateOf(true) }
+    var selectionRowsEnabled by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
 
     val entries =
@@ -33,15 +34,16 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
             add(
                 OpenCodeOverflowMenuEntry(
                     title = "Session context",
-                    icon = OpenCodeIcons.Architecture,
+                    icon = if (selectionRowsEnabled) OpenCodeIcons.Check else OpenCodeIcons.Architecture,
                     enabled = entriesEnabled,
+                    accessibilityLabel = if (selectionRowsEnabled) "Session context, selected" else null,
                     onClick = { menuExpanded = false },
                 ),
             )
             add(
                 OpenCodeOverflowMenuEntry(
                     title = "Copy session ID",
-                    icon = OpenCodeIcons.ContentCopy,
+                    icon = if (selectionRowsEnabled) null else OpenCodeIcons.ContentCopy,
                     enabled = entriesEnabled,
                     onClick = { menuExpanded = false },
                 ),
@@ -88,6 +90,11 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                     selected = entriesEnabled,
                     onClick = { entriesEnabled = !entriesEnabled },
                 )
+                OpenCodeChoiceBadge(
+                    label = "Selection rows",
+                    selected = selectionRowsEnabled,
+                    onClick = { selectionRowsEnabled = !selectionRowsEnabled },
+                )
             }
 
             ControlGroup(title = "Entry count") {
@@ -103,7 +110,7 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
             Text(
                 text =
                     "Use the overflow icon in the live top bar preview to open the menu. " +
-                        "Switch controls to review enabled and disabled entry states.",
+                        "Switch controls to review enabled, disabled, and aligned selection states.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

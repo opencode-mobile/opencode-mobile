@@ -36,6 +36,7 @@ struct ChangesState: Equatable {
     var phase: ChangesPhase = .loading
     var selectedSource: ChangeSource = .lastTurn
     var availableSources: [ChangeSource] = [.lastTurn]
+    var isRefreshing = false
 }
 
 struct ChangesContentState: Equatable {
@@ -172,7 +173,7 @@ final class ChangesViewModel {
 
     func load() async { await load(refreshAvailability: true) }
     func retry() async { await load(refreshAvailability: true) }
-    func refresh() async { await load(refreshAvailability: true) }
+    func refresh() async { await load(refreshAvailability: true, preserveContent: true) }
 
     func selectSource(_ source: ChangeSource) async {
         guard source != state.selectedSource, availableSources.contains(source) else { return }
@@ -180,12 +181,18 @@ final class ChangesViewModel {
         await load(refreshAvailability: false)
     }
 
-    private func load(refreshAvailability: Bool) async {
+    private func load(refreshAvailability: Bool, preserveContent: Bool = false) async {
         loadRevision += 1
         let revision = loadRevision
         let requestedSource = state.selectedSource
         var activeSource = requestedSource
-        state = ChangesState(phase: .loading, selectedSource: requestedSource, availableSources: availableSources)
+        let preservedPhase: ChangesPhase? = if preserveContent, case .content = state.phase { state.phase } else { nil }
+        state = ChangesState(
+            phase: preservedPhase ?? .loading,
+            selectedSource: requestedSource,
+            availableSources: availableSources,
+            isRefreshing: preservedPhase != nil
+        )
         let startedAt = Date()
         do {
             if refreshAvailability {
@@ -197,7 +204,9 @@ final class ChangesViewModel {
                 log(source: requestedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
             }
             activeSource = selectedSource
-            state = ChangesState(phase: .loading, selectedSource: selectedSource, availableSources: availableSources)
+            if preservedPhase == nil {
+                state = ChangesState(phase: .loading, selectedSource: selectedSource, availableSources: availableSources)
+            }
             let loadedFiles: [FileDiff]
             do {
                 loadedFiles = try await loadFiles(source: selectedSource)
@@ -206,20 +215,31 @@ final class ChangesViewModel {
                 availableSources = [.lastTurn]
                 selectedSource = .lastTurn
                 activeSource = selectedSource
-                state = ChangesState(phase: .loading, selectedSource: selectedSource, availableSources: availableSources)
+                if preservedPhase == nil {
+                    state = ChangesState(phase: .loading, selectedSource: selectedSource, availableSources: availableSources)
+                }
                 loadedFiles = try await loadFiles(source: selectedSource)
             }
             let files = loadedFiles.sorted { $0.path < $1.path }
             guard revision == loadRevision else { return }
             guard let first = files.first else {
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "empty")
-                state.phase = selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges
+                state = ChangesState(
+                    phase: selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges,
+                    selectedSource: selectedSource,
+                    availableSources: availableSources
+                )
                 return
             }
             log(source: selectedSource, fileCount: files.count, startedAt: startedAt, result: "success")
             let firstHunkID = UnifiedDiffParser.parse(first.patch ?? "").hunks.first?.id
-            state.phase = .content(ChangesContentState(files: files, selectedPath: first.path, selectedHunkID: firstHunkID))
+            state = ChangesState(
+                phase: .content(ChangesContentState(files: files, selectedPath: first.path, selectedHunkID: firstHunkID)),
+                selectedSource: selectedSource,
+                availableSources: availableSources
+            )
         } catch is CancellationError {
+            if revision == loadRevision { state.isRefreshing = false }
             return
         } catch {
             guard revision == loadRevision else { return }

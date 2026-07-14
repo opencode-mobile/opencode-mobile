@@ -38,6 +38,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FileNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
@@ -172,6 +173,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
+                                                        ComponentGalleryEntryId.FileNavigationPill -> FileNavigationPillGalleryScreen()
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()

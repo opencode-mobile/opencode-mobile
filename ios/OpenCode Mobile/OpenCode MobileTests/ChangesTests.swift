@@ -220,6 +220,7 @@ struct ChangesViewModelTests {
         #expect(content.reviewedPaths.isEmpty)
         #expect(content.contextMode == .collapsed)
         #expect(content.selectedHunkPositionLabel == "Hunk 1 of 1")
+        #expect(!viewModel.state.isRefreshing)
         #expect(repository.requests.count == 2)
     }
 
@@ -401,6 +402,27 @@ struct ChangesViewModelTests {
         #expect(cases.contains { $0.additions > 0 && $0.deletions > 0 })
         #expect(cases.contains { $0.additions > 0 && $0.deletions == 0 })
         #expect(cases.contains { $0.additions == 0 && $0.deletions > 0 })
+        #expect(cases.contains { $0.additions == 0 && $0.deletions == 0 })
+    }
+
+    @Test func fileNavigationPillKeepsBothVisibleTotalsAndAccessibleTotals() {
+        #expect(OpenCodeFileNavigationPill.visibleSummary(additions: 12, deletions: 3) == "+12 −3")
+        #expect(OpenCodeFileNavigationPill.visibleSummary(additions: 0, deletions: 3) == "+0 −3")
+        #expect(OpenCodeFileNavigationPill.visibleSummary(additions: 12, deletions: 0) == "+12 −0")
+        #expect(OpenCodeFileNavigationPill.visibleSummary(additions: 0, deletions: 0) == "+0 −0")
+
+        #expect(OpenCodeFileNavigationPill.accessibilityLabel(additions: 1, deletions: 1) == "1 addition, 1 deletion")
+        #expect(OpenCodeFileNavigationPill.accessibilityLabel(additions: 0, deletions: 3) == "0 additions, 3 deletions")
+        #expect(OpenCodeFileNavigationPill.accessibilityLabel(additions: 12, deletions: 0) == "12 additions, 0 deletions")
+    }
+
+    @Test func fileNavigationPillPreviewMatrixCoversBoundariesRefreshAndThemes() {
+        let cases = FileNavigationPillPreviewCase.allCases
+        #expect(Set(cases.map(\.colorScheme)) == Set([.light, .dark]))
+        #expect(cases.contains { !$0.previousEnabled && $0.nextEnabled })
+        #expect(cases.contains { $0.previousEnabled && $0.nextEnabled })
+        #expect(cases.contains { $0.previousEnabled && !$0.nextEnabled })
+        #expect(cases.contains { !$0.enabled })
         #expect(cases.contains { $0.additions == 0 && $0.deletions == 0 })
     }
 

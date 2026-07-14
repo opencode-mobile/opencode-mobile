@@ -193,6 +193,7 @@ class ChangesViewModelTest {
             assertEquals(emptySet<String>(), content.reviewedPaths)
             assertEquals(UnifiedDiffContextMode.Collapsed, content.contextMode)
             assertEquals("Hunk 1 of 1", content.selectedHunkPositionLabel)
+            assertFalse(viewModel.uiState.value.isRefreshing)
             assertEquals(2, repository.requests.size)
         }
 

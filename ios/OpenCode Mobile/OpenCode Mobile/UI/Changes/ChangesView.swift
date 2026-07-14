@@ -74,10 +74,12 @@ struct ChangesView: View {
 
     private var sourceMenuEntries: [OpenCodeOverflowMenuEntry] {
         viewModel.state.availableSources.map { source in
-            OpenCodeOverflowMenuEntry(
+            let selected = source == viewModel.state.selectedSource
+            return OpenCodeOverflowMenuEntry(
                 id: source.rawValue,
-                title: source.displayName + (source == viewModel.state.selectedSource ? " (selected)" : ""),
-                icon: .description,
+                title: source.displayName,
+                icon: selected ? .check : nil,
+                accessibilityLabel: selected ? "\(source.displayName), selected" : source.displayName,
                 action: { Task { await viewModel.selectSource(source) } }
             )
         }
@@ -92,9 +94,6 @@ struct ChangesView: View {
                     .foregroundStyle(OpenCodeColors.textBase)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel(changeSet.aggregateAccessibilityLabel)
-                OpenCodeButton(variant: .compactText(title: "Refresh"), contrast: .low) {
-                    Task { await viewModel.refresh() }
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -111,24 +110,6 @@ struct ChangesView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Choose file. \(changeSet.selectedFileAccessibilityLabel)")
             .accessibilityAddTraits(.isButton)
-
-            HStack {
-                OpenCodeButton(
-                    variant: .compactText(title: "Previous file"),
-                    enabled: changeSet.canSelectPrevious,
-                    contrast: .low,
-                    action: viewModel.selectPreviousFile
-                )
-                Spacer()
-                OpenCodeButton(
-                    variant: .compactText(title: "Next file"),
-                    enabled: changeSet.canSelectNext,
-                    contrast: .low,
-                    action: viewModel.selectNextFile
-                )
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
 
             HStack {
                 OpenCodeButton(
@@ -169,27 +150,53 @@ struct ChangesView: View {
             .padding(.vertical, 8)
 
             ScrollViewReader { proxy in
-                ScrollView {
-                    if changeSet.selectedFileHasPreview {
-                        OpenCodeUnifiedDiff(
-                            file: selectedFile,
-                            document: changeSet.selectedDocument,
-                            contextMode: changeSet.contextMode,
-                            reviewed: changeSet.selectedFileReviewed,
-                            selectedHunkID: changeSet.selectedHunkID
-                        )
-                    } else {
-                        message(selectedFile.path, detail: "A text preview is unavailable for this file.")
+                ZStack(alignment: .bottom) {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            Color.clear
+                                .frame(height: 0)
+                                .id(Self.diffTopAnchorID)
+                            if changeSet.selectedFileHasPreview {
+                                OpenCodeUnifiedDiff(
+                                    file: selectedFile,
+                                    document: changeSet.selectedDocument,
+                                    contextMode: changeSet.contextMode,
+                                    reviewed: changeSet.selectedFileReviewed,
+                                    selectedHunkID: changeSet.selectedHunkID
+                                )
+                            } else {
+                                message(selectedFile.path, detail: "A text preview is unavailable for this file.")
+                            }
+                        }
+                        .padding(.bottom, Self.fileNavigationContentInset)
                     }
+                    .padding(16)
+                    .refreshable { await viewModel.refresh() }
+
+                    OpenCodeFileNavigationPill(
+                        additions: selectedFile.additions,
+                        deletions: selectedFile.deletions,
+                        previousEnabled: changeSet.canSelectPrevious,
+                        nextEnabled: changeSet.canSelectNext,
+                        enabled: !viewModel.state.isRefreshing,
+                        onPrevious: viewModel.selectPreviousFile,
+                        onNext: viewModel.selectNextFile
+                    )
+                    .padding(.bottom, 12)
                 }
-                .padding(16)
                 .onChange(of: changeSet.selectedHunkID) { _, selectedHunkID in
                     guard let selectedHunkID else { return }
                     withAnimation { proxy.scrollTo(selectedHunkID, anchor: .top) }
                 }
+                .onChange(of: changeSet.selectedPath) { _, _ in
+                    proxy.scrollTo(Self.diffTopAnchorID, anchor: .top)
+                }
             }
         }
     }
+
+    private static let diffTopAnchorID = "changes-diff-top"
+    private static let fileNavigationContentInset: CGFloat = 68
 
     @ViewBuilder private func fileFilter() -> some View {
         if let changeSet = viewModel.content {

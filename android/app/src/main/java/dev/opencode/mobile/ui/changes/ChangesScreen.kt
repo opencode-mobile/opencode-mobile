@@ -1,17 +1,21 @@
 package dev.opencode.mobile.ui.changes
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +35,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeFileNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
@@ -64,9 +69,11 @@ fun ChangesScreen(
             onDismissRequest = { menuExpanded = false },
             entries =
                 state.availableSources.map { source ->
+                    val selected = source == state.selectedSource
                     OpenCodeOverflowMenuEntry(
-                        title = source.displayName + if (source == state.selectedSource) " (selected)" else "",
-                        icon = OpenCodeIcons.Description,
+                        title = source.displayName,
+                        icon = if (selected) OpenCodeIcons.Check else null,
+                        accessibilityLabel = if (selected) "${source.displayName}, selected" else source.displayName,
                         onClick = { viewModel.selectSource(source) },
                     )
                 },
@@ -90,7 +97,7 @@ fun ChangesScreen(
             ChangesPhase.Loading -> Centered { CircularProgressIndicator() }
             ChangesPhase.NoTurn -> EmptyMessage("No completed turn", "Send a prompt and wait for it to complete, then try again.")
             ChangesPhase.NoChanges -> EmptyMessage(state.selectedSource.emptyTitle, state.selectedSource.emptyDetail)
-            is ChangesPhase.Content -> ChangeSetContent(current.changeSet, viewModel)
+            is ChangesPhase.Content -> ChangeSetContent(current.changeSet, state.isRefreshing, viewModel)
             is ChangesPhase.Error ->
                 Centered {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -107,121 +114,131 @@ fun ChangesScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun ChangeSetContent(
     changeSet: ChangesContentState,
+    isRefreshing: Boolean,
     viewModel: ChangesViewModel,
 ) {
     var pickerVisible by remember { mutableStateOf(false) }
     val selectedFile = changeSet.selectedFile
+    val diffScrollState = rememberScrollState()
 
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    LaunchedEffect(changeSet.selectedPath) {
+        diffScrollState.scrollTo(0)
+    }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = viewModel::refresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Column(Modifier.fillMaxSize()) {
             Text(
                 text = "${changeSet.files.size} files  ·  +${changeSet.additions}  −${changeSet.deletions}",
-                modifier = Modifier.semantics { contentDescription = changeSet.aggregateAccessibilityLabel },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .semantics { contentDescription = changeSet.aggregateAccessibilityLabel },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Refresh"),
-                onClick = viewModel::refresh,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-        }
 
-        OpenCodeListItem(
-            title = selectedFile.path,
-            subtitle = changeSet.selectedFileSummary,
-            style = OpenCodeListItemStyle.Card,
-            onClick = { pickerVisible = true },
-            modifier =
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .semantics { contentDescription = "Choose file. ${changeSet.selectedFileAccessibilityLabel}" },
-            trailing = {
-                Icon(OpenCodeIcons.ChevronRight, contentDescription = null)
-            },
-        )
+            OpenCodeListItem(
+                title = selectedFile.path,
+                subtitle = changeSet.selectedFileSummary,
+                style = OpenCodeListItemStyle.Card,
+                onClick = { pickerVisible = true },
+                modifier =
+                    Modifier
+                        .padding(horizontal = 16.dp)
+                        .semantics { contentDescription = "Choose file. ${changeSet.selectedFileAccessibilityLabel}" },
+                trailing = {
+                    Icon(OpenCodeIcons.ChevronRight, contentDescription = null)
+                },
+            )
 
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Previous file"),
-                onClick = viewModel::selectPreviousFile,
-                enabled = changeSet.canSelectPrevious,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Next file"),
-                onClick = viewModel::selectNextFile,
-                enabled = changeSet.canSelectNext,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-        }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                OpenCodeButton(
+                    variant =
+                        OpenCodeButtonVariant.CompactText(
+                            if (changeSet.contextMode == UnifiedDiffContextMode.Collapsed) "Expand context" else "Collapse context",
+                        ),
+                    onClick = viewModel::toggleContextMode,
+                    contrast = OpenCodeButtonContrast.Low,
+                )
+                OpenCodeButton(
+                    variant =
+                        OpenCodeButtonVariant.CompactText(
+                            if (changeSet.selectedFileReviewed) "Mark unreviewed" else "Mark reviewed",
+                        ),
+                    onClick = viewModel::toggleSelectedFileReviewed,
+                    contrast = OpenCodeButtonContrast.Low,
+                )
+            }
 
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            OpenCodeButton(
-                variant =
-                    OpenCodeButtonVariant.CompactText(
-                        if (changeSet.contextMode == UnifiedDiffContextMode.Collapsed) "Expand context" else "Collapse context",
-                    ),
-                onClick = viewModel::toggleContextMode,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-            OpenCodeButton(
-                variant =
-                    OpenCodeButtonVariant.CompactText(
-                        if (changeSet.selectedFileReviewed) "Mark unreviewed" else "Mark reviewed",
-                    ),
-                onClick = viewModel::toggleSelectedFileReviewed,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-        }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.CompactText("Previous hunk"),
+                    onClick = viewModel::selectPreviousHunk,
+                    enabled = changeSet.canSelectPreviousHunk,
+                    contrast = OpenCodeButtonContrast.Low,
+                )
+                Text(
+                    changeSet.selectedHunkPositionLabel,
+                    modifier = Modifier.semantics { contentDescription = changeSet.selectedHunkPositionLabel },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.CompactText("Next hunk"),
+                    onClick = viewModel::selectNextHunk,
+                    enabled = changeSet.canSelectNextHunk,
+                    contrast = OpenCodeButtonContrast.Low,
+                )
+            }
 
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Previous hunk"),
-                onClick = viewModel::selectPreviousHunk,
-                enabled = changeSet.canSelectPreviousHunk,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-            Text(
-                changeSet.selectedHunkPositionLabel,
-                modifier = Modifier.semantics { contentDescription = changeSet.selectedHunkPositionLabel },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Next hunk"),
-                onClick = viewModel::selectNextHunk,
-                enabled = changeSet.canSelectNextHunk,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-        }
+            Box(Modifier.weight(1f)) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(diffScrollState)
+                        .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 84.dp),
+                ) {
+                    if (!changeSet.selectedFileHasPreview) {
+                        EmptyMessage(selectedFile.path, "A text preview is unavailable for this file.")
+                    } else {
+                        OpenCodeUnifiedDiff(
+                            file = selectedFile,
+                            document = changeSet.selectedDocument,
+                            contextMode = changeSet.contextMode,
+                            reviewed = changeSet.selectedFileReviewed,
+                            selectedHunkId = changeSet.selectedHunkId,
+                        )
+                    }
+                }
 
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            if (!changeSet.selectedFileHasPreview) {
-                EmptyMessage(selectedFile.path, "A text preview is unavailable for this file.")
-            } else {
-                OpenCodeUnifiedDiff(
-                    file = selectedFile,
-                    document = changeSet.selectedDocument,
-                    contextMode = changeSet.contextMode,
-                    reviewed = changeSet.selectedFileReviewed,
-                    selectedHunkId = changeSet.selectedHunkId,
+                OpenCodeFileNavigationPill(
+                    additions = selectedFile.additions,
+                    deletions = selectedFile.deletions,
+                    previousEnabled = changeSet.canSelectPrevious,
+                    nextEnabled = changeSet.canSelectNext,
+                    enabled = !isRefreshing,
+                    onPrevious = viewModel::selectPreviousFile,
+                    onNext = viewModel::selectNextFile,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(bottom = 16.dp),
                 )
             }
         }

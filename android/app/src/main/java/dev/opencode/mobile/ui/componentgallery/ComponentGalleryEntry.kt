@@ -22,6 +22,7 @@ enum class ComponentGalleryEntryId {
     ChoiceBadge,
     ActionPill,
     ReviewChangesPill,
+    FileNavigationPill,
     UnifiedDiff,
     Button,
     TextInput,
@@ -105,6 +106,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ReviewChangesPill,
             title = "Review Changes Pill",
             description = "Contextual shortcut to files changed by the latest completed turn.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.FileNavigationPill,
+            title = "File Navigation Pill",
+            description = "Floating previous and next file controls with current-file totals.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

@@ -6,7 +6,8 @@ Provide a compact anchored popup menu for secondary page actions that should sta
 near the top bar without crowding trailing icon slots. Use it when a screen needs
 a `moreVert` overflow affordance with a short list of tappable actions.
 
-Each entry shows a leading icon and a single-line label. Prefer
+Each entry reserves a leading icon slot and shows a single-line label. The slot
+may contain an icon or remain empty for aligned selection rows. Prefer
 `OpenCodeBottomSheet` when the action list needs a title, close affordance, or
 many entries with scrolling.
 
@@ -16,8 +17,10 @@ many entries with scrolling.
 - States:
   - menu: expanded, dismissed.
   - entries: enabled, disabled.
-- Required content: entry `title`, leading `icon`, and `onClick` handler.
+- Required content: entry `title` and `onClick` handler.
 - Optional content:
+  - leading icon; omitting it preserves the standard icon slot so mixed icon
+    and no-icon rows stay aligned.
   - entry accessibility label when the title alone is insufficient.
   - iOS trigger via `OpenCodeOverflowMenu` label closure and `isPresented`
     binding.
@@ -50,7 +53,10 @@ left-aligned inside the panel. Tapping outside dismisses the menu.
 
 Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
 `OpenCodeIcons` on Android). Icons are decorative when the entry title already
-describes the action.
+describes the action. Selection menus use the catalog check icon for the
+selected row and an empty reserved slot for unselected rows; the selected state
+remains available to assistive technology through the entry accessibility
+label rather than visible label suffixes.
 
 ## Platform Notes
 
@@ -67,11 +73,12 @@ describes the action.
 - Default: included.
 - Pressed: covered through platform interaction behavior.
 - Disabled: included.
+- Selected and unselected aligned rows: included.
 - Loading: not applicable for this component version.
 - Error: not applicable for this component version.
 
-Component Gallery includes one live top-bar preview with controls for entry count
-and enabled state.
+Component Gallery includes one live top-bar preview with controls for entry
+count, enabled state, and aligned selection rows.
 
 ## Parity And Divergence
 

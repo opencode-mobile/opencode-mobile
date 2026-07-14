@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntRect
@@ -55,10 +57,11 @@ private val OverflowMenuAnchorTopOffset = 8.dp
 
 data class OpenCodeOverflowMenuEntry(
     val title: String,
-    val icon: ImageVector,
+    val icon: ImageVector?,
     val onClick: () -> Unit,
     val enabled: Boolean = true,
     val contentDescription: String? = null,
+    val accessibilityLabel: String? = null,
 )
 
 @Composable
@@ -123,12 +126,11 @@ private class OverflowMenuPopupPositionProvider(
         windowSize: IntSize,
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize,
-    ): androidx.compose.ui.unit.IntOffset {
-        return androidx.compose.ui.unit.IntOffset(
+    ): androidx.compose.ui.unit.IntOffset =
+        androidx.compose.ui.unit.IntOffset(
             x = topBarBounds.right.roundToInt() - popupContentSize.width - endInsetPx,
             y = topBarBounds.bottom.roundToInt() + topOffsetPx,
         )
-    }
 }
 
 @Composable
@@ -197,21 +199,30 @@ private fun OverflowMenuEntryRow(
                         onDismissRequest()
                         entry.onClick()
                     },
-                )
-                .padding(
+                ).padding(
                     horizontal = OverflowMenuEntryPaddingHorizontal,
                     vertical = 12.dp,
-                )
-                .then(if (entry.enabled) Modifier else Modifier.alpha(0.7f)),
+                ).then(
+                    entry.accessibilityLabel?.let { label ->
+                        Modifier.semantics(mergeDescendants = true) { contentDescription = label }
+                    } ?: Modifier,
+                ).then(if (entry.enabled) Modifier else Modifier.alpha(0.7f)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(OverflowMenuEntryIconSpacing),
     ) {
-        Icon(
-            imageVector = entry.icon,
-            contentDescription = entry.contentDescription,
+        Box(
             modifier = Modifier.size(OverflowMenuEntryIconSize),
-            tint = iconColor,
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            entry.icon?.let { icon ->
+                Icon(
+                    imageVector = icon,
+                    contentDescription = entry.contentDescription,
+                    modifier = Modifier.size(OverflowMenuEntryIconSize),
+                    tint = iconColor,
+                )
+            }
+        }
         Text(
             text = entry.title,
             style = MaterialTheme.typography.bodyLarge,
@@ -269,13 +280,14 @@ private fun OpenCodeOverflowMenuDarkPreview() {
 private fun previewOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
     listOf(
         OpenCodeOverflowMenuEntry(
-            title = "Session context",
-            icon = OpenCodeIcons.Architecture,
+            title = "Working tree",
+            icon = OpenCodeIcons.Check,
+            accessibilityLabel = "Working tree, selected",
             onClick = {},
         ),
         OpenCodeOverflowMenuEntry(
-            title = "Copy session ID",
-            icon = OpenCodeIcons.ContentCopy,
+            title = "Main branch",
+            icon = null,
             onClick = {},
         ),
         OpenCodeOverflowMenuEntry(

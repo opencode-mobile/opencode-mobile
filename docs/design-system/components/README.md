@@ -107,6 +107,7 @@ applicable item is complete.
 - `text-input.md`
 - `action-pill.md`
 - `review-changes-pill.md`
+- `file-navigation-pill.md`
 - `unified-diff.md`
 - `project-session-selector.md`
 - `session-status-bar.md`

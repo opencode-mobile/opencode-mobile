@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,9 +44,11 @@ class ChangesScreenTest {
         composeTestRule
             .onNodeWithContentDescription("3 changed files, 4 additions, 3 deletions")
             .assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Refresh").assertCountEquals(0)
         composeTestRule.onNodeWithText("Working tree").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Choose change source").performClick()
-        composeTestRule.onNodeWithText("Working tree (selected)").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Working tree, selected").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Working tree (selected)").assertCountEquals(0)
         composeTestRule.onNodeWithText("Main branch").assertIsDisplayed().performClick()
         composeTestRule.onNodeWithText("Main branch").assertIsDisplayed()
         val picker =
@@ -69,9 +72,13 @@ class ChangesScreenTest {
             .onNodeWithContentDescription(
                 "Choose file. Sources/New.kt, Added, file 2 of 3, 2 additions, 0 deletions",
             ).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Previous file").assertIsEnabled()
-        composeTestRule.onNodeWithText("Next file").assertIsEnabled().performClick()
-        composeTestRule.onNodeWithText("Next file").assertIsNotEnabled()
+        composeTestRule.onAllNodesWithText("Previous file").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("Next file").assertCountEquals(0)
+        composeTestRule.onNodeWithContentDescription("2 additions, 0 deletions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Previous file").assertIsEnabled()
+        composeTestRule.onNodeWithContentDescription("Next file").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithContentDescription("Next file").assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription("1 addition, 2 deletions").assertIsDisplayed()
         composeTestRule
             .onNodeWithContentDescription(
                 "Choose file. Sources/Removed.kt, Deleted, file 3 of 3, 1 addition, 2 deletions",

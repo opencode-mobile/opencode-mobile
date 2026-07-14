@@ -88,6 +88,8 @@ struct ComponentGalleryDetailView: View {
             ActionPillGalleryView()
         case .reviewChangesPill:
             ReviewChangesPillGalleryView()
+        case .fileNavigationPill:
+            FileNavigationPillGalleryView()
         case .unifiedDiff:
             UnifiedDiffGalleryView()
         case .button:

@@ -113,7 +113,8 @@ implementation belong in the feature's `parity-gaps.md`.
 - Area: component | accessibility
 - Shared intent: `OpenCodeOverflowMenu` exposes the same entry model, enabled
   state, opaque elevated panel chrome, and dismissal behavior for compact
-  top-bar overflow actions with a leading icon and single-line label.
+  top-bar overflow actions with a reserved leading icon slot and single-line
+  label. The slot may contain a catalog icon or remain empty for aligned rows.
 - iOS behavior: presented with a styled popover anchored to the trigger supplied
   through the component label closure. `OpenCodeOverflowMenuTrigger` provides the
   standard `moreVert` button for top-bar placement.
