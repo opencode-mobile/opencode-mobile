@@ -143,6 +143,8 @@ private struct SessionChatTimelineReadyView: View {
                 OpenCodeReviewChangesPill(
                     variant: .latestTurn,
                     changedFileCount: fileCount,
+                    additions: 0,
+                    deletions: 0,
                     action: props.onReviewChangesTap
                 )
                     .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)

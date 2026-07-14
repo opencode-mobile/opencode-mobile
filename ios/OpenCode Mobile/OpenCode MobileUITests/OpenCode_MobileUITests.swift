@@ -64,12 +64,12 @@ final class OpenCode_MobileUITests: XCTestCase {
         app.launchEnvironment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] = "1"
         app.launch()
 
-        let singular = app.buttons["Review 1 changed file"]
+        let singular = app.buttons["Review changes, 1 file, 12 additions, 3 deletions"]
         XCTAssertTrue(singular.waitForExistence(timeout: 10))
         singular.tap()
         XCTAssertTrue(app.staticTexts["Review changes tapped"].waitForExistence(timeout: 5))
 
-        let disabled = app.buttons["Review 4 changed files"]
+        let disabled = app.buttons["Review changes, 4 files"]
         XCTAssertTrue(disabled.waitForExistence(timeout: 5))
         XCTAssertFalse(disabled.isEnabled)
     }

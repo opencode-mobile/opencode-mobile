@@ -80,8 +80,8 @@ private struct ReviewChangesPillUITestView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 1) { tapped = true }
-            OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 4, enabled: false, action: {})
+            OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 1, additions: 12, deletions: 3) { tapped = true }
+            OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 4, additions: 0, deletions: 0, enabled: false, action: {})
             Text(tapped ? "Review changes tapped" : "Waiting for review")
         }
     }

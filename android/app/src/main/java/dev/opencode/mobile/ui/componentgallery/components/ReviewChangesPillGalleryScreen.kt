@@ -9,7 +9,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -23,27 +22,46 @@ import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
 @Composable
 fun ReviewChangesPillGalleryScreen(modifier: Modifier = Modifier) {
     var enabled by rememberSaveable { mutableStateOf(true) }
-    var changedFileCount by rememberSaveable { mutableIntStateOf(1) }
+    var summary by rememberSaveable { mutableStateOf(ReviewChangesPillGallerySummary.Mixed) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Review singular, plural, and disabled latest-turn states.",
+            text = "Review mixed, additions-only, deletions-only, zero-line, singular, plural, and disabled states.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OpenCodeChoiceBadge("1 file", changedFileCount == 1, onClick = { changedFileCount = 1 })
-            OpenCodeChoiceBadge("4 files", changedFileCount == 4, onClick = { changedFileCount = 4 })
+            OpenCodeChoiceBadge("Mixed", summary == ReviewChangesPillGallerySummary.Mixed, onClick = { summary = ReviewChangesPillGallerySummary.Mixed })
+            OpenCodeChoiceBadge("+ only", summary == ReviewChangesPillGallerySummary.AdditionsOnly, onClick = { summary = ReviewChangesPillGallerySummary.AdditionsOnly })
+            OpenCodeChoiceBadge("− only", summary == ReviewChangesPillGallerySummary.DeletionsOnly, onClick = { summary = ReviewChangesPillGallerySummary.DeletionsOnly })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpenCodeChoiceBadge("Zero lines", summary == ReviewChangesPillGallerySummary.ZeroLine, onClick = { summary = ReviewChangesPillGallerySummary.ZeroLine })
+            OpenCodeChoiceBadge("1 file", summary == ReviewChangesPillGallerySummary.Singular, onClick = { summary = ReviewChangesPillGallerySummary.Singular })
             OpenCodeChoiceBadge("Enabled", enabled, onClick = { enabled = !enabled })
         }
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             OpenCodeReviewChangesPill(
                 variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                changedFileCount = changedFileCount,
+                changedFileCount = summary.changedFileCount,
+                additions = summary.additions,
+                deletions = summary.deletions,
                 enabled = enabled,
                 onClick = {},
             )
         }
     }
+}
+
+private enum class ReviewChangesPillGallerySummary(
+    val changedFileCount: Int,
+    val additions: Int,
+    val deletions: Int,
+) {
+    Mixed(5, 12, 3),
+    AdditionsOnly(5, 12, 0),
+    DeletionsOnly(5, 0, 3),
+    ZeroLine(5, 0, 0),
+    Singular(1, 1, 1),
 }

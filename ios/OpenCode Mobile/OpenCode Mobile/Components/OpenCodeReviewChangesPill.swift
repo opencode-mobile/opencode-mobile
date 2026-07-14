@@ -5,94 +5,141 @@ enum OpenCodeReviewChangesPillVariant {
 }
 
 enum ReviewChangesPillPreviewCase: CaseIterable {
-    case singularLight
+    case mixedLight
+    case mixedDark
+    case additionsOnlyLight
+    case deletionsOnlyDark
+    case zeroLineLight
     case singularDark
-    case pluralLight
-    case pluralDark
     case disabledLight
     case disabledDark
 
-    var changedFileCount: Int {
+    private var configuration: (files: Int, additions: Int, deletions: Int, enabled: Bool, colorScheme: ColorScheme) {
         switch self {
-        case .singularLight, .singularDark: 1
-        case .pluralLight, .pluralDark, .disabledLight, .disabledDark: 4
+        case .mixedLight: (4, 12, 3, true, .light)
+        case .mixedDark: (4, 12, 3, true, .dark)
+        case .additionsOnlyLight: (4, 12, 0, true, .light)
+        case .deletionsOnlyDark: (4, 0, 3, true, .dark)
+        case .zeroLineLight: (4, 0, 0, true, .light)
+        case .singularDark: (1, 1, 1, true, .dark)
+        case .disabledLight: (4, 12, 3, false, .light)
+        case .disabledDark: (4, 0, 0, false, .dark)
         }
     }
 
-    var enabled: Bool {
-        switch self {
-        case .disabledLight, .disabledDark: false
-        default: true
-        }
-    }
-
-    var colorScheme: ColorScheme {
-        switch self {
-        case .singularDark, .pluralDark, .disabledDark: .dark
-        default: .light
-        }
-    }
+    var changedFileCount: Int { configuration.files }
+    var additions: Int { configuration.additions }
+    var deletions: Int { configuration.deletions }
+    var enabled: Bool { configuration.enabled }
+    var colorScheme: ColorScheme { configuration.colorScheme }
 }
 
 struct OpenCodeReviewChangesPill: View {
     let variant: OpenCodeReviewChangesPillVariant
     let changedFileCount: Int
+    let additions: Int
+    let deletions: Int
     let enabled: Bool
     let action: () -> Void
 
     init(
         variant: OpenCodeReviewChangesPillVariant,
         changedFileCount: Int,
+        additions: Int,
+        deletions: Int,
         enabled: Bool = true,
         action: @escaping () -> Void
     ) {
         precondition(changedFileCount > 0, "Review Changes Pill requires a positive file count")
+        precondition(additions >= 0, "Review Changes Pill requires nonnegative additions")
+        precondition(deletions >= 0, "Review Changes Pill requires nonnegative deletions")
         self.variant = variant
         self.changedFileCount = changedFileCount
+        self.additions = additions
+        self.deletions = deletions
         self.enabled = enabled
         self.action = action
     }
 
     var body: some View {
+        let summary = switch variant {
+        case .latestTurn:
+            Self.makeSummary(
+                changedFileCount: changedFileCount,
+                additions: additions,
+                deletions: deletions
+            )
+        }
         Button(action: action) {
-            HStack(spacing: Self.iconSpacing) {
-                OpenCodeIconImage(icon: icon)
-                    .font(.system(size: Self.iconSize, weight: .semibold))
-                    .foregroundStyle(enabled ? OpenCodeColors.iconStrongBase : OpenCodeColors.textBase)
-                Text(label)
-                    .font(OpenCodeTypography.button)
-                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
-            }
+            summaryText(summary)
+                .font(OpenCodeTypography.button)
             .padding(.horizontal, Self.paddingHorizontal)
             .padding(.vertical, Self.paddingVertical)
             .frame(minHeight: Self.minHeight)
         }
         .buttonStyle(OpenCodeReviewChangesPillButtonStyle(enabled: enabled))
         .disabled(!enabled)
-        .accessibilityLabel(label)
+        .accessibilityLabel(summary.accessibilityLabel)
     }
 
-    private var label: String {
-        switch variant {
-        case .latestTurn: Self.label(changedFileCount: changedFileCount)
+    static func fileLabel(changedFileCount: Int) -> String {
+        "\(changedFileCount) \(changedFileCount == 1 ? "file" : "files")"
+    }
+
+    static func visibleSummary(changedFileCount: Int, additions: Int, deletions: Int) -> String {
+        makeSummary(changedFileCount: changedFileCount, additions: additions, deletions: deletions).visibleLabel
+    }
+
+    static func accessibilityLabel(changedFileCount: Int, additions: Int, deletions: Int) -> String {
+        makeSummary(changedFileCount: changedFileCount, additions: additions, deletions: deletions).accessibilityLabel
+    }
+
+    private static func makeSummary(changedFileCount: Int, additions: Int, deletions: Int) -> ReviewChangesPillSummary {
+        ReviewChangesPillSummary(
+            fileLabel: fileLabel(changedFileCount: changedFileCount),
+            additionLabel: additions > 0 ? "+\(additions)" : nil,
+            deletionLabel: deletions > 0 ? "−\(deletions)" : nil,
+            additionAccessibilityLabel: additions > 0 ? "\(additions) \(additions == 1 ? "addition" : "additions")" : nil,
+            deletionAccessibilityLabel: deletions > 0 ? "\(deletions) \(deletions == 1 ? "deletion" : "deletions")" : nil
+        )
+    }
+
+    private func summaryText(_ summary: ReviewChangesPillSummary) -> Text {
+        let disabledColor = OpenCodeColors.textBase
+        var text = Text(summary.fileLabel)
+            .foregroundColor(enabled ? OpenCodeColors.textStrong : disabledColor)
+        if let additionLabel = summary.additionLabel {
+            text = text + Text("  ") + Text(additionLabel)
+                .foregroundColor(enabled ? OpenCodeColors.diffAdd : disabledColor)
         }
-    }
-
-    private var icon: OpenCodeIcon {
-        switch variant {
-        case .latestTurn: .description
+        if let deletionLabel = summary.deletionLabel {
+            text = text + Text("  ") + Text(deletionLabel)
+                .foregroundColor(enabled ? OpenCodeColors.diffDelete : disabledColor)
         }
-    }
-
-    static func label(changedFileCount: Int) -> String {
-        "Review \(changedFileCount) changed \(changedFileCount == 1 ? "file" : "files")"
+        return text
     }
 
     private static let minHeight: CGFloat = 36
     private static let paddingHorizontal: CGFloat = 14
     private static let paddingVertical: CGFloat = 8
-    private static let iconSize: CGFloat = 16
-    private static let iconSpacing: CGFloat = 6
+}
+
+private struct ReviewChangesPillSummary {
+    let fileLabel: String
+    let additionLabel: String?
+    let deletionLabel: String?
+    let additionAccessibilityLabel: String?
+    let deletionAccessibilityLabel: String?
+
+    var visibleLabel: String {
+        [fileLabel, additionLabel, deletionLabel].compactMap { $0 }.joined(separator: "  ")
+    }
+
+    var accessibilityLabel: String {
+        ["Review changes", fileLabel, additionAccessibilityLabel, deletionAccessibilityLabel]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
 }
 
 private struct OpenCodeReviewChangesPillButtonStyle: ButtonStyle {
@@ -119,6 +166,8 @@ private struct ReviewChangesPillPreview: View {
         OpenCodeReviewChangesPill(
             variant: .latestTurn,
             changedFileCount: previewCase.changedFileCount,
+            additions: previewCase.additions,
+            deletions: previewCase.deletions,
             enabled: previewCase.enabled,
             action: {}
         )
@@ -128,20 +177,28 @@ private struct ReviewChangesPillPreview: View {
     }
 }
 
-#Preview("Singular Light") {
-    ReviewChangesPillPreview(previewCase: .singularLight)
+#Preview("Mixed Light") {
+    ReviewChangesPillPreview(previewCase: .mixedLight)
+}
+
+#Preview("Mixed Dark") {
+    ReviewChangesPillPreview(previewCase: .mixedDark)
+}
+
+#Preview("Additions Only Light") {
+    ReviewChangesPillPreview(previewCase: .additionsOnlyLight)
+}
+
+#Preview("Deletions Only Dark") {
+    ReviewChangesPillPreview(previewCase: .deletionsOnlyDark)
+}
+
+#Preview("Zero Line Light") {
+    ReviewChangesPillPreview(previewCase: .zeroLineLight)
 }
 
 #Preview("Singular Dark") {
     ReviewChangesPillPreview(previewCase: .singularDark)
-}
-
-#Preview("Plural Light") {
-    ReviewChangesPillPreview(previewCase: .pluralLight)
-}
-
-#Preview("Plural Dark") {
-    ReviewChangesPillPreview(previewCase: .pluralDark)
 }
 
 #Preview("Disabled Light") {

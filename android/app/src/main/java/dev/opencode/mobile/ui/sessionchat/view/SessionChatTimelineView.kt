@@ -184,6 +184,8 @@ private fun SessionChatTimelineReadyView(
                 OpenCodeReviewChangesPill(
                     variant = OpenCodeReviewChangesPillVariant.LatestTurn,
                     changedFileCount = fileCount,
+                    additions = 0,
+                    deletions = 0,
                     onClick = onReviewChangesClick,
                 )
             }

@@ -21,23 +21,27 @@ class ReviewChangesPillTest {
             OpenCodeReviewChangesPill(
                 variant = OpenCodeReviewChangesPillVariant.LatestTurn,
                 changedFileCount = 1,
+                additions = 12,
+                deletions = 3,
                 onClick = { clickCount += 1 },
             )
             OpenCodeReviewChangesPill(
                 variant = OpenCodeReviewChangesPillVariant.LatestTurn,
                 changedFileCount = 4,
+                additions = 0,
+                deletions = 0,
                 enabled = false,
                 onClick = { clickCount += 1 },
             )
         }
 
         composeTestRule
-            .onNodeWithContentDescription("Review 1 changed file")
+            .onNodeWithContentDescription("Review changes, 1 file, 12 additions, 3 deletions")
             .assertIsDisplayed()
             .assertIsEnabled()
             .performClick()
         composeTestRule
-            .onNodeWithContentDescription("Review 4 changed files")
+            .onNodeWithContentDescription("Review changes, 4 files")
             .assertIsDisplayed()
             .assertIsNotEnabled()
             .performClick()

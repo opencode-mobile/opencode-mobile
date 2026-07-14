@@ -292,8 +292,6 @@ same compact raised geometry.
 | `reviewChangesPill.minHeight` | 36 (logical px; enforced via vertical padding) |
 | `reviewChangesPill.paddingHorizontal` | 14 (logical px) |
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
-| `reviewChangesPill.iconSize` | 16 (logical px) |
-| `reviewChangesPill.iconSpacing` | 6 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px) |
 
 ### Unified diff

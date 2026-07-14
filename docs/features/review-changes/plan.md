@@ -121,8 +121,9 @@ perform mutations.
 
 ## Design-System Components Needed
 
-- New `OpenCodeReviewChangesPill`, documented in
-  `docs/design-system/components/review-changes-pill.md`.
+- Extended `OpenCodeReviewChangesPill`, documented in
+  `docs/design-system/components/review-changes-pill.md`, with a compact latest
+  turn file/addition/deletion summary and equivalent native accessibility.
 - New reusable native `OpenCodeUnifiedDiff`, documented in
   `docs/design-system/components/unified-diff.md`.
 - Reuse `OpenCodeTopBar`, `OpenCodeOverflowMenu`, `OpenCodeBottomSheet`,
@@ -143,5 +144,5 @@ perform mutations.
 - Verify filtering, selection, file/hunk navigation, context, reviewed-state
   lifecycle, horizontal scrolling, and empty/error recovery.
 - Verify pill visibility, mutual exclusion with Scroll to end, singular/plural
-  copy, navigation source, accessibility labels, and light/dark component
-  states.
+  file copy, zero-valued line-total omission, navigation source, accessibility
+  labels, semantic summary colors, and light/dark component states.
