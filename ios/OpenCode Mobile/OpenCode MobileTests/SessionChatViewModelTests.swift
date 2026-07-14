@@ -98,6 +98,60 @@ struct SessionChatViewModelTests {
         #expect(messages[0].text == "Hello")
     }
 
+    @Test func completedLatestTurnLoadsReviewChangesCountWithWorktree() async {
+        let sessionRepository = FakeChatSessionRepository(
+            sessionDiffs: [FileDiff(path: "one.swift", patch: nil, additions: 1, deletions: 0, status: .modified)]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Change it", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(id: "assistant-1", role: .assistant, text: "Done", model: nil, mode: nil, sentAtEpochMs: 2),
+            ]),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.reviewChangesFileCount == 1 }
+
+        #expect(sessionRepository.diffRequest == .init(sessionID: "ses-1", messageID: "user-1", directory: "/repo"))
+    }
+
+    @Test func failedReviewChangesCountStaysHidden() async {
+        let sessionRepository = FakeChatSessionRepository(sessionDiffError: .transport("offline"))
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Change it", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(id: "assistant-1", role: .assistant, text: "Done", model: nil, mode: nil, sentAtEpochMs: 2),
+            ]),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        await waitUntil { sessionRepository.diffRequest != nil }
+
+        #expect(viewModel.uiState.reviewChangesFileCount == nil)
+    }
+
+    @Test func activeLatestTurnDoesNotLoadReviewChangesCount() async {
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Change it", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(id: "tool-1", role: .tool, text: "Still working", model: nil, mode: nil, sentAtEpochMs: 2),
+            ]),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(sessionRepository.diffRequest == nil)
+        #expect(viewModel.uiState.reviewChangesFileCount == nil)
+    }
+
     @Test func benchmark_loadMessages_longMarkdownHistory() async {
         let messages = longMarkdownHistory()
         let detectorMs = milliseconds {
@@ -1036,25 +1090,41 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
 }
 
 private final class FakeChatSessionRepository: SessionRepository, @unchecked Sendable {
+    struct DiffRequest: Equatable {
+        let sessionID: String
+        let messageID: String?
+        let directory: String?
+    }
+
     private let sessions: [Session]
     private let pendingPermissions: [PermissionRequest]
     private let permissionResponseError: SessionError?
     private let listSessionsError: SessionError?
+    private let sessionDiffs: [FileDiff]
+    private let sessionDiffError: SessionError?
+    private let sessionStatusType: String
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
     private(set) var pendingPermissionLoads = 0
+    private(set) var diffRequest: DiffRequest?
 
     init(
         sessions: [Session] = [],
         pendingPermissions: [PermissionRequest] = [],
         permissionResponseError: SessionError? = nil,
-        listSessionsError: SessionError? = nil
+        listSessionsError: SessionError? = nil,
+        sessionDiffs: [FileDiff] = [],
+        sessionDiffError: SessionError? = nil,
+        sessionStatusType: String = "idle"
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
         self.permissionResponseError = permissionResponseError
         self.listSessionsError = listSessionsError
+        self.sessionDiffs = sessionDiffs
+        self.sessionDiffError = sessionDiffError
+        self.sessionStatusType = sessionStatusType
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
@@ -1068,7 +1138,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
-        [SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        [SessionStatus(sessionID: "ses-1", raw: ["type": sessionStatusType])]
     }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
@@ -1080,7 +1150,11 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func abortSession(id: String, directory: String?) async throws -> Bool { fatalError() }
     func shareSession(id: String) async throws -> Session { fatalError() }
     func unshareSession(id: String) async throws -> Session { fatalError() }
-    func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] { fatalError() }
+    func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
+        diffRequest = DiffRequest(sessionID: id, messageID: messageID, directory: directory)
+        if let sessionDiffError { throw sessionDiffError }
+        return sessionDiffs
+    }
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
     func unrevertSession(id: String) async throws -> Bool { fatalError() }

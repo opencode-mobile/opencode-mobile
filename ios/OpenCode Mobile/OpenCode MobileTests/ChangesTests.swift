@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import OpenCode_Mobile
 
@@ -354,6 +355,42 @@ struct ChangesViewModelTests {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
         state.messages = [row("user-1", role: .user), row("assistant", role: .assistant), row("pending", role: .user, pending: true)]
         #expect(state.changesNavigationTarget(worktree: "/repo") == ChangesNavigationTarget(sessionID: "s", worktree: "/repo", messageID: "user-1"))
+    }
+
+    @Test func reviewChangesPillUsesLatestCompletedTurnAndLastTurnSource() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.messages = [row("user-1", role: .user), row("assistant", role: .assistant)]
+        state.reviewChangesMessageID = "user-1"
+        state.reviewChangesFileCount = 2
+
+        #expect(
+            state.reviewChangesNavigationTarget(worktree: "/repo") ==
+                ChangesNavigationTarget(sessionID: "s", worktree: "/repo", messageID: "user-1", initialSource: .lastTurn)
+        )
+    }
+
+    @Test func reviewChangesPillHidesForPendingLatestTurnOrUnavailableCount() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.messages = [row("user-1", role: .user), row("assistant", role: .assistant), row("user-2", role: .user, pending: true)]
+        state.reviewChangesFileCount = 3
+
+        #expect(state.reviewChangesNavigationTarget(worktree: "/repo") == nil)
+        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: nil, isPinnedToEnd: true, showScrollToEnd: false) == false)
+        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: 3, isPinnedToEnd: false, showScrollToEnd: true) == false)
+        #expect(ReviewChangesPillVisibility.shouldShow(fileCount: 3, isPinnedToEnd: true, showScrollToEnd: false))
+    }
+
+    @Test func reviewChangesPillPluralizesAccessibleLabel() {
+        #expect(OpenCodeReviewChangesPill.label(changedFileCount: 1) == "Review 1 changed file")
+        #expect(OpenCodeReviewChangesPill.label(changedFileCount: 4) == "Review 4 changed files")
+    }
+
+    @Test func reviewChangesPillPreviewMatrixCoversLightAndDarkStates() {
+        let cases = ReviewChangesPillPreviewCase.allCases
+        #expect(cases.count == 6)
+        #expect(Set(cases.map(\.colorScheme)) == Set([.light, .dark]))
+        #expect(Set(cases.map(\.enabled)) == Set([true, false]))
+        #expect(Set(cases.map(\.changedFileCount)) == Set([1, 4]))
     }
 
     private func loadedViewModel(_ paths: String...) async -> ChangesViewModel {

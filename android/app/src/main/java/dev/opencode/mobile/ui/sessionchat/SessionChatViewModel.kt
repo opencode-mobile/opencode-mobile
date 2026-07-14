@@ -20,6 +20,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
 import kotlinx.coroutines.CoroutineDispatcher
@@ -50,6 +51,7 @@ class SessionChatViewModel
                 field = value
                 timeline.ioDispatcher = value
                 composer.ioDispatcher = value
+                reviewChanges.ioDispatcher = value
             }
 
         private val timeline =
@@ -74,6 +76,11 @@ class SessionChatViewModel
                 eventDomainAdapter = eventDomainAdapter,
                 scope = viewModelScope,
             )
+        private val reviewChanges =
+            SessionChatReviewChanges(
+                sessionRepository = sessionRepository,
+                scope = viewModelScope,
+            )
 
         private val _uiState =
             MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
@@ -88,16 +95,26 @@ class SessionChatViewModel
         private var permissionError: String? = null
         private var permissionTopologyError: String? = null
         private var permissionObservationJob: kotlinx.coroutines.Job? = null
-
         init {
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
             viewModelScope.launch {
-                combine(timeline.state, composer.state, sessionInfo.state) { timelineState, composerState, infoState ->
-                    Triple(timelineState, composerState, infoState)
-                }.collect { (timelineState, composerState, infoState) ->
+                combine(
+                    timeline.state,
+                    composer.state,
+                    sessionInfo.state,
+                    reviewChanges.state,
+                ) { timelineState, composerState, infoState, reviewChangesState ->
+                    SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState)
+                }.collect { (timelineState, composerState, infoState, reviewChangesState) ->
                     composer.tryApplyInitialSelection(timelineState, timeline.latestModelHint())
-                    _uiState.value = mergeUiState(timelineState, composerState, infoState)
+                    reviewChanges.updateCandidate(
+                        messages = timelineState.messages,
+                        hasResolvedSessionStatus = infoState.hasResolvedSessionStatus,
+                        isTurnActive = infoState.sessionStatusLabel != null,
+                        isSending = composerState.isSending,
+                    )
+                    publishUiState(timelineState, composerState, infoState, reviewChangesState)
                 }
             }
         }
@@ -121,6 +138,7 @@ class SessionChatViewModel
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             sessionInfo.bind(sessionId, sessionTitle, worktree)
+            reviewChanges.bind(sessionId, worktree)
             observePermissions(sessionId, worktree)
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -274,13 +292,28 @@ class SessionChatViewModel
         ): SessionChatMessageItem = timeline.toMessageItem(message, previous)
 
         private fun publishUiState() {
-            _uiState.value = mergeUiState(timeline.state.value, composer.state.value, sessionInfo.state.value)
+            publishUiState(
+                timeline.state.value,
+                composer.state.value,
+                sessionInfo.state.value,
+                reviewChanges.state.value,
+            )
+        }
+
+        private fun publishUiState(
+            timelineState: SessionChatTimelineRegionState,
+            composerState: SessionChatComposerRegionState,
+            infoState: SessionInfoRegionState,
+            reviewChangesState: SessionChatReviewChangesRegionState,
+        ) {
+            _uiState.value = mergeUiState(timelineState, composerState, infoState, reviewChangesState)
         }
 
         private fun mergeUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
             infoState: SessionInfoRegionState,
+            reviewChangesState: SessionChatReviewChangesRegionState,
         ): SessionChatUiState {
             val errorMessage =
                 when {
@@ -312,6 +345,8 @@ class SessionChatViewModel
                 permissionQueueCount = permissionRequests.size,
                 permissionSubmitting = permissionSubmittingId != null,
                 permissionErrorMessage = permissionError ?: permissionTopologyError,
+                reviewChangesMessageId = reviewChangesState.messageId,
+                reviewChangesFileCount = reviewChangesState.fileCount,
             )
         }
 
@@ -330,6 +365,13 @@ private object EmptyPermissionLiveStore : PermissionLiveStore {
     override fun observePermissions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<PermissionRequest>())
     override fun clearCache() = Unit
 }
+
+private data class SessionChatCombinedState(
+    val timeline: SessionChatTimelineRegionState,
+    val composer: SessionChatComposerRegionState,
+    val info: SessionInfoRegionState,
+    val reviewChanges: SessionChatReviewChangesRegionState,
+)
 
 internal fun orderedPermissionRequests(
     rootSessionId: String,

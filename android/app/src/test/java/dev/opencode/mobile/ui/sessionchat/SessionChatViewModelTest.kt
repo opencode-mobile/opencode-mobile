@@ -23,6 +23,8 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.session.FileDiff
+import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
@@ -188,6 +190,118 @@ class SessionChatViewModelTest {
             assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertEquals(1, state.messages.size)
             assertEquals("Hello", state.messages.first().text)
+        }
+
+    @Test
+    fun completedLatestTurnLoadsReviewChangesCountWithWorktree() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionDiffs =
+                        listOf(
+                            FileDiff(
+                                path = "one.kt",
+                                patch = null,
+                                additions = 1,
+                                deletions = 0,
+                                status = FileDiffStatus.Modified,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
+                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.reviewChangesFileCount)
+            assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+        }
+
+    @Test
+    fun failedReviewChangesCountStaysHidden() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionDiffError = SessionError.Transport(IllegalStateException("offline")),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
+                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.reviewChangesFileCount)
+            assertEquals(FakeSessionRepository.DiffRequest("ses-1", "user-1", "/repo"), sessionRepository.diffRequest)
+        }
+
+    @Test
+    fun activeLatestTurnDoesNotLoadReviewChangesCount() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
+                                    Message(id = "tool-1", role = MessageRole.Tool, text = "Still working", sentAtEpochMs = 2),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.diffRequest)
+            assertEquals(null, viewModel.uiState.value.reviewChangesFileCount)
+        }
+
+    @Test
+    fun unresolvedStatusDoesNotLoadReviewChangesCount() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(sessionStatusError = SessionError.Transport(IllegalStateException("offline")))
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
+                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Partial", sentAtEpochMs = 2),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.diffRequest)
+            assertEquals(null, viewModel.uiState.value.reviewChangesFileCount)
         }
 
     @Test
@@ -1323,12 +1437,24 @@ private class FakeSessionRepository(
     private val pendingPermissions: List<PermissionRequest> = emptyList(),
     private val permissionResponseError: SessionError? = null,
     private val listSessionsError: Throwable? = null,
+    private val sessionDiffs: List<FileDiff> = emptyList(),
+    private val sessionDiffError: SessionError? = null,
+    private val sessionStatusType: String = "idle",
+    private val sessionStatusError: SessionError? = null,
 ) : SessionRepository {
+    data class DiffRequest(
+        val sessionId: String,
+        val messageId: String?,
+        val directory: String?,
+    )
+
     var pendingPermissionLoads: Int = 0
         private set
     var respondedPermissionId: String? = null
         private set
     var respondedSessionId: String? = null
+        private set
+    var diffRequest: DiffRequest? = null
         private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
@@ -1347,8 +1473,10 @@ private class FakeSessionRepository(
         directory: String?,
     ) = error("unused")
 
-    override suspend fun getAllSessionStatuses(directory: String?) =
-        listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "idle")))
+    override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
+        sessionStatusError?.let { throw it }
+        return listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to sessionStatusType)))
+    }
 
     override suspend fun getSession(
         id: String,
@@ -1409,7 +1537,11 @@ private class FakeSessionRepository(
         id: String,
         messageId: String?,
         directory: String?,
-    ) = error("unused")
+    ): List<FileDiff> {
+        diffRequest = DiffRequest(id, messageId, directory)
+        sessionDiffError?.let { throw it }
+        return sessionDiffs
+    }
 
     override suspend fun summarizeSession(
         id: String,

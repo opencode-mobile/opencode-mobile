@@ -185,8 +185,9 @@
 - Decision: Session Chat Screen Models on both platforms delegate to
   `SessionChatTimeline` (message list load, live updates, markdown transform,
   optimistic rows), `SessionChatComposer` (catalog load, picker state, send,
-  abort, model-selection cache), and `SessionInfo` (session id/title, SSE
-  connection, agent status, context usage). `SessionChatViewModel` remains a
+  abort, model-selection cache), `SessionInfo` (session id/title, SSE
+  connection, agent status, context usage), and `SessionChatReviewChanges`
+  (completed-turn eligibility and worktree-scoped diff count). `SessionChatViewModel` remains a
   **thin facade**: `bind()` orchestration, composite `SessionChatUiState` via
   `mergeUiState()`, and explicit cross-region wiring (for example
   `sendPrompt` callbacks).
@@ -213,6 +214,7 @@
   | `SessionChatTimeline` | Message load/refresh, live observation, markdown rows, optimistic send merge |
   | `SessionChatComposer` | Catalog, picker state, send/abort, `SessionModelSelectionStore` read/write |
   | `SessionInfo` | Session id/title, SSE connection, agent status, context usage |
+  | `SessionChatReviewChanges` | Completed-turn eligibility, diff-count lifecycle, request diagnostics |
   | `SessionChatViewModel` | `bind()` orchestration, `mergeUiState()`, minimal cross-region callbacks |
 
 - **Allowed in the facade**

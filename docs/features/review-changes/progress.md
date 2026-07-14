@@ -7,16 +7,15 @@
 
 ## Design System
 
-- Status: Unified Diff is implemented as a practical review component and
-  registered in both Component Galleries; Review Changes Pill remains planned
-  under OPE-38.
+- Status: Unified Diff and Review Changes Pill are implemented and registered
+  in both Component Galleries with interactive and native preview states.
 - New dependencies: Review Changes Pill and Unified Diff.
 - Reused: top bar, overflow menu, bottom sheet, list item, button, semantic diff
   and syntax tokens, and existing typography roles.
 
 ## iOS
 
-- Status: OPE-35, OPE-36, OPE-37, and OPE-39 complete.
+- Status: OPE-35 through OPE-39 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -36,10 +35,15 @@
   source selection, retry, or explicit refresh. Non-Git projects and servers
   without VCS endpoints fall back to Last turn; transient failures stay
   retryable.
+- Session Chat requests a worktree-scoped diff count only after the latest user
+  turn completes. A positive result shows the Review Changes Pill only while
+  the timeline is pinned to its end; pending, empty, and failed results keep it
+  hidden. The pill is mutually exclusive with Scroll to end and opens Last
+  turn with the captured completed-user-message identifier.
 
 ## Android
 
-- Status: OPE-35, OPE-36, OPE-37, and OPE-39 complete.
+- Status: OPE-35 through OPE-39 complete.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -59,18 +63,26 @@
   source selection, retry, or explicit refresh. Non-Git projects and servers
   without VCS endpoints fall back to Last turn; transient failures stay
   retryable.
+- Session Chat requests a worktree-scoped diff count only after the latest user
+  turn completes. A positive result shows the Review Changes Pill only while
+  the timeline is pinned to its end; pending, empty, and failed results keep it
+  hidden. The pill is mutually exclusive with Scroll to end and opens Last
+  turn with the captured completed-user-message identifier.
 
 ## Blockers
 
-- Implementation tickets must follow the dependency order below.
-- No external product decision is blocking the accepted scope.
+- None.
 
 ## Remaining Work
 
-- [`OPE-38`](https://linear.app/opencode-mobile/issue/OPE-38) — Surface the
-  completed-turn Review changes pill.
+- No remaining implementation work in the current Review Changes slice.
 
 ## Completed Work
+
+- [`OPE-38`](https://linear.app/opencode-mobile/issue/OPE-38) — Add the
+  completed-turn Review Changes Pill component, count loading, visibility and
+  mutual-exclusion gates, Last turn navigation, galleries, previews,
+  accessibility, and automated coverage on iOS and Android.
 
 - [`OPE-37`](https://linear.app/opencode-mobile/issue/OPE-37) — Add
   worktree-scoped VCS metadata and diff clients, Working tree and conditional

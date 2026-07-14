@@ -14,6 +14,7 @@ final class SessionChatViewModel {
     private let timeline: SessionChatTimeline
     private let composer: SessionChatComposer
     private let sessionInfo: SessionInfo
+    private let reviewChanges: SessionChatReviewChanges
     private let sessionRepository: any SessionRepository
     private let permissionLiveStore: any PermissionLiveStore
     private var permissionTask: Task<Void, Never>?
@@ -22,7 +23,6 @@ final class SessionChatViewModel {
     private var permissionSubmittingID: String?
     private var permissionError: String?
     private var permissionTopologyError: String?
-
     init(
         sessionID: String,
         sessionTitle: String,
@@ -62,11 +62,17 @@ final class SessionChatViewModel {
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: foregroundEventStream
         )
+        self.reviewChanges = SessionChatReviewChanges(
+            sessionID: sessionID,
+            worktree: worktree,
+            sessionRepository: sessionRepository
+        )
         OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
         composer.onChange = { [weak self] in self?.publishUiState() }
         sessionInfo.onChange = { [weak self] in self?.publishUiState() }
+        reviewChanges.onChange = { [weak self] in self?.publishUiState() }
         publishUiState()
     }
 
@@ -242,6 +248,7 @@ final class SessionChatViewModel {
         timeline.stopObserving()
         sessionInfo.stopObserving()
         permissionTask?.cancel()
+        reviewChanges.stop()
     }
 
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
@@ -263,6 +270,13 @@ final class SessionChatViewModel {
             timelineState: timelineState,
             messageHint: timeline.latestModelHint()
         )
+        reviewChanges.updateCandidate(
+            messages: timelineState.messages,
+            hasResolvedSessionStatus: infoState.hasResolvedSessionStatus,
+            isTurnActive: infoState.sessionStatusLabel != nil,
+            isSending: composerState.isSending
+        )
+        let reviewChangesState = reviewChanges.state
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -286,7 +300,9 @@ final class SessionChatViewModel {
             permissionRequest: permissionRequests.first,
             permissionQueueCount: permissionRequests.count,
             permissionSubmitting: permissionSubmittingID != nil,
-            permissionErrorMessage: permissionError ?? permissionTopologyError
+            permissionErrorMessage: permissionError ?? permissionTopologyError,
+            reviewChangesMessageID: reviewChangesState.messageID,
+            reviewChangesFileCount: reviewChangesState.fileCount
         )
     }
 

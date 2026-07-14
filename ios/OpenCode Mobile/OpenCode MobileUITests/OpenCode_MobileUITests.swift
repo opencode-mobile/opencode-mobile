@@ -59,6 +59,22 @@ final class OpenCode_MobileUITests: XCTestCase {
     }
 
     @MainActor
+    func testReviewChangesPillAccessibilityAndDisabledBehavior() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] = "1"
+        app.launch()
+
+        let singular = app.buttons["Review 1 changed file"]
+        XCTAssertTrue(singular.waitForExistence(timeout: 10))
+        singular.tap()
+        XCTAssertTrue(app.staticTexts["Review changes tapped"].waitForExistence(timeout: 5))
+
+        let disabled = app.buttons["Review 4 changed files"]
+        XCTAssertTrue(disabled.waitForExistence(timeout: 5))
+        XCTAssertFalse(disabled.isEnabled)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()

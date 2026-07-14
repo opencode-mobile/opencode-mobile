@@ -1,6 +1,5 @@
 package dev.opencode.mobile.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
@@ -10,7 +9,7 @@ import androidx.compose.ui.graphics.Color
  */
 @Composable
 fun openCodeColor(token: String): Color {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalOpenCodeDarkTheme.current
     val hex = if (isDark) ThemeManager.resolvedDark[token] else ThemeManager.resolvedLight[token]
     return ThemeResolver.parseHexColor(hex)
 }

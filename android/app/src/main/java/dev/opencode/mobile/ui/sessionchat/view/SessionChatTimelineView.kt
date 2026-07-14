@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,11 +31,15 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
+import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
+import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListScrollToEndOverlay
+import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
+import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.displayLabel
@@ -42,7 +49,9 @@ internal data class SessionChatTimelineViewProps(
     val messages: List<SessionChatMessageItem>,
     val isRefreshing: Boolean,
     val errorMessage: String?,
+    val reviewChangesFileCount: Int?,
     val onRefresh: () -> Unit,
+    val onReviewChangesClick: () -> Unit,
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
 )
 
@@ -90,7 +99,9 @@ internal fun SessionChatTimelineView(
             SessionChatTimelineReadyView(
                 messages = props.messages,
                 isRefreshing = props.isRefreshing,
+                reviewChangesFileCount = props.reviewChangesFileCount,
                 onRefresh = props.onRefresh,
+                onReviewChangesClick = props.onReviewChangesClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 modifier = modifier,
             )
@@ -103,7 +114,9 @@ internal fun SessionChatTimelineView(
 private fun SessionChatTimelineReadyView(
     messages: List<SessionChatMessageItem>,
     isRefreshing: Boolean,
+    reviewChangesFileCount: Int?,
     onRefresh: () -> Unit,
+    onReviewChangesClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -151,6 +164,30 @@ private fun SessionChatTimelineReadyView(
             },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        val showReviewChanges =
+            ReviewChangesPillVisibility.shouldShow(
+                fileCount = reviewChangesFileCount,
+                isPinnedToEnd = timeline.isPinnedToEnd,
+                showScrollToEnd = timeline.showScrollToEnd,
+            )
+        AnimatedVisibility(
+            visible = showReviewChanges,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = MessageListTimelineDefaults.scrollToEndPillBottomPadding),
+        ) {
+            reviewChangesFileCount?.let { fileCount ->
+                OpenCodeReviewChangesPill(
+                    variant = OpenCodeReviewChangesPillVariant.LatestTurn,
+                    changedFileCount = fileCount,
+                    onClick = onReviewChangesClick,
+                )
+            }
+        }
     }
 }
 

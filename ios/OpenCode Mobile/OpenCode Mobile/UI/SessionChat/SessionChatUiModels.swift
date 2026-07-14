@@ -76,6 +76,8 @@ struct SessionChatUiState: Equatable {
     var permissionQueueCount: Int = 0
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
+    var reviewChangesMessageID: String?
+    var reviewChangesFileCount: Int?
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -99,6 +101,16 @@ struct SessionChatUiState: Equatable {
         )
     }
 
+    func reviewChangesNavigationTarget(worktree: String) -> ChangesNavigationTarget? {
+        guard reviewChangesFileCount ?? 0 > 0, let messageID = reviewChangesMessageID else { return nil }
+        return ChangesNavigationTarget(
+            sessionID: sessionID,
+            worktree: worktree,
+            messageID: messageID,
+            initialSource: .lastTurn
+        )
+    }
+
     static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
         SessionChatUiState(
             sessionID: sessionID,
@@ -114,6 +126,12 @@ struct SessionChatUiState: Equatable {
                 modelNotice: nil
             )
         )
+    }
+}
+
+enum ReviewChangesPillVisibility {
+    static func shouldShow(fileCount: Int?, isPinnedToEnd: Bool, showScrollToEnd: Bool) -> Bool {
+        (fileCount ?? 0) > 0 && isPinnedToEnd && !showScrollToEnd
     }
 }
 
@@ -157,7 +175,13 @@ struct SessionInfoRegionState: Equatable {
     var sessionID: String = ""
     var sessionTitle: String = ""
     var sessionStatusLabel: String?
+    var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
+}
+
+struct SessionChatReviewChangesRegionState: Equatable {
+    var messageID: String?
+    var fileCount: Int?
 }
 
 struct LatestModelHint: Equatable {

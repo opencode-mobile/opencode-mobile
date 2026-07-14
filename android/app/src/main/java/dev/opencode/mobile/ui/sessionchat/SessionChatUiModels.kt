@@ -47,6 +47,8 @@ data class SessionChatUiState(
     val permissionQueueCount: Int = 0,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
+    val reviewChangesMessageId: String? = null,
+    val reviewChangesFileCount: Int? = null,
 ) {
     val latestCompletedUserMessageId: String?
         get() {
@@ -70,6 +72,17 @@ data class SessionChatUiState(
             initialSource = ChangeSource.WorkingTree,
         )
 
+    fun reviewChangesNavigationTarget(worktree: String): ChangesNavigationTarget? {
+        val messageId = reviewChangesMessageId ?: return null
+        if ((reviewChangesFileCount ?: 0) <= 0) return null
+        return ChangesNavigationTarget(
+            sessionId = sessionId,
+            worktree = worktree,
+            messageId = messageId,
+            initialSource = ChangeSource.LastTurn,
+        )
+    }
+
     companion object {
         fun initial(
             sessionId: String,
@@ -81,6 +94,14 @@ data class SessionChatUiState(
                 timeline = SessionChatTimelineState.Loading,
             )
     }
+}
+
+object ReviewChangesPillVisibility {
+    fun shouldShow(
+        fileCount: Int?,
+        isPinnedToEnd: Boolean,
+        showScrollToEnd: Boolean,
+    ): Boolean = (fileCount ?: 0) > 0 && isPinnedToEnd && !showScrollToEnd
 }
 
 data class ChangesNavigationTarget(
@@ -109,7 +130,13 @@ data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
     val sessionStatusLabel: String? = null,
+    val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+)
+
+data class SessionChatReviewChangesRegionState(
+    val messageId: String? = null,
+    val fileCount: Int? = null,
 )
 
 data class LatestModelHint(
