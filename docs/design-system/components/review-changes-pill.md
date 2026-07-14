@@ -47,7 +47,8 @@ its end. It is mutually exclusive with Scroll to end.
 
 The enabled file summary uses `text-strong`, additions use `diff-add`, and
 deletions use `diff-delete`. Disabled content uses the existing disabled text
-treatment. The pill has no leading icon.
+treatment. The pill has no leading icon. Its summary is vertically centered
+within the capsule on both platforms.
 
 Accessibility identifies the control as the Review changes action and speaks
 the visible totals using pluralized phrases, for example `Review changes, 5
@@ -59,7 +60,8 @@ semantic surface mapping.
 
 - iOS: native SwiftUI `Button` with a capsule surface and light shadow.
 - Android: Material 3 clickable `Surface` with capsule shape, border, and
-  elevation.
+  elevation. A centered inner content container owns the minimum height so
+  font metrics cannot top-align the summary within the capsule.
 
 ## Review Surfaces
 

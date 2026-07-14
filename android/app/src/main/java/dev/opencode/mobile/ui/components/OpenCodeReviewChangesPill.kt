@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -135,7 +137,6 @@ fun OpenCodeReviewChangesPill(
         enabled = enabled,
         modifier =
             modifier
-                .defaultMinSize(minHeight = 36.dp)
                 .semantics { contentDescription = summary.accessibilityLabel },
         shape = ReviewChangesPillShape,
         color = containerColor,
@@ -144,23 +145,30 @@ fun OpenCodeReviewChangesPill(
         shadowElevation = if (enabled) 4.dp else 0.dp,
         interactionSource = interactionSource,
     ) {
-        Text(
-            text =
-                buildAnnotatedString {
-                    append(summary.fileLabel)
-                    summary.additionLabel?.let {
-                        append("  ")
-                        withStyle(SpanStyle(color = additionsColor)) { append(it) }
-                    }
-                    summary.deletionLabel?.let {
-                        append("  ")
-                        withStyle(SpanStyle(color = deletionsColor)) { append(it) }
-                    }
-                },
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = contentColor,
-        )
+        Box(
+            modifier =
+                Modifier
+                    .defaultMinSize(minHeight = 36.dp)
+                    .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text =
+                    buildAnnotatedString {
+                        append(summary.fileLabel)
+                        summary.additionLabel?.let {
+                            append("  ")
+                            withStyle(SpanStyle(color = additionsColor)) { append(it) }
+                        }
+                        summary.deletionLabel?.let {
+                            append("  ")
+                            withStyle(SpanStyle(color = deletionsColor)) { append(it) }
+                        }
+                    },
+                style = MaterialTheme.typography.labelLarge,
+                color = contentColor,
+            )
+        }
     }
 }
 
