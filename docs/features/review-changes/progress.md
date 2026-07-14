@@ -4,6 +4,8 @@
 
 - Status: accepted and documented.
 - Linear parent: `OPE-25` Session Diff Viewer.
+- Follow-up fixes: `OPE-43` Session Diff Viewer fixes and improvements is
+  active.
 
 ## Design System
 
@@ -19,7 +21,10 @@
 
 ## iOS
 
-- Status: OPE-35 through OPE-41 complete.
+- Status: OPE-35 through OPE-41 complete; OPE-43 follow-up fixes are active.
+- OPE-43 suppresses Scroll to end while its programmatic animation is active,
+  so activating the pill dismisses it immediately and it stays hidden as the
+  timeline reaches its end.
 - Session diffs decode into structured file models, Last turn loads are scoped
   by captured user message and worktree, and Session Chat navigates to a native
   Changes screen that presents one path-sorted file at a time.
@@ -89,7 +94,9 @@
 
 ## Remaining Work
 
-- None in the current Review Changes slice.
+- [`OPE-43`](https://linear.app/opencode-mobile/issue/OPE-43) remains active as
+  the general bucket for additional verified Session Diff Viewer fixes and
+  improvements.
 
 ## Completed Work
 

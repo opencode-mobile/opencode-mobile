@@ -1,5 +1,8 @@
 import SwiftUI
 
+private let messageListScrollAnimationDuration = 0.2
+private let messageListScrollAnimationSettleMilliseconds = 200
+
 enum MessageListTimelineDefaults {
     static let bottomAnchorHeight: CGFloat = 1
     static let pinnedTolerance: CGFloat = 8
@@ -45,7 +48,11 @@ final class MessageListTimelineState {
     }
 
     func shouldShowScrollToEnd(messageCount: Int) -> Bool {
-        guard messageCount > 0, isScrollable(messageCount: messageCount) else { return false }
+        guard
+            messageCount > 0,
+            isScrollable(messageCount: messageCount),
+            !isProgrammaticScrolling
+        else { return false }
 
         if #available(iOS 18, *) {
             return ScrollToEndVisibility.shouldShow(
@@ -123,15 +130,16 @@ final class MessageListTimelineState {
         Task { @MainActor in
             await Task.yield()
             if let scrollTargetID, scrollTargetID != bottomAnchorID {
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAnimation(.easeOut(duration: messageListScrollAnimationDuration)) {
                     scrollPositionID = scrollTargetID
                 }
                 await Task.yield()
                 await Task.yield()
             }
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(.easeOut(duration: messageListScrollAnimationDuration)) {
                 scrollPositionID = bottomAnchorID
             }
+            try? await Task.sleep(for: .milliseconds(messageListScrollAnimationSettleMilliseconds))
             await Task.yield()
             await Task.yield()
             isProgrammaticScrolling = false
