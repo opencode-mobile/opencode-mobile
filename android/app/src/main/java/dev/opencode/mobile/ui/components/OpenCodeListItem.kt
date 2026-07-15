@@ -25,14 +25,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
+import dev.opencode.mobile.theme.openCodeColor
 
 private val ListItemStartDecoratorSize = 24.dp
 private val ListItemLetterBadgeCornerRadius = 4.dp
@@ -43,10 +47,22 @@ enum class OpenCodeListItemStyle {
     Card,
 }
 
+enum class OpenCodeListItemSubtitleTone {
+    Secondary,
+    Addition,
+    Deletion,
+}
+
+data class OpenCodeListItemSubtitleSegment(
+    val text: String,
+    val tone: OpenCodeListItemSubtitleTone,
+)
+
 @Composable
 fun OpenCodeListItem(
     title: String,
     subtitle: String? = null,
+    subtitleSegments: List<OpenCodeListItemSubtitleSegment>? = null,
     selected: Boolean = false,
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
@@ -55,6 +71,9 @@ fun OpenCodeListItem(
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    require(subtitle == null || subtitleSegments == null) {
+        "List Item accepts either a plain subtitle or semantic segments"
+    }
     val containerColor =
         when {
             style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
@@ -106,7 +125,30 @@ fun OpenCodeListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle != null) {
+                if (subtitleSegments != null) {
+                    val disabledColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    Text(
+                        text =
+                            buildAnnotatedString {
+                                subtitleSegments.forEach { segment ->
+                                    val color =
+                                        if (!enabled) {
+                                            disabledColor
+                                        } else {
+                                            when (segment.tone) {
+                                                OpenCodeListItemSubtitleTone.Secondary -> disabledColor
+                                                OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
+                                                OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
+                                            }
+                                        }
+                                    withStyle(SpanStyle(color = color)) { append(segment.text) }
+                                }
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else if (subtitle != null) {
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
@@ -182,6 +224,23 @@ private fun OpenCodeListItemPreview() {
         OpenCodeListItem(
             title = "Material Design Icons integration plan",
             subtitle = "http://127.0.0.1:4096/",
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeListItemSemanticSubtitlePreview() {
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeListItem(
+            title = "contact.html",
+            subtitleSegments =
+                listOf(
+                    OpenCodeListItemSubtitleSegment("Modified · ", OpenCodeListItemSubtitleTone.Secondary),
+                    OpenCodeListItemSubtitleSegment("+51", OpenCodeListItemSubtitleTone.Addition),
+                    OpenCodeListItemSubtitleSegment(" ", OpenCodeListItemSubtitleTone.Secondary),
+                    OpenCodeListItemSubtitleSegment("−7", OpenCodeListItemSubtitleTone.Deletion),
+                ),
         )
     }
 }

@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -35,31 +37,46 @@ enum class OpenCodeTextInputSubmitAction {
 
 @Composable
 fun OpenCodeTextInput(
-    label: String,
+    label: String? = null,
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
+    accessibilityLabel: String? = null,
     kind: OpenCodeTextInputKind = OpenCodeTextInputKind.Text,
     enabled: Boolean = true,
     errorMessage: String? = null,
     submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
 ) {
+    val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(label, accessibilityLabel)
+    requireNotNull(resolvedAccessibilityLabel) {
+        "OpenCodeTextInput requires a visible label or a non-blank accessibilityLabel"
+    }
     val focusManager = LocalFocusManager.current
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
-        )
-        Spacer(modifier = Modifier.height(6.dp))
+        label?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = resolvedAccessibilityLabel },
             enabled = enabled,
             singleLine = true,
-            placeholder = if (placeholder.isEmpty()) null else { { Text(placeholder) } },
+            placeholder =
+                if (placeholder.isEmpty()) {
+                    null
+                } else {
+                    { Text(placeholder) }
+                },
             isError = errorMessage != null,
             supportingText =
                 errorMessage?.let { message ->
@@ -67,7 +84,14 @@ fun OpenCodeTextInput(
                 },
             textStyle = MaterialTheme.typography.bodyLarge,
             shape = RoundedCornerShape(8.dp),
-            visualTransformation = if (kind == OpenCodeTextInputKind.Password) PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation =
+                if (kind ==
+                    OpenCodeTextInputKind.Password
+                ) {
+                    PasswordVisualTransformation()
+                } else {
+                    VisualTransformation.None
+                },
             keyboardOptions =
                 KeyboardOptions(
                     imeAction = if (submitAction == OpenCodeTextInputSubmitAction.Next) ImeAction.Next else ImeAction.Done,
@@ -96,3 +120,8 @@ fun OpenCodeTextInput(
         )
     }
 }
+
+internal fun resolveOpenCodeTextInputAccessibilityLabel(
+    label: String?,
+    accessibilityLabel: String?,
+): String? = accessibilityLabel?.takeIf { it.isNotBlank() } ?: label?.takeIf { it.isNotBlank() }

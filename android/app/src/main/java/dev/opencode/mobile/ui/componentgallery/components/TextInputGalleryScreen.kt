@@ -21,6 +21,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
     var kindName by rememberSaveable { mutableStateOf(OpenCodeTextInputKind.Url.name) }
     var enabled by rememberSaveable { mutableStateOf(true) }
     var showsError by rememberSaveable { mutableStateOf(false) }
+    var showsLabel by rememberSaveable { mutableStateOf(true) }
     val kind = OpenCodeTextInputKind.valueOf(kindName)
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -39,12 +40,14 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
             OpenCodeChoiceBadge(label = "Error", selected = showsError, onClick = { showsError = !showsError })
+            OpenCodeChoiceBadge(label = "Label", selected = showsLabel, onClick = { showsLabel = !showsLabel })
         }
         OpenCodeTextInput(
-            label = kind.fieldLabel,
+            label = kind.fieldLabel.takeIf { showsLabel },
             value = value,
             onValueChange = { value = it },
             placeholder = kind.placeholder,
+            accessibilityLabel = kind.fieldLabel.takeUnless { showsLabel },
             kind = kind,
             enabled = enabled,
             errorMessage = if (showsError) "Enter a valid ${kind.fieldLabel.lowercase()}" else null,

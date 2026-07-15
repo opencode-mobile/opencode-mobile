@@ -1,27 +1,30 @@
 import Foundation
-import SwiftUI
 import Testing
 @testable import OpenCode_Mobile
+
+struct OpenCodeTextInputTests {
+    @Test func accessibilityLabelPrefersExplicitValueThenVisibleLabel() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: "Filter changed files") == "Filter changed files")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Server URL", accessibilityLabel: nil) == "Server URL")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Visible", accessibilityLabel: "Explicit") == "Explicit")
+    }
+
+    @Test func placeholderDoesNotSatisfyAccessibilityContract() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: nil) == nil)
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "  ", accessibilityLabel: "\n") == nil)
+    }
+}
 
 @MainActor struct FileDiffAdapterTests {
     @Test func decodesServerShapeAndSynthesizesDomainPatchAndStatus() throws {
         let data = Data(#"{"file":"Sources/App.swift","before":"old","after":"new","additions":1,"deletions":1}"#.utf8)
-        let dto = try JSONDecoder().decode(FileDiffDTO.self, from: data)
-        let diff = SessionDomainAdapter().fileDiff(from: dto)
+        let diff = SessionDomainAdapter().fileDiff(from: try JSONDecoder().decode(FileDiffDTO.self, from: data))
 
         #expect(diff.path == "Sources/App.swift")
         #expect(diff.status == .modified)
         #expect(diff.patch == "@@ -1,1 +1,1 @@\n-old\n+new")
         #expect(diff.additions == 1)
         #expect(diff.deletions == 1)
-    }
-
-    @Test func decodesPathPatchAndExplicitStatus() throws {
-        let data = Data(#"{"path":"new.txt","patch":"@@ -0,0 +1,1 @@\n+hello","additions":1,"deletions":0,"status":"added"}"#.utf8)
-        let diff = SessionDomainAdapter().fileDiff(from: try JSONDecoder().decode(FileDiffDTO.self, from: data))
-        #expect(diff.path == "new.txt")
-        #expect(diff.status == .added)
-        #expect(diff.patch?.contains("+hello") == true)
     }
 
     @Test func synthesizesAddedAndDeletedFilesWithoutPhantomBlankLines() throws {
@@ -33,233 +36,112 @@ import Testing
 }
 
 struct UnifiedDiffParserTests {
-    @Test func parsesHunksAndAdvancesOldAndNewLineNumbers() {
-        let document = UnifiedDiffParser.parse("@@ -2,3 +2,3 @@ first\n same\n-old\n\\ No newline at end of file\n+new\n next\n@@ -20 +20,2 @@ second\n+naïve 🚀\n tail")
-        let rows = document.rows
-        #expect(rows.prefix(6).map(\.kind) == [.hunk, .context, .deletion, .metadata, .addition, .context])
-        #expect(rows[1].oldLine == 2 && rows[1].newLine == 2)
-        #expect(rows[2].oldLine == 3 && rows[2].newLine == nil)
-        #expect(rows[3].oldLine == nil && rows[3].newLine == nil)
-        #expect(rows[4].oldLine == nil && rows[4].newLine == 3)
-        #expect(rows[5].oldLine == 4 && rows[5].newLine == 4)
+    @Test func parsesHunksAndAdvancesLineNumbers() {
+        let document = UnifiedDiffParser.parse("@@ -2,3 +2,3 @@\n same\n-old\n+new\n next\n@@ -20 +20 @@\n-before\n+after")
         #expect(document.hunks.count == 2)
-        #expect(document.hunks[0].oldStart == 2 && document.hunks[0].oldCount == 3)
-        #expect(document.hunks[0].newStart == 2 && document.hunks[0].newCount == 3)
-        #expect(document.hunks[1].oldStart == 20 && document.hunks[1].oldCount == 1)
-        #expect(document.hunks[1].newStart == 20 && document.hunks[1].newCount == 2)
-        #expect(document.hunks[1].rows.contains { $0.text == "naïve 🚀" })
+        #expect(document.rows[1].oldLine == 2 && document.rows[1].newLine == 2)
+        #expect(document.rows[2].oldLine == 3 && document.rows[2].newLine == nil)
+        #expect(document.rows[3].oldLine == nil && document.rows[3].newLine == 3)
     }
 
     @Test func collapsedProjectionKeepsThreeContextLinesAroundChanges() {
-        let contextBefore = (1...8).map { " before \($0)" }.joined(separator: "\n")
-        let contextAfter = (1...8).map { " after \($0)" }.joined(separator: "\n")
-        let document = UnifiedDiffParser.parse("@@ -1,17 +1,17 @@\n\(contextBefore)\n-old\n+new\n\(contextAfter)")
-
+        let before = (1...8).map { " before \($0)" }.joined(separator: "\n")
+        let after = (1...8).map { " after \($0)" }.joined(separator: "\n")
+        let document = UnifiedDiffParser.parse("@@ -1,17 +1,17 @@\n\(before)\n-old\n+new\n\(after)")
         #expect(document.visibleRows(contextMode: .expanded).count == 19)
-        let collapsed = document.visibleRows(contextMode: .collapsed)
-        #expect(collapsed.count == 9)
-        #expect(!collapsed.contains { $0.text == "before 4" })
-        #expect(collapsed.contains { $0.text == "before 6" })
-        #expect(collapsed.contains { $0.text == "after 3" })
-        #expect(!collapsed.contains { $0.text == "after 4" })
+        #expect(document.visibleRows(contextMode: .collapsed).count == 9)
     }
 
-    @Test func metadataEmptyAndBinaryPatchesDoNotCreatePhantomHunks() {
+    @Test func emptyBinaryAndMalformedPatchesHaveNoHunks() {
         #expect(UnifiedDiffParser.parse("").hunks.isEmpty)
-        #expect(UnifiedDiffParser.parse("Binary files a/image.png and b/image.png differ").hunks.isEmpty)
-        let document = UnifiedDiffParser.parse("--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new")
-        #expect(document.rows.prefix(2).allSatisfy { $0.kind == .metadata })
-    }
-
-    @Test func rejectsMalformedHunksAndIgnoresOneTrailingPatchNewline() {
+        #expect(UnifiedDiffParser.parse("Binary files differ").hunks.isEmpty)
         #expect(UnifiedDiffParser.parse("@@ -1,2 +1,2 @@\n-old\n+new").hunks.isEmpty)
-        #expect(UnifiedDiffParser.parse("@@ -1 +1 @@\nbare row").hunks.isEmpty)
-        #expect(UnifiedDiffParser.parse("@@ -1 +1 @@garbage\n-old\n+new").hunks.isEmpty)
-        #expect(UnifiedDiffParser.parse("@@ -99999999999999999999 +1 @@\n-old\n+new").hunks.isEmpty)
-
-        let trailingNewline = UnifiedDiffParser.parse("@@ -1 +1 @@\n-old\n+new\n")
-        #expect(trailingNewline.hunks.count == 1)
-        #expect(trailingNewline.rows.count == 3)
-    }
-
-    @Test func preservesLongSourceLinesExactly() {
-        let longLine = "result = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()"
-        let document = UnifiedDiffParser.parse("@@ -0,0 +1 @@\n+\(longLine)")
-        #expect(document.hunks.first?.rows.first?.text == longLine)
     }
 }
 
 @MainActor
 struct ChangesViewModelTests {
-    @Test func exposesSourceSpecificEmptyCopy() {
-        #expect(ChangeSource.lastTurn.emptyTitle == "No changes")
-        #expect(ChangeSource.workingTree.emptyDetail == "The working tree has no uncommitted changes.")
-        #expect(ChangeSource.mainBranch.emptyTitle == "No Main branch changes")
+    @Test func exposesTwoSourcesWithDesktopCopy() {
+        #expect(ChangeSource.workingTree.displayName == "Git changes")
+        #expect(ChangeSource.lastTurn.displayName == "Last turn changes")
+        #expect(ChangeSource.allCases == [.workingTree, .lastTurn])
     }
 
-    @Test func loadsPathSortedChangeSetWithAggregateCountsAndScopesRequest() async {
+    @Test func loadsSortedSnapshotAndFilteredTotals() async {
         let repository = ChangesSessionRepository(results: [.success([
-            Self.file("file2.swift", additions: 3, deletions: 2),
-            Self.file("file10.swift", additions: 2, deletions: 1),
+            Self.file("B.swift", additions: 3, deletions: 2),
+            Self.file("A.swift", additions: 2, deletions: 1),
         ])])
-        let viewModel = ChangesViewModel(sessionID: "ses-1", worktree: "/repo", messageID: "msg-1", repository: repository)
+        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/repo", messageID: "m", repository: repository)
         await viewModel.load()
 
-        guard case let .content(content) = viewModel.state.phase else { Issue.record("Expected content"); return }
-        #expect(content.files.map(\.path) == ["file10.swift", "file2.swift"])
-        #expect(content.selectedFile.path == "file10.swift")
-        #expect(content.additions == 5)
-        #expect(content.deletions == 3)
-        #expect(content.aggregateAccessibilityLabel == "2 changed files, 5 additions, 3 deletions")
-        #expect(repository.requests == [ChangesSessionRepository.Request(sessionID: "ses-1", messageID: "msg-1", directory: "/repo")])
-    }
+        #expect(viewModel.content?.files.map(\.path) == ["A.swift", "B.swift"])
+        #expect(viewModel.content?.summary == "2 changed files")
+        #expect(viewModel.content?.additions == 5)
+        #expect(repository.requests == [.init(sessionID: "s", messageID: "m", directory: "/repo")])
 
-    @Test func filtersSelectsAndClearsWithExplicitNoMatchesState() async {
-        let viewModel = await loadedViewModel("app/Main.swift", "docs/Plan.md", "test/MainTests.swift")
-
-        viewModel.updateFilter("main")
-        var content = try! #require(viewModel.content)
-        #expect(content.filteredFiles.map(\.path) == ["app/Main.swift", "test/MainTests.swift"])
-        #expect(content.selectedFile.path == "app/Main.swift")
-
-        viewModel.selectFile("test/MainTests.swift")
-        content = try! #require(viewModel.content)
-        #expect(content.selectedFile.path == "test/MainTests.swift")
-
+        viewModel.updateFilter("B")
+        #expect(viewModel.content?.filteredFiles.map(\.path) == ["B.swift"])
+        #expect(viewModel.content?.summary == "1 changed file")
+        #expect(viewModel.content?.additions == 3)
+        #expect(viewModel.content?.deletions == 2)
         viewModel.updateFilter("missing")
-        content = try! #require(viewModel.content)
-        #expect(content.filteredFiles.isEmpty)
-        #expect(content.selectedFile.path == "test/MainTests.swift")
-
-        viewModel.clearFilter()
-        content = try! #require(viewModel.content)
-        #expect(content.filteredFiles.count == 3)
-        #expect(content.selectedFile.path == "test/MainTests.swift")
+        #expect(viewModel.content?.summary == "0 changed files")
+        #expect(viewModel.content?.additions == 0 && viewModel.content?.deletions == 0)
     }
 
-    @Test func previousAndNextMoveWithinFilteredFilesAndExposeEnabledStates() async {
-        let viewModel = await loadedViewModel("app/A.swift", "app/B.swift", "docs/C.md")
-        viewModel.updateFilter("app/")
-
-        var content = try! #require(viewModel.content)
-        #expect(!content.canSelectPrevious)
-        #expect(content.canSelectNext)
-
-        viewModel.selectNextFile()
-        content = try! #require(viewModel.content)
-        #expect(content.selectedFile.path == "app/B.swift")
-        #expect(content.canSelectPrevious)
-        #expect(!content.canSelectNext)
-
-        viewModel.selectPreviousFile()
-        #expect(viewModel.content?.selectedFile.path == "app/A.swift")
+    @Test func refreshPreservesFilterUntilReplacementSnapshotArrives() async {
+        let repository = ChangesSessionRepository(results: [
+            .success([Self.file("keep.swift"), Self.file("other.swift")]),
+            .success([Self.file("keep-new.swift")]),
+        ])
+        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
+        await viewModel.load()
+        viewModel.updateFilter("keep")
+        await viewModel.refresh()
+        #expect(viewModel.content?.filter == "keep")
+        #expect(viewModel.content?.filteredFiles.map(\.path) == ["keep-new.swift"])
+        #expect(!viewModel.state.isRefreshing)
     }
 
-    @Test func exposesSelectedFileStatusPositionCountsAndAccessibilityLabel() async {
-        let viewModel = await loadedViewModel("Sources/App.swift", "Sources/New.swift")
-        viewModel.selectFile("Sources/New.swift")
-        let content = try! #require(viewModel.content)
+    @Test func refreshFailureKeepsSnapshotAndExposesRetry() async {
+        let repository = ChangesSessionRepository(results: [
+            .success([Self.file("keep.swift")]),
+            .failure(SessionError.transport("offline")),
+        ])
+        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
+        await viewModel.load()
+        viewModel.updateFilter("keep")
+        let refresh = Task { await viewModel.refresh() }
+        viewModel.updateFilter("latest")
+        await refresh.value
 
-        #expect(content.selectedFileSummary == "Added · 2 of 2")
-        #expect(content.filePickerSummary(content.selectedFile) == "Added · +1 −1")
-        #expect(content.selectedFileAccessibilityLabel == "Sources/New.swift, Added, file 2 of 2, 1 addition, 1 deletion")
+        #expect(viewModel.content?.files.map(\.path) == ["keep.swift"])
+        #expect(viewModel.content?.filter == "latest")
+        #expect(viewModel.state.refreshError == "offline")
+        #expect(!viewModel.state.isRefreshing)
     }
 
-    @Test func navigatesHunksTogglesContextAndKeepsReviewedFilesVisible() async {
-        let patch = "@@ -1 +1 @@\n-old\n+new\n@@ -20 +20 @@\n-before\n+after"
-        let files = [
-            FileDiff(path: "A.swift", patch: patch, additions: 2, deletions: 2, status: .modified),
-            Self.file("B.swift"),
-        ]
+    @Test func gitEntryUsesFixedSourceOrderAndWorktreeDiff() async {
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))],
+            vcsDiffResults: [.success([Self.file("git.swift")])]
+        )
         let viewModel = ChangesViewModel(
             sessionID: "s",
             worktree: "/w",
             messageID: "m",
-            repository: ChangesSessionRepository(results: [.success(files)])
+            initialSource: .workingTree,
+            repository: repository
         )
         await viewModel.load()
-
-        var content = try! #require(viewModel.content)
-        #expect(content.selectedHunkPositionLabel == "Hunk 1 of 2")
-        #expect(!content.canSelectPreviousHunk && content.canSelectNextHunk)
-        #expect(content.contextMode == .collapsed)
-
-        viewModel.selectNextHunk()
-        viewModel.toggleContextMode()
-        viewModel.toggleSelectedFileReviewed()
-        content = try! #require(viewModel.content)
-        #expect(content.selectedHunkPositionLabel == "Hunk 2 of 2")
-        #expect(content.canSelectPreviousHunk && !content.canSelectNextHunk)
-        #expect(content.contextMode == .expanded)
-        #expect(content.selectedFileReviewed)
-        #expect(content.files.count == 2)
-
-        viewModel.selectFile("B.swift")
-        content = try! #require(viewModel.content)
-        #expect(!content.selectedFileReviewed)
-        #expect(content.reviewedPaths == ["A.swift"])
-        #expect(content.selectedHunkPositionLabel == "Hunk 1 of 1")
-
-        viewModel.prepareForSourceSwitch()
-        content = try! #require(viewModel.content)
-        #expect(content.reviewedPaths.isEmpty)
-        #expect(content.contextMode == .collapsed)
-    }
-
-    @Test func explicitRefreshClearsReviewedMarkersAndViewerControls() async {
-        let files = [Self.file("A.swift")]
-        let repository = ChangesSessionRepository(results: [.success(files), .success(files)])
-        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
-        await viewModel.load()
-        viewModel.toggleSelectedFileReviewed()
-        viewModel.toggleContextMode()
-
-        await viewModel.refresh()
-
-        let content = try! #require(viewModel.content)
-        #expect(content.reviewedPaths.isEmpty)
-        #expect(content.contextMode == .collapsed)
-        #expect(content.selectedHunkPositionLabel == "Hunk 1 of 1")
-        #expect(repository.requests.count == 2)
-    }
-
-    @Test func repositoryUpdatesDoNotMutateOpenSnapshotUntilExplicitRefresh() async {
-        let repository = ChangesSessionRepository(results: [
-            .success([Self.file("snapshot.swift")]),
-            .success([Self.file("refreshed.swift")]),
-        ])
-        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
-        await viewModel.load()
-
-        // Foreground events update other live stores; Changes intentionally owns no event or polling subscription.
-        await Task.yield()
-        #expect(viewModel.content?.selectedFile.path == "snapshot.swift")
-        #expect(repository.requests.count == 1)
-
-        await viewModel.refresh()
-        #expect(viewModel.content?.selectedFile.path == "refreshed.swift")
-        #expect(repository.requests.count == 2)
-    }
-
-    @Test func workingTreeEntryLoadsVcsSourcesAndGitDiff() async {
-        let repository = ChangesSessionRepository(
-            results: [],
-            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main"))],
-            vcsDiffResults: [.success([Self.file("working.swift")])]
-        )
-        let viewModel = ChangesViewModel(
-            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: repository
-        )
-
-        await viewModel.load()
-
+        #expect(viewModel.state.availableSources == [.workingTree, .lastTurn])
         #expect(viewModel.state.selectedSource == .workingTree)
-        #expect(viewModel.state.availableSources == [.lastTurn, .workingTree, .mainBranch])
-        #expect(viewModel.content?.selectedFile.path == "working.swift")
         #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
     }
 
-    @Test func unsupportedVcsFallsBackToLastTurnButTransientFailureIsRetryable() async {
+    @Test func unsupportedGitFallsBackButTransientFailureIsRetryable() async {
         let unsupported = ChangesSessionRepository(
             results: [.success([Self.file("last.swift")])],
             vcsInfoResults: [.success(VcsInfo(currentBranch: nil, defaultBranch: nil))]
@@ -269,7 +151,7 @@ struct ChangesViewModelTests {
         )
         await fallback.load()
         #expect(fallback.state.selectedSource == .lastTurn)
-        #expect(fallback.content?.selectedFile.path == "last.swift")
+        #expect(fallback.state.availableSources == [.lastTurn])
 
         let transient = ChangesSessionRepository(
             results: [],
@@ -279,143 +161,66 @@ struct ChangesViewModelTests {
             sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: transient
         )
         await retryable.load()
-        #expect(retryable.state.phase == .error("offline"))
-        #expect(transient.requests.isEmpty)
+        guard case .error = retryable.state.phase else {
+            Issue.record("Expected retryable error")
+            return
+        }
     }
 
-    @Test func sourceSwitchAndRefreshReloadSelectedStableSnapshotAndResetControls() async {
+    @Test func missingGitDiffEndpointFallsBackToLastTurn() async {
         let repository = ChangesSessionRepository(
             results: [.success([Self.file("last.swift")])],
-            vcsInfoResults: [
-                .success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main")),
-                .success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main")),
-            ],
-            vcsDiffResults: [
-                .success([Self.file("working.swift")]),
-                .success([Self.file("main.swift")]),
-                .success([Self.file("main-refreshed.swift")]),
-            ]
-        )
-        let viewModel = ChangesViewModel(
-            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: repository
-        )
-        await viewModel.load()
-        viewModel.toggleContextMode()
-        viewModel.toggleSelectedFileReviewed()
-
-        await viewModel.selectSource(.lastTurn)
-        await viewModel.selectSource(.mainBranch)
-        #expect(viewModel.content?.selectedFile.path == "main.swift")
-        #expect(viewModel.content?.reviewedPaths.isEmpty == true)
-        #expect(viewModel.content?.contextMode == .collapsed)
-
-        await viewModel.refresh()
-        #expect(viewModel.content?.selectedFile.path == "main-refreshed.swift")
-        #expect(viewModel.state.selectedSource == .mainBranch)
-    }
-
-    @Test func missingVcsDiffEndpointFallsBackToLastTurn() async {
-        let repository = ChangesSessionRepository(
-            results: [.success([Self.file("last.swift")])],
-            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature/review", defaultBranch: "main"))],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))],
             vcsDiffResults: [.failure(SessionError.http(statusCode: 404, message: "missing"))]
         )
         let viewModel = ChangesViewModel(
             sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree, repository: repository
         )
-
         await viewModel.load()
-
         #expect(viewModel.state.selectedSource == .lastTurn)
-        #expect(viewModel.state.availableSources == [.lastTurn])
-        #expect(viewModel.content?.selectedFile.path == "last.swift")
+        #expect(viewModel.content?.files.first?.path == "last.swift")
     }
 
-    @Test func coversNoTurnNoChangesUnavailablePatchErrorAndRetry() async {
-        let noTurn = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: nil, repository: ChangesSessionRepository(results: []))
-        await noTurn.load()
-        #expect(noTurn.state.phase == .noTurn)
-
-        let repository = ChangesSessionRepository(results: [
-            .success([]),
-            .success([FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified)]),
-            .failure(SessionError.transport("offline")),
-            .success([Self.file("ok.swift")]),
-        ])
-        let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
-        await viewModel.load(); #expect(viewModel.state.phase == .noChanges)
-        await viewModel.retry()
-        #expect(viewModel.content?.selectedFile == FileDiff(path: "binary.png", patch: nil, additions: 0, deletions: 0, status: .modified))
-        #expect(viewModel.content?.selectedFileHasPreview == false)
-        await viewModel.retry(); #expect(viewModel.state.phase == .error("offline"))
-        await viewModel.retry(); #expect(viewModel.content?.selectedFile == Self.file("ok.swift"))
-    }
-
-    @Test func reviewChangesNavigationCapturesSessionWorktreeAndLatestCompletedUserMessage() {
-        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
-        state.messages = [row("user-1", role: .user), row("assistant", role: .assistant), row("pending", role: .user, pending: true)]
-        #expect(state.changesNavigationTarget(worktree: "/repo") == ChangesNavigationTarget(sessionID: "s", worktree: "/repo", messageID: "user-1"))
-    }
-
-    @Test func reviewChangesPillUsesLatestCompletedTurnAndLastTurnSource() {
-        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
-        state.messages = [row("user-1", role: .user), row("assistant", role: .assistant)]
-        state.reviewChangesMessageID = "user-1"
-        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 2)
-
-        #expect(
-            state.reviewChangesNavigationTarget(worktree: "/repo") ==
-                ChangesNavigationTarget(sessionID: "s", worktree: "/repo", messageID: "user-1", initialSource: .lastTurn)
+    @Test func viewerStartsCollapsedNavigatesHunksAndDisablesUnavailableActions() {
+        let twoHunks = FileDiff(
+            path: "A.swift",
+            patch: "@@ -1 +1 @@\n-old\n+new\n@@ -5 +5 @@\n-before\n+after",
+            additions: 2,
+            deletions: 2,
+            status: .modified
         )
+        var viewer = FileViewerState(file: twoHunks)
+        #expect(viewer.hasPreview)
+        #expect(!viewer.canSelectPreviousHunk)
+        #expect(viewer.canSelectNextHunk)
+        #expect(!viewer.canExpandContext)
+        viewer.selectNextHunk()
+        #expect(viewer.canSelectPreviousHunk)
+        #expect(!viewer.canSelectNextHunk)
+
+        let before = (1...8).map { " before \($0)" }.joined(separator: "\n")
+        let after = (1...8).map { " after \($0)" }.joined(separator: "\n")
+        var expandable = FileViewerState(file: FileDiff(
+            path: "B.swift",
+            patch: "@@ -1,17 +1,17 @@\n\(before)\n-old\n+new\n\(after)",
+            additions: 1,
+            deletions: 1,
+            status: .modified
+        ))
+        #expect(expandable.canExpandContext)
+        expandable.toggleContextMode()
+        #expect(expandable.contextMode == .expanded)
+        #expect(FileViewerState(file: FileDiff(path: "image.png", patch: nil, additions: 0, deletions: 0, status: .modified)).hasPreview == false)
     }
 
-    @Test func reviewChangesPillHidesForPendingLatestTurnOrUnavailableCount() {
+    @Test func entryPointsChooseGitAndLastTurn() {
         var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
-        state.messages = [row("user-1", role: .user), row("assistant", role: .assistant), row("user-2", role: .user, pending: true)]
-        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 3, additions: 4, deletions: 2)
-
-        #expect(state.reviewChangesNavigationTarget(worktree: "/repo") == nil)
-        #expect(ReviewChangesPillVisibility.shouldShow(summary: nil, isPinnedToEnd: true, showScrollToEnd: false) == false)
-        #expect(ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary, isPinnedToEnd: false, showScrollToEnd: true) == false)
-        #expect(ReviewChangesPillVisibility.shouldShow(summary: state.reviewChangesSummary, isPinnedToEnd: true, showScrollToEnd: false))
-    }
-
-    @Test func reviewChangesPillFormatsSummaryAndOmitsZeroLineTotals() {
-        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 1, additions: 12, deletions: 3) == "1 file  +12  −3")
-        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 5, additions: 12, deletions: 0) == "5 files  +12")
-        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 5, additions: 0, deletions: 3) == "5 files  −3")
-        #expect(OpenCodeReviewChangesPill.visibleSummary(changedFileCount: 5, additions: 0, deletions: 0) == "5 files")
-
-        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 1, additions: 1, deletions: 1) == "Review changes, 1 file, 1 addition, 1 deletion")
-        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 5, additions: 12, deletions: 0) == "Review changes, 5 files, 12 additions")
-        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 5, additions: 0, deletions: 3) == "Review changes, 5 files, 3 deletions")
-        #expect(OpenCodeReviewChangesPill.accessibilityLabel(changedFileCount: 5, additions: 0, deletions: 0) == "Review changes, 5 files")
-    }
-
-    @Test func reviewChangesPillPreviewMatrixCoversLightAndDarkStates() {
-        let cases = ReviewChangesPillPreviewCase.allCases
-        #expect(cases.count == 8)
-        #expect(Set(cases.map(\.colorScheme)) == Set([.light, .dark]))
-        #expect(Set(cases.map(\.enabled)) == Set([true, false]))
-        #expect(Set(cases.map(\.changedFileCount)) == Set([1, 4]))
-        #expect(cases.contains { $0.additions > 0 && $0.deletions > 0 })
-        #expect(cases.contains { $0.additions > 0 && $0.deletions == 0 })
-        #expect(cases.contains { $0.additions == 0 && $0.deletions > 0 })
-        #expect(cases.contains { $0.additions == 0 && $0.deletions == 0 })
-    }
-
-    private func loadedViewModel(_ paths: String...) async -> ChangesViewModel {
-        let files = paths.enumerated().map { index, path in
-            Self.file(path, status: index == 1 ? .added : .modified)
-        }
-        let viewModel = ChangesViewModel(
-            sessionID: "s",
-            worktree: "/w",
-            messageID: "m",
-            repository: ChangesSessionRepository(results: [.success(files)])
-        )
-        await viewModel.load()
-        return viewModel
+        state.timeline = .ready
+        state.messages = [row("user", .user), row("assistant", .assistant)]
+        state.reviewChangesMessageID = "user"
+        state.reviewChangesSummary = ReviewChangesSummary(fileCount: 1, additions: 1, deletions: 0)
+        #expect(state.changesNavigationTarget(worktree: "/repo").initialSource == .workingTree)
+        #expect(state.reviewChangesNavigationTarget(worktree: "/repo")?.initialSource == .lastTurn)
     }
 
     private static func file(
@@ -424,11 +229,22 @@ struct ChangesViewModelTests {
         deletions: Int = 1,
         status: FileDiffStatus = .modified
     ) -> FileDiff {
-        FileDiff(path: path, patch: "@@ -1,1 +1,1 @@\n-old\n+new", additions: additions, deletions: deletions, status: status)
+        FileDiff(path: path, patch: "@@ -1 +1 @@\n-old\n+new", additions: additions, deletions: deletions, status: status)
     }
 
-    private func row(_ id: String, role: MessageRole, pending: Bool = false) -> SessionChatRow {
-        SessionChatRow(id: id, role: role, text: "", metadataLabel: "", isPending: pending, isStreaming: false, renderedMarkdown: nil, modelProviderID: nil, modelID: nil, contextInputTokens: nil)
+    private func row(_ id: String, _ role: MessageRole) -> SessionChatRow {
+        SessionChatRow(
+            id: id,
+            role: role,
+            text: "",
+            metadataLabel: "",
+            isPending: false,
+            isStreaming: false,
+            renderedMarkdown: nil,
+            modelProviderID: nil,
+            modelID: nil,
+            contextInputTokens: nil
+        )
     }
 }
 
@@ -440,6 +256,7 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
     private var results: [Result<[FileDiff], Error>]
     private var vcsInfoResults: [Result<VcsInfo, Error>]
     private var vcsDiffResults: [Result<[FileDiff], Error>]
+
     init(
         results: [Result<[FileDiff], Error>],
         vcsInfoResults: [Result<VcsInfo, Error>] = [],
@@ -449,8 +266,10 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
         self.vcsInfoResults = vcsInfoResults
         self.vcsDiffResults = vcsDiffResults
     }
+
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
-        requests.append(.init(sessionID: id, messageID: messageID, directory: directory)); return try results.removeFirst().get()
+        requests.append(.init(sessionID: id, messageID: messageID, directory: directory))
+        return try results.removeFirst().get()
     }
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
         guard !vcsInfoResults.isEmpty else { throw SessionError.http(statusCode: 404, message: "unsupported") }

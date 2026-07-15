@@ -38,7 +38,9 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
@@ -169,9 +171,11 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
+                                                        ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
+                                                        ComponentGalleryEntryId.HunkNavigationPill -> HunkNavigationPillGalleryScreen()
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
@@ -258,7 +262,7 @@ fun MainNavigation() {
 @Suppress("ktlint:standard:property-naming")
 private const val RouteTransitionDurationMillis = 220
 
-private fun forwardRouteTransition() =
+internal fun forwardRouteTransition() =
     (
         slideInHorizontally(
             animationSpec = tween(RouteTransitionDurationMillis),
@@ -271,7 +275,7 @@ private fun forwardRouteTransition() =
         ) + fadeOut(animationSpec = tween(RouteTransitionDurationMillis))
     )
 
-private fun backwardRouteTransition() =
+internal fun backwardRouteTransition() =
     (
         slideInHorizontally(
             animationSpec = tween(RouteTransitionDurationMillis),

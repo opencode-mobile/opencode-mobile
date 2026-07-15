@@ -14,7 +14,7 @@ private let overflowMenuAnchorTopOffset: CGFloat = 8
 struct OpenCodeOverflowMenuEntry: Identifiable {
     let id: String
     let title: String
-    let icon: OpenCodeIcon
+    let icon: OpenCodeIcon?
     let enabled: Bool
     let accessibilityLabel: String?
     let action: () -> Void
@@ -22,7 +22,7 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
     init(
         id: String = UUID().uuidString,
         title: String,
-        icon: OpenCodeIcon,
+        icon: OpenCodeIcon?,
         enabled: Bool = true,
         accessibilityLabel: String? = nil,
         action: @escaping () -> Void
@@ -210,14 +210,21 @@ private struct OpenCodeOverflowMenuPanel: View {
                     onEntrySelected()
                 } label: {
                     HStack(spacing: overflowMenuEntryIconSpacing) {
-                        OpenCodeIconImage(icon: entry.icon)
-                            .font(.system(size: overflowMenuEntryIconSize, weight: .regular))
-                            .frame(width: overflowMenuEntryIconSize, height: overflowMenuEntryIconSize)
-                            .foregroundStyle(
-                                entry.enabled
-                                    ? OpenCodeColors.iconWeakBase
-                                    : OpenCodeColors.iconWeakBase.opacity(0.6)
-                            )
+                        Group {
+                            if let icon = entry.icon {
+                                OpenCodeIconImage(icon: icon)
+                            } else {
+                                Color.clear
+                            }
+                        }
+                        .font(.system(size: overflowMenuEntryIconSize, weight: .regular))
+                        .frame(width: overflowMenuEntryIconSize, height: overflowMenuEntryIconSize)
+                        .foregroundStyle(
+                            entry.enabled
+                                ? OpenCodeColors.iconWeakBase
+                                : OpenCodeColors.iconWeakBase.opacity(0.6)
+                        )
+                        .accessibilityHidden(true)
                         Text(entry.title)
                             .font(OpenCodeTypography.body)
                             .foregroundStyle(entry.enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeak)
@@ -277,13 +284,14 @@ private struct OpenCodeOverflowMenuPanel: View {
 private func previewOverflowMenuEntries() -> [OpenCodeOverflowMenuEntry] {
     [
         OpenCodeOverflowMenuEntry(
-            title: "Session context",
-            icon: .architecture,
+            title: "Working tree",
+            icon: .check,
+            accessibilityLabel: "Working tree, selected",
             action: {}
         ),
         OpenCodeOverflowMenuEntry(
-            title: "Copy session ID",
-            icon: .contentCopy,
+            title: "Main branch",
+            icon: nil,
             action: {}
         ),
         OpenCodeOverflowMenuEntry(

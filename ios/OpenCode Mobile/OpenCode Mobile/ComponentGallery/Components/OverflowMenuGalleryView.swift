@@ -3,19 +3,21 @@ import SwiftUI
 struct OverflowMenuGalleryView: View {
     @State private var menuExpanded = false
     @State private var entriesEnabled = true
+    @State private var selectionRowsEnabled = false
     @State private var itemCount = 2
 
     private var entries: [OpenCodeOverflowMenuEntry] {
         var items: [OpenCodeOverflowMenuEntry] = [
             OpenCodeOverflowMenuEntry(
                 title: "Session context",
-                icon: .architecture,
+                icon: selectionRowsEnabled ? .check : .architecture,
                 enabled: entriesEnabled,
+                accessibilityLabel: selectionRowsEnabled ? "Session context, selected" : nil,
                 action: {}
             ),
             OpenCodeOverflowMenuEntry(
                 title: "Copy session ID",
-                icon: .contentCopy,
+                icon: selectionRowsEnabled ? nil : .contentCopy,
                 enabled: entriesEnabled,
                 action: {}
             ),
@@ -59,6 +61,11 @@ struct OverflowMenuGalleryView: View {
                         selected: entriesEnabled,
                         action: { entriesEnabled.toggle() }
                     )
+                    OpenCodeChoiceBadge(
+                        label: "Selection rows",
+                        selected: selectionRowsEnabled,
+                        action: { selectionRowsEnabled.toggle() }
+                    )
                 }
 
                 ControlGroup(title: "Entry count") {
@@ -75,7 +82,7 @@ struct OverflowMenuGalleryView: View {
 
                 Text(
                     "Use the overflow icon in the live top bar preview to open the menu. " +
-                        "Switch controls to review enabled and disabled entry states."
+                        "Switch controls to review enabled, disabled, and aligned selection states."
                 )
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)

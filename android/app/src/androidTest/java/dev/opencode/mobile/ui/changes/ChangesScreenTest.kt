@@ -5,11 +5,13 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
@@ -20,22 +22,26 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsDiffMode
 import dev.opencode.mobile.domain.session.VcsInfo
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.abs
 
 class ChangesScreenTest {
     @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun rendersAccessibleMultiFilePickerFilteringSelectionAndNavigation() {
+    fun rendersChangedFilesThenPushesFocusedViewer() {
         val viewModel = ChangesViewModel(ChangesScreenRepository)
+        var didExit = false
         composeTestRule.setContent {
             ChangesScreen(
                 sessionId = "session",
                 worktree = "/repo",
                 messageId = "message",
                 initialSource = ChangeSource.WorkingTree,
-                onNavigateBack = {},
+                onNavigateBack = { didExit = true },
                 viewModel = viewModel,
             )
         }
@@ -43,43 +49,57 @@ class ChangesScreenTest {
         composeTestRule
             .onNodeWithContentDescription("3 changed files, 4 additions, 3 deletions")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Working tree").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Refresh").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Git changes").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Choose change source").performClick()
-        composeTestRule.onNodeWithText("Working tree (selected)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Main branch").assertIsDisplayed().performClick()
-        composeTestRule.onNodeWithText("Main branch").assertIsDisplayed()
-        val picker =
-            composeTestRule.onNodeWithContentDescription(
-                "Choose file. Sources/App.kt, Modified, file 1 of 3, 1 addition, 1 deletion",
-            )
-        picker.assertIsDisplayed().performClick()
-
-        composeTestRule.onNodeWithText("Search changed paths").performTextInput("missing")
+        composeTestRule.onNodeWithContentDescription("Git changes, selected").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Last turn changes").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Main branch").assertCountEquals(0)
+        composeTestRule.onNodeWithContentDescription("Filter changed files").performTextInput("missing")
+        composeTestRule
+            .onNodeWithContentDescription("0 changed files, 0 additions, 0 deletions")
+            .assertIsDisplayed()
         composeTestRule.onNodeWithText("No matching files").assertIsDisplayed()
         composeTestRule.onNodeWithText("Clear filter").performClick()
-
+        composeTestRule.onNodeWithContentDescription("Filter changed files").performTextInput("App")
         composeTestRule
-            .onAllNodesWithContentDescription(
-                "Sources/New.kt, Added, file 2 of 3, 2 additions, 0 deletions",
-            )[0]
-            .assertIsDisplayed()
+            .onNodeWithContentDescription(
+                "Sources/App.kt, Modified, file 1 of 1, 1 addition, 1 deletion",
+            ).performClick()
+        composeTestRule.onNodeWithText("Sources/App.kt").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Previous hunk").assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription("Expand context").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithContentDescription("Collapse context").assertIsDisplayed()
+        val firstHunkTop =
+            composeTestRule
+                .onNodeWithContentDescription("hunk, @@ -1,17 +1,17 @@")
+                .getUnclippedBoundsInRoot()
+                .top
+        composeTestRule.onNodeWithContentDescription("Next hunk").assertIsEnabled().performClick()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            val finalHunkTop =
+                composeTestRule
+                    .onNodeWithContentDescription("hunk, @@ -30 +30 @@")
+                    .getUnclippedBoundsInRoot()
+                    .top
+            abs((finalHunkTop - firstHunkTop).value) < 2f
+        }
+        composeTestRule.onNodeWithContentDescription("Previous hunk").assertIsEnabled()
+        composeTestRule.onNodeWithContentDescription("Next hunk").assertIsNotEnabled()
+        composeTestRule.onAllNodesWithText("Filter paths").assertCountEquals(0)
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        composeTestRule.onNodeWithText("App").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("1 changed file, 1 addition, 1 deletion").assertIsDisplayed()
+        composeTestRule.onNodeWithText("App").performTextClearance()
+        composeTestRule
+            .onNodeWithContentDescription("Sources/Removed.kt, Deleted, file 3 of 3, 1 addition, 2 deletions")
             .performClick()
-
-        composeTestRule
-            .onNodeWithContentDescription(
-                "Choose file. Sources/New.kt, Added, file 2 of 3, 2 additions, 0 deletions",
-            ).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Previous file").assertIsEnabled()
-        composeTestRule.onNodeWithText("Next file").assertIsEnabled().performClick()
-        composeTestRule.onNodeWithText("Next file").assertIsNotEnabled()
-        composeTestRule
-            .onNodeWithContentDescription(
-                "Choose file. Sources/Removed.kt, Deleted, file 3 of 3, 1 addition, 2 deletions",
-            ).assertIsDisplayed()
-        composeTestRule
-            .onAllNodesWithContentDescription(
-                "Choose file. Sources/App.kt, Modified, file 1 of 3, 1 addition, 1 deletion",
-            ).assertCountEquals(0)
+        composeTestRule.onNodeWithText("Preview unavailable").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Previous hunk").assertCountEquals(0)
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        assertTrue(didExit)
+        assertEquals("", (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet.filter)
     }
 }
 
@@ -100,10 +120,22 @@ private object ChangesScreenRepository : SessionRepository {
 
     private fun files() =
         listOf(
-            file("Sources/Removed.kt", "old-removed", 1, 2, FileDiffStatus.Deleted),
+            FileDiff("Sources/Removed.kt", null, 1, 2, FileDiffStatus.Deleted),
             file("Sources/New.kt", "old-new", 2, 0, FileDiffStatus.Added),
-            file("Sources/App.kt", "old-app", 1, 1, FileDiffStatus.Modified),
+            FileDiff(
+                "Sources/App.kt",
+                expandablePatch("old-app"),
+                1,
+                1,
+                FileDiffStatus.Modified,
+            ),
         )
+
+    private fun expandablePatch(oldLine: String): String {
+        val before = (1..8).joinToString("\n") { " before $it" }
+        val after = (1..8).joinToString("\n") { " after $it" }
+        return "@@ -1,17 +1,17 @@\n$before\n-$oldLine\n+new\n$after\n@@ -30 +30 @@\n-old-two\n+new-two"
+    }
 
     private fun file(
         path: String,

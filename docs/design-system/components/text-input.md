@@ -2,7 +2,7 @@
 
 ## Intent
 
-`OpenCodeTextInput` is the shared single-line form control for labeled text entry.
+`OpenCodeTextInput` is the shared single-line form control for text entry.
 Feature screens use it for ordinary text, URLs, usernames, and passwords instead
 of styling native text fields locally.
 
@@ -10,9 +10,13 @@ of styling native text fields locally.
 
 - Variants: `text`, `url`, `username`, `password`.
 - States: empty, populated, focused, disabled, and error.
-- Required content: label, value binding/callback.
-- Optional content: placeholder, error message, enabled state, and semantic
-  submit action (`next` or `done`).
+- Required content: value binding/callback.
+- Optional content: visible label, placeholder, accessibility label, error
+  message, enabled state, and semantic submit action (`next` or `done`).
+
+When the visible label is omitted, the component removes both the label and its
+spacing. The caller must provide an accessibility label; placeholder copy does
+not replace the semantic name.
 
 The variant selects secure entry, capitalization, autocorrection, keyboard, and
 content-type behavior. Visual styling is not exposed for feature-level override.
@@ -32,7 +36,7 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 - Disabled fields remain readable but do not accept input.
 - Password values use native secure-entry behavior and are not revealed by the
   component.
-- Labels remain visible when values or placeholders are empty.
+- Supplied labels remain visible when values or placeholders are empty.
 - `next` advances to the next focusable field; `done` clears field focus and
   dismisses the keyboard according to native behavior.
 
@@ -46,7 +50,20 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 ## Previews
 
 Both Component Galleries provide one live field with controls for input kind,
-enabled state, and error state. The shared theme control covers light and dark.
+visible-label presence, enabled state, and error state. The shared theme control
+covers light and dark.
+
+## Completion Ledger
+
+- Public API and applicable states: complete.
+- Token and typography mapping: complete; unchanged.
+- iOS and Android implementations: complete. Both enforce a visible label or
+  explicit non-empty accessibility label, and placeholder text is not accepted
+  as the semantic name.
+- Gallery entries and previews: complete.
+- Parity and divergences: complete; none known.
+- Automated checks: complete. Both platforms cover explicit-label precedence,
+  visible-label fallback, and rejection of empty unlabeled configurations.
 
 ## Parity And Divergence
 

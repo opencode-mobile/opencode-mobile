@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -13,13 +14,30 @@ class MainScreenTest {
 
     @Before
     fun setup() {
-        composeTestRule.setContent { MainScreen(FAKE_DATA) }
+        composeTestRule.setContent {
+            MainScreen(
+                uiState = MainScreenUiState.Disconnected,
+                liveUpdatesConnectionState = EventStreamConnectionState.Idle,
+                onSettingsClick = {},
+                onSessionClick = {},
+                onEditConnection = {},
+                onConnectClick = {},
+                onRetryProbe = {},
+                onRefresh = {},
+                onAddProjectClick = {},
+                onFocusProject = {},
+                onDismissAddProject = {},
+                onSelectAddProject = {},
+                onSeeAllSessions = {},
+                onDismissSeeAll = {},
+                onNewSession = {},
+                onConsumePendingOpenSession = {},
+            )
+        }
     }
 
     @Test
     fun firstItem_exists() {
-        FAKE_DATA.forEach { composeTestRule.onNodeWithText("Hello $it!").assertExists() }
+        composeTestRule.onNodeWithText("Connect to your server").assertExists()
     }
 }
-
-private val FAKE_DATA = listOf("Sample1", "Sample2", "Sample3")

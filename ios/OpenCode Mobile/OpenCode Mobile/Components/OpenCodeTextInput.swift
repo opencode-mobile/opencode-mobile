@@ -13,9 +13,10 @@ enum OpenCodeTextInputSubmitAction {
 }
 
 struct OpenCodeTextInput: View {
-    let label: String
+    var label: String?
     @Binding var text: String
     var placeholder: String = ""
+    var accessibilityLabel: String?
     var kind: OpenCodeTextInputKind = .text
     var enabled = true
     var errorMessage: String?
@@ -25,11 +26,41 @@ struct OpenCodeTextInput: View {
 
     @FocusState private var focused: Bool
 
+    init(
+        label: String? = nil,
+        text: Binding<String>,
+        placeholder: String = "",
+        accessibilityLabel: String? = nil,
+        kind: OpenCodeTextInputKind = .text,
+        enabled: Bool = true,
+        errorMessage: String? = nil,
+        submitAction: OpenCodeTextInputSubmitAction = .done,
+        isFocused: Binding<Bool>? = nil,
+        onSubmit: (() -> Void)? = nil
+    ) {
+        precondition(
+            Self.resolveAccessibilityLabel(label: label, accessibilityLabel: accessibilityLabel) != nil,
+            "OpenCodeTextInput requires a visible label or a non-blank accessibilityLabel"
+        )
+        self.label = label
+        _text = text
+        self.placeholder = placeholder
+        self.accessibilityLabel = accessibilityLabel
+        self.kind = kind
+        self.enabled = enabled
+        self.errorMessage = errorMessage
+        self.submitAction = submitAction
+        self.isFocused = isFocused
+        self.onSubmit = onSubmit
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+            if let label {
+                Text(label)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+            }
 
             field
                 .font(OpenCodeTypography.body)
@@ -68,16 +99,26 @@ struct OpenCodeTextInput: View {
         }
     }
 
-    @ViewBuilder
     private var field: some View {
-        if kind == .password {
-            SecureField(placeholder, text: $text)
-                .textContentType(.password)
-        } else {
-            TextField(placeholder, text: $text)
-                .textContentType(contentType)
-                .keyboardType(kind == .url ? .URL : .default)
+        Group {
+            if kind == .password {
+                SecureField(placeholder, text: $text)
+                    .textContentType(.password)
+            } else {
+                TextField(placeholder, text: $text)
+                    .textContentType(contentType)
+                    .keyboardType(kind == .url ? .URL : .default)
+            }
         }
+        .accessibilityLabel(Self.resolveAccessibilityLabel(label: label, accessibilityLabel: accessibilityLabel)!)
+    }
+
+    static func resolveAccessibilityLabel(label: String?, accessibilityLabel: String?) -> String? {
+        if let accessibilityLabel, !accessibilityLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return accessibilityLabel
+        }
+        if let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return label }
+        return nil
     }
 
     private var contentType: UITextContentType? {

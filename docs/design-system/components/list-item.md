@@ -18,7 +18,12 @@ optional trailing accessory.
 - Variants: default, selected.
 - States: enabled, disabled.
 - Required content: `title`.
-- Optional content: `subtitle`, trailing accessory content.
+- Optional content: plain `subtitle`, semantic subtitle segments, and trailing
+  accessory content. Plain subtitle and semantic segments are mutually
+  exclusive.
+- Semantic subtitle segment tones: `secondary`, `addition`, and `deletion`.
+  They allow structured metadata such as diff totals without exposing raw
+  colors through the component API.
 - **Start decorator** (`none` by default):
   - **`none`**: no leading visual.
   - **`letter`**: one uppercase character in a **24×24** rounded square; callers
@@ -37,7 +42,7 @@ separate public typography override.
 
 - Semantic tokens: `color.surface.primary`, `color.surface.secondary`,
   `color.text.primary`, `color.text.secondary`, `color.text.disabled`,
-  `color.border.subtle`, `color.icon.default`.
+  `color.border.subtle`, `color.icon.default`, `diff-add`, and `diff-delete`.
 - Component tokens: outer row corner radius — `listItem.cornerRadius` in
   `docs/design-system/tokens.md`; letter badge accents and inner badge radius —
   see `listItem.startDecorator.*` in the same file.
@@ -48,6 +53,11 @@ separate public typography override.
 The component supports tap/click actions when a handler is provided. Selected
 rows use the secondary surface token. Disabled rows reduce emphasis and do not
 run actions. Long title/subtitle strings truncate to one line.
+
+Semantic subtitle segments render as one line using the caption typography
+role. Secondary segments use secondary text, addition segments use `diff-add`,
+and deletion segments use `diff-delete`. Disabled presentation resolves every
+segment to the disabled text treatment.
 
 `card` style adds the elevated surface fill and subtle border. Unselected
 `plain` rows do not draw an outer container. Selected `plain` rows and all
@@ -71,8 +81,8 @@ recommended labels on iOS.
 - Pressed: covered through platform interaction behavior.
 - Disabled: included.
 - Container style: **plain** and **card** are toggled via gallery controls.
-- Subtitle: **on** and **off** gallery controls pass `nil` when off to show the
-  optional subtitle slot.
+- Subtitle: **plain**, **semantic diff**, and **off** gallery controls cover the
+  mutually exclusive subtitle forms and optional slot.
 - Start decorator: letter accents and icon are explored via **interactive
   controls** in the component gallery (single preview row), not a static matrix
   of samples.

@@ -25,18 +25,20 @@ struct OpenCode_MobileApp: App {
     private var rootView: some View {
         #if DEBUG
         if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_CHANGES"] == "1" {
-            ChangesView(
-                sessionID: "ui-test-session",
-                worktree: "/ui-test",
-                messageID: "ui-test-message",
-                viewModel: ChangesViewModel(
+            NavigationStack {
+                ChangesView(
                     sessionID: "ui-test-session",
                     worktree: "/ui-test",
                     messageID: "ui-test-message",
-                    initialSource: .workingTree,
-                    files: Self.changesUITestFiles
+                    viewModel: ChangesViewModel(
+                        sessionID: "ui-test-session",
+                        worktree: "/ui-test",
+                        messageID: "ui-test-message",
+                        initialSource: .workingTree,
+                        files: Self.changesUITestFiles
+                    )
                 )
-            )
+            }
         } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] == "1" {
             ReviewChangesPillUITestView()
         } else {
@@ -51,7 +53,7 @@ struct OpenCode_MobileApp: App {
     private static let changesUITestFiles = [
         FileDiff(
             path: "Sources/Removed.swift",
-            patch: "@@ -1,1 +1,1 @@\n-old-removed\n+new",
+            patch: nil,
             additions: 1,
             deletions: 2,
             status: .deleted
@@ -65,7 +67,15 @@ struct OpenCode_MobileApp: App {
         ),
         FileDiff(
             path: "Sources/App.swift",
-            patch: "@@ -1,1 +1,1 @@\n-old-app\n+new",
+            patch: {
+                let before = (1...8).map { index in
+                    index == 6
+                        ? " let horizontalScrollingFixture = \"This source line is intentionally much wider than an iPhone viewport so the unified diff can verify horizontal scrolling.\""
+                        : " before \(index)"
+                }.joined(separator: "\n")
+                let after = (1...8).map { " after \($0)" }.joined(separator: "\n")
+                return "@@ -1,17 +1,17 @@\n\(before)\n-old-app\n+new\n\(after)\n@@ -30 +30 @@\n-old-two\n+new-two"
+            }(),
             additions: 1,
             deletions: 1,
             status: .modified

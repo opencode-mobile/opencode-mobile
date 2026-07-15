@@ -294,6 +294,28 @@ same compact raised geometry.
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px) |
 
+### Hunk navigation pill
+
+Bottom-centered hunk and context control for read-only change review. It shares
+the raised capsule language with the other floating pills and gives all three
+actions an equal native touch target.
+
+| Token | Value |
+| --- | --- |
+| `hunkNavigationPill.width` | 132 (logical px) |
+| `hunkNavigationPill.minHeight` | 44 (logical px) |
+| `hunkNavigationPill.iconButtonSize` | 44 (logical px) |
+| `hunkNavigationPill.iconSize` | 20 (logical px) |
+| `hunkNavigationPill.shadowElevation` | 4 (logical px) |
+
+### List group
+
+One bordered and clipped surface for an ordered collection of List Item rows.
+
+| Token | Value |
+| --- | --- |
+| `listGroup.cornerRadius` | 12 (logical px) |
+
 ### Unified diff
 
 Read-only line-oriented diff surface with stable gutters and horizontally

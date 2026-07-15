@@ -5,6 +5,7 @@ struct TextInputGalleryView: View {
     @State private var kind: OpenCodeTextInputKind = .url
     @State private var enabled = true
     @State private var showsError = false
+    @State private var showsLabel = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -19,11 +20,13 @@ struct TextInputGalleryView: View {
             HStack(spacing: 8) {
                 OpenCodeChoiceBadge(label: "Enabled", selected: enabled) { enabled.toggle() }
                 OpenCodeChoiceBadge(label: "Error", selected: showsError) { showsError.toggle() }
+                OpenCodeChoiceBadge(label: "Label", selected: showsLabel) { showsLabel.toggle() }
             }
             OpenCodeTextInput(
-                label: fieldLabel,
+                label: showsLabel ? fieldLabel : nil,
                 text: $text,
                 placeholder: placeholder,
+                accessibilityLabel: showsLabel ? nil : fieldLabel,
                 kind: kind,
                 enabled: enabled,
                 errorMessage: showsError ? errorMessage : nil

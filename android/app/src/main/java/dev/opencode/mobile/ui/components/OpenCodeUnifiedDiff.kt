@@ -19,16 +19,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
+import kotlin.math.roundToInt
 
 enum class UnifiedDiffRowKind { Hunk, Metadata, Context, Addition, Deletion }
 
@@ -179,8 +182,8 @@ fun OpenCodeUnifiedDiff(
     file: FileDiff,
     modifier: Modifier = Modifier,
     contextMode: UnifiedDiffContextMode = UnifiedDiffContextMode.Collapsed,
-    reviewed: Boolean = false,
     selectedHunkId: Int? = null,
+    onSelectedHunkOffset: (Int) -> Unit = {},
     document: UnifiedDiffDocument,
 ) {
     val shape = RoundedCornerShape(8.dp)
@@ -188,19 +191,15 @@ fun OpenCodeUnifiedDiff(
         modifier =
             modifier
                 .fillMaxWidth()
-                .alpha(if (reviewed) 0.72f else 1f)
                 .background(MaterialTheme.colorScheme.surface, shape)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
     ) {
-        Column(modifier = Modifier.padding(12.dp).semantics { contentDescription = file.summary() }) {
-            Text(file.path, style = CodeTextStyle)
-            Text(
-                "${file.status.label()}  +${file.additions}  −${file.deletions}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        Column(
+            modifier =
+                Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .semantics { contentDescription = file.summary() },
+        ) {
             document.visibleRows(contextMode).forEach { row ->
                 val selected = row.id == selectedHunkId && row.kind == UnifiedDiffRowKind.Hunk
                 val bringIntoViewRequester = remember(row.id) { BringIntoViewRequester() }
@@ -210,7 +209,12 @@ fun OpenCodeUnifiedDiff(
                 UnifiedDiffRowView(
                     row,
                     selected = selected,
-                    modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+                    modifier =
+                        Modifier
+                            .bringIntoViewRequester(bringIntoViewRequester)
+                            .onGloballyPositioned { coordinates ->
+                                if (selected) onSelectedHunkOffset(coordinates.positionInParent().y.roundToInt())
+                            },
                 )
             }
         }
@@ -252,7 +256,15 @@ private fun UnifiedDiffRowView(
         Text(row.oldLine?.toString().orEmpty(), Modifier.width(24.dp), style = CodeTextStyle)
         Text(row.newLine?.toString().orEmpty(), Modifier.width(24.dp), style = CodeTextStyle)
         Text(row.kind.marker(), Modifier.width(20.dp), color = foreground, style = CodeTextStyle)
-        Text(row.text, Modifier.padding(horizontal = 8.dp), color = foreground, style = CodeTextStyle)
+        Text(
+            text = row.text,
+            modifier = Modifier.padding(horizontal = 8.dp),
+            color = foreground,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            softWrap = false,
+            style = CodeTextStyle,
+        )
     }
 }
 

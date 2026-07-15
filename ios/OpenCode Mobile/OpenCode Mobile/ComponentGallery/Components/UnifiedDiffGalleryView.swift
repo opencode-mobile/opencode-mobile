@@ -2,7 +2,6 @@ import SwiftUI
 
 struct UnifiedDiffGalleryView: View {
     @State private var sample = 0
-    @State private var reviewed = false
     @State private var expanded = false
 
     var body: some View {
@@ -15,14 +14,12 @@ struct UnifiedDiffGalleryView: View {
                     }
                 }
             }
-            OpenCodeChoiceBadge(label: "Reviewed", selected: reviewed) { reviewed.toggle() }
             OpenCodeChoiceBadge(label: "Expanded context", selected: expanded) { expanded.toggle() }
             if let file = files[sample] {
                 OpenCodeUnifiedDiff(
                     file: file,
                     document: UnifiedDiffParser.parse(file.patch ?? ""),
                     contextMode: expanded ? .expanded : .collapsed,
-                    reviewed: reviewed,
                     selectedHunkID: 0
                 )
             } else {

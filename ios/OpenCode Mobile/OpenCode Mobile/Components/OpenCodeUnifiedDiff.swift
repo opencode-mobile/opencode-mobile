@@ -31,6 +31,10 @@ struct UnifiedDiffHunk: Identifiable, Sendable, Equatable {
     let rows: [UnifiedDiffRow]
 }
 
+struct UnifiedDiffScrollTarget: Hashable {
+    let rowID: Int
+}
+
 struct UnifiedDiffDocument: Sendable, Equatable {
     let rows: [UnifiedDiffRow]
     let hunks: [UnifiedDiffHunk]
@@ -157,50 +161,39 @@ struct OpenCodeUnifiedDiff: View {
     let file: FileDiff
     let document: UnifiedDiffDocument
     var contextMode: UnifiedDiffContextMode = .collapsed
-    var reviewed = false
     var selectedHunkID: Int?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            fileSummary
-            Divider().overlay(OpenCodeColors.borderWeakerBase)
-            ScrollView(.horizontal) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { row in
-                        rowView(row)
-                            .id(row.id)
-                    }
+        ScrollView(.horizontal) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(rows) { row in
+                    rowView(row)
+                        .id(row.id)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceBase)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase))
-        .opacity(reviewed ? 0.72 : 1)
+        .overlay(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                ForEach(rows) { row in
+                    Color.clear
+                        .frame(width: 1, height: 20)
+                        .id(UnifiedDiffScrollTarget(rowID: row.id))
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(file.status.rawValue.capitalized) file \(file.path), \(file.additions) additions, \(file.deletions) deletions")
     }
 
     private var rows: [UnifiedDiffRow] {
         document.visibleRows(contextMode: contextMode)
-    }
-
-    private var fileSummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(file.path).font(OpenCodeTypography.code).foregroundStyle(OpenCodeColors.textStrong)
-            Text("\(statusLabel)  +\(file.additions)  −\(file.deletions)")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-        }
-        .padding(12)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var statusLabel: String {
-        switch file.status {
-        case .added: "Added"
-        case .deleted: "Deleted"
-        case .modified: "Modified"
-        }
     }
 
     private func rowView(_ row: UnifiedDiffRow) -> some View {
@@ -210,7 +203,10 @@ struct OpenCodeUnifiedDiff: View {
             Text(row.newLine.map(String.init) ?? "")
                 .frame(width: 24, alignment: .trailing)
             Text(marker(row.kind)).frame(width: 20)
-            Text(row.text).padding(.horizontal, 8)
+            Text(row.text)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 8)
         }
         .font(OpenCodeTypography.code)
         .foregroundStyle(foreground(row.kind))

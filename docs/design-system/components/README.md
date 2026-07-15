@@ -103,10 +103,12 @@ applicable item is complete.
 - `bottom-sheet.md`
 - `choice-badge.md`
 - `list-item.md`
+- `list-group.md`
 - `button.md`
 - `text-input.md`
 - `action-pill.md`
 - `review-changes-pill.md`
+- `hunk-navigation-pill.md`
 - `unified-diff.md`
 - `project-session-selector.md`
 - `session-status-bar.md`
