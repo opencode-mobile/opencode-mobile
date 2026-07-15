@@ -458,6 +458,23 @@ Reusable outgoing prompt card for session conversations.
 | `outgoingMessage.paddingVertical` | 8 (logical px) |
 | `outgoingMessage.footerSpacing` | 6 (logical px) |
 
+### Tool call card
+
+Collapsed, tool-agnostic assistant tool-call row. Status chrome reuses the
+shared `success` / `warning` / `error` semantic tokens; +/− counts reuse
+`diffAdd` / `diffDelete`.
+
+| Token | Value |
+| --- | --- |
+| `toolCallCard.cornerRadius` | 8 (logical px; matches `listItem.cornerRadius`) |
+| `toolCallCard.paddingHorizontal` | 12 (logical px) |
+| `toolCallCard.paddingVertical` | 10 (logical px) |
+| `toolCallCard.statusDotSize` | 6 (logical px) |
+| `toolCallCard.statusDotSpacing` | 10 (logical px) |
+| `toolCallCard.statusDotTopPadding` | 6 (logical px) |
+| `toolCallCard.contentSpacing` | 4 (logical px) |
+| `toolCallCard.metaRowSpacing` | 8 (logical px) |
+
 ## Platform Mappings
 
 Platform mappings translate semantic and component tokens into native APIs:

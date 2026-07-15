@@ -10,6 +10,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case typography
     case icons
     case outgoingMessage
+    case toolCallCard
     case topBar
     case overflowMenu
     case bottomSheet
@@ -59,6 +60,12 @@ let componentGalleryEntries = [
         id: .outgoingMessage,
         title: "Outgoing Message",
         description: "Trailing prompt card that renders sent prompts at full height.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
+        id: .toolCallCard,
+        title: "Tool Call Card",
+        description: "Collapsed tool-agnostic assistant tool row with status variants.",
         category: .components
     ),
     ComponentGalleryEntry(

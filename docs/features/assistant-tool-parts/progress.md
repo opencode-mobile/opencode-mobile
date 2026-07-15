@@ -2,7 +2,8 @@
 
 ## Shared Planning
 
-- Status: planned; OPE-48 domain enrichment shipped on both platforms; UI tickets remain.
+- Status: foundations shipped (OPE-48 domain, OPE-47 Tool Call Card); Session Chat
+  UI tickets remain.
 - Linear: [OPE-46](https://linear.app/opencode-mobile/issue/OPE-46/assistant-tool-parts)
 - Docs: `docs/features/assistant-tool-parts/`
 - Research: `docs/research/opencode-assistant-tool-messages.md`
@@ -20,25 +21,28 @@
 
 ## Design System
 
-- Tool Call Card not started.
+- Tool Call Card shipped on iOS and Android with Component Gallery entries
+  ([OPE-47](https://linear.app/opencode-mobile/issue/OPE-47/design-system-tool-call-card)).
+  Contract: `docs/design-system/components/tool-call-card.md`.
 
 ## Android
 
 - Structured `MessagePart.Tool` with `ToolStatus`, optional title/error/call id,
   opaque input/output/metadata; Android tool-state DTO has `metadata`.
 - Compact emoji labels come from `MessageDomainAdapter.compactToolLabel`;
-  `Message.text` still joins text + formatter labels (no card UI yet).
+  `Message.text` still joins text + formatter labels (no Session Chat card UI yet).
+- `OpenCodeToolCallCard` + gallery entry available for feature wiring.
 
 ## iOS
 
 - Structured `ToolPart` with `ToolStatus`, optional title/error/call id, opaque
   input/output/metadata (`AnyCodable` maps).
 - Compact emoji labels come from `MessageDomainAdapter.compactToolLabel`;
-  `Message.text` still joins text + formatter labels (no card UI yet).
+  `Message.text` still joins text + formatter labels (no Session Chat card UI yet).
+- `OpenCodeToolCallCard` + gallery entry available for feature wiring.
 
 ## Remaining
 
-- Design-system Tool Call Card ([OPE-47](https://linear.app/opencode-mobile/issue/OPE-47/design-system-tool-call-card)).
 - Generic tool cards in Session Chat (including hide rules) ([OPE-49](https://linear.app/opencode-mobile/issue/OPE-49/generic-tool-cards-in-session-chat)).
 - Lightweight tool chrome (context, shell, network, interact) ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome)).
 - File change tools (edit / write / apply_patch) ([OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)).
@@ -47,3 +51,4 @@
 ## Completed
 
 - Structured tool parts in the domain ([OPE-48](https://linear.app/opencode-mobile/issue/OPE-48/structured-tool-parts-in-the-domain)).
+- Design-system Tool Call Card ([OPE-47](https://linear.app/opencode-mobile/issue/OPE-47/design-system-tool-call-card)).

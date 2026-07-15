@@ -74,6 +74,8 @@ struct ComponentGalleryDetailView: View {
             IconsGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
+        case .toolCallCard:
+            ToolCallCardGalleryView()
         case .topBar:
             TopBarGalleryView()
         case .overflowMenu:

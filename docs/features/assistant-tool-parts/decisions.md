@@ -29,6 +29,23 @@
 - Tool input and metadata are opaque string-keyed maps; output and error are
   optional strings. No per-tool domain schemas in OPE-48.
 
+## OPE-47 Tool Call Card (grilling)
+
+- Collapsed-only for this ticket: status, title, optional subtitle, optional
+  +/− counts, optional error text, optional feature-owned tap. No expand,
+  chevron, or body slot — add those when a later ticket needs them (likely
+  OPE-50 for shell output).
+- One component with four status variants (`pending` / `running` /
+  `completed` / `error`). Do not ship a separate error card component.
+- Pending/running use static status chrome only; no shimmer/animation in
+  OPE-47.
+- Optional +/− accessory is part of the public API now so OPE-51 does not
+  reshape the card; the component does not compute diff stats.
+- Card is tool-agnostic: feature code builds title/subtitle strings (for
+  example “Called edit”). The design-system card does not know tool IDs.
+- Optional tap is feature-owned; without a handler the card is display-only.
+  The card does not navigate to Changes or child sessions itself.
+
 ## File-change v1
 
 - Collapsed Edit/Write/Patch rows show filename and +N/−N when available.
