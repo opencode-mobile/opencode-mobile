@@ -7,9 +7,21 @@ enum OpenCodeListItemStyle {
     case card
 }
 
+enum OpenCodeListItemSubtitleTone {
+    case secondary
+    case addition
+    case deletion
+}
+
+struct OpenCodeListItemSubtitleSegment {
+    let text: String
+    let tone: OpenCodeListItemSubtitleTone
+}
+
 struct OpenCodeListItem<Trailing: View>: View {
     let title: String
     let subtitle: String?
+    let subtitleSegments: [OpenCodeListItemSubtitleSegment]?
     let selected: Bool
     let enabled: Bool
     let style: OpenCodeListItemStyle
@@ -20,6 +32,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     init(
         title: String,
         subtitle: String? = nil,
+        subtitleSegments: [OpenCodeListItemSubtitleSegment]? = nil,
         selected: Bool = false,
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
@@ -27,8 +40,10 @@ struct OpenCodeListItem<Trailing: View>: View {
         action: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
     ) {
+        precondition(subtitle == nil || subtitleSegments == nil, "List Item accepts either a plain subtitle or semantic segments")
         self.title = title
         self.subtitle = subtitle
+        self.subtitleSegments = subtitleSegments
         self.selected = selected
         self.enabled = enabled
         self.style = style
@@ -61,7 +76,11 @@ struct OpenCodeListItem<Trailing: View>: View {
                     .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                     .lineLimit(1)
 
-                if let subtitle {
+                if let subtitleSegments {
+                    semanticSubtitle(subtitleSegments)
+                        .font(OpenCodeTypography.caption)
+                        .lineLimit(1)
+                } else if let subtitle {
                     Text(subtitle)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
@@ -88,6 +107,25 @@ struct OpenCodeListItem<Trailing: View>: View {
             }
         }
         .opacity(enabled ? 1 : 0.7)
+    }
+
+    private func semanticSubtitle(_ segments: [OpenCodeListItemSubtitleSegment]) -> Text {
+        segments.reduce(Text("")) { result, segment in
+            result + Text(segment.text)
+                .foregroundColor(subtitleColor(segment.tone))
+        }
+    }
+
+    private func subtitleColor(_ tone: OpenCodeListItemSubtitleTone) -> Color {
+        guard enabled else { return OpenCodeColors.textWeaker }
+        switch tone {
+        case .secondary:
+            return OpenCodeColors.textBase
+        case .addition:
+            return OpenCodeColors.diffAdd
+        case .deletion:
+            return OpenCodeColors.diffDelete
+        }
     }
 
     @ViewBuilder
@@ -138,6 +176,15 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
         OpenCodeListItem(
             title: "Material Design Icons integration plan",
             subtitle: "http://127.0.0.1:4096/"
+        )
+        OpenCodeListItem(
+            title: "contact.html",
+            subtitleSegments: [
+                .init(text: "Modified · ", tone: .secondary),
+                .init(text: "+51", tone: .addition),
+                .init(text: " ", tone: .secondary),
+                .init(text: "−7", tone: .deletion)
+            ]
         )
         OpenCodeListItem(
             title: "iOS color palette and typography screens",

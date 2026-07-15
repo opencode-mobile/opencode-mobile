@@ -4,9 +4,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,7 +69,7 @@ fun OpenCodeFileNavigationPill(
         shadowElevation = 4.dp,
     ) {
         Row(
-            modifier = Modifier.defaultMinSize(minHeight = 44.dp),
+            modifier = Modifier.width(200.dp).defaultMinSize(minHeight = 44.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             FileNavigationButton(
@@ -75,6 +77,7 @@ fun OpenCodeFileNavigationPill(
                 enabled = enabled && previousEnabled,
                 onClick = onPrevious,
             )
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text =
                     buildAnnotatedString {
@@ -90,6 +93,7 @@ fun OpenCodeFileNavigationPill(
                         },
                 style = MaterialTheme.typography.labelLarge,
             )
+            Spacer(modifier = Modifier.weight(1f))
             FileNavigationButton(
                 previous = false,
                 enabled = enabled && nextEnabled,

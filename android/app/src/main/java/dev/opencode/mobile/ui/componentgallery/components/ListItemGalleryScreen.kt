@@ -19,6 +19,8 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -28,12 +30,18 @@ private enum class GalleryDecoratorKind {
     Icon,
 }
 
+private enum class GallerySubtitleKind {
+    Plain,
+    Diff,
+    Off,
+}
+
 @Composable
 fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
     var cardStyle by rememberSaveable { mutableStateOf(false) }
-    var subtitleVisible by rememberSaveable { mutableStateOf(true) }
+    var subtitleKindName by rememberSaveable { mutableStateOf(GallerySubtitleKind.Plain.name) }
     var decoratorKindName by rememberSaveable { mutableStateOf(GalleryDecoratorKind.None.name) }
     var letterAccentName by rememberSaveable { mutableStateOf(LetterAccent.Violet.name) }
 
@@ -49,6 +57,12 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
         } catch (_: IllegalArgumentException) {
             LetterAccent.Violet
         }
+    val subtitleKind =
+        try {
+            GallerySubtitleKind.valueOf(subtitleKindName)
+        } catch (_: IllegalArgumentException) {
+            GallerySubtitleKind.Plain
+        }
 
     val startDecorator: StartDecorator =
         when (decoratorKind) {
@@ -58,7 +72,18 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
                 StartDecorator.Icon(imageVector = OpenCodeIcons.Folder, contentDescription = "Folder")
         }
 
-    val subtitle: String? = if (subtitleVisible) "http://127.0.0.1:4096/" else null
+    val subtitle: String? = if (subtitleKind == GallerySubtitleKind.Plain) "http://127.0.0.1:4096/" else null
+    val subtitleSegments =
+        if (subtitleKind == GallerySubtitleKind.Diff) {
+            listOf(
+                OpenCodeListItemSubtitleSegment("Modified · ", OpenCodeListItemSubtitleTone.Secondary),
+                OpenCodeListItemSubtitleSegment("+51", OpenCodeListItemSubtitleTone.Addition),
+                OpenCodeListItemSubtitleSegment(" ", OpenCodeListItemSubtitleTone.Secondary),
+                OpenCodeListItemSubtitleSegment("−7", OpenCodeListItemSubtitleTone.Deletion),
+            )
+        } else {
+            null
+        }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -72,8 +97,13 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(text = "Subtitle", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpenCodeChoiceBadge(label = "On", selected = subtitleVisible, onClick = { subtitleVisible = true })
-                OpenCodeChoiceBadge(label = "Off", selected = !subtitleVisible, onClick = { subtitleVisible = false })
+                GallerySubtitleKind.entries.forEach { kind ->
+                    OpenCodeChoiceBadge(
+                        label = kind.name,
+                        selected = subtitleKind == kind,
+                        onClick = { subtitleKindName = kind.name },
+                    )
+                }
             }
         }
 
@@ -119,6 +149,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeListItem(
             title = "Material Design Icons integration plan",
             subtitle = subtitle,
+            subtitleSegments = subtitleSegments,
             selected = selected,
             enabled = enabled,
             style = if (cardStyle) OpenCodeListItemStyle.Card else OpenCodeListItemStyle.Plain,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,11 +27,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.session.FileDiff
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -38,6 +42,8 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeFileNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -155,7 +161,7 @@ private fun ChangeSetContent(
                         .padding(horizontal = 16.dp)
                         .semantics { contentDescription = "Choose file. ${changeSet.selectedFileAccessibilityLabel}" },
                 trailing = {
-                    Icon(OpenCodeIcons.ChevronRight, contentDescription = null)
+                    Icon(OpenCodeIcons.List, contentDescription = null)
                 },
             )
 
@@ -296,22 +302,54 @@ private fun FilePickerEntry(
 ) {
     OpenCodeListItem(
         title = file.path,
-        subtitle = changeSet.filePickerSummary(file),
-        selected = selected,
+        subtitleSegments = filePickerSubtitleSegments(file, changeSet),
         onClick = onClick,
         modifier =
             Modifier
                 .padding(horizontal = 12.dp)
-                .semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
+                .semantics {
+                    contentDescription = changeSet.fileAccessibilityLabel(file)
+                    this.selected = selected
+                },
         trailing = {
-            if (file.path in changeSet.reviewedPaths) {
-                Text("Reviewed", style = MaterialTheme.typography.labelMedium)
-            } else if (selected) {
-                Text("Selected", style = MaterialTheme.typography.labelMedium)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (file.path in changeSet.reviewedPaths) {
+                    Text("Reviewed", style = MaterialTheme.typography.labelMedium)
+                }
+                if (selected) {
+                    Icon(
+                        imageVector = OpenCodeIcons.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = openCodeColor("icon-strong-base"),
+                    )
+                }
             }
         },
     )
 }
+
+private fun filePickerSubtitleSegments(
+    file: FileDiff,
+    changeSet: ChangesContentState,
+): List<OpenCodeListItemSubtitleSegment> =
+    buildList {
+        if (file.path in changeSet.reviewedPaths) {
+            add(OpenCodeListItemSubtitleSegment("Reviewed · ", OpenCodeListItemSubtitleTone.Secondary))
+        }
+        add(
+            OpenCodeListItemSubtitleSegment(
+                "${file.status.name.replaceFirstChar(Char::uppercase)} · ",
+                OpenCodeListItemSubtitleTone.Secondary,
+            ),
+        )
+        add(OpenCodeListItemSubtitleSegment("+${file.additions}", OpenCodeListItemSubtitleTone.Addition))
+        add(OpenCodeListItemSubtitleSegment(" ", OpenCodeListItemSubtitleTone.Secondary))
+        add(OpenCodeListItemSubtitleSegment("−${file.deletions}", OpenCodeListItemSubtitleTone.Deletion))
+    }
 
 @Composable
 private fun Centered(content: @Composable () -> Unit) =
@@ -326,8 +364,17 @@ private fun EmptyMessage(
     title: String,
     detail: String,
 ) {
-    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(
+        Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(title, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
+        Text(
+            detail,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

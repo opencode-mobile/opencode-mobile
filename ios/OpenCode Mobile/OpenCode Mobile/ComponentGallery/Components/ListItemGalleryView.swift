@@ -16,16 +16,35 @@ private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
     }
 }
 
+private enum GallerySubtitleKind: String, CaseIterable, Identifiable {
+    case plain
+    case diff
+    case off
+
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+}
+
 struct ListItemGalleryView: View {
     @State private var selected = false
     @State private var enabled = true
     @State private var cardStyle = false
-    @State private var subtitleVisible = true
+    @State private var subtitleKind: GallerySubtitleKind = .plain
     @State private var decoratorKind: GalleryDecoratorKind = .none
     @State private var letterAccent: LetterAccent = .violet
 
     private var subtitle: String? {
-        subtitleVisible ? "http://127.0.0.1:4096/" : nil
+        subtitleKind == .plain ? "http://127.0.0.1:4096/" : nil
+    }
+
+    private var subtitleSegments: [OpenCodeListItemSubtitleSegment]? {
+        guard subtitleKind == .diff else { return nil }
+        return [
+            .init(text: "Modified · ", tone: .secondary),
+            .init(text: "+51", tone: .addition),
+            .init(text: " ", tone: .secondary),
+            .init(text: "−7", tone: .deletion)
+        ]
     }
 
     private var startDecorator: StartDecorator {
@@ -56,8 +75,13 @@ struct ListItemGalleryView: View {
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(OpenCodeColors.textStrong)
                 HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: "On", selected: subtitleVisible, action: { subtitleVisible = true })
-                    OpenCodeChoiceBadge(label: "Off", selected: !subtitleVisible, action: { subtitleVisible = false })
+                    ForEach(GallerySubtitleKind.allCases) { kind in
+                        OpenCodeChoiceBadge(
+                            label: kind.label,
+                            selected: subtitleKind == kind,
+                            action: { subtitleKind = kind }
+                        )
+                    }
                 }
             }
 
@@ -108,6 +132,7 @@ struct ListItemGalleryView: View {
             OpenCodeListItem(
                 title: "Material Design Icons integration plan",
                 subtitle: subtitle,
+                subtitleSegments: subtitleSegments,
                 selected: selected,
                 enabled: enabled,
                 style: cardStyle ? .card : .plain,

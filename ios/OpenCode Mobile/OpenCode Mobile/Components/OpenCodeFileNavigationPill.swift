@@ -71,10 +71,14 @@ struct OpenCodeFileNavigationPill: View {
                 action: onPrevious
             )
 
+            Spacer(minLength: 0)
+
             summaryText
                 .font(OpenCodeTypography.button)
                 .padding(.horizontal, Self.summaryPaddingHorizontal)
                 .accessibilityLabel(Self.accessibilityLabel(additions: additions, deletions: deletions))
+
+            Spacer(minLength: 0)
 
             navigationButton(
                 icon: .chevronRight,
@@ -84,6 +88,7 @@ struct OpenCodeFileNavigationPill: View {
                 action: onNext
             )
         }
+        .frame(width: Self.width)
         .frame(minHeight: Self.minHeight)
         .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
         .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1))
@@ -129,6 +134,7 @@ struct OpenCodeFileNavigationPill: View {
         .accessibilityLabel(label)
     }
 
+    private static let width: CGFloat = 200
     private static let minHeight: CGFloat = 44
     private static let iconButtonSize: CGFloat = 44
     private static let iconSize: CGFloat = 20

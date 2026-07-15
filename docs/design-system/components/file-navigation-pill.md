@@ -20,7 +20,10 @@ it as a bottom-centered overlay on read-only change-review surfaces.
   conditions such as refresh.
 
 The fixed visible summary is `+N −N`. Both values remain present when zero.
-The summary is informational and is not an action.
+The summary is informational and is not an action. The capsule keeps the
+documented fixed 200-point/dp width as totals change; it never expands to the
+available page width. Directional buttons stay pinned to their respective
+capsule edges and the summary stays centered.
 
 ## Token Usage
 
@@ -33,9 +36,9 @@ The summary is informational and is not an action.
 ## Behavior
 
 The left chevron invokes Previous file and the right chevron invokes Next file.
-Both controls remain visible. Directional availability disables each action
-independently; the overall enabled state disables both without changing the
-current totals. Disabled actions block dispatch and use the weak icon role.
+Both controls remain visible at the capsule edges. Directional availability
+disables each action independently; the overall enabled state disables both
+without changing the current totals. Disabled actions block dispatch and use the weak icon role.
 Pressed actions use the raised hover surface through native interaction state.
 
 The component validates nonnegative totals. It does not own collection
@@ -49,9 +52,11 @@ Accessibility exposes two independent buttons named `Previous file` and
 ## Platform Notes
 
 - iOS: SwiftUI capsule containing two native `Button` controls and a static
-  summary. Each direction has a 44-point hit target.
+  summary. Each direction has a 44-point hit target and the capsule enforces
+  the shared fixed width.
 - Android: Material 3 raised capsule containing two `IconButton` controls and
-  a static summary. Each direction has a 44-dp hit target.
+  a static summary. Each direction has a 44-dp hit target and the capsule
+  enforces the shared fixed width.
 
 ## Review Surfaces
 

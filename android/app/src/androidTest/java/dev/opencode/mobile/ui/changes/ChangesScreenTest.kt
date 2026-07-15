@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -60,6 +61,13 @@ class ChangesScreenTest {
         composeTestRule.onNodeWithText("Search changed paths").performTextInput("missing")
         composeTestRule.onNodeWithText("No matching files").assertIsDisplayed()
         composeTestRule.onNodeWithText("Clear filter").performClick()
+        composeTestRule
+            .onAllNodesWithContentDescription(
+                "Sources/App.kt, Modified, file 1 of 3, 1 addition, 1 deletion",
+            )[0]
+            .assertIsSelected()
+        composeTestRule.onAllNodesWithText("Modified · +1 −1")[0].assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Selected").assertCountEquals(0)
 
         composeTestRule
             .onAllNodesWithContentDescription(

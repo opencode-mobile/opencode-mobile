@@ -302,6 +302,7 @@ minimum height preserves a native touch target for each directional action.
 
 | Token | Value |
 | --- | --- |
+| `fileNavigationPill.width` | 200 (logical px) |
 | `fileNavigationPill.minHeight` | 44 (logical px) |
 | `fileNavigationPill.iconButtonSize` | 44 (logical px) |
 | `fileNavigationPill.iconSize` | 20 (logical px) |

@@ -39,6 +39,10 @@ final class OpenCode_MobileUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No matching files"].waitForExistence(timeout: 5))
         app.buttons["Clear filter"].tap()
 
+        let selectedFile = app.buttons["Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"]
+        XCTAssertTrue(selectedFile.exists)
+        XCTAssertFalse(app.staticTexts["Selected"].exists)
+
         let newFile = app.buttons["Sources/New.swift, Added, file 2 of 3, 2 additions, 0 deletions"]
         XCTAssertTrue(newFile.waitForExistence(timeout: 5))
         newFile.tap()

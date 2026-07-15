@@ -104,7 +104,7 @@ struct ChangesView: View {
                 style: .card,
                 action: { filePickerPresented = true }
             ) {
-                OpenCodeIconImage(icon: .chevronRight)
+                OpenCodeIconImage(icon: .list)
             }
             .padding(.horizontal, 16)
             .accessibilityElement(children: .ignore)
@@ -231,27 +231,48 @@ struct ChangesView: View {
                     ForEach(changeSet.filteredFiles) { file in
                         OpenCodeListItem(
                             title: file.path,
-                            subtitle: changeSet.filePickerSummary(file),
-                            selected: file.path == changeSet.selectedPath,
+                            subtitleSegments: filePickerSubtitleSegments(file, changeSet: changeSet),
                             action: {
                                 viewModel.selectFile(file.path)
                                 filePickerPresented = false
                             }
                         ) {
-                            if changeSet.reviewedPaths.contains(file.path) {
-                                Text("Reviewed").font(OpenCodeTypography.caption)
-                            } else if file.path == changeSet.selectedPath {
-                                Text("Selected").font(OpenCodeTypography.caption)
+                            HStack(spacing: 8) {
+                                if changeSet.reviewedPaths.contains(file.path) {
+                                    Text("Reviewed").font(OpenCodeTypography.caption)
+                                }
+                                if file.path == changeSet.selectedPath {
+                                    OpenCodeIconImage(icon: .check)
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(OpenCodeColors.iconStrongBase)
+                                        .accessibilityHidden(true)
+                                }
                             }
                         }
                         .padding(.horizontal, 12)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(changeSet.fileAccessibilityLabel(file))
                         .accessibilityAddTraits(.isButton)
+                        .accessibilityAddTraits(file.path == changeSet.selectedPath ? .isSelected : [])
                     }
                 }
             }
         }
+    }
+
+    private func filePickerSubtitleSegments(
+        _ file: FileDiff,
+        changeSet: ChangesContentState
+    ) -> [OpenCodeListItemSubtitleSegment] {
+        var segments: [OpenCodeListItemSubtitleSegment] = []
+        if changeSet.reviewedPaths.contains(file.path) {
+            segments.append(.init(text: "Reviewed · ", tone: .secondary))
+        }
+        segments.append(.init(text: "\(file.status.rawValue.capitalized) · ", tone: .secondary))
+        segments.append(.init(text: "+\(file.additions)", tone: .addition))
+        segments.append(.init(text: " ", tone: .secondary))
+        segments.append(.init(text: "−\(file.deletions)", tone: .deletion))
+        return segments
     }
 
     private func message(_ title: String, detail: String) -> some View {

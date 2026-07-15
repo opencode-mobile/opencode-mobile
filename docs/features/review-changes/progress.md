@@ -16,7 +16,9 @@
   deletion totals, and exposes the same action summary to accessibility on both
   platforms. File Navigation Pill adds fixed previous/next chevrons, stable
   current-file `+N −N` totals, independent boundary disabling, and an overall
-  refresh-disabled state with 44-point/dp directional targets.
+  refresh-disabled state with 44-point/dp directional targets. List Item now
+  supports mutually exclusive semantic subtitle segments so diff additions and
+  deletions can use shared tokens without exposing raw colors to features.
 - New dependencies: Review Changes Pill, File Navigation Pill, and Unified Diff.
 - Reused: top bar, overflow menu, bottom sheet, list item, button, semantic diff
   and syntax tokens, and existing typography roles.
@@ -32,6 +34,10 @@
 - OPE-43 replaces the Changes Refresh button with native pull-to-refresh,
   keeping the current diff visible while the request runs and resetting
   viewer-local controls only when the refreshed snapshot is published.
+- OPE-43 shows per-file additions and deletions in the Changed Files picker
+  using semantic diff tokens. Selection is indicated by a trailing checkmark
+  and selected accessibility trait without a selected row fill or `Selected`
+  text.
 - OPE-44 replaces the previous/next file text row with a bottom-centered File
   Navigation Pill. It follows the filtered file collection, shows both selected
   file totals including zero, disables at boundaries and during refresh, resets
@@ -74,6 +80,9 @@
 - OPE-43 replaces the Changes Refresh button with native pull-to-refresh,
   keeping the current diff visible while the request runs and resetting
   viewer-local controls only when the refreshed snapshot is published.
+- OPE-43 shows per-file additions and deletions in the Changed Files picker
+  using semantic diff tokens. Selection is indicated by a trailing checkmark
+  and selected semantics without a selected row fill or `Selected` text.
 - OPE-44 replaces the previous/next file text row with a bottom-centered File
   Navigation Pill. It follows the filtered file collection, shows both selected
   file totals including zero, disables at boundaries and during refresh, resets
