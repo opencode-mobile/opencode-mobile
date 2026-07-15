@@ -17,8 +17,11 @@ final class SessionChatComposer {
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
     private var cachedSelection: SessionModelSelection?
-    private var cacheResolved = false
-    private var appliedInitialModelSelection = false
+    private var newSessionPreference: SessionModelSelection?
+    private var initialSelectionState: InitialSelectionState = .loadingCache
+    private var latestTimelineState: SessionChatTimelineRegionState?
+    private var latestHistoryHints: ModelSelectionHistoryHints?
+    private var lastSelectionTimestamp: Int64 = 0
 
     init(
         sessionID: String,
@@ -46,14 +49,12 @@ final class SessionChatComposer {
     func reset() {
         loadedCatalog = nil
         cachedSelection = nil
-        cacheResolved = false
-        appliedInitialModelSelection = false
+        newSessionPreference = nil
+        initialSelectionState = .loadingCache
+        latestTimelineState = nil
+        latestHistoryHints = nil
         state = SessionChatComposerRegionState()
         notifyChange()
-    }
-
-    func resetInitialModelSelection() {
-        appliedInitialModelSelection = false
     }
 
     func loadCatalog() async {
@@ -62,88 +63,116 @@ final class SessionChatComposer {
             applyCatalog(catalog)
         } catch {
             OpenCodeLog.sessionChat.warning("loadCatalog failed error=\(error.localizedDescription, privacy: .public)")
+            updateComposer {
+                $0.isModelSelectionReady = false
+                $0.modelCatalogError = "Unable to load models. Tap Model to retry."
+                $0.modelNotice = "Unable to load models. Tap Model to retry."
+            }
         }
-    }
-
-    func applyLatestModelHint(_ hint: LatestModelHint?) {
-        guard let catalog = loadedCatalog, !catalog.options.isEmpty else { return }
-        guard let hint else { return }
-        guard let latestOption = catalog.option(providerID: hint.providerID, modelID: hint.modelID) else { return }
-        updateFromCatalog(catalog, latestOption: latestOption, latestVariant: hint.variant)
     }
 
     func tryApplyInitialSelection(
         timelineState: SessionChatTimelineRegionState,
-        messageHint: LatestModelHint?
+        historyHints: ModelSelectionHistoryHints
     ) {
-        guard !appliedInitialModelSelection else { return }
-        guard cacheResolved else { return }
-        guard !state.composer.modelOptions.isEmpty else { return }
+        latestTimelineState = timelineState
+        latestHistoryHints = historyHints
+        applyInitialSelectionIfReady()
+    }
+
+    private func applyInitialSelectionIfReady() {
+        guard initialSelectionState != .resolved, initialSelectionState != .failedWithFallback else { return }
+        guard initialSelectionState != .loadingCache else { return }
+        guard let catalog = loadedCatalog, !catalog.options.isEmpty else { return }
+        guard let timelineState = latestTimelineState else { return }
 
         switch timelineState.timeline {
         case .loading:
             return
-        case .error, .empty:
-            applyResolvedInitialSelection(messageHint: messageHint, markAppliedWithoutHint: true)
-        case .ready:
-            let staleCached = staleCachedSelection()
-            if let cachedSelection,
-               staleCached == nil {
-                appliedInitialModelSelection = true
-                applyLatestModelHint(
-                    LatestModelHint(
-                        providerID: cachedSelection.providerID,
-                        modelID: cachedSelection.modelID,
-                        variant: cachedSelection.variant
-                    )
-                )
-                return
-            }
-            if let messageHint {
-                appliedInitialModelSelection = true
-                applyLatestModelHint(messageHint)
-                if let staleCached {
-                    applyStaleCacheNotice(staleCached)
-                }
-            } else if !timelineState.messages.isEmpty {
-                appliedInitialModelSelection = true
-                if let staleCached {
-                    applyStaleCacheNotice(staleCached)
-                }
-            }
+        case .error, .empty, .ready:
+            guard let historyHints = latestHistoryHints else { return }
+            resolveAndPublishInitialSelection(catalog: catalog, historyHints: historyHints)
         }
     }
 
-    private func applyResolvedInitialSelection(
-        messageHint: LatestModelHint?,
-        markAppliedWithoutHint: Bool
+    private func resolveAndPublishInitialSelection(
+        catalog: ModelSelectionCatalog,
+        historyHints: ModelSelectionHistoryHints
     ) {
         let staleCached = staleCachedSelection()
-        if let cachedSelection, staleCached == nil {
-            appliedInitialModelSelection = true
-            applyLatestModelHint(
-                LatestModelHint(
-                    providerID: cachedSelection.providerID,
-                    modelID: cachedSelection.modelID,
-                    variant: cachedSelection.variant
-                )
-            )
-            return
+        let validCached = staleCached == nil ? cachedSelection : nil
+        let validUserHint = historyHints.user.flatMap { hint in
+            catalog.option(providerID: hint.providerID, modelID: hint.modelID) == nil ? nil : hint
         }
-        if let messageHint {
-            appliedInitialModelSelection = true
-            applyLatestModelHint(messageHint)
-            if let staleCached {
-                applyStaleCacheNotice(staleCached)
+        let validAssistantHint = historyHints.assistant.flatMap { hint in
+            catalog.option(providerID: hint.providerID, modelID: hint.modelID) == nil ? nil : hint
+        }
+        let validPreference = newSessionPreference.flatMap { value in
+            catalog.option(providerID: value.providerID, modelID: value.modelID) == nil ? nil : value
+        }
+        let chosen = chooseInitialSelection(
+            cached: validCached,
+            userHint: validUserHint,
+            assistantHint: validAssistantHint,
+            preference: validPreference
+        )
+        let chosenOption: ModelSelectionOption?
+        let rememberedVariant: String?
+        switch chosen {
+        case let .cached(value):
+            chosenOption = catalog.option(providerID: value.providerID, modelID: value.modelID)
+            rememberedVariant = value.variant
+        case let .history(value):
+            chosenOption = catalog.option(providerID: value.providerID, modelID: value.modelID)
+            rememberedVariant = value.variant
+        case let .preference(value):
+            chosenOption = catalog.option(providerID: value.providerID, modelID: value.modelID)
+            rememberedVariant = value.variant
+        case nil:
+            chosenOption = nil
+            rememberedVariant = nil
+        }
+        let option = chosenOption ?? catalog.serverDefault ?? catalog.options[0]
+        let variant = resolvedVariant(remembered: rememberedVariant, for: option)
+        let variantNotice = rememberedVariant.flatMap {
+            !$0.isEmpty && !option.variants.contains($0) ? "Remembered Variant is unavailable. Using Default." : nil
+        }
+        initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
+        updateComposer {
+            $0.modelOptions = catalog.options
+            $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
+            $0.selectedVariant = variant
+            $0.isModelSelectionReady = true
+            $0.modelCatalogError = nil
+            if staleCached != nil {
+                $0.modelNotice = "Selected model is unavailable. Using \(option.modelLabel)."
+            } else {
+                $0.modelNotice = variantNotice
             }
-            return
         }
-        if markAppliedWithoutHint {
-            appliedInitialModelSelection = true
-            if let staleCached {
-                applyStaleCacheNotice(staleCached)
-            }
+        let source = chosen?.sourceName ?? (catalog.serverDefault == nil ? "first-usable" : "server-default")
+        OpenCodeLog.sessionChat.info("modelSelection source=\(source, privacy: .public)")
+        if case .cached? = chosen {
+            // Keep the original timestamp when the session cache wins.
+        } else if staleCached == nil {
+            persistCurrentSelection(updatePreference: false)
         }
+    }
+
+    private func chooseInitialSelection(
+        cached: SessionModelSelection?,
+        userHint: LatestModelHint?,
+        assistantHint: LatestModelHint?,
+        preference: SessionModelSelection?
+    ) -> InitialSelection? {
+        if let userHint {
+            guard let cached else { return .history(userHint) }
+            guard let savedAt = cached.savedAtEpochMs else { return .history(userHint) }
+            guard let historyTime = userHint.sentAtEpochMs else { return .cached(cached) }
+            return historyTime > savedAt ? .history(userHint) : .cached(cached)
+        }
+        if let cached { return .cached(cached) }
+        return assistantHint.map(InitialSelection.history) ?? preference.map(InitialSelection.preference)
     }
 
     func updateComposerText(_ text: String) {
@@ -160,7 +189,7 @@ final class SessionChatComposer {
             composer.selectedVariant = composer.selectedModel?.selectedVariant
             composer.modelNotice = nil
         }
-        persistCurrentSelection()
+        persistCurrentSelection(updatePreference: true)
     }
 
     func selectMode(_ mode: String) {
@@ -179,7 +208,7 @@ final class SessionChatComposer {
             composer.selectedVariant = variant
             composer.selectedModel = composer.selectedModel.map { ModelSelection(option: $0.option, selectedVariant: variant) }
         }
-        persistCurrentSelection()
+        persistCurrentSelection(updatePreference: true)
     }
 
     func restoreComposerText(_ text: String) {
@@ -193,7 +222,11 @@ final class SessionChatComposer {
         onSendFailed: (String, String) -> Void
     ) async {
         let trimmed = state.composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let selectedModel = state.composer.selectedModel, !state.isSending else { return }
+        guard !trimmed.isEmpty,
+              let selectedModel = state.composer.selectedModel,
+              state.composer.isModelSelectionReady,
+              !state.isSending
+        else { return }
 
         var composer = state.composer
         composer.text = ""
@@ -237,7 +270,7 @@ final class SessionChatComposer {
                 ),
                 directory: worktree
             )
-            persistCurrentSelection()
+            persistCurrentSelection(updatePreference: false)
             await onSendAccepted()
         } catch {
             let message = errorMessage(error)
@@ -275,33 +308,53 @@ final class SessionChatComposer {
     }
 
     private func loadCachedSelection() async {
-        defer { cacheResolved = true }
-        guard let serverBaseURL = activeConnectionManager.currentProfile()?.baseURL else { return }
-        cachedSelection = await sessionModelSelectionStore.load(
-            serverBaseURL: serverBaseURL,
-            worktree: worktree,
-            sessionID: sessionID
-        )
+        if let profile = activeConnectionManager.currentProfile() {
+            let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
+            async let session = sessionModelSelectionStore.loadSession(
+                connectionIdentity: identity,
+                worktree: worktree,
+                sessionID: sessionID
+            )
+            async let preference = sessionModelSelectionStore.loadNewSessionPreference(
+                connectionIdentity: identity,
+                worktree: worktree
+            )
+            cachedSelection = await session
+            newSessionPreference = await preference
+        }
+        initialSelectionState = .waitingForInputs
+        applyInitialSelectionIfReady()
         notifyChange()
     }
 
-    private func persistCurrentSelection() {
-        guard let serverBaseURL = activeConnectionManager.currentProfile()?.baseURL,
+    private func persistCurrentSelection(updatePreference: Bool) {
+        guard let profile = activeConnectionManager.currentProfile(),
               let selectedModel = state.composer.selectedModel
         else { return }
+        let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
+        let timestamp = max(Int64(Date().timeIntervalSince1970 * 1_000), lastSelectionTimestamp + 1)
+        lastSelectionTimestamp = timestamp
         let selection = SessionModelSelection(
             providerID: selectedModel.option.providerID,
             modelID: selectedModel.option.modelID,
-            variant: state.composer.selectedVariant
+            variant: state.composer.selectedVariant,
+            savedAtEpochMs: timestamp
         )
         cachedSelection = selection
         Task {
-            await sessionModelSelectionStore.save(
-                serverBaseURL: serverBaseURL,
+            await sessionModelSelectionStore.saveSession(
+                connectionIdentity: identity,
                 worktree: worktree,
                 sessionID: sessionID,
                 selection: selection
             )
+            if updatePreference {
+                await sessionModelSelectionStore.saveNewSessionPreference(
+                    connectionIdentity: identity,
+                    worktree: worktree,
+                    selection: selection
+                )
+            }
         }
     }
 
@@ -313,46 +366,34 @@ final class SessionChatComposer {
         return isAvailable ? nil : cachedSelection
     }
 
-    private func applyStaleCacheNotice(_ cached: SessionModelSelection) {
-        let fallbackLabel = state.composer.selectedModel?.modelLabel ?? cached.modelID
-        updateComposer {
-            $0.modelNotice = "Selected model is unavailable. Using \(fallbackLabel)."
-        }
-    }
-
     private func applyCatalog(_ catalog: ModelSelectionCatalog) {
-        guard !catalog.options.isEmpty else { return }
+        guard !catalog.options.isEmpty else {
+            updateComposer {
+                $0.isModelSelectionReady = false
+                $0.modelCatalogError = "No usable models are available. Tap Model to retry."
+                $0.modelNotice = "No usable models are available. Tap Model to retry."
+            }
+            return
+        }
         loadedCatalog = catalog
-        updateFromCatalog(catalog, latestOption: nil, latestVariant: nil)
-    }
-
-    private func updateFromCatalog(
-        _ catalog: ModelSelectionCatalog,
-        latestOption: ModelSelectionOption?,
-        latestVariant: String?
-    ) {
-        let current = state.composer.selectedModel
-        let currentOption = current.flatMap {
-            catalog.option(providerID: $0.option.providerID, modelID: $0.option.modelID)
+        updateComposer {
+            $0.modelOptions = catalog.options
+            $0.modelCatalogError = nil
         }
-        let desired = latestOption ?? currentOption
-        let fallback = desired ?? catalog.serverDefault ?? catalog.options[0]
-        let notice: String? = {
-            guard let current, catalog.option(providerID: current.option.providerID, modelID: current.option.modelID) == nil else { return nil }
-            return "Selected model is unavailable. Using \(fallback.modelLabel)."
-        }()
-        let variant = resolvedVariant(remembered: state.composer.selectedVariant ?? latestVariant, for: fallback)
-        updateComposer { composer in
-            composer.modelOptions = catalog.options
-            composer.selectedModel = ModelSelection(option: fallback, selectedVariant: variant)
-            composer.selectedVariant = variant
-            composer.modelNotice = notice
-        }
+        applyInitialSelectionIfReady()
     }
 
     private func resolvedVariant(remembered: String?, for option: ModelSelectionOption) -> String? {
         guard let remembered, !remembered.isEmpty else { return nil }
         return option.variants.contains(remembered) ? remembered : nil
+    }
+
+    private enum InitialSelectionState {
+        case loadingCache
+        case waitingForInputs
+        case waitingForFallback
+        case resolved
+        case failedWithFallback
     }
 
     private func metadataLabel(mode: String, model: String?, variant: String?) -> String {
@@ -401,5 +442,19 @@ final class SessionChatComposer {
             modelID: optimistic.modelID,
             contextInputTokens: optimistic.contextInputTokens
         )
+    }
+
+    private enum InitialSelection {
+        case cached(SessionModelSelection)
+        case history(LatestModelHint)
+        case preference(SessionModelSelection)
+
+        var sourceName: String {
+            switch self {
+            case .cached: "session-cache"
+            case let .history(value): value.source == .user ? "user-history" : "assistant-history"
+            case .preference: "new-session-preference"
+            }
+        }
     }
 }

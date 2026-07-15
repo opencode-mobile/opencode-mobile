@@ -349,6 +349,119 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
     }
 
+    @Test func loadMessages_newerUserHistoryOverridesOlderCachedSelection() async {
+        let historyOption = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: ["high"],
+            contextLimitTokens: 128_000
+        )
+        let cachedOption = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "gpt-4",
+            modelName: "GPT-4",
+            variants: [],
+            contextLimitTokens: 128_000
+        )
+        let selectionStore = InMemorySessionModelSelectionStore()
+        await selectionStore.save(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            worktree: "/repo",
+            sessionID: "ses-1",
+            selection: SessionModelSelection(
+                providerID: "openai",
+                modelID: "gpt-4",
+                variant: nil,
+                savedAtEpochMs: 1_000
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-2",
+                        role: .user,
+                        text: "Use Claude",
+                        model: nil,
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: "high",
+                        mode: nil,
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            ),
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: FakeModelRepository(
+                catalog: ModelSelectionCatalog(
+                    options: [historyOption, cachedOption],
+                    serverDefault: cachedOption
+                )
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.composer.selectedModel?.option.providerID == "anthropic")
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+        #expect(viewModel.uiState.composer.selectedVariant == "high")
+    }
+
+    @Test func initialization_waitsForLateCacheAndPublishesSelectionOnceReady() async {
+        let defaultOption = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: [],
+            contextLimitTokens: 128_000
+        )
+        let cachedOption = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "gpt-4",
+            modelName: "GPT-4",
+            variants: [],
+            contextLimitTokens: 128_000
+        )
+        let store = InMemorySessionModelSelectionStore(blockLoads: true)
+        await store.save(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            worktree: "/repo",
+            sessionID: "ses-1",
+            selection: SessionModelSelection(
+                providerID: "openai",
+                modelID: "gpt-4",
+                variant: nil,
+                savedAtEpochMs: 2_000
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: []),
+            sessionModelSelectionStore: store,
+            modelRepository: FakeModelRepository(
+                catalog: ModelSelectionCatalog(options: [defaultOption, cachedOption], serverDefault: defaultOption)
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+        #expect(viewModel.uiState.composer.selectedModel == nil)
+
+        store.releaseLoads()
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+        viewModel.startObserving()
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+        viewModel.stopObserving()
+    }
+
     @Test func selectModel_persistsAndRestoresOnNewViewModel() async {
         let defaultOption = ModelSelectionOption(
             providerID: "anthropic",
@@ -388,6 +501,13 @@ struct SessionChatViewModelTests {
 
         #expect(secondViewModel.uiState.composer.selectedModel?.option.providerID == "openai")
         #expect(secondViewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+        #expect(await selectionStore.loadNewSessionPreference(
+            connectionIdentity: ModelSelectionConnectionIdentity(
+                serverBaseURL: "http://127.0.0.1:4096/",
+                username: "opencode"
+            ),
+            worktree: "/repo"
+        )?.modelID == "gpt-4")
     }
 
     @Test func loadMessages_showsNoticeWhenCachedModelUnavailable() async {
@@ -1114,13 +1234,58 @@ private struct FakeModelRepository: ModelRepository {
 @MainActor
 private final class InMemorySessionModelSelectionStore: SessionModelSelectionStore, @unchecked Sendable {
     private var saved: [String: SessionModelSelection] = [:]
+    private var preferences: [String: SessionModelSelection] = [:]
+    private var blockLoads: Bool
+
+    init(blockLoads: Bool = false) {
+        self.blockLoads = blockLoads
+    }
 
     func load(serverBaseURL: String, worktree: String, sessionID: String) async -> SessionModelSelection? {
-        saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)]
+        while blockLoads { await Task.yield() }
+        return saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)]
+    }
+
+    func releaseLoads() {
+        blockLoads = false
     }
 
     func save(serverBaseURL: String, worktree: String, sessionID: String, selection: SessionModelSelection) async {
         saved[key(serverBaseURL: serverBaseURL, worktree: worktree, sessionID: sessionID)] = selection
+    }
+
+    func loadSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) async -> SessionModelSelection? {
+        await load(serverBaseURL: connectionIdentity.serverBaseURL, worktree: worktree, sessionID: sessionID)
+    }
+
+    func saveSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String,
+        selection: SessionModelSelection
+    ) async {
+        await save(serverBaseURL: connectionIdentity.serverBaseURL, worktree: worktree, sessionID: sessionID, selection: selection)
+    }
+
+    func deleteSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) async {
+        saved.removeValue(forKey: key(serverBaseURL: connectionIdentity.serverBaseURL, worktree: worktree, sessionID: sessionID))
+    }
+
+    func deleteSessionEntries(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        sessionID: String
+    ) async {
+        saved.keys
+            .filter { $0.hasPrefix(connectionIdentity.serverBaseURL) && $0.hasSuffix("|\(sessionID)") }
+            .forEach { saved.removeValue(forKey: $0) }
     }
 
     func hasSavedSelection(
@@ -1133,6 +1298,26 @@ private final class InMemorySessionModelSelectionStore: SessionModelSelectionSto
 
     func clearAll() async {
         saved.removeAll()
+        preferences.removeAll()
+    }
+
+    func loadNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) async -> SessionModelSelection? {
+        preferences[preferenceKey(connectionIdentity, worktree)]
+    }
+
+    func saveNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        selection: SessionModelSelection
+    ) async {
+        preferences[preferenceKey(connectionIdentity, worktree)] = selection
+    }
+
+    private func preferenceKey(_ identity: ModelSelectionConnectionIdentity, _ worktree: String) -> String {
+        [identity.serverBaseURL, identity.username, worktree].joined(separator: "|")
     }
 
     private func key(serverBaseURL: String, worktree: String, sessionID: String) -> String {

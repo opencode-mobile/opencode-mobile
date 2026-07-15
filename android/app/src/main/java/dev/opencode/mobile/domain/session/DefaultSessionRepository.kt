@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.session
 
+import android.util.Log
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.dto.CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
@@ -8,6 +9,9 @@ import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
 import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Inject
 
 class DefaultSessionRepository
@@ -15,6 +19,8 @@ class DefaultSessionRepository
     constructor(
         private val api: SessionsApi,
         private val adapter: SessionDomainAdapter,
+        private val sessionModelSelectionStore: SessionModelSelectionStore? = null,
+        private val activeConnectionManager: ActiveConnectionManager? = null,
     ) : SessionRepository {
         override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
             runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }
@@ -59,9 +65,21 @@ class DefaultSessionRepository
         override suspend fun deleteSession(
             id: String,
             directory: String?,
-        ): Boolean =
-            runCatching { api.deleteSession(id, directory) }
-                .getOrElse { throw adapter.mapError(it) }
+        ): Boolean {
+            val deleted =
+                runCatching { api.deleteSession(id, directory) }
+                    .getOrElse { throw adapter.mapError(it) }
+            val profile = activeConnectionManager?.currentProfile()
+            if (deleted && profile != null) {
+                runCatching {
+                    sessionModelSelectionStore?.deleteSessionEntries(
+                        ModelSelectionConnectionIdentity(profile.baseUrl, profile.username),
+                        id,
+                    )
+                }.onFailure { Log.w("SessionRepository", "delete model selection failed", it) }
+            }
+            return deleted
+        }
 
         override suspend fun listChildSessions(
             id: String,

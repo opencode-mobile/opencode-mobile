@@ -120,8 +120,6 @@ class SessionContextCalculatorTest {
             id = "ses-1",
             title = "Session",
             directory = "/repo",
-            modelProviderId = "anthropic",
-            modelId = "claude-sonnet",
             createdAtEpochMs = 1_000L,
             updatedAtEpochMs = 6_000L,
         )

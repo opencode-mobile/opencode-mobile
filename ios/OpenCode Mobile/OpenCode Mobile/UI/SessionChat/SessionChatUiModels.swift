@@ -34,9 +34,11 @@ struct SessionChatComposerState: Equatable {
     var selectedMode: String
     var selectedVariant: String?
     var modelNotice: String?
+    var isModelSelectionReady = false
+    var modelCatalogError: String?
 
     var selectedModelLabel: String {
-        selectedModel?.modelLabel ?? "Model"
+        isModelSelectionReady ? selectedModel?.modelLabel ?? "Model" : "Loading model…"
     }
 
     var selectedVariantLabel: String {
@@ -209,6 +211,18 @@ struct LatestModelHint: Equatable {
     let providerID: String
     let modelID: String
     let variant: String?
+    let sentAtEpochMs: Int64?
+    let source: ModelSelectionHistorySource
+}
+
+struct ModelSelectionHistoryHints: Equatable {
+    let user: LatestModelHint?
+    let assistant: LatestModelHint?
+}
+
+enum ModelSelectionHistorySource: Equatable {
+    case user
+    case assistant
 }
 
 enum SessionConnectionStatus: String, Equatable, Sendable {

@@ -102,8 +102,6 @@ struct SessionContextCalculatorTests {
             projectID: nil,
             directory: "/repo",
             parentID: nil,
-            modelProviderID: "anthropic",
-            modelID: "claude-sonnet",
             createdAtEpochMs: 1_000,
             updatedAtEpochMs: 6_000
         )

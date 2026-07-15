@@ -10,14 +10,19 @@ import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelSelectionCatalog
+import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
+import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.model.SessionModelSelection
+import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
-import dev.opencode.mobile.domain.model.SessionModelSelection
-import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -187,6 +192,39 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun createSession_copiesResolvedPreferenceBeforeOpeningChat() =
+        runTest(testDispatcher) {
+            val selectionStore = FakeSessionModelSelectionStore()
+            val identity = ModelSelectionConnectionIdentity(serverUrl, "opencode")
+            selectionStore.saveNewSessionPreference(
+                identity,
+                "/repo",
+                SessionModelSelection("openai", "gpt-4", "high", 1_000L),
+            )
+            val option =
+                ModelSelectionOption("openai", "OpenAI", "gpt-4", "GPT-4", listOf("high"), 128_000)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = FakeSessionRepository(mutableMapOf()),
+                    selectionStore = selectionStore,
+                    modelRepository =
+                        object : ModelRepository {
+                            override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog =
+                                ModelSelectionCatalog(listOf(option), option)
+                        },
+                )
+            advanceUntilIdle()
+
+            viewModel.createSession("/repo")
+            advanceUntilIdle()
+
+            val target = (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession
+            assertEquals("created", target?.sessionId)
+            assertEquals("gpt-4", selectionStore.loadSession(identity, "/repo", "created")?.modelId)
+        }
+
+    @Test
     fun refreshOnSessionCreatedEvent() =
         runTest(testDispatcher) {
             val eventStream = FakeForegroundEventStream()
@@ -226,6 +264,11 @@ class MainScreenViewModelTest {
         sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
         eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(sessionsByWorktree.toMutableMap()),
+        selectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
+        modelRepository: ModelRepository =
+            object : ModelRepository {
+                override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
+            },
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -238,7 +281,7 @@ class MainScreenViewModelTest {
                 activeConnectionManager = activeConnectionManager,
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
-                sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                sessionModelSelectionStore = selectionStore,
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
@@ -256,6 +299,11 @@ class MainScreenViewModelTest {
             foregroundEventStream = eventStream,
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
+            newSessionModelSelectionResolver =
+                NewSessionModelSelectionResolver(
+                    selectionStore,
+                    modelRepository,
+                ),
         )
     }
 }
@@ -452,13 +500,16 @@ private class FakeSecureCredentialStore : SecureCredentialStore {
 }
 
 private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
-    override suspend fun load(
+    private val sessions = mutableMapOf<String, SessionModelSelection>()
+    private val preferences = mutableMapOf<String, SessionModelSelection>()
+
+    suspend fun load(
         serverBaseUrl: String,
         worktree: String,
         sessionId: String,
     ): SessionModelSelection? = null
 
-    override suspend fun save(
+    suspend fun save(
         serverBaseUrl: String,
         worktree: String,
         sessionId: String,
@@ -466,4 +517,48 @@ private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
     ) = Unit
 
     override suspend fun clearAll() = Unit
+
+    override suspend fun loadSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionId: String,
+    ): SessionModelSelection? = sessions["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree|$sessionId"]
+
+    override suspend fun saveSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionId: String,
+        selection: SessionModelSelection,
+    ) {
+        sessions["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree|$sessionId"] = selection
+    }
+
+    override suspend fun deleteSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionId: String,
+    ) {
+        sessions.remove("${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree|$sessionId")
+    }
+
+    override suspend fun deleteSessionEntries(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        sessionId: String,
+    ) {
+        val prefix = "${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|"
+        sessions.keys.removeAll { it.startsWith(prefix) && it.endsWith("|$sessionId") }
+    }
+
+    override suspend fun loadNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+    ): SessionModelSelection? = preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"]
+
+    override suspend fun saveNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        selection: SessionModelSelection,
+    ) {
+        preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = selection
+    }
 }

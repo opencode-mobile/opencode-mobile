@@ -134,6 +134,14 @@ final class SessionChatTimeline {
         latestModelHint(from: lastLoadedMessages)
     }
 
+    func modelSelectionHistoryHints() -> ModelSelectionHistoryHints {
+        let sorted = sortedByRecency(lastLoadedMessages)
+        return ModelSelectionHistoryHints(
+            user: latestModelHint(from: sorted, role: .user),
+            assistant: latestModelHint(from: sorted, role: .assistant)
+        )
+    }
+
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
         row(from: DisplayMessage(message: message), previous: previous)
     }
@@ -261,15 +269,18 @@ final class SessionChatTimeline {
     }
 
     private func latestModelHint(from messages: [Message]) -> LatestModelHint? {
-        let sorted =
-            messages.sorted(by: {
+        let sorted = sortedByRecency(messages)
+        return latestModelHint(from: sorted, role: .user)
+            ?? latestModelHint(from: sorted, role: .assistant)
+    }
+
+    private func sortedByRecency(_ messages: [Message]) -> [Message] {
+        messages.sorted(by: {
                 let leftTime = $0.sentAtEpochMs ?? Int64.min
                 let rightTime = $1.sentAtEpochMs ?? Int64.min
                 if leftTime != rightTime { return leftTime > rightTime }
                 return $0.id > $1.id
             })
-        return latestModelHint(from: sorted, role: .user)
-            ?? latestModelHint(from: sorted, role: .assistant)
     }
 
     private func latestModelHint(from sortedMessages: [Message], role: MessageRole) -> LatestModelHint? {
@@ -277,7 +288,13 @@ final class SessionChatTimeline {
               let providerID = message.modelProviderID,
               let modelID = message.modelID
         else { return nil }
-        return LatestModelHint(providerID: providerID, modelID: modelID, variant: message.variant)
+        return LatestModelHint(
+            providerID: providerID,
+            modelID: modelID,
+            variant: message.variant,
+            sentAtEpochMs: message.sentAtEpochMs,
+            source: role == .user ? .user : .assistant
+        )
     }
 
     private func mergeWithPending(_ serverRows: [SessionChatRow], pendingRows: [SessionChatRow]) -> [SessionChatRow] {

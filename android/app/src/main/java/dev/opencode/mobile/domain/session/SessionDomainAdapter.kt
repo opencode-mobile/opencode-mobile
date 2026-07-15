@@ -27,9 +27,6 @@ class SessionDomainAdapter {
             parentId = dto.parentId,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
-            modelProviderId = dto.model?.providerId,
-            modelId = dto.model?.id,
-            variant = dto.model?.variant,
             createdAtEpochMs = dto.time?.created,
             updatedAtEpochMs = dto.time?.updated,
         )

@@ -73,7 +73,9 @@ extension Container {
         self {
             DefaultSessionRepository(
                 api: self.sessionsAPIClient(),
-                adapter: self.sessionDomainAdapter()
+                adapter: self.sessionDomainAdapter(),
+                sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -234,7 +236,11 @@ extension Container {
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
-                connectionSessionCoordinator: self.connectionSessionCoordinator()
+                connectionSessionCoordinator: self.connectionSessionCoordinator(),
+                newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
+                    store: self.sessionModelSelectionStore(),
+                    modelRepository: self.modelRepository()
+                )
             )
         }
     }

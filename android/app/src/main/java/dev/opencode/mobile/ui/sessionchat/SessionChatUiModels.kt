@@ -17,9 +17,11 @@ data class SessionChatComposerState(
     val selectedMode: String = SessionChatComposer.AvailableModes.first(),
     val selectedVariant: String? = null,
     val modelNotice: String? = null,
+    val isModelSelectionReady: Boolean = false,
+    val modelCatalogError: String? = null,
 ) {
     val selectedModelLabel: String
-        get() = selectedModel?.modelLabel ?: "Model"
+        get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
 
     val selectedVariantLabel: String
         get() = selectedVariant ?: ModelSelection.DefaultVariantLabel
@@ -161,7 +163,19 @@ data class LatestModelHint(
     val providerId: String,
     val modelId: String,
     val variant: String?,
+    val sentAtEpochMs: Long?,
+    val source: ModelSelectionHistorySource,
 )
+
+data class ModelSelectionHistoryHints(
+    val user: LatestModelHint?,
+    val assistant: LatestModelHint?,
+)
+
+enum class ModelSelectionHistorySource {
+    User,
+    Assistant,
+}
 
 enum class SessionConnectionStatus(
     val label: String,
