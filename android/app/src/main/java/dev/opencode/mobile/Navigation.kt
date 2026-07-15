@@ -262,7 +262,7 @@ fun MainNavigation() {
 @Suppress("ktlint:standard:property-naming")
 private const val RouteTransitionDurationMillis = 220
 
-private fun forwardRouteTransition() =
+internal fun forwardRouteTransition() =
     (
         slideInHorizontally(
             animationSpec = tween(RouteTransitionDurationMillis),
@@ -275,7 +275,7 @@ private fun forwardRouteTransition() =
         ) + fadeOut(animationSpec = tween(RouteTransitionDurationMillis))
     )
 
-private fun backwardRouteTransition() =
+internal fun backwardRouteTransition() =
     (
         slideInHorizontally(
             animationSpec = tween(RouteTransitionDurationMillis),

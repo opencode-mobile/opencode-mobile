@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
@@ -255,7 +256,15 @@ private fun UnifiedDiffRowView(
         Text(row.oldLine?.toString().orEmpty(), Modifier.width(24.dp), style = CodeTextStyle)
         Text(row.newLine?.toString().orEmpty(), Modifier.width(24.dp), style = CodeTextStyle)
         Text(row.kind.marker(), Modifier.width(20.dp), color = foreground, style = CodeTextStyle)
-        Text(row.text, Modifier.padding(horizontal = 8.dp), color = foreground, style = CodeTextStyle)
+        Text(
+            text = row.text,
+            modifier = Modifier.padding(horizontal = 8.dp),
+            color = foreground,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            softWrap = false,
+            style = CodeTextStyle,
+        )
     }
 }
 

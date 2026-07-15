@@ -16,8 +16,9 @@
 - Added reusable Hunk Navigation Pill components with equal Previous hunk,
   Expand/Collapse context, and Next hunk targets plus independent disabled
   states.
-- Updated Unified Diff to retain typed rows, context projection, horizontal
-  scrolling, and selected-hunk focus without reviewed presentation.
+- Updated Unified Diff to retain typed rows, context projection, unwrapped
+  source lines with viewport-clamped horizontal scrolling, and selected-hunk
+  focus without reviewed presentation.
 - Removed File Navigation Pill implementations, tokens, documentation,
   galleries, previews, and tests.
 - Registered List Group and Hunk Navigation Pill in both Component Galleries
@@ -34,6 +35,8 @@
 - File rows push a native File Viewer that inherits the stable snapshot, starts
   at the top with the first hunk selected and context collapsed, and exposes the
   floating Hunk Navigation Pill only for renderable patches.
+- The File Viewer clamps the diff surface to the measured iOS viewport while
+  long source rows keep their intrinsic width and scroll inside that surface.
 - Back navigation preserves list source, filter, snapshot, and scroll state.
   Source switching preserves the filter and resets list scroll.
 - Reviewed state, file-picker presentation, previous/next file stepping, Main
@@ -45,6 +48,8 @@
   pass, while native UI verification remains blocked.
 - Changes uses a nested Navigation 3 back stack for the Changed Files and File
   Viewer destinations while one ViewModel retains the list snapshot and filter.
+  Its forward, Back, and predictive-Back motion reuses the app-level horizontal
+  push/pop transition contract.
 - The Changed Files behavior, source order/fallback, filtered totals, grouped
   rows, pull-to-refresh, errors, and empty states match iOS.
 - The File Viewer creates fresh local hunk/context state on every entry, keeps

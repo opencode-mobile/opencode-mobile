@@ -33,8 +33,13 @@ exposing editing actions.
 - Keep parsing deterministic across platforms: hunk headers expose old/new
   ranges, rows retain stable patch-line identifiers, metadata does not advance
   source line numbers, and malformed or non-text patches produce no hunks.
-- Keep source rows unwrapped and horizontally scrollable while the owning page
-  scrolls vertically.
+- Keep source rows explicitly single-line and unwrapped. Content wider than the
+  viewport expands to its intrinsic width and remains horizontally scrollable
+  while the owning page scrolls vertically; it is never line-broken or
+  ellipsized to fit.
+- Fill the available horizontal viewport with the diff surface even when every
+  rendered source row is shorter than the viewport. Long rows may still expand
+  the horizontal scroll content beyond that minimum width.
 - Collapsed context is the default and shows limited unchanged lines around
   each change. Expanded mode reveals all unchanged context present in the
   loaded patch without requesting or inventing additional source lines.
@@ -50,7 +55,8 @@ markers twice.
 ## Platform Notes
 
 - iOS: native SwiftUI rows inside coordinated vertical and horizontal scroll
-  containers.
+  containers. The horizontal content stack adopts its widest row's intrinsic
+  width so long lines produce a real scroll range.
 - Android: native Compose rows inside coordinated vertical and horizontal
   scroll containers.
 - Both platforms use equivalent unified-patch fixtures and existing syntax-role
@@ -74,9 +80,10 @@ internally but should not create observable behavior differences.
 - Token and typography usage: complete; the component uses the documented
   semantic diff, syntax, surface, border, caption, and code roles.
 - iOS implementation: complete, including typed hunks and rows, selected-hunk
-  focus, horizontal source scrolling, and context variants.
+  focus, explicit single-line intrinsic sizing, full-width surface layout,
+  horizontal source scrolling, and context variants.
 - Android implementation: complete with the equivalent behavior and native
-  bring-into-view handling for selected hunks.
+  no-wrap row sizing plus bring-into-view handling for selected hunks.
 - Component Galleries: complete on both platforms with interactive modified,
   added, deleted, unavailable, collapsed/expanded context, Unicode,
   no-newline, multi-hunk, and long-line fixtures under gallery light/dark theme

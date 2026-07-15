@@ -28,7 +28,7 @@ final class OpenCode_MobileUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Main branch"].exists)
         app.buttons["Git changes, selected"].tap()
 
-        let filter = app.textFields.firstMatch
+        let filter = app.textFields["Filter changed files"]
         XCTAssertTrue(filter.waitForExistence(timeout: 5))
         filter.tap()
         filter.typeText("missing")
@@ -42,6 +42,24 @@ final class OpenCode_MobileUITests: XCTestCase {
         file.tap()
 
         XCTAssertTrue(app.staticTexts["Sources/App.swift"].waitForExistence(timeout: 5))
+        let diff = app.scrollViews["Modified file Sources/App.swift, 1 additions, 1 deletions"]
+        let longLine = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "horizontalScrollingFixture")
+        ).firstMatch
+        XCTAssertTrue(diff.waitForExistence(timeout: 5))
+        XCTAssertTrue(longLine.waitForExistence(timeout: 5))
+        let initialLongLineX = longLine.frame.minX
+        diff.swipeLeft()
+        let horizontalScrollExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { element, _ in
+                guard let element = element as? XCUIElement else { return false }
+                return element.frame.minX < initialLongLineX - 20
+            },
+            object: longLine
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [horizontalScrollExpectation], timeout: 5), .completed)
+        diff.swipeRight()
+
         XCTAssertFalse(app.buttons["Previous hunk"].isEnabled)
         XCTAssertTrue(app.buttons["Expand context"].isEnabled)
         XCTAssertTrue(app.buttons["Next hunk"].isEnabled)

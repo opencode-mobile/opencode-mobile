@@ -160,16 +160,16 @@ struct OpenCodeUnifiedDiff: View {
     var selectedHunkID: Int?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { row in
-                        rowView(row)
-                            .id(row.id)
-                    }
+        ScrollView(.horizontal) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(rows) { row in
+                    rowView(row)
+                        .id(row.id)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceBase)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase))
@@ -188,7 +188,10 @@ struct OpenCodeUnifiedDiff: View {
             Text(row.newLine.map(String.init) ?? "")
                 .frame(width: 24, alignment: .trailing)
             Text(marker(row.kind)).frame(width: 20)
-            Text(row.text).padding(.horizontal, 8)
+            Text(row.text)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 8)
         }
         .font(OpenCodeTypography.code)
         .foregroundStyle(foreground(row.kind))

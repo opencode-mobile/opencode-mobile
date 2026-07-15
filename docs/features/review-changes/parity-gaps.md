@@ -10,4 +10,5 @@ actions, semantic colors, accessibility labels, and removal boundaries.
 
 Native navigation mechanics remain intentionally platform-specific: iOS uses a
 SwiftUI pushed destination and Android uses a nested Navigation 3 back stack.
-This does not create an observable product difference.
+Android's nested stack reuses the same horizontal push/pop motion as the app's
+top-level routes, so this does not create an observable product difference.

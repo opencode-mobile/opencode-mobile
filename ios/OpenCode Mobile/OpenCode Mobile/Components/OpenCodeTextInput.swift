@@ -13,9 +13,10 @@ enum OpenCodeTextInputSubmitAction {
 }
 
 struct OpenCodeTextInput: View {
-    let label: String
+    var label: String?
     @Binding var text: String
     var placeholder: String = ""
+    var accessibilityLabel: String?
     var kind: OpenCodeTextInputKind = .text
     var enabled = true
     var errorMessage: String?
@@ -27,9 +28,11 @@ struct OpenCodeTextInput: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+            if let label {
+                Text(label)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+            }
 
             field
                 .font(OpenCodeTypography.body)
@@ -68,16 +71,18 @@ struct OpenCodeTextInput: View {
         }
     }
 
-    @ViewBuilder
     private var field: some View {
-        if kind == .password {
-            SecureField(placeholder, text: $text)
-                .textContentType(.password)
-        } else {
-            TextField(placeholder, text: $text)
-                .textContentType(contentType)
-                .keyboardType(kind == .url ? .URL : .default)
+        Group {
+            if kind == .password {
+                SecureField(placeholder, text: $text)
+                    .textContentType(.password)
+            } else {
+                TextField(placeholder, text: $text)
+                    .textContentType(contentType)
+                    .keyboardType(kind == .url ? .URL : .default)
+            }
         }
+        .accessibilityLabel(accessibilityLabel ?? label ?? placeholder)
     }
 
     private var contentType: UITextContentType? {

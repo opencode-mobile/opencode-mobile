@@ -21,6 +21,8 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsDiffMode
 import dev.opencode.mobile.domain.session.VcsInfo
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,13 +32,14 @@ class ChangesScreenTest {
     @Test
     fun rendersChangedFilesThenPushesFocusedViewer() {
         val viewModel = ChangesViewModel(ChangesScreenRepository)
+        var didExit = false
         composeTestRule.setContent {
             ChangesScreen(
                 sessionId = "session",
                 worktree = "/repo",
                 messageId = "message",
                 initialSource = ChangeSource.WorkingTree,
-                onNavigateBack = {},
+                onNavigateBack = { didExit = true },
                 viewModel = viewModel,
             )
         }
@@ -50,13 +53,13 @@ class ChangesScreenTest {
         composeTestRule.onNodeWithContentDescription("Git changes, selected").assertIsDisplayed()
         composeTestRule.onNodeWithText("Last turn changes").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Main branch").assertCountEquals(0)
-        composeTestRule.onNodeWithText("Search changed paths").performTextInput("missing")
+        composeTestRule.onNodeWithContentDescription("Filter changed files").performTextInput("missing")
         composeTestRule
             .onNodeWithContentDescription("0 changed files, 0 additions, 0 deletions")
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("No matching files").assertIsDisplayed()
         composeTestRule.onNodeWithText("Clear filter").performClick()
-        composeTestRule.onNodeWithText("Search changed paths").performTextInput("App")
+        composeTestRule.onNodeWithContentDescription("Filter changed files").performTextInput("App")
         composeTestRule
             .onNodeWithContentDescription(
                 "Sources/App.kt, Modified, file 1 of 1, 1 addition, 1 deletion",
@@ -78,6 +81,10 @@ class ChangesScreenTest {
             .performClick()
         composeTestRule.onNodeWithText("Preview unavailable").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Previous hunk").assertCountEquals(0)
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+        assertTrue(didExit)
+        assertEquals("", (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet.filter)
     }
 }
 

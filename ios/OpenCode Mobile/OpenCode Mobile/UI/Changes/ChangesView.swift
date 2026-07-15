@@ -29,7 +29,7 @@ struct ChangesView: View {
                 OpenCodeTopBar(
                     title: "Changes",
                     subtitle: viewModel.state.selectedSource.displayName,
-                    leading: .back(action: { dismiss() }),
+                    leading: .back(action: exitChanges),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "Choose change source") {
                             sourceMenuPresented = true
@@ -43,11 +43,21 @@ struct ChangesView: View {
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
+        .onDisappear {
+            if selectedPath == nil {
+                viewModel.clearFilter()
+            }
+        }
         .navigationDestination(item: $selectedPath) { path in
             if let file = viewModel.content?.files.first(where: { $0.path == path }) {
                 FileViewerView(file: file)
             }
         }
+    }
+
+    private func exitChanges() {
+        viewModel.clearFilter()
+        dismiss()
     }
 
     @ViewBuilder private var content: some View {
@@ -96,12 +106,13 @@ struct ChangesView: View {
                 }
 
                 OpenCodeTextInput(
-                    label: "Filter paths",
+                    label: nil,
                     text: Binding(
                         get: { viewModel.content?.filter ?? "" },
                         set: viewModel.updateFilter
                     ),
-                    placeholder: "Search changed paths"
+                    placeholder: "Filter",
+                    accessibilityLabel: "Filter changed files"
                 )
 
                 if changeSet.filteredFiles.isEmpty {
@@ -226,34 +237,37 @@ private struct FileViewerView: View {
     }
 
     private var viewerContent: some View {
-        ScrollViewReader { proxy in
-            ZStack(alignment: .bottom) {
-                ScrollView {
-                    OpenCodeUnifiedDiff(
-                        file: state.file,
-                        document: state.document,
-                        contextMode: state.contextMode,
-                        selectedHunkID: state.selectedHunkID
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 84)
-                }
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ZStack(alignment: .bottom) {
+                    ScrollView {
+                        OpenCodeUnifiedDiff(
+                            file: state.file,
+                            document: state.document,
+                            contextMode: state.contextMode,
+                            selectedHunkID: state.selectedHunkID
+                        )
+                        .frame(width: max(0, geometry.size.width - 32), alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 84)
+                    }
 
-                OpenCodeHunkNavigationPill(
-                    previousEnabled: state.canSelectPreviousHunk,
-                    nextEnabled: state.canSelectNextHunk,
-                    contextEnabled: state.canExpandContext,
-                    contextExpanded: state.contextMode == .expanded,
-                    onPrevious: { state.selectPreviousHunk() },
-                    onToggleContext: { state.toggleContextMode() },
-                    onNext: { state.selectNextHunk() }
-                )
-                .padding(.bottom, 12)
-            }
-            .onChange(of: state.selectedHunkID) { _, selectedHunkID in
-                guard let selectedHunkID else { return }
-                withAnimation { proxy.scrollTo(selectedHunkID, anchor: .top) }
+                    OpenCodeHunkNavigationPill(
+                        previousEnabled: state.canSelectPreviousHunk,
+                        nextEnabled: state.canSelectNextHunk,
+                        contextEnabled: state.canExpandContext,
+                        contextExpanded: state.contextMode == .expanded,
+                        onPrevious: { state.selectPreviousHunk() },
+                        onToggleContext: { state.toggleContextMode() },
+                        onNext: { state.selectNextHunk() }
+                    )
+                    .padding(.bottom, 12)
+                }
+                .onChange(of: state.selectedHunkID) { _, selectedHunkID in
+                    guard let selectedHunkID else { return }
+                    withAnimation { proxy.scrollTo(selectedHunkID, anchor: .top) }
+                }
             }
         }
     }

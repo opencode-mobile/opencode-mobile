@@ -41,7 +41,9 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.domain.session.FileDiff
+import dev.opencode.mobile.forwardRouteTransition
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -83,18 +85,25 @@ fun ChangesScreen(
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(ChangedFilesRoute)
+    val exitChanges = {
+        viewModel.clearFilter()
+        onNavigateBack()
+    }
 
     NavDisplay(
         modifier = modifier.fillMaxSize(),
         backStack = backStack,
-        onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else onNavigateBack() },
+        onBack = { if (backStack.size > 1) backStack.removeLastOrNull() else exitChanges() },
+        transitionSpec = { forwardRouteTransition() },
+        popTransitionSpec = { backwardRouteTransition() },
+        predictivePopTransitionSpec = { backwardRouteTransition() },
         entryProvider =
             entryProvider {
                 entry<ChangedFilesRoute> {
                     ChangedFilesScreen(
                         state = state,
                         viewModel = viewModel,
-                        onNavigateBack = onNavigateBack,
+                        onNavigateBack = exitChanges,
                         onOpenFile = { backStack.add(FileViewerRoute(it)) },
                     )
                 }
@@ -249,10 +258,10 @@ private fun ChangedFilesContent(
             }
             item {
                 OpenCodeTextInput(
-                    label = "Filter paths",
                     value = changeSet.filter,
                     onValueChange = viewModel::updateFilter,
-                    placeholder = "Search changed paths",
+                    placeholder = "Filter",
+                    accessibilityLabel = "Filter changed files",
                 )
             }
             if (changeSet.filteredFiles.isEmpty()) {

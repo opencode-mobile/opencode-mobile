@@ -68,7 +68,11 @@ struct OpenCode_MobileApp: App {
         FileDiff(
             path: "Sources/App.swift",
             patch: {
-                let before = (1...8).map { " before \($0)" }.joined(separator: "\n")
+                let before = (1...8).map { index in
+                    index == 6
+                        ? " let horizontalScrollingFixture = \"This source line is intentionally much wider than an iPhone viewport so the unified diff can verify horizontal scrolling.\""
+                        : " before \(index)"
+                }.joined(separator: "\n")
                 let after = (1...8).map { " after \($0)" }.joined(separator: "\n")
                 return "@@ -1,17 +1,17 @@\n\(before)\n-old-app\n+new\n\(after)\n@@ -30 +30 @@\n-old-two\n+new-two"
             }(),
