@@ -113,14 +113,15 @@ and quiet refresh merge stay in the Screen Model.
 
 A user, assistant, or tool-related item inside a session.
 
-Each message has a `role` (user/assistant), a pre-computed `text` for display,
-and an ordered array of `parts` that represent the content structure. A message
-with no meaningful parts (empty prompt, system-only) still has a `text` fallback.
+Each message has a `role` (user/assistant), an ordered array of `parts`, and a
+`text` projection of TextPart content for display. Tool calls are not flattened
+into `text` when Session Chat shows them as Tool Call Cards. A message with no
+meaningful parts (empty prompt, system-only) still has a `text` fallback.
 
 ### message part
 
-A typed content unit within a message. Parts are ordered and rendered
-sequentially. For v1 the domain model defines two variants:
+A typed content unit within a message. Parts are ordered. For v1 the domain
+model defines two variants:
 
 - **TextPart**: user prompt text or assistant response text. May carry
   `isStreaming: true` while delta chunks are still arriving. Model reasoning
@@ -132,13 +133,22 @@ sequentially. For v1 the domain model defines two variants:
   _Avoid_: treating a preformatted status string as the tool part itself;
   modeling every server tool schema as its own domain type in v1.
 
+### timeline block
+
+A Session Chat presentation unit inside one message timeline item: either a
+text block (Rendered Markdown from adjacent TextParts) or a tool card block
+(Tool Call Card from a visible ToolPart).
+_Avoid_: treating each block as its own top-level message; flattening tool
+labels into message `text` for Session Chat display.
+
 ### tool status
 
 Where a ToolPart is in its lifecycle: `pending`, `running`, `completed`, or
 `error`. Missing or unrecognized server status is treated as `pending`.
 
-Compact chat labels may prefix a status emoji (for example ⌛ / ⏳ / ✓ / ✕);
-that emoji is presentation via a display formatter, not stored on ToolPart.
+Session Chat shows status on the Tool Call Card. Compact emoji labels (for
+example ⌛ / ⏳ / ✓ / ✕) are a legacy display formatter for non-card surfaces,
+not stored on ToolPart.
 _Avoid_: encoding status only as emoji or a display string.
 
 Server-only part types (`step-start`, `step-finish`, `agent`, `subtask`,

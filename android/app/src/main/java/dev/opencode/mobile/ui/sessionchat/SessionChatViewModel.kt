@@ -293,7 +293,7 @@ class SessionChatViewModel
         internal fun toMessageItem(
             message: Message,
             previous: SessionChatMessageItem? = null,
-        ): SessionChatMessageItem = timeline.toMessageItem(message, previous)
+        ): SessionChatMessageItem? = timeline.toMessageItem(message, previous)
 
         private fun publishUiState() {
             publishUiState(

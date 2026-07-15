@@ -44,13 +44,16 @@ Android.
 
 ## Screen Model
 
-- Session Chat timeline: ordered rows of text and tool cards (generic first;
-  specialized chrome later).
-- Actions: expand/collapse tool card where the shared card supports it; tap
-  file-change tools → open existing Changes review; tap `task` → navigate to
-  child session when `metadata.sessionId` is present.
-- Until tool cards land, UI still renders flattened `Message.text` (compact
-  labels) — no new Screen Model fields required for OPE-48 alone.
+- Session Chat timeline: one item per **message**, with ordered **timeline
+  blocks** (text block | tool card block). Generic cards first (OPE-49);
+  specialized chrome later (OPE-50+).
+- OPE-49: Screen Model maps assistant parts → blocks; merges adjacent
+  TextParts; applies hide rules (`todowrite`; in-flight `question`); omits
+  messages with no visible blocks; rebuilds blocks on live part updates.
+- Actions (later tickets): tap file-change tools → Changes review; tap
+  `task` → child session when `metadata.sessionId` is present. Generic cards
+  in OPE-49 are display-only (no tap/expand).
+- Chat display uses blocks; `Message.text` is TextPart-only.
 
 ## Native navigation entry points
 

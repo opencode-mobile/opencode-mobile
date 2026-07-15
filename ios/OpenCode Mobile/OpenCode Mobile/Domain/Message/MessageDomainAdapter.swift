@@ -181,16 +181,16 @@ struct MessageDomainAdapter: Sendable {
     }
 
     private func displayText(from parts: [MessagePart]) -> String {
-        let segments: [String] = parts.map { part in
+        let segments: [String] = parts.compactMap { part in
             switch part {
             case .text(let t):
-                return t.text
-            case .tool(let t):
-                return compactToolLabel(for: t)
+                let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            case .tool:
+                return nil
             }
         }
-        let nonEmpty = segments.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        return nonEmpty.joined(separator: "\n")
+        return segments.joined(separator: "\n")
     }
 
     private func tokenUsage(from dto: MessageTokensDTO?) -> MessageTokenUsage? {

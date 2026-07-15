@@ -254,7 +254,7 @@ final class SessionChatViewModel {
         reviewChanges.stop()
     }
 
-    func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
+    func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow? {
         timeline.row(from: message, previous: previous)
     }
 

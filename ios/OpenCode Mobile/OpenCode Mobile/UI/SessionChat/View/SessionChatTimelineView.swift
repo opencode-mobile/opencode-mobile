@@ -176,6 +176,7 @@ private extension Array where Element == SessionChatRow {
             hasher.combine(result)
             hasher.combine(message.id)
             hasher.combine(message.text.count)
+            hasher.combine(message.blocks.count)
             hasher.combine(message.isStreaming)
             hasher.combine(message.renderedMarkdown?.sourceHash ?? 0)
             hasher.combine(message.renderedMarkdown?.blocks.count ?? 0)
@@ -216,18 +217,11 @@ private struct SessionChatMessageRow: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
             case .assistant:
-                AssistantMessageBubble(
-                    text: message.text,
-                    renderedMarkdown: message.renderedMarkdown
+                AssistantMessageContent(
+                    message: message,
+                    onOpenMessageActions: { openMessageActions(showsRevertMessage: false) }
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .modifier(
-                    SessionChatMessageActionsGestureModifier(
-                        renderedMarkdown: message.renderedMarkdown,
-                        accessibilityLabel: "Assistant message",
-                        onOpenMessageActions: { openMessageActions(showsRevertMessage: false) }
-                    )
-                )
             case .command, .tool, .unknown:
                 FallbackMessageBubble(
                     roleLabel: message.role.displayLabel,
@@ -262,6 +256,53 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
     }
 }
 
+private struct AssistantMessageContent: View {
+    let message: SessionChatRow
+    let onOpenMessageActions: () -> Void
+
+    private var blocks: [SessionChatTimelineBlock] {
+        if message.blocks.isEmpty {
+            return [.text(message.text)]
+        }
+        return message.blocks
+    }
+
+    private var singleTextBlock: Bool {
+        blocks.filter {
+            if case .text = $0 { return true }
+            return false
+        }.count == 1
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .text(let text):
+                    AssistantMessageBubble(
+                        text: text,
+                        renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil
+                    )
+                    .modifier(
+                        SessionChatMessageActionsGestureModifier(
+                            renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil,
+                            accessibilityLabel: "Assistant message",
+                            onOpenMessageActions: onOpenMessageActions
+                        )
+                    )
+                case .toolCard(let card):
+                    OpenCodeToolCallCard(
+                        status: card.status.toolCallCardStatus,
+                        title: card.title,
+                        subtitle: card.subtitle,
+                        errorText: card.errorText
+                    )
+                }
+            }
+        }
+    }
+}
+
 private struct AssistantMessageBubble: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
@@ -287,6 +328,17 @@ private struct AssistantMessageBubble: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+    }
+}
+
+private extension ToolStatus {
+    var toolCallCardStatus: OpenCodeToolCallCardStatus {
+        switch self {
+        case .pending: .pending
+        case .running: .running
+        case .completed: .completed
+        case .error: .error
+        }
     }
 }
 

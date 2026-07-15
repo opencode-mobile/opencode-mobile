@@ -211,6 +211,7 @@ data class SessionChatMessageItem(
     val isPending: Boolean = false,
     val isStreaming: Boolean = false,
     val renderedMarkdown: MarkdownDocument? = null,
+    val blocks: List<SessionChatTimelineBlock> = emptyList(),
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,

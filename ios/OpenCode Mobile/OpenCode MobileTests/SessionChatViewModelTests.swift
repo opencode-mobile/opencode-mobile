@@ -757,7 +757,7 @@ struct SessionChatViewModelTests {
         )
         let viewModel = makeViewModel()
         let row = viewModel.row(from: message)
-        #expect(row.isStreaming == true)
+        #expect(row?.isStreaming == true)
     }
 
     @Test func rowFromMessage_nonStreamingTextPart_setsIsStreamingFalse() {
@@ -772,14 +772,14 @@ struct SessionChatViewModelTests {
         )
         let viewModel = makeViewModel()
         let row = viewModel.row(from: message)
-        #expect(row.isStreaming == false)
+        #expect(row?.isStreaming == false)
     }
 
     @Test func rowFromMessage_toolPartOnly_isNotStreaming() {
         let message = Message(
             id: "msg-1",
             role: .assistant,
-            text: "\u{2713} bash",
+            text: "",
             parts: [.tool(ToolPart(toolName: "bash", status: .completed))],
             model: nil,
             mode: nil,
@@ -787,7 +787,12 @@ struct SessionChatViewModelTests {
         )
         let viewModel = makeViewModel()
         let row = viewModel.row(from: message)
-        #expect(row.isStreaming == false)
+        #expect(row?.isStreaming == false)
+        guard case .toolCard(let card) = row?.blocks.first else {
+            Issue.record("Expected tool card block")
+            return
+        }
+        #expect(card.title == "Called bash")
     }
 
     @Test func contextUsageFraction_usesLatestAssistantTokensAndModelLimit() async {

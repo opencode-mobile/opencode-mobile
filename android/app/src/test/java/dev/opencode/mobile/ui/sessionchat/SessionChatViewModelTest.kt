@@ -1281,7 +1281,7 @@ class SessionChatViewModelTest {
                     text = "Hello",
                     parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true)),
                 )
-            val item = viewModel.toMessageItem(message)
+            val item = requireNotNull(viewModel.toMessageItem(message))
             assertTrue(item.isStreaming)
         }
 
@@ -1296,7 +1296,7 @@ class SessionChatViewModelTest {
                     text = "Done",
                     parts = listOf(MessagePart.Text(text = "Done", isStreaming = false)),
                 )
-            val item = viewModel.toMessageItem(message)
+            val item = requireNotNull(viewModel.toMessageItem(message))
             assertFalse(item.isStreaming)
         }
 
@@ -1308,11 +1308,13 @@ class SessionChatViewModelTest {
                 Message(
                     id = "msg-1",
                     role = MessageRole.Assistant,
-                    text = "\u2713 bash",
+                    text = "",
                     parts = listOf(MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed)),
                 )
-            val item = viewModel.toMessageItem(message)
+            val item = requireNotNull(viewModel.toMessageItem(message))
             assertFalse(item.isStreaming)
+            val tool = item.blocks.single() as SessionChatTimelineBlock.ToolCard
+            assertEquals("Called bash", tool.title)
         }
 
     @Test
@@ -1386,14 +1388,16 @@ class SessionChatViewModelTest {
             )
 
         val item =
-            viewModel.toMessageItem(
-                Message(
-                    id = "msg-1",
-                    role = MessageRole.Assistant,
-                    text = "# Partial heading",
-                    parts = listOf(MessagePart.Text(text = "# Partial heading", isStreaming = true)),
+            requireNotNull(
+                viewModel.toMessageItem(
+                    Message(
+                        id = "msg-1",
+                        role = MessageRole.Assistant,
+                        text = "# Partial heading",
+                        parts = listOf(MessagePart.Text(text = "# Partial heading", isStreaming = true)),
+                    ),
+                    previous,
                 ),
-                previous,
             )
 
         assertNotNull(item.renderedMarkdown)
