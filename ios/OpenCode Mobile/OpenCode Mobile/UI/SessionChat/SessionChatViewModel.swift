@@ -77,7 +77,6 @@ final class SessionChatViewModel {
     }
 
     func startObserving() {
-        composer.resetInitialModelSelection()
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionInfo.startObserving()
         timeline.startObserving()
@@ -97,6 +96,10 @@ final class SessionChatViewModel {
 
     func updateComposerText(_ text: String) {
         composer.updateComposerText(text)
+    }
+
+    func retryModelCatalog() async {
+        await composer.loadCatalog()
     }
 
     func selectModel(_ option: ModelSelectionOption) {
@@ -268,7 +271,7 @@ final class SessionChatViewModel {
         let infoState = sessionInfo.state
         composer.tryApplyInitialSelection(
             timelineState: timelineState,
-            messageHint: timeline.latestModelHint()
+            historyHints: timeline.modelSelectionHistoryHints()
         )
         reviewChanges.updateCandidate(
             messages: timelineState.messages,

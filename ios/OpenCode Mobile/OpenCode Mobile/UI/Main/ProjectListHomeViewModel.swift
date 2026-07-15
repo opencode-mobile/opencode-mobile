@@ -58,6 +58,7 @@ final class ProjectListHomeViewModel {
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
+    private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver?
     private let sessionLiveStore: any SessionLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
@@ -82,7 +83,8 @@ final class ProjectListHomeViewModel {
         sessionLiveStore: any SessionLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
-        connectionSessionCoordinator: ConnectionSessionCoordinator
+        connectionSessionCoordinator: ConnectionSessionCoordinator,
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
     ) {
         self.projectRepository = projectRepository
         self.sessionRepository = sessionRepository
@@ -92,6 +94,7 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.foregroundEventStream = foregroundEventStream
         self.connectionSessionCoordinator = connectionSessionCoordinator
+        self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 await self?.refresh()
@@ -200,7 +203,21 @@ final class ProjectListHomeViewModel {
     func createSession(in worktree: String) async {
         setProjectSessionCreateError(nil)
         do {
+            let profile = activeConnectionManager.currentProfile()
+            let selection: SessionModelSelection? = if let profile {
+                await newSessionModelSelectionResolver?.resolve(profile: profile, worktree: worktree)
+            } else {
+                nil
+            }
             let session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: worktree)
+            if let profile, let selection {
+                await newSessionModelSelectionResolver?.seedSession(
+                    profile: profile,
+                    worktree: worktree,
+                    sessionID: session.id,
+                    selection: selection
+                )
+            }
             pendingSessionOpen =
                 SessionListItem(id: session.id, title: session.title, worktree: worktree)
         } catch {

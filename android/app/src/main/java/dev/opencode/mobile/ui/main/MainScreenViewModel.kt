@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -52,6 +53,7 @@ class MainScreenViewModel
         private val foregroundEventStream: ForegroundEventStream,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+        private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -158,8 +160,14 @@ class MainScreenViewModel
         fun createSession(worktree: String) {
             viewModelScope.launch {
                 clearProjectSessionCreateError()
+                val profile = activeConnectionManager.currentProfile()
+                val selection =
+                    profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
                 val createResult = runCatching { sessionRepository.createSession(directory = worktree) }
                 createResult.onSuccess { session ->
+                    if (profile != null && selection != null) {
+                        newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
+                    }
                     _uiState.update { state ->
                         if (state is MainScreenUiState.Loaded) {
                             state.copy(

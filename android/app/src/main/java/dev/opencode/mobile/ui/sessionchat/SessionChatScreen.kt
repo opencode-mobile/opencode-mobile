@@ -183,7 +183,11 @@ fun SessionChatScreen(
                     selectedModeLabel = uiState.composer.selectedMode,
                     selectedVariantLabel = uiState.composer.selectedVariantLabel,
                     showVariant = uiState.composer.canSelectVariant,
-                    sendEnabled = uiState.composer.text.isNotBlank() && uiState.composer.selectedModel != null && !uiState.isSending,
+                    sendEnabled =
+                        uiState.composer.text.isNotBlank() &&
+                            uiState.composer.selectedModel != null &&
+                            uiState.composer.isModelSelectionReady &&
+                            !uiState.isSending,
                     showStop = uiState.sessionStatusLabel != null,
                     stopEnabled = !uiState.isAborting,
                 )
@@ -193,6 +197,10 @@ fun SessionChatScreen(
                     when (action) {
                         is OpenCodeSessionComposerAction.TextChanged -> viewModel.updateComposerText(action.text)
                         OpenCodeSessionComposerAction.SelectModel -> {
+                            if (uiState.composer.modelOptions.isEmpty()) {
+                                viewModel.retryModelCatalog()
+                                return@OpenCodeSessionComposer
+                            }
                             activeModelProviderId =
                                 uiState.composer.selectedModel
                                     ?.option

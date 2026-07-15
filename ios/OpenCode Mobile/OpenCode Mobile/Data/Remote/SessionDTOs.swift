@@ -10,14 +10,7 @@ struct SessionDTO: Codable, Sendable {
     let version: String?
     let cost: Double?
     let tokens: MessageTokensDTO?
-    let model: SessionModelDTO?
     let time: SessionTimeDTO?
-}
-
-struct SessionModelDTO: Codable, Sendable {
-    let id: String?
-    let providerID: String?
-    let variant: String?
 }
 
 struct SessionTimeDTO: Codable, Sendable {

@@ -175,7 +175,11 @@ struct SessionChatView: View {
                     selectedModeLabel: composer.selectedMode,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
-                    sendEnabled: !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && composer.selectedModel != nil && !isSending,
+                    sendEnabled:
+                        !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        composer.selectedModel != nil &&
+                        composer.isModelSelectionReady &&
+                        !isSending,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting
                 )
@@ -189,6 +193,10 @@ struct SessionChatView: View {
                 case let .textChanged(text):
                     viewModel.updateComposerText(text)
                 case .selectModel:
+                    guard !composer.modelOptions.isEmpty else {
+                        Task { await viewModel.retryModelCatalog() }
+                        return
+                    }
                     activeModelProviderID = composer.selectedModel?.option.providerID
                     activePicker = .model
                 case .selectMode:

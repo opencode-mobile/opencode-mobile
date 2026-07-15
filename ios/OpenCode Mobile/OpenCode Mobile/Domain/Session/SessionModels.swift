@@ -9,9 +9,6 @@ struct Session: Sendable, Equatable {
     let parentID: String?
     var cost: Double? = nil
     var tokens: MessageTokenUsage? = nil
-    var modelProviderID: String? = nil
-    var modelID: String? = nil
-    var variant: String? = nil
     var createdAtEpochMs: Int64? = nil
     let updatedAtEpochMs: Int64?
 }

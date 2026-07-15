@@ -11,9 +11,6 @@ struct SessionDomainAdapter: Sendable {
             parentID: dto.parentID,
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
-            modelProviderID: dto.model?.providerID,
-            modelID: dto.model?.id,
-            variant: dto.model?.variant,
             createdAtEpochMs: dto.time?.created,
             updatedAtEpochMs: dto.time?.updated
         )

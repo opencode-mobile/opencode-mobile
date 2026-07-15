@@ -51,10 +51,19 @@ extension SessionRepository {
 struct DefaultSessionRepository: SessionRepository, Sendable {
     private let api: SessionsAPIClient
     private let adapter: SessionDomainAdapter
+    private let sessionModelSelectionStore: (any SessionModelSelectionStore)?
+    private let activeConnectionManager: ActiveConnectionManager?
 
-    init(api: SessionsAPIClient, adapter: SessionDomainAdapter) {
+    init(
+        api: SessionsAPIClient,
+        adapter: SessionDomainAdapter,
+        sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
+        activeConnectionManager: ActiveConnectionManager? = nil
+    ) {
         self.api = api
         self.adapter = adapter
+        self.sessionModelSelectionStore = sessionModelSelectionStore
+        self.activeConnectionManager = activeConnectionManager
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
@@ -86,7 +95,19 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
     }
 
     func deleteSession(id: String) async throws -> Bool {
-        try await run { try await api.deleteSession(id: id) }
+        let deleted = try await run { try await api.deleteSession(id: id) }
+        if deleted,
+           let profile = activeConnectionManager?.currentProfile(),
+           let sessionModelSelectionStore {
+            await sessionModelSelectionStore.deleteSessionEntries(
+                connectionIdentity: ModelSelectionConnectionIdentity(
+                    serverBaseURL: profile.baseURL,
+                    username: profile.username
+                ),
+                sessionID: id
+            )
+        }
+        return deleted
     }
 
     func listChildSessions(id: String) async throws -> [Session] {

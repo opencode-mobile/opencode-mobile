@@ -95,6 +95,7 @@ class SessionChatViewModel
         private var permissionError: String? = null
         private var permissionTopologyError: String? = null
         private var permissionObservationJob: kotlinx.coroutines.Job? = null
+
         init {
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
@@ -107,7 +108,7 @@ class SessionChatViewModel
                 ) { timelineState, composerState, infoState, reviewChangesState ->
                     SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState)
                 }.collect { (timelineState, composerState, infoState, reviewChangesState) ->
-                    composer.tryApplyInitialSelection(timelineState, timeline.latestModelHint())
+                    composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
                     reviewChanges.updateCandidate(
                         messages = timelineState.messages,
                         hasResolvedSessionStatus = infoState.hasResolvedSessionStatus,
@@ -155,6 +156,10 @@ class SessionChatViewModel
 
         fun updateComposerText(text: String) {
             composer.updateComposerText(text)
+        }
+
+        fun retryModelCatalog() {
+            composer.loadCatalog()
         }
 
         fun selectModel(option: ModelSelectionOption) {
@@ -212,11 +217,12 @@ class SessionChatViewModel
             worktree: String,
         ) {
             permissionObservationJob?.cancel()
-            permissionObservationJob = viewModelScope.launch(ioDispatcher) {
-                permissionLiveStore.observePermissions(worktree).collect { requests ->
-                    applyPermissionSnapshot(sessionId, worktree, requests)
+            permissionObservationJob =
+                viewModelScope.launch(ioDispatcher) {
+                    permissionLiveStore.observePermissions(worktree).collect { requests ->
+                        applyPermissionSnapshot(sessionId, worktree, requests)
+                    }
                 }
-            }
         }
 
         private fun respondToPermission(
@@ -234,22 +240,21 @@ class SessionChatViewModel
             viewModelScope.launch(ioDispatcher) {
                 runCatching {
                     sessionRepository.respondToPermission(request.sessionId, request.id, decision, boundWorktree)
-                }
-                    .onFailure {
-                        permissionSubmittingId = null
-                        if (it is SessionError.Http && it.statusCode == 404) {
-                            val refreshed = refreshPermissionSnapshot()
-                            if (refreshed && permissionRequests.none { pending -> pending.id == request.id }) {
-                                permissionError = null
-                                publishUiState()
-                                return@onFailure
-                            }
-                            permissionError = "Permission request is no longer available"
-                        } else {
-                            permissionError = it.message ?: "Permission response failed"
+                }.onFailure {
+                    permissionSubmittingId = null
+                    if (it is SessionError.Http && it.statusCode == 404) {
+                        val refreshed = refreshPermissionSnapshot()
+                        if (refreshed && permissionRequests.none { pending -> pending.id == request.id }) {
+                            permissionError = null
+                            publishUiState()
+                            return@onFailure
                         }
-                        publishUiState()
+                        permissionError = "Permission request is no longer available"
+                    } else {
+                        permissionError = it.message ?: "Permission response failed"
                     }
+                    publishUiState()
+                }
             }
         }
 
@@ -270,8 +275,7 @@ class SessionChatViewModel
                 .onSuccess {
                     permissionSessions = it
                     permissionTopologyError = null
-                }
-                .onFailure {
+                }.onFailure {
                     permissionSessions = emptyList()
                     permissionTopologyError = "Unable to refresh permission session tree"
                 }
@@ -363,6 +367,7 @@ class SessionChatViewModel
 
 private object EmptyPermissionLiveStore : PermissionLiveStore {
     override fun observePermissions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<PermissionRequest>())
+
     override fun clearCache() = Unit
 }
 
@@ -379,17 +384,18 @@ internal fun orderedPermissionRequests(
     requests: List<PermissionRequest>,
 ): List<PermissionRequest> {
     val children = sessions.groupBy { it.parentId }
-    val sessionOrder = buildList {
-        val queue = ArrayDeque<String>()
-        val visited = mutableSetOf<String>()
-        queue.add(rootSessionId)
-        while (queue.isNotEmpty()) {
-            val sessionId = queue.removeFirst()
-            if (!visited.add(sessionId)) continue
-            add(sessionId)
-            children[sessionId].orEmpty().forEach { queue.add(it.id) }
+    val sessionOrder =
+        buildList {
+            val queue = ArrayDeque<String>()
+            val visited = mutableSetOf<String>()
+            queue.add(rootSessionId)
+            while (queue.isNotEmpty()) {
+                val sessionId = queue.removeFirst()
+                if (!visited.add(sessionId)) continue
+                add(sessionId)
+                children[sessionId].orEmpty().forEach { queue.add(it.id) }
+            }
         }
-    }
     val requestsBySession = requests.groupBy { it.sessionId }
     return sessionOrder.flatMap { requestsBySession[it].orEmpty() }
 }

@@ -49,8 +49,8 @@ struct SessionContextCalculator: Sendable {
         modelCatalog: ModelSelectionCatalog
     ) -> SessionContextSnapshot {
         let latestAssistant = latestAssistantWithTokens(messages)
-        let modelProviderID = latestAssistant?.modelProviderID ?? session.modelProviderID
-        let modelID = latestAssistant?.modelID ?? session.modelID
+        let modelProviderID = latestAssistant?.modelProviderID
+        let modelID = latestAssistant?.modelID
         let option = modelProviderID.flatMap { providerID in
             modelID.flatMap { modelCatalog.option(providerID: providerID, modelID: $0) }
         }

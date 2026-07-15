@@ -132,6 +132,50 @@ struct ProjectListHomeViewModelTests {
         }
         #expect(createError == "nope")
     }
+
+    @Test func createSession_copiesResolvedPreferenceBeforeOpeningChat() async {
+        let store = HomeSelectionStore()
+        let identity = ModelSelectionConnectionIdentity(
+            serverBaseURL: "http://127.0.0.1:4096/",
+            username: "opencode"
+        )
+        await store.saveNewSessionPreference(
+            connectionIdentity: identity,
+            worktree: "/repo",
+            selection: SessionModelSelection(
+                providerID: "openai",
+                modelID: "gpt-4",
+                variant: "high",
+                savedAtEpochMs: 1_000
+            )
+        )
+        let option = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "gpt-4",
+            modelName: "GPT-4",
+            variants: ["high"],
+            contextLimitTokens: 128_000
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
+                store: store,
+                modelRepository: HomeModelRepository(catalog: ModelSelectionCatalog(options: [option], serverDefault: option))
+            )
+        )
+        await viewModel.refresh()
+
+        await viewModel.createSession(in: "/repo")
+
+        #expect(viewModel.pendingSessionOpen?.id == "created")
+        #expect(await store.loadSession(
+            connectionIdentity: identity,
+            worktree: "/repo",
+            sessionID: "created"
+        )?.modelID == "gpt-4")
+    }
 }
 
 @MainActor
@@ -139,7 +183,8 @@ private func makeViewModel(
     projectRepository: any ProjectRepository,
     sessionRepository: any SessionRepository = FakeSessionRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
-    eventStream: FakeForegroundEventStream? = nil
+    eventStream: FakeForegroundEventStream? = nil,
+    newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     let manager = ActiveConnectionManager()
@@ -164,8 +209,79 @@ private func makeViewModel(
         sessionLiveStore: sessionLiveStore,
         sessionStatusLiveStore: sessionStatusLiveStore,
         foregroundEventStream: eventStream,
-        connectionSessionCoordinator: coordinator
+        connectionSessionCoordinator: coordinator,
+        newSessionModelSelectionResolver: newSessionModelSelectionResolver
     )
+}
+
+private struct HomeModelRepository: ModelRepository {
+    let catalog: ModelSelectionCatalog
+
+    func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog { catalog }
+}
+
+@MainActor
+private final class HomeSelectionStore: SessionModelSelectionStore, @unchecked Sendable {
+    private var sessions: [String: SessionModelSelection] = [:]
+    private var preferences: [String: SessionModelSelection] = [:]
+
+    func load(serverBaseURL: String, worktree: String, sessionID: String) async -> SessionModelSelection? { nil }
+    func save(serverBaseURL: String, worktree: String, sessionID: String, selection: SessionModelSelection) async {}
+    func clearAll() async {}
+
+    func loadSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) async -> SessionModelSelection? {
+        sessions[key(connectionIdentity, worktree, sessionID)]
+    }
+
+    func saveSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String,
+        selection: SessionModelSelection
+    ) async {
+        sessions[key(connectionIdentity, worktree, sessionID)] = selection
+    }
+
+    func deleteSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) async {
+        sessions.removeValue(forKey: key(connectionIdentity, worktree, sessionID))
+    }
+
+    func deleteSessionEntries(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        sessionID: String
+    ) async {
+        let prefix = [connectionIdentity.serverBaseURL, connectionIdentity.username].joined(separator: "|")
+        sessions.keys
+            .filter { $0.hasPrefix(prefix) && $0.hasSuffix("|\(sessionID)") }
+            .forEach { sessions.removeValue(forKey: $0) }
+    }
+
+    func loadNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) async -> SessionModelSelection? {
+        preferences[key(connectionIdentity, worktree)]
+    }
+
+    func saveNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        selection: SessionModelSelection
+    ) async {
+        preferences[key(connectionIdentity, worktree)] = selection
+    }
+
+    private func key(_ identity: ModelSelectionConnectionIdentity, _ values: String...) -> String {
+        ([identity.serverBaseURL, identity.username] + values).joined(separator: "|")
+    }
 }
 
 private struct FakeProjectRepository: ProjectRepository {

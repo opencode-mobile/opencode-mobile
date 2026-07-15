@@ -52,8 +52,8 @@ class SessionContextCalculator
             modelCatalog: ModelSelectionCatalog,
         ): SessionContextSnapshot {
             val latestAssistant = messages.asReversed().firstOrNull { it.role == MessageRole.Assistant && (it.tokens?.total ?: 0) > 0 }
-            val modelProviderId = latestAssistant?.modelProviderId ?: session.modelProviderId
-            val modelId = latestAssistant?.modelId ?: session.modelId
+            val modelProviderId = latestAssistant?.modelProviderId
+            val modelId = latestAssistant?.modelId
             val option =
                 if (modelProviderId != null && modelId != null) {
                     modelCatalog.option(modelProviderId, modelId)

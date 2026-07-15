@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -61,13 +62,13 @@ private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
         saved[key(serverBaseUrl, worktree, sessionId)] = selection
     }
 
-    override suspend fun load(
+    suspend fun load(
         serverBaseUrl: String,
         worktree: String,
         sessionId: String,
     ): SessionModelSelection? = saved[key(serverBaseUrl, worktree, sessionId)]
 
-    override suspend fun save(
+    suspend fun save(
         serverBaseUrl: String,
         worktree: String,
         sessionId: String,
@@ -75,6 +76,45 @@ private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
     ) {
         saved[key(serverBaseUrl, worktree, sessionId)] = selection
     }
+
+    override suspend fun loadSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionId: String,
+    ): SessionModelSelection? = load(connectionIdentity.serverBaseUrl, worktree, sessionId)
+
+    override suspend fun saveSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionId: String,
+        selection: SessionModelSelection,
+    ) = save(connectionIdentity.serverBaseUrl, worktree, sessionId, selection)
+
+    override suspend fun deleteSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionId: String,
+    ) {
+        saved.remove(key(connectionIdentity.serverBaseUrl, worktree, sessionId))
+    }
+
+    override suspend fun deleteSessionEntries(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        sessionId: String,
+    ) {
+        saved.keys.removeAll { it.startsWith(connectionIdentity.serverBaseUrl) && it.endsWith("|$sessionId") }
+    }
+
+    override suspend fun loadNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+    ): SessionModelSelection? = null
+
+    override suspend fun saveNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        selection: SessionModelSelection,
+    ) = Unit
 
     override suspend fun clearAll() {
         saved.clear()

@@ -1,16 +1,16 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
-import dev.opencode.mobile.ui.sessionchat.LatestModelHint
-import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
-import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
-import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.ui.sessionchat.LatestModelHint
+import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -182,6 +182,17 @@ class SessionChatTimeline(
 
     fun latestModelHint(): LatestModelHint? = latestModelHintFromMessages(lastLoadedMessages)
 
+    fun modelSelectionHistoryHints(): dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints {
+        val sorted =
+            lastLoadedMessages.sortedWith(
+                compareByDescending<Message> { it.sentAtEpochMs ?: Long.MIN_VALUE }.thenByDescending { it.id },
+            )
+        return dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints(
+            user = latestModelHintFromMessages(sorted, MessageRole.User),
+            assistant = latestModelHintFromMessages(sorted, MessageRole.Assistant),
+        )
+    }
+
     internal fun toMessageItem(
         message: Message,
         previous: SessionChatMessageItem? = null,
@@ -199,9 +210,10 @@ class SessionChatTimeline(
             text = message.text,
             metadataLabel = metadataLabel(message),
             isStreaming = isStreaming,
-            renderedMarkdown = display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
-                isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
-            },
+            renderedMarkdown =
+                display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
+                    isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
+                },
             modelProviderId = message.modelProviderId,
             modelId = message.modelId,
             contextInputTokens = message.contextInputTokens,
@@ -228,6 +240,13 @@ class SessionChatTimeline(
                     providerId = message.modelProviderId.orEmpty(),
                     modelId = message.modelId.orEmpty(),
                     variant = message.variant,
+                    sentAtEpochMs = message.sentAtEpochMs,
+                    source =
+                        if (role == MessageRole.User) {
+                            dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource.User
+                        } else {
+                            dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource.Assistant
+                        },
                 )
             }
 
@@ -370,7 +389,9 @@ class SessionChatTimeline(
                 val rightTime = right.value.message.sentAtEpochMs
                 when {
                     leftTime != null && rightTime != null && leftTime != rightTime -> leftTime.compareTo(rightTime)
-                    leftTime != null && rightTime != null -> left.value.message.id.compareTo(right.value.message.id)
+                    leftTime != null && rightTime != null ->
+                        left.value.message.id
+                            .compareTo(right.value.message.id)
                     else -> left.index.compareTo(right.index)
                 }
             }.map { toMessageItem(it.value, previousById[it.value.id]) }

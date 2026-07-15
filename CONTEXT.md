@@ -154,6 +154,14 @@ variant is sent.
 When a Model Selection already exists, changing it starts from models offered by
 the selected Provider, with a way back to the Provider list.
 
+### New Session Model Preference
+
+The Model Selection explicitly chosen on this device as the starting choice for
+new sessions in the same Connection Profile and Added Project.
+
+It is not inferred from session history, merely opening a session, or activity
+from another client.
+
 ### Thinking Effort
 
 Legacy planning term for a reasoning-effort preference. In Session Chat, the
