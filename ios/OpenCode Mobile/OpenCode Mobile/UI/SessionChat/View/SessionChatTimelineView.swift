@@ -12,6 +12,29 @@ struct SessionChatTimelineViewProps {
     let onRefresh: () async -> Void
     let onReviewChangesTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+
+    init(
+        timeline: SessionChatTimelineState,
+        messages: [SessionChatRow],
+        isRefreshing: Bool,
+        errorMessage: String?,
+        reviewChangesSummary: ReviewChangesSummary?,
+        onRefresh: @escaping () async -> Void,
+        onReviewChangesTap: @escaping () -> Void,
+        onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
+        onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in }
+    ) {
+        self.timeline = timeline
+        self.messages = messages
+        self.isRefreshing = isRefreshing
+        self.errorMessage = errorMessage
+        self.reviewChangesSummary = reviewChangesSummary
+        self.onRefresh = onRefresh
+        self.onReviewChangesTap = onReviewChangesTap
+        self.onMessageActionsTap = onMessageActionsTap
+        self.onToolDetailTap = onToolDetailTap
+    }
 }
 
 struct SessionChatTimelineView: View {
@@ -99,6 +122,7 @@ private struct SessionChatTimelineReadyView: View {
                             SessionChatMessageRow(
                                 message: message,
                                 onMessageActionsTap: props.onMessageActionsTap,
+                                onToolDetailTap: props.onToolDetailTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -108,6 +132,7 @@ private struct SessionChatTimelineReadyView: View {
                             SessionChatMessageRow(
                                 message: message,
                                 onMessageActionsTap: props.onMessageActionsTap,
+                                onToolDetailTap: props.onToolDetailTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -188,6 +213,7 @@ private extension Array where Element == SessionChatRow {
 private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let animateSizeChanges: Bool
     let onContentSizeAnimationFinished: (() -> Void)?
 
@@ -219,7 +245,8 @@ private struct SessionChatMessageRow: View {
             case .assistant:
                 AssistantMessageContent(
                     message: message,
-                    onOpenMessageActions: { openMessageActions(showsRevertMessage: false) }
+                    onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
+                    onToolDetailTap: onToolDetailTap
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .command, .tool, .unknown:
@@ -259,6 +286,7 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
 private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
@@ -295,7 +323,24 @@ private struct AssistantMessageContent: View {
                         status: card.status.toolCallCardStatus,
                         title: card.title,
                         subtitle: card.subtitle,
-                        errorText: card.errorText
+                        errorText: card.errorText,
+                        action: card.detailText.map { detail in
+                            {
+                                onToolDetailTap(
+                                    SessionChatToolDetailTarget(
+                                        title: card.title,
+                                        body: detail
+                                    )
+                                )
+                            }
+                        }
+                    )
+                case .toolGroup(let group):
+                    OpenCodeToolCallCard(
+                        status: group.status.toolCallCardStatus,
+                        title: group.title,
+                        subtitle: group.subtitle,
+                        errorText: group.errorText
                     )
                 }
             }

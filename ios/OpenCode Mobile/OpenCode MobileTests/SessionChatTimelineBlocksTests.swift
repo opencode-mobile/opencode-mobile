@@ -14,12 +14,19 @@ struct SessionChatTimelineBlocksTests {
         #expect(blocks == [.text("Hello\nWorld")])
     }
 
-    @Test func build_interleavesTextAndGenericToolCards() {
+    @Test func build_interleavesTextAndToolCards() {
         let blocks = SessionChatTimelineBlocks.build(
             role: .assistant,
             parts: [
                 .text(TextPart(text: "Before", isStreaming: false)),
-                .tool(ToolPart(toolName: "bash", status: .completed)),
+                .tool(
+                    ToolPart(
+                        toolName: "bash",
+                        status: .completed,
+                        input: ["command": .string("ls")],
+                        output: "a.txt"
+                    )
+                ),
                 .text(TextPart(text: "After", isStreaming: false)),
             ]
         )
@@ -29,66 +36,10 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Called bash")
-        #expect(tool.status == .completed)
-        #expect(tool.subtitle == nil)
-        #expect(tool.errorText == nil)
+        #expect(tool.title == "Shell")
+        #expect(tool.subtitle == "ls")
+        #expect(tool.detailText == "a.txt")
         #expect(blocks[2] == .text("After"))
-    }
-
-    @Test func build_runningToolUsesTitleAsSubtitle() {
-        let blocks = SessionChatTimelineBlocks.build(
-            role: .assistant,
-            parts: [
-                .tool(ToolPart(toolName: "grep", status: .running, title: "Searching…")),
-            ]
-        )
-        guard case .toolCard(let tool) = blocks.first else {
-            Issue.record("Expected tool card")
-            return
-        }
-        #expect(tool.title == "Called grep")
-        #expect(tool.subtitle == "Searching…")
-        #expect(tool.status == .running)
-    }
-
-    @Test func build_pendingAndCompletedDoNotUseTitleSubtitle() {
-        let pending = SessionChatTimelineBlocks.build(
-            role: .assistant,
-            parts: [.tool(ToolPart(toolName: "read", status: .pending, title: "file.kt"))]
-        )
-        guard case .toolCard(let pendingCard) = pending.first else {
-            Issue.record("Expected pending tool card")
-            return
-        }
-        #expect(pendingCard.subtitle == nil)
-
-        let completed = SessionChatTimelineBlocks.build(
-            role: .assistant,
-            parts: [.tool(ToolPart(toolName: "read", status: .completed, title: "file.kt"))]
-        )
-        guard case .toolCard(let completedCard) = completed.first else {
-            Issue.record("Expected completed tool card")
-            return
-        }
-        #expect(completedCard.subtitle == nil)
-    }
-
-    @Test func build_errorUsesErrorSlot() {
-        let blocks = SessionChatTimelineBlocks.build(
-            role: .assistant,
-            parts: [
-                .tool(ToolPart(toolName: "webfetch", status: .error, title: "https://example.com", error: "timeout")),
-            ]
-        )
-        guard case .toolCard(let tool) = blocks.first else {
-            Issue.record("Expected tool card")
-            return
-        }
-        #expect(tool.title == "Called webfetch")
-        #expect(tool.subtitle == nil)
-        #expect(tool.errorText == "timeout")
-        #expect(tool.status == .error)
     }
 
     @Test func build_hidesTodowriteAlways() {
@@ -114,13 +65,23 @@ struct SessionChatTimelineBlocksTests {
 
         let shown = SessionChatTimelineBlocks.build(
             role: .assistant,
-            parts: [.tool(ToolPart(toolName: "question", status: .completed))]
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "question",
+                        status: .completed,
+                        input: ["prompt": .string("Which option?")]
+                    )
+                ),
+            ]
         )
         guard case .toolCard(let tool) = shown.first else {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Called question")
+        #expect(tool.title == "Question")
+        #expect(tool.subtitle == "Which option?")
+        #expect(tool.detailText == nil)
     }
 
     @Test func build_nonAssistantRolesAreTextOnly() {
@@ -145,8 +106,278 @@ struct SessionChatTimelineBlocksTests {
         #expect(blocks.isEmpty)
     }
 
-    @Test func build_genericChromeForSpecializedToolIds() {
-        for name in ["bash", "edit", "task", "webfetch", "skill"] {
+    @Test func build_singleReadUsesSpecializedChrome() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "read",
+                        status: .completed,
+                        input: ["filePath": .string("src/Main.kt")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Read")
+        #expect(tool.subtitle == "src/Main.kt")
+        #expect(tool.detailText == nil)
+    }
+
+    @Test func build_contextFallsBackToGenericTitleWhenInputMissing() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [.tool(ToolPart(toolName: "glob", status: .completed))]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Called glob")
+        #expect(tool.subtitle == nil)
+    }
+
+    @Test func build_runningContextPrefersToolTitleSubtitle() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "grep",
+                        status: .running,
+                        title: "Searching…",
+                        input: ["pattern": .string("TODO")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Grep")
+        #expect(tool.subtitle == "Searching…")
+    }
+
+    @Test func build_consecutiveContextToolsBecomeToolGroup() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(ToolPart(toolName: "read", status: .completed, input: ["path": .string("a.kt")])),
+                .tool(ToolPart(toolName: "grep", status: .running, input: ["pattern": .string("foo")])),
+                .tool(ToolPart(toolName: "glob", status: .pending, input: ["pattern": .string("*.kt")])),
+            ]
+        )
+        guard case .toolGroup(let group) = blocks.first else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.count == 3)
+        #expect(group.status == .running)
+        #expect(group.title == "1 read · 1 grep · 1 glob")
+    }
+
+    @Test func build_textBreaksContextGroup() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(ToolPart(toolName: "read", status: .completed, input: ["path": .string("a.kt")])),
+                .text(TextPart(text: "note", isStreaming: false)),
+                .tool(ToolPart(toolName: "read", status: .completed, input: ["path": .string("b.kt")])),
+            ]
+        )
+        #expect(blocks.count == 3)
+        guard case .toolCard = blocks[0] else {
+            Issue.record("Expected first tool card")
+            return
+        }
+        #expect(blocks[1] == .text("note"))
+        guard case .toolCard = blocks[2] else {
+            Issue.record("Expected second tool card")
+            return
+        }
+    }
+
+    @Test func build_nonContextToolBreaksContextGroup() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(ToolPart(toolName: "read", status: .completed, input: ["path": .string("a.kt")])),
+                .tool(
+                    ToolPart(
+                        toolName: "bash",
+                        status: .completed,
+                        input: ["command": .string("pwd")],
+                        output: "/"
+                    )
+                ),
+                .tool(ToolPart(toolName: "read", status: .completed, input: ["path": .string("b.kt")])),
+            ]
+        )
+        #expect(blocks.count == 3)
+        guard case .toolCard = blocks[0], case .toolCard = blocks[1], case .toolCard = blocks[2] else {
+            Issue.record("Expected three tool cards")
+            return
+        }
+    }
+
+    @Test func build_toolGroupStatusPrefersError() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(ToolPart(toolName: "read", status: .completed)),
+                .tool(ToolPart(toolName: "grep", status: .error, error: "boom")),
+                .tool(ToolPart(toolName: "glob", status: .running)),
+            ]
+        )
+        guard case .toolGroup(let group) = blocks.first else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(group.status == .error)
+        #expect(group.errorText == "boom")
+    }
+
+    @Test func build_pendingBashHasNoSheetDetail() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "bash",
+                        status: .pending,
+                        input: ["command": .string("echo hi")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Shell")
+        #expect(tool.subtitle == "echo hi")
+        #expect(tool.detailText == nil)
+    }
+
+    @Test func build_bashErrorUsesErrorSlotAndSheetDetail() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "bash",
+                        status: .error,
+                        error: "exit 1",
+                        input: ["command": .string("false")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Shell")
+        #expect(tool.subtitle == "false")
+        #expect(tool.errorText == "exit 1")
+        #expect(tool.detailText == "exit 1")
+    }
+
+    @Test func build_networkFetchAndSearchChrome() {
+        let fetchBlocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "webfetch",
+                        status: .completed,
+                        input: ["url": .string("https://example.com")],
+                        output: "ok"
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let fetch) = fetchBlocks.first else {
+            Issue.record("Expected fetch card")
+            return
+        }
+        #expect(fetch.title == "Fetch")
+        #expect(fetch.subtitle == "https://example.com")
+        #expect(fetch.detailText == "ok")
+
+        let searchBlocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "websearch",
+                        status: .completed,
+                        input: ["query": .string("opencode mobile")],
+                        output: "https://a.example\nhttps://b.example"
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let search) = searchBlocks.first else {
+            Issue.record("Expected search card")
+            return
+        }
+        #expect(search.title == "Search")
+        #expect(search.subtitle == "opencode mobile")
+        #expect(search.detailText == "https://a.example\nhttps://b.example")
+    }
+
+    @Test func build_runningNetworkHasNoSheetDetailEvenWithOutput() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "webfetch",
+                        status: .running,
+                        input: ["url": .string("https://example.com")],
+                        output: "partial"
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Fetch")
+        #expect(tool.detailText == nil)
+    }
+
+    @Test func build_skillUsesSpecializedChrome() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "skill",
+                        status: .completed,
+                        input: ["name": .string("tdd")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Skill")
+        #expect(tool.subtitle == "tdd")
+        #expect(tool.detailText == nil)
+    }
+
+    @Test func build_keepsGenericChromeForLaterTickets() {
+        for name in ["edit", "write", "apply_patch", "task", "custom_mcp"] {
             let blocks = SessionChatTimelineBlocks.build(
                 role: .assistant,
                 parts: [.tool(ToolPart(toolName: name, status: .completed))]
@@ -156,6 +387,7 @@ struct SessionChatTimelineBlocksTests {
                 return
             }
             #expect(tool.title == "Called \(name)")
+            #expect(tool.detailText == nil)
         }
     }
 }

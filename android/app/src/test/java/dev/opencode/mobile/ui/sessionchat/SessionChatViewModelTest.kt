@@ -1314,7 +1314,7 @@ class SessionChatViewModelTest {
             val item = requireNotNull(viewModel.toMessageItem(message))
             assertFalse(item.isStreaming)
             val tool = item.blocks.single() as SessionChatTimelineBlock.ToolCard
-            assertEquals("Called bash", tool.title)
+            assertEquals("Shell", tool.title)
         }
 
     @Test
