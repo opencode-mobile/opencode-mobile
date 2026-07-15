@@ -8,9 +8,36 @@ struct SessionChatRow: Identifiable, Equatable {
     let isPending: Bool
     let isStreaming: Bool
     let renderedMarkdown: NativeMarkdownDocument?
+    let blocks: [SessionChatTimelineBlock]
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+
+    init(
+        id: String,
+        role: MessageRole,
+        text: String,
+        metadataLabel: String,
+        isPending: Bool = false,
+        isStreaming: Bool = false,
+        renderedMarkdown: NativeMarkdownDocument? = nil,
+        blocks: [SessionChatTimelineBlock] = [],
+        modelProviderID: String? = nil,
+        modelID: String? = nil,
+        contextInputTokens: Int64? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.metadataLabel = metadataLabel
+        self.isPending = isPending
+        self.isStreaming = isStreaming
+        self.renderedMarkdown = renderedMarkdown
+        self.blocks = blocks
+        self.modelProviderID = modelProviderID
+        self.modelID = modelID
+        self.contextInputTokens = contextInputTokens
+    }
 
     static func == (lhs: SessionChatRow, rhs: SessionChatRow) -> Bool {
         lhs.id == rhs.id &&
@@ -19,6 +46,7 @@ struct SessionChatRow: Identifiable, Equatable {
             lhs.metadataLabel == rhs.metadataLabel &&
             lhs.isPending == rhs.isPending &&
             lhs.isStreaming == rhs.isStreaming &&
+            lhs.blocks == rhs.blocks &&
             lhs.modelProviderID == rhs.modelProviderID &&
             lhs.modelID == rhs.modelID &&
             lhs.contextInputTokens == rhs.contextInputTokens &&
@@ -257,6 +285,7 @@ extension SessionChatRow {
             isPending: isPending,
             isStreaming: isStreaming,
             renderedMarkdown: document,
+            blocks: blocks,
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens

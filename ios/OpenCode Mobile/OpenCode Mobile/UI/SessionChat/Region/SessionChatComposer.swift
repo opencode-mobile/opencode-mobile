@@ -243,6 +243,7 @@ final class SessionChatComposer {
             isPending: true,
             isStreaming: false,
             renderedMarkdown: nil,
+            blocks: [.text(trimmed)],
             modelProviderID: nil,
             modelID: nil,
             contextInputTokens: nil
@@ -438,6 +439,7 @@ final class SessionChatComposer {
             isPending: optimistic.isPending,
             isStreaming: optimistic.isStreaming,
             renderedMarkdown: prepared.renderedMarkdown,
+            blocks: [.text(optimistic.text)],
             modelProviderID: optimistic.modelProviderID,
             modelID: optimistic.modelID,
             contextInputTokens: optimistic.contextInputTokens

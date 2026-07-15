@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,12 +28,15 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
+import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListScrollToEndOverlay
 import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
@@ -42,6 +46,7 @@ import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.displayLabel
 
@@ -248,15 +253,9 @@ private fun SessionChatMessageRow(
                 )
 
             MessageRole.Assistant ->
-                AssistantMessageBubble(
-                    text = message.text,
-                    renderedMarkdown = message.renderedMarkdown,
-                    modifier =
-                        messageActionsModifier(
-                            renderedMarkdown = message.renderedMarkdown,
-                            onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
-                            messageDescription = "Assistant message",
-                        ),
+                AssistantMessageContent(
+                    message = message,
+                    onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -290,6 +289,46 @@ private fun messageActionsModifier(
     }
 
 @Composable
+private fun AssistantMessageContent(
+    message: SessionChatMessageItem,
+    onOpenMessageActions: () -> Unit,
+) {
+    val blocks =
+        message.blocks.ifEmpty {
+            listOf(SessionChatTimelineBlock.Text(text = message.text))
+        }
+    val singleTextBlock = blocks.count { it is SessionChatTimelineBlock.Text } == 1
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        blocks.forEach { block ->
+            when (block) {
+                is SessionChatTimelineBlock.Text ->
+                    AssistantMessageBubble(
+                        text = block.text,
+                        renderedMarkdown = message.renderedMarkdown.takeIf { singleTextBlock },
+                        modifier =
+                            messageActionsModifier(
+                                renderedMarkdown = message.renderedMarkdown.takeIf { singleTextBlock },
+                                onOpenMessageActions = onOpenMessageActions,
+                                messageDescription = "Assistant message",
+                            ),
+                    )
+                is SessionChatTimelineBlock.ToolCard ->
+                    OpenCodeToolCallCard(
+                        status = block.status.toToolCallCardStatus(),
+                        title = block.title,
+                        subtitle = block.subtitle,
+                        errorText = block.errorText,
+                    )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AssistantMessageBubble(
     text: String,
     renderedMarkdown: MarkdownDocument?,
@@ -319,6 +358,14 @@ private fun AssistantMessageBubble(
     }
 }
 
+private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
+    when (this) {
+        ToolStatus.Pending -> OpenCodeToolCallCardStatus.Pending
+        ToolStatus.Running -> OpenCodeToolCallCardStatus.Running
+        ToolStatus.Completed -> OpenCodeToolCallCardStatus.Completed
+        ToolStatus.Error -> OpenCodeToolCallCardStatus.Error
+    }
+
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
 
 private fun List<SessionChatMessageItem>.layoutSignature(): Int =
@@ -326,6 +373,7 @@ private fun List<SessionChatMessageItem>.layoutSignature(): Int =
         31 * result +
             message.id.hashCode() +
             message.text.length +
+            message.blocks.size +
             message.renderedMarkdown.layoutSignature() +
             if (message.isStreaming) 1 else 0
     }

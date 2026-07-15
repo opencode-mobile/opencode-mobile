@@ -182,14 +182,14 @@ class MessageDomainAdapter {
     }
 
     private fun displayText(parts: List<MessagePart>): String {
-        val segments = parts.map { part ->
-            when (part) {
-                is MessagePart.Text -> part.text
-                is MessagePart.Tool -> compactToolLabel(part)
+        val segments =
+            parts.mapNotNull { part ->
+                when (part) {
+                    is MessagePart.Text -> part.text.trim().takeIf { it.isNotEmpty() }
+                    is MessagePart.Tool -> null
+                }
             }
-        }
-        val nonEmpty = segments.map { it.trim() }.filter { it.isNotEmpty() }
-        return nonEmpty.joinToString("\n")
+        return segments.joinToString("\n")
     }
 
     private fun toTokenUsage(dto: MessageTokensDto?): MessageTokenUsage? {

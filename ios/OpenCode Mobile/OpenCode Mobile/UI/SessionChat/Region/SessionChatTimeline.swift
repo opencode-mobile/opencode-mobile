@@ -142,13 +142,27 @@ final class SessionChatTimeline {
         )
     }
 
-    func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow {
+    func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow? {
         row(from: DisplayMessage(message: message), previous: previous)
     }
 
-    func row(from display: DisplayMessage, previous: SessionChatRow? = nil) -> SessionChatRow {
+    func row(from display: DisplayMessage, previous: SessionChatRow? = nil) -> SessionChatRow? {
         let message = display.message
+        let structuralBlocks = SessionChatTimelineBlocks.build(role: message.role, parts: message.parts)
+        let resolvedBlocks: [SessionChatTimelineBlock] =
+            if !structuralBlocks.isEmpty {
+                structuralBlocks
+            } else if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                [.text(message.text)]
+            } else {
+                []
+            }
+        guard !resolvedBlocks.isEmpty else { return nil }
+
         let isStreaming = display.isStreaming
+        let renderedMarkdown = display.renderedMarkdown ?? previous?.renderedMarkdown.flatMap { document in
+            isStreaming && (previous?.isStreaming == true || previous?.text == message.text) ? document : nil
+        }
         return SessionChatRow(
             id: message.id,
             role: message.role,
@@ -161,9 +175,8 @@ final class SessionChatTimeline {
             ),
             isPending: false,
             isStreaming: isStreaming,
-            renderedMarkdown: display.renderedMarkdown ?? previous?.renderedMarkdown.flatMap { document in
-                isStreaming && (previous?.isStreaming == true || previous?.text == message.text) ? document : nil
-            },
+            renderedMarkdown: renderedMarkdown,
+            blocks: resolvedBlocks,
             modelProviderID: message.modelProviderID,
             modelID: message.modelID,
             contextInputTokens: message.contextInputTokens
@@ -212,7 +225,7 @@ final class SessionChatTimeline {
                     }
                     return left.offset < right.offset
                 }
-                .map { row(from: $0.element, previous: previousByID[$0.element.id]) }
+                .compactMap { row(from: $0.element, previous: previousByID[$0.element.id]) }
         let rows =
             if fromQuietRefresh, isSending {
                 mergeWithPending(

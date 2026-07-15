@@ -43,7 +43,7 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toMessage_toolPartsProduceFallbackText() {
+    fun toMessage_toolPartsLeaveTextEmpty() {
         val raw =
             """
             {
@@ -58,7 +58,7 @@ class MessageDomainAdapterTest {
         val message = adapter.toMessage(dto)
 
         assertEquals(MessageRole.Assistant, message.role)
-        assertEquals("\u231B glob", message.text)
+        assertEquals("", message.text)
         val tool = message.parts.single() as MessagePart.Tool
         assertEquals(ToolStatus.Pending, tool.status)
     }
@@ -368,13 +368,13 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun flattenedText_textAndToolParts() {
+    fun flattenedText_textAndToolParts_isTextOnly() {
         val parts =
             listOf<MessagePart>(
                 MessagePart.Text("Look at this"),
                 MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Completed),
             )
-        assertEquals("Look at this\n\u2713 webfetch", adapter.flattenedText(parts))
+        assertEquals("Look at this", adapter.flattenedText(parts))
     }
 
     @Test
@@ -396,8 +396,7 @@ class MessageDomainAdapterTest {
             """.trimIndent()
         val dto = json.decodeFromString<MessageDto>(raw)
         val message = adapter.toMessage(dto)
-        assertTrue(message.text.contains("Here is the answer."))
-        assertTrue(message.text.contains("\u2713 bash"))
+        assertEquals("Here is the answer.", message.text)
         assertEquals(2, message.parts.size)
         val tool = message.parts[1] as MessagePart.Tool
         assertEquals(ToolStatus.Completed, tool.status)

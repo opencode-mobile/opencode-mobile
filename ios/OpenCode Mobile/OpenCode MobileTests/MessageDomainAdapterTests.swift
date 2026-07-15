@@ -307,12 +307,12 @@ struct MessageDomainAdapterTests {
         #expect(adapter.flattenedText(from: parts) == "First\nSecond")
     }
 
-    @Test func flattenedText_textAndToolParts() {
+    @Test func flattenedText_textAndToolParts_isTextOnly() {
         let parts: [MessagePart] = [
             .text(TextPart(text: "Look at this", isStreaming: false)),
             .tool(ToolPart(toolName: "webfetch", status: .completed)),
         ]
-        #expect(adapter.flattenedText(from: parts) == "Look at this\n\u{2713} webfetch")
+        #expect(adapter.flattenedText(from: parts) == "Look at this")
     }
 
     @Test func flattenedText_emptyParts_returnsEmptyString() {
@@ -332,8 +332,7 @@ struct MessageDomainAdapterTests {
             """.data(using: .utf8)!
         let dto = try decoder.decode(MessageDTO.self, from: data)
         let message = adapter.message(from: dto)
-        #expect(message.text.contains("Here is the answer."))
-        #expect(message.text.contains("\u{2713} bash"))
+        #expect(message.text == "Here is the answer.")
         #expect(message.parts.count == 2)
         guard case .tool(let tool) = message.parts[1] else {
             Issue.record("Expected tool part")

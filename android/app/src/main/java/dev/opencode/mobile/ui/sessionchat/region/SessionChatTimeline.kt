@@ -9,6 +9,8 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import kotlinx.coroutines.CoroutineDispatcher
@@ -196,24 +198,36 @@ class SessionChatTimeline(
     internal fun toMessageItem(
         message: Message,
         previous: SessionChatMessageItem? = null,
-    ): SessionChatMessageItem = toMessageItem(DisplayMessage(message), previous)
+    ): SessionChatMessageItem? = toMessageItem(DisplayMessage(message), previous)
 
     internal fun toMessageItem(
         display: DisplayMessage,
         previous: SessionChatMessageItem? = null,
-    ): SessionChatMessageItem {
+    ): SessionChatMessageItem? {
         val message = display.message
+        val blocks = SessionChatTimelineBlocks.build(role = message.role, parts = message.parts)
+        val resolvedBlocks =
+            when {
+                blocks.isNotEmpty() -> blocks
+                message.text.isNotBlank() -> listOf(SessionChatTimelineBlock.Text(message.text))
+                else -> emptyList()
+            }
+        if (resolvedBlocks.isEmpty()) return null
+
         val isStreaming = display.isStreaming
+        val renderedMarkdown =
+            display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
+                isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
+            }
+
         return SessionChatMessageItem(
             id = message.id,
             role = message.role,
             text = message.text,
             metadataLabel = metadataLabel(message),
             isStreaming = isStreaming,
-            renderedMarkdown =
-                display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
-                    isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
-                },
+            renderedMarkdown = renderedMarkdown,
+            blocks = resolvedBlocks,
             modelProviderId = message.modelProviderId,
             modelId = message.modelId,
             contextInputTokens = message.contextInputTokens,
@@ -394,7 +408,7 @@ class SessionChatTimeline(
                             .compareTo(right.value.message.id)
                     else -> left.index.compareTo(right.index)
                 }
-            }.map { toMessageItem(it.value, previousById[it.value.id]) }
+            }.mapNotNull { toMessageItem(it.value, previousById[it.value.id]) }
 
     private fun metadataLabel(message: Message): String {
         val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
