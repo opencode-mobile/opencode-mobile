@@ -81,3 +81,40 @@
   until nothing else needs it, then delete.
 - Specialize families in OPE-50 / OPE-51 / OPE-52; do not start that chrome
   in OPE-49.
+
+## OPE-50 lightweight tool chrome (grilling)
+
+- Keep all four simple families in one ticket: context, shell, network,
+  interact. Do not split shell or grouping into a separate Linear issue.
+  To-tickets confirmed: no further child split; OPE-50 remains the single
+  implementable frontier ticket.
+- Do not reshape the design-system Tool Call Card: stay collapsed-only with
+  optional feature-owned tap. No expand, chevron, or body slot in OPE-50.
+- Shell (`bash`) and completed network tools that have output or result links:
+  tap opens the existing Bottom Sheet with that content. Pending/running bash
+  is display-only (command as title/subtitle) until output or error text exists.
+- Context (`read` / `glob` / `grep`): consecutive same-family tools in one
+  message collapse into a single **tool group** timeline block (summary card
+  with count). A text block or another tool family breaks the group. No
+  per-tool expand inside a group in v1.
+- Tool group status is worst-of its members: any `error` → error; else any
+  `running` / `pending` → running; else completed. Rebuild on each live apply.
+- Single (ungrouped) context copy: title = `Read` / `Glob` / `Grep`; subtitle =
+  filename/path or path/pattern from opaque input; fall back to
+  `Called {name}` when keys are missing; running `ToolPart.title` may override
+  subtitle when present.
+- Network: title = `Fetch` / `Search`; subtitle = URL or query. Result links
+  for completed search live in the sheet on tap (plain text is enough; system
+  open-URL optional). No new browser surface.
+- Interact: keep hide rules. Completed `question` → title `Question`, subtitle
+  from input when available. `skill` → title `Skill`, subtitle = skill name.
+  No tap/navigation in OPE-50.
+- Mapping and grouping live in the Screen Model / feature helpers only. No
+  per-tool domain schemas (OPE-48 stands). Mirror the same pure rules on iOS
+  and Android with tests.
+- Tools outside these families (including `edit` / `write` / `apply_patch` /
+  `task`) keep OPE-49 generic chrome until OPE-51 / OPE-52.
+- Error status keeps specialized title/subtitle and uses the card error slot;
+  sheet tap remains when error/output text exists.
+- Per-block markdown (text after tools) stays out of OPE-50; leave the
+  temporary parity gap.

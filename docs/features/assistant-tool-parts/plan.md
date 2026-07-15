@@ -12,8 +12,11 @@ Android.
 - Design-system Tool Call Card with status variants.
 - Generic tool cards in the Session Chat timeline for unknown tools.
 - Hide `todowrite` and in-flight `question` (live ask stays on Permission Approval).
-- Lightweight specialized chrome: context (`read`/`glob`/`grep` + grouping),
-  shell (`bash`), network (`webfetch`/`websearch`), interact (`question` completed / `skill`).
+- Lightweight specialized chrome (OPE-50): context (`read`/`glob`/`grep` with
+  consecutive **tool group** summary cards), shell (`bash` command + Bottom
+  Sheet for output), network (`webfetch`/`websearch` + sheet for search
+  results), interact (completed `question` / `skill`). Collapsed Tool Call Card
+  only; no card expand API.
 - File change tools (`edit`/`write`/`apply_patch`): filename + +N/−N; tap opens
   existing Changes review.
 - Subagent `task` card with navigate to child session when available.
@@ -45,14 +48,17 @@ Android.
 ## Screen Model
 
 - Session Chat timeline: one item per **message**, with ordered **timeline
-  blocks** (text block | tool card block). Generic cards first (OPE-49);
-  specialized chrome later (OPE-50+).
+  blocks** (text block | tool card block | tool group block). Generic cards
+  first (OPE-49); specialized chrome in OPE-50+.
 - OPE-49: Screen Model maps assistant parts → blocks; merges adjacent
   TextParts; applies hide rules (`todowrite`; in-flight `question`); omits
   messages with no visible blocks; rebuilds blocks on live part updates.
+- OPE-50: feature helpers specialize title/subtitle for context/shell/network/
+  interact; consecutive context tools become one tool group card; bash and
+  completed network results use Bottom Sheet on tap; no Tool Call Card expand.
 - Actions (later tickets): tap file-change tools → Changes review; tap
-  `task` → child session when `metadata.sessionId` is present. Generic cards
-  in OPE-49 are display-only (no tap/expand).
+  `task` → child session when `metadata.sessionId` is present. OPE-49 generic
+  cards are display-only; OPE-50 adds sheet taps only where noted.
 - Chat display uses blocks; `Message.text` is TextPart-only.
 
 ## Native navigation entry points

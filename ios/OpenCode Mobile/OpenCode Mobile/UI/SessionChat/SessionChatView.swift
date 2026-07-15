@@ -12,6 +12,7 @@ struct SessionChatView: View {
     @State private var changesTarget: ChangesNavigationTarget?
     @State private var menuExpanded = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
+    @State private var toolDetailTarget: SessionChatToolDetailTarget?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -70,7 +71,8 @@ struct SessionChatView: View {
                     onReviewChangesTap: {
                         changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
                     },
-                    onMessageActionsTap: { messageActionsTarget = $0 }
+                    onMessageActionsTap: { messageActionsTarget = $0 },
+                    onToolDetailTap: { toolDetailTarget = $0 }
                 )
             )
             composer
@@ -80,6 +82,7 @@ struct SessionChatView: View {
             target: $messageActionsTarget,
             onRestoreToComposer: { viewModel.restoreComposerText($0) }
         )
+        .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatPickerSheet(
             activePicker: $activePicker,
             activeModelProviderID: $activeModelProviderID,

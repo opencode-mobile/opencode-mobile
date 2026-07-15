@@ -14,17 +14,15 @@
   (follow-up under assistant-tool-parts or Session Chat polish).
 - **Status:** Temporary.
 
-## No specialized tool chrome yet
+## File-change and task tools still use generic chrome
 
-- **Intent:** Context, shell, network, interact, file-change, and task tools get
-  family-specific chrome beyond generic `Called {tool}` cards.
-- **iOS:** Generic Tool Call Cards in Session Chat (OPE-49); specialized families
-  not started.
-- **Android:** Generic Tool Call Cards in Session Chat (OPE-49); specialized
-  families not started.
-- **Area:** Missing feature wiring (OPE-50+).
-- **Reason:** OPE-49 deliberately ships generic chrome only.
-- **Next action:** Implement [OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome),
-  then [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards) and
-  [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card).
+- **Intent:** File-change tools show filename +/− and open Changes; `task` shows
+  subagent chrome and navigates to a child session when available.
+- **iOS:** `edit` / `write` / `apply_patch` / `task` still render as generic
+  `Called {tool}` cards (OPE-50 left them for later tickets).
+- **Android:** Same generic chrome for those tool IDs.
+- **Area:** Missing feature wiring (OPE-51 / OPE-52).
+- **Reason:** OPE-50 scoped only context/shell/network/interact families.
+- **Next action:** Implement [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)
+  and [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card).
 - **Status:** Temporary.

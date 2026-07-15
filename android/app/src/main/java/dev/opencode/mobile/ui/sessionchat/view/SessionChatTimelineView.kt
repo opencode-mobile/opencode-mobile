@@ -59,6 +59,7 @@ internal data class SessionChatTimelineViewProps(
     val onRefresh: () -> Unit,
     val onReviewChangesClick: () -> Unit,
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +110,7 @@ internal fun SessionChatTimelineView(
                 onRefresh = props.onRefresh,
                 onReviewChangesClick = props.onReviewChangesClick,
                 onMessageActionsTap = props.onMessageActionsTap,
+                onToolDetailTap = props.onToolDetailTap,
                 modifier = modifier,
             )
         }
@@ -124,6 +126,7 @@ private fun SessionChatTimelineReadyView(
     onRefresh: () -> Unit,
     onReviewChangesClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val timeline =
@@ -151,6 +154,7 @@ private fun SessionChatTimelineReadyView(
                 SessionChatMessageRow(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
+                    onToolDetailTap = onToolDetailTap,
                     animateSizeChanges = isNewestMessage,
                     onContentSizeAnimationFinished = onContentSizeSettled,
                     modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
@@ -203,6 +207,7 @@ private fun SessionChatTimelineReadyView(
 private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -256,6 +261,7 @@ private fun SessionChatMessageRow(
                 AssistantMessageContent(
                     message = message,
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
+                    onToolDetailTap = onToolDetailTap,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -292,6 +298,7 @@ private fun messageActionsModifier(
 private fun AssistantMessageContent(
     message: SessionChatMessageItem,
     onOpenMessageActions: () -> Unit,
+    onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
 ) {
     val blocks =
         message.blocks.ifEmpty {
@@ -317,6 +324,24 @@ private fun AssistantMessageContent(
                             ),
                     )
                 is SessionChatTimelineBlock.ToolCard ->
+                    OpenCodeToolCallCard(
+                        status = block.status.toToolCallCardStatus(),
+                        title = block.title,
+                        subtitle = block.subtitle,
+                        errorText = block.errorText,
+                        onClick =
+                            block.detailText?.let { detail ->
+                                {
+                                    onToolDetailTap(
+                                        SessionChatToolDetailTarget(
+                                            title = block.title,
+                                            body = detail,
+                                        ),
+                                    )
+                                }
+                            },
+                    )
+                is SessionChatTimelineBlock.ToolGroup ->
                     OpenCodeToolCallCard(
                         status = block.status.toToolCallCardStatus(),
                         title = block.title,

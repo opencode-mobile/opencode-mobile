@@ -41,6 +41,8 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +68,7 @@ fun SessionChatScreen(
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
+    var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -162,6 +165,7 @@ fun SessionChatScreen(
                             uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
                         },
                         onMessageActionsTap = { messageActionsTarget = it },
+                        onToolDetailTap = { toolDetailTarget = it },
                     ),
                 modifier = Modifier.weight(1f),
             )
@@ -225,6 +229,11 @@ fun SessionChatScreen(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
             onRestoreToComposer = viewModel::restoreComposerText,
+        )
+
+        SessionChatToolDetailSheet(
+            target = toolDetailTarget,
+            onDismiss = { toolDetailTarget = null },
         )
 
         SessionChatPickerSheet(

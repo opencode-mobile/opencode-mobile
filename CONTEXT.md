@@ -135,11 +135,19 @@ model defines two variants:
 
 ### timeline block
 
-A Session Chat presentation unit inside one message timeline item: either a
-text block (Rendered Markdown from adjacent TextParts) or a tool card block
-(Tool Call Card from a visible ToolPart).
+A Session Chat presentation unit inside one message timeline item: a text
+block (Rendered Markdown from adjacent TextParts), a tool card block (Tool
+Call Card from a visible ToolPart), or a **tool group** block.
 _Avoid_: treating each block as its own top-level message; flattening tool
 labels into message `text` for Session Chat display.
+
+### tool group
+
+A Session Chat timeline block that summarizes consecutive context ToolParts
+(`read` / `glob` / `grep`) inside one message as a single Tool Call Card.
+A text block or a different tool family breaks the group.
+_Avoid_: expanding each grouped tool inline; treating a group as multiple
+timeline messages.
 
 ### tool status
 

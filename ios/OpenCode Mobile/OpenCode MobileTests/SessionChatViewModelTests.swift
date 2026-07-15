@@ -792,7 +792,7 @@ struct SessionChatViewModelTests {
             Issue.record("Expected tool card block")
             return
         }
-        #expect(card.title == "Called bash")
+        #expect(card.title == "Shell")
     }
 
     @Test func contextUsageFraction_usesLatestAssistantTokensAndModelLimit() async {
