@@ -200,6 +200,12 @@ struct ChangesNavigationTarget: Hashable {
     }
 }
 
+struct ChildSessionNavigationTarget: Hashable {
+    let sessionID: String
+    let sessionTitle: String
+    let worktree: String
+}
+
 struct SessionChatTimelineRegionState: Equatable {
     var timeline: SessionChatTimelineState = .loading
     var messages: [SessionChatRow] = []

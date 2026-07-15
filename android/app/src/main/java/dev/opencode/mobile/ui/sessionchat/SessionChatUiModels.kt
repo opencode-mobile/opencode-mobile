@@ -131,6 +131,12 @@ data class ChangesNavigationTarget(
     val initialSource: ChangeSource = ChangeSource.WorkingTree,
 )
 
+data class ChildSessionNavigationTarget(
+    val sessionId: String,
+    val sessionTitle: String,
+    val worktree: String,
+)
+
 data class SessionChatTimelineRegionState(
     val timeline: SessionChatTimelineState = SessionChatTimelineState.Loading,
     val messages: List<SessionChatMessageItem> = emptyList(),

@@ -376,8 +376,137 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.detailText == nil)
     }
 
+    @Test func build_taskUsesAgentTitleDescriptionAndChildSessionId() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "task",
+                        status: .completed,
+                        input: [
+                            "agent": .string("explore"),
+                            "description": .string("Find auth bugs"),
+                        ],
+                        metadata: ["sessionId": .string("ses-child-1")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "explore")
+        #expect(tool.subtitle == "Find auth bugs")
+        #expect(tool.childSessionId == "ses-child-1")
+        #expect(tool.detailText == nil)
+    }
+
+    @Test func build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "task",
+                        status: .running,
+                        title: "Working…",
+                        input: ["prompt": .string("Investigate flaky tests")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Task")
+        #expect(tool.subtitle == "Investigate flaky tests")
+        #expect(tool.childSessionId == nil)
+        #expect(tool.detailText == nil)
+    }
+
+    @Test func build_taskUsesInputNameFallbackAndOmitsBareBackground() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "task",
+                        status: .completed,
+                        input: ["name": .string("coder")],
+                        metadata: ["background": .bool(true)]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "coder")
+        #expect(tool.subtitle == nil)
+        #expect(tool.childSessionId == nil)
+    }
+
+    @Test func build_taskAppendsBackgroundMarkerAndUsesMetadataAgent() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "task",
+                        status: .completed,
+                        input: ["description": .string("Long research")],
+                        metadata: [
+                            "agent": .string("researcher"),
+                            "background": .bool(true),
+                            "sessionId": .string("ses-bg"),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "researcher")
+        #expect(tool.subtitle == "Long research (background)")
+        #expect(tool.childSessionId == "ses-bg")
+    }
+
+    @Test func build_taskErrorKeepsSpecializedChrome() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "task",
+                        status: .error,
+                        error: "child failed",
+                        input: [
+                            "agent": .string("build"),
+                            "description": .string("Ship it"),
+                        ],
+                        metadata: ["sessionId": .string("ses-err")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "build")
+        #expect(tool.subtitle == "Ship it")
+        #expect(tool.errorText == "child failed")
+        #expect(tool.childSessionId == "ses-err")
+    }
+
     @Test func build_keepsGenericChromeForLaterTickets() {
-        for name in ["edit", "write", "apply_patch", "task", "custom_mcp"] {
+        for name in ["edit", "write", "apply_patch", "custom_mcp"] {
             let blocks = SessionChatTimelineBlocks.build(
                 role: .assistant,
                 parts: [.tool(ToolPart(toolName: name, status: .completed))]
@@ -388,6 +517,7 @@ struct SessionChatTimelineBlocksTests {
             }
             #expect(tool.title == "Called \(name)")
             #expect(tool.detailText == nil)
+            #expect(tool.childSessionId == nil)
         }
     }
 }

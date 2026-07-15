@@ -210,6 +210,15 @@ fun MainNavigation() {
                                                         Changes(target.sessionId, target.worktree, target.messageId, target.initialSource),
                                                     )
                                                 },
+                                                onChildSessionClick = { target ->
+                                                    backStack.add(
+                                                        SessionChat(
+                                                            sessionId = target.sessionId,
+                                                            sessionTitle = target.sessionTitle,
+                                                            worktree = target.worktree,
+                                                        ),
+                                                    )
+                                                },
                                             )
                                         }
                                     }

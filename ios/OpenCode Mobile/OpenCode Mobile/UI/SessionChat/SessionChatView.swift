@@ -13,6 +13,7 @@ struct SessionChatView: View {
     @State private var menuExpanded = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
+    @State private var childSessionTarget: ChildSessionNavigationTarget?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -72,7 +73,14 @@ struct SessionChatView: View {
                         changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
                     },
                     onMessageActionsTap: { messageActionsTarget = $0 },
-                    onToolDetailTap: { toolDetailTarget = $0 }
+                    onToolDetailTap: { toolDetailTarget = $0 },
+                    onChildSessionTap: { sessionID, title in
+                        childSessionTarget = ChildSessionNavigationTarget(
+                            sessionID: sessionID,
+                            sessionTitle: title,
+                            worktree: session.worktree
+                        )
+                    }
                 )
             )
             composer
@@ -102,6 +110,15 @@ struct SessionChatView: View {
                 worktree: target.worktree,
                 messageID: target.messageID,
                 initialSource: target.initialSource
+            )
+        }
+        .navigationDestination(item: $childSessionTarget) { target in
+            SessionChatView(
+                session: SessionListItem(
+                    id: target.sessionID,
+                    title: target.sessionTitle,
+                    worktree: target.worktree
+                )
             )
         }
         .task {

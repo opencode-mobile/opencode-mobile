@@ -54,6 +54,7 @@ fun SessionChatScreen(
     onNavigateBack: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
+    onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
     val context = LocalContext.current
@@ -166,6 +167,15 @@ fun SessionChatScreen(
                         },
                         onMessageActionsTap = { messageActionsTarget = it },
                         onToolDetailTap = { toolDetailTarget = it },
+                        onChildSessionTap = { childSessionId, childTitle ->
+                            onChildSessionClick(
+                                ChildSessionNavigationTarget(
+                                    sessionId = childSessionId,
+                                    sessionTitle = childTitle,
+                                    worktree = worktree,
+                                ),
+                            )
+                        },
                     ),
                 modifier = Modifier.weight(1f),
             )

@@ -19,7 +19,7 @@ Android.
   only; no card expand API.
 - File change tools (`edit`/`write`/`apply_patch`): filename + +N/−N; tap opens
   existing Changes review.
-- Subagent `task` card with navigate to child session when available.
+- `task` tool card with navigate to child session when available.
 
 ## Out of scope
 

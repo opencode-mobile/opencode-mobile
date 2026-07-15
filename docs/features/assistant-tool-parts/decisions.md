@@ -118,3 +118,19 @@
   sheet tap remains when error/output text exists.
 - Per-block markdown (text after tools) stays out of OPE-50; leave the
   temporary parity gap.
+
+## OPE-52 subagent / task tool card (grilling)
+
+- Product language: a **`task` ToolPart** opens a **child session**. Do not add
+  a first-class “subagent” domain entity; keep “subagent” informal only.
+- Collapsed chrome only (no expand, sheet, or agent color): title = agent name
+  (fallback `Task`); subtitle = description with optional ` (background)` when
+  `metadata.background` is truthy; status uses existing Tool Call Card variants.
+- Field mapping stays feature-local on opaque maps (OPE-48 stands):
+  - title: `input.agent` → `input.name` → `metadata.agent` → `Task`
+  - subtitle: `input.description` → `input.prompt` → running `ToolPart.title`
+    → omit
+  - nav: non-empty `metadata.sessionId`
+- Timeline `ToolCard` optional `childSessionId`: non-null → push child Session
+  Chat (same worktree); null → display-only. No preflight for stale children.
+- No task grouping. Parallel with OPE-51.
