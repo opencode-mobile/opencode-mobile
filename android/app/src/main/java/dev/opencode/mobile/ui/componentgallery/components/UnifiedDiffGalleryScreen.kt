@@ -24,7 +24,6 @@ import dev.opencode.mobile.ui.components.UnifiedDiffParser
 @Composable
 fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
     var sample by rememberSaveable { mutableIntStateOf(0) }
-    var reviewed by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val labels = listOf("Modified", "Added", "Deleted", "Unavailable")
     val files =
@@ -50,13 +49,11 @@ fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeChoiceBadge(label = label, selected = sample == index, onClick = { sample = index })
             }
         }
-        OpenCodeChoiceBadge(label = "Reviewed", selected = reviewed, onClick = { reviewed = !reviewed })
         OpenCodeChoiceBadge(label = "Expanded context", selected = expanded, onClick = { expanded = !expanded })
         files[sample]?.let {
             OpenCodeUnifiedDiff(
                 file = it,
                 contextMode = if (expanded) UnifiedDiffContextMode.Expanded else UnifiedDiffContextMode.Collapsed,
-                reviewed = reviewed,
                 selectedHunkId = 0,
                 document = UnifiedDiffParser.parse(it.patch.orEmpty()),
             )

@@ -82,14 +82,16 @@ struct ComponentGalleryDetailView: View {
             BottomSheetGalleryView()
         case .listItem:
             ListItemGalleryView()
+        case .listGroup:
+            ListGroupGalleryView()
         case .choiceBadge:
             ChoiceBadgeGalleryView()
         case .actionPill:
             ActionPillGalleryView()
         case .reviewChangesPill:
             ReviewChangesPillGalleryView()
-        case .fileNavigationPill:
-            FileNavigationPillGalleryView()
+        case .hunkNavigationPill:
+            HunkNavigationPillGalleryView()
         case .unifiedDiff:
             UnifiedDiffGalleryView()
         case .button:

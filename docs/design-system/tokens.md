@@ -294,20 +294,27 @@ same compact raised geometry.
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px) |
 
-### File navigation pill
+### Hunk navigation pill
 
-Bottom-centered file stepping control for read-only change review. It shares
-the raised capsule language with the other floating pills, while its larger
-minimum height preserves a native touch target for each directional action.
+Bottom-centered hunk and context control for read-only change review. It shares
+the raised capsule language with the other floating pills and gives all three
+actions an equal native touch target.
 
 | Token | Value |
 | --- | --- |
-| `fileNavigationPill.width` | 200 (logical px) |
-| `fileNavigationPill.minHeight` | 44 (logical px) |
-| `fileNavigationPill.iconButtonSize` | 44 (logical px) |
-| `fileNavigationPill.iconSize` | 20 (logical px) |
-| `fileNavigationPill.summaryPaddingHorizontal` | 12 (logical px) |
-| `fileNavigationPill.shadowElevation` | 4 (logical px) |
+| `hunkNavigationPill.width` | 132 (logical px) |
+| `hunkNavigationPill.minHeight` | 44 (logical px) |
+| `hunkNavigationPill.iconButtonSize` | 44 (logical px) |
+| `hunkNavigationPill.iconSize` | 20 (logical px) |
+| `hunkNavigationPill.shadowElevation` | 4 (logical px) |
+
+### List group
+
+One bordered and clipped surface for an ordered collection of List Item rows.
+
+| Token | Value |
+| --- | --- |
+| `listGroup.cornerRadius` | 12 (logical px) |
 
 ### Unified diff
 

@@ -10,7 +10,7 @@ exposing editing actions.
 ## Public API
 
 - Variants: collapsed context and expanded available context.
-- States: default, reviewed, and selected hunk.
+- States: default and selected hunk.
 - Required content: file path, file status, additions, deletions, and a parsed
   Unified Diff document containing typed hunks and rows with old/new line
   numbers and row kinds.
@@ -38,8 +38,6 @@ exposing editing actions.
 - Collapsed context is the default and shows limited unchanged lines around
   each change. Expanded mode reveals all unchanged context present in the
   loaded patch without requesting or inventing additional source lines.
-- Reviewed presentation remains readable but reduces diff emphasis. It does not
-  remove or collapse the file.
 - A selected hunk receives semantic focus/selection treatment without changing
   the patch contents.
 - Missing or empty patches are handled by the owning screen as unavailable
@@ -61,13 +59,13 @@ markers twice.
 ## Review Surfaces
 
 - Register an interactive Unified diff entry in both Component Galleries.
-- Include light/dark examples for modified, added, deleted, reviewed,
-  collapsed, expanded, long-line, and unavailable-patch cases.
+- Include light/dark examples for modified, added, deleted, collapsed,
+  expanded, long-line, and unavailable-patch cases.
 
 ## Parity And Divergence
 
-Row meaning, line numbering, context behavior, syntax roles, reviewed emphasis,
-and accessibility meaning are shared. Native scrolling mechanics may differ
+Row meaning, line numbering, context behavior, syntax roles, and accessibility
+meaning are shared. Native scrolling mechanics may differ
 internally but should not create observable behavior differences.
 
 ## Completion Ledger
@@ -76,11 +74,11 @@ internally but should not create observable behavior differences.
 - Token and typography usage: complete; the component uses the documented
   semantic diff, syntax, surface, border, caption, and code roles.
 - iOS implementation: complete, including typed hunks and rows, selected-hunk
-  focus, horizontal source scrolling, context variants, and reviewed emphasis.
+  focus, horizontal source scrolling, and context variants.
 - Android implementation: complete with the equivalent behavior and native
   bring-into-view handling for selected hunks.
 - Component Galleries: complete on both platforms with interactive modified,
-  added, deleted, unavailable, reviewed, collapsed/expanded context, Unicode,
+  added, deleted, unavailable, collapsed/expanded context, Unicode,
   no-newline, multi-hunk, and long-line fixtures under gallery light/dark theme
   controls.
 - Parity and divergences: complete; no observable divergence is known.

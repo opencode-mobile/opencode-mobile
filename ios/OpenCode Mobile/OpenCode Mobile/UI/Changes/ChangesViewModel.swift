@@ -3,18 +3,15 @@ import Observation
 import OSLog
 
 enum ChangeSource: String, CaseIterable, Sendable, Equatable, Hashable {
-    case lastTurn
     case workingTree
-    case mainBranch
+    case lastTurn
 
     private var metadata: (displayName: String, emptyTitle: String, emptyDetail: String, logValue: String) {
         switch self {
-        case .lastTurn:
-            ("Last turn", "No changes", "The latest completed turn did not change any files.", "last-turn")
         case .workingTree:
-            ("Working tree", "No Working tree changes", "The working tree has no uncommitted changes.", "working-tree")
-        case .mainBranch:
-            ("Main branch", "No Main branch changes", "The current branch has no changes relative to the default branch.", "main-branch")
+            ("Git changes", "No Git changes", "The working tree has no uncommitted changes.", "git-changes")
+        case .lastTurn:
+            ("Last turn changes", "No changes", "The latest completed turn did not change any files.", "last-turn")
         }
     }
 
@@ -37,97 +34,72 @@ struct ChangesState: Equatable {
     var selectedSource: ChangeSource = .lastTurn
     var availableSources: [ChangeSource] = [.lastTurn]
     var isRefreshing = false
+    var refreshError: String?
 }
 
 struct ChangesContentState: Equatable {
     let files: [FileDiff]
-    var selectedPath: String
     var filter = ""
-    var contextMode: UnifiedDiffContextMode = .collapsed
-    var reviewedPaths: Set<String> = []
-    var selectedHunkID: Int?
 
     var filteredFiles: [FileDiff] {
         let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
         return query.isEmpty ? files : files.filter { $0.path.localizedCaseInsensitiveContains(query) }
     }
 
-    var selectedFile: FileDiff {
-        files.first { $0.path == selectedPath }!
-    }
+    var additions: Int { filteredFiles.reduce(0) { $0 + $1.additions } }
+    var deletions: Int { filteredFiles.reduce(0) { $0 + $1.deletions } }
 
-    var selectedDocument: UnifiedDiffDocument { UnifiedDiffParser.parse(selectedFile.patch ?? "") }
-    var selectedFileHasPreview: Bool { !selectedDocument.hunks.isEmpty }
-    var selectedFileReviewed: Bool { reviewedPaths.contains(selectedPath) }
-    var selectedHunkPositionLabel: String {
-        selectedHunkIndex.map { "Hunk \($0 + 1) of \(selectedDocument.hunks.count)" } ?? "No hunks"
+    var summary: String {
+        "\(filteredFiles.count) \(plural(filteredFiles.count, singular: "changed file", plural: "changed files"))"
     }
-    var canSelectPreviousHunk: Bool { (selectedHunkIndex ?? -1) > 0 }
-    var canSelectNextHunk: Bool {
-        guard let selectedHunkIndex else { return false }
-        return selectedHunkIndex < selectedDocument.hunks.count - 1
-    }
-
-    var additions: Int { files.reduce(0) { $0 + $1.additions } }
-    var deletions: Int { files.reduce(0) { $0 + $1.deletions } }
 
     var aggregateAccessibilityLabel: String {
-        "\(files.count) \(plural(files.count, singular: "changed file", plural: "changed files")), "
+        "\(summary), "
             + "\(additions) \(plural(additions, singular: "addition", plural: "additions")), "
             + "\(deletions) \(plural(deletions, singular: "deletion", plural: "deletions"))"
     }
 
-    var selectedFileSummary: String {
-        "\(selectedFile.status.displayName) · \(selectedPosition + 1) of \(positionFiles.count)"
-    }
-
-    var selectedFileAccessibilityLabel: String { fileAccessibilityLabel(selectedFile) }
-    var canSelectPrevious: Bool { filteredSelectedIndex > 0 }
-    var canSelectNext: Bool { filteredSelectedIndex >= 0 && filteredSelectedIndex < filteredFiles.count - 1 }
-
-    func filePickerSummary(_ file: FileDiff) -> String {
-        let reviewed = reviewedPaths.contains(file.path) ? "Reviewed · " : ""
-        return "\(reviewed)\(file.status.displayName) · +\(file.additions) −\(file.deletions)"
-    }
-
     func fileAccessibilityLabel(_ file: FileDiff) -> String {
-        let position = max(0, positionFiles.firstIndex { $0.path == file.path } ?? 0)
-        let reviewed = reviewedPaths.contains(file.path) ? "reviewed, " : ""
-        return "\(file.path), \(reviewed)\(file.status.displayName), file \(position + 1) of \(positionFiles.count), "
+        let position = max(0, filteredFiles.firstIndex { $0.path == file.path } ?? 0)
+        return "\(file.path), \(file.status.displayName), file \(position + 1) of \(filteredFiles.count), "
             + "\(file.additions) \(plural(file.additions, singular: "addition", plural: "additions")), "
             + "\(file.deletions) \(plural(file.deletions, singular: "deletion", plural: "deletions"))"
     }
+}
 
-    private var filteredSelectedIndex: Int {
-        filteredFiles.firstIndex { $0.path == selectedPath } ?? -1
+struct FileViewerState: Equatable {
+    let file: FileDiff
+    let document: UnifiedDiffDocument
+    var contextMode: UnifiedDiffContextMode = .collapsed
+    var selectedHunkID: Int?
+
+    init(file: FileDiff) {
+        self.file = file
+        document = UnifiedDiffParser.parse(file.patch ?? "")
+        selectedHunkID = document.hunks.first?.id
     }
 
-    private var positionFiles: [FileDiff] {
-        filteredSelectedIndex >= 0 ? filteredFiles : files
-    }
+    var hasPreview: Bool { !document.hunks.isEmpty }
+    var canExpandContext: Bool { document.visibleRows(contextMode: .collapsed).count < document.rows.count }
+    var canSelectPreviousHunk: Bool { selectedHunkIndex.map { $0 > 0 } ?? false }
+    var canSelectNextHunk: Bool { selectedHunkIndex.map { $0 < document.hunks.count - 1 } ?? false }
 
-    private var selectedPosition: Int {
-        max(0, positionFiles.firstIndex { $0.path == selectedPath } ?? 0)
+    mutating func selectPreviousHunk() { moveHunk(by: -1) }
+    mutating func selectNextHunk() { moveHunk(by: 1) }
+    mutating func toggleContextMode() {
+        guard canExpandContext else { return }
+        contextMode = contextMode == .collapsed ? .expanded : .collapsed
     }
 
     private var selectedHunkIndex: Int? {
-        selectedDocument.hunks.firstIndex { $0.id == selectedHunkID }
+        document.hunks.firstIndex { $0.id == selectedHunkID }
     }
 
-    func selecting(path: String) -> ChangesContentState {
-        guard let file = files.first(where: { $0.path == path }) else { return self }
-        var next = self
-        next.selectedPath = path
-        next.selectedHunkID = UnifiedDiffParser.parse(file.patch ?? "").hunks.first?.id
-        return next
-    }
-
-    func resettingViewerControls() -> ChangesContentState {
-        var next = self
-        next.contextMode = .collapsed
-        next.reviewedPaths = []
-        next.selectedHunkID = selectedDocument.hunks.first?.id
-        return next
+    private mutating func moveHunk(by offset: Int) {
+        guard let selectedHunkIndex else { return }
+        let target = selectedHunkIndex + offset
+        guard document.hunks.indices.contains(target) else { return }
+        selectedHunkID = document.hunks[target].id
     }
 }
 
@@ -138,6 +110,7 @@ final class ChangesViewModel {
     private let messageID: String?
     private let repository: SessionRepository
     private var availableSources: [ChangeSource] = [.lastTurn]
+    private var filter = ""
     private var loadRevision = 0
 
     private(set) var state = ChangesState()
@@ -181,6 +154,17 @@ final class ChangesViewModel {
         await load(refreshAvailability: false)
     }
 
+    func updateFilter(_ value: String) {
+        filter = value
+        updateContent { content in
+            var next = content
+            next.filter = value
+            return next
+        }
+    }
+
+    func clearFilter() { updateFilter("") }
+
     private func load(refreshAvailability: Bool, preserveContent: Bool = false) async {
         loadRevision += 1
         let revision = loadRevision
@@ -195,9 +179,7 @@ final class ChangesViewModel {
         )
         let startedAt = Date()
         do {
-            if refreshAvailability {
-                availableSources = try await resolveAvailableSources()
-            }
+            if refreshAvailability { availableSources = try await resolveAvailableSources() }
             guard revision == loadRevision else { return }
             var selectedSource = availableSources.contains(requestedSource) ? requestedSource : .lastTurn
             if selectedSource != requestedSource {
@@ -210,7 +192,7 @@ final class ChangesViewModel {
             let loadedFiles: [FileDiff]
             do {
                 loadedFiles = try await loadFiles(source: selectedSource)
-            } catch let SessionError.http(statusCode, _) where statusCode == 404 && selectedSource != .lastTurn {
+            } catch let SessionError.http(statusCode, _) where statusCode == 404 && selectedSource == .workingTree {
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
                 availableSources = [.lastTurn]
                 selectedSource = .lastTurn
@@ -222,7 +204,7 @@ final class ChangesViewModel {
             }
             let files = loadedFiles.sorted { $0.path < $1.path }
             guard revision == loadRevision else { return }
-            guard let first = files.first else {
+            guard !files.isEmpty else {
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "empty")
                 state = ChangesState(
                     phase: selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges,
@@ -232,33 +214,37 @@ final class ChangesViewModel {
                 return
             }
             log(source: selectedSource, fileCount: files.count, startedAt: startedAt, result: "success")
-            let firstHunkID = UnifiedDiffParser.parse(first.patch ?? "").hunks.first?.id
             state = ChangesState(
-                phase: .content(ChangesContentState(files: files, selectedPath: first.path, selectedHunkID: firstHunkID)),
+                phase: .content(ChangesContentState(files: files, filter: filter)),
                 selectedSource: selectedSource,
                 availableSources: availableSources
             )
         } catch is CancellationError {
             if revision == loadRevision { state.isRefreshing = false }
-            return
         } catch {
             guard revision == loadRevision else { return }
             log(source: activeSource, fileCount: 0, startedAt: startedAt, result: "failure")
-            state = ChangesState(
-                phase: .error(error.localizedDescription),
-                selectedSource: activeSource,
-                availableSources: availableSources
-            )
+            if let preservedPhase {
+                state = ChangesState(
+                    phase: preservedPhase,
+                    selectedSource: requestedSource,
+                    availableSources: availableSources,
+                    refreshError: error.localizedDescription
+                )
+            } else {
+                state = ChangesState(
+                    phase: .error(error.localizedDescription),
+                    selectedSource: activeSource,
+                    availableSources: availableSources
+                )
+            }
         }
     }
 
     private func resolveAvailableSources() async throws -> [ChangeSource] {
         do {
             let info = try await repository.getVcsInfo(directory: worktree)
-            var sources: [ChangeSource] = [.lastTurn]
-            if info.supportsGit { sources.append(.workingTree) }
-            if info.hasDistinctMainBranch { sources.append(.mainBranch) }
-            return sources
+            return info.supportsGit ? [.workingTree, .lastTurn] : [.lastTurn]
         } catch let SessionError.http(statusCode, _) where statusCode == 404 {
             return [.lastTurn]
         }
@@ -271,77 +257,6 @@ final class ChangesViewModel {
             return try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree)
         case .workingTree:
             return try await repository.getVcsDiff(mode: .workingTree, directory: worktree, context: 12)
-        case .mainBranch:
-            return try await repository.getVcsDiff(mode: .mainBranch, directory: worktree, context: 12)
-        }
-    }
-
-    func updateFilter(_ filter: String) {
-        updateContent { content in
-            var next = content
-            next.filter = filter
-            if !next.filteredFiles.contains(where: { $0.path == content.selectedPath }),
-               let first = next.filteredFiles.first
-            {
-                next = next.selecting(path: first.path)
-            }
-            return next
-        }
-    }
-
-    func clearFilter() { updateFilter("") }
-
-    func selectFile(_ path: String) {
-        updateContent { content in
-            guard content.filteredFiles.contains(where: { $0.path == path }) else { return content }
-            return content.selecting(path: path)
-        }
-    }
-
-    func selectPreviousFile() { moveSelection(by: -1) }
-    func selectNextFile() { moveSelection(by: 1) }
-    func selectPreviousHunk() { moveHunk(by: -1) }
-    func selectNextHunk() { moveHunk(by: 1) }
-
-    func toggleContextMode() {
-        updateContent { content in
-            var next = content
-            next.contextMode = content.contextMode == .collapsed ? .expanded : .collapsed
-            return next
-        }
-    }
-
-    func toggleSelectedFileReviewed() {
-        updateContent { content in
-            var next = content
-            if !next.reviewedPaths.insert(content.selectedPath).inserted {
-                next.reviewedPaths.remove(content.selectedPath)
-            }
-            return next
-        }
-    }
-
-    func prepareForSourceSwitch() {
-        updateContent { $0.resettingViewerControls() }
-    }
-
-    private func moveSelection(by offset: Int) {
-        updateContent { content in
-            guard let index = content.filteredFiles.firstIndex(where: { $0.path == content.selectedPath }) else { return content }
-            let target = index + offset
-            guard content.filteredFiles.indices.contains(target) else { return content }
-            return content.selecting(path: content.filteredFiles[target].path)
-        }
-    }
-
-    private func moveHunk(by offset: Int) {
-        updateContent { content in
-            guard let index = content.selectedDocument.hunks.firstIndex(where: { $0.id == content.selectedHunkID }) else { return content }
-            let target = index + offset
-            guard content.selectedDocument.hunks.indices.contains(target) else { return content }
-            var next = content
-            next.selectedHunkID = content.selectedDocument.hunks[target].id
-            return next
         }
     }
 
@@ -363,9 +278,7 @@ private struct PreviewChangesRepository: SessionRepository {
     let files: [FileDiff]
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] { files }
-    func getVcsInfo(directory: String?) async throws -> VcsInfo {
-        VcsInfo(currentBranch: "feature/review", defaultBranch: "main")
-    }
+    func getVcsInfo(directory: String?) async throws -> VcsInfo { VcsInfo(currentBranch: "feature/review", defaultBranch: "main") }
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] { files }
     func listSessions(directory: String?) async throws -> [Session] { [] }
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }

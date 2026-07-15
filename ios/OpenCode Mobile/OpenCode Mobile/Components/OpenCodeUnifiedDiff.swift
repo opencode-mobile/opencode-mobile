@@ -157,13 +157,10 @@ struct OpenCodeUnifiedDiff: View {
     let file: FileDiff
     let document: UnifiedDiffDocument
     var contextMode: UnifiedDiffContextMode = .collapsed
-    var reviewed = false
     var selectedHunkID: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            fileSummary
-            Divider().overlay(OpenCodeColors.borderWeakerBase)
             ScrollView(.horizontal) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(rows) { row in
@@ -176,31 +173,12 @@ struct OpenCodeUnifiedDiff: View {
         .background(OpenCodeColors.surfaceBase)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase))
-        .opacity(reviewed ? 0.72 : 1)
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(file.status.rawValue.capitalized) file \(file.path), \(file.additions) additions, \(file.deletions) deletions")
     }
 
     private var rows: [UnifiedDiffRow] {
         document.visibleRows(contextMode: contextMode)
-    }
-
-    private var fileSummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(file.path).font(OpenCodeTypography.code).foregroundStyle(OpenCodeColors.textStrong)
-            Text("\(statusLabel)  +\(file.additions)  −\(file.deletions)")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-        }
-        .padding(12)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var statusLabel: String {
-        switch file.status {
-        case .added: "Added"
-        case .deleted: "Deleted"
-        case .modified: "Modified"
-        }
     }
 
     private func rowView(_ row: UnifiedDiffRow) -> some View {

@@ -21,16 +21,12 @@ final class OpenCode_MobileUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["3 changed files, 4 additions, 3 deletions"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["Refresh"].exists)
-        XCTAssertTrue(app.staticTexts["Working tree"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Git changes"].waitForExistence(timeout: 5))
         app.buttons["Choose change source"].tap()
-        XCTAssertTrue(app.buttons["Working tree, selected"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["Working tree (selected)"].exists)
-        app.buttons["Main branch"].tap()
-        XCTAssertTrue(app.staticTexts["Main branch"].waitForExistence(timeout: 5))
-        let picker = app.buttons["Choose file. Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["Previous file"].isEnabled)
-        picker.tap()
+        XCTAssertTrue(app.buttons["Git changes, selected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Last turn changes"].exists)
+        XCTAssertFalse(app.buttons["Main branch"].exists)
+        app.buttons["Git changes, selected"].tap()
 
         let filter = app.textFields.firstMatch
         XCTAssertTrue(filter.waitForExistence(timeout: 5))
@@ -38,34 +34,36 @@ final class OpenCode_MobileUITests: XCTestCase {
         filter.typeText("missing")
         XCTAssertTrue(app.staticTexts["No matching files"].waitForExistence(timeout: 5))
         app.buttons["Clear filter"].tap()
+        filter.tap()
+        filter.typeText("App")
 
-        let selectedFile = app.buttons["Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"]
-        XCTAssertTrue(selectedFile.exists)
-        XCTAssertFalse(app.staticTexts["Selected"].exists)
+        let file = app.buttons["Sources/App.swift, Modified, file 1 of 1, 1 addition, 1 deletion"]
+        XCTAssertTrue(file.waitForExistence(timeout: 5))
+        file.tap()
 
-        let newFile = app.buttons["Sources/New.swift, Added, file 2 of 3, 2 additions, 0 deletions"]
-        XCTAssertTrue(newFile.waitForExistence(timeout: 5))
-        newFile.tap()
+        XCTAssertTrue(app.staticTexts["Sources/App.swift"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Previous hunk"].isEnabled)
+        XCTAssertTrue(app.buttons["Expand context"].isEnabled)
+        XCTAssertTrue(app.buttons["Next hunk"].isEnabled)
+        app.buttons["Next hunk"].tap()
+        XCTAssertTrue(app.buttons["Previous hunk"].isEnabled)
+        XCTAssertFalse(app.buttons["Next hunk"].isEnabled)
+        app.buttons["Expand context"].tap()
+        XCTAssertTrue(app.buttons["Collapse context"].exists)
+        XCTAssertFalse(app.staticTexts["Filter paths"].exists)
 
-        XCTAssertTrue(
-            app.buttons["Choose file. Sources/New.swift, Added, file 2 of 3, 2 additions, 0 deletions"]
-                .waitForExistence(timeout: 5)
-        )
-        XCTAssertFalse(app.staticTexts["Previous file"].exists)
-        XCTAssertFalse(app.staticTexts["Next file"].exists)
-        XCTAssertTrue(app.staticTexts["2 additions, 0 deletions"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Previous file"].isEnabled)
-        XCTAssertTrue(app.buttons["Next file"].isEnabled)
-        app.buttons["Next file"].tap()
-        XCTAssertFalse(app.buttons["Next file"].isEnabled)
-        XCTAssertTrue(app.staticTexts["1 addition, 2 deletions"].waitForExistence(timeout: 5))
-        XCTAssertTrue(
-            app.buttons["Choose file. Sources/Removed.swift, Deleted, file 3 of 3, 1 addition, 2 deletions"]
-                .waitForExistence(timeout: 5)
-        )
-        XCTAssertFalse(
-            app.buttons["Choose file. Sources/App.swift, Modified, file 1 of 3, 1 addition, 1 deletion"].exists
-        )
+        app.buttons["Back"].tap()
+        XCTAssertEqual(filter.value as? String, "App")
+        XCTAssertTrue(app.staticTexts["1 changed file, 1 addition, 1 deletion"].exists)
+        filter.tap()
+        filter.typeText("missing")
+        XCTAssertTrue(app.staticTexts["No matching files"].waitForExistence(timeout: 5))
+        app.buttons["Clear filter"].tap()
+        if app.keyboards.buttons["done"].exists { app.keyboards.buttons["done"].tap() }
+        XCTAssertTrue(app.staticTexts["3 changed files, 4 additions, 3 deletions"].waitForExistence(timeout: 5))
+        app.buttons["Sources/Removed.swift, Deleted, file 3 of 3, 1 addition, 2 deletions"].tap()
+        XCTAssertTrue(app.staticTexts["Preview unavailable"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Previous hunk"].exists)
     }
 
     @MainActor

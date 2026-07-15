@@ -2,123 +2,121 @@
 
 ## User Goal
 
-Open a dedicated mobile screen from Session Chat and understand what changed in
-the latest turn, the current Git working tree, or the current branch relative
-to its default branch.
+Open a mobile Changed Files list from Session Chat, choose between the latest
+turn and current Git worktree changes, filter and understand the affected
+files, then open one focused read-only file viewer for hunk-level inspection.
 
 ## In Scope
 
-- Add an always-available **Review changes** action to the Session Chat overflow
-  menu.
-- Add a dedicated **Changes** screen on iOS and Android.
-- Support three Change Set sources:
-  - **Last turn** for the latest completed user turn.
-  - **Working tree** for current uncommitted Git changes.
-  - **Main branch** for current branch changes relative to its default branch.
-- Open Working tree from the Session Chat overflow menu when Git is available;
-  otherwise fall back to Last turn.
-- Show Main branch only when the server reports a current branch that differs
-  from the default branch.
-- Add a separate Review Changes Pill at the conversation end after a completed
-  turn with changed files. The pill opens Last turn.
-- Present one file at a time with a filterable changed-file picker, file status,
-  addition/deletion counts, previous/next file navigation, and previous/next
-  hunk navigation.
-- Replace the Changes screen's previous/next file text-button row with a
-  bottom-centered floating File Navigation Pill. The pill always presents
-  previous and next chevrons around the selected file's addition and deletion
-  totals, keeps both totals visible when either value is zero, disables
-  unavailable directions and both directions during refresh, respects the
-  active path filter, and resets a newly selected file to the top of its diff.
-- Render a native unified diff with line numbers, syntax roles, horizontally
-  scrollable long lines, collapsed context by default, and an expanded
-  available-context mode.
-- Allow files to be marked reviewed for the current viewer lifetime. Reviewed
-  files remain visible and markers clear on source switch, refresh, or exit.
-- Load a stable snapshot on entry or source switch and reload only through
-  pull-to-refresh or retry.
+- Add an always-available Changes action to the Session Chat overflow.
+- Show a Review Changes Pill after a completed turn with changed files.
+- Support exactly two Change Set sources:
+  - **Git changes** for current uncommitted worktree changes.
+  - **Last turn changes** for the latest completed user turn.
+- Open Git changes from the overflow when supported, otherwise fall back to Last
+  turn changes. Open Last turn changes from the Review Changes Pill.
+- Split Review Changes into two native screens:
+  - a Changed Files screen for source selection, filtering, filtered totals,
+    refresh, errors, empty states, and the stable snapshot;
+  - a pushed File Viewer for one file's unified diff, hunk navigation, and
+    collapsed/expanded context.
+- Present filtered files in one grouped, bordered list. Rows show relative path,
+  semantic `+N −N` counts including zero, and a chevron.
+- Preserve the list's source, filter, and scroll position when returning from a
+  file. Source switches preserve the filter and reset scroll.
+- Keep pull-to-refresh on the list and keep an open viewer snapshot stable.
+- Render native unified diffs with line numbers, syntax roles, horizontally
+  scrollable long lines, collapsed context by default, and expanded available
+  context.
+- Show a bottom-centered, icon-only Hunk Navigation Pill with Previous hunk,
+  Expand/Collapse all context, and Next hunk actions.
+- Keep unrenderable files actionable through a Preview unavailable viewer state.
 
 ## Out Of Scope
 
+- Main-branch comparison as a mobile Change Set source.
+- Previous/next file stepping inside the viewer.
+- Marking files reviewed or persisting review state.
 - Editing files, applying patches, reverting changes, or executing shell
   commands.
-- Live diff updates, event-driven refresh, or periodic polling while the viewer
-  is open.
-- Split diff layout.
-- Persisting reviewed markers across viewer sessions or app launches.
-- Full file browsing outside the selected Change Set.
+- Live diff updates, event-driven refresh, or periodic polling while reviewing.
+- Split diff layout, historical-turn browsing, or full file browsing outside
+  the selected Change Set.
 
 ## Server APIs Involved
 
 - `GET /session/{id}/diff?messageID={latestUserMessageID}&directory={worktree}`
-  for Last turn.
-- `GET /vcs?directory={worktree}` for Git, current-branch, and default-branch
-  availability.
-- `GET /vcs/diff?mode=git&context=12&directory={worktree}` for Working tree.
-- `GET /vcs/diff?mode=branch&context=12&directory={worktree}` for Main branch.
+  for Last turn changes.
+- `GET /vcs?directory={worktree}` to confirm Git/worktree-diff availability.
+- `GET /vcs/diff?mode=git&context=12&directory={worktree}` for Git changes.
 
-Unsupported or non-Git VCS endpoints leave Last turn available. Transient VCS
-or session failures remain retryable and must not be treated as proof that a
-source is unsupported.
+The branch-diff mode is not used by this feature. Unsupported or non-Git VCS
+capability leaves Last turn changes available. Transient failures remain
+retryable and do not prove that Git changes are unsupported.
 
 ## Expected Platform Logs
 
-Log source, session identifier, directory, file, addition, and deletion totals,
-request duration, and success or mapped failure for each load, source switch,
-refresh, and pill-summary request. Do not log patch contents, source lines,
-credentials, or authorization headers.
+Log source, session identifier, directory, file/addition/deletion totals,
+request duration, and success or mapped failure for list load, source switch,
+refresh, retry, and pill-summary requests. Do not log patches, source lines,
+credentials, or authorization headers. File Viewer actions are local and do not
+require network logs.
 
 ## Domain Objects
 
-- **Change Set**: one loaded read-only snapshot from a selected source.
-- **Change Source**: Last turn, Working tree, or Main branch.
-- **File Diff**: file path, patch, additions, deletions, and
-  added/deleted/modified status.
-- **Diff Hunk** and **Diff Row**: native render models derived from a unified
-  patch, including old/new line numbers and row meaning.
+- **Change Set**: one stable read-only snapshot from a selected source.
+- **Change Source**: Git changes or Last turn changes.
+- **File Diff**: relative path, patch, additions, deletions, and status.
+- **Diff Hunk** and **Diff Row**: native render models with old/new line numbers
+  and semantic row meaning.
+- **Changed Files State**: source, snapshot, filter, filtered totals, refresh,
+  loading, empty, and error presentation.
+- **File Viewer State**: selected file, typed document, selected hunk, context
+  mode, action availability, and unavailable-preview presentation.
 
-Generated or transport-specific types remain behind a Change Review Repository
-so feature code uses the domain terms above.
+Generated and transport-specific types remain behind the Change Review
+Repository so feature code uses the domain terms above.
 
 ## Screen Model
 
-One immutable state exposes:
+One flow-level owner retains the stable Change Set snapshot and Changed Files
+state across native push/back navigation. The File Viewer references a path in
+that snapshot and never reloads it.
 
-- loading, content, empty, and retryable error presentation;
-- available and selected source;
-- loaded snapshot time and aggregate counts;
-- selected file and hunk;
-- file filter and filtered results;
-- collapsed or expanded context mode;
-- viewer-local reviewed file paths.
+Changed Files actions are load, retry, refresh, select source, update/clear
+filter, open file, and navigate back. File Viewer actions are select previous
+hunk, select next hunk, toggle all context, and navigate back.
 
-Explicit actions are: load, retry, refresh, select source, select/filter file,
-move to previous/next file, move to previous/next hunk, toggle context, toggle
-reviewed, and navigate back.
-
-The viewer captures the latest user-message identifier at entry. Foreground
-events do not mutate an open snapshot.
+Viewer-local hunk selection and context mode reset when the viewer exits. The
+viewer captures the first hunk and collapsed context on entry. Foreground events
+do not mutate the open snapshot.
 
 ## Native Navigation Entry Points
 
-- Session Chat overflow: always show Review changes; request Working tree first
-  and fall back to Last turn when VCS is unavailable.
-- Review Changes Pill: show only when the timeline is at its end, the latest
-  user turn is complete, and that turn has one or more changed files; open Last
-  turn.
-- The destination carries session identifier, worktree, initial source, and the
-  captured latest user-message identifier through each platform's native
-  navigation model.
+- Session Chat overflow: open Git changes when supported, otherwise Last turn
+  changes.
+- Review Changes Pill: open Last turn changes for the captured latest completed
+  user-message identifier.
+- File row: push File Viewer through each platform's native navigation model.
+- Viewer Back, including native iOS swipe-back where supported: restore the
+  existing Changed Files source, filter, snapshot, and scroll position.
+
+Routes carry session identifier, worktree, initial source, captured message
+identifier, and selected file path as needed. Patch content remains owned by the
+flow rather than serialized into navigation routes.
 
 ## Error And Empty States
 
 - Source-specific loading and retryable failure.
-- No changes for Last turn, Working tree, or Main branch with distinct copy.
-- No latest user turn.
-- Non-Git or unsupported VCS source fallback.
-- No files matching the current filter.
-- Missing or empty patch preview, including binary files.
-- A failed pill-summary request hides the pill without hiding the overflow entry.
+- No changes for Git changes or Last turn changes with distinct copy.
+- No latest completed user turn.
+- Confirmed unsupported/non-Git capability hides Git changes.
+- No matching files shows zero filtered totals, No matching files, and Clear
+  filter.
+- Missing, malformed, empty, or binary patch opens Preview unavailable without
+  the Hunk Navigation Pill.
+- A failed Review Changes Pill summary request hides the pill without hiding
+  the overflow entry.
 
 ## Permission Requests
 
@@ -127,35 +125,41 @@ perform mutations.
 
 ## Design-System Components Needed
 
-- New reusable native `OpenCodeFileNavigationPill` with equivalent iOS and
-  Android enabled, direction-disabled, refresh-disabled, zero-count,
-  accessibility, gallery, preview, and light/dark states.
-- Extended `OpenCodeReviewChangesPill`, documented in
-  `docs/design-system/components/review-changes-pill.md`, with a compact latest
-  turn file/addition/deletion summary and equivalent native accessibility.
-- New reusable native `OpenCodeUnifiedDiff`, documented in
-  `docs/design-system/components/unified-diff.md`.
-- Reuse `OpenCodeTopBar`, `OpenCodeOverflowMenu`, `OpenCodeBottomSheet`,
-  `OpenCodeListItem`, `OpenCodeButton`, semantic diff/syntax tokens, and the
-  existing typography roles.
-- Keep the source selector, aggregate toolbar, file-picker composition, and
-  screen empty/error layouts feature-local because their behavior belongs to
-  this screen rather than a general component role.
+- Add reusable `OpenCodeListGroup` for the shared bordered container, clipping,
+  corner radius, and internal row separators.
+- Add reusable `OpenCodeHunkNavigationPill` for equal Previous, context, and
+  Next icon actions, disabled states, pressed states, accessibility, galleries,
+  and previews.
+- Reuse `OpenCodeListItem` with semantic addition/deletion subtitle segments.
+- Reuse `OpenCodeUnifiedDiff` for typed hunks and selected-hunk focus; remove its
+  reviewed state and presentation.
+- Remove `OpenCodeFileNavigationPill`, its tokens, documentation, galleries,
+  previews, and tests after its feature references are gone.
+- Reuse OpenCodeTopBar, OpenCodeOverflowMenu, OpenCodeTextInput, icons, semantic
+  diff/syntax tokens, and existing typography roles.
+- Keep the filtered aggregate summary and screen empty/error compositions
+  feature-local because they express Changed Files screen state.
 
 ## Automated Acceptance Expectations
 
 - Decode and map added, deleted, modified, optional-patch, binary, Unicode, and
   multi-hunk file diffs on both platforms.
-- Verify worktree scoping, Last turn message identifiers, VCS modes, context,
-  authentication, source availability, fallback, and mapped failures.
-- Verify stable snapshots ignore foreground events and reload only on explicit
-  actions.
-- Verify filtering, selection, file/hunk navigation, context, reviewed-state
-  lifecycle, horizontal scrolling, and empty/error recovery.
-- Verify the File Navigation Pill's selected-file totals, stable two-count
-  formatting, always-visible chevrons, boundary and refresh disabling,
-  filtered navigation, top reset, floating placement, accessibility, and
-  replacement of the previous/next text-button row.
-- Verify pill visibility, mutual exclusion with Scroll to end, singular/plural
-  file copy, zero-valued line-total omission, navigation source, accessibility
-  labels, semantic summary colors, and light/dark component states.
+- Verify worktree scoping, latest-turn identifiers, Git availability, context,
+  authentication, fallback, and mapped failures.
+- Verify stable snapshots ignore foreground events and reload only from list
+  load, source switch, refresh, or retry.
+- Verify source order/defaults, filtered files and totals, clearing, empty/error
+  recovery, and list state restoration after Back.
+- Verify viewer entry reset, hunk boundaries, focus scrolling, all-hunk context
+  toggle, no-expand disabling, horizontal scrolling, bottom inset, and
+  unavailable preview.
+- Verify grouped-list and Hunk Navigation Pill light/dark, enabled/disabled,
+  accessibility, gallery, preview, and native integration states.
+- Verify reviewed and previous/next file behavior are absent from state, UI,
+  semantics, documentation, and tests.
+- Verify Review Changes Pill visibility, Scroll-to-end mutual exclusion,
+  summary copy/colors, entry source, and accessibility.
+
+## Focused Execution Plan
+
+See [`ope-43-two-screen-diff-plan.md`](ope-43-two-screen-diff-plan.md).

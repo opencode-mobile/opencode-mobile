@@ -19,10 +19,11 @@ enum class ComponentGalleryEntryId {
     OverflowMenu,
     BottomSheet,
     ListItem,
+    ListGroup,
     ChoiceBadge,
     ActionPill,
     ReviewChangesPill,
-    FileNavigationPill,
+    HunkNavigationPill,
     UnifiedDiff,
     Button,
     TextInput,
@@ -91,6 +92,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ListGroup,
+            title = "List Group",
+            description = "Bordered and separated container for related List Item rows.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.ChoiceBadge,
             title = "Choice Badge",
             description = "Selectable pill for compact single-choice controls.",
@@ -109,9 +116,9 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.FileNavigationPill,
-            title = "File Navigation Pill",
-            description = "Floating previous and next file controls with current-file totals.",
+            id = ComponentGalleryEntryId.HunkNavigationPill,
+            title = "Hunk Navigation Pill",
+            description = "Floating hunk movement and context controls for unified diffs.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

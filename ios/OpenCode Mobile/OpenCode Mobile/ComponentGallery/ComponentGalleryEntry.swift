@@ -14,10 +14,11 @@ enum ComponentGalleryEntryID: String, Hashable {
     case overflowMenu
     case bottomSheet
     case listItem
+    case listGroup
     case choiceBadge
     case actionPill
     case reviewChangesPill
-    case fileNavigationPill
+    case hunkNavigationPill
     case unifiedDiff
     case button
     case textInput
@@ -85,6 +86,12 @@ let componentGalleryEntries = [
         category: .components
     ),
     ComponentGalleryEntry(
+        id: .listGroup,
+        title: "List Group",
+        description: "Bordered and separated container for related List Item rows.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
         id: .choiceBadge,
         title: "Choice Badge",
         description: "Selectable pill for compact single-choice controls.",
@@ -103,9 +110,9 @@ let componentGalleryEntries = [
         category: .components
     ),
     ComponentGalleryEntry(
-        id: .fileNavigationPill,
-        title: "File Navigation Pill",
-        description: "Floating previous and next file controls with current-file totals.",
+        id: .hunkNavigationPill,
+        title: "Hunk Navigation Pill",
+        description: "Floating hunk movement and context controls for unified diffs.",
         category: .components
     ),
     ComponentGalleryEntry(
