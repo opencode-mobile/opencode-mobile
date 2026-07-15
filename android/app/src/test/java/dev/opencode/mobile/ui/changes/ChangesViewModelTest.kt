@@ -126,11 +126,12 @@ class ChangesViewModelTest {
             advanceUntilIdle()
             viewModel.updateFilter("keep")
             viewModel.refresh()
+            viewModel.updateFilter("latest")
             advanceUntilIdle()
 
             val content = (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet
             assertEquals(listOf("keep.kt"), content.files.map(FileDiff::path))
-            assertEquals("keep", content.filter)
+            assertEquals("latest", content.filter)
             assertEquals("offline", viewModel.uiState.value.refreshError)
             assertFalse(viewModel.uiState.value.isRefreshing)
         }

@@ -46,7 +46,6 @@ struct HunkNavigationPillGalleryView: View {
         }
     }
 }
-
 private enum HunkNavigationPosition: CaseIterable {
     case first
     case middle
@@ -64,4 +63,3 @@ private enum HunkNavigationPosition: CaseIterable {
 #Preview {
     HunkNavigationPillGalleryView().padding().openCodeTheme()
 }
-

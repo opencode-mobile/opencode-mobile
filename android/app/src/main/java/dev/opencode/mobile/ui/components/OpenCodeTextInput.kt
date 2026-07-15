@@ -48,6 +48,10 @@ fun OpenCodeTextInput(
     errorMessage: String? = null,
     submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
 ) {
+    val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(label, accessibilityLabel)
+    requireNotNull(resolvedAccessibilityLabel) {
+        "OpenCodeTextInput requires a visible label or a non-blank accessibilityLabel"
+    }
     val focusManager = LocalFocusManager.current
     Column(modifier = modifier.fillMaxWidth()) {
         label?.let {
@@ -64,15 +68,7 @@ fun OpenCodeTextInput(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (accessibilityLabel == null) {
-                            Modifier
-                        } else {
-                            Modifier.semantics {
-                                contentDescription = accessibilityLabel
-                            }
-                        },
-                    ),
+                    .semantics { contentDescription = resolvedAccessibilityLabel },
             enabled = enabled,
             singleLine = true,
             placeholder =
@@ -124,3 +120,8 @@ fun OpenCodeTextInput(
         )
     }
 }
+
+internal fun resolveOpenCodeTextInputAccessibilityLabel(
+    label: String?,
+    accessibilityLabel: String?,
+): String? = accessibilityLabel?.takeIf { it.isNotBlank() } ?: label?.takeIf { it.isNotBlank() }

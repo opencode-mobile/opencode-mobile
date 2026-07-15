@@ -57,14 +57,13 @@ covers light and dark.
 
 - Public API and applicable states: complete.
 - Token and typography mapping: complete; unchanged.
-- iOS and Android implementations: blocked from completion because neither
-  native API yet enforces a non-empty accessibility label when the visible
-  label is omitted; iOS also still treats placeholder text as a fallback name.
+- iOS and Android implementations: complete. Both enforce a visible label or
+  explicit non-empty accessibility label, and placeholder text is not accepted
+  as the semantic name.
 - Gallery entries and previews: complete.
 - Parity and divergences: complete; none known.
-- Automated checks: blocked until both native APIs have invariant coverage for
-  the unlabeled variant. Existing platform compilation and Changes UI coverage
-  confirm the valid caller but do not reject invalid component usage.
+- Automated checks: complete. Both platforms cover explicit-label precedence,
+  visible-label fallback, and rejection of empty unlabeled configurations.
 
 ## Parity And Divergence
 

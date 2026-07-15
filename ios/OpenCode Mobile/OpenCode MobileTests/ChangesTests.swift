@@ -2,6 +2,19 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
+struct OpenCodeTextInputTests {
+    @Test func accessibilityLabelPrefersExplicitValueThenVisibleLabel() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: "Filter changed files") == "Filter changed files")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Server URL", accessibilityLabel: nil) == "Server URL")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Visible", accessibilityLabel: "Explicit") == "Explicit")
+    }
+
+    @Test func placeholderDoesNotSatisfyAccessibilityContract() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: nil) == nil)
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "  ", accessibilityLabel: "\n") == nil)
+    }
+}
+
 @MainActor struct FileDiffAdapterTests {
     @Test func decodesServerShapeAndSynthesizesDomainPatchAndStatus() throws {
         let data = Data(#"{"file":"Sources/App.swift","before":"old","after":"new","additions":1,"deletions":1}"#.utf8)
@@ -99,10 +112,12 @@ struct ChangesViewModelTests {
         let viewModel = ChangesViewModel(sessionID: "s", worktree: "/w", messageID: "m", repository: repository)
         await viewModel.load()
         viewModel.updateFilter("keep")
-        await viewModel.refresh()
+        let refresh = Task { await viewModel.refresh() }
+        viewModel.updateFilter("latest")
+        await refresh.value
 
         #expect(viewModel.content?.files.map(\.path) == ["keep.swift"])
-        #expect(viewModel.content?.filter == "keep")
+        #expect(viewModel.content?.filter == "latest")
         #expect(viewModel.state.refreshError == "offline")
         #expect(!viewModel.state.isRefreshing)
     }

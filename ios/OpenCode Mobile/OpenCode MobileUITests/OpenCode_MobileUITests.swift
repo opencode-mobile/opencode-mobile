@@ -42,7 +42,7 @@ final class OpenCode_MobileUITests: XCTestCase {
         file.tap()
 
         XCTAssertTrue(app.staticTexts["Sources/App.swift"].waitForExistence(timeout: 5))
-        let diff = app.scrollViews["Modified file Sources/App.swift, 1 additions, 1 deletions"]
+        let diff = app.descendants(matching: .any)["Modified file Sources/App.swift, 1 additions, 1 deletions"]
         let longLine = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "horizontalScrollingFixture")
         ).firstMatch
@@ -63,7 +63,24 @@ final class OpenCode_MobileUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Previous hunk"].isEnabled)
         XCTAssertTrue(app.buttons["Expand context"].isEnabled)
         XCTAssertTrue(app.buttons["Next hunk"].isEnabled)
+        let firstHunk = app.staticTexts["hunk, , @@ -1,17 +1,17 @@"]
+        let finalHunk = app.staticTexts["hunk, , @@ -30 +30 @@"]
+        XCTAssertTrue(firstHunk.waitForExistence(timeout: 5))
+        XCTAssertTrue(finalHunk.waitForExistence(timeout: 5))
+        let expectedHunkTop = firstHunk.frame.minY
         app.buttons["Next hunk"].tap()
+        let topAlignmentExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { element, _ in
+                guard let element = element as? XCUIElement else { return false }
+                return abs(element.frame.minY - expectedHunkTop) < 2
+            },
+            object: finalHunk
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [topAlignmentExpectation], timeout: 5),
+            .completed,
+            "Expected final hunk at \(expectedHunkTop), got \(finalHunk.frame.minY)"
+        )
         XCTAssertTrue(app.buttons["Previous hunk"].isEnabled)
         XCTAssertFalse(app.buttons["Next hunk"].isEnabled)
         app.buttons["Expand context"].tap()

@@ -2,10 +2,13 @@ package dev.opencode.mobile.ui.changes
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -326,12 +329,13 @@ private fun FileViewerScreen(
         if (!viewer.hasPreview) {
             Centered { EmptyMessage("Preview unavailable", "A text preview is unavailable for this file.") }
         } else {
-            Box(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val trailingScrollSpace = maxOf(84.dp, maxHeight - 20.dp)
                 Column(
                     Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 84.dp),
+                        .padding(start = 16.dp, top = 16.dp, end = 16.dp),
                 ) {
                     OpenCodeUnifiedDiff(
                         file = file,
@@ -340,6 +344,7 @@ private fun FileViewerScreen(
                         selectedHunkId = viewer.selectedHunkId,
                         onSelectedHunkOffset = { selectedHunkOffset = it },
                     )
+                    Spacer(Modifier.height(trailingScrollSpace))
                 }
                 OpenCodeHunkNavigationPill(
                     previousEnabled = viewer.canSelectPreviousHunk,

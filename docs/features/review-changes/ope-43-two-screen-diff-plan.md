@@ -1,6 +1,6 @@
 # OPE-43 Two-Screen Diff Plan
 
-Status: implemented with remaining review fixes tracked in
+Status: implemented and verified. Completion is recorded in
 [`progress.md`](progress.md).
 
 ## Objective

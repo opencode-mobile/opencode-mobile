@@ -26,6 +26,34 @@ struct OpenCodeTextInput: View {
 
     @FocusState private var focused: Bool
 
+    init(
+        label: String? = nil,
+        text: Binding<String>,
+        placeholder: String = "",
+        accessibilityLabel: String? = nil,
+        kind: OpenCodeTextInputKind = .text,
+        enabled: Bool = true,
+        errorMessage: String? = nil,
+        submitAction: OpenCodeTextInputSubmitAction = .done,
+        isFocused: Binding<Bool>? = nil,
+        onSubmit: (() -> Void)? = nil
+    ) {
+        precondition(
+            Self.resolveAccessibilityLabel(label: label, accessibilityLabel: accessibilityLabel) != nil,
+            "OpenCodeTextInput requires a visible label or a non-blank accessibilityLabel"
+        )
+        self.label = label
+        _text = text
+        self.placeholder = placeholder
+        self.accessibilityLabel = accessibilityLabel
+        self.kind = kind
+        self.enabled = enabled
+        self.errorMessage = errorMessage
+        self.submitAction = submitAction
+        self.isFocused = isFocused
+        self.onSubmit = onSubmit
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let label {
@@ -82,7 +110,15 @@ struct OpenCodeTextInput: View {
                     .keyboardType(kind == .url ? .URL : .default)
             }
         }
-        .accessibilityLabel(accessibilityLabel ?? label ?? placeholder)
+        .accessibilityLabel(Self.resolveAccessibilityLabel(label: label, accessibilityLabel: accessibilityLabel)!)
+    }
+
+    static func resolveAccessibilityLabel(label: String?, accessibilityLabel: String?) -> String? {
+        if let accessibilityLabel, !accessibilityLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return accessibilityLabel
+        }
+        if let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return label }
+        return nil
     }
 
     private var contentType: UITextContentType? {

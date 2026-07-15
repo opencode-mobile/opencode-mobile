@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +26,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.abs
 
 class ChangesScreenTest {
     @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
@@ -68,7 +70,20 @@ class ChangesScreenTest {
         composeTestRule.onNodeWithContentDescription("Previous hunk").assertIsNotEnabled()
         composeTestRule.onNodeWithContentDescription("Expand context").assertIsEnabled().performClick()
         composeTestRule.onNodeWithContentDescription("Collapse context").assertIsDisplayed()
+        val firstHunkTop =
+            composeTestRule
+                .onNodeWithContentDescription("hunk, @@ -1,17 +1,17 @@")
+                .getUnclippedBoundsInRoot()
+                .top
         composeTestRule.onNodeWithContentDescription("Next hunk").assertIsEnabled().performClick()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            val finalHunkTop =
+                composeTestRule
+                    .onNodeWithContentDescription("hunk, @@ -30 +30 @@")
+                    .getUnclippedBoundsInRoot()
+                    .top
+            abs((finalHunkTop - firstHunkTop).value) < 2f
+        }
         composeTestRule.onNodeWithContentDescription("Previous hunk").assertIsEnabled()
         composeTestRule.onNodeWithContentDescription("Next hunk").assertIsNotEnabled()
         composeTestRule.onAllNodesWithText("Filter paths").assertCountEquals(0)

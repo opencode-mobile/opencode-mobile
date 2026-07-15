@@ -31,6 +31,10 @@ struct UnifiedDiffHunk: Identifiable, Sendable, Equatable {
     let rows: [UnifiedDiffRow]
 }
 
+struct UnifiedDiffScrollTarget: Hashable {
+    let rowID: Int
+}
+
 struct UnifiedDiffDocument: Sendable, Equatable {
     let rows: [UnifiedDiffRow]
     let hunks: [UnifiedDiffHunk]
@@ -173,6 +177,17 @@ struct OpenCodeUnifiedDiff: View {
         .background(OpenCodeColors.surfaceBase)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase))
+        .overlay(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                ForEach(rows) { row in
+                    Color.clear
+                        .frame(width: 1, height: 20)
+                        .id(UnifiedDiffScrollTarget(rowID: row.id))
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(file.status.rawValue.capitalized) file \(file.path), \(file.additions) additions, \(file.deletions) deletions")
     }

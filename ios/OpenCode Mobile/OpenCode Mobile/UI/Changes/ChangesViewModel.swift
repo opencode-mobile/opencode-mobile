@@ -225,8 +225,13 @@ final class ChangesViewModel {
             guard revision == loadRevision else { return }
             log(source: activeSource, fileCount: 0, startedAt: startedAt, result: "failure")
             if let preservedPhase {
+                var restoredPhase = preservedPhase
+                if case var .content(content) = restoredPhase {
+                    content.filter = filter
+                    restoredPhase = .content(content)
+                }
                 state = ChangesState(
-                    phase: preservedPhase,
+                    phase: restoredPhase,
                     selectedSource: requestedSource,
                     availableSources: availableSources,
                     refreshError: error.localizedDescription

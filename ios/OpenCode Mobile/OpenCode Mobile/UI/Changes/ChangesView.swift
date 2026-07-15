@@ -241,17 +241,21 @@ private struct FileViewerView: View {
             ScrollViewReader { proxy in
                 ZStack(alignment: .bottom) {
                     ScrollView {
-                        OpenCodeUnifiedDiff(
-                            file: state.file,
-                            document: state.document,
-                            contextMode: state.contextMode,
-                            selectedHunkID: state.selectedHunkID
-                        )
-                        .frame(width: max(0, geometry.size.width - 32), alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 84)
+                        VStack(spacing: 0) {
+                            OpenCodeUnifiedDiff(
+                                file: state.file,
+                                document: state.document,
+                                contextMode: state.contextMode,
+                                selectedHunkID: state.selectedHunkID
+                            )
+                            .frame(width: max(0, geometry.size.width - 32), alignment: .leading)
+                            .padding(.horizontal, 16)
+
+                            Color.clear
+                                .frame(height: max(84, geometry.size.height - 20))
+                        }
                     }
+                    .contentMargins(.top, 16, for: .scrollContent)
 
                     OpenCodeHunkNavigationPill(
                         previousEnabled: state.canSelectPreviousHunk,
@@ -266,7 +270,9 @@ private struct FileViewerView: View {
                 }
                 .onChange(of: state.selectedHunkID) { _, selectedHunkID in
                     guard let selectedHunkID else { return }
-                    withAnimation { proxy.scrollTo(selectedHunkID, anchor: .top) }
+                    withAnimation {
+                        proxy.scrollTo(UnifiedDiffScrollTarget(rowID: selectedHunkID), anchor: .top)
+                    }
                 }
             }
         }

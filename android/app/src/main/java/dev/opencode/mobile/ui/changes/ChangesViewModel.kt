@@ -245,8 +245,12 @@ class ChangesViewModel
                         }
                         _uiState.value =
                             if (preservedPhase != null) {
+                                val restoredPhase =
+                                    (preservedPhase as ChangesPhase.Content).copy(
+                                        changeSet = preservedPhase.changeSet.copy(filter = filter),
+                                    )
                                 ChangesUiState(
-                                    phase = preservedPhase,
+                                    phase = restoredPhase,
                                     selectedSource = requestedSource,
                                     availableSources = availableSources,
                                     refreshError = error.userMessage(),
