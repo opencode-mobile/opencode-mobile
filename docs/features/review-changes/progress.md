@@ -3,14 +3,16 @@
 ## Shared Planning
 
 - Status: the OPE-43 two-screen simplification is implemented from
-  [`ope-43-two-screen-diff-plan.md`](ope-43-two-screen-diff-plan.md).
+  [`ope-43-two-screen-diff-plan.md`](ope-43-two-screen-diff-plan.md), with
+  review fixes remaining below.
 - Linear parent: `OPE-25` Session Diff Viewer.
 - Implementation bucket: `OPE-43` Session Diff Viewer fixes and improvements.
 
 ## Design System
 
-- Status: implementation complete on iOS and Android; native UI verification is
-  blocked on Android by an unrelated instrumentation compile failure.
+- Status: the shared components are implemented on iOS and Android. Enforcing
+  the Text Input accessibility-label invariant remains; native UI verification
+  is blocked on Android by an unrelated instrumentation compile failure.
 - Added reusable List Group components for one bordered, clipped collection of
   List Item rows with internal separators.
 - Added reusable Hunk Navigation Pill components with equal Previous hunk,
@@ -26,8 +28,9 @@
 
 ## iOS
 
-- Status: implementation complete; production build and focused unit/UI checks
-  pass.
+- Status: the two-screen flow is implemented and production build plus focused
+  unit/UI checks pass; review fixes remain for refresh-filter retention and
+  final-hunk top alignment.
 - Changes now opens a Changed Files list with Git changes and Last turn changes
   in fixed source-menu order, Git capability fallback, path filtering, filtered
   semantic totals, grouped rows, source-specific empty/error states, and native
@@ -38,14 +41,16 @@
 - The File Viewer clamps the diff surface to the measured iOS viewport while
   long source rows keep their intrinsic width and scroll inside that surface.
 - Back navigation preserves list source, filter, snapshot, and scroll state.
-  Source switching preserves the filter and resets list scroll.
+  Source switching preserves the filter and resets list scroll. Exiting Changes
+  back to Session Chat clears the filter.
 - Reviewed state, file-picker presentation, previous/next file stepping, Main
   branch source selection, and viewer refresh/source controls are removed.
 
 ## Android
 
-- Status: implementation complete; production build and focused unit checks
-  pass, while native UI verification remains blocked.
+- Status: the two-screen flow is implemented and production build plus focused
+  unit checks pass; review fixes remain for refresh-filter retention and
+  final-hunk top alignment, while native UI verification remains blocked.
 - Changes uses a nested Navigation 3 back stack for the Changed Files and File
   Viewer destinations while one ViewModel retains the list snapshot and filter.
   Its forward, Back, and predictive-Back motion reuses the app-level horizontal
@@ -68,6 +73,11 @@
 
 ## Remaining Work
 
+- Require a non-empty accessibility label whenever Text Input omits its visible
+  label on both platforms; placeholder text is not the semantic fallback.
+- Preserve filter edits made while refresh is in flight if that refresh fails.
+- Make the File Viewer trailing inset viewport-aware so the final selected hunk
+  can align to the top on both platforms, and add position coverage.
 - Repair the unrelated Android instrumentation source-set failure, then run the
   changed Review Changes UI/component tests.
 
@@ -77,6 +87,7 @@
   platforms, two-source model, reusable List Group and Hunk Navigation Pill,
   stable viewer snapshots, filtered totals, native refresh, and retirement of
   reviewed and file-navigation behavior.
-- OPE-35 through OPE-44 established the original Changes screen, multi-file
+- OPE-35 through OPE-43 established the original Changes screen, multi-file
   support, Git Change Sets, Review Changes Pill, typed unified diffs, and the
-  refinements superseded or retained by this redesign.
+  refinements superseded or retained by this redesign. The OPE-44 file-navigation
+  direction was superseded before delivery by the two-screen approach.

@@ -1,5 +1,8 @@
 # OPE-43 Two-Screen Diff Plan
 
+Status: implemented with remaining review fixes tracked in
+[`progress.md`](progress.md).
+
 ## Objective
 
 Simplify Review Changes by separating Change Set browsing from file review:
@@ -37,6 +40,8 @@ The slice ships with equivalent behavior on iOS and Android.
 - Filtering updates the visible rows and all summary totals.
 - Preserve source, filter, and list scroll when a file is opened and the user
   returns.
+- Clear the filter when Changes exits back to Session Chat; preservation is
+  scoped to Changed Files -> File Viewer -> Changed Files navigation.
 - Switching source preserves the filter but resets list scroll.
 - Show matching files in one grouped, bordered container with shared corner
   radius and separators between rows.
@@ -98,7 +103,8 @@ snapshot rather than serializing or reloading the patch.
 - captured latest-user-message identifier for Last turn changes.
 
 Actions are load, retry, refresh, select source, update/clear filter, open file,
-and navigate back.
+return from the viewer, and exit Changes. Exiting Changes clears the filter;
+returning from the viewer does not.
 
 ### File Viewer State
 
@@ -119,8 +125,8 @@ navigate back. Viewer-local state is discarded on exit.
 2. Add reusable `OpenCodeHunkNavigationPill` implementations with three equal
    icon targets, boundary and no-context disabling, native pressed states,
    accessibility labels, galleries, and light/dark previews.
-3. Keep `OpenCodeListItem` for row content and semantic addition/deletion
-   segments; the feature supplies the trailing chevron.
+3. Keep `OpenCodeListItem` for row content; the feature supplies semantic
+   addition/deletion counts and the chevron through the trailing accessory.
 4. Keep `OpenCodeUnifiedDiff` for typed rows and selected-hunk focus, but remove
    its reviewed presentation and reviewed-state contract.
 5. Remove `OpenCodeFileNavigationPill` and its component tokens and review
@@ -177,8 +183,8 @@ navigate back. Viewer-local state is discarded on exit.
   back cleanly.
 - Only Git changes and Last turn changes appear, in the agreed order and copy.
 - Filtering changes rows and totals together; clearing restores the full group.
-- Opening a file pushes the viewer; Back restores source, filter, and list
-  scroll without reloading.
+- Opening a file pushes the viewer; File Viewer Back restores source, filter,
+  and list scroll without reloading. Exiting Changes clears the filter.
 - Viewer source and snapshot remain stable until the user returns to the list.
 - File rows, filtered summary, source menu, no-match state, and unavailable
   preview expose complete accessibility meaning.

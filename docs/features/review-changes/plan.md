@@ -24,6 +24,8 @@ files, then open one focused read-only file viewer for hunk-level inspection.
   semantic `+N −N` counts including zero, and a chevron.
 - Preserve the list's source, filter, and scroll position when returning from a
   file. Source switches preserve the filter and reset scroll.
+- Clear the filter when the user exits the entire Changes flow back to Session
+  Chat; filter restoration applies only while navigating within Changes.
 - Keep pull-to-refresh on the list and keep an open viewer snapshot stable.
 - Render native unified diffs with line numbers, syntax roles, horizontally
   scrollable long lines, collapsed context by default, and expanded available
@@ -130,7 +132,8 @@ perform mutations.
 - Add reusable `OpenCodeHunkNavigationPill` for equal Previous, context, and
   Next icon actions, disabled states, pressed states, accessibility, galleries,
   and previews.
-- Reuse `OpenCodeListItem` with semantic addition/deletion subtitle segments.
+- Reuse `OpenCodeListItem` for each path row; the feature supplies semantic
+  addition/deletion counts and the chevron in its trailing accessory.
 - Reuse `OpenCodeUnifiedDiff` for typed hunks and selected-hunk focus; remove its
   reviewed state and presentation.
 - Remove `OpenCodeFileNavigationPill`, its tokens, documentation, galleries,
@@ -149,7 +152,8 @@ perform mutations.
 - Verify stable snapshots ignore foreground events and reload only from list
   load, source switch, refresh, or retry.
 - Verify source order/defaults, filtered files and totals, clearing, empty/error
-  recovery, and list state restoration after Back.
+  recovery, list state restoration after File Viewer Back, and filter clearing
+  when the Changes flow exits.
 - Verify viewer entry reset, hunk boundaries, focus scrolling, all-hunk context
   toggle, no-expand disabling, horizontal scrolling, bottom inset, and
   unavailable preview.

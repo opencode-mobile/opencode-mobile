@@ -44,9 +44,11 @@
 ## State Restoration
 
 - Decision: preserve list source, filter, snapshot, and scroll across File
-  Viewer navigation; reset viewer-local hunk and context state on each entry.
+  Viewer navigation; clear the filter when the entire Changes flow exits back
+  to Session Chat; reset viewer-local hunk and context state on each entry.
 - Reason: Back should return to the browsing task exactly where it was left,
-  while every file review begins predictably at its top in collapsed mode.
+  while reopening Changes begins without a stale query and every file review
+  begins predictably at its top in collapsed mode.
 
 ## Stable Snapshots
 
