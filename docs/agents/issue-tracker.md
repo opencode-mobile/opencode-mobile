@@ -28,6 +28,8 @@ Linear for current state rather than relying on a remembered issue inventory.
   change to Linear.
 - Use the repository's `linear-project-tracking` skill for detailed
   reconciliation rules.
+- Name git branches `feature/ope-<number>-…` or `fix/ope-<number>-…` per
+  `AGENTS.md`. Ignore Linear's `{username}/…` branch suggestion.
 
 ## GitHub operations
 
