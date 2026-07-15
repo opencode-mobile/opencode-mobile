@@ -89,5 +89,6 @@
   reviewed and file-navigation behavior.
 - OPE-35 through OPE-43 established the original Changes screen, multi-file
   support, Git Change Sets, Review Changes Pill, typed unified diffs, and the
-  refinements superseded or retained by this redesign. The OPE-44 file-navigation
-  direction was superseded before delivery by the two-screen approach.
+  refinements superseded or retained by this redesign. OPE-44 delivered the
+  File Navigation Pill, which this two-screen approach subsequently superseded
+  and retired.
