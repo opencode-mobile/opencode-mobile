@@ -21,8 +21,11 @@ branches before creating one when remote state is relevant to the request. Name
 a new branch:
 
 ```text
-codex/ope-<number>-<feature-slug-or-short-title>
+feature/ope-<number>-<feature-slug-or-short-title>
 ```
+
+Do not use Linear's default `{username}/…` branch suggestion, and do not put
+agent or username prefixes in the branch name.
 
 The slug must use lowercase ASCII letters or numbers separated by single
 hyphens, contain no leading or trailing hyphen, and keep the full branch name at
