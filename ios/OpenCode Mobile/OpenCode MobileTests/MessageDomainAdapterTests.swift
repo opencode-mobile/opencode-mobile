@@ -84,64 +84,50 @@ struct MessageDomainAdapterTests {
         #expect(body.agent == nil)
     }
 
-    @Test func toolStatusLabel_nilState_returnsHourglass() {
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: nil) == "\u{231B} webfetch")
+    @Test func compactToolLabel_pending_returnsHourglass() {
+        #expect(
+            adapter.compactToolLabel(for: ToolPart(toolName: "webfetch", status: .pending)) == "\u{231B} webfetch"
+        )
     }
 
-    @Test func toolStatusLabel_pending_returnsHourglass() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"pending"}"#.data(using: .utf8)!
+    @Test func compactToolLabel_runningWithoutTitle_returnsHourglassWithName() {
+        #expect(
+            adapter.compactToolLabel(for: ToolPart(toolName: "webfetch", status: .running)) == "\u{23F3} webfetch"
         )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "\u{231B} webfetch")
     }
 
-    @Test func toolStatusLabel_runningWithoutTitle_returnsHourglassWithName() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"running"}"#.data(using: .utf8)!
+    @Test func compactToolLabel_runningWithTitle_returnsHourglassWithTitle() {
+        #expect(
+            adapter.compactToolLabel(
+                for: ToolPart(toolName: "webfetch", status: .running, title: "Searching...")
+            ) == "\u{23F3} Searching..."
         )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "\u{23F3} webfetch")
     }
 
-    @Test func toolStatusLabel_runningWithTitle_returnsHourglassWithTitle() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"running","title":"Searching..."}"#.data(using: .utf8)!
+    @Test func compactToolLabel_completed_returnsCheckmark() {
+        #expect(
+            adapter.compactToolLabel(for: ToolPart(toolName: "webfetch", status: .completed)) == "\u{2713} webfetch"
         )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "\u{23F3} Searching...")
     }
 
-    @Test func toolStatusLabel_completed_returnsCheckmark() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"completed"}"#.data(using: .utf8)!
+    @Test func compactToolLabel_errorWithoutMessage_returnsCrossWithDefault() {
+        #expect(
+            adapter.compactToolLabel(for: ToolPart(toolName: "webfetch", status: .error)) == "\u{2715} webfetch: failed"
         )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "\u{2713} webfetch")
     }
 
-    @Test func toolStatusLabel_errorWithoutMessage_returnsCrossWithDefault() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"error"}"#.data(using: .utf8)!
+    @Test func compactToolLabel_errorWithMessage_returnsCrossWithMessage() {
+        #expect(
+            adapter.compactToolLabel(
+                for: ToolPart(toolName: "webfetch", status: .error, error: "timeout")
+            ) == "\u{2715} webfetch: timeout"
         )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "\u{2715} webfetch: failed")
     }
 
-    @Test func toolStatusLabel_errorWithMessage_returnsCrossWithMessage() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"error","error":"timeout"}"#.data(using: .utf8)!
-        )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "\u{2715} webfetch: timeout")
-    }
-
-    @Test func toolStatusLabel_unknownStatus_returnsPlainName() throws {
-        let state = try decoder.decode(
-            MessageToolStateDTO.self,
-            from: #"{"status":"unknown"}"#.data(using: .utf8)!
-        )
-        #expect(adapter.toolStatusLabel(toolName: "webfetch", state: state) == "webfetch")
+    @Test func toolStatus_missingOrUnrecognized_mapsToPending() {
+        #expect(adapter.toolStatus(from: nil) == .pending)
+        #expect(adapter.toolStatus(from: "unknown") == .pending)
+        #expect(adapter.toolStatus(from: "") == .pending)
     }
 
     @Test func messagePart_textType_returnsTextPart() throws {
@@ -163,15 +149,121 @@ struct MessageDomainAdapterTests {
         #expect(adapter.messagePart(from: dto) == nil)
     }
 
-    @Test func messagePart_toolType_returnsToolPart() throws {
+    @Test func messagePart_toolType_returnsStructuredToolPart() throws {
         let dto = try decoder.decode(
             MessagePartDTO.self,
-            from: #"{"id":"prt-1","type":"tool","tool":"webfetch","state":{"status":"completed"}}"#.data(using: .utf8)!
+            from: #"{"id":"prt-1","type":"tool","tool":"webfetch","callID":"call-1","state":{"status":"completed"}}"#.data(using: .utf8)!
         )
         let part = adapter.messagePart(from: dto)
         guard case .tool(let t) = part else { Issue.record("Expected tool part"); return }
         #expect(t.toolName == "webfetch")
-        #expect(t.statusText == "\u{2713} webfetch")
+        #expect(t.status == .completed)
+        #expect(t.callID == "call-1")
+        #expect(t.title == nil)
+        #expect(t.error == nil)
+        #expect(adapter.compactToolLabel(for: t) == "\u{2713} webfetch")
+    }
+
+    @Test func messagePart_missingToolState_mapsPending() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"tool","tool":"glob"}"#.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.status == .pending)
+        #expect(adapter.compactToolLabel(for: t) == "\u{231B} glob")
+    }
+
+    @Test func messagePart_unknownStatus_mapsPending() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"tool","tool":"webfetch","state":{"status":"unknown"}}"#.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.status == .pending)
+        #expect(adapter.compactToolLabel(for: t) == "\u{231B} webfetch")
+    }
+
+    @Test func messagePart_runningWithTitleAndInput() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"tool","tool":"websearch","state":{"status":"running","title":"Searching...","input":{"query":"opencode"}}}"#.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.status == .running)
+        #expect(t.title == "Searching...")
+        if case let .string(query)? = t.input?["query"] {
+            #expect(query == "opencode")
+        } else {
+            Issue.record("Expected query input")
+        }
+        #expect(adapter.compactToolLabel(for: t) == "\u{23F3} Searching...")
+    }
+
+    @Test func messagePart_errorPreservesErrorText() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"tool","tool":"webfetch","state":{"status":"error","error":"timeout"}}"#.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.status == .error)
+        #expect(t.error == "timeout")
+        #expect(adapter.compactToolLabel(for: t) == "\u{2715} webfetch: timeout")
+    }
+
+    @Test func messagePart_completedEdit_preservesMetadataWhileCompactLabelStaysSimple() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: """
+            {
+              "id":"prt-1",
+              "type":"tool",
+              "tool":"edit",
+              "callID":"call-edit-1",
+              "state":{
+                "status":"completed",
+                "title":"src/Main.kt",
+                "output":"edited",
+                "metadata":{
+                  "filediff":{"file":"src/Main.kt","additions":3,"deletions":1}
+                }
+              }
+            }
+            """.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.toolName == "edit")
+        #expect(t.status == .completed)
+        #expect(t.title == "src/Main.kt")
+        #expect(t.output == "edited")
+        #expect(t.callID == "call-edit-1")
+        if case let .dictionary(filediff)? = t.metadata?["filediff"],
+           case let .string(file)? = filediff["file"],
+           case let .int(additions)? = filediff["additions"],
+           case let .int(deletions)? = filediff["deletions"]
+        {
+            #expect(file == "src/Main.kt")
+            #expect(additions == 3)
+            #expect(deletions == 1)
+        } else {
+            Issue.record("Expected filediff metadata")
+        }
+        #expect(adapter.compactToolLabel(for: t) == "\u{2713} edit")
     }
 
     @Test func messagePart_hiddenTypes_returnNil() throws {
@@ -218,7 +310,7 @@ struct MessageDomainAdapterTests {
     @Test func flattenedText_textAndToolParts() {
         let parts: [MessagePart] = [
             .text(TextPart(text: "Look at this", isStreaming: false)),
-            .tool(ToolPart(toolName: "webfetch", statusText: "\u{2713} webfetch")),
+            .tool(ToolPart(toolName: "webfetch", status: .completed)),
         ]
         #expect(adapter.flattenedText(from: parts) == "Look at this\n\u{2713} webfetch")
     }
@@ -243,6 +335,12 @@ struct MessageDomainAdapterTests {
         #expect(message.text.contains("Here is the answer."))
         #expect(message.text.contains("\u{2713} bash"))
         #expect(message.parts.count == 2)
+        guard case .tool(let tool) = message.parts[1] else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(tool.status == .completed)
+        #expect(tool.toolName == "bash")
     }
 
     @Test func messageCountsFilePartSourceTextForContextEstimate() throws {

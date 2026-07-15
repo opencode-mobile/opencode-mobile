@@ -102,7 +102,8 @@ struct MessageSyncTests {
         let msg2 = last?.first(where: { $0.id == "msg-2" })
         let toolParts = msg2?.parts.compactMap { part -> ToolPart? in if case .tool(let t) = part { t } else { nil } }
         #expect(toolParts?.count == 1)
-        #expect(toolParts?.first?.statusText == "\u{2713} webfetch")
+        #expect(toolParts?.first?.status == .completed)
+        #expect(msg2?.text.contains("\u{2713} webfetch") == true)
     }
 
     @Test func messagePartUpdated_textDeltaAppendsToExistingPart() async {

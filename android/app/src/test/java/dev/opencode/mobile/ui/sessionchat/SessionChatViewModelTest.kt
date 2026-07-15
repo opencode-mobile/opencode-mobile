@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -1308,7 +1309,7 @@ class SessionChatViewModelTest {
                     id = "msg-1",
                     role = MessageRole.Assistant,
                     text = "\u2713 bash",
-                    parts = listOf(MessagePart.Tool(toolName = "bash", statusText = "\u2713 bash")),
+                    parts = listOf(MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed)),
                 )
             val item = viewModel.toMessageItem(message)
             assertFalse(item.isStreaming)

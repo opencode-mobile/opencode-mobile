@@ -780,7 +780,7 @@ struct SessionChatViewModelTests {
             id: "msg-1",
             role: .assistant,
             text: "\u{2713} bash",
-            parts: [.tool(ToolPart(toolName: "bash", statusText: "\u{2713} bash"))],
+            parts: [.tool(ToolPart(toolName: "bash", status: .completed))],
             model: nil,
             mode: nil,
             sentAtEpochMs: nil

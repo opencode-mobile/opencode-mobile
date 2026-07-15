@@ -3,10 +3,11 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
-import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,6 +59,8 @@ class MessageDomainAdapterTest {
 
         assertEquals(MessageRole.Assistant, message.role)
         assertEquals("\u231B glob", message.text)
+        val tool = message.parts.single() as MessagePart.Tool
+        assertEquals(ToolStatus.Pending, tool.status)
     }
 
     @Test
@@ -147,57 +150,62 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toolStatusLabel_nilState_returnsHourglass() {
-        assertEquals("\u231B webfetch", adapter.toolStatusLabel("webfetch", null))
+    fun compactToolLabel_pending_returnsHourglass() {
+        assertEquals(
+            "\u231B webfetch",
+            adapter.compactToolLabel(MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Pending)),
+        )
     }
 
     @Test
-    fun toolStatusLabel_pending_returnsHourglass() {
-        val state = buildJsonObject { put("status", "pending") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("\u231B webfetch", adapter.toolStatusLabel("webfetch", parsed))
+    fun compactToolLabel_runningWithoutTitle_returnsHourglassWithName() {
+        assertEquals(
+            "\u23F3 webfetch",
+            adapter.compactToolLabel(MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Running)),
+        )
     }
 
     @Test
-    fun toolStatusLabel_runningWithoutTitle_returnsHourglassWithName() {
-        val state = buildJsonObject { put("status", "running") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("\u23F3 webfetch", adapter.toolStatusLabel("webfetch", parsed))
+    fun compactToolLabel_runningWithTitle_returnsHourglassWithTitle() {
+        assertEquals(
+            "\u23F3 Searching...",
+            adapter.compactToolLabel(
+                MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Running, title = "Searching..."),
+            ),
+        )
     }
 
     @Test
-    fun toolStatusLabel_runningWithTitle_returnsHourglassWithTitle() {
-        val state = buildJsonObject { put("status", "running"); put("title", "Searching...") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("\u23F3 Searching...", adapter.toolStatusLabel("webfetch", parsed))
+    fun compactToolLabel_completed_returnsCheckmark() {
+        assertEquals(
+            "\u2713 webfetch",
+            adapter.compactToolLabel(MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Completed)),
+        )
     }
 
     @Test
-    fun toolStatusLabel_completed_returnsCheckmark() {
-        val state = buildJsonObject { put("status", "completed") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("\u2713 webfetch", adapter.toolStatusLabel("webfetch", parsed))
+    fun compactToolLabel_errorWithoutMessage_returnsCrossWithDefault() {
+        assertEquals(
+            "\u2715 webfetch: failed",
+            adapter.compactToolLabel(MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Error)),
+        )
     }
 
     @Test
-    fun toolStatusLabel_errorWithoutMessage_returnsCrossWithDefault() {
-        val state = buildJsonObject { put("status", "error") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("\u2715 webfetch: failed", adapter.toolStatusLabel("webfetch", parsed))
+    fun compactToolLabel_errorWithMessage_returnsCrossWithMessage() {
+        assertEquals(
+            "\u2715 webfetch: timeout",
+            adapter.compactToolLabel(
+                MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Error, error = "timeout"),
+            ),
+        )
     }
 
     @Test
-    fun toolStatusLabel_errorWithMessage_returnsCrossWithMessage() {
-        val state = buildJsonObject { put("status", "error"); put("error", "timeout") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("\u2715 webfetch: timeout", adapter.toolStatusLabel("webfetch", parsed))
-    }
-
-    @Test
-    fun toolStatusLabel_unknownStatus_returnsPlainName() {
-        val state = buildJsonObject { put("status", "unknown") }
-        val parsed = json.decodeFromJsonElement<MessageToolStateDto>(state)
-        assertEquals("webfetch", adapter.toolStatusLabel("webfetch", parsed))
+    fun toToolStatus_missingOrUnrecognized_mapsToPending() {
+        assertEquals(ToolStatus.Pending, adapter.toToolStatus(null))
+        assertEquals(ToolStatus.Pending, adapter.toToolStatus("unknown"))
+        assertEquals(ToolStatus.Pending, adapter.toToolStatus(""))
     }
 
     @Test
@@ -216,13 +224,114 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toMessagePart_toolType_returnsToolPart() {
+    fun toMessagePart_toolType_returnsStructuredToolPart() {
         val state = buildJsonObject { put("status", "completed") }
-        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "webfetch", state = state)
+        val dto =
+            MessagePartDto(
+                id = "prt-1",
+                type = "tool",
+                tool = "webfetch",
+                callId = "call-1",
+                state = state,
+            )
         val part = adapter.toMessagePart(dto)
         assertTrue(part is MessagePart.Tool)
-        assertEquals("webfetch", (part as MessagePart.Tool).toolName)
-        assertEquals("\u2713 webfetch", part.statusText)
+        val tool = part as MessagePart.Tool
+        assertEquals("webfetch", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("call-1", tool.callId)
+        assertNull(tool.title)
+        assertNull(tool.error)
+        assertEquals("\u2713 webfetch", adapter.compactToolLabel(tool))
+    }
+
+    @Test
+    fun toMessagePart_missingToolState_mapsPending() {
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "glob")
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(ToolStatus.Pending, tool.status)
+        assertEquals("\u231B glob", adapter.compactToolLabel(tool))
+    }
+
+    @Test
+    fun toMessagePart_unknownStatus_mapsPending() {
+        val state = buildJsonObject { put("status", "unknown") }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "webfetch", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(ToolStatus.Pending, tool.status)
+        assertEquals("\u231B webfetch", adapter.compactToolLabel(tool))
+    }
+
+    @Test
+    fun toMessagePart_runningWithTitleAndInput() {
+        val state =
+            buildJsonObject {
+                put("status", "running")
+                put("title", "Searching...")
+                put("input", buildJsonObject { put("query", "opencode") })
+            }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "websearch", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(ToolStatus.Running, tool.status)
+        assertEquals("Searching...", tool.title)
+        assertEquals("opencode", tool.input?.get("query")?.jsonPrimitive?.content)
+        assertEquals("\u23F3 Searching...", adapter.compactToolLabel(tool))
+    }
+
+    @Test
+    fun toMessagePart_errorPreservesErrorText() {
+        val state =
+            buildJsonObject {
+                put("status", "error")
+                put("error", "timeout")
+            }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "webfetch", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(ToolStatus.Error, tool.status)
+        assertEquals("timeout", tool.error)
+        assertEquals("\u2715 webfetch: timeout", adapter.compactToolLabel(tool))
+    }
+
+    @Test
+    fun toMessagePart_completedEdit_preservesMetadataWhileCompactLabelStaysSimple() {
+        val state =
+            buildJsonObject {
+                put("status", "completed")
+                put("title", "src/Main.kt")
+                put("output", "edited")
+                put(
+                    "metadata",
+                    buildJsonObject {
+                        put(
+                            "filediff",
+                            buildJsonObject {
+                                put("file", "src/Main.kt")
+                                put("additions", 3)
+                                put("deletions", 1)
+                            },
+                        )
+                    },
+                )
+            }
+        val dto =
+            MessagePartDto(
+                id = "prt-1",
+                type = "tool",
+                tool = "edit",
+                callId = "call-edit-1",
+                state = state,
+            )
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals("edit", tool.toolName)
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("src/Main.kt", tool.title)
+        assertEquals("edited", tool.output)
+        assertEquals("call-edit-1", tool.callId)
+        val filediff = tool.metadata?.get("filediff")?.jsonObject
+        assertEquals("src/Main.kt", filediff?.get("file")?.jsonPrimitive?.content)
+        assertEquals(3, filediff?.get("additions")?.jsonPrimitive?.int)
+        assertEquals(1, filediff?.get("deletions")?.jsonPrimitive?.int)
+        assertEquals("\u2713 edit", adapter.compactToolLabel(tool))
     }
 
     @Test
@@ -263,7 +372,7 @@ class MessageDomainAdapterTest {
         val parts =
             listOf<MessagePart>(
                 MessagePart.Text("Look at this"),
-                MessagePart.Tool("webfetch", "\u2713 webfetch"),
+                MessagePart.Tool(toolName = "webfetch", status = ToolStatus.Completed),
             )
         assertEquals("Look at this\n\u2713 webfetch", adapter.flattenedText(parts))
     }
@@ -290,6 +399,9 @@ class MessageDomainAdapterTest {
         assertTrue(message.text.contains("Here is the answer."))
         assertTrue(message.text.contains("\u2713 bash"))
         assertEquals(2, message.parts.size)
+        val tool = message.parts[1] as MessagePart.Tool
+        assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("bash", tool.toolName)
     }
 
     @Test

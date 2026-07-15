@@ -53,30 +53,58 @@ struct MessageDomainAdapter: Sendable {
             return .text(TextPart(text: text, isStreaming: false))
         case "tool":
             guard let toolName = dto.tool else { return nil }
-            let statusText = toolStatusLabel(toolName: toolName, state: dto.state)
-            return .tool(ToolPart(toolName: toolName, statusText: statusText))
+            return .tool(toolPart(toolName: toolName, callID: dto.callID, state: dto.state))
         default:
             return nil
         }
     }
 
-    func toolStatusLabel(toolName: String, state: MessageToolStateDTO?) -> String {
-        guard let state else { return "⌛ \(toolName)" }
-        switch state.status {
+    func toolPart(
+        toolName: String,
+        callID: String? = nil,
+        state: MessageToolStateDTO?
+    ) -> ToolPart {
+        ToolPart(
+            toolName: toolName,
+            status: toolStatus(from: state?.status),
+            title: state?.title.flatMap { $0.isEmpty ? nil : $0 },
+            error: state?.error.flatMap { $0.isEmpty ? nil : $0 },
+            callID: callID,
+            input: state?.input,
+            output: state?.output,
+            metadata: state?.metadata
+        )
+    }
+
+    func toolStatus(from raw: String?) -> ToolStatus {
+        switch raw {
         case "pending":
-            return "⌛ \(toolName)"
+            .pending
         case "running":
-            if let title = state.title, !title.isEmpty {
+            .running
+        case "completed":
+            .completed
+        case "error":
+            .error
+        default:
+            .pending
+        }
+    }
+
+    func compactToolLabel(for tool: ToolPart) -> String {
+        switch tool.status {
+        case .pending:
+            return "⌛ \(tool.toolName)"
+        case .running:
+            if let title = tool.title, !title.isEmpty {
                 return "⏳ \(title)"
             }
-            return "⏳ \(toolName)"
-        case "completed":
-            return "✓ \(toolName)"
-        case "error":
-            let message = state.error ?? "failed"
-            return "✕ \(toolName): \(message)"
-        default:
-            return "\(toolName)"
+            return "⏳ \(tool.toolName)"
+        case .completed:
+            return "✓ \(tool.toolName)"
+        case .error:
+            let message = tool.error.flatMap { $0.isEmpty ? nil : $0 } ?? "failed"
+            return "✕ \(tool.toolName): \(message)"
         }
     }
 
@@ -158,7 +186,7 @@ struct MessageDomainAdapter: Sendable {
             case .text(let t):
                 return t.text
             case .tool(let t):
-                return t.statusText
+                return compactToolLabel(for: t)
             }
         }
         let nonEmpty = segments.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }

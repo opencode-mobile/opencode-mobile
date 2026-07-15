@@ -75,6 +75,13 @@ struct MessageContextEstimate: Equatable, Sendable {
     }
 }
 
+enum ToolStatus: String, Sendable, Equatable {
+    case pending
+    case running
+    case completed
+    case error
+}
+
 enum MessagePart: Equatable, Sendable {
     case text(TextPart)
     case tool(ToolPart)
@@ -87,7 +94,33 @@ struct TextPart: Equatable, Sendable {
 
 struct ToolPart: Equatable, Sendable {
     let toolName: String
-    let statusText: String
+    let status: ToolStatus
+    let title: String?
+    let error: String?
+    let callID: String?
+    let input: [String: AnyCodable]?
+    let output: String?
+    let metadata: [String: AnyCodable]?
+
+    init(
+        toolName: String,
+        status: ToolStatus,
+        title: String? = nil,
+        error: String? = nil,
+        callID: String? = nil,
+        input: [String: AnyCodable]? = nil,
+        output: String? = nil,
+        metadata: [String: AnyCodable]? = nil
+    ) {
+        self.toolName = toolName
+        self.status = status
+        self.title = title
+        self.error = error
+        self.callID = callID
+        self.input = input
+        self.output = output
+        self.metadata = metadata
+    }
 }
 
 struct PromptSendOptions: Equatable, Sendable {

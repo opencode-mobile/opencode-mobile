@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.message
 
+import kotlinx.serialization.json.JsonObject
+
 data class Message(
     val id: String,
     val role: MessageRole,
@@ -34,6 +36,13 @@ data class MessageContextEstimate(
     val toolCharacters: Int = 0,
 )
 
+enum class ToolStatus {
+    Pending,
+    Running,
+    Completed,
+    Error,
+}
+
 sealed class MessagePart {
     data class Text(
         val text: String,
@@ -42,7 +51,13 @@ sealed class MessagePart {
 
     data class Tool(
         val toolName: String,
-        val statusText: String,
+        val status: ToolStatus,
+        val title: String? = null,
+        val error: String? = null,
+        val callId: String? = null,
+        val input: JsonObject? = null,
+        val output: String? = null,
+        val metadata: JsonObject? = null,
     ) : MessagePart()
 }
 

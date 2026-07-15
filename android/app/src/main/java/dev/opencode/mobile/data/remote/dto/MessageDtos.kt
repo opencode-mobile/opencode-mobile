@@ -109,6 +109,7 @@ data class MessageToolStateDto(
     val output: String? = null,
     val error: String? = null,
     val time: MessageToolTimeDto? = null,
+    val metadata: JsonObject? = null,
 )
 
 @Serializable
