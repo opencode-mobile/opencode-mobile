@@ -13,6 +13,7 @@ struct SessionChatTimelineViewProps {
     let onReviewChangesTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onChildSessionTap: (String, String) -> Void
 
     init(
         timeline: SessionChatTimelineState,
@@ -23,7 +24,8 @@ struct SessionChatTimelineViewProps {
         onRefresh: @escaping () async -> Void,
         onReviewChangesTap: @escaping () -> Void,
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
-        onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in }
+        onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
+        onChildSessionTap: @escaping (String, String) -> Void = { _, _ in }
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -34,6 +36,7 @@ struct SessionChatTimelineViewProps {
         self.onReviewChangesTap = onReviewChangesTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
+        self.onChildSessionTap = onChildSessionTap
     }
 }
 
@@ -123,6 +126,7 @@ private struct SessionChatTimelineReadyView: View {
                                 message: message,
                                 onMessageActionsTap: props.onMessageActionsTap,
                                 onToolDetailTap: props.onToolDetailTap,
+                                onChildSessionTap: props.onChildSessionTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -133,6 +137,7 @@ private struct SessionChatTimelineReadyView: View {
                                 message: message,
                                 onMessageActionsTap: props.onMessageActionsTap,
                                 onToolDetailTap: props.onToolDetailTap,
+                                onChildSessionTap: props.onChildSessionTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -214,6 +219,7 @@ private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onChildSessionTap: (String, String) -> Void
     let animateSizeChanges: Bool
     let onContentSizeAnimationFinished: (() -> Void)?
 
@@ -246,7 +252,8 @@ private struct SessionChatMessageRow: View {
                 AssistantMessageContent(
                     message: message,
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
-                    onToolDetailTap: onToolDetailTap
+                    onToolDetailTap: onToolDetailTap,
+                    onChildSessionTap: onChildSessionTap
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .command, .tool, .unknown:
@@ -287,6 +294,7 @@ private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onChildSessionTap: (String, String) -> Void
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
@@ -324,16 +332,7 @@ private struct AssistantMessageContent: View {
                         title: card.title,
                         subtitle: card.subtitle,
                         errorText: card.errorText,
-                        action: card.detailText.map { detail in
-                            {
-                                onToolDetailTap(
-                                    SessionChatToolDetailTarget(
-                                        title: card.title,
-                                        body: detail
-                                    )
-                                )
-                            }
-                        }
+                        action: toolCardAction(for: card)
                     )
                 case .toolGroup(let group):
                     OpenCodeToolCallCard(
@@ -345,6 +344,23 @@ private struct AssistantMessageContent: View {
                 }
             }
         }
+    }
+
+    private func toolCardAction(for card: SessionChatToolCardBlock) -> (() -> Void)? {
+        if let childSessionId = card.childSessionId {
+            return { onChildSessionTap(childSessionId, card.title) }
+        }
+        if let detail = card.detailText {
+            return {
+                onToolDetailTap(
+                    SessionChatToolDetailTarget(
+                        title: card.title,
+                        body: detail
+                    )
+                )
+            }
+        }
+        return nil
     }
 }
 

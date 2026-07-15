@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 /**
  * Session Chat presentation units inside one message timeline item.
@@ -23,6 +24,8 @@ sealed class SessionChatTimelineBlock {
         val errorText: String? = null,
         /** Non-null when the card should open a Bottom Sheet with this body. */
         val detailText: String? = null,
+        /** Non-null when tap should open this child session's Session Chat. */
+        val childSessionId: String? = null,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -176,6 +179,7 @@ object SessionChatTimelineBlocks {
             subtitle = chrome.subtitle,
             errorText = errorText,
             detailText = chrome.detailText,
+            childSessionId = chrome.childSessionId,
         )
     }
 
@@ -183,6 +187,7 @@ object SessionChatTimelineBlocks {
         val title: String,
         val subtitle: String?,
         val detailText: String? = null,
+        val childSessionId: String? = null,
     )
 
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
@@ -229,8 +234,30 @@ object SessionChatTimelineBlocks {
                         inputString(tool.input, "name", "skill")
                             ?: runningTitleOverride(tool),
                 )
+            "task" -> taskChrome(tool)
             else -> null
         }
+
+    private fun taskChrome(tool: MessagePart.Tool): Chrome {
+        val title =
+            inputString(tool.input, "agent", "name")
+                ?: metadataString(tool.metadata, "agent")
+                ?: "Task"
+        val description =
+            inputString(tool.input, "description", "prompt")
+                ?: runningTitleOverride(tool)
+        val subtitle =
+            when {
+                description != null && isTruthyMetadata(tool.metadata, "background") ->
+                    "$description (background)"
+                else -> description
+            }
+        return Chrome(
+            title = title,
+            subtitle = subtitle,
+            childSessionId = metadataString(tool.metadata, "sessionId"),
+        )
+    }
 
     private fun contextChrome(
         tool: MessagePart.Tool,
@@ -316,5 +343,20 @@ object SessionChatTimelineBlocks {
             return value
         }
         return null
+    }
+
+    private fun metadataString(
+        metadata: JsonObject?,
+        vararg keys: String,
+    ): String? = inputString(metadata, *keys)
+
+    private fun isTruthyMetadata(
+        metadata: JsonObject?,
+        key: String,
+    ): Boolean {
+        val primitive = metadata?.get(key) as? JsonPrimitive ?: return false
+        primitive.booleanOrNull?.let { return it }
+        val content = primitive.content.lowercase()
+        return content == "true" || content == "1"
     }
 }

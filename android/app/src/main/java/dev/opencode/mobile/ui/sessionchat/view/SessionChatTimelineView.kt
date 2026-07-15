@@ -60,6 +60,7 @@ internal data class SessionChatTimelineViewProps(
     val onReviewChangesClick: () -> Unit,
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
+    val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,6 +112,7 @@ internal fun SessionChatTimelineView(
                 onReviewChangesClick = props.onReviewChangesClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
+                onChildSessionTap = props.onChildSessionTap,
                 modifier = modifier,
             )
         }
@@ -127,6 +129,7 @@ private fun SessionChatTimelineReadyView(
     onReviewChangesClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val timeline =
@@ -155,6 +158,7 @@ private fun SessionChatTimelineReadyView(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
                     onToolDetailTap = onToolDetailTap,
+                    onChildSessionTap = onChildSessionTap,
                     animateSizeChanges = isNewestMessage,
                     onContentSizeAnimationFinished = onContentSizeSettled,
                     modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
@@ -208,6 +212,7 @@ private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -262,6 +267,7 @@ private fun SessionChatMessageRow(
                     message = message,
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                     onToolDetailTap = onToolDetailTap,
+                    onChildSessionTap = onChildSessionTap,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -299,6 +305,7 @@ private fun AssistantMessageContent(
     message: SessionChatMessageItem,
     onOpenMessageActions: () -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
 ) {
     val blocks =
         message.blocks.ifEmpty {
@@ -330,15 +337,23 @@ private fun AssistantMessageContent(
                         subtitle = block.subtitle,
                         errorText = block.errorText,
                         onClick =
-                            block.detailText?.let { detail ->
-                                {
-                                    onToolDetailTap(
-                                        SessionChatToolDetailTarget(
-                                            title = block.title,
-                                            body = detail,
-                                        ),
-                                    )
+                            when {
+                                block.childSessionId != null -> {
+                                    {
+                                        onChildSessionTap(block.childSessionId, block.title)
+                                    }
                                 }
+                                block.detailText != null -> {
+                                    {
+                                        onToolDetailTap(
+                                            SessionChatToolDetailTarget(
+                                                title = block.title,
+                                                body = block.detailText,
+                                            ),
+                                        )
+                                    }
+                                }
+                                else -> null
                             },
                     )
                 is SessionChatTimelineBlock.ToolGroup ->

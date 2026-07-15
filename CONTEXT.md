@@ -149,6 +149,14 @@ A text block or a different tool family breaks the group.
 _Avoid_: expanding each grouped tool inline; treating a group as multiple
 timeline messages.
 
+### child session
+
+A session spawned from a parent session to carry out delegated work.
+
+The parent timeline surfaces that work as a `task` ToolPart. Opening the card
+navigates into the child session when a session id is available.
+_Avoid_: subagent (informal/desktop slang for the same child session).
+
 ### tool status
 
 Where a ToolPart is in its lifecycle: `pending`, `running`, `completed`, or

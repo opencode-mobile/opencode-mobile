@@ -16,6 +16,8 @@ struct SessionChatToolCardBlock: Equatable, Sendable {
     let errorText: String?
     /// Non-nil when the card should open a Bottom Sheet with this body.
     let detailText: String?
+    /// Non-nil when tap should open this child session's Session Chat.
+    let childSessionId: String?
 
     init(
         toolName: String,
@@ -23,7 +25,8 @@ struct SessionChatToolCardBlock: Equatable, Sendable {
         title: String,
         subtitle: String? = nil,
         errorText: String? = nil,
-        detailText: String? = nil
+        detailText: String? = nil,
+        childSessionId: String? = nil
     ) {
         self.toolName = toolName
         self.status = status
@@ -31,6 +34,7 @@ struct SessionChatToolCardBlock: Equatable, Sendable {
         self.subtitle = subtitle
         self.errorText = errorText
         self.detailText = detailText
+        self.childSessionId = childSessionId
     }
 }
 
@@ -183,7 +187,8 @@ enum SessionChatTimelineBlocks {
             title: chrome.title,
             subtitle: chrome.subtitle,
             errorText: errorText,
-            detailText: chrome.detailText
+            detailText: chrome.detailText,
+            childSessionId: chrome.childSessionId
         )
     }
 
@@ -191,11 +196,18 @@ enum SessionChatTimelineBlocks {
         let title: String
         let subtitle: String?
         let detailText: String?
+        let childSessionId: String?
 
-        init(title: String, subtitle: String?, detailText: String? = nil) {
+        init(
+            title: String,
+            subtitle: String?,
+            detailText: String? = nil,
+            childSessionId: String? = nil
+        ) {
             self.title = title
             self.subtitle = subtitle
             self.detailText = detailText
+            self.childSessionId = childSessionId
         }
     }
 
@@ -236,9 +248,32 @@ enum SessionChatTimelineBlocks {
                 subtitle: inputString(tool.input, keys: "name", "skill")
                     ?? runningTitleOverride(tool)
             )
+        case "task":
+            return taskChrome(tool)
         default:
             return nil
         }
+    }
+
+    private static func taskChrome(_ tool: ToolPart) -> Chrome {
+        let title =
+            inputString(tool.input, keys: "agent", "name")
+            ?? metadataString(tool.metadata, keys: "agent")
+            ?? "Task"
+        let description =
+            inputString(tool.input, keys: "description", "prompt")
+            ?? runningTitleOverride(tool)
+        let subtitle: String?
+        if let description, isTruthyMetadata(tool.metadata, key: "background") {
+            subtitle = "\(description) (background)"
+        } else {
+            subtitle = description
+        }
+        return Chrome(
+            title: title,
+            subtitle: subtitle,
+            childSessionId: metadataString(tool.metadata, keys: "sessionId")
+        )
     }
 
     private static func contextChrome(tool: ToolPart, displayTitle: String, subtitle: String?) -> Chrome {
@@ -308,6 +343,29 @@ enum SessionChatTimelineBlocks {
             }
         }
         return nil
+    }
+
+    private static func metadataString(_ metadata: [String: AnyCodable]?, keys: String...) -> String? {
+        guard let metadata else { return nil }
+        for key in keys {
+            if let value = metadata[key]?.stringValue, !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func isTruthyMetadata(_ metadata: [String: AnyCodable]?, key: String) -> Bool {
+        guard let value = metadata?[key] else { return false }
+        switch value {
+        case .bool(let flag):
+            return flag
+        case .string(let text):
+            let normalized = text.lowercased()
+            return normalized == "true" || normalized == "1"
+        default:
+            return false
+        }
     }
 
     private static func nonEmpty(_ value: String?) -> String? {

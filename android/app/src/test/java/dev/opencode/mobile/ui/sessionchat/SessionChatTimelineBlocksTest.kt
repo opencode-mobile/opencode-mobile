@@ -415,8 +415,127 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_taskUsesAgentTitleDescriptionAndChildSessionId() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Completed,
+                            input = json("agent" to "explore", "description" to "Find auth bugs"),
+                            metadata = json("sessionId" to "ses-child-1"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("explore", tool.title)
+        assertEquals("Find auth bugs", tool.subtitle)
+        assertEquals("ses-child-1", tool.childSessionId)
+        assertNull(tool.detailText)
+    }
+
+    @Test
+    fun build_taskFallsBackTitleAndOmitsNavWithoutSessionId() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Running,
+                            title = "Working…",
+                            input = json("prompt" to "Investigate flaky tests"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Task", tool.title)
+        assertEquals("Investigate flaky tests", tool.subtitle)
+        assertNull(tool.childSessionId)
+        assertNull(tool.detailText)
+    }
+
+    @Test
+    fun build_taskUsesInputNameFallbackAndOmitsBareBackground() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Completed,
+                            input = json("name" to "coder"),
+                            metadata =
+                                JsonObject(
+                                    mapOf("background" to JsonPrimitive(true)),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("coder", tool.title)
+        assertNull(tool.subtitle)
+        assertNull(tool.childSessionId)
+    }
+
+    @Test
+    fun build_taskAppendsBackgroundMarkerAndUsesMetadataAgent() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Completed,
+                            input = json("description" to "Long research"),
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "agent" to JsonPrimitive("researcher"),
+                                        "background" to JsonPrimitive(true),
+                                        "sessionId" to JsonPrimitive("ses-bg"),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("researcher", tool.title)
+        assertEquals("Long research (background)", tool.subtitle)
+        assertEquals("ses-bg", tool.childSessionId)
+    }
+
+    @Test
+    fun build_taskErrorKeepsSpecializedChrome() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Error,
+                            error = "child failed",
+                            input = json("agent" to "build", "description" to "Ship it"),
+                            metadata = json("sessionId" to "ses-err"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("build", tool.title)
+        assertEquals("Ship it", tool.subtitle)
+        assertEquals("child failed", tool.errorText)
+        assertEquals("ses-err", tool.childSessionId)
+    }
+
+    @Test
     fun build_keepsGenericChromeForLaterTickets() {
-        for (name in listOf("edit", "write", "apply_patch", "task", "custom_mcp")) {
+        for (name in listOf("edit", "write", "apply_patch", "custom_mcp")) {
             val tool =
                 SessionChatTimelineBlocks.build(
                     role = MessageRole.Assistant,
@@ -424,6 +543,7 @@ class SessionChatTimelineBlocksTest {
                 ).single() as SessionChatTimelineBlock.ToolCard
             assertEquals("Called $name", tool.title)
             assertNull(tool.detailText)
+            assertNull(tool.childSessionId)
         }
     }
 
