@@ -15,6 +15,7 @@ enum class ComponentGalleryEntryId {
     Typography,
     Icons,
     OutgoingMessage,
+    ToolCallCard,
     TopBar,
     OverflowMenu,
     BottomSheet,
@@ -65,6 +66,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.OutgoingMessage,
             title = "Outgoing Message",
             description = "Trailing prompt card that renders sent prompts at full height.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ToolCallCard,
+            title = "Tool Call Card",
+            description = "Collapsed tool-agnostic assistant tool row with status variants.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

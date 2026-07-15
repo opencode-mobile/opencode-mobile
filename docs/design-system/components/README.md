@@ -98,6 +98,7 @@ applicable item is complete.
 
 - `../icons.md` (shared Material icon catalog and sync workflow)
 - `outgoing-message.md`
+- `tool-call-card.md`
 - `top-bar.md`
 - `overflow-menu.md`
 - `bottom-sheet.md`
