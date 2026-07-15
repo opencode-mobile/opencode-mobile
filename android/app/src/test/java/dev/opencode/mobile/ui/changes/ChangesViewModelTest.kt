@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -244,6 +245,40 @@ class ChangesViewModelTest {
             )
         assertEquals(ChangeSource.WorkingTree, state.changesNavigationTarget("/repo").initialSource)
         assertEquals(ChangeSource.LastTurn, state.reviewChangesNavigationTarget("/repo")?.initialSource)
+    }
+
+    @Test fun fileChangeNavigationUsesOwningTurnAndOptionalPath() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages =
+                    listOf(
+                        row("user-1", MessageRole.User),
+                        row("assistant-1", MessageRole.Assistant),
+                        row("user-2", MessageRole.User),
+                        row("assistant-2", MessageRole.Assistant),
+                    ),
+            )
+        val single =
+            state.fileChangeNavigationTarget(
+                worktree = "/repo",
+                assistantMessageId = "assistant-1",
+                initialFilePath = "src/Main.kt",
+            )
+        assertEquals("user-1", single?.messageId)
+        assertEquals(ChangeSource.LastTurn, single?.initialSource)
+        assertEquals("src/Main.kt", single?.initialFilePath)
+
+        val multi =
+            state.fileChangeNavigationTarget(
+                worktree = "/repo",
+                assistantMessageId = "assistant-2",
+                initialFilePath = null,
+            )
+        assertEquals("user-2", multi?.messageId)
+        assertNull(multi?.initialFilePath)
     }
 
     private fun row(

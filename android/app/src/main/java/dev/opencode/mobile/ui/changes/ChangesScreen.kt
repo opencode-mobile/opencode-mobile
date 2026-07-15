@@ -79,18 +79,29 @@ fun ChangesScreen(
     worktree: String,
     messageId: String?,
     initialSource: ChangeSource = ChangeSource.LastTurn,
+    initialFilePath: String? = null,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ChangesViewModel = hiltViewModel(key = "$sessionId-$worktree-$messageId-$initialSource"),
+    viewModel: ChangesViewModel = hiltViewModel(key = "$sessionId-$worktree-$messageId-$initialSource-$initialFilePath"),
 ) {
     LaunchedEffect(sessionId, worktree, messageId, initialSource) {
         viewModel.bind(sessionId, worktree, messageId, initialSource)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(ChangedFilesRoute)
+    var didAttemptDeepLink by rememberSaveable(initialFilePath) { mutableStateOf(false) }
     val exitChanges = {
         viewModel.clearFilter()
         onNavigateBack()
+    }
+
+    LaunchedEffect(state.phase, initialFilePath, didAttemptDeepLink) {
+        if (didAttemptDeepLink || initialFilePath.isNullOrEmpty()) return@LaunchedEffect
+        val content = (state.phase as? ChangesPhase.Content)?.changeSet ?: return@LaunchedEffect
+        if (content.files.any { it.path == initialFilePath }) {
+            backStack.add(FileViewerRoute(initialFilePath))
+        }
+        didAttemptDeepLink = true
     }
 
     NavDisplay(

@@ -14,6 +14,7 @@ struct SessionChatTimelineViewProps {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
+    let onChangesReviewTap: (String, String?) -> Void
 
     init(
         timeline: SessionChatTimelineState,
@@ -25,7 +26,8 @@ struct SessionChatTimelineViewProps {
         onReviewChangesTap: @escaping () -> Void,
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
-        onChildSessionTap: @escaping (String, String) -> Void = { _, _ in }
+        onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
+        onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in }
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -37,6 +39,7 @@ struct SessionChatTimelineViewProps {
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
         self.onChildSessionTap = onChildSessionTap
+        self.onChangesReviewTap = onChangesReviewTap
     }
 }
 
@@ -127,6 +130,7 @@ private struct SessionChatTimelineReadyView: View {
                                 onMessageActionsTap: props.onMessageActionsTap,
                                 onToolDetailTap: props.onToolDetailTap,
                                 onChildSessionTap: props.onChildSessionTap,
+                                onChangesReviewTap: props.onChangesReviewTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -138,6 +142,7 @@ private struct SessionChatTimelineReadyView: View {
                                 onMessageActionsTap: props.onMessageActionsTap,
                                 onToolDetailTap: props.onToolDetailTap,
                                 onChildSessionTap: props.onChildSessionTap,
+                                onChangesReviewTap: props.onChangesReviewTap,
                                 animateSizeChanges: isNewestMessage,
                                 onContentSizeAnimationFinished: onContentSizeSettled
                             )
@@ -220,6 +225,7 @@ private struct SessionChatMessageRow: View {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
+    let onChangesReviewTap: (String, String?) -> Void
     let animateSizeChanges: Bool
     let onContentSizeAnimationFinished: (() -> Void)?
 
@@ -253,7 +259,8 @@ private struct SessionChatMessageRow: View {
                     message: message,
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
-                    onChildSessionTap: onChildSessionTap
+                    onChildSessionTap: onChildSessionTap,
+                    onChangesReviewTap: onChangesReviewTap
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .command, .tool, .unknown:
@@ -295,6 +302,7 @@ private struct AssistantMessageContent: View {
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
+    let onChangesReviewTap: (String, String?) -> Void
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
@@ -331,6 +339,8 @@ private struct AssistantMessageContent: View {
                         status: card.status.toolCallCardStatus,
                         title: card.title,
                         subtitle: card.subtitle,
+                        additions: card.additions,
+                        deletions: card.deletions,
                         errorText: card.errorText,
                         action: toolCardAction(for: card)
                     )
@@ -349,6 +359,9 @@ private struct AssistantMessageContent: View {
     private func toolCardAction(for card: SessionChatToolCardBlock) -> (() -> Void)? {
         if let childSessionId = card.childSessionId {
             return { onChildSessionTap(childSessionId, card.title) }
+        }
+        if card.opensChangesReview {
+            return { onChangesReviewTap(message.id, card.changesInitialFilePath) }
         }
         if let detail = card.detailText {
             return {

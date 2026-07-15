@@ -61,6 +61,7 @@ internal data class SessionChatTimelineViewProps(
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
+    val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,6 +114,7 @@ internal fun SessionChatTimelineView(
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
                 onChildSessionTap = props.onChildSessionTap,
+                onChangesReviewTap = props.onChangesReviewTap,
                 modifier = modifier,
             )
         }
@@ -130,6 +132,7 @@ private fun SessionChatTimelineReadyView(
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
+    onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val timeline =
@@ -159,6 +162,7 @@ private fun SessionChatTimelineReadyView(
                     onMessageActionsTap = onMessageActionsTap,
                     onToolDetailTap = onToolDetailTap,
                     onChildSessionTap = onChildSessionTap,
+                    onChangesReviewTap = onChangesReviewTap,
                     animateSizeChanges = isNewestMessage,
                     onContentSizeAnimationFinished = onContentSizeSettled,
                     modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
@@ -213,6 +217,7 @@ private fun SessionChatMessageRow(
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
+    onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -268,6 +273,7 @@ private fun SessionChatMessageRow(
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                     onToolDetailTap = onToolDetailTap,
                     onChildSessionTap = onChildSessionTap,
+                    onChangesReviewTap = onChangesReviewTap,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -306,6 +312,7 @@ private fun AssistantMessageContent(
     onOpenMessageActions: () -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
+    onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
 ) {
     val blocks =
         message.blocks.ifEmpty {
@@ -335,12 +342,19 @@ private fun AssistantMessageContent(
                         status = block.status.toToolCallCardStatus(),
                         title = block.title,
                         subtitle = block.subtitle,
+                        additions = block.additions,
+                        deletions = block.deletions,
                         errorText = block.errorText,
                         onClick =
                             when {
                                 block.childSessionId != null -> {
                                     {
                                         onChildSessionTap(block.childSessionId, block.title)
+                                    }
+                                }
+                                block.opensChangesReview -> {
+                                    {
+                                        onChangesReviewTap(message.id, block.changesInitialFilePath)
                                     }
                                 }
                                 block.detailText != null -> {

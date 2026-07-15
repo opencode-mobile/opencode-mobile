@@ -505,19 +505,219 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.childSessionId == "ses-err")
     }
 
-    @Test func build_keepsGenericChromeForLaterTickets() {
-        for name in ["edit", "write", "apply_patch", "custom_mcp"] {
-            let blocks = SessionChatTimelineBlocks.build(
-                role: .assistant,
-                parts: [.tool(ToolPart(toolName: name, status: .completed))]
-            )
-            guard case .toolCard(let tool) = blocks.first else {
-                Issue.record("Expected tool card for \(name)")
-                return
-            }
-            #expect(tool.title == "Called \(name)")
-            #expect(tool.detailText == nil)
-            #expect(tool.childSessionId == nil)
+    @Test func build_editUsesFilediffPathCountsAndOpensChanges() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "edit",
+                        status: .completed,
+                        metadata: [
+                            "filediff": .dictionary([
+                                "file": .string("src/Main.kt"),
+                                "additions": .int(3),
+                                "deletions": .int(1),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
         }
+        #expect(tool.title == "Edit")
+        #expect(tool.subtitle == "src/Main.kt")
+        #expect(tool.additions == 3)
+        #expect(tool.deletions == 1)
+        #expect(tool.opensChangesReview)
+        #expect(tool.changesInitialFilePath == "src/Main.kt")
+        #expect(tool.detailText == nil)
+        #expect(tool.childSessionId == nil)
+    }
+
+    @Test func build_writeFallsBackToInputPathAndOmitsZeroCounts() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "write",
+                        status: .completed,
+                        input: ["filePath": .string("README.md")],
+                        metadata: [
+                            "filediff": .dictionary([
+                                "file": .string("README.md"),
+                                "additions": .int(5),
+                                "deletions": .int(0),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Write")
+        #expect(tool.subtitle == "README.md")
+        #expect(tool.additions == 5)
+        #expect(tool.deletions == nil)
+        #expect(tool.opensChangesReview)
+        #expect(tool.changesInitialFilePath == "README.md")
+    }
+
+    @Test func build_fileChangeWithoutPathKeepsTitleOnlyAndNoTap() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [.tool(ToolPart(toolName: "edit", status: .completed))]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Edit")
+        #expect(tool.subtitle == nil)
+        #expect(tool.additions == nil)
+        #expect(tool.deletions == nil)
+        #expect(!tool.opensChangesReview)
+        #expect(tool.changesInitialFilePath == nil)
+    }
+
+    @Test func build_fileChangePendingWithoutPathIsTitleOnly() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "edit",
+                        status: .running,
+                        title: "Editing…"
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Edit")
+        #expect(tool.subtitle == nil)
+        #expect(!tool.opensChangesReview)
+    }
+
+    @Test func build_fileChangePendingWithPathIsDisplayOnly() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "edit",
+                        status: .running,
+                        title: "Editing…",
+                        input: ["filePath": .string("App.kt")]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Edit")
+        #expect(tool.subtitle == "App.kt")
+        #expect(!tool.opensChangesReview)
+        #expect(tool.changesInitialFilePath == nil)
+    }
+
+    @Test func build_applyPatchMultiFileUsesCountSubtitleAndListTap() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "apply_patch",
+                        status: .completed,
+                        metadata: [
+                            "files": .array([
+                                .dictionary([
+                                    "filePath": .string("a.kt"),
+                                    "additions": .int(2),
+                                    "deletions": .int(1),
+                                ]),
+                                .dictionary([
+                                    "filePath": .string("b.kt"),
+                                    "additions": .int(4),
+                                    "deletions": .int(0),
+                                ]),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Patch")
+        #expect(tool.subtitle == "2 files")
+        #expect(tool.additions == 6)
+        #expect(tool.deletions == 1)
+        #expect(tool.opensChangesReview)
+        #expect(tool.changesInitialFilePath == nil)
+    }
+
+    @Test func build_applyPatchSingleFileDeepLinksPath() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                .tool(
+                    ToolPart(
+                        toolName: "apply_patch",
+                        status: .error,
+                        error: "conflict",
+                        metadata: [
+                            "files": .array([
+                                .dictionary([
+                                    "filePath": .string("solo.kt"),
+                                    "additions": .int(1),
+                                    "deletions": .int(1),
+                                ]),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Patch")
+        #expect(tool.subtitle == "solo.kt")
+        #expect(tool.additions == 1)
+        #expect(tool.deletions == 1)
+        #expect(tool.errorText == "conflict")
+        #expect(tool.opensChangesReview)
+        #expect(tool.changesInitialFilePath == "solo.kt")
+    }
+
+    @Test func build_keepsGenericChromeForUnknownTools() {
+        let blocks = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [.tool(ToolPart(toolName: "custom_mcp", status: .completed))]
+        )
+        guard case .toolCard(let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Called custom_mcp")
+        #expect(tool.detailText == nil)
+        #expect(tool.childSessionId == nil)
+        #expect(!tool.opensChangesReview)
     }
 }

@@ -207,7 +207,13 @@ fun MainNavigation() {
                                                 },
                                                 onReviewChangesClick = { target ->
                                                     backStack.add(
-                                                        Changes(target.sessionId, target.worktree, target.messageId, target.initialSource),
+                                                        Changes(
+                                                            target.sessionId,
+                                                            target.worktree,
+                                                            target.messageId,
+                                                            target.initialSource,
+                                                            target.initialFilePath,
+                                                        ),
                                                     )
                                                 },
                                                 onChildSessionClick = { target ->
@@ -238,6 +244,7 @@ fun MainNavigation() {
                                                 worktree = key.worktree,
                                                 messageId = key.messageId,
                                                 initialSource = key.initialSource,
+                                                initialFilePath = key.initialFilePath,
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                             )
                                         }

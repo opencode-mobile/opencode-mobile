@@ -149,6 +149,16 @@ A text block or a different tool family breaks the group.
 _Avoid_: expanding each grouped tool inline; treating a group as multiple
 timeline messages.
 
+### file-change tool
+
+An assistant ToolPart in the `edit` / `write` / `apply_patch` family that
+changes project files. Session Chat shows it as a Tool Call Card with a verb
+title, path or multi-file subtitle, and optional +/− counts. Tap opens the
+owning-turn Changes flow (File Viewer deep-link when a single path is in the
+snapshot; otherwise the Changed Files list).
+_Avoid_: treating it as a Change Set; expanding an inline diff accordion in the
+chat timeline; using a Bottom Sheet for the diff.
+
 ### child session
 
 A session spawned from a parent session to carry out delegated work.

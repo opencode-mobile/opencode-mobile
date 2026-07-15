@@ -14,10 +14,15 @@ struct SessionChatToolCardBlock: Equatable, Sendable {
     let title: String
     let subtitle: String?
     let errorText: String?
+    let additions: Int?
+    let deletions: Int?
     /// Non-nil when the card should open a Bottom Sheet with this body.
     let detailText: String?
     /// Non-nil when tap should open this child session's Session Chat.
     let childSessionId: String?
+    /// When true, tap opens owning-turn Changes (optional File Viewer path).
+    let opensChangesReview: Bool
+    let changesInitialFilePath: String?
 
     init(
         toolName: String,
@@ -25,16 +30,24 @@ struct SessionChatToolCardBlock: Equatable, Sendable {
         title: String,
         subtitle: String? = nil,
         errorText: String? = nil,
+        additions: Int? = nil,
+        deletions: Int? = nil,
         detailText: String? = nil,
-        childSessionId: String? = nil
+        childSessionId: String? = nil,
+        opensChangesReview: Bool = false,
+        changesInitialFilePath: String? = nil
     ) {
         self.toolName = toolName
         self.status = status
         self.title = title
         self.subtitle = subtitle
         self.errorText = errorText
+        self.additions = additions
+        self.deletions = deletions
         self.detailText = detailText
         self.childSessionId = childSessionId
+        self.opensChangesReview = opensChangesReview
+        self.changesInitialFilePath = changesInitialFilePath
     }
 }
 
@@ -187,27 +200,43 @@ enum SessionChatTimelineBlocks {
             title: chrome.title,
             subtitle: chrome.subtitle,
             errorText: errorText,
+            additions: chrome.additions,
+            deletions: chrome.deletions,
             detailText: chrome.detailText,
-            childSessionId: chrome.childSessionId
+            childSessionId: chrome.childSessionId,
+            opensChangesReview: chrome.opensChangesReview,
+            changesInitialFilePath: chrome.changesInitialFilePath
         )
     }
 
     private struct Chrome {
         let title: String
         let subtitle: String?
+        let additions: Int?
+        let deletions: Int?
         let detailText: String?
         let childSessionId: String?
+        let opensChangesReview: Bool
+        let changesInitialFilePath: String?
 
         init(
             title: String,
             subtitle: String?,
+            additions: Int? = nil,
+            deletions: Int? = nil,
             detailText: String? = nil,
-            childSessionId: String? = nil
+            childSessionId: String? = nil,
+            opensChangesReview: Bool = false,
+            changesInitialFilePath: String? = nil
         ) {
             self.title = title
             self.subtitle = subtitle
+            self.additions = additions
+            self.deletions = deletions
             self.detailText = detailText
             self.childSessionId = childSessionId
+            self.opensChangesReview = opensChangesReview
+            self.changesInitialFilePath = changesInitialFilePath
         }
     }
 
@@ -250,9 +279,119 @@ enum SessionChatTimelineBlocks {
             )
         case "task":
             return taskChrome(tool)
+        case "edit":
+            return fileChangeChrome(tool: tool, displayTitle: "Edit")
+        case "write":
+            return fileChangeChrome(tool: tool, displayTitle: "Write")
+        case "apply_patch":
+            return fileChangeChrome(tool: tool, displayTitle: "Patch")
         default:
             return nil
         }
+    }
+
+    private static func fileChangeChrome(tool: ToolPart, displayTitle: String) -> Chrome {
+        let filesArray: [AnyCodable]? = {
+            guard case let .array(array)? = tool.metadata?["files"] else { return nil }
+            return array
+        }()
+        let patchFiles = metadataFiles(tool.metadata)
+        if let filesArray, filesArray.count > 1 {
+            let additions = positiveCount(patchFiles.reduce(0) { $0 + ($1.additions ?? 0) })
+            let deletions = positiveCount(patchFiles.reduce(0) { $0 + ($1.deletions ?? 0) })
+            return Chrome(
+                title: "Patch",
+                subtitle: "\(filesArray.count) files",
+                additions: additions,
+                deletions: deletions,
+                opensChangesReview: canOpenChangesReview(tool.status),
+                changesInitialFilePath: nil
+            )
+        }
+
+        let singlePatchFile = patchFiles.count == 1 ? patchFiles[0] : nil
+        let path =
+            metadataFilediffString(tool.metadata, key: "file")
+            ?? singlePatchFile?.path
+            ?? pathSubtitle(tool.input)
+        let additions = positiveCount(
+            metadataFilediffInt(tool.metadata, key: "additions") ?? singlePatchFile?.additions
+        )
+        let deletions = positiveCount(
+            metadataFilediffInt(tool.metadata, key: "deletions") ?? singlePatchFile?.deletions
+        )
+        let opens = path != nil && canOpenChangesReview(tool.status)
+        return Chrome(
+            title: displayTitle,
+            subtitle: path,
+            additions: path == nil ? nil : additions,
+            deletions: path == nil ? nil : deletions,
+            opensChangesReview: opens,
+            changesInitialFilePath: opens ? path : nil
+        )
+    }
+
+    private static func canOpenChangesReview(_ status: ToolStatus) -> Bool {
+        status == .completed || status == .error
+    }
+
+    private struct PatchFileEntry {
+        let path: String
+        let additions: Int?
+        let deletions: Int?
+    }
+
+    private static func metadataFiles(_ metadata: [String: AnyCodable]?) -> [PatchFileEntry] {
+        guard case let .array(array)? = metadata?["files"] else { return [] }
+        return array.compactMap { element in
+            guard case let .dictionary(obj) = element else { return nil }
+            guard let path = stringFromObject(obj, keys: "filePath", "relativePath", "file") else {
+                return nil
+            }
+            return PatchFileEntry(
+                path: path,
+                additions: intFromObject(obj, key: "additions"),
+                deletions: intFromObject(obj, key: "deletions")
+            )
+        }
+    }
+
+    private static func metadataFilediffString(_ metadata: [String: AnyCodable]?, key: String) -> String? {
+        guard case let .dictionary(filediff)? = metadata?["filediff"] else { return nil }
+        return stringFromObject(filediff, keys: key)
+    }
+
+    private static func metadataFilediffInt(_ metadata: [String: AnyCodable]?, key: String) -> Int? {
+        guard case let .dictionary(filediff)? = metadata?["filediff"] else { return nil }
+        return intFromObject(filediff, key: key)
+    }
+
+    private static func stringFromObject(_ obj: [String: AnyCodable], keys: String...) -> String? {
+        for key in keys {
+            if let value = obj[key]?.stringValue, !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func intFromObject(_ obj: [String: AnyCodable], key: String) -> Int? {
+        guard let value = obj[key] else { return nil }
+        switch value {
+        case .int(let number):
+            return number
+        case .double(let number):
+            return Int(number)
+        case .string(let text):
+            return Int(text)
+        default:
+            return nil
+        }
+    }
+
+    private static func positiveCount(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
     }
 
     private static func taskChrome(_ tool: ToolPart) -> Chrome {

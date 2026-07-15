@@ -223,6 +223,33 @@ struct ChangesViewModelTests {
         #expect(state.reviewChangesNavigationTarget(worktree: "/repo")?.initialSource == .lastTurn)
     }
 
+    @Test func fileChangeNavigationUsesOwningTurnAndOptionalPath() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [
+            row("user-1", .user),
+            row("assistant-1", .assistant),
+            row("user-2", .user),
+            row("assistant-2", .assistant),
+        ]
+        let single = state.fileChangeNavigationTarget(
+            worktree: "/repo",
+            assistantMessageID: "assistant-1",
+            initialFilePath: "src/Main.kt"
+        )
+        #expect(single?.messageID == "user-1")
+        #expect(single?.initialSource == .lastTurn)
+        #expect(single?.initialFilePath == "src/Main.kt")
+
+        let multi = state.fileChangeNavigationTarget(
+            worktree: "/repo",
+            assistantMessageID: "assistant-2",
+            initialFilePath: nil
+        )
+        #expect(multi?.messageID == "user-2")
+        #expect(multi?.initialFilePath == nil)
+    }
+
     private static func file(
         _ path: String,
         additions: Int = 1,

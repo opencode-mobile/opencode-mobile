@@ -17,8 +17,8 @@ Android.
   Sheet for output), network (`webfetch`/`websearch` + sheet for search
   results), interact (completed `question` / `skill`). Collapsed Tool Call Card
   only; no card expand API.
-- File change tools (`edit`/`write`/`apply_patch`): filename + +N/−N; tap opens
-  existing Changes review.
+- File change tools (`edit`/`write`/`apply_patch`): filename or `N files` +
+  +N/−N; tap opens owning-turn Changes (File Viewer deep-link or list).
 - `task` tool card with navigate to child session when available.
 
 ## Out of scope
@@ -56,9 +56,10 @@ Android.
 - OPE-50: feature helpers specialize title/subtitle for context/shell/network/
   interact; consecutive context tools become one tool group card; bash and
   completed network results use Bottom Sheet on tap; no Tool Call Card expand.
-- Actions (later tickets): tap file-change tools → Changes review; tap
-  `task` → child session when `metadata.sessionId` is present. OPE-49 generic
-  cards are display-only; OPE-50 adds sheet taps only where noted.
+- Actions: OPE-50 sheet taps where noted; OPE-51 file-change → owning-turn
+  File Viewer (single-file path deep-link) or Changed Files list (multi-file
+  patch / missing path in snapshot); OPE-52 `task` → child session when
+  `metadata.sessionId` is present. OPE-49 generic cards remain display-only.
 - Chat display uses blocks; `Message.text` is TextPart-only.
 
 ## Native navigation entry points
@@ -85,7 +86,8 @@ Android.
 ## Design system
 
 - **New:** Tool Call Card (status, title, subtitle, optional +/− / error).
-- Reuse existing Changes navigation for file-change taps.
+- Reuse existing Changes navigation for file-change taps (owning-turn File
+  Viewer or Changed Files list).
 - Feature-local mapping from tool ID → card chrome only where the shared card
   variants are insufficient.
 
