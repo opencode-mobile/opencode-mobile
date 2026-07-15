@@ -125,9 +125,21 @@ sequentially. For v1 the domain model defines two variants:
 - **TextPart**: user prompt text or assistant response text. May carry
   `isStreaming: true` while delta chunks are still arriving. Model reasoning
   traces are hidden from normal chat text in v1.
-- **ToolPart**: a tool call with a friendly status label such as
-  `"⌛ webfetch"` (pending), `"⏳ webfetch: Searching"` (running),
-  `"✓ webfetch"` (completed), or `"✕ weftch: error"` (error).
+- **ToolPart**: a named tool call inside a message, with a tool status,
+  optional running title, optional error text, call id when the server
+  provides one, opaque string-keyed input and metadata maps, and optional
+  string output for later card chrome.
+  _Avoid_: treating a preformatted status string as the tool part itself;
+  modeling every server tool schema as its own domain type in v1.
+
+### tool status
+
+Where a ToolPart is in its lifecycle: `pending`, `running`, `completed`, or
+`error`. Missing or unrecognized server status is treated as `pending`.
+
+Compact chat labels may prefix a status emoji (for example ⌛ / ⏳ / ✓ / ✕);
+that emoji is presentation via a display formatter, not stored on ToolPart.
+_Avoid_: encoding status only as emoji or a display string.
 
 Server-only part types (`step-start`, `step-finish`, `agent`, `subtask`,
 `snapshot`, `patch`, `compaction`, `retry`) are consumed by the adapter but do

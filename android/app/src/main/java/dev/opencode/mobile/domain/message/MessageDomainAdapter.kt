@@ -74,8 +74,7 @@ class MessageDomainAdapter {
             "tool" -> {
                 val toolName = dto.tool ?: return null
                 val stateDto = parseToolState(dto.state)
-                val statusText = toolStatusLabel(toolName, stateDto)
-                MessagePart.Tool(toolName = toolName, statusText = statusText)
+                toToolPart(toolName = toolName, callId = dto.callId, state = stateDto)
             }
             else -> null
         }
@@ -86,25 +85,46 @@ class MessageDomainAdapter {
         return runCatching { json.decodeFromJsonElement<MessageToolStateDto>(stateJson) }.getOrNull()
     }
 
-    fun toolStatusLabel(
+    fun toToolPart(
         toolName: String,
+        callId: String? = null,
         state: MessageToolStateDto?,
-    ): String {
-        if (state == null) return "\u231B $toolName"
-        return when (state.status) {
-            "pending" -> "\u231B $toolName"
-            "running" -> {
-                val title = state.title?.takeIf { it.isNotEmpty() }
-                if (title != null) "\u23F3 $title" else "\u23F3 $toolName"
-            }
-            "completed" -> "\u2713 $toolName"
-            "error" -> {
-                val message = state.error ?: "failed"
-                "\u2715 $toolName: $message"
-            }
-            else -> toolName
-        }
+    ): MessagePart.Tool {
+        val status = toToolStatus(state?.status)
+        return MessagePart.Tool(
+            toolName = toolName,
+            status = status,
+            title = state?.title?.takeIf { it.isNotEmpty() },
+            error = state?.error?.takeIf { it.isNotEmpty() },
+            callId = callId,
+            input = state?.input,
+            output = state?.output,
+            metadata = state?.metadata,
+        )
     }
+
+    fun toToolStatus(raw: String?): ToolStatus =
+        when (raw) {
+            "pending" -> ToolStatus.Pending
+            "running" -> ToolStatus.Running
+            "completed" -> ToolStatus.Completed
+            "error" -> ToolStatus.Error
+            else -> ToolStatus.Pending
+        }
+
+    fun compactToolLabel(tool: MessagePart.Tool): String =
+        when (tool.status) {
+            ToolStatus.Pending -> "\u231B ${tool.toolName}"
+            ToolStatus.Running -> {
+                val title = tool.title?.takeIf { it.isNotEmpty() }
+                if (title != null) "\u23F3 $title" else "\u23F3 ${tool.toolName}"
+            }
+            ToolStatus.Completed -> "\u2713 ${tool.toolName}"
+            ToolStatus.Error -> {
+                val message = tool.error?.takeIf { it.isNotEmpty() } ?: "failed"
+                "\u2715 ${tool.toolName}: $message"
+            }
+        }
 
     fun flattenedText(parts: List<MessagePart>): String = displayText(parts)
 
@@ -165,7 +185,7 @@ class MessageDomainAdapter {
         val segments = parts.map { part ->
             when (part) {
                 is MessagePart.Text -> part.text
-                is MessagePart.Tool -> part.statusText
+                is MessagePart.Tool -> compactToolLabel(part)
             }
         }
         val nonEmpty = segments.map { it.trim() }.filter { it.isNotEmpty() }

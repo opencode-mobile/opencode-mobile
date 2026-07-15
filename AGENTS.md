@@ -169,6 +169,25 @@ them.
 - Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
   feature docs directory, merge checklist, and pull request for a feature task.
 
+## Branch naming
+
+Ticket-backed work uses a type prefix, never a username or agent name:
+
+```text
+feature/ope-<number>-<short-slug>
+```
+
+- Prefer `feature/` for product feature work tied to an `OPE-<number>` issue.
+- Use `fix/` for bug-fix tickets when the issue is clearly a fix rather than
+  a new capability.
+- Keep the slug lowercase ASCII with single hyphens; omit leading/trailing
+  hyphens; keep the full branch name at 80 characters or fewer.
+- Ignore Linear's default `{username}/…` branch suggestion. Do not create
+  branches like `ivanfenenko/ope-48-…` or `codex/ope-48-…`.
+
+Detailed resolution and publication rules live in
+`.agents/skills/feature/reference.md`.
+
 ## Agent skills
 
 ### Issue tracker
