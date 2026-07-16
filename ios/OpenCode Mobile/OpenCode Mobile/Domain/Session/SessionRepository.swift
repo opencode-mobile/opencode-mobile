@@ -6,7 +6,7 @@ protocol SessionRepository: Sendable {
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
     func getSession(id: String, directory: String?) async throws -> Session
-    func updateSession(id: String, title: String?) async throws -> Session
+    func updateSession(id: String, title: String?, directory: String?) async throws -> Session
     func archiveSession(id: String, directory: String?) async throws -> Session
     func deleteSession(id: String, directory: String?) async throws -> Bool
     func listChildSessions(id: String) async throws -> [Session]
@@ -30,6 +30,10 @@ extension SessionRepository {
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
+    }
+
+    func updateSession(id: String, title: String?) async throws -> Session {
+        try await updateSession(id: id, title: title, directory: nil)
     }
 
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
@@ -91,8 +95,8 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { adapter.session(from: try await api.getSession(id: id, directory: directory)) }
     }
 
-    func updateSession(id: String, title: String?) async throws -> Session {
-        try await run { adapter.session(from: try await api.updateSession(id: id, title: title)) }
+    func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
+        try await run { adapter.session(from: try await api.updateSession(id: id, title: title, directory: directory)) }
     }
 
     func archiveSession(id: String, directory: String?) async throws -> Session {

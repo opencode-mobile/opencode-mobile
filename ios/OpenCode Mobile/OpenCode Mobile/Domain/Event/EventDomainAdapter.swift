@@ -45,6 +45,21 @@ struct EventDomainAdapter: Sendable {
         statusLabel(fromRawType: status.raw["type"])
     }
 
+    /// Title change carried by a `session.updated` event for a concrete session id.
+    /// Returns nil when the event is not a usable title update.
+    func sessionTitleUpdate(from event: OpencodeEvent) -> SessionTitleUpdate? {
+        guard event.type == "session.updated" else { return nil }
+        let info = event.rawProperties?["info"]?.dictionaryValue
+        let sessionID =
+            event.sessionID
+            ?? info?["id"]?.stringValue
+            ?? info?["sessionID"]?.stringValue
+            ?? info?["sessionId"]?.stringValue
+        guard let sessionID else { return nil }
+        guard let title = info?["title"]?.stringValue else { return nil }
+        return SessionTitleUpdate(sessionID: sessionID, title: title)
+    }
+
     private func statusLabel(fromRawType rawType: String?) -> String? {
         switch rawType {
         case "busy":
@@ -55,4 +70,9 @@ struct EventDomainAdapter: Sendable {
             nil
         }
     }
+}
+
+struct SessionTitleUpdate: Equatable, Sendable {
+    let sessionID: String
+    let title: String
 }

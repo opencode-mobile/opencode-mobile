@@ -56,6 +56,24 @@ struct EventDomainAdapterTests {
         #expect(retry == "Retrying")
         #expect(idle == nil)
     }
+
+    @Test func sessionTitleUpdate_readsInfoTitle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"Live title"}}}}"#
+        )
+        let update = adapter.sessionTitleUpdate(from: event!)
+        #expect(update?.sessionID == "ses-1")
+        #expect(update?.title == "Live title")
+    }
+
+    @Test func sessionTitleUpdate_ignoresNonUpdatedEvents() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.created","properties":{"info":{"id":"ses-1","title":"New"}}}}"#
+        )
+        #expect(adapter.sessionTitleUpdate(from: event!) == nil)
+    }
 }
 
 final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendable {

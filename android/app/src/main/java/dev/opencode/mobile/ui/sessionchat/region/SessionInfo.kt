@@ -3,13 +3,16 @@ package dev.opencode.mobile.ui.sessionchat.region
 import android.util.Log
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
+import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -34,19 +37,21 @@ class SessionInfo(
     private var boundSessionTitle: String? = null
     private var boundWorktree: String? = null
     private var observationJob: Job? = null
+    private var renameJob: Job? = null
 
     fun bind(
         sessionId: String,
         sessionTitle: String,
         worktree: String,
     ) {
-        if (boundSessionId == sessionId &&
-            boundSessionTitle == sessionTitle &&
-            boundWorktree == worktree
-        ) {
+        // Session identity is id + worktree. Ignore stale navigation titles after rename /
+        // session.updated so configuration changes do not wipe the live title.
+        if (boundSessionId == sessionId && boundWorktree == worktree) {
             return
         }
         stopObserving()
+        renameJob?.cancel()
+        renameJob = null
         boundSessionId = sessionId
         boundSessionTitle = sessionTitle
         boundWorktree = worktree
@@ -63,6 +68,93 @@ class SessionInfo(
     fun stopObserving() {
         observationJob?.cancel()
         observationJob = null
+    }
+
+    fun openRenameSession() {
+        val title = _state.value.sessionTitle
+        _state.update {
+            it.copy(
+                rename =
+                    SessionRenameUiState(
+                        isDialogVisible = true,
+                        draftTitle = title,
+                    ),
+            )
+        }
+    }
+
+    fun cancelRenameSession() {
+        renameJob?.cancel()
+        renameJob = null
+        _state.update { it.copy(rename = SessionRenameUiState()) }
+    }
+
+    fun updateRenameDraft(text: String) {
+        _state.update {
+            it.copy(
+                rename =
+                    it.rename.copy(
+                        draftTitle = text,
+                        errorMessage = null,
+                    ),
+            )
+        }
+    }
+
+    fun confirmRenameSession() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (_state.value.rename.isSubmitting) return
+
+        val trimmed = _state.value.rename.draftTitle.trim()
+        if (trimmed.isEmpty()) {
+            _state.update {
+                it.copy(rename = it.rename.copy(errorMessage = EMPTY_TITLE_ERROR))
+            }
+            return
+        }
+        if (trimmed == _state.value.sessionTitle) {
+            cancelRenameSession()
+            return
+        }
+
+        _state.update {
+            it.copy(rename = it.rename.copy(isSubmitting = true, errorMessage = null))
+        }
+        logI("rename submit session=$sessionId")
+        renameJob?.cancel()
+        renameJob =
+            scope.launch {
+                runCatching {
+                    sessionRepository.updateSession(
+                        id = sessionId,
+                        title = trimmed,
+                        directory = worktree,
+                    )
+                }.onSuccess { session ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    boundSessionTitle = session.title
+                    _state.update {
+                        it.copy(
+                            sessionTitle = session.title,
+                            rename = SessionRenameUiState(),
+                        )
+                    }
+                    logI("rename success session=$sessionId")
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logW("rename failed session=$sessionId message=${error.message}")
+                    _state.update {
+                        it.copy(
+                            rename =
+                                it.rename.copy(
+                                    isSubmitting = false,
+                                    errorMessage = renameErrorMessage(error),
+                                ),
+                        )
+                    }
+                }
+            }
     }
 
     fun refreshStatus() {
@@ -203,6 +295,7 @@ class SessionInfo(
                     }
                     launch {
                         foregroundEventStream.events.collect { event ->
+                            if (!isCurrentBinding(sessionId, worktree)) return@collect
                             val eventScope =
                                 when (event.sessionId) {
                                     sessionId -> "bound"
@@ -213,10 +306,23 @@ class SessionInfo(
                                 "SSE event observed session=$sessionId type=${event.type} " +
                                     "eventSession=${event.sessionId ?: "-"} scope=$eventScope",
                             )
+                            applySessionUpdatedTitle(event, sessionId)
                         }
                     }
                 }
             }
+    }
+
+    private fun applySessionUpdatedTitle(
+        event: OpencodeEvent,
+        sessionId: String,
+    ) {
+        val update = eventDomainAdapter.sessionTitleUpdate(event) ?: return
+        if (update.sessionId != sessionId) return
+        if (update.title == _state.value.sessionTitle) return
+        boundSessionTitle = update.title
+        _state.update { it.copy(sessionTitle = update.title) }
+        logI("session.updated title session=$sessionId title=${update.title}")
     }
 
     private fun modelLimit(
@@ -235,6 +341,14 @@ class SessionInfo(
         worktree: String,
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
+    private fun renameErrorMessage(throwable: Throwable): String =
+        when (throwable) {
+            is SessionError.Http -> throwable.message ?: "Request failed"
+            is SessionError.Transport -> "Unable to reach the server"
+            is SessionError.Decoding -> "Unable to read server response"
+            else -> throwable.message ?: "Something went wrong"
+        }
+
     private fun logI(message: String) {
         runCatching { Log.i(TAG, message) }
     }
@@ -243,8 +357,13 @@ class SessionInfo(
         runCatching { Log.d(TAG, message) }
     }
 
+    private fun logW(message: String) {
+        runCatching { Log.w(TAG, message) }
+    }
+
     companion object {
         private const val TAG = "SessionInfo"
+        private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val DELETE_ERROR = "Couldn't delete session."
     }

@@ -63,4 +63,26 @@ class EventDomainAdapterTest {
         assertEquals("Retrying", retry)
         assertNull(idle)
     }
+
+    @Test
+    fun sessionTitleUpdate_readsInfoTitle() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"Live title"}}}}""",
+            )
+
+        val update = adapter.sessionTitleUpdate(event!!)
+        assertEquals("ses-1", update?.sessionId)
+        assertEquals("Live title", update?.title)
+    }
+
+    @Test
+    fun sessionTitleUpdate_ignoresNonUpdatedEvents() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.created","properties":{"info":{"id":"ses-1","title":"New"}}}}""",
+            )
+
+        assertNull(adapter.sessionTitleUpdate(event!!))
+    }
 }

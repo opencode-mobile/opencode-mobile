@@ -126,6 +126,22 @@ final class SessionChatViewModel {
         composer.restoreComposerText(text)
     }
 
+    func openRenameSession() {
+        sessionInfo.openRenameSession()
+    }
+
+    func cancelRenameSession() {
+        sessionInfo.cancelRenameSession()
+    }
+
+    func updateRenameDraft(_ text: String) {
+        sessionInfo.updateRenameDraft(text)
+    }
+
+    func confirmRenameSession() async {
+        await sessionInfo.confirmRenameSession()
+    }
+
     func sendPrompt() async {
         await composer.sendPrompt(
             sessionID: sessionID,
@@ -316,7 +332,8 @@ final class SessionChatViewModel {
             permissionSubmitting: permissionSubmittingID != nil,
             permissionErrorMessage: permissionError ?? permissionTopologyError,
             reviewChangesMessageID: reviewChangesState.messageID,
-            reviewChangesSummary: reviewChangesState.summary
+            reviewChangesSummary: reviewChangesState.summary,
+            rename: infoState.rename
         )
     }
 
