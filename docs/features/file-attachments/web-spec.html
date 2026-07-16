@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>File Attachments — opencode Web Reference Specification</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f6f8; --panel:#fff; --text:#20242b; --muted:#626b78; --line:#d9dde4; --accent:#2864dc; --warn:#9a5b00; --bad:#b3261e; --good:#18794e; --code:#eef1f5; }
+    @media (prefers-color-scheme:dark){:root{--bg:#111318;--panel:#191c22;--text:#edf0f5;--muted:#aab2bf;--line:#343a45;--accent:#8ab4ff;--warn:#ffc66d;--bad:#ffb4ab;--good:#75d6a7;--code:#242932}}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} main{max-width:1120px;margin:auto;padding:38px 22px 72px} h1{font-size:clamp(28px,5vw,46px);line-height:1.08;margin:0 0 12px;letter-spacing:-.03em} h2{font-size:23px;margin:34px 0 13px} h3{font-size:17px;margin:22px 0 8px} p{margin:8px 0} a{color:var(--accent)} code{background:var(--code);padding:.12em .35em;border-radius:5px} .eyebrow{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:12px}.lead{font-size:18px;color:var(--muted);max-width:850px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}.metric{font-size:25px;font-weight:750}.label{color:var(--muted);font-size:13px}.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.step{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}.step b{display:block;color:var(--accent);margin-bottom:6px}.step:not(:last-child):after{content:"→";position:absolute;right:-10px;top:43%;z-index:2;color:var(--muted)} table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line)} th,td{text-align:left;vertical-align:top;padding:11px;border-bottom:1px solid var(--line)} th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)} ul,ol{padding-left:22px}.callout{border-left:4px solid var(--warn);padding:12px 16px;background:var(--panel);margin:18px 0}.bad{color:var(--bad);font-weight:700}.good{color:var(--good);font-weight:700}.source{font-size:13px;color:var(--muted)} @media(max-width:800px){.grid,.flow{grid-template-columns:1fr}.step:not(:last-child):after{content:"↓";right:50%;top:auto;bottom:-17px}.wide{overflow-x:auto}}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">Web reference · inspected 16 July 2026 · upstream cb8be9ba1</div>
+  <h1>Attachments for mobile</h1>
+  <p class="lead">Product term: <strong>Attachment</strong> (pending in composer, sent as domain <strong>FilePart</strong>). Upstream has no multipart upload API — bytes ride as <code>data:</code> URLs inside <code>FilePartInput</code> on <code>prompt_async</code>. Device photos/PDFs/text only; not project <code>@</code> browsing.</p>
+
+  <div class="grid">
+    <div class="card"><div class="metric">No upload API</div><div class="label">Bytes ride inside JSON prompt parts</div></div>
+    <div class="card"><div class="metric">3 kinds</div><div class="label">Images · PDF · text/plain</div></div>
+    <div class="card"><div class="metric">5 MiB</div><div class="label">Default server image base64 cap</div></div>
+  </div>
+
+  <h2>End-to-end flow</h2>
+  <div class="flow">
+    <div class="step"><b>1 · Pick</b>Photos / Files (web: picker, paste, drop).</div>
+    <div class="step"><b>2 · Accept</b>MIME gate; reject other binaries.</div>
+    <div class="step"><b>3 · Encode</b><code>data:{mime};base64,…</code></div>
+    <div class="step"><b>4 · Send</b><code>prompt_async</code> with text + file parts.</div>
+    <div class="step"><b>5 · Show</b>Timeline chips for <code>data:</code> URLs.</div>
+  </div>
+
+  <div class="callout"><strong>Scope split:</strong> <span class="good">In scope</span> = device local upload as data URLs. <span class="bad">Out of scope</span> = project <code>file://</code> / <code>@</code> mentions (server reads disk).</div>
+
+  <h2>Wire contract</h2>
+  <div class="wide"><table>
+    <thead><tr><th>Concern</th><th>Contract</th><th>Required mobile behavior</th></tr></thead>
+    <tbody>
+      <tr><td>Send</td><td><code>POST /session/{sessionID}/prompt_async</code> → <strong>204</strong></td><td>Include V1 <code>parts</code> with text + file parts; work is forked.</td></tr>
+      <tr><td>File part</td><td><code>{ type:"file", mime, url, filename? }</code></td><td><code>url</code> must be a data URL for local attach.</td></tr>
+      <tr><td>Images</td><td>Server <code>Image.normalize</code></td><td>Default max 5 MiB base64 / 2000×2000; failures after 204 via <code>Session.Event.Error</code>.</td></tr>
+      <tr><td>Text files</td><td><code>mime: "text/plain"</code> data URL</td><td>Server decodes into synthetic text context.</td></tr>
+      <tr><td>History</td><td>Message parts <code>type:"file"</code></td><td>Render when <code>url</code> starts with <code>data:</code>.</td></tr>
+      <tr><td>Sync / V2</td><td><code>POST …/message</code> · V2 <code>/api/session/…/prompt</code></td><td>Out of scope for this slice; stay on V1 async parts.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Acceptance</h2>
+  <div class="wide"><table>
+    <thead><tr><th>Kind</th><th>Client mime</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Image</td><td><code>image/png|jpeg|gif|webp</code></td><td>Thumbnail chip + timeline image.</td></tr>
+      <tr><td>PDF</td><td><code>application/pdf</code></td><td>File card, not resized by image path.</td></tr>
+      <tr><td>Text-like</td><td>Coerce to <code>text/plain</code></td><td>JSON/YAML/source/text heuristics like web.</td></tr>
+      <tr><td>Other binary</td><td>Reject</td><td>Copy: only images, PDFs, or text files.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Mobile v1 product behavior</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Composer</h3>
+      <ul>
+        <li>Label: <strong>Attach</strong> / Add attachment.</li>
+        <li>Photos + Files pickers (no camera v1).</li>
+        <li>Removable pending chips; multi-attach.</li>
+        <li>Send allowed with attachments only.</li>
+        <li>Clear on HTTP 204; keep draft on non-2xx.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Domain</h3>
+      <ul>
+        <li><strong>Attachment</strong> pending state.</li>
+        <li><strong>FilePart</strong> on user messages.</li>
+        <li>Extend prompt send builders.</li>
+        <li>Post-204 errors via <code>Session.Event.Error</code> (no chip restore).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Excluded</h3>
+      <ul>
+        <li>Multipart / “upload” API.</li>
+        <li>Project file browser / <code>@</code>.</li>
+        <li>Drag-and-drop; camera; in-app PDF reader.</li>
+        <li>Hard client image resize.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Implementation slices</h2>
+  <ol>
+    <li><strong>Domain + DTO</strong> — file parts in/out, multi-part <code>prompt_async</code>.</li>
+    <li><strong>Design system</strong> — chip + file-part primitives before feature glue.</li>
+    <li><strong>Composer UX</strong> — pickers, chips, send gating.</li>
+    <li><strong>Timeline UX</strong> — image vs file attachment rendering.</li>
+    <li><strong>Validation</strong> — MIME, encode/send, history round-trip, both platforms.</li>
+  </ol>
+
+  <h2>Acceptance gates</h2>
+  <ul>
+    <li>Attach image, PDF, and text-like file; remove before send.</li>
+    <li>Unsupported type rejected without losing draft text.</li>
+    <li><code>prompt_async</code> includes data-URL file parts; attachment-only send works.</li>
+    <li>Failed send keeps text + attachments; success clears pending chips.</li>
+    <li>History/SSE shows data-URL attachments on user messages.</li>
+    <li>iOS/Android behavior parity; intentional diffs in <code>parity-gaps.md</code>.</li>
+  </ul>
+
+  <p class="source">Canonical Markdown: <a href="./web-spec.md">web-spec.md</a> · Research: <a href="../../research/opencode-file-upload.md">opencode-file-upload.md</a> · Plan: <a href="./plan.md">plan.md</a></p>
+</main></body>
+</html>

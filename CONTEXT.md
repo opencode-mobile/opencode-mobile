@@ -76,15 +76,40 @@ server process boot worktree (`GET /project/current` without a query).
 
 A conversation and work stream managed by opencode for the current project.
 
-The mobile client can list sessions, create sessions, rename sessions, delete
-sessions, fork sessions, inspect their messages, send prompts, abort active
-work, review diffs, and respond to permission requests.
+A session has a user-visible title. The mobile client can list sessions, create
+sessions, rename sessions, archive sessions, delete sessions, fork sessions,
+inspect their messages, send prompts, abort active work, review diffs, and
+respond to permission requests.
+
+### archive
+
+A session lifecycle action that removes a session from the active list while
+keeping it on the server.
+
+Archive is distinct from **delete**. An archived session can still be fetched by
+id; it is not permanently removed.
+_Avoid_: hide, soft-delete, dismiss.
+
+### archived session
+
+A session that has been archived and is excluded from active session lists.
+
+The mobile client does not browse or restore archived sessions in v1.
+_Avoid_: hidden session.
+
+### delete (session)
+
+A session lifecycle action that permanently removes a session and its associated
+data, including child sessions.
+
+Delete is distinct from **archive**.
+_Avoid_: archive, remove (as a synonym when archive is meant).
 
 ### Session Repository
 
 The mobile integration layer that performs session lifecycle operations against
-the opencode server (list, create, update, delete, fork, status, abort, diff,
-permissions, and related session-scoped controls).
+the opencode server (list, create, update, archive, delete, fork, status, abort,
+diff, permissions, and related session-scoped controls).
 
 Distinct from a **session**: the repository is app infrastructure; the session
 is the server-managed conversation for the current project.
@@ -114,14 +139,15 @@ and quiet refresh merge stay in the Screen Model.
 A user, assistant, or tool-related item inside a session.
 
 Each message has a `role` (user/assistant), an ordered array of `parts`, and a
-`text` projection of TextPart content for display. Tool calls are not flattened
-into `text` when Session Chat shows them as Tool Call Cards. A message with no
-meaningful parts (empty prompt, system-only) still has a `text` fallback.
+`text` projection of TextPart content for display. Tool calls and Attachments
+are not flattened into `text` when Session Chat shows Tool Call Cards or
+attachment rows. A message with no meaningful parts (empty prompt, system-only)
+still has a `text` fallback.
 
 ### message part
 
 A typed content unit within a message. Parts are ordered. For v1 the domain
-model defines two variants:
+model defines three variants:
 
 - **TextPart**: user prompt text or assistant response text. May carry
   `isStreaming: true` while delta chunks are still arriving. Model reasoning
@@ -132,14 +158,38 @@ model defines two variants:
   string output for later card chrome.
   _Avoid_: treating a preformatted status string as the tool part itself;
   modeling every server tool schema as its own domain type in v1.
+- **FilePart**: a user **Attachment** that arrived on the wire as a server
+  `type: "file"` part with a `data:` URL (image, PDF, or text-like file).
+  Shown on the user message as an attachment row (thumbnail or file card),
+  not flattened into `text`.
+  _Avoid_: upload; treating project `file://` mentions as FileParts in this
+  slice; confusing with **file-change tool**.
+
+Server-only part types that remain adapter-consumed without a visible domain
+part in v1 include `step-start`, `step-finish`, `agent`, `subtask`,
+`snapshot`, `patch`, `compaction`, `retry`, and non-`data:` `file` parts
+(project path mentions).
+
+### Attachment
+
+A device file the user includes with a prompt: image, PDF, or text-like
+document.
+
+An Attachment has two lifecycle states: **pending** in the Session Chat
+composer (removable chips before send) and **sent** on a user message as a
+**FilePart**. Bytes travel inside the async prompt as a data URL; there is no
+separate upload API.
+_Avoid_: upload; Attach context (legacy composer label for device files);
+project `@` / `file://` context (different concept).
 
 ### timeline block
 
 A Session Chat presentation unit inside one message timeline item: a text
 block (Rendered Markdown from adjacent TextParts), a tool card block (Tool
-Call Card from a visible ToolPart), or a **tool group** block.
+Call Card from a visible ToolPart), a **tool group** block, or an attachment
+row (FileParts on a user message).
 _Avoid_: treating each block as its own top-level message; flattening tool
-labels into message `text` for Session Chat display.
+labels or attachment bytes into message `text` for Session Chat display.
 
 ### tool group
 
@@ -164,7 +214,8 @@ chat timeline; using a Bottom Sheet for the diff.
 A session spawned from a parent session to carry out delegated work.
 
 The parent timeline surfaces that work as a `task` ToolPart. Opening the card
-navigates into the child session when a session id is available.
+navigates into the child session when a session id is available. A child
+session has the same title and rename behavior as any other session.
 _Avoid_: subagent (informal/desktop slang for the same child session).
 
 ### tool status
@@ -176,10 +227,6 @@ Session Chat shows status on the Tool Call Card. Compact emoji labels (for
 example ⌛ / ⏳ / ✓ / ✕) are a legacy display formatter for non-card surfaces,
 not stored on ToolPart.
 _Avoid_: encoding status only as emoji or a display string.
-
-Server-only part types (`step-start`, `step-finish`, `agent`, `subtask`,
-`snapshot`, `patch`, `compaction`, `retry`) are consumed by the adapter but do
-not produce a visible domain part in v1.
 
 ### Rendered Markdown
 
