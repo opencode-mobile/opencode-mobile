@@ -13,7 +13,13 @@ data class Session(
     val tokens: dev.opencode.mobile.domain.message.MessageTokenUsage? = null,
     val createdAtEpochMs: Long? = null,
     val updatedAtEpochMs: Long? = null,
-)
+    val archivedAtEpochMs: Long? = null,
+) {
+    val isArchived: Boolean
+        get() = archivedAtEpochMs != null
+}
+
+fun List<Session>.activeSessions(): List<Session> = filterNot { it.isArchived }
 
 data class SessionSummary(
     val id: String,

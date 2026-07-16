@@ -754,6 +754,11 @@ private class FakeSessionRepository(
         directory: String?,
     ): Session = error("unused")
 
+    override suspend fun archiveSession(
+        id: String,
+        directory: String?,
+    ): Session = error("unused")
+
     override suspend fun deleteSession(
         id: String,
         directory: String?,

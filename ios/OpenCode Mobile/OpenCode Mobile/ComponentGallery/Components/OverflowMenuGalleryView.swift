@@ -4,6 +4,7 @@ struct OverflowMenuGalleryView: View {
     @State private var menuExpanded = false
     @State private var entriesEnabled = true
     @State private var selectionRowsEnabled = false
+    @State private var showDestructive = false
     @State private var itemCount = 2
 
     private var entries: [OpenCodeOverflowMenuEntry] {
@@ -45,6 +46,18 @@ struct OverflowMenuGalleryView: View {
             )
         }
 
+        if showDestructive {
+            items.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Delete",
+                    icon: .close,
+                    enabled: entriesEnabled,
+                    destructive: true,
+                    action: {}
+                )
+            )
+        }
+
         return items
     }
 
@@ -65,6 +78,11 @@ struct OverflowMenuGalleryView: View {
                         label: "Selection rows",
                         selected: selectionRowsEnabled,
                         action: { selectionRowsEnabled.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
+                        label: "Destructive",
+                        selected: showDestructive,
+                        action: { showDestructive.toggle() }
                     )
                 }
 

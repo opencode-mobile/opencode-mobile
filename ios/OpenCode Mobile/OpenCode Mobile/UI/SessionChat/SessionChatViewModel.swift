@@ -94,6 +94,14 @@ final class SessionChatViewModel {
         await timeline.refreshMessages()
     }
 
+    func archiveSession() {
+        sessionInfo.archiveSession()
+    }
+
+    func deleteSession() {
+        sessionInfo.deleteSession()
+    }
+
     func updateComposerText(_ text: String) {
         composer.updateComposerText(text)
     }
@@ -298,8 +306,11 @@ final class SessionChatViewModel {
             ),
             errorMessage: mergedErrorMessage(
                 timelineState: timelineState,
-                composerState: composerState
+                composerState: composerState,
+                infoState: infoState
             ),
+            isLifecycleActionInFlight: infoState.isLifecycleActionInFlight,
+            shouldLeaveSession: infoState.shouldLeaveSession,
             permissionRequest: permissionRequests.first,
             permissionQueueCount: permissionRequests.count,
             permissionSubmitting: permissionSubmittingID != nil,
@@ -311,8 +322,12 @@ final class SessionChatViewModel {
 
     private func mergedErrorMessage(
         timelineState: SessionChatTimelineRegionState,
-        composerState: SessionChatComposerRegionState
+        composerState: SessionChatComposerRegionState,
+        infoState: SessionInfoRegionState
     ) -> String? {
+        if let error = infoState.lifecycleErrorMessage {
+            return error
+        }
         if timelineState.timeline == .error {
             return timelineState.errorMessage
         }

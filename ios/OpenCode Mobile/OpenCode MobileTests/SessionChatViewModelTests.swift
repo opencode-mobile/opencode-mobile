@@ -5,6 +5,82 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
+    @Test func archiveSession_successLeavesSession() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.archiveSession()
+        await waitUntil { viewModel.uiState.shouldLeaveSession }
+
+        #expect(sessionRepository.archiveRequest == .init(id: "ses-1", directory: "/repo"))
+        #expect(viewModel.uiState.isLifecycleActionInFlight == false)
+        #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    @Test func archiveSession_failureKeepsSessionWithError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            archiveError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.archiveSession()
+        await waitUntil { viewModel.uiState.errorMessage == "Couldn't archive session." }
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func deleteSession_successLeavesSession() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.deleteSession()
+        await waitUntil { viewModel.uiState.shouldLeaveSession }
+
+        #expect(sessionRepository.deleteRequest == .init(id: "ses-1", directory: "/repo"))
+    }
+
+    @Test func deleteSession_failureKeepsSessionWithError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            deleteError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.deleteSession()
+        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func deleteSession_falseResultKeepsSessionWithError() async {
+        let sessionRepository = FakeChatSessionRepository(deleteResult: false)
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.deleteSession()
+        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func archiveSession_disablesWhileInFlight() async {
+        let gate = AsyncGate()
+        let sessionRepository = FakeChatSessionRepository(archiveHold: gate)
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.archiveSession()
+        await waitUntil { sessionRepository.archiveCallCount == 1 && viewModel.uiState.isLifecycleActionInFlight }
+        viewModel.archiveSession()
+        #expect(sessionRepository.archiveCallCount == 1)
+
+        await gate.open()
+        await waitUntil { viewModel.uiState.shouldLeaveSession }
+    }
+
     @Test func orderedPermissionRequests_prioritizesRootAndIncludesNewDescendants() {
         let rootRequest = permissionRequest(id: "root-request", sessionID: "root")
         let childRequest = permissionRequest(id: "child-request", sessionID: "child")
@@ -1339,6 +1415,11 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         let directory: String?
     }
 
+    struct LifecycleRequest: Equatable {
+        let id: String
+        let directory: String?
+    }
+
     private let sessions: [Session]
     private let pendingPermissions: [PermissionRequest]
     private let permissionResponseError: SessionError?
@@ -1347,11 +1428,20 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let sessionDiffError: SessionError?
     private let sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])?
     private let sessionStatusType: String
+    private let archiveError: SessionError?
+    private let deleteError: SessionError?
+    private let deleteResult: Bool
+    private let archiveHold: AsyncGate?
+    private let deleteHold: AsyncGate?
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
     private(set) var pendingPermissionLoads = 0
     private(set) var diffRequest: DiffRequest?
+    private(set) var archiveRequest: LifecycleRequest?
+    private(set) var archiveCallCount = 0
+    private(set) var deleteRequest: LifecycleRequest?
+    private(set) var deleteCallCount = 0
 
     init(
         sessions: [Session] = [],
@@ -1361,7 +1451,12 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         sessionDiffs: [FileDiff] = [],
         sessionDiffError: SessionError? = nil,
         sessionStatusType: String = "idle",
-        sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil
+        sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil,
+        archiveError: SessionError? = nil,
+        deleteError: SessionError? = nil,
+        deleteResult: Bool = true,
+        archiveHold: AsyncGate? = nil,
+        deleteHold: AsyncGate? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -1371,6 +1466,11 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.sessionDiffError = sessionDiffError
         self.sessionStatusType = sessionStatusType
         self.sessionDiffProvider = sessionDiffProvider
+        self.archiveError = archiveError
+        self.deleteError = deleteError
+        self.deleteResult = deleteResult
+        self.archiveHold = archiveHold
+        self.deleteHold = deleteHold
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
@@ -1388,7 +1488,29 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String) async throws -> Bool { fatalError() }
+    func archiveSession(id: String, directory: String?) async throws -> Session {
+        archiveCallCount += 1
+        archiveRequest = LifecycleRequest(id: id, directory: directory)
+        if let archiveHold { await archiveHold.wait() }
+        if let archiveError { throw archiveError }
+        return Session(
+            id: id,
+            title: "Archived",
+            slug: nil,
+            projectID: nil,
+            directory: nil,
+            parentID: nil,
+            updatedAtEpochMs: nil,
+            archivedAtEpochMs: 1
+        )
+    }
+    func deleteSession(id: String, directory: String?) async throws -> Bool {
+        deleteCallCount += 1
+        deleteRequest = LifecycleRequest(id: id, directory: directory)
+        if let deleteHold { await deleteHold.wait() }
+        if let deleteError { throw deleteError }
+        return deleteResult
+    }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
@@ -1451,4 +1573,27 @@ private func permissionRequest(
         toolMessageID: nil,
         toolCallID: nil
     )
+}
+
+private final class AsyncGate: @unchecked Sendable {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { continuation in
+            if isOpen {
+                continuation.resume()
+            } else {
+                continuations.append(continuation)
+            }
+        }
+    }
+
+    func open() async {
+        isOpen = true
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
 }

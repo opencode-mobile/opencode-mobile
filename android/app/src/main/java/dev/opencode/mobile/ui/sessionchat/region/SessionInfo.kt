@@ -81,6 +81,74 @@ class SessionInfo(
         }
     }
 
+    fun archiveSession() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("archive start session=$sessionId")
+            runCatching { sessionRepository.archiveSession(id = sessionId, directory = worktree) }
+                .onSuccess {
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    logI("archive success session=$sessionId")
+                    _state.update {
+                        it.copy(isLifecycleActionInFlight = false, shouldLeaveSession = true)
+                    }
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("archive failure session=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            isLifecycleActionInFlight = false,
+                            lifecycleErrorMessage = ARCHIVE_ERROR,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun deleteSession() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("delete start session=$sessionId")
+            runCatching { sessionRepository.deleteSession(id = sessionId, directory = worktree) }
+                .onSuccess { deleted ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    if (deleted) {
+                        logI("delete success session=$sessionId")
+                        _state.update {
+                            it.copy(isLifecycleActionInFlight = false, shouldLeaveSession = true)
+                        }
+                    } else {
+                        logI("delete rejected session=$sessionId")
+                        _state.update {
+                            it.copy(
+                                isLifecycleActionInFlight = false,
+                                lifecycleErrorMessage = DELETE_ERROR,
+                            )
+                        }
+                    }
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("delete failure session=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            isLifecycleActionInFlight = false,
+                            lifecycleErrorMessage = DELETE_ERROR,
+                        )
+                    }
+                }
+        }
+    }
+
     fun contextUsageFraction(
         messages: List<SessionChatMessageItem>,
         modelOptions: List<ModelSelectionOption>,
@@ -177,5 +245,7 @@ class SessionInfo(
 
     companion object {
         private const val TAG = "SessionInfo"
+        const val ARCHIVE_ERROR = "Couldn't archive session."
+        const val DELETE_ERROR = "Couldn't delete session."
     }
 }

@@ -84,6 +84,137 @@ class SessionChatViewModelTest {
     }
 
     @Test
+    fun archiveSession_successLeavesSession() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.archiveSession()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo"),
+                sessionRepository.archiveRequest,
+            )
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(false, viewModel.uiState.value.isLifecycleActionInFlight)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun archiveSession_failureKeepsSessionWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(archiveError = SessionError.Http(500, "boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.archiveSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals("Couldn't archive session.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun deleteSession_successLeavesSession() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo"),
+                sessionRepository.deleteRequest,
+            )
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+        }
+
+    @Test
+    fun deleteSession_failureKeepsSessionWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(deleteError = SessionError.Http(500, "boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun deleteSession_falseResultKeepsSessionWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(deleteResult = false)
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun archiveSession_disablesWhileInFlight() =
+        runTest(testDispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val sessionRepository = FakeSessionRepository(archiveHoldUntil = gate)
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.archiveSession()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isLifecycleActionInFlight)
+
+            viewModel.archiveSession()
+            advanceUntilIdle()
+            assertEquals(1, sessionRepository.archiveCallCount)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+        }
+
+    @Test
     fun orderedPermissionRequests_prioritizesRootAndIncludesNewDescendants() {
         val rootRequest = permissionRequest("root-request", "root")
         val childRequest = permissionRequest("child-request", "child")
@@ -1744,10 +1875,20 @@ private class FakeSessionRepository(
     private val sessionDiffError: SessionError? = null,
     private val sessionStatusType: String = "idle",
     private val sessionStatusError: SessionError? = null,
+    private val archiveError: Throwable? = null,
+    private val deleteError: Throwable? = null,
+    private val deleteResult: Boolean = true,
+    private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
+    private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
         val messageId: String?,
+        val directory: String?,
+    )
+
+    data class LifecycleRequest(
+        val id: String,
         val directory: String?,
     )
 
@@ -1758,6 +1899,14 @@ private class FakeSessionRepository(
     var respondedSessionId: String? = null
         private set
     var diffRequest: DiffRequest? = null
+        private set
+    var archiveRequest: LifecycleRequest? = null
+        private set
+    var archiveCallCount: Int = 0
+        private set
+    var deleteRequest: LifecycleRequest? = null
+        private set
+    var deleteCallCount: Int = 0
         private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
@@ -1792,10 +1941,27 @@ private class FakeSessionRepository(
         directory: String?,
     ) = error("unused")
 
+    override suspend fun archiveSession(
+        id: String,
+        directory: String?,
+    ): Session {
+        archiveCallCount += 1
+        archiveRequest = LifecycleRequest(id = id, directory = directory)
+        archiveHoldUntil?.await()
+        archiveError?.let { throw it }
+        return Session(id = id, title = "Archived", archivedAtEpochMs = 1L)
+    }
+
     override suspend fun deleteSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        deleteCallCount += 1
+        deleteRequest = LifecycleRequest(id = id, directory = directory)
+        deleteHoldUntil?.await()
+        deleteError?.let { throw it }
+        return deleteResult
+    }
 
     override suspend fun listChildSessions(
         id: String,

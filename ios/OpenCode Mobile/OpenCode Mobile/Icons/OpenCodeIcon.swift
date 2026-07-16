@@ -20,6 +20,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case search = "md_search"
     case settings = "md_settings"
     case architecture = "md_architecture"
+    case archive = "md_archive"
     case cloud = "md_cloud"
     case stop = "md_stop"
     case stopCircle = "md_stop_circle"

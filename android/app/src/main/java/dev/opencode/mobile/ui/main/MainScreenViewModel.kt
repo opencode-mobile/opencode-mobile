@@ -21,6 +21,7 @@ import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.session.activeSessions
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -279,6 +280,7 @@ class MainScreenViewModel
             val sessions =
                 sessionRepository
                     .listSessions(directory = worktree)
+                    .activeSessions()
                     .sortedByDescending { it.updatedAtEpochMs ?: 0L }
             val statusBySessionId =
                 runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
@@ -378,6 +380,7 @@ class MainScreenViewModel
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
             val summaries =
                 sessions
+                    .activeSessions()
                     .sortedByDescending { it.updatedAtEpochMs ?: 0L }
                     .map { session ->
                         sessionDomainAdapter.toSessionSummary(

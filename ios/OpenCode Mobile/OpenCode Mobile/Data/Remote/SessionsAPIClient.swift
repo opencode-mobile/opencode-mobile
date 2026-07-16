@@ -57,6 +57,15 @@ struct SessionsAPIClient: Sendable {
         try await patch(path: "session/\(id)", body: UpdateSessionRequestDTO(title: title), directory: directory)
     }
 
+    func archiveSession(id: String, directory: String? = nil) async throws -> SessionDTO {
+        let archivedAt = Int64(Date().timeIntervalSince1970 * 1000)
+        return try await patch(
+            path: "session/\(id)",
+            body: UpdateSessionRequestDTO(time: UpdateSessionTimeDTO(archived: archivedAt)),
+            directory: directory
+        )
+    }
+
     func deleteSession(id: String, directory: String? = nil) async throws -> Bool {
         try await delete(path: "session/\(id)", directory: directory)
     }

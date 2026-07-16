@@ -60,6 +60,7 @@ data class OpenCodeOverflowMenuEntry(
     val icon: ImageVector?,
     val onClick: () -> Unit,
     val enabled: Boolean = true,
+    val destructive: Boolean = false,
     val contentDescription: String? = null,
     val accessibilityLabel: String? = null,
 )
@@ -173,16 +174,16 @@ private fun OverflowMenuEntryRow(
     onDismissRequest: () -> Unit,
 ) {
     val contentColor =
-        if (entry.enabled) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+        when {
+            !entry.enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            entry.destructive -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurface
         }
     val iconColor =
-        if (entry.enabled) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        when {
+            !entry.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            entry.destructive -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -294,6 +295,12 @@ private fun previewOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
             title = "Disabled action",
             icon = OpenCodeIcons.Settings,
             enabled = false,
+            onClick = {},
+        ),
+        OpenCodeOverflowMenuEntry(
+            title = "Delete",
+            icon = OpenCodeIcons.Close,
+            destructive = true,
             onClick = {},
         ),
     )

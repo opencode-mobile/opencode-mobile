@@ -58,6 +58,65 @@ final class SessionInfo {
         notifyChange()
     }
 
+    func archiveSession() {
+        guard !state.sessionID.isEmpty, !state.isLifecycleActionInFlight else { return }
+        let sessionID = state.sessionID
+        state.isLifecycleActionInFlight = true
+        state.lifecycleErrorMessage = nil
+        notifyChange()
+        OpenCodeLog.sessionChat.info("archive start session=\(sessionID, privacy: .public)")
+        Task {
+            do {
+                _ = try await sessionRepository.archiveSession(id: sessionID, directory: worktree)
+                guard state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.info("archive success session=\(sessionID, privacy: .public)")
+                state.isLifecycleActionInFlight = false
+                state.shouldLeaveSession = true
+                notifyChange()
+            } catch {
+                guard state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.info(
+                    "archive failure session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                state.isLifecycleActionInFlight = false
+                state.lifecycleErrorMessage = Self.archiveError
+                notifyChange()
+            }
+        }
+    }
+
+    func deleteSession() {
+        guard !state.sessionID.isEmpty, !state.isLifecycleActionInFlight else { return }
+        let sessionID = state.sessionID
+        state.isLifecycleActionInFlight = true
+        state.lifecycleErrorMessage = nil
+        notifyChange()
+        OpenCodeLog.sessionChat.info("delete start session=\(sessionID, privacy: .public)")
+        Task {
+            do {
+                let deleted = try await sessionRepository.deleteSession(id: sessionID, directory: worktree)
+                guard state.sessionID == sessionID else { return }
+                state.isLifecycleActionInFlight = false
+                if deleted {
+                    OpenCodeLog.sessionChat.info("delete success session=\(sessionID, privacy: .public)")
+                    state.shouldLeaveSession = true
+                } else {
+                    OpenCodeLog.sessionChat.info("delete rejected session=\(sessionID, privacy: .public)")
+                    state.lifecycleErrorMessage = Self.deleteError
+                }
+                notifyChange()
+            } catch {
+                guard state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.info(
+                    "delete failure session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                state.isLifecycleActionInFlight = false
+                state.lifecycleErrorMessage = Self.deleteError
+                notifyChange()
+            }
+        }
+    }
+
     func contextUsageFraction(
         messages: [SessionChatRow],
         modelOptions: [ModelSelectionOption],
@@ -119,4 +178,7 @@ final class SessionInfo {
     private func notifyChange() {
         onChange?()
     }
+
+    private static let archiveError = "Couldn't archive session."
+    private static let deleteError = "Couldn't delete session."
 }

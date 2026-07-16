@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,17 +67,56 @@ fun SessionChatScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
+    val lifecycleActionsEnabled = !uiState.isLifecycleActionInFlight
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
             activeModelProviderId = null
             modelFilterText = ""
         }
+    }
+
+    LaunchedEffect(uiState.shouldLeaveSession) {
+        if (uiState.shouldLeaveSession) {
+            onNavigateBack()
+        }
+    }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = {
+                if (lifecycleActionsEnabled) {
+                    showDeleteConfirmation = false
+                }
+            },
+            title = { Text("Delete session") },
+            text = { Text("Delete session “${uiState.sessionTitle}”?") },
+            confirmButton = {
+                TextButton(
+                    enabled = lifecycleActionsEnabled,
+                    onClick = {
+                        showDeleteConfirmation = false
+                        viewModel.deleteSession()
+                    },
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = lifecycleActionsEnabled,
+                    onClick = { showDeleteConfirmation = false },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     Box(modifier = modifier.fillMaxSize().imePadding()) {
@@ -107,6 +148,25 @@ fun SessionChatScreen(
                             onClick = {
                                 menuExpanded = false
                                 copySessionIdToClipboard(context, uiState.sessionId)
+                            },
+                        ),
+                        OpenCodeOverflowMenuEntry(
+                            title = "Archive",
+                            icon = OpenCodeIcons.Archive,
+                            enabled = lifecycleActionsEnabled,
+                            onClick = {
+                                menuExpanded = false
+                                viewModel.archiveSession()
+                            },
+                        ),
+                        OpenCodeOverflowMenuEntry(
+                            title = "Delete",
+                            icon = OpenCodeIcons.Close,
+                            enabled = lifecycleActionsEnabled,
+                            destructive = true,
+                            onClick = {
+                                menuExpanded = false
+                                showDeleteConfirmation = true
                             },
                         ),
                     ),
