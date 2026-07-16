@@ -62,6 +62,11 @@
   slice.
 - Revisit when: context attachment behavior is explicitly designed within v1
   scope.
+- Revisited: 2026-07-16 — device **Attachments** are specified under
+  [File Attachments](../file-attachments/plan.md) with glossary terms in
+  `CONTEXT.md`. Implementation should rename the affordance to **Attach** /
+  **Add attachment** (drop **Attach context**). Project `@` / `file://`
+  browsing remains out of scope there.
 
 ## WhatsApp-style timeline order and scroll anchor
 

@@ -33,7 +33,11 @@ Chat screen with visible messages and a composer ready for new prompts.
 ## Still Out Of Scope
 
 - Dedicated session diff viewer interactions.
-- Real attachment handling or mobile file upload.
+- Real attachment handling or mobile file upload (specified separately in
+  [File Attachments](../file-attachments/plan.md)).
+
+Session rename from Session Chat overflow is a separate Feature Slice:
+[Session Rename](../session-rename/plan.md).
 
 ## Server APIs Involved
 
@@ -84,8 +88,10 @@ is a thin facade. Any change to the facade is an architectural decision — see
   variant keys for the selected model).
 - Model and Variant are server-backed by `/config/providers`; selected model and
   non-default Variant are sent with async prompts.
-- The attachment `+` is visually present as an `Attach context` affordance but
-  remains a no-op in this scaffold slice.
+- The attachment `+` is visually present but remains a no-op in this scaffold
+  slice. Real **Attachments** are specified in
+  [File Attachments](../file-attachments/plan.md); implementation should use
+  **Attach** / **Add attachment** (not **Attach context**).
 
 ## Session Status Bar
 
