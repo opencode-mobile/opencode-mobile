@@ -7,7 +7,8 @@ protocol SessionRepository: Sendable {
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
     func getSession(id: String, directory: String?) async throws -> Session
     func updateSession(id: String, title: String?) async throws -> Session
-    func deleteSession(id: String) async throws -> Bool
+    func archiveSession(id: String, directory: String?) async throws -> Session
+    func deleteSession(id: String, directory: String?) async throws -> Bool
     func listChildSessions(id: String) async throws -> [Session]
     func listSessionTodos(id: String) async throws -> [SessionTodo]
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool
@@ -94,8 +95,16 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { adapter.session(from: try await api.updateSession(id: id, title: title)) }
     }
 
-    func deleteSession(id: String) async throws -> Bool {
-        let deleted = try await run { try await api.deleteSession(id: id) }
+    func archiveSession(id: String, directory: String?) async throws -> Session {
+        try await run {
+            adapter.session(
+                from: try await api.archiveSession(id: id, directory: directory)
+            )
+        }
+    }
+
+    func deleteSession(id: String, directory: String?) async throws -> Bool {
+        let deleted = try await run { try await api.deleteSession(id: id, directory: directory) }
         if deleted,
            let profile = activeConnectionManager?.currentProfile(),
            let sessionModelSelectionStore {

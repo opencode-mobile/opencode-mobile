@@ -154,6 +154,14 @@ class SessionChatViewModel
             timeline.refreshMessages()
         }
 
+        fun archiveSession() {
+            sessionInfo.archiveSession()
+        }
+
+        fun deleteSession() {
+            sessionInfo.deleteSession()
+        }
+
         fun updateComposerText(text: String) {
             composer.updateComposerText(text)
         }
@@ -321,6 +329,7 @@ class SessionChatViewModel
         ): SessionChatUiState {
             val errorMessage =
                 when {
+                    infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
                     timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
                     composerState.errorMessage != null -> composerState.errorMessage
                     composerState.abortErrorMessage != null -> composerState.abortErrorMessage
@@ -345,6 +354,8 @@ class SessionChatViewModel
                         composerState.composer.selectedModel,
                     ),
                 errorMessage = errorMessage,
+                isLifecycleActionInFlight = infoState.isLifecycleActionInFlight,
+                shouldLeaveSession = infoState.shouldLeaveSession,
                 permissionRequest = permissionRequests.firstOrNull(),
                 permissionQueueCount = permissionRequests.size,
                 permissionSubmitting = permissionSubmittingId != null,

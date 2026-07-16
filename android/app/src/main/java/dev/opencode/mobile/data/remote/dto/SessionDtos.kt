@@ -31,6 +31,7 @@ data class SessionSummaryDto(
 data class SessionTimeDto(
     val created: Long? = null,
     val updated: Long? = null,
+    val archived: Long? = null,
 )
 
 @Serializable
@@ -40,8 +41,14 @@ data class CreateSessionRequestDto(
 )
 
 @Serializable
+data class UpdateSessionTimeDto(
+    val archived: Long? = null,
+)
+
+@Serializable
 data class UpdateSessionRequestDto(
     val title: String? = null,
+    val time: UpdateSessionTimeDto? = null,
 )
 
 @Serializable

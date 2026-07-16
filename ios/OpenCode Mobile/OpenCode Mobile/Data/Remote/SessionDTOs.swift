@@ -16,6 +16,13 @@ struct SessionDTO: Codable, Sendable {
 struct SessionTimeDTO: Codable, Sendable {
     let created: Int64?
     let updated: Int64?
+    let archived: Int64?
+
+    init(created: Int64? = nil, updated: Int64? = nil, archived: Int64? = nil) {
+        self.created = created
+        self.updated = updated
+        self.archived = archived
+    }
 }
 
 struct CreateSessionRequestDTO: Codable, Sendable {
@@ -23,8 +30,18 @@ struct CreateSessionRequestDTO: Codable, Sendable {
     let title: String?
 }
 
+struct UpdateSessionTimeDTO: Codable, Sendable {
+    let archived: Int64?
+}
+
 struct UpdateSessionRequestDTO: Codable, Sendable {
     let title: String?
+    let time: UpdateSessionTimeDTO?
+
+    init(title: String? = nil, time: UpdateSessionTimeDTO? = nil) {
+        self.title = title
+        self.time = time
+    }
 }
 
 struct ForkSessionRequestDTO: Codable, Sendable {

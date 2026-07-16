@@ -9,6 +9,7 @@ import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
 import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.UpdateSessionTimeDto
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -60,6 +61,22 @@ class DefaultSessionRepository
         ): Session =
             runCatching {
                 adapter.toSession(api.updateSession(id, UpdateSessionRequestDto(title = title), directory))
+            }.getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun archiveSession(
+            id: String,
+            directory: String?,
+        ): Session =
+            runCatching {
+                adapter.toSession(
+                    api.updateSession(
+                        id,
+                        UpdateSessionRequestDto(
+                            time = UpdateSessionTimeDto(archived = System.currentTimeMillis()),
+                        ),
+                        directory,
+                    ),
+                )
             }.getOrElse { throw adapter.mapError(it) }
 
         override suspend fun deleteSession(

@@ -11,6 +11,7 @@ struct SessionChatView: View {
     @State private var showSessionContext = false
     @State private var changesTarget: ChangesNavigationTarget?
     @State private var menuExpanded = false
+    @State private var showDeleteConfirmation = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
@@ -139,6 +140,23 @@ struct SessionChatView: View {
                 modelFilterText = ""
             }
         }
+        .onChange(of: viewModel.uiState.shouldLeaveSession) { _, shouldLeave in
+            if shouldLeave {
+                leaveSession()
+            }
+        }
+        .confirmationDialog(
+            "Delete session",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteSession()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Delete session “\(viewModel.uiState.sessionTitle)”?")
+        }
         .onDisappear {
             viewModel.stopObserving()
         }
@@ -150,7 +168,8 @@ struct SessionChatView: View {
     }
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
-        [
+        let lifecycleEnabled = !viewModel.uiState.isLifecycleActionInFlight
+        return [
             OpenCodeOverflowMenuEntry(
                 title: "Review changes",
                 icon: .description,
@@ -173,6 +192,25 @@ struct SessionChatView: View {
                 action: {
                     menuExpanded = false
                     UIPasteboard.general.string = viewModel.uiState.sessionID
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Archive",
+                icon: nil,
+                enabled: lifecycleEnabled,
+                action: {
+                    menuExpanded = false
+                    viewModel.archiveSession()
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Delete",
+                icon: .close,
+                enabled: lifecycleEnabled,
+                destructive: true,
+                action: {
+                    menuExpanded = false
+                    showDeleteConfirmation = true
                 }
             ),
         ]

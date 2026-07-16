@@ -290,7 +290,8 @@ private struct PreviewChangesRepository: SessionRepository {
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String) async throws -> Bool { false }
+    func archiveSession(id: String, directory: String?) async throws -> Session { fatalError() }
+    func deleteSession(id: String, directory: String?) async throws -> Bool { false }
     func listChildSessions(id: String) async throws -> [Session] { [] }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { [] }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { false }

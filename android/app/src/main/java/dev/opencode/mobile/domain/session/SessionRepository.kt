@@ -24,6 +24,11 @@ interface SessionRepository {
         directory: String? = null,
     ): Session
 
+    suspend fun archiveSession(
+        id: String,
+        directory: String? = null,
+    ): Session
+
     suspend fun deleteSession(
         id: String,
         directory: String? = null,

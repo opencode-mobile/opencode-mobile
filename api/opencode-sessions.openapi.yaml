@@ -374,6 +374,10 @@ components:
         updated:
           type: integer
           format: int64
+        archived:
+          type: integer
+          format: int64
+          description: Epoch ms when the session was archived; omitted means active.
     SessionStatus:
       type: object
       additionalProperties: true
@@ -402,6 +406,13 @@ components:
       properties:
         title:
           type: string
+        time:
+          type: object
+          properties:
+            archived:
+              type: integer
+              format: int64
+              description: Epoch ms when the session was archived.
     ForkSessionRequest:
       type: object
       properties:

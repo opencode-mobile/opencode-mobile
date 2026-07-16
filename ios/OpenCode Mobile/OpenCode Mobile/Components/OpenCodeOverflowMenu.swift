@@ -16,6 +16,7 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
     let title: String
     let icon: OpenCodeIcon?
     let enabled: Bool
+    let destructive: Bool
     let accessibilityLabel: String?
     let action: () -> Void
 
@@ -24,6 +25,7 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
         title: String,
         icon: OpenCodeIcon?,
         enabled: Bool = true,
+        destructive: Bool = false,
         accessibilityLabel: String? = nil,
         action: @escaping () -> Void
     ) {
@@ -31,6 +33,7 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
         self.title = title
         self.icon = icon
         self.enabled = enabled
+        self.destructive = destructive
         self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
@@ -219,15 +222,11 @@ private struct OpenCodeOverflowMenuPanel: View {
                         }
                         .font(.system(size: overflowMenuEntryIconSize, weight: .regular))
                         .frame(width: overflowMenuEntryIconSize, height: overflowMenuEntryIconSize)
-                        .foregroundStyle(
-                            entry.enabled
-                                ? OpenCodeColors.iconWeakBase
-                                : OpenCodeColors.iconWeakBase.opacity(0.6)
-                        )
+                        .foregroundStyle(overflowEntryIconColor(entry))
                         .accessibilityHidden(true)
                         Text(entry.title)
                             .font(OpenCodeTypography.body)
-                            .foregroundStyle(entry.enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeak)
+                            .foregroundStyle(overflowEntryTextColor(entry))
                             .lineLimit(1)
                     }
                     .frame(minWidth: overflowMenuMinWidth, minHeight: overflowMenuEntryMinHeight, alignment: .leading)
@@ -281,6 +280,28 @@ private struct OpenCodeOverflowMenuPanel: View {
     .preferredColorScheme(.dark)
 }
 
+private func overflowEntryTextColor(_ entry: OpenCodeOverflowMenuEntry) -> Color {
+    switch (entry.enabled, entry.destructive) {
+    case (false, _):
+        OpenCodeColors.textWeak
+    case (true, true):
+        OpenCodeColors.error
+    case (true, false):
+        OpenCodeColors.textStrong
+    }
+}
+
+private func overflowEntryIconColor(_ entry: OpenCodeOverflowMenuEntry) -> Color {
+    switch (entry.enabled, entry.destructive) {
+    case (false, _):
+        OpenCodeColors.iconWeakBase.opacity(0.6)
+    case (true, true):
+        OpenCodeColors.error
+    case (true, false):
+        OpenCodeColors.iconWeakBase
+    }
+}
+
 private func previewOverflowMenuEntries() -> [OpenCodeOverflowMenuEntry] {
     [
         OpenCodeOverflowMenuEntry(
@@ -298,6 +319,12 @@ private func previewOverflowMenuEntries() -> [OpenCodeOverflowMenuEntry] {
             title: "Disabled action",
             icon: .settings,
             enabled: false,
+            action: {}
+        ),
+        OpenCodeOverflowMenuEntry(
+            title: "Delete",
+            icon: .close,
+            destructive: true,
             action: {}
         ),
     ]

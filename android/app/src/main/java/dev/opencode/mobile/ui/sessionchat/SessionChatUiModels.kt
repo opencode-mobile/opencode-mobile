@@ -46,6 +46,8 @@ data class SessionChatUiState(
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
+    val isLifecycleActionInFlight: Boolean = false,
+    val shouldLeaveSession: Boolean = false,
     val permissionRequest: PermissionRequest? = null,
     val permissionQueueCount: Int = 0,
     val permissionSubmitting: Boolean = false,
@@ -187,6 +189,9 @@ data class SessionInfoRegionState(
     val sessionStatusLabel: String? = null,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+    val isLifecycleActionInFlight: Boolean = false,
+    val lifecycleErrorMessage: String? = null,
+    val shouldLeaveSession: Boolean = false,
 )
 
 data class SessionChatReviewChangesRegionState(

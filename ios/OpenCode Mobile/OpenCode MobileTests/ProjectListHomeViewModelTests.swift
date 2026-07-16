@@ -50,6 +50,34 @@ struct ProjectListHomeViewModelTests {
         #expect(focusedWorktree == "/repo")
     }
 
+    @Test func refresh_excludesArchivedSessionsFromActiveLists() async {
+        let sessions = [
+            Session(id: "active", title: "Active", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 2),
+            Session(
+                id: "archived",
+                title: "Archived",
+                slug: nil,
+                projectID: nil,
+                directory: "/repo",
+                parentID: nil,
+                updatedAtEpochMs: 3,
+                archivedAtEpochMs: 1
+            ),
+        ]
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        guard case let .loaded(sections, _, _, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.first?.allSessions.map(\.id) == ["active"])
+        #expect(sections.first?.totalSessionCount == 1)
+    }
+
     @Test func refresh_preservesAddedWorktreeOrder() async {
         let viewModel = makeViewModel(
             projectRepository: SlowFirstProjectRepository(),
@@ -374,7 +402,8 @@ private struct SlowFirstSessionRepository: SessionRepository {
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String) async throws -> Bool { fatalError() }
+    func archiveSession(id: String, directory: String?) async throws -> Session { fatalError() }
+    func deleteSession(id: String, directory: String?) async throws -> Bool { fatalError() }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
@@ -417,7 +446,8 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String) async throws -> Bool { fatalError() }
+    func archiveSession(id: String, directory: String?) async throws -> Session { fatalError() }
+    func deleteSession(id: String, directory: String?) async throws -> Bool { fatalError() }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }

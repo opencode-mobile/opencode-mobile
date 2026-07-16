@@ -12,7 +12,8 @@ struct SessionDomainAdapter: Sendable {
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             createdAtEpochMs: dto.time?.created,
-            updatedAtEpochMs: dto.time?.updated
+            updatedAtEpochMs: dto.time?.updated,
+            archivedAtEpochMs: dto.time?.archived
         )
     }
 

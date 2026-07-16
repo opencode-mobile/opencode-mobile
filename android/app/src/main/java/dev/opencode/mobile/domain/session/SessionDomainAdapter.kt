@@ -29,6 +29,7 @@ class SessionDomainAdapter {
             tokens = toTokenUsage(dto.tokens),
             createdAtEpochMs = dto.time?.created,
             updatedAtEpochMs = dto.time?.updated,
+            archivedAtEpochMs = dto.time?.archived,
         )
 
     fun toSessionSummary(

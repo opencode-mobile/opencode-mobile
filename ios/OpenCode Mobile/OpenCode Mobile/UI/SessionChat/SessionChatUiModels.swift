@@ -102,6 +102,8 @@ struct SessionChatUiState: Equatable {
     var connectionStatus: SessionConnectionStatus = .offline
     var contextUsageFraction: Double?
     var errorMessage: String?
+    var isLifecycleActionInFlight: Bool = false
+    var shouldLeaveSession: Bool = false
     var permissionRequest: PermissionRequest?
     var permissionQueueCount: Int = 0
     var permissionSubmitting: Bool = false
@@ -270,6 +272,9 @@ struct SessionInfoRegionState: Equatable {
     var sessionStatusLabel: String?
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
+    var isLifecycleActionInFlight = false
+    var lifecycleErrorMessage: String?
+    var shouldLeaveSession = false
 }
 
 struct SessionChatReviewChangesRegionState: Equatable {

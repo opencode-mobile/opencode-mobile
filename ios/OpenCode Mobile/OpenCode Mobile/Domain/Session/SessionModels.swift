@@ -11,6 +11,15 @@ struct Session: Sendable, Equatable {
     var tokens: MessageTokenUsage? = nil
     var createdAtEpochMs: Int64? = nil
     let updatedAtEpochMs: Int64?
+    var archivedAtEpochMs: Int64? = nil
+
+    var isArchived: Bool { archivedAtEpochMs != nil }
+}
+
+extension Array where Element == Session {
+    func activeSessions() -> [Session] {
+        filter { !$0.isArchived }
+    }
 }
 
 struct SessionStatus: Sendable, Equatable {

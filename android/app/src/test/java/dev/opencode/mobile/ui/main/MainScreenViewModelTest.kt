@@ -82,6 +82,26 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun uiState_excludesArchivedSessionsFromActiveLists() =
+        runTest(testDispatcher) {
+            val sessions =
+                listOf(
+                    Session(id = "active", title = "Active", updatedAtEpochMs = 2L),
+                    Session(id = "archived", title = "Archived", updatedAtEpochMs = 3L, archivedAtEpochMs = 1L),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                )
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val section = loaded.sections.single()
+            assertEquals(listOf("active"), section.allSessions.map { it.id })
+            assertEquals(1, section.totalSessionCount)
+        }
+
+    @Test
     fun uiState_limitsPreviewSessionsToThree() =
         runTest(testDispatcher) {
             val sessions =
@@ -354,6 +374,11 @@ private class FakeSessionRepository(
     override suspend fun updateSession(
         id: String,
         title: String?,
+        directory: String?,
+    ) = error("unused")
+
+    override suspend fun archiveSession(
+        id: String,
         directory: String?,
     ) = error("unused")
 
