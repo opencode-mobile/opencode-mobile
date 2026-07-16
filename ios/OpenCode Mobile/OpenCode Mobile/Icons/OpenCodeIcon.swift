@@ -22,6 +22,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case architecture = "md_architecture"
     case archive = "md_archive"
     case cloud = "md_cloud"
+    case stop = "md_stop"
     case stopCircle = "md_stop_circle"
     case undo = "md_undo"
     case widgets = "md_widgets"

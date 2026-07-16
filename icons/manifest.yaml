@@ -61,6 +61,9 @@ icons:
   - name: cloud
     style: filled
     notes: Cloud — Server Connection entry in Settings
+  - name: stop
+    style: filled
+    notes: SF Symbol stop.fill; Session Composer abort action
   - name: stop_circle
     style: filled
     notes: SF Symbol stop.circle
