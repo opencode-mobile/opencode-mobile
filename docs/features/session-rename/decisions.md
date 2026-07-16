@@ -40,9 +40,10 @@
   request is pending; only an in-flight rename submit disables Save.
 - Reason: Title is independent of prompt execution and permission resolution.
 
-## Platform-native rename chrome
+## Shared Dialog chrome
 
-- Decision: Android uses `AlertDialog`; iOS uses a medium form sheet. Both use
-  `OpenCodeTextInput` with Cancel/Save.
-- Reason: Keep platform-native modal patterns while sharing product behavior and
-  design-system field chrome.
+- Decision: Both platforms use `OpenCodeDialog` with Cancel/Save and an in-field
+  title hint.
+- Reason: Keep short confirmations and single-field edits on one design-system
+  modal; platform Dialog host differences are recorded in
+  `docs/design-system/divergences.md`.

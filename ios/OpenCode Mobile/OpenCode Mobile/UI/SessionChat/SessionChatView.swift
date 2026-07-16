@@ -145,18 +145,24 @@ struct SessionChatView: View {
                 leaveSession()
             }
         }
-        .confirmationDialog(
-            "Delete session",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
+        .openCodeDialog(
+            isPresented: deleteDialogBinding,
+            title: "Delete session",
+            subtitle: "Delete session “\(viewModel.uiState.sessionTitle)”?",
+            primaryOption: OpenCodeDialogOption(
+                title: "Delete",
+                enabled: !viewModel.uiState.isLifecycleActionInFlight
+            ) {
+                showDeleteConfirmation = false
                 viewModel.deleteSession()
+            },
+            secondaryOption: OpenCodeDialogOption(
+                title: "Cancel",
+                enabled: !viewModel.uiState.isLifecycleActionInFlight
+            ) {
+                showDeleteConfirmation = false
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Delete session “\(viewModel.uiState.sessionTitle)”?")
-        }
+        )
         .onDisappear {
             viewModel.stopObserving()
         }
@@ -183,6 +189,17 @@ struct SessionChatView: View {
                 enabled: !viewModel.uiState.rename.isSubmitting,
                 errorMessage: viewModel.uiState.rename.errorMessage
             )
+        )
+    }
+
+    private var deleteDialogBinding: Binding<Bool> {
+        Binding(
+            get: { showDeleteConfirmation },
+            set: { visible in
+                if !visible, !viewModel.uiState.isLifecycleActionInFlight {
+                    showDeleteConfirmation = false
+                }
+            }
         )
     }
 

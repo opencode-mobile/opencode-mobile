@@ -5,11 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,36 +89,31 @@ fun SessionChatScreen(
         }
     }
 
-    if (showDeleteConfirmation) {
-        AlertDialog(
-            onDismissRequest = {
-                if (lifecycleActionsEnabled) {
+    OpenCodeDialog(
+        visible = showDeleteConfirmation,
+        title = "Delete session",
+        subtitle = "Delete session “${uiState.sessionTitle}”?",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Delete",
+                enabled = lifecycleActionsEnabled,
+                onClick = {
                     showDeleteConfirmation = false
-                }
-            },
-            title = { Text("Delete session") },
-            text = { Text("Delete session “${uiState.sessionTitle}”?") },
-            confirmButton = {
-                TextButton(
-                    enabled = lifecycleActionsEnabled,
-                    onClick = {
-                        showDeleteConfirmation = false
-                        viewModel.deleteSession()
-                    },
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = lifecycleActionsEnabled,
-                    onClick = { showDeleteConfirmation = false },
-                ) {
-                    Text("Cancel")
-                }
-            },
-        )
-    }
+                    viewModel.deleteSession()
+                },
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                enabled = lifecycleActionsEnabled,
+                onClick = { showDeleteConfirmation = false },
+            ),
+        onDismissRequest = {
+            if (lifecycleActionsEnabled) {
+                showDeleteConfirmation = false
+            }
+        },
+    )
 
     Box(modifier = modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
