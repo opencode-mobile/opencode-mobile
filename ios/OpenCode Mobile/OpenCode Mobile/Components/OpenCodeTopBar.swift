@@ -94,6 +94,11 @@ struct OpenCodeTopBar: View {
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .background(OpenCodeColors.backgroundBase)
+        .background {
+            if case .back = leading {
+                OpenCodeInteractivePopGestureBridge()
+            }
+        }
     }
 
     @ViewBuilder
