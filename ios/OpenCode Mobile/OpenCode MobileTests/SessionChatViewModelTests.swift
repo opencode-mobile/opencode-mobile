@@ -174,6 +174,117 @@ struct SessionChatViewModelTests {
         #expect(messages[0].text == "Hello")
     }
 
+    @Test func openRenameSession_prefillsCurrentTitle() async {
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.rename.draftTitle == "Title")
+        #expect(viewModel.uiState.rename.errorMessage == nil)
+        #expect(!viewModel.uiState.rename.isSubmitting)
+    }
+
+    @Test func confirmRenameSession_emptyTitle_keepsDialogWithoutApiCall() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("   ")
+        await viewModel.confirmRenameSession()
+
+        #expect(sessionRepository.updateRequest == nil)
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.rename.errorMessage == "Enter a session title")
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
+    @Test func confirmRenameSession_unchangedTitle_dismissesWithoutApiCall() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("  Title  ")
+        await viewModel.confirmRenameSession()
+
+        #expect(sessionRepository.updateRequest == nil)
+        #expect(!viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
+    @Test func confirmRenameSession_success_updatesTitleAndDismisses() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("Renamed title")
+        await viewModel.confirmRenameSession()
+
+        #expect(sessionRepository.updateRequest == .init(id: "ses-1", title: "Renamed title", directory: "/repo"))
+        #expect(!viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.sessionTitle == "Renamed title")
+        #expect(viewModel.uiState.sessionID == "ses-1")
+    }
+
+    @Test func confirmRenameSession_failure_keepsPreviousTitleAndShowsError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            updateSessionError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("Renamed title")
+        await viewModel.confirmRenameSession()
+
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        #expect(!viewModel.uiState.rename.isSubmitting)
+        #expect(viewModel.uiState.rename.errorMessage == "boom")
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
+    @Test func sessionUpdatedEvent_appliesTitleForOpenSession() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream)
+        defer { viewModel.stopObserving() }
+
+        // Let SessionInfo finish subscribing to the fake event stream.
+        try? await Task.sleep(for: .milliseconds(50))
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.updated",
+                sessionID: "ses-1",
+                rawProperties: [
+                    "info": .dictionary([
+                        "id": .string("ses-1"),
+                        "title": .string("Live title"),
+                    ]),
+                ]
+            )
+        )
+        let updated = await waitUntil { viewModel.uiState.sessionTitle == "Live title" }
+        #expect(updated)
+        #expect(viewModel.uiState.sessionTitle == "Live title")
+    }
+
+    @Test func cancelRenameSession_hidesDialog() async {
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("Draft")
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        viewModel.cancelRenameSession()
+
+        #expect(!viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
     @Test func completedLatestTurnLoadsReviewChangesSummaryWithWorktree() async {
         let sessionRepository = FakeChatSessionRepository(
             sessionDiffs: [
@@ -1415,6 +1526,12 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         let directory: String?
     }
 
+    struct UpdateRequest: Equatable {
+        let id: String
+        let title: String?
+        let directory: String?
+    }
+
     struct LifecycleRequest: Equatable {
         let id: String
         let directory: String?
@@ -1428,6 +1545,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let sessionDiffError: SessionError?
     private let sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])?
     private let sessionStatusType: String
+    private let updateSessionError: SessionError?
     private let archiveError: SessionError?
     private let deleteError: SessionError?
     private let deleteResult: Bool
@@ -1438,6 +1556,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var responseSessionID: String?
     private(set) var pendingPermissionLoads = 0
     private(set) var diffRequest: DiffRequest?
+    private(set) var updateRequest: UpdateRequest?
     private(set) var archiveRequest: LifecycleRequest?
     private(set) var archiveCallCount = 0
     private(set) var deleteRequest: LifecycleRequest?
@@ -1452,6 +1571,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         sessionDiffError: SessionError? = nil,
         sessionStatusType: String = "idle",
         sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil,
+        updateSessionError: SessionError? = nil,
         archiveError: SessionError? = nil,
         deleteError: SessionError? = nil,
         deleteResult: Bool = true,
@@ -1466,6 +1586,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.sessionDiffError = sessionDiffError
         self.sessionStatusType = sessionStatusType
         self.sessionDiffProvider = sessionDiffProvider
+        self.updateSessionError = updateSessionError
         self.archiveError = archiveError
         self.deleteError = deleteError
         self.deleteResult = deleteResult
@@ -1487,7 +1608,19 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         [SessionStatus(sessionID: "ses-1", raw: ["type": sessionStatusType])]
     }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
-    func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
+    func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
+        updateRequest = UpdateRequest(id: id, title: title, directory: directory)
+        if let updateSessionError { throw updateSessionError }
+        return Session(
+            id: id,
+            title: title ?? "",
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: nil
+        )
+    }
     func archiveSession(id: String, directory: String?) async throws -> Session {
         archiveCallCount += 1
         archiveRequest = LifecycleRequest(id: id, directory: directory)

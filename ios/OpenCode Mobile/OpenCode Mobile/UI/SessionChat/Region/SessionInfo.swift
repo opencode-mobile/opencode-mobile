@@ -13,6 +13,7 @@ final class SessionInfo {
     private let foregroundEventStream: any ForegroundEventStream
     private let eventAdapter = EventDomainAdapter()
     private var observationTask: Task<Void, Never>?
+    private var renameTask: Task<Void, Never>?
 
     init(
         worktree: String,
@@ -27,9 +28,13 @@ final class SessionInfo {
     }
 
     func bind(sessionID: String, sessionTitle: String) {
-        guard state.sessionID != sessionID || state.sessionTitle != sessionTitle else { return }
+        // Session identity is the id; ignore stale title rebinds after rename / session.updated.
+        guard state.sessionID != sessionID else { return }
+        renameTask?.cancel()
+        renameTask = nil
         state.sessionID = sessionID
         state.sessionTitle = sessionTitle
+        state.rename = SessionRenameUiState()
         notifyChange()
     }
 
@@ -47,6 +52,73 @@ final class SessionInfo {
     func stopObserving() {
         observationTask?.cancel()
         observationTask = nil
+    }
+
+    func openRenameSession() {
+        state.rename = SessionRenameUiState(
+            isDialogVisible: true,
+            draftTitle: state.sessionTitle
+        )
+        notifyChange()
+    }
+
+    func cancelRenameSession() {
+        renameTask?.cancel()
+        renameTask = nil
+        state.rename = SessionRenameUiState()
+        notifyChange()
+    }
+
+    func updateRenameDraft(_ text: String) {
+        state.rename.draftTitle = text
+        state.rename.errorMessage = nil
+        notifyChange()
+    }
+
+    func confirmRenameSession() async {
+        guard !state.sessionID.isEmpty, !state.rename.isSubmitting else { return }
+
+        let trimmed = state.rename.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            state.rename.errorMessage = Self.emptyTitleError
+            notifyChange()
+            return
+        }
+        if trimmed == state.sessionTitle {
+            cancelRenameSession()
+            return
+        }
+
+        let sessionID = state.sessionID
+        state.rename.isSubmitting = true
+        state.rename.errorMessage = nil
+        notifyChange()
+        OpenCodeLog.sessionChat.info("rename submit session=\(sessionID, privacy: .public)")
+
+        renameTask?.cancel()
+        renameTask = Task {
+            do {
+                let session = try await sessionRepository.updateSession(
+                    id: sessionID,
+                    title: trimmed,
+                    directory: worktree
+                )
+                guard !Task.isCancelled, state.sessionID == sessionID else { return }
+                state.sessionTitle = session.title
+                state.rename = SessionRenameUiState()
+                notifyChange()
+                OpenCodeLog.sessionChat.info("rename success session=\(sessionID, privacy: .public)")
+            } catch {
+                guard !Task.isCancelled, state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.error(
+                    "rename failed session=\(sessionID, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                )
+                state.rename.isSubmitting = false
+                state.rename.errorMessage = renameErrorMessage(error)
+                notifyChange()
+            }
+        }
+        await renameTask?.value
     }
 
     func refreshStatus() async {
@@ -172,13 +244,41 @@ final class SessionInfo {
             OpenCodeLog.sessionChat.debug(
                 "SSE event observed session=\(self.state.sessionID, privacy: .public) type=\(event.type, privacy: .public) eventSession=\(event.sessionID ?? "-", privacy: .public) scope=\(scope, privacy: .public)"
             )
+            applySessionUpdatedTitle(event)
         }
+    }
+
+    private func applySessionUpdatedTitle(_ event: OpencodeEvent) {
+        guard let update = eventAdapter.sessionTitleUpdate(from: event),
+              update.sessionID == state.sessionID,
+              update.title != state.sessionTitle
+        else { return }
+        state.sessionTitle = update.title
+        notifyChange()
+        OpenCodeLog.sessionChat.info(
+            "session.updated title session=\(self.state.sessionID, privacy: .public) title=\(update.title, privacy: .public)"
+        )
+    }
+
+    private func renameErrorMessage(_ error: Error) -> String {
+        if let sessionError = error as? SessionError {
+            switch sessionError {
+            case let .http(_, message):
+                return message ?? "Request failed"
+            case .transport:
+                return "Unable to reach the server"
+            case .decoding:
+                return "Unable to read server response"
+            }
+        }
+        return error.localizedDescription
     }
 
     private func notifyChange() {
         onChange?()
     }
 
+    private static let emptyTitleError = "Enter a session title"
     private static let archiveError = "Couldn't archive session."
     private static let deleteError = "Couldn't delete session."
 }

@@ -89,6 +89,13 @@ enum SessionChatTimelineState: Equatable {
     case error
 }
 
+struct SessionRenameUiState: Equatable {
+    var isDialogVisible = false
+    var draftTitle = ""
+    var isSubmitting = false
+    var errorMessage: String?
+}
+
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
@@ -110,6 +117,7 @@ struct SessionChatUiState: Equatable {
     var permissionErrorMessage: String?
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
+    var rename = SessionRenameUiState()
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -272,6 +280,7 @@ struct SessionInfoRegionState: Equatable {
     var sessionStatusLabel: String?
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
+    var rename = SessionRenameUiState()
     var isLifecycleActionInFlight = false
     var lifecycleErrorMessage: String?
     var shouldLeaveSession = false

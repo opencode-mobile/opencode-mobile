@@ -125,10 +125,9 @@ class SessionChatViewModel
             sessionTitle: String,
             worktree: String,
         ) {
-            if (boundSessionId == sessionId &&
-                boundWorktree == worktree &&
-                boundSessionTitle == sessionTitle
-            ) {
+            // Identity is session + worktree. Title may diverge after rename / session.updated;
+            // do not full-reset when navigation still carries a stale title.
+            if (boundSessionId == sessionId && boundWorktree == worktree) {
                 return
             }
             boundSessionId = sessionId
@@ -184,6 +183,22 @@ class SessionChatViewModel
 
         fun restoreComposerText(text: String) {
             composer.restoreComposerText(text)
+        }
+
+        fun openRenameSession() {
+            sessionInfo.openRenameSession()
+        }
+
+        fun cancelRenameSession() {
+            sessionInfo.cancelRenameSession()
+        }
+
+        fun updateRenameDraft(text: String) {
+            sessionInfo.updateRenameDraft(text)
+        }
+
+        fun confirmRenameSession() {
+            sessionInfo.confirmRenameSession()
         }
 
         fun sendPrompt() {
@@ -362,6 +377,7 @@ class SessionChatViewModel
                 permissionErrorMessage = permissionError ?: permissionTopologyError,
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
+                rename = infoState.rename,
             )
         }
 

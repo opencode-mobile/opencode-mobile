@@ -36,6 +36,24 @@ class EventDomainAdapter(
 
     fun statusLabel(sessionStatus: SessionStatus): String? = statusLabelFromRawKeys(sessionStatus.raw)
 
+    /**
+     * Title change carried by a `session.updated` event for a concrete session id.
+     * Returns null when the event is not a usable title update.
+     */
+    fun sessionTitleUpdate(event: OpencodeEvent): SessionTitleUpdate? {
+        if (event.type != "session.updated") return null
+        val info = event.rawProperties?.get("info")?.jsonObject ?: return null
+        fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+        val sessionId =
+            event.sessionId
+                ?: info.string("id")
+                ?: info.string("sessionID")
+                ?: info.string("sessionId")
+                ?: return null
+        val title = info.string("title") ?: return null
+        return SessionTitleUpdate(sessionId = sessionId, title = title)
+    }
+
     private fun statusLabelFromRaw(status: JsonObject): String? {
         val keys = status.mapValues { (_, value) -> value.jsonPrimitive.contentOrNull.orEmpty() }
         return statusLabelFromRawKeys(keys)
@@ -48,3 +66,8 @@ class EventDomainAdapter(
             else -> null
         }
 }
+
+data class SessionTitleUpdate(
+    val sessionId: String,
+    val title: String,
+)

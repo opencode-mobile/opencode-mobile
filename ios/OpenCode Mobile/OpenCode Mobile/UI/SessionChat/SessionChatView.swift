@@ -36,7 +36,7 @@ struct SessionChatView: View {
                 entries: sessionOverflowMenuEntries
             ) {
                 OpenCodeTopBar(
-                    title: "Session",
+                    title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
                     subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
                     leading: .back(action: leaveSession),
                     actions: [
@@ -160,6 +160,31 @@ struct SessionChatView: View {
         .onDisappear {
             viewModel.stopObserving()
         }
+        .sheet(isPresented: renameDialogBinding) {
+            SessionRenameDialog(
+                draftTitle: viewModel.uiState.rename.draftTitle,
+                errorMessage: viewModel.uiState.rename.errorMessage,
+                isSubmitting: viewModel.uiState.rename.isSubmitting,
+                onDraftChange: viewModel.updateRenameDraft,
+                onConfirm: {
+                    Task { await viewModel.confirmRenameSession() }
+                },
+                onCancel: viewModel.cancelRenameSession
+            )
+            .presentationDetents([.medium])
+            .interactiveDismissDisabled(viewModel.uiState.rename.isSubmitting)
+        }
+    }
+
+    private var renameDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.rename.isDialogVisible },
+            set: { visible in
+                if !visible {
+                    viewModel.cancelRenameSession()
+                }
+            }
+        )
     }
 
     private func leaveSession() {
@@ -170,6 +195,14 @@ struct SessionChatView: View {
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
         let lifecycleEnabled = !viewModel.uiState.isLifecycleActionInFlight
         return [
+            OpenCodeOverflowMenuEntry(
+                title: "Rename session",
+                icon: .edit,
+                action: {
+                    menuExpanded = false
+                    viewModel.openRenameSession()
+                }
+            ),
             OpenCodeOverflowMenuEntry(
                 title: "Review changes",
                 icon: .description,
@@ -282,6 +315,59 @@ struct SessionChatView: View {
                 }
             }
         )
+    }
+}
+
+private struct SessionRenameDialog: View {
+    let draftTitle: String
+    let errorMessage: String?
+    let isSubmitting: Bool
+    let onDraftChange: (String) -> Void
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    @State private var localTitle: String = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                OpenCodeTextInput(
+                    label: "Title",
+                    text: Binding(
+                        get: { localTitle },
+                        set: { newValue in
+                            localTitle = newValue
+                            onDraftChange(newValue)
+                        }
+                    ),
+                    enabled: !isSubmitting,
+                    errorMessage: errorMessage
+                )
+                Spacer()
+            }
+            .padding(16)
+            .background(OpenCodeColors.backgroundBase)
+            .navigationTitle("Rename session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                        .disabled(isSubmitting)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: onConfirm)
+                        .disabled(isSubmitting)
+                }
+            }
+            .onAppear {
+                localTitle = draftTitle
+            }
+            .onChange(of: draftTitle) { _, newValue in
+                if newValue != localTitle {
+                    localTitle = newValue
+                }
+            }
+        }
     }
 }
 

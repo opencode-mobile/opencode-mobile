@@ -2,8 +2,8 @@
 
 ## Shared Planning
 
-- Status: planned from grilled product contract; implementation not started.
-- Linear: [OPE-53](https://linear.app/opencode-mobile/issue/OPE-53/session-rename) (Todo, ready-for-agent).
+- Status: complete for the planned Session Chat rename slice.
+- Linear: [OPE-53](https://linear.app/opencode-mobile/issue/OPE-53/session-rename).
 - Plan: [plan.md](plan.md).
 - Decisions: [decisions.md](decisions.md).
 
@@ -15,17 +15,23 @@
 
 ## iOS
 
-- Status: not started.
-- Already present: `SessionRepository.updateSession`, Session Chat overflow host.
-- Remaining: top bar title binding, overflow entry, dialog, Screen Model rename
-  state/actions, `session.updated` title apply, tests.
+- Status: complete.
+- Session Chat top bar binds to session title.
+- Overflow **Rename session** opens a Cancel/Save sheet with `OpenCodeTextInput`.
+- Screen Model rename state/actions live in SessionInfo via Session Chat facade.
+- Confirmed rename calls `SessionRepository.updateSession` with worktree directory.
+- `session.updated` applies title for the open session.
+- ViewModel tests cover empty/unchanged/success/failure/cancel and live title apply.
 
 ## Android
 
-- Status: not started.
-- Already present: `SessionRepository.updateSession`, Session Chat overflow host.
-- Remaining: top bar title binding, overflow entry, dialog, Screen Model rename
-  state/actions, `session.updated` title apply, tests.
+- Status: complete.
+- Session Chat top bar binds to session title.
+- Overflow **Rename session** opens an AlertDialog with `OpenCodeTextInput`.
+- Screen Model rename state/actions live in SessionInfo via Session Chat facade.
+- Confirmed rename calls `SessionRepository.updateSession` with worktree directory.
+- `session.updated` applies title for the open session.
+- ViewModel tests cover empty/unchanged/success/failure/cancel and live title apply.
 
 ## Blockers
 
@@ -33,6 +39,6 @@
 
 ## Remaining Work
 
-- Implement the planned Session Chat rename flow on iOS and Android.
-- Confirm home session list picks up title changes via existing Live Store
-  behavior; only add work if it does not.
+- None for the planned slice.
+- Home session list already reloads on `session.updated` via SessionLiveStore
+  (`triggersHomeRefresh`); no extra home-list work in this slice.

@@ -33,6 +33,13 @@ data class SessionChatComposerState(
         get() = selectedModel?.option?.supportsVariants == true
 }
 
+data class SessionRenameUiState(
+    val isDialogVisible: Boolean = false,
+    val draftTitle: String = "",
+    val isSubmitting: Boolean = false,
+    val errorMessage: String? = null,
+)
+
 data class SessionChatUiState(
     val sessionId: String,
     val sessionTitle: String,
@@ -54,6 +61,7 @@ data class SessionChatUiState(
     val permissionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    val rename: SessionRenameUiState = SessionRenameUiState(),
 ) {
     val latestCompletedUserMessageId: String?
         get() {
@@ -189,6 +197,7 @@ data class SessionInfoRegionState(
     val sessionStatusLabel: String? = null,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+    val rename: SessionRenameUiState = SessionRenameUiState(),
     val isLifecycleActionInFlight: Boolean = false,
     val lifecycleErrorMessage: String? = null,
     val shouldLeaveSession: Boolean = false,

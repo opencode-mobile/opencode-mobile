@@ -62,6 +62,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
 import org.junit.After
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -645,6 +647,181 @@ class SessionChatViewModelTest {
             assertEquals("Second", viewModel.uiState.value.sessionTitle)
             assertEquals("", viewModel.uiState.value.composer.text)
             assertEquals(SessionChatTimelineState.Loading, viewModel.uiState.value.timeline)
+        }
+
+    @Test
+    fun openRenameSession_prefillsCurrentTitle() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+
+            val rename = viewModel.uiState.value.rename
+            assertTrue(rename.isDialogVisible)
+            assertEquals("Original title", rename.draftTitle)
+            assertEquals(null, rename.errorMessage)
+            assertFalse(rename.isSubmitting)
+        }
+
+    @Test
+    fun confirmRenameSession_emptyTitle_keepsDialogWithoutApiCall() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("   ")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.updateRequest)
+            assertTrue(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Enter a session title", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun confirmRenameSession_unchangedTitle_dismissesWithoutApiCall() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("  Original title  ")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.updateRequest)
+            assertFalse(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun confirmRenameSession_success_updatesTitleAndDismisses() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Renamed title")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.UpdateRequest("ses-1", "Renamed title", "/repo"),
+                sessionRepository.updateRequest,
+            )
+            assertFalse(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Renamed title", viewModel.uiState.value.sessionTitle)
+            assertEquals("ses-1", viewModel.uiState.value.sessionId)
+        }
+
+    @Test
+    fun confirmRenameSession_failure_keepsPreviousTitleAndShowsError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(updateSessionError = SessionError.Http(500, "boom"))
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Renamed title")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.rename.isDialogVisible)
+            assertFalse(viewModel.uiState.value.rename.isSubmitting)
+            assertEquals("boom", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun sessionUpdatedEvent_appliesTitleForOpenSession() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.updated",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "info",
+                                buildJsonObject {
+                                    put("id", "ses-1")
+                                    put("title", "Live title")
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("Live title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun cancelRenameSession_hidesDialog() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Draft")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.rename.isDialogVisible)
+            viewModel.cancelRenameSession()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun bind_sameSessionKeepsRenamedTitleWhenNavTitleIsStale() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Renamed title")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+            assertEquals("Renamed title", viewModel.uiState.value.sessionTitle)
+
+            // Simulate configuration change re-running LaunchedEffect with stale nav title.
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("Renamed title", viewModel.uiState.value.sessionTitle)
         }
 
     @Test
@@ -1875,6 +2052,7 @@ private class FakeSessionRepository(
     private val sessionDiffError: SessionError? = null,
     private val sessionStatusType: String = "idle",
     private val sessionStatusError: SessionError? = null,
+    private val updateSessionError: SessionError? = null,
     private val archiveError: Throwable? = null,
     private val deleteError: Throwable? = null,
     private val deleteResult: Boolean = true,
@@ -1884,6 +2062,12 @@ private class FakeSessionRepository(
     data class DiffRequest(
         val sessionId: String,
         val messageId: String?,
+        val directory: String?,
+    )
+
+    data class UpdateRequest(
+        val id: String,
+        val title: String?,
         val directory: String?,
     )
 
@@ -1899,6 +2083,8 @@ private class FakeSessionRepository(
     var respondedSessionId: String? = null
         private set
     var diffRequest: DiffRequest? = null
+        private set
+    var updateRequest: UpdateRequest? = null
         private set
     var archiveRequest: LifecycleRequest? = null
         private set
@@ -1939,7 +2125,11 @@ private class FakeSessionRepository(
         id: String,
         title: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        updateRequest = UpdateRequest(id, title, directory)
+        updateSessionError?.let { throw it }
+        return Session(id = id, title = title.orEmpty(), directory = directory)
+    }
 
     override suspend fun archiveSession(
         id: String,

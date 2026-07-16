@@ -39,3 +39,10 @@
 - Decision: Rename remains available while the session is busy or a permission
   request is pending; only an in-flight rename submit disables Save.
 - Reason: Title is independent of prompt execution and permission resolution.
+
+## Platform-native rename chrome
+
+- Decision: Android uses `AlertDialog`; iOS uses a medium form sheet. Both use
+  `OpenCodeTextInput` with Cancel/Save.
+- Reason: Keep platform-native modal patterns while sharing product behavior and
+  design-system field chrome.
