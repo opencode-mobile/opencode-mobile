@@ -66,7 +66,11 @@ Plain `subtitle` text is ignored while a status-dot accessory is present.
 
 Leading actions use semantic meaning rather than arbitrary placement:
 
-- `back` returns to the previous screen.
+- `back` returns to the previous screen. It also opts a pushed screen into the
+  platform-native Back gesture: iOS uses the navigation controller's standard
+  leading-edge interactive pop, while Android continues to use system and
+  predictive Back. A completed gesture is equivalent to invoking the visible
+  Back action; a canceled gesture leaves the current screen active.
 - `close` dismisses the current flow.
 - `customIcon` is for a product-specific leading affordance that still behaves
   like a compact navigation control.
@@ -86,10 +90,13 @@ one label.
 
 - iOS: implemented as a custom SwiftUI component that keeps the title centered
   while reusing **`OpenCodeButton`** (`iconCircle` / `compactText`) for leading
-  icon actions and trailing actions.
+  icon actions and trailing actions. The `back` variant internally restores
+  UIKit's standard leading-edge interactive pop for pushed screens without
+  exposing gesture configuration or replacing the custom bar.
 - Android: implemented as a custom Compose component with start-aligned title.
   Leading and trailing affordances reuse **`OpenCodeButton`** (`IconCircle` /
-  `CompactText`) so ripple and shape match the shared button component.
+  `CompactText`) so ripple and shape match the shared button component. System
+  and predictive Back remain owned by the Navigation 3 host.
 
 Leading **back** / **close** use fixed catalog icons; **customIcon** remains
 caller-provided per platform catalog types (`OpenCodeIcon` / `OpenCodeIcons`) in
@@ -113,6 +120,6 @@ caller-provided per platform catalog types (`OpenCodeIcon` / `OpenCodeIcons`) in
 ## Parity And Divergence
 
 Shared semantics for leading variants, title scope, subtitle scope, action
-composition, fixed title-block height, and divider behavior are aligned across
-iOS and Android. The intentional title alignment difference is documented in
-`../divergences.md`.
+composition, fixed title-block height, divider behavior, and Back navigation are
+aligned across iOS and Android. Intentional platform mappings for title
+alignment and native Back input are documented in `../divergences.md`.
