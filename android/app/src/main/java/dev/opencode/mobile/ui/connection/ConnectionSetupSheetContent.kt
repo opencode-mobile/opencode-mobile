@@ -33,23 +33,23 @@ fun ConnectionSetupSheetContent(
                 .padding(horizontal = 20.dp),
     ) {
         OpenCodeTextInput(
-            label = "Server URL",
             value = uiState.baseUrl,
             onValueChange = onBaseUrlChanged,
+            hint = "Server URL",
             submitAction = OpenCodeTextInputSubmitAction.Next,
         )
         Spacer(modifier = Modifier.height(12.dp))
         OpenCodeTextInput(
-            label = "Username",
             value = uiState.username,
             onValueChange = onUsernameChanged,
+            hint = "Username",
             submitAction = OpenCodeTextInputSubmitAction.Next,
         )
         Spacer(modifier = Modifier.height(12.dp))
         OpenCodeTextInput(
-            label = "Password",
             value = uiState.password,
             onValueChange = onPasswordChanged,
+            hint = "Password",
             kind = OpenCodeTextInputKind.Password,
         )
         if (uiState.testResultMessage != null) {

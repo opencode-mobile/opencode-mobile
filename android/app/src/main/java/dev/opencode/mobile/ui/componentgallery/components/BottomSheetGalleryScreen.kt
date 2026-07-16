@@ -101,16 +101,16 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     ) {
         if (formMode) {
             OpenCodeTextInput(
-                label = "Server URL",
                 value = formValue,
                 onValueChange = { formValue = it },
+                hint = "Server URL",
                 kind = OpenCodeTextInputKind.Url,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
             OpenCodeTextInput(
-                label = "Password",
                 value = "gallery password",
                 onValueChange = {},
+                hint = "Password",
                 kind = OpenCodeTextInputKind.Password,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )

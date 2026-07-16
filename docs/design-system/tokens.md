@@ -359,7 +359,6 @@ shared `interactive` and `error` semantic tokens.
 | `textInput.cornerRadius` | 8 (logical px) |
 | `textInput.minHeight` | 48 (logical px) |
 | `textInput.paddingHorizontal` | 12 (logical px) |
-| `textInput.labelSpacing` | 6 (logical px) |
 
 ### Session composer
 
@@ -422,6 +421,23 @@ entries.
 | `overflowMenu.entry.paddingHorizontal` | 12 (logical px) |
 | `overflowMenu.entry.iconSize` | 20 (logical px) |
 | `overflowMenu.entry.iconSpacing` | 12 (logical px) |
+
+### Dialog
+
+Centered popup dialog with a title, optional subtitle, exactly two options, and
+an optional single-line text field.
+
+| Token | Value |
+| --- | --- |
+| `dialog.cornerRadius` | 16 (logical px) |
+| `dialog.maxWidth` | 360 (logical px) |
+| `dialog.screenPaddingHorizontal` | 24 (logical px) |
+| `dialog.paddingHorizontal` | 20 (logical px) |
+| `dialog.paddingVertical` | 20 (logical px) |
+| `dialog.contentSpacing` | 16 (logical px) |
+| `dialog.titleSubtitleSpacing` | 8 (logical px) |
+| `dialog.optionSpacing` | 8 (logical px) |
+| `dialog.shadowElevation` | 8 (logical px) |
 
 ### Bottom sheet
 

@@ -133,14 +133,18 @@ struct SettingsView: View {
         ) { result in
             handleThemeImport(result)
         }
-        .alert("Clear all data?", isPresented: $showClearConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clear", role: .destructive) {
+        .openCodeDialog(
+            isPresented: $showClearConfirmation,
+            title: "Clear all data?",
+            subtitle: "This cannot be undone.",
+            primaryOption: OpenCodeDialogOption(title: "Clear") {
                 Container.clearAllData()
+                showClearConfirmation = false
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                showClearConfirmation = false
             }
-        } message: {
-            Text("This cannot be undone.")
-        }
+        )
     }
 
     private func handleThemeImport(_ result: Result<[URL], Error>) {

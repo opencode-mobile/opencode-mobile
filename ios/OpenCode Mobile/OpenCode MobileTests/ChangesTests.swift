@@ -3,15 +3,16 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct OpenCodeTextInputTests {
-    @Test func accessibilityLabelPrefersExplicitValueThenVisibleLabel() {
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: "Filter changed files") == "Filter changed files")
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Server URL", accessibilityLabel: nil) == "Server URL")
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Visible", accessibilityLabel: "Explicit") == "Explicit")
+    @Test func accessibilityLabelPrefersExplicitValueThenHint() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "Filter", accessibilityLabel: "Filter changed files") == "Filter changed files")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "Server URL", accessibilityLabel: nil) == "Server URL")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "Visible hint", accessibilityLabel: "Explicit") == "Explicit")
     }
 
-    @Test func placeholderDoesNotSatisfyAccessibilityContract() {
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: nil) == nil)
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "  ", accessibilityLabel: "\n") == nil)
+    @Test func blankHintAndAccessibilityLabelFailContract() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: nil, accessibilityLabel: nil) == nil)
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "  ", accessibilityLabel: "\n") == nil)
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "", accessibilityLabel: nil) == nil)
     }
 }
 

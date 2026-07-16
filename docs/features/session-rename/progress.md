@@ -9,15 +9,17 @@
 
 ## Design System
 
-- Status: no new reusable component required for the planned slice.
-- Reused: `OpenCodeTopBar`, overflow host/entry, `OpenCodeTextInput`.
-- Feature-local: rename dialog shell (Cancel / Save).
+- Status: complete for dialog chrome.
+- Reused: `OpenCodeTopBar`, overflow host/entry, `OpenCodeDialog`,
+  `OpenCodeTextInput`.
+- Follow-up: [OPE-61](https://linear.app/opencode-mobile/issue/OPE-61/opencode-dialog)
+  replaced the feature-local rename shell with shared Dialog.
 
 ## iOS
 
 - Status: complete.
 - Session Chat top bar binds to session title.
-- Overflow **Rename session** opens a Cancel/Save sheet with `OpenCodeTextInput`.
+- Overflow **Rename session** opens `OpenCodeDialog` with an in-field title hint.
 - Screen Model rename state/actions live in SessionInfo via Session Chat facade.
 - Confirmed rename calls `SessionRepository.updateSession` with worktree directory.
 - `session.updated` applies title for the open session.
@@ -27,7 +29,7 @@
 
 - Status: complete.
 - Session Chat top bar binds to session title.
-- Overflow **Rename session** opens an AlertDialog with `OpenCodeTextInput`.
+- Overflow **Rename session** opens `OpenCodeDialog` with an in-field title hint.
 - Screen Model rename state/actions live in SessionInfo via Session Chat facade.
 - Confirmed rename calls `SessionRepository.updateSession` with worktree directory.
 - `session.updated` applies title for the open session.

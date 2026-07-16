@@ -125,12 +125,11 @@ struct ChangesView: View {
                 }
 
                 OpenCodeTextInput(
-                    label: nil,
                     text: Binding(
                         get: { viewModel.content?.filter ?? "" },
                         set: viewModel.updateFilter
                     ),
-                    placeholder: "Filter",
+                    hint: "Filter",
                     accessibilityLabel: "Filter changed files"
                 )
 

@@ -7,7 +7,8 @@
 
 ## Design-System
 
-- [x] No new components required.
+- [x] Confirmation uses `OpenCodeDialog` (see
+  [OPE-61](https://linear.app/opencode-mobile/issue/OPE-61/opencode-dialog)).
 
 ## iOS
 

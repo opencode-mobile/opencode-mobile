@@ -24,13 +24,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.components.OpenCodeDialog
+import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
-import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -355,59 +357,36 @@ fun SessionChatScreen(
             },
         )
 
-        if (uiState.rename.isDialogVisible) {
-            SessionRenameDialog(
-                draftTitle = uiState.rename.draftTitle,
-                errorMessage = uiState.rename.errorMessage,
-                isSubmitting = uiState.rename.isSubmitting,
-                onDraftChange = viewModel::updateRenameDraft,
-                onConfirm = viewModel::confirmRenameSession,
-                onDismiss = viewModel::cancelRenameSession,
-            )
-        }
+        OpenCodeDialog(
+            visible = uiState.rename.isDialogVisible,
+            title = "Rename session",
+            primaryOption =
+                OpenCodeDialogOption(
+                    title = "Save",
+                    enabled = !uiState.rename.isSubmitting,
+                    onClick = viewModel::confirmRenameSession,
+                ),
+            secondaryOption =
+                OpenCodeDialogOption(
+                    title = "Cancel",
+                    enabled = !uiState.rename.isSubmitting,
+                    onClick = viewModel::cancelRenameSession,
+                ),
+            textField =
+                OpenCodeDialogTextField(
+                    value = uiState.rename.draftTitle,
+                    onValueChange = viewModel::updateRenameDraft,
+                    hint = "Title",
+                    enabled = !uiState.rename.isSubmitting,
+                    errorMessage = uiState.rename.errorMessage,
+                ),
+            onDismissRequest = {
+                if (!uiState.rename.isSubmitting) {
+                    viewModel.cancelRenameSession()
+                }
+            },
+        )
     }
-}
-
-@Composable
-private fun SessionRenameDialog(
-    draftTitle: String,
-    errorMessage: String?,
-    isSubmitting: Boolean,
-    onDraftChange: (String) -> Unit,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = {
-            if (!isSubmitting) onDismiss()
-        },
-        title = { Text("Rename session") },
-        text = {
-            OpenCodeTextInput(
-                label = "Title",
-                value = draftTitle,
-                onValueChange = onDraftChange,
-                enabled = !isSubmitting,
-                errorMessage = errorMessage,
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                enabled = !isSubmitting,
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isSubmitting,
-            ) {
-                Text("Cancel")
-            }
-        },
-    )
 }
 
 @Composable

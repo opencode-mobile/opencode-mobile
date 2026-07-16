@@ -101,14 +101,14 @@ struct BottomSheetGalleryView: View {
         ) {
             if formMode {
                 OpenCodeTextInput(
-                    label: "Server URL",
                     text: $formValue,
+                    hint: "Server URL",
                     kind: .url
                 )
                 .padding(.horizontal, 20)
                 OpenCodeTextInput(
-                    label: "Password",
                     text: .constant("gallery password"),
+                    hint: "Password",
                     kind: .password
                 )
                 .padding(.horizontal, 20)

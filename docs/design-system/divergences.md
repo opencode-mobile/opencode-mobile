@@ -164,3 +164,19 @@ implementation belong in the feature's `parity-gaps.md`.
   preserve the same visible ownership boundary and interaction behavior.
 - Review trigger: revisit if both platforms adopt a shared native modal API with
   equivalent detent and keyboard-inset semantics.
+
+## Dialog presentation
+
+- Status: intentional
+- Area: component | motion
+- Shared intent: `OpenCodeDialog` shows a centered elevated card with title,
+  optional subtitle, optional single text field, and exactly two options over a
+  dimmed scrim. Scrim tap and system dismiss request the secondary path.
+- iOS behavior: presented as a window-level overlay with fade in/out; keyboard
+  safe area lifts the card when the text field is focused.
+- Android behavior: presented with Compose `Dialog` and a custom card;
+  `imePadding()` keeps the card above the IME.
+- Reason: each platform uses its native modal host while sharing OpenCode
+  surface, radius, typography, button, and text-input composition.
+- Review trigger: revisit if product design requires identical enter/exit motion
+  or a shared modal host abstraction.
