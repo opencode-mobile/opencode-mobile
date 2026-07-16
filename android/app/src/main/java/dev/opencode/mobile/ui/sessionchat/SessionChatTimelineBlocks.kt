@@ -3,9 +3,12 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 
 /**
  * Session Chat presentation units inside one message timeline item.
@@ -22,10 +25,15 @@ sealed class SessionChatTimelineBlock {
         val title: String,
         val subtitle: String? = null,
         val errorText: String? = null,
+        val additions: Int? = null,
+        val deletions: Int? = null,
         /** Non-null when the card should open a Bottom Sheet with this body. */
         val detailText: String? = null,
         /** Non-null when tap should open this child session's Session Chat. */
         val childSessionId: String? = null,
+        /** When true, tap opens owning-turn Changes (optional File Viewer path). */
+        val opensChangesReview: Boolean = false,
+        val changesInitialFilePath: String? = null,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -178,16 +186,24 @@ object SessionChatTimelineBlocks {
             title = chrome.title,
             subtitle = chrome.subtitle,
             errorText = errorText,
+            additions = chrome.additions,
+            deletions = chrome.deletions,
             detailText = chrome.detailText,
             childSessionId = chrome.childSessionId,
+            opensChangesReview = chrome.opensChangesReview,
+            changesInitialFilePath = chrome.changesInitialFilePath,
         )
     }
 
     private data class Chrome(
         val title: String,
         val subtitle: String?,
+        val additions: Int? = null,
+        val deletions: Int? = null,
         val detailText: String? = null,
         val childSessionId: String? = null,
+        val opensChangesReview: Boolean = false,
+        val changesInitialFilePath: String? = null,
     )
 
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
@@ -235,8 +251,114 @@ object SessionChatTimelineBlocks {
                             ?: runningTitleOverride(tool),
                 )
             "task" -> taskChrome(tool)
+            "edit" -> fileChangeChrome(tool, displayTitle = "Edit")
+            "write" -> fileChangeChrome(tool, displayTitle = "Write")
+            "apply_patch" -> fileChangeChrome(tool, displayTitle = "Patch")
             else -> null
         }
+
+    private fun fileChangeChrome(
+        tool: MessagePart.Tool,
+        displayTitle: String,
+    ): Chrome {
+        val filesArray = tool.metadata?.get("files") as? JsonArray
+        val patchFiles = metadataFiles(tool.metadata)
+        if (filesArray != null && filesArray.size > 1) {
+            val additions = positiveCount(patchFiles.sumOf { it.additions ?: 0 })
+            val deletions = positiveCount(patchFiles.sumOf { it.deletions ?: 0 })
+            return Chrome(
+                title = "Patch",
+                subtitle = "${filesArray.size} files",
+                additions = additions,
+                deletions = deletions,
+                opensChangesReview = canOpenChangesReview(tool.status),
+                changesInitialFilePath = null,
+            )
+        }
+
+        val singlePatchFile = patchFiles.singleOrNull()
+        val path =
+            metadataFilediffString(tool.metadata, "file")
+                ?: singlePatchFile?.path
+                ?: pathSubtitle(tool.input)
+        val additions =
+            positiveCount(
+                metadataFilediffInt(tool.metadata, "additions")
+                    ?: singlePatchFile?.additions,
+            )
+        val deletions =
+            positiveCount(
+                metadataFilediffInt(tool.metadata, "deletions")
+                    ?: singlePatchFile?.deletions,
+            )
+        val opens = path != null && canOpenChangesReview(tool.status)
+        return Chrome(
+            title = displayTitle,
+            subtitle = path,
+            additions = additions.takeIf { path != null },
+            deletions = deletions.takeIf { path != null },
+            opensChangesReview = opens,
+            changesInitialFilePath = path.takeIf { opens },
+        )
+    }
+
+    private fun canOpenChangesReview(status: ToolStatus): Boolean =
+        status == ToolStatus.Completed || status == ToolStatus.Error
+
+    private data class PatchFileEntry(
+        val path: String,
+        val additions: Int?,
+        val deletions: Int?,
+    )
+
+    private fun metadataFiles(metadata: JsonObject?): List<PatchFileEntry> {
+        val array = metadata?.get("files") as? JsonArray ?: return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val path =
+                stringFromObject(obj, "filePath", "relativePath", "file")
+                    ?: return@mapNotNull null
+            PatchFileEntry(
+                path = path,
+                additions = intFromObject(obj, "additions"),
+                deletions = intFromObject(obj, "deletions"),
+            )
+        }
+    }
+
+    private fun metadataFilediffString(
+        metadata: JsonObject?,
+        key: String,
+    ): String? {
+        val filediff = metadata?.get("filediff") as? JsonObject ?: return null
+        return stringFromObject(filediff, key)
+    }
+
+    private fun metadataFilediffInt(
+        metadata: JsonObject?,
+        key: String,
+    ): Int? {
+        val filediff = metadata?.get("filediff") as? JsonObject ?: return null
+        return intFromObject(filediff, key)
+    }
+
+    private fun stringFromObject(
+        obj: JsonObject,
+        vararg keys: String,
+    ): String? {
+        for (key in keys) {
+            val value = (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private fun intFromObject(
+        obj: JsonObject,
+        key: String,
+    ): Int? = (obj[key] as? JsonPrimitive)?.intOrNull
+
+    private fun positiveCount(value: Int?): Int? = value?.takeIf { it > 0 }
 
     private fun taskChrome(tool: MessagePart.Tool): Chrome {
         val title =

@@ -141,6 +141,34 @@ struct SessionChatUiState: Equatable {
         )
     }
 
+    func owningTurnMessageID(assistantMessageID: String) -> String? {
+        var candidate: String?
+        for message in messages {
+            if message.id == assistantMessageID {
+                return candidate
+            }
+            if message.role == .user, !message.isPending, !message.isStreaming {
+                candidate = message.id
+            }
+        }
+        return nil
+    }
+
+    func fileChangeNavigationTarget(
+        worktree: String,
+        assistantMessageID: String,
+        initialFilePath: String?
+    ) -> ChangesNavigationTarget? {
+        guard let messageID = owningTurnMessageID(assistantMessageID: assistantMessageID) else { return nil }
+        return ChangesNavigationTarget(
+            sessionID: sessionID,
+            worktree: worktree,
+            messageID: messageID,
+            initialSource: .lastTurn,
+            initialFilePath: initialFilePath
+        )
+    }
+
     static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
         SessionChatUiState(
             sessionID: sessionID,
@@ -191,12 +219,20 @@ struct ChangesNavigationTarget: Hashable {
     let worktree: String
     let messageID: String?
     let initialSource: ChangeSource
+    let initialFilePath: String?
 
-    init(sessionID: String, worktree: String, messageID: String?, initialSource: ChangeSource = .workingTree) {
+    init(
+        sessionID: String,
+        worktree: String,
+        messageID: String?,
+        initialSource: ChangeSource = .workingTree,
+        initialFilePath: String? = nil
+    ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageID = messageID
         self.initialSource = initialSource
+        self.initialFilePath = initialFilePath
     }
 }
 

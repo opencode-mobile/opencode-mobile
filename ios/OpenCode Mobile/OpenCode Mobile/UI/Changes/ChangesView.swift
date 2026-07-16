@@ -6,14 +6,18 @@ struct ChangesView: View {
     @State private var viewModel: ChangesViewModel
     @State private var sourceMenuPresented = false
     @State private var selectedPath: String?
+    @State private var didAttemptDeepLink = false
+    private let initialFilePath: String?
 
     init(
         sessionID: String,
         worktree: String,
         messageID: String?,
         initialSource: ChangeSource = .lastTurn,
+        initialFilePath: String? = nil,
         viewModel: ChangesViewModel? = nil
     ) {
+        self.initialFilePath = initialFilePath
         _viewModel = State(initialValue: viewModel ?? ChangesViewModel(
             sessionID: sessionID,
             worktree: worktree,
@@ -42,7 +46,13 @@ struct ChangesView: View {
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            attemptDeepLinkIfNeeded()
+        }
+        .onChange(of: viewModel.state.phase) { _, _ in
+            attemptDeepLinkIfNeeded()
+        }
         .onDisappear {
             if selectedPath == nil {
                 viewModel.clearFilter()
@@ -53,6 +63,15 @@ struct ChangesView: View {
                 FileViewerView(file: file)
             }
         }
+    }
+
+    private func attemptDeepLinkIfNeeded() {
+        guard !didAttemptDeepLink, let initialFilePath, !initialFilePath.isEmpty else { return }
+        guard case .content(let changeSet) = viewModel.state.phase else { return }
+        if changeSet.files.contains(where: { $0.path == initialFilePath }) {
+            selectedPath = initialFilePath
+        }
+        didAttemptDeepLink = true
     }
 
     private func exitChanges() {

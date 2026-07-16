@@ -31,4 +31,5 @@ import kotlinx.serialization.Serializable
     val worktree: String,
     val messageId: String? = null,
     val initialSource: ChangeSource = ChangeSource.LastTurn,
+    val initialFilePath: String? = null,
 ) : NavKey

@@ -80,6 +80,13 @@ struct SessionChatView: View {
                             sessionTitle: title,
                             worktree: session.worktree
                         )
+                    },
+                    onChangesReviewTap: { assistantMessageID, initialFilePath in
+                        changesTarget = viewModel.uiState.fileChangeNavigationTarget(
+                            worktree: session.worktree,
+                            assistantMessageID: assistantMessageID,
+                            initialFilePath: initialFilePath
+                        )
                     }
                 )
             )
@@ -109,7 +116,8 @@ struct SessionChatView: View {
                 sessionID: target.sessionID,
                 worktree: target.worktree,
                 messageID: target.messageID,
-                initialSource: target.initialSource
+                initialSource: target.initialSource,
+                initialFilePath: target.initialFilePath
             )
         }
         .navigationDestination(item: $childSessionTarget) { target in

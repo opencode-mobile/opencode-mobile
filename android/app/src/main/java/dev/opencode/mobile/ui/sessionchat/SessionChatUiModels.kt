@@ -86,6 +86,34 @@ data class SessionChatUiState(
         )
     }
 
+    fun owningTurnMessageId(assistantMessageId: String): String? {
+        var candidate: String? = null
+        for (message in messages) {
+            if (message.id == assistantMessageId) {
+                return candidate
+            }
+            if (message.role == MessageRole.User && !message.isPending && !message.isStreaming) {
+                candidate = message.id
+            }
+        }
+        return null
+    }
+
+    fun fileChangeNavigationTarget(
+        worktree: String,
+        assistantMessageId: String,
+        initialFilePath: String?,
+    ): ChangesNavigationTarget? {
+        val messageId = owningTurnMessageId(assistantMessageId) ?: return null
+        return ChangesNavigationTarget(
+            sessionId = sessionId,
+            worktree = worktree,
+            messageId = messageId,
+            initialSource = ChangeSource.LastTurn,
+            initialFilePath = initialFilePath,
+        )
+    }
+
     companion object {
         fun initial(
             sessionId: String,
@@ -129,6 +157,7 @@ data class ChangesNavigationTarget(
     val worktree: String,
     val messageId: String?,
     val initialSource: ChangeSource = ChangeSource.WorkingTree,
+    val initialFilePath: String? = null,
 )
 
 data class ChildSessionNavigationTarget(

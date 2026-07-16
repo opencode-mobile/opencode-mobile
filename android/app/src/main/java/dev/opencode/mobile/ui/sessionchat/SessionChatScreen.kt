@@ -176,6 +176,14 @@ fun SessionChatScreen(
                                 ),
                             )
                         },
+                        onChangesReviewTap = { assistantMessageId, initialFilePath ->
+                            uiState
+                                .fileChangeNavigationTarget(
+                                    worktree = worktree,
+                                    assistantMessageId = assistantMessageId,
+                                    initialFilePath = initialFilePath,
+                                )?.let(onReviewChangesClick)
+                        },
                     ),
                 modifier = Modifier.weight(1f),
             )

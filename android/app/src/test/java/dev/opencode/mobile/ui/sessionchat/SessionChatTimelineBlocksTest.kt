@@ -534,17 +534,234 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
-    fun build_keepsGenericChromeForLaterTickets() {
-        for (name in listOf("edit", "write", "apply_patch", "custom_mcp")) {
-            val tool =
-                SessionChatTimelineBlocks.build(
-                    role = MessageRole.Assistant,
-                    parts = listOf(MessagePart.Tool(toolName = name, status = ToolStatus.Completed)),
-                ).single() as SessionChatTimelineBlock.ToolCard
-            assertEquals("Called $name", tool.title)
-            assertNull(tool.detailText)
-            assertNull(tool.childSessionId)
-        }
+    fun build_editUsesFilediffPathCountsAndOpensChanges() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "edit",
+                            status = ToolStatus.Completed,
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "filediff" to
+                                            JsonObject(
+                                                mapOf(
+                                                    "file" to JsonPrimitive("src/Main.kt"),
+                                                    "additions" to JsonPrimitive(3),
+                                                    "deletions" to JsonPrimitive(1),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Edit", tool.title)
+        assertEquals("src/Main.kt", tool.subtitle)
+        assertEquals(3, tool.additions)
+        assertEquals(1, tool.deletions)
+        assertTrue(tool.opensChangesReview)
+        assertEquals("src/Main.kt", tool.changesInitialFilePath)
+        assertNull(tool.detailText)
+        assertNull(tool.childSessionId)
+    }
+
+    @Test
+    fun build_writeFallsBackToInputPathAndOmitsZeroCounts() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "write",
+                            status = ToolStatus.Completed,
+                            input = json("filePath" to "README.md"),
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "filediff" to
+                                            JsonObject(
+                                                mapOf(
+                                                    "file" to JsonPrimitive("README.md"),
+                                                    "additions" to JsonPrimitive(5),
+                                                    "deletions" to JsonPrimitive(0),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Write", tool.title)
+        assertEquals("README.md", tool.subtitle)
+        assertEquals(5, tool.additions)
+        assertNull(tool.deletions)
+        assertTrue(tool.opensChangesReview)
+        assertEquals("README.md", tool.changesInitialFilePath)
+    }
+
+    @Test
+    fun build_fileChangeWithoutPathKeepsTitleOnlyAndNoTap() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts = listOf(MessagePart.Tool(toolName = "edit", status = ToolStatus.Completed)),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Edit", tool.title)
+        assertNull(tool.subtitle)
+        assertNull(tool.additions)
+        assertNull(tool.deletions)
+        assertTrue(!tool.opensChangesReview)
+        assertNull(tool.changesInitialFilePath)
+    }
+
+    @Test
+    fun build_fileChangePendingWithoutPathIsTitleOnly() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "edit",
+                            status = ToolStatus.Running,
+                            title = "Editing…",
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Edit", tool.title)
+        assertNull(tool.subtitle)
+        assertTrue(!tool.opensChangesReview)
+    }
+
+    @Test
+    fun build_fileChangePendingWithPathIsDisplayOnly() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "edit",
+                            status = ToolStatus.Running,
+                            title = "Editing…",
+                            input = json("filePath" to "App.kt"),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Edit", tool.title)
+        assertEquals("App.kt", tool.subtitle)
+        assertTrue(!tool.opensChangesReview)
+        assertNull(tool.changesInitialFilePath)
+    }
+
+    @Test
+    fun build_applyPatchMultiFileUsesCountSubtitleAndListTap() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "apply_patch",
+                            status = ToolStatus.Completed,
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "files" to
+                                            kotlinx.serialization.json.JsonArray(
+                                                listOf(
+                                                    JsonObject(
+                                                        mapOf(
+                                                            "filePath" to JsonPrimitive("a.kt"),
+                                                            "additions" to JsonPrimitive(2),
+                                                            "deletions" to JsonPrimitive(1),
+                                                        ),
+                                                    ),
+                                                    JsonObject(
+                                                        mapOf(
+                                                            "filePath" to JsonPrimitive("b.kt"),
+                                                            "additions" to JsonPrimitive(4),
+                                                            "deletions" to JsonPrimitive(0),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Patch", tool.title)
+        assertEquals("2 files", tool.subtitle)
+        assertEquals(6, tool.additions)
+        assertEquals(1, tool.deletions)
+        assertTrue(tool.opensChangesReview)
+        assertNull(tool.changesInitialFilePath)
+    }
+
+    @Test
+    fun build_applyPatchSingleFileDeepLinksPath() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "apply_patch",
+                            status = ToolStatus.Error,
+                            error = "conflict",
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "files" to
+                                            kotlinx.serialization.json.JsonArray(
+                                                listOf(
+                                                    JsonObject(
+                                                        mapOf(
+                                                            "filePath" to JsonPrimitive("solo.kt"),
+                                                            "additions" to JsonPrimitive(1),
+                                                            "deletions" to JsonPrimitive(1),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Patch", tool.title)
+        assertEquals("solo.kt", tool.subtitle)
+        assertEquals(1, tool.additions)
+        assertEquals(1, tool.deletions)
+        assertEquals("conflict", tool.errorText)
+        assertTrue(tool.opensChangesReview)
+        assertEquals("solo.kt", tool.changesInitialFilePath)
+    }
+
+    @Test
+    fun build_keepsGenericChromeForUnknownTools() {
+        val tool =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts = listOf(MessagePart.Tool(toolName = "custom_mcp", status = ToolStatus.Completed)),
+            ).single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("Called custom_mcp", tool.title)
+        assertNull(tool.detailText)
+        assertNull(tool.childSessionId)
+        assertTrue(!tool.opensChangesReview)
     }
 
     private fun json(vararg pairs: Pair<String, String>): JsonObject =

@@ -2,8 +2,8 @@
 
 ## Shared Planning
 
-- Status: task / child-session tool card (OPE-52) implemented on iOS and Android;
-  file-change (OPE-51) remains next.
+- Status: file-change tool cards (OPE-51) and task / child-session tool card
+  (OPE-52) implemented on iOS and Android.
 - Linear: [OPE-46](https://linear.app/opencode-mobile/issue/OPE-46/assistant-tool-parts)
 - Docs: `docs/features/assistant-tool-parts/`
 - Research: `docs/research/opencode-assistant-tool-messages.md`
@@ -32,10 +32,12 @@
 - `Message.text` is TextPart-only; compact tool labels remain available via
   `compactToolLabel` for non-card surfaces.
 - Session Chat timeline: context groups, shell/network detail sheet, interact
-  chrome, and specialized `task` cards with child-session navigation
+  chrome, specialized `task` cards with child-session navigation, and
+  file-change cards (`edit` / `write` / `apply_patch`) with +/− and owning-turn
+  Changes navigation
   ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome),
+  [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards),
   [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card)).
-  File-change tools still use generic chrome until OPE-51.
 
 ## iOS
 
@@ -44,14 +46,17 @@
 - `Message.text` is TextPart-only; compact tool labels remain available via
   `compactToolLabel` for non-card surfaces.
 - Session Chat timeline: context groups, shell/network detail sheet, interact
-  chrome, and specialized `task` cards with child-session navigation
+  chrome, specialized `task` cards with child-session navigation, and
+  file-change cards (`edit` / `write` / `apply_patch`) with +/− and owning-turn
+  Changes navigation
   ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome),
+  [OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards),
   [OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card)).
-  File-change tools still use generic chrome until OPE-51.
 
 ## Remaining
 
-- File-change tools (edit / write / apply_patch) ([OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)) — grilled; unblocked.
+- None for the planned assistant-tool-parts child tickets. Follow-up polish
+  (per-block markdown) remains under parity gaps.
 
 ## Completed
 
@@ -60,3 +65,4 @@
 - Generic tool cards in Session Chat (including hide rules) ([OPE-49](https://linear.app/opencode-mobile/issue/OPE-49/generic-tool-cards-in-session-chat)).
 - Lightweight tool chrome (context, shell, network, interact) ([OPE-50](https://linear.app/opencode-mobile/issue/OPE-50/lightweight-tool-chrome)).
 - Task / child-session tool card ([OPE-52](https://linear.app/opencode-mobile/issue/OPE-52/subagent-task-tool-card)).
+- File-change tool cards ([OPE-51](https://linear.app/opencode-mobile/issue/OPE-51/file-change-tool-cards)).

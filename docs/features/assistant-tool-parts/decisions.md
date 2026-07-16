@@ -48,9 +48,7 @@
 
 ## File-change v1
 
-- Collapsed Edit/Write/Patch rows show filename and +N/−N when available.
-- Tap opens the existing Changes review experience; do not build a full inline
-  diff editor in the chat timeline for v1.
+Superseded by **OPE-51 file-change tool cards (grilling)** below.
 
 ## Visibility
 
@@ -118,6 +116,55 @@
   sheet tap remains when error/output text exists.
 - Per-block markdown (text after tools) stays out of OPE-50; leave the
   temporary parity gap.
+
+## OPE-51 file-change tool cards (grilling)
+
+- Product language: **file-change tool** = `edit` / `write` / `apply_patch`.
+  Still a Tool Call Card, not a new design-system component. Not a Change Set.
+- Collapsed chrome only: title = `Edit` / `Write` / `Patch`; subtitle =
+  filename/path (or multi-file patch subtitle below); optional +/− from
+  metadata. No card expand, no chevron body, no shimmer, **no Bottom Sheet**
+  for the diff (sheets stay for OPE-50 shell/network output). No nested
+  per-file accordion (web multi-file expand is not mirrored).
+- Presentation choice (vs web inline accordion): tap opens a **full-screen**
+  Changes page — File Viewer or Changed Files list per rules below — not an
+  in-timeline expand and not a sheet.
+- Field mapping stays feature-local on opaque maps (OPE-48 stands):
+  - single-file path: `metadata.filediff.file` → input `filePath` / `path` /
+    `file` (and single-entry `metadata.files` for `apply_patch`)
+  - counts: `metadata.filediff.additions` / `deletions` (omit nil/zero sides)
+  - missing path on single-file tools → specialized title, omit subtitle/
+    counts, no tap
+  - missing counts with path → show path, omit +/−
+- `apply_patch` branches (align collapsed chrome with web, not expand UX):
+  - **Single file** (one resolvable path): same as `edit` — path + optional
+    +/−; tap → File Viewer when path is in the owning-turn snapshot, else list.
+  - **Multi-file** (`metadata.files` length > 1): title `Patch`, subtitle
+    `N files` (match web collapsed trigger); optional summed +/− when easy
+    from file entries; tap → owning-turn **Changed Files list** (no File
+    Viewer deep-link for an arbitrary file). No nested accordion.
+- No consecutive file-change grouping (`edit`/`write`/`apply_patch` stay
+  separate cards, same as web `CONTEXT_GROUP_TOOLS` excluding them).
+- Error status keeps specialized title/subtitle/+/- when present and uses the
+  card error slot.
+- Tap (completed, or error when a resolvable single path / multi-file list
+  target exists): open Changes on the **owning-turn** Change Set (`messageID`
+  + `LastTurn`). Single-file: prefer **File Viewer** deep-link when the path
+  exists in the snapshot; otherwise list. Multi-file patch: always list. Not
+  latest-turn-only; not working-tree.
+- Extend `ChangesNavigationTarget` with an optional initial file path (required
+  for File Viewer deep-link; today the target only has session/worktree/
+  messageId/source).
+- Diff data for the viewer remains the turn Change Set API (existing File
+  Viewer), not a separate tool-local before/after renderer in v1. Web’s
+  tool-metadata accordion is intentionally not mirrored; see
+  `docs/research/opencode-web-edit-tool-expand.md`.
+- Pending/running: specialized chrome when path / “N files” is known, else
+  title only; display-only (no tap).
+- Blocked by OPE-50 (reuse `specializedChrome` + feature-owned tap; tap target
+  is Changes/File Viewer navigation, not `detailText` sheet).
+- Tests: chrome mapping (single + multi-file patch) + owning-turn nav with
+  optional file deep-link vs list. Parity on iOS and Android.
 
 ## OPE-52 subagent / task tool card (grilling)
 
