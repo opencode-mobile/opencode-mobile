@@ -102,4 +102,4 @@ region) which calls Session Repository. Views must not perform HTTP.
 | Overflow entries | Existing + small extension | `OpenCodeOverflowMenuEntry` — Archive / Delete; add optional destructive emphasis for Delete |
 | Delete confirm dialog | Feature-local | Platform alert (Cancel / Delete); title “Delete session”, body with session title |
 | Error banner | Existing | Session Chat mutation error text |
-| New catalog icons for archive | Not required | Use empty icon slot or existing Close for Delete |
+| Catalog `archive` icon | Done | Session Chat overflow Archive uses Material `archive` |

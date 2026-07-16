@@ -1,6 +1,7 @@
 material_icons/filled/add:md_add
 material_icons/filled/arrow_back:md_arrow_back
 material_icons/filled/arrow_upward:md_arrow_upward
+material_icons/filled/arrow_downward:md_arrow_downward
 material_icons/filled/check:md_check
 material_icons/filled/chevron_right:md_chevron_right
 material_icons/filled/close:md_close
@@ -15,6 +16,7 @@ material_icons/filled/more_vert:md_more_vert
 material_icons/filled/search:md_search
 material_icons/filled/settings:md_settings
 material_icons/filled/architecture:md_architecture
+material_icons/filled/archive:md_archive
 material_icons/filled/cloud:md_cloud
 material_icons/filled/stop_circle:md_stop_circle
 material_icons/filled/undo:md_undo

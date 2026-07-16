@@ -152,7 +152,7 @@ fun SessionChatScreen(
                         ),
                         OpenCodeOverflowMenuEntry(
                             title = "Archive",
-                            icon = null,
+                            icon = OpenCodeIcons.Archive,
                             enabled = lifecycleActionsEnabled,
                             onClick = {
                                 menuExpanded = false

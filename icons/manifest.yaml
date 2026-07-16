@@ -55,6 +55,9 @@ icons:
   - name: architecture
     style: filled
     notes: Column/blueprint — Component Gallery entry in Settings
+  - name: archive
+    style: filled
+    notes: SF Symbol archivebox; Session Chat overflow Archive action
   - name: cloud
     style: filled
     notes: Cloud — Server Connection entry in Settings

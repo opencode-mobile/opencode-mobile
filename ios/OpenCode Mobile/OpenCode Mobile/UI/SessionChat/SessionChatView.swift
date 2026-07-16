@@ -196,7 +196,7 @@ struct SessionChatView: View {
             ),
             OpenCodeOverflowMenuEntry(
                 title: "Archive",
-                icon: nil,
+                icon: .archive,
                 enabled: lifecycleEnabled,
                 action: {
                     menuExpanded = false
