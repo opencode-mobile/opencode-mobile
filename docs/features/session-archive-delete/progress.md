@@ -10,6 +10,7 @@
 
 - Reused: `OpenCodeTopBarOverflowHost`, Session Chat error banner.
 - Extended: optional `destructive` emphasis on `OpenCodeOverflowMenuEntry`.
+- Added: catalog `archive` icon for Session Chat overflow Archive.
 - Feature-local: platform delete confirmation alert.
 
 ## Android
