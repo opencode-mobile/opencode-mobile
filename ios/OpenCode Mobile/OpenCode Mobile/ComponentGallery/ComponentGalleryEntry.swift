@@ -14,6 +14,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case topBar
     case overflowMenu
     case bottomSheet
+    case dialog
     case listItem
     case listGroup
     case choiceBadge
@@ -87,6 +88,12 @@ let componentGalleryEntries = [
         category: .components
     ),
     ComponentGalleryEntry(
+        id: .dialog,
+        title: "Dialog",
+        description: "Centered popup with title, optional subtitle, two options, and optional text field.",
+        category: .components
+    ),
+    ComponentGalleryEntry(
         id: .listItem,
         title: "List Item",
         description: "Reusable project and session row treatment.",
@@ -137,7 +144,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .textInput,
         title: "Text Input",
-        description: "Labeled single-line entry for text, URLs, usernames, and passwords.",
+        description: "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
         category: .components
     ),
     ComponentGalleryEntry(

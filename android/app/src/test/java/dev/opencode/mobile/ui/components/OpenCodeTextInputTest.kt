@@ -5,14 +5,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class OpenCodeTextInputTest {
-    @Test fun accessibilityLabelPrefersExplicitValueThenVisibleLabel() {
-        assertEquals("Filter changed files", resolveOpenCodeTextInputAccessibilityLabel(null, "Filter changed files"))
+    @Test fun accessibilityLabelTakesPrecedenceOverHint() {
+        assertEquals("Filter changed files", resolveOpenCodeTextInputAccessibilityLabel("Filter", "Filter changed files"))
         assertEquals("Server URL", resolveOpenCodeTextInputAccessibilityLabel("Server URL", null))
-        assertEquals("Explicit", resolveOpenCodeTextInputAccessibilityLabel("Visible", "Explicit"))
+        assertEquals("Explicit", resolveOpenCodeTextInputAccessibilityLabel("Visible hint", "Explicit"))
     }
 
-    @Test fun placeholderDoesNotSatisfyAccessibilityContract() {
+    @Test fun blankHintAndAccessibilityLabelFailContract() {
         assertNull(resolveOpenCodeTextInputAccessibilityLabel(null, null))
         assertNull(resolveOpenCodeTextInputAccessibilityLabel("  ", "\n"))
+        assertNull(resolveOpenCodeTextInputAccessibilityLabel("", null))
     }
 }

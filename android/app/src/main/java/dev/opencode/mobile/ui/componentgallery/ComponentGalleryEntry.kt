@@ -19,6 +19,7 @@ enum class ComponentGalleryEntryId {
     TopBar,
     OverflowMenu,
     BottomSheet,
+    Dialog,
     ListItem,
     ListGroup,
     ChoiceBadge,
@@ -93,6 +94,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Dialog,
+            title = "Dialog",
+            description = "Centered popup with title, optional subtitle, two options, and optional text field.",
+            category = ComponentGalleryCategory.Components,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.ListItem,
             title = "List Item",
             description = "Reusable project and session row treatment.",
@@ -143,7 +150,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.TextInput,
             title = "Text Input",
-            description = "Labeled single-line entry for text, URLs, usernames, and passwords.",
+            description = "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
             category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(

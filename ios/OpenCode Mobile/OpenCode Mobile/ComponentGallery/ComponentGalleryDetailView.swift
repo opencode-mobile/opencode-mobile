@@ -82,6 +82,8 @@ struct ComponentGalleryDetailView: View {
             OverflowMenuGalleryView()
         case .bottomSheet:
             BottomSheetGalleryView()
+        case .dialog:
+            DialogGalleryView()
         case .listItem:
             ListItemGalleryView()
         case .listGroup:

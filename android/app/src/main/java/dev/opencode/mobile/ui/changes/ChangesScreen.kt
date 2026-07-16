@@ -274,7 +274,7 @@ private fun ChangedFilesContent(
                 OpenCodeTextInput(
                     value = changeSet.filter,
                     onValueChange = viewModel::updateFilter,
-                    placeholder = "Filter",
+                    hint = "Filter",
                     accessibilityLabel = "Filter changed files",
                 )
             }

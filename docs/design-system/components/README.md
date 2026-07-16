@@ -102,6 +102,7 @@ applicable item is complete.
 - `top-bar.md`
 - `overflow-menu.md`
 - `bottom-sheet.md`
+- `dialog.md`
 - `choice-badge.md`
 - `list-item.md`
 - `list-group.md`
