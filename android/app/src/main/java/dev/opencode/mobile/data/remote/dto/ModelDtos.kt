@@ -24,6 +24,22 @@ data class ProviderModelDto(
     val disabled: Boolean? = null,
     val variants: Map<String, JsonElement>? = null,
     val limit: ProviderModelLimitDto? = null,
+    val capabilities: ProviderModelCapabilitiesDto? = null,
+)
+
+@Serializable
+data class ProviderModelCapabilitiesDto(
+    val attachment: Boolean? = null,
+    val input: ProviderModelInputCapabilitiesDto? = null,
+)
+
+@Serializable
+data class ProviderModelInputCapabilitiesDto(
+    val text: Boolean? = null,
+    val audio: Boolean? = null,
+    val image: Boolean? = null,
+    val video: Boolean? = null,
+    val pdf: Boolean? = null,
 )
 
 @Serializable

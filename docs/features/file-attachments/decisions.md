@@ -84,6 +84,23 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
   mobile IDE scope.
 - Revisit when: richer preview is requested.
 
+## Gate Attach on model input capabilities
+
+- Date: 2026-07-17
+- Decision: Read `GET /provider` model `capabilities.input.image` and
+  `capabilities.input.pdf`. Disable Attach when neither is true (text-only
+  models). When Attach is enabled, show Photos only for image input and keep
+  Files for any attach-capable model; reject PDFs when `input.pdf` is false.
+  Switching models strips pending image/PDF chips the new model cannot accept.
+  Text attachments remain allowed whenever Attach is enabled.
+- Reason: Upstream enforces unsupported media at send time via
+  `capabilities.input[modality]`; mobile should prevent the dead-end before
+  send. Catalog `capabilities.attachment` alone can diverge from modalities.
+  When the provider omits `capabilities.input`, treat image/pdf as supported so
+  older catalogs and local fixtures keep Attach available.
+- Revisit when: audio/video attach enters mobile scope or upstream changes the
+  provider capability contract.
+
 ## Composer label and pickers
 
 - Date: 2026-07-16

@@ -67,6 +67,10 @@ Timeline owns attachment-row rendering on user messages. Facade remains thin.
 
 - No attachments: current composer.
 - Pending attachments: chips + enabled send even if text empty.
+- Model without image or PDF input: Attach disabled.
+- Model with partial input support: Attach enabled; Photos hidden without image
+  input; Files kept when Attach is enabled; unsupported kinds rejected with
+  clear copy.
 - Unsupported type: non-fatal error; selection rejected.
 - Sending: existing in-flight send state.
 - HTTP failure: restore text and pending attachments.

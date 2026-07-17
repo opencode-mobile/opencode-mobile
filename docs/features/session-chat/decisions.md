@@ -64,9 +64,10 @@
   scope.
 - Revisited: 2026-07-16 — device **Attachments** are specified under
   [File Attachments](../file-attachments/plan.md) with glossary terms in
-  `CONTEXT.md`. Implementation should rename the affordance to **Attach** /
-  **Add attachment** (drop **Attach context**). Project `@` / `file://`
-  browsing remains out of scope there.
+  `CONTEXT.md`.
+- Superseded: 2026-07-16 by OPE-55. The affordance now opens native Photos and
+  Files/document entry points and uses **Add attachment**. Project `@` /
+  `file://` browsing remains out of scope.
 
 ## WhatsApp-style timeline order and scroll anchor
 

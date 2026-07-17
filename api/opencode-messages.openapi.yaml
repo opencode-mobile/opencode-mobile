@@ -102,13 +102,34 @@ components:
         modelID:
           type: string
     MessagePartInput:
+      oneOf:
+        - $ref: "#/components/schemas/TextPartInput"
+        - $ref: "#/components/schemas/FilePartInput"
+    TextPartInput:
       type: object
       required: [type, text]
       properties:
         type:
           type: string
-          enum: [text]
+          const: text
         text:
+          type: string
+    FilePartInput:
+      type: object
+      required: [type, mime, url]
+      properties:
+        id:
+          type: string
+          pattern: "^prt"
+          description: Optional. When present must match ^prt; omit for client-generated local attachment ids.
+        type:
+          type: string
+          const: file
+        mime:
+          type: string
+        filename:
+          type: string
+        url:
           type: string
     Message:
       type: object
@@ -177,4 +198,10 @@ components:
         messageID:
           type: string
         tool:
+          type: string
+        mime:
+          type: string
+        filename:
+          type: string
+        url:
           type: string

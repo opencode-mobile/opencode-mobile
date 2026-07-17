@@ -1,6 +1,8 @@
 import Factory
+import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
@@ -15,6 +17,10 @@ struct SessionChatView: View {
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
+    @State private var showAttachmentSources = false
+    @State private var showFilesPicker = false
+    @State private var showPhotosPicker = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -108,6 +114,41 @@ struct SessionChatView: View {
             onSelectMode: { viewModel.selectMode($0) },
             onSelectVariant: { viewModel.selectVariant($0) }
         )
+        .openCodeBottomSheet(isPresented: $showAttachmentSources, title: "Add attachment") {
+            if viewModel.uiState.composer.canAttachPhotos {
+                OpenCodeBottomSheetEntry(
+                    title: "Photos",
+                    startDecorator: .icon(.description, accessibilityLabel: "Photos"),
+                    action: {
+                        showAttachmentSources = false
+                        showPhotosPicker = true
+                    }
+                )
+            }
+            if viewModel.uiState.composer.canAttachFiles {
+                OpenCodeBottomSheetEntry(
+                    title: "Files",
+                    startDecorator: .icon(.folder, accessibilityLabel: "Files"),
+                    action: {
+                        showAttachmentSources = false
+                        showFilesPicker = true
+                    }
+                )
+            }
+        }
+        .photosPicker(
+            isPresented: $showPhotosPicker,
+            selection: $selectedPhotoItems,
+            matching: .images
+        )
+        .fileImporter(
+            isPresented: $showFilesPicker,
+            allowedContentTypes: [.image, .pdf, .text, .sourceCode],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case let .success(urls) = result else { return }
+            Task { await viewModel.addAttachmentFiles(urls) }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSessionContext) {
             SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
@@ -144,6 +185,10 @@ struct SessionChatView: View {
             if shouldLeave {
                 leaveSession()
             }
+        }
+        .onChange(of: selectedPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await importPhotos(items) }
         }
         .openCodeDialog(
             isPresented: deleteDialogBinding,
@@ -217,6 +262,23 @@ struct SessionChatView: View {
     private func leaveSession() {
         viewModel.stopObserving()
         dismiss()
+    }
+
+    private func importPhotos(_ items: [PhotosPickerItem]) async {
+        defer { selectedPhotoItems = [] }
+        for (index, item) in items.enumerated() {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                viewModel.reportAttachmentReadFailure()
+                continue
+            }
+            let type = item.supportedContentTypes.first(where: { $0.conforms(to: .image) })
+            let fileExtension = type?.preferredFilenameExtension ?? "jpg"
+            viewModel.addAttachmentData(
+                data,
+                filename: "Photo \(index + 1).\(fileExtension)",
+                declaredMime: type?.preferredMIMEType
+            )
+        }
     }
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
@@ -297,15 +359,17 @@ struct SessionChatView: View {
             state = .prompt(
                 .init(
                     text: composer.text,
+                    attachments: composer.attachments.map(attachmentPresentation),
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedMode,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
                     sendEnabled:
-                        !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        composer.hasSendableContent &&
                         composer.selectedModel != nil &&
                         composer.isModelSelectionReady &&
                         !isSending,
+                    attachEnabled: composer.canAttach && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting
                 )
@@ -330,7 +394,17 @@ struct SessionChatView: View {
                 case .selectVariant:
                     activePicker = .variant
                 case .attach:
-                    break
+                    let photos = composer.canAttachPhotos
+                    let files = composer.canAttachFiles
+                    if photos, files {
+                        showAttachmentSources = true
+                    } else if photos {
+                        showPhotosPicker = true
+                    } else if files {
+                        showFilesPicker = true
+                    }
+                case let .removeAttachment(id):
+                    viewModel.removeAttachment(id: id)
                 case .send:
                     Task { await viewModel.sendPrompt() }
                 case .stop:
@@ -342,6 +416,10 @@ struct SessionChatView: View {
                 }
             }
         )
+    }
+
+    private func attachmentPresentation(_ attachment: Attachment) -> OpenCodeAttachmentPresentation {
+        AttachmentPresentationMapper.presentation(from: attachment)
     }
 }
 

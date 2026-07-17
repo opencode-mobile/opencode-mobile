@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,12 +33,25 @@ private val OutgoingMessagePaddingHorizontal = 12.dp
 private val OutgoingMessagePaddingVertical = 8.dp
 private val OutgoingMessageFooterSpacing = 6.dp
 
+sealed interface OpenCodeOutgoingMessageContent {
+    data class Text(
+        val text: String,
+        val renderedMarkdown: MarkdownDocument? = null,
+    ) : OpenCodeOutgoingMessageContent
+
+    data class Attachment(
+        val presentation: OpenCodeAttachmentPresentation,
+    ) : OpenCodeOutgoingMessageContent
+}
+
 @Composable
 fun OpenCodeOutgoingMessage(
     text: String,
     metadataLabel: String,
     modifier: Modifier = Modifier,
     renderedMarkdown: MarkdownDocument? = null,
+    attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
+    content: List<OpenCodeOutgoingMessageContent>? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -46,43 +60,60 @@ fun OpenCodeOutgoingMessage(
         contentAlignment = Alignment.CenterEnd,
     ) {
         val maxBubbleWidth = maxWidth * OUTGOING_MESSAGE_MAX_WIDTH_FRACTION
+        val resolvedContent =
+            content ?: buildList {
+                if (text.isNotBlank()) add(OpenCodeOutgoingMessageContent.Text(text, renderedMarkdown))
+                attachments.forEach { add(OpenCodeOutgoingMessageContent.Attachment(it)) }
+            }
 
         Column(
             modifier = Modifier.widthIn(max = maxBubbleWidth),
             horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Surface(
-                modifier =
-                    Modifier
-                        .widthIn(max = maxBubbleWidth)
-                        .clip(OutgoingMessageShape)
-                        .then(outgoingMessageInteractionModifier(onClick, onLongClick)),
-                shape = OutgoingMessageShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ) {
-                Column(
-                    modifier =
-                        Modifier.padding(
-                            horizontal = OutgoingMessagePaddingHorizontal,
-                            vertical = OutgoingMessagePaddingVertical,
-                        ),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    if (renderedMarkdown != null) {
-                        OpenCodeRenderedMarkdown(
-                            document = renderedMarkdown,
-                            variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
-                            modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
+            resolvedContent.forEach { part ->
+                when (part) {
+                    is OpenCodeOutgoingMessageContent.Text ->
+                        Surface(
+                            modifier =
+                                Modifier
+                                    .widthIn(max = maxBubbleWidth)
+                                    .clip(OutgoingMessageShape)
+                                    .then(outgoingMessageInteractionModifier(onClick, onLongClick)),
+                            shape = OutgoingMessageShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ) {
+                            Column(
+                                modifier =
+                                    Modifier.padding(
+                                        horizontal = OutgoingMessagePaddingHorizontal,
+                                        vertical = OutgoingMessagePaddingVertical,
+                                    ),
+                                horizontalAlignment = Alignment.End,
+                            ) {
+                                if (part.renderedMarkdown != null) {
+                                    OpenCodeRenderedMarkdown(
+                                        document = part.renderedMarkdown,
+                                        variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                                        modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
+                                    )
+                                } else {
+                                    Text(
+                                        text = part.text,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        overflow = TextOverflow.Clip,
+                                        modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
+                                    )
+                                }
+                            }
+                        }
+
+                    is OpenCodeOutgoingMessageContent.Attachment ->
+                        OpenCodeMessageAttachment(
+                            attachment = part.presentation,
+                            modifier = Modifier.widthIn(max = maxBubbleWidth),
                         )
-                    } else {
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.bodyLarge,
-                            overflow = TextOverflow.Clip,
-                            modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
-                        )
-                    }
                 }
             }
 
@@ -96,7 +127,7 @@ fun OpenCodeOutgoingMessage(
                 modifier =
                     Modifier
                         .widthIn(max = maxBubbleWidth)
-                        .padding(top = OutgoingMessageFooterSpacing),
+                        .padding(top = if (resolvedContent.isEmpty()) 0.dp else OutgoingMessageFooterSpacing),
             )
         }
     }

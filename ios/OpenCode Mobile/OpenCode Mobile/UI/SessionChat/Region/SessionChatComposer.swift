@@ -22,6 +22,9 @@ final class SessionChatComposer {
     private var latestTimelineState: SessionChatTimelineRegionState?
     private var latestHistoryHints: ModelSelectionHistoryHints?
     private var lastSelectionTimestamp: Int64 = 0
+    private var draftRevision = 0
+    private var attachmentRevision = 0
+    private var attachmentRevisions: [String: Int] = [:]
 
     init(
         sessionID: String,
@@ -53,6 +56,9 @@ final class SessionChatComposer {
         initialSelectionState = .loadingCache
         latestTimelineState = nil
         latestHistoryHints = nil
+        draftRevision = 0
+        attachmentRevision = 0
+        attachmentRevisions = [:]
         state = SessionChatComposerRegionState()
         notifyChange()
     }
@@ -139,6 +145,11 @@ final class SessionChatComposer {
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
         updateComposer {
+            let removed = $0.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+            for attachment in removed {
+                attachmentRevisions[attachment.id] = nil
+            }
+            $0.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
             $0.modelOptions = catalog.options
             $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
             $0.selectedVariant = variant
@@ -176,12 +187,103 @@ final class SessionChatComposer {
     }
 
     func updateComposerText(_ text: String) {
+        draftRevision += 1
         updateComposer { $0.text = text }
+    }
+
+    func addAttachments(_ attachments: [Attachment]) {
+        guard !attachments.isEmpty else { return }
+        let option = state.composer.selectedModel?.option
+        let accepted = attachments.filter { option?.acceptsAttachmentKind($0.kind) != false }
+        let rejected = attachments.filter { option?.acceptsAttachmentKind($0.kind) == false }
+        if !accepted.isEmpty {
+            updateComposer { composer in
+                var ordered = composer.attachments
+                for attachment in accepted {
+                    attachmentRevision += 1
+                    attachmentRevisions[attachment.id] = attachmentRevision
+                    if let index = ordered.firstIndex(where: { $0.id == attachment.id }) {
+                        ordered[index] = attachment
+                    } else {
+                        ordered.append(attachment)
+                    }
+                }
+                composer.attachments = ordered
+            }
+        }
+        if !rejected.isEmpty {
+            setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
+        } else if !accepted.isEmpty {
+            state.errorMessage = nil
+            notifyChange()
+        }
+    }
+
+    func removeAttachment(id: String) {
+        attachmentRevisions[id] = nil
+        updateComposer { $0.attachments.removeAll { $0.id == id } }
+    }
+
+    func addAttachmentData(_ data: Data, filename: String, declaredMime: String?) {
+        do {
+            let attachment = try AttachmentLoader().load(data: data, filename: filename, declaredMime: declaredMime)
+            addAttachments([attachment])
+            if state.composer.attachments.contains(where: { $0.id == attachment.id }) {
+                OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime, privacy: .public) bytes=\(data.count) count=1")
+            }
+        } catch {
+            setAttachmentError(error.localizedDescription)
+        }
+    }
+
+    func reportAttachmentReadFailure() {
+        setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+    }
+
+    func addAttachmentFiles(_ urls: [URL]) async {
+        guard !urls.isEmpty else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            urls.map { url -> Result<Attachment, Error> in
+                Result { try AttachmentLoader().load(fileURL: url) }
+            }
+        }.value
+        let attachments = result.compactMap { try? $0.get() }
+        addAttachments(attachments)
+        let failures = result.compactMap { result -> Error? in
+            guard case let .failure(error) = result else { return nil }
+            return error
+        }
+        if let failure = failures.first, state.errorMessage == nil {
+            setAttachmentError(failure.localizedDescription)
+        }
+        OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
+    }
+
+    private func setAttachmentError(_ message: String) {
+        state.errorMessage = message
+        OpenCodeLog.sessionChat.warning("attachment rejected error=\(message, privacy: .public)")
+        notifyChange()
+    }
+
+    private static func unsupportedAttachmentMessage(for rejected: [Attachment]) -> String {
+        let kinds = Set(rejected.map(\.kind))
+        if kinds == [.image] {
+            return "This model does not support image attachments."
+        }
+        if kinds == [.pdf] {
+            return "This model does not support PDF attachments."
+        }
+        return "This model does not support some of the selected attachments."
     }
 
     func selectModel(_ option: ModelSelectionOption) {
         updateComposer { composer in
             let previousVariant = composer.selectedVariant
+            let removed = composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+            for attachment in removed {
+                attachmentRevisions[attachment.id] = nil
+            }
+            composer.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
             composer.selectedModel = ModelSelection(
                 option: option,
                 selectedVariant: previousVariant.flatMap { option.variants.contains($0) ? $0 : nil }
@@ -212,6 +314,7 @@ final class SessionChatComposer {
     }
 
     func restoreComposerText(_ text: String) {
+        draftRevision += 1
         updateComposer { $0.text = text }
     }
 
@@ -221,15 +324,35 @@ final class SessionChatComposer {
         onSendAccepted: () async -> Void,
         onSendFailed: (String, String) -> Void
     ) async {
-        let trimmed = state.composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
+        let submittedText = state.composer.text
+        let trimmed = submittedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let submittedAttachments = state.composer.attachments
+        let submittedDraftRevision = draftRevision
+        let submittedAttachmentRevisions = Dictionary(
+            uniqueKeysWithValues: submittedAttachments.compactMap { attachment in
+                attachmentRevisions[attachment.id].map { (attachment.id, $0) }
+            }
+        )
+        guard (!trimmed.isEmpty || !submittedAttachments.isEmpty),
               let selectedModel = state.composer.selectedModel,
               state.composer.isModelSelectionReady,
               !state.isSending
         else { return }
 
-        var composer = state.composer
-        composer.text = ""
+        let composer = state.composer
+
+        let attachmentBlocks = submittedAttachments.map { attachment in
+            SessionChatTimelineBlock.attachment(
+                FilePart(
+                    id: attachment.id,
+                    filename: attachment.filename,
+                    mime: attachment.mime,
+                    kind: attachment.kind,
+                    dataURL: attachment.dataURL
+                )
+            )
+        }
+        let optimisticBlocks = (trimmed.isEmpty ? [] : [SessionChatTimelineBlock.text(trimmed)]) + attachmentBlocks
 
         let optimistic = SessionChatRow(
             id: "pending-\(UUID().uuidString)",
@@ -243,7 +366,7 @@ final class SessionChatComposer {
             isPending: true,
             isStreaming: false,
             renderedMarkdown: nil,
-            blocks: [.text(trimmed)],
+            blocks: optimisticBlocks,
             modelProviderID: nil,
             modelID: nil,
             contextInputTokens: nil
@@ -251,7 +374,6 @@ final class SessionChatComposer {
 
         let prepared = await messageRepository.prepareOptimisticUserMessage(id: optimistic.id, text: trimmed)
         let enriched = [row(from: prepared, optimistic: optimistic)]
-        state.composer = composer
         state.isSending = true
         state.errorMessage = nil
         notifyChange()
@@ -262,6 +384,7 @@ final class SessionChatComposer {
                 sessionID: sessionID,
                 options: PromptSendOptions(
                     text: trimmed,
+                    attachments: submittedAttachments,
                     model: PromptModelSelection(
                         providerID: selectedModel.option.providerID,
                         modelID: selectedModel.option.modelID
@@ -270,6 +393,10 @@ final class SessionChatComposer {
                     mode: agentMode(mode: composer.selectedMode)
                 ),
                 directory: worktree
+            )
+            clearAcceptedSubmission(
+                textRevision: submittedDraftRevision,
+                attachmentRevisions: submittedAttachmentRevisions
             )
             persistCurrentSelection(updatePreference: false)
             await onSendAccepted()
@@ -419,6 +546,25 @@ final class SessionChatComposer {
         notifyChange()
     }
 
+    private func clearAcceptedSubmission(
+        textRevision: Int,
+        attachmentRevisions submittedAttachmentRevisions: [String: Int]
+    ) {
+        var composer = state.composer
+        if draftRevision == textRevision {
+            composer.text = ""
+        }
+        composer.attachments.removeAll { attachment in
+            guard let submittedRevision = submittedAttachmentRevisions[attachment.id] else { return false }
+            return attachmentRevisions[attachment.id] == submittedRevision
+        }
+        for (id, revision) in submittedAttachmentRevisions where attachmentRevisions[id] == revision {
+            attachmentRevisions[id] = nil
+        }
+        state.composer = composer
+        notifyChange()
+    }
+
     private func errorMessage(_ error: Error) -> String {
         if let messageError = error as? MessageError {
             return messageError.localizedDescription
@@ -439,7 +585,7 @@ final class SessionChatComposer {
             isPending: optimistic.isPending,
             isStreaming: optimistic.isStreaming,
             renderedMarkdown: prepared.renderedMarkdown,
-            blocks: [.text(optimistic.text)],
+            blocks: optimistic.blocks,
             modelProviderID: optimistic.modelProviderID,
             modelID: optimistic.modelID,
             contextInputTokens: optimistic.contextInputTokens

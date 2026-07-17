@@ -3,6 +3,7 @@ import SwiftUI
 private enum OutgoingMessageSample: String, CaseIterable {
     case short = "Short"
     case long = "Long"
+    case attachments = "Attachments"
 
     var text: String {
         switch self {
@@ -10,6 +11,8 @@ private enum OutgoingMessageSample: String, CaseIterable {
             "Based on the standard 2026 pricing for DHL in Germany, confirm the package class."
         case .long:
             "Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options. Include the likely dimensions, weight limits, and the tradeoffs a customer should consider before choosing it. Keep the answer practical and note where pricing depends on the booking channel or destination. Then summarize the recommendation in one concise sentence for a mobile chat user."
+        case .attachments:
+            ""
         }
     }
 }
@@ -38,6 +41,10 @@ struct OutgoingMessageGalleryView: View {
 
             OpenCodeOutgoingMessage(
                 text: sample.text,
+                attachments: sample == .attachments ? [
+                    .init(id: "pdf", filename: "requirements.pdf", variant: .pdf),
+                    .init(id: "text", filename: "notes.md", variant: .text),
+                ] : [],
                 metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
                 onTap: {}
             )

@@ -106,6 +106,26 @@ final class SessionChatViewModel {
         composer.updateComposerText(text)
     }
 
+    func addAttachments(_ attachments: [Attachment]) {
+        composer.addAttachments(attachments)
+    }
+
+    func removeAttachment(id: String) {
+        composer.removeAttachment(id: id)
+    }
+
+    func addAttachmentData(_ data: Data, filename: String, declaredMime: String?) {
+        composer.addAttachmentData(data, filename: filename, declaredMime: declaredMime)
+    }
+
+    func reportAttachmentReadFailure() {
+        composer.reportAttachmentReadFailure()
+    }
+
+    func addAttachmentFiles(_ urls: [URL]) async {
+        await composer.addAttachmentFiles(urls)
+    }
+
     func retryModelCatalog() async {
         await composer.loadCatalog()
     }
@@ -352,6 +372,9 @@ final class SessionChatViewModel {
             return error
         }
         if let error = composerState.abortErrorMessage {
+            return error
+        }
+        if let error = infoState.errorMessage {
             return error
         }
         if permissionRequests.isEmpty, let error = permissionTopologyError {

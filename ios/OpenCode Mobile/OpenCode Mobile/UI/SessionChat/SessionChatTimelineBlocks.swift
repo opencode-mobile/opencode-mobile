@@ -4,6 +4,7 @@ import Foundation
 /// Built from structured parts with hide rules and lightweight tool chrome.
 enum SessionChatTimelineBlock: Equatable, Sendable {
     case text(String)
+    case attachment(FilePart)
     case toolCard(SessionChatToolCardBlock)
     case toolGroup(SessionChatToolGroupBlock)
 }
@@ -86,6 +87,10 @@ enum SessionChatTimelineBlocks {
                 if !trimmed.isEmpty {
                     pendingText.append(trimmed)
                 }
+                index += 1
+            case .file(let file):
+                flushText()
+                blocks.append(.attachment(file))
                 index += 1
             case .tool(let tool):
                 guard allowToolCards, isVisibleTool(tool) else {

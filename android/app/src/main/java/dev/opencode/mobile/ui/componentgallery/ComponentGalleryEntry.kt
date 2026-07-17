@@ -14,6 +14,7 @@ enum class ComponentGalleryEntryId {
     Colors,
     Typography,
     Icons,
+    Attachment,
     OutgoingMessage,
     ToolCallCard,
     TopBar,
@@ -62,6 +63,12 @@ val ComponentGalleryEntries =
             title = "Icons",
             description = "Material Icons catalog synced from icons/manifest.yaml.",
             category = ComponentGalleryCategory.Foundation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Attachment,
+            title = "Attachment",
+            description = "Pending attachment chips and sent-message attachment rows.",
+            category = ComponentGalleryCategory.Components,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.OutgoingMessage,

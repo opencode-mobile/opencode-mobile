@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
@@ -43,6 +45,7 @@ import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
+import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -252,6 +255,7 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
+                    content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick =
                         if (message.renderedMarkdown == null) {
@@ -281,6 +285,22 @@ private fun SessionChatMessageRow(
                     roleLabel = message.role.displayLabel(),
                     text = message.text,
                 )
+        }
+    }
+}
+
+private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessageContent> {
+    val textBlocks = blocks.filterIsInstance<SessionChatTimelineBlock.Text>()
+    return blocks.mapNotNull { block ->
+        when (block) {
+            is SessionChatTimelineBlock.Text ->
+                OpenCodeOutgoingMessageContent.Text(
+                    text = block.text,
+                    renderedMarkdown = renderedMarkdown.takeIf { textBlocks.size == 1 },
+                )
+            is SessionChatTimelineBlock.Attachment ->
+                OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
+            is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup -> null
         }
     }
 }
@@ -337,6 +357,8 @@ private fun AssistantMessageContent(
                                 messageDescription = "Assistant message",
                             ),
                     )
+                is SessionChatTimelineBlock.Attachment ->
+                    OpenCodeMessageAttachment(AttachmentPresentationMapper.from(block.attachment))
                 is SessionChatTimelineBlock.ToolCard ->
                     OpenCodeToolCallCard(
                         status = block.status.toToolCallCardStatus(),
@@ -428,6 +450,7 @@ private fun List<SessionChatMessageItem>.layoutSignature(): Int =
             message.id.hashCode() +
             message.text.length +
             message.blocks.size +
+            message.attachments.size +
             message.renderedMarkdown.layoutSignature() +
             if (message.isStreaming) 1 else 0
     }

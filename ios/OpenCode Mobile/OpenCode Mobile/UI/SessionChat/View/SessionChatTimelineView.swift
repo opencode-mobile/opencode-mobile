@@ -243,7 +243,7 @@ private struct SessionChatMessageRow: View {
             switch message.role {
             case .user:
                 OpenCodeOutgoingMessage(
-                    text: message.text,
+                    content: message.outgoingContent,
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
                     onTap: message.renderedMarkdown == nil
@@ -274,6 +274,22 @@ private struct SessionChatMessageRow: View {
             animateSizeChanges: animateSizeChanges,
             onContentSizeAnimationFinished: onContentSizeAnimationFinished
         )
+    }
+}
+
+private extension SessionChatRow {
+    var outgoingContent: [OpenCodeOutgoingMessageContent] {
+        let content = blocks.enumerated().compactMap { index, block -> OpenCodeOutgoingMessageContent? in
+            switch block {
+            case .text(let text):
+                .text(id: String(index), text: text)
+            case .attachment(let file):
+                .attachment(file.attachmentPresentation)
+            case .toolCard, .toolGroup:
+                nil
+            }
+        }
+        return content.isEmpty ? [.text(id: "message", text: text)] : content
     }
 }
 
@@ -334,6 +350,8 @@ private struct AssistantMessageContent: View {
                             onOpenMessageActions: onOpenMessageActions
                         )
                     )
+                case .attachment(let file):
+                    OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
                 case .toolCard(let card):
                     OpenCodeToolCallCard(
                         status: card.status.toolCallCardStatus,
@@ -374,6 +392,12 @@ private struct AssistantMessageContent: View {
             }
         }
         return nil
+    }
+}
+
+private extension FilePart {
+    var attachmentPresentation: OpenCodeAttachmentPresentation {
+        AttachmentPresentationMapper.presentation(from: self)
     }
 }
 

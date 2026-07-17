@@ -51,6 +51,22 @@ struct MessageDomainAdapter: Sendable {
         case "text":
             guard let text = dto.text else { return nil }
             return .text(TextPart(text: text, isStreaming: false))
+        case "file":
+            guard let url = dto.url,
+                  let mime = dto.mime?.lowercased(),
+                  url.lowercased().hasPrefix("data:"),
+                  AttachmentDataURL.validates(url, mime: mime),
+                  let kind = AttachmentDataURL.kind(for: mime)
+            else { return nil }
+            return .file(
+                FilePart(
+                    id: dto.id ?? url,
+                    filename: dto.filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                    mime: mime,
+                    kind: kind,
+                    dataURL: url
+                )
+            )
         case "tool":
             guard let toolName = dto.tool else { return nil }
             return .tool(toolPart(toolName: toolName, callID: dto.callID, state: dto.state))
@@ -117,8 +133,17 @@ struct MessageDomainAdapter: Sendable {
     }
 
     func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
-        SendMessageRequestDTO(
-            parts: [SendMessagePartDTO(type: "text", text: options.text)],
+        var parts: [SendMessagePartDTO] = []
+        if !options.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(SendMessagePartDTO(type: "text", text: options.text))
+        }
+        // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
+        // Local Attachment ids are UUIDs for composer chip identity.
+        parts.append(contentsOf: options.attachments.map {
+            SendMessagePartDTO(type: "file", mime: $0.mime, filename: $0.filename, url: $0.dataURL)
+        })
+        return SendMessageRequestDTO(
+            parts: parts,
             model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) },
             variant: options.variant,
             agent: options.mode
@@ -186,6 +211,8 @@ struct MessageDomainAdapter: Sendable {
             case .text(let t):
                 let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
+            case .file:
+                return nil
             case .tool:
                 return nil
             }
@@ -261,4 +288,8 @@ struct MessageDomainAdapter: Sendable {
             return inputOverhead
         }
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -28,6 +28,12 @@ interface MessageRepository {
         text: String,
     ): DisplayMessage
 
+    suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+        attachments: List<Attachment>,
+    ): DisplayMessage = prepareOptimisticUserMessage(id, text)
+
     fun clearMessageCache()
 
     suspend fun listMessages(

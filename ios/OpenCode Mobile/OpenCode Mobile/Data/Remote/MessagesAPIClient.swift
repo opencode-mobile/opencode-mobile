@@ -6,7 +6,14 @@ enum MessagesAPIError: Error {
     case noActiveConnection
 }
 
-struct MessagesAPIClient: Sendable {
+protocol MessagesAPI: Sendable {
+    func listMessages(sessionID: String, directory: String?) async throws -> [MessageDTO]
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
+    func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
+    func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
+}
+
+struct MessagesAPIClient: MessagesAPI, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()

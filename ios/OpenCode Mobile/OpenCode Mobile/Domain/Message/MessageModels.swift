@@ -84,12 +84,35 @@ enum ToolStatus: String, Sendable, Equatable {
 
 enum MessagePart: Equatable, Sendable {
     case text(TextPart)
+    case file(FilePart)
     case tool(ToolPart)
 }
 
 struct TextPart: Equatable, Sendable {
     let text: String
     var isStreaming: Bool
+}
+
+enum AttachmentKind: String, Equatable, Sendable {
+    case image
+    case pdf
+    case text
+}
+
+struct Attachment: Equatable, Sendable, Identifiable {
+    let id: String
+    let filename: String
+    let mime: String
+    let kind: AttachmentKind
+    let dataURL: String
+}
+
+struct FilePart: Equatable, Sendable {
+    let id: String
+    let filename: String
+    let mime: String
+    let kind: AttachmentKind
+    let dataURL: String
 }
 
 struct ToolPart: Equatable, Sendable {
@@ -125,17 +148,20 @@ struct ToolPart: Equatable, Sendable {
 
 struct PromptSendOptions: Equatable, Sendable {
     let text: String
+    let attachments: [Attachment]
     let model: PromptModelSelection?
     let variant: String?
     let mode: String?
 
     init(
         text: String,
+        attachments: [Attachment] = [],
         model: PromptModelSelection? = nil,
         variant: String? = nil,
         mode: String? = nil
     ) {
         self.text = text
+        self.attachments = attachments
         self.model = model
         self.variant = variant
         self.mode = mode

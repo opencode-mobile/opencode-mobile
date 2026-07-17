@@ -43,6 +43,22 @@ enum class ToolStatus {
     Error,
 }
 
+enum class AttachmentKind {
+    Image,
+    Pdf,
+    Text,
+}
+
+data class Attachment(
+    val id: String,
+    val filename: String,
+    val mime: String,
+    val kind: AttachmentKind,
+    val dataUrl: String,
+    val byteCount: Long,
+    val previewBytes: ByteArray? = null,
+)
+
 sealed class MessagePart {
     data class Text(
         val text: String,
@@ -59,10 +75,19 @@ sealed class MessagePart {
         val output: String? = null,
         val metadata: JsonObject? = null,
     ) : MessagePart()
+
+    data class File(
+        val id: String,
+        val filename: String,
+        val mime: String,
+        val kind: AttachmentKind,
+        val dataUrl: String,
+    ) : MessagePart()
 }
 
 data class PromptSendOptions(
     val text: String,
+    val attachments: List<Attachment> = emptyList(),
     val model: PromptModelSelection? = null,
     val variant: String? = null,
     val mode: String? = null,

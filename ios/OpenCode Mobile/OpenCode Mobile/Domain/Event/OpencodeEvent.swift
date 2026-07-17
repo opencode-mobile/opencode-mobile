@@ -31,6 +31,19 @@ struct OpencodeEvent: Sendable, Equatable {
         type == "message.updated"
     }
 
+    var sessionErrorMessage: String? {
+        guard type == "session.error",
+              case let .dictionary(error)? = rawProperties?["error"]
+        else { return nil }
+        if case let .dictionary(data)? = error["data"],
+           case let .string(message)? = data["message"],
+           !message.isEmpty {
+            return message
+        }
+        if case let .string(name)? = error["name"], !name.isEmpty { return name }
+        return "Session work failed"
+    }
+
     private static let messageRefreshTypes: Set<String> = [
         "message.updated",
         "message.part.updated",

@@ -72,6 +72,8 @@ struct ComponentGalleryDetailView: View {
             TypographyGalleryView()
         case .icons:
             IconsGalleryView()
+        case .attachment:
+            AttachmentGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
         case .toolCallCard:

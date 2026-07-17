@@ -18,6 +18,20 @@ struct ProviderModelDTO: Codable, Sendable {
     let disabled: Bool?
     let variants: [String: JSONValueDTO]?
     let limit: ProviderModelLimitDTO?
+    let capabilities: ProviderModelCapabilitiesDTO?
+}
+
+struct ProviderModelCapabilitiesDTO: Codable, Sendable {
+    let attachment: Bool?
+    let input: ProviderModelInputCapabilitiesDTO?
+}
+
+struct ProviderModelInputCapabilitiesDTO: Codable, Sendable {
+    let text: Bool?
+    let audio: Bool?
+    let image: Bool?
+    let video: Bool?
+    let pdf: Bool?
 }
 
 struct ProviderModelLimitDTO: Codable, Sendable {

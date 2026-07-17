@@ -9,6 +9,8 @@ import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -61,6 +63,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -883,6 +887,247 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun attachmentOnlyPrompt_sendsAndCreatesOptimisticAttachmentMessage() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val attachment = testAttachment()
+
+            viewModel.addAttachments(listOf(attachment))
+            runCurrent()
+            assertTrue(viewModel.uiState.value.composer.canSend)
+            viewModel.sendPrompt()
+            runCurrent()
+
+            assertEquals(listOf(attachment), repository.sentOptions?.attachments)
+            assertEquals("", repository.sentOptions?.text)
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.attachments.singleOrNull()?.filename == "photo.png"
+                },
+            )
+            assertEquals(listOf(attachment), viewModel.uiState.value.composer.attachments)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun attach_disabledForTextOnlyModelAndStripsUnsupportedPendingAttachments() =
+        runTest(testDispatcher) {
+            val textOnly =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "text-only",
+                    modelName = "Text Only",
+                    supportsImageInput = false,
+                    supportsPdfInput = false,
+                )
+            val vision =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "vision",
+                    modelName = "Vision",
+                    supportsImageInput = true,
+                    supportsPdfInput = false,
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(options = listOf(vision, textOnly), serverDefault = vision),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.composer.canAttach)
+            assertTrue(viewModel.uiState.value.composer.canAttachPhotos)
+
+            val image = testAttachment(id = "img", filename = "shot.png", kind = AttachmentKind.Image, mime = "image/png")
+            val pdf = testAttachment(id = "pdf", filename = "brief.pdf", kind = AttachmentKind.Pdf, mime = "application/pdf")
+            val text = testAttachment(id = "txt", filename = "notes.txt", kind = AttachmentKind.Text, mime = "text/plain")
+            viewModel.addAttachments(listOf(image, pdf, text))
+            runCurrent()
+            assertEquals(listOf("img", "txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+            assertEquals(
+                "This model does not support PDF attachments.",
+                viewModel.uiState.value.errorMessage,
+            )
+
+            viewModel.selectModel(textOnly)
+            runCurrent()
+            assertFalse(viewModel.uiState.value.composer.canAttach)
+            assertEquals(listOf("txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+        }
+
+    @Test
+    fun failedAttachmentPrompt_restoresDraftAndAttachmentsWithoutOverwritingNewEdits() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(shouldFailSend = true, holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val original = testAttachment()
+
+            viewModel.updateComposerText("Original")
+            viewModel.addAttachments(listOf(original))
+            runCurrent()
+            viewModel.sendPrompt()
+            runCurrent()
+            viewModel.updateComposerText("New edit")
+            val newer = testAttachment(id = "attachment-2", filename = "new.txt", kind = AttachmentKind.Text)
+            viewModel.addAttachments(listOf(newer))
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("New edit", viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(original.id, newer.id),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun successfulPrompt_clearsOnlySubmittedValuesAndPreservesNewEditsAndSelection() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val secondModel =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val defaultModel =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val viewModel =
+                createViewModel(
+                    repository,
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(listOf(defaultModel, secondModel), defaultModel),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val submitted = testAttachment()
+            val newer = testAttachment(id = "attachment-2", filename = "new.txt", kind = AttachmentKind.Text)
+
+            viewModel.updateComposerText("Submitted")
+            viewModel.addAttachments(listOf(submitted))
+            viewModel.sendPrompt()
+            runCurrent()
+            viewModel.updateComposerText("New edit")
+            viewModel.addAttachments(listOf(newer))
+            viewModel.selectModel(secondModel)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("New edit", viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(newer.id),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+            assertEquals(
+                "gpt-4",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun successfulPrompt_preservesInFlightSameTextAndReaddedAttachment() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val attachment = testAttachment()
+
+            viewModel.updateComposerText("Submitted")
+            viewModel.addAttachments(listOf(attachment))
+            viewModel.sendPrompt()
+            runCurrent()
+            viewModel.updateComposerText("Edited")
+            viewModel.updateComposerText("Submitted")
+            viewModel.removeAttachment(attachment.id)
+            viewModel.addAttachments(listOf(attachment))
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("Submitted", viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(attachment.id),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun repeatedAttachmentOnlySend_doesNotReconcileAgainstOlderMatchingMessage() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val oldFile =
+                MessagePart.File(
+                    id = "server-old",
+                    filename = "notes.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,SGk=",
+                )
+            val repository =
+                FakeMessageRepository(
+                    messages =
+                        listOf(
+                            Message(id = "msg-old", role = MessageRole.User, text = "", parts = listOf(oldFile)),
+                        ),
+                    holdSendUntil = sendGate,
+                )
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(testAttachment(id = "client-new", filename = "notes.txt", kind = AttachmentKind.Text)))
+            viewModel.sendPrompt()
+            runCurrent()
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            runCurrent()
+
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.id.startsWith("pending-") },
+            )
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+        }
+
+    @Test
     fun sendPrompt_planMode_sendsPlanAgent() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1435,6 +1680,33 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sessionErrorEvent_surfacesMessageWithoutRestoringAttachments() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.error",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put("error", buildJsonObject { put("message", "Image exceeds the size limit") })
+                        },
+                ),
+            )
+            runCurrent()
+
+            assertEquals("Image exceeds the size limit", viewModel.uiState.value.errorMessage)
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
     fun sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository(failListMessagesAfterSend = true)
@@ -1623,6 +1895,59 @@ class SessionChatViewModelTest {
             assertFalse(item.isStreaming)
             val tool = item.blocks.single() as SessionChatTimelineBlock.ToolCard
             assertEquals("Shell", tool.title)
+        }
+
+    @Test
+    fun toMessageItem_userParts_preserveTextAndAttachmentOrder() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val firstFile =
+                MessagePart.File(
+                    id = "file-1",
+                    filename = "first.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,QQ==",
+                )
+            val secondFile = firstFile.copy(id = "file-2", filename = "second.txt", dataUrl = "data:text/plain;base64,Qg==")
+            val message =
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.User,
+                    text = "Between",
+                    parts = listOf(firstFile, MessagePart.Text("Between"), secondFile),
+                )
+
+            val item = requireNotNull(viewModel.toMessageItem(message))
+
+            assertEquals(3, item.blocks.size)
+            assertEquals("first.txt", (item.blocks[0] as SessionChatTimelineBlock.Attachment).attachment.filename)
+            assertEquals("Between", (item.blocks[1] as SessionChatTimelineBlock.Text).text)
+            assertEquals("second.txt", (item.blocks[2] as SessionChatTimelineBlock.Attachment).attachment.filename)
+        }
+
+    @Test
+    fun toMessageItem_attachmentOnlyUserMessage_isKept() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val file =
+                MessagePart.File(
+                    id = "file-1",
+                    filename = "notes.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,SGk=",
+                )
+
+            val item =
+                requireNotNull(
+                    viewModel.toMessageItem(
+                        Message(id = "msg-1", role = MessageRole.User, text = "", parts = listOf(file)),
+                    ),
+                )
+
+            assertEquals(1, item.blocks.size)
+            assertTrue(item.blocks.single() is SessionChatTimelineBlock.Attachment)
         }
 
     @Test
@@ -1987,6 +2312,12 @@ private class FakeMessageRepository(
         text: String,
     ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
 
+    override suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+        attachments: List<Attachment>,
+    ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text, attachments)
+
     override fun clearMessageCache() = Unit
 
     override suspend fun listMessages(
@@ -2018,9 +2349,32 @@ private class FakeMessageRepository(
     ) {
         sendPromptAsyncCalled = true
         sentOptions = options
-        if (shouldFailSend) error("send failed")
         holdSendUntil?.await()
+        if (shouldFailSend) error("send failed")
     }
+}
+
+private fun testAttachment(
+    id: String = "attachment-1",
+    filename: String = "photo.png",
+    kind: AttachmentKind = AttachmentKind.Image,
+    mime: String? = null,
+): Attachment {
+    val resolvedMime =
+        mime
+            ?: when (kind) {
+                AttachmentKind.Text -> "text/plain"
+                AttachmentKind.Pdf -> "application/pdf"
+                AttachmentKind.Image -> "image/png"
+            }
+    return Attachment(
+        id = id,
+        filename = filename,
+        mime = resolvedMime,
+        kind = kind,
+        dataUrl = "data:$resolvedMime;base64,AA==",
+        byteCount = 1,
+    )
 }
 
 private class FakeModelRepository(

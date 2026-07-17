@@ -19,6 +19,10 @@ sealed class SessionChatTimelineBlock {
         val text: String,
     ) : SessionChatTimelineBlock()
 
+    data class Attachment(
+        val attachment: SessionChatAttachmentItem,
+    ) : SessionChatTimelineBlock()
+
     data class ToolCard(
         val toolName: String,
         val status: ToolStatus,
@@ -103,6 +107,11 @@ object SessionChatTimelineBlocks {
                         blocks += toToolCard(part)
                         index += 1
                     }
+                }
+                is MessagePart.File -> {
+                    flushText()
+                    blocks += SessionChatTimelineBlock.Attachment(AttachmentPresentationMapper.from(part))
+                    index += 1
                 }
             }
         }

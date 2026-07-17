@@ -80,6 +80,9 @@ struct MessagePartDTO: Codable, Sendable {
     let files: [String]?
     let auto: Bool?
     let subtask: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
 }
 
 struct MessageToolStateDTO: Codable, Sendable {
@@ -125,8 +128,28 @@ struct SendPromptModelDTO: Codable, Sendable {
 }
 
 struct SendMessagePartDTO: Codable, Sendable {
+    let id: String?
     let type: String
-    let text: String
+    let text: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
+
+    init(
+        id: String? = nil,
+        type: String,
+        text: String? = nil,
+        mime: String? = nil,
+        filename: String? = nil,
+        url: String? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.text = text
+        self.mime = mime
+        self.filename = filename
+        self.url = url
+    }
 }
 
 /// A type-erased Codable value for flexible JSON content.

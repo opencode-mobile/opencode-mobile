@@ -57,6 +57,7 @@ struct SessionChatRow: Identifiable, Equatable {
 
 struct SessionChatComposerState: Equatable {
     var text: String
+    var attachments: [Attachment] = []
     var selectedModel: ModelSelection?
     var modelOptions: [ModelSelectionOption]
     var selectedMode: String
@@ -79,6 +80,22 @@ struct SessionChatComposerState: Equatable {
 
     var canSelectVariant: Bool {
         selectedModel?.option.supportsVariants == true
+    }
+
+    var hasSendableContent: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
+    }
+
+    var canAttach: Bool {
+        selectedModel?.option.canAttach == true
+    }
+
+    var canAttachPhotos: Bool {
+        selectedModel?.option.canAttachPhotos == true
+    }
+
+    var canAttachFiles: Bool {
+        selectedModel?.option.canAttachFiles == true
     }
 }
 
@@ -284,6 +301,7 @@ struct SessionInfoRegionState: Equatable {
     var isLifecycleActionInFlight = false
     var lifecycleErrorMessage: String?
     var shouldLeaveSession = false
+    var errorMessage: String?
 }
 
 struct SessionChatReviewChangesRegionState: Equatable {

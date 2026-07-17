@@ -18,6 +18,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
@@ -29,6 +31,7 @@ private enum class SessionComposerGalleryScenario(
     Empty("Empty"),
     Prompt("Prompt"),
     Active("Active"),
+    Attachments("Attachments"),
     Permission("Permission"),
     Queued("Queued"),
     Submitting("Submitting"),
@@ -51,6 +54,23 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 promptState(
                     text = draftText,
                     showStop = true,
+                )
+            SessionComposerGalleryScenario.Attachments ->
+                promptState(
+                    text = "",
+                    attachments =
+                        listOf(
+                            OpenCodeAttachmentPresentation(
+                                id = "pdf",
+                                filename = "requirements.pdf",
+                                variant = OpenCodeAttachmentVariant.Pdf,
+                            ),
+                            OpenCodeAttachmentPresentation(
+                                id = "text",
+                                filename = "notes.md",
+                                variant = OpenCodeAttachmentVariant.Text,
+                            ),
+                        ),
                 )
             SessionComposerGalleryScenario.Permission -> permissionState()
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
@@ -99,14 +119,16 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
 
 private fun promptState(
     text: String,
+    attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
     showStop: Boolean = false,
 ) = OpenCodeSessionComposerState.Prompt(
     text = text,
+    attachments = attachments,
     selectedModelLabel = "Claude Sonnet 4",
     selectedModeLabel = "Build",
     selectedVariantLabel = "Default",
     showVariant = true,
-    sendEnabled = text.isNotBlank(),
+    sendEnabled = text.isNotBlank() || attachments.isNotEmpty(),
     showStop = showStop,
     stopEnabled = showStop,
 )
@@ -133,6 +155,7 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.SelectMode -> "Select mode"
             OpenCodeSessionComposerAction.SelectVariant -> "Select variant"
             OpenCodeSessionComposerAction.Attach -> "Attach"
+            is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
