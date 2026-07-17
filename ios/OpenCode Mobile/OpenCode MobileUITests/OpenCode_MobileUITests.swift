@@ -118,6 +118,41 @@ final class OpenCode_MobileUITests: XCTestCase {
     }
 
     @MainActor
+    func testSessionChatTimelineDragDismissesKeyboard() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCODE_UI_TEST_SESSION_CHAT_KEYBOARD"] = "1"
+        app.launch()
+
+        let composerField = app.textFields["Ask anything..."]
+        let textViews = app.textViews.matching(NSPredicate(format: "placeholderValue == %@ OR label == %@", "Ask anything...", "Ask anything..."))
+        let field: XCUIElement
+        if composerField.waitForExistence(timeout: 5) {
+            field = composerField
+        } else {
+            field = textViews.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 5), "Expected composer prompt field")
+        }
+
+        field.tap()
+        let keyboard = app.keyboards.element
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "Expected software keyboard after focusing composer")
+
+        let timeline = app.descendants(matching: .any)["keyboard-test-timeline"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        timeline.swipeUp()
+
+        let keyboardDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: keyboard
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [keyboardDismissed], timeout: 5),
+            .completed,
+            "Expected timeline drag to dismiss the software keyboard"
+        )
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()

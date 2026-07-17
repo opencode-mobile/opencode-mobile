@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 
 @main
 struct OpenCode_MobileApp: App {
@@ -41,6 +42,8 @@ struct OpenCode_MobileApp: App {
             }
         } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] == "1" {
             ReviewChangesPillUITestView()
+        } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_SESSION_CHAT_KEYBOARD"] == "1" {
+            SessionChatKeyboardUITestView()
         } else {
             AppRootView()
         }
@@ -94,6 +97,78 @@ private struct ReviewChangesPillUITestView: View {
             OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 4, additions: 0, deletions: 0, enabled: false, action: {})
             Text(tapped ? "Review changes tapped" : "Waiting for review")
         }
+    }
+}
+
+/// Mirrors Session Chat: timeline ScrollView sibling + composer field outside it.
+private struct SessionChatKeyboardUITestView: View {
+    @State private var text = ""
+    @State private var composerFocused = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(0..<40, id: \.self) { index in
+                        Text("Message \(index)")
+                            .font(OpenCodeTypography.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .accessibilityIdentifier("keyboard-test-message-\(index)")
+                    }
+                }
+                .padding(.vertical, 12)
+            }
+            .accessibilityIdentifier("keyboard-test-timeline")
+            .scrollDismissesKeyboard(.immediately)
+            .scrollViewKeyboardDismissMode(.onDrag) {
+                dismissComposerKeyboard()
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { _ in
+                        dismissComposerKeyboard()
+                    }
+            )
+
+            OpenCodeSessionComposer(
+                state: .prompt(
+                    .init(
+                        text: text,
+                        selectedModelLabel: "Model",
+                        selectedModeLabel: "Build",
+                        selectedVariantLabel: "Default",
+                        showVariant: false,
+                        sendEnabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                        showStop: false,
+                        stopEnabled: false
+                    )
+                ),
+                isFocused: $composerFocused,
+                onAction: { action in
+                    switch action {
+                    case let .textChanged(value):
+                        text = value
+                    case .send:
+                        dismissComposerKeyboard()
+                    default:
+                        dismissComposerKeyboard()
+                    }
+                }
+            )
+            .accessibilityIdentifier("keyboard-test-composer")
+        }
+        .background(OpenCodeColors.backgroundBase)
+    }
+
+    private func dismissComposerKeyboard() {
+        composerFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 }
 #endif
