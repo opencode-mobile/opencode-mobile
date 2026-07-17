@@ -10,8 +10,9 @@ identical width, shape, inset, background, and border behavior.
 ## Public API
 
 - Component state: `prompt` or `permission`.
-- Prompt-entry states: empty, populated, sending-disabled, stop available, and
-  model/mode/variant selection.
+- Prompt-entry states: empty, populated, pending attachments,
+  attach-disabled, sending-disabled, stop available, and model/mode/variant
+  selection.
 - Permission states: pending, submitting/disabled, queued, and response error.
 - Required permission content: opaque request and session identifiers, category,
   one or more patterns, allow-once action, and deny action.
@@ -19,10 +20,13 @@ identical width, shape, inset, background, and border behavior.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed, select model, select mode, select variant,
-attach, send, and stop. Permission actions are allow once and deny, and return
-the opaque request and session identifiers rendered with the decision. The
-feature supplies product content and handles actions; it does not choose shell
-colors, radii, spacing, motion, or other visual overrides. Domain models,
+attach, remove attachment, send, and stop. Prompt content includes
+`attachEnabled` so the feature can disable Attach when the selected model lacks
+image and PDF input. Pending attachment content uses presentation-safe
+`OpenCodeAttachmentChip` state. Permission actions are allow once and deny, and
+return the opaque request and session identifiers rendered with the decision.
+The feature supplies product content and handles actions; it does not choose
+shell colors, radii, spacing, motion, or other visual overrides. Domain models,
 server DTOs, repositories, and Screen Models are not component inputs.
 
 ## Token Usage
@@ -43,6 +47,11 @@ server DTOs, repositories, and Screen Models are not component inputs.
 
 - Exactly one composer shell is mounted at the bottom of Session Chat.
 - Without a pending request, it renders prompt entry and its normal controls.
+- Prompt send is available when trimmed text or at least one pending attachment
+  exists. Pending attachments render as a vertical stack of full-width removable
+  chips above the prompt input at 6–8 logical-pixel spacing. Attach is disabled
+  when the selected model cannot accept image or PDF input; the feature owns
+  that gate and passes `attachEnabled` into the composer.
 - With a pending request, the shell replaces its inner content with permission
   details and decisions. Draft text and selection state remain in the Screen
   Model and return after the request resolves.
@@ -77,10 +86,12 @@ server DTOs, repositories, and Screen Models are not component inputs.
 Both platform component files include permission-state previews with stable
 shell-command examples for light and dark theme review. Both Component
 Galleries expose one live, edge-to-edge composer with interactive controls for
-empty prompt, populated prompt, active work, pending permission, queued
-permission, submitting, and error states. The live composer is anchored to the
-bottom of the available gallery page below its controls so screen-edge geometry
-and resize motion can be reviewed in a realistic Session Chat placement.
+empty prompt, populated prompt, active work, pending attachments, pending
+permission, queued permission, submitting, and error states. The pending
+attachments scenario shows at least two sample chips with empty draft text and
+send enabled. The live composer is anchored to the bottom of the available
+gallery page below its controls so screen-edge geometry and resize motion can
+be reviewed in a realistic Session Chat placement.
 
 ## Parity And Divergence
 

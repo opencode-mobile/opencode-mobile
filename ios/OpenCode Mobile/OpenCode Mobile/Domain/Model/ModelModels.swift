@@ -42,6 +42,8 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
     let modelName: String
     let variants: [String]
     let contextLimitTokens: Int64?
+    let supportsImageInput: Bool
+    let supportsPdfInput: Bool
 
     init(
         providerID: String,
@@ -49,7 +51,9 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         modelID: String,
         modelName: String,
         variants: [String],
-        contextLimitTokens: Int64? = nil
+        contextLimitTokens: Int64? = nil,
+        supportsImageInput: Bool = true,
+        supportsPdfInput: Bool = true
     ) {
         self.providerID = providerID
         self.providerName = providerName
@@ -57,12 +61,25 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         self.modelName = modelName
         self.variants = variants
         self.contextLimitTokens = contextLimitTokens
+        self.supportsImageInput = supportsImageInput
+        self.supportsPdfInput = supportsPdfInput
     }
 
     var modelLabel: String { modelName.isEmpty ? modelID : modelName }
     var providerLabel: String { providerName.isEmpty ? providerID : providerName }
     var displayLabel: String { "\(modelLabel) · \(providerLabel)" }
     var supportsVariants: Bool { !variants.isEmpty }
+    var canAttach: Bool { supportsImageInput || supportsPdfInput }
+    var canAttachPhotos: Bool { supportsImageInput }
+    var canAttachFiles: Bool { canAttach }
+
+    func acceptsAttachmentKind(_ kind: AttachmentKind) -> Bool {
+        switch kind {
+        case .image: supportsImageInput
+        case .pdf: supportsPdfInput
+        case .text: true
+        }
+    }
 
     func matchesFilter(_ query: String) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)

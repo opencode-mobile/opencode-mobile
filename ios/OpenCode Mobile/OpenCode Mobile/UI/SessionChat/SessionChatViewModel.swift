@@ -94,8 +94,36 @@ final class SessionChatViewModel {
         await timeline.refreshMessages()
     }
 
+    func archiveSession() {
+        sessionInfo.archiveSession()
+    }
+
+    func deleteSession() {
+        sessionInfo.deleteSession()
+    }
+
     func updateComposerText(_ text: String) {
         composer.updateComposerText(text)
+    }
+
+    func addAttachments(_ attachments: [Attachment]) {
+        composer.addAttachments(attachments)
+    }
+
+    func removeAttachment(id: String) {
+        composer.removeAttachment(id: id)
+    }
+
+    func addAttachmentData(_ data: Data, filename: String, declaredMime: String?) {
+        composer.addAttachmentData(data, filename: filename, declaredMime: declaredMime)
+    }
+
+    func reportAttachmentReadFailure() {
+        composer.reportAttachmentReadFailure()
+    }
+
+    func addAttachmentFiles(_ urls: [URL]) async {
+        await composer.addAttachmentFiles(urls)
     }
 
     func retryModelCatalog() async {
@@ -116,6 +144,22 @@ final class SessionChatViewModel {
 
     func restoreComposerText(_ text: String) {
         composer.restoreComposerText(text)
+    }
+
+    func openRenameSession() {
+        sessionInfo.openRenameSession()
+    }
+
+    func cancelRenameSession() {
+        sessionInfo.cancelRenameSession()
+    }
+
+    func updateRenameDraft(_ text: String) {
+        sessionInfo.updateRenameDraft(text)
+    }
+
+    func confirmRenameSession() async {
+        await sessionInfo.confirmRenameSession()
     }
 
     func sendPrompt() async {
@@ -298,21 +342,29 @@ final class SessionChatViewModel {
             ),
             errorMessage: mergedErrorMessage(
                 timelineState: timelineState,
-                composerState: composerState
+                composerState: composerState,
+                infoState: infoState
             ),
+            isLifecycleActionInFlight: infoState.isLifecycleActionInFlight,
+            shouldLeaveSession: infoState.shouldLeaveSession,
             permissionRequest: permissionRequests.first,
             permissionQueueCount: permissionRequests.count,
             permissionSubmitting: permissionSubmittingID != nil,
             permissionErrorMessage: permissionError ?? permissionTopologyError,
             reviewChangesMessageID: reviewChangesState.messageID,
-            reviewChangesSummary: reviewChangesState.summary
+            reviewChangesSummary: reviewChangesState.summary,
+            rename: infoState.rename
         )
     }
 
     private func mergedErrorMessage(
         timelineState: SessionChatTimelineRegionState,
-        composerState: SessionChatComposerRegionState
+        composerState: SessionChatComposerRegionState,
+        infoState: SessionInfoRegionState
     ) -> String? {
+        if let error = infoState.lifecycleErrorMessage {
+            return error
+        }
         if timelineState.timeline == .error {
             return timelineState.errorMessage
         }
@@ -320,6 +372,9 @@ final class SessionChatViewModel {
             return error
         }
         if let error = composerState.abortErrorMessage {
+            return error
+        }
+        if let error = infoState.errorMessage {
             return error
         }
         if permissionRequests.isEmpty, let error = permissionTopologyError {

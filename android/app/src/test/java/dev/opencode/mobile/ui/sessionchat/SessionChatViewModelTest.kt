@@ -9,6 +9,8 @@ import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -61,7 +63,11 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -82,6 +88,137 @@ class SessionChatViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun archiveSession_successLeavesSession() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.archiveSession()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo"),
+                sessionRepository.archiveRequest,
+            )
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(false, viewModel.uiState.value.isLifecycleActionInFlight)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun archiveSession_failureKeepsSessionWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(archiveError = SessionError.Http(500, "boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.archiveSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals("Couldn't archive session.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun deleteSession_successLeavesSession() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo"),
+                sessionRepository.deleteRequest,
+            )
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+        }
+
+    @Test
+    fun deleteSession_failureKeepsSessionWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(deleteError = SessionError.Http(500, "boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun deleteSession_falseResultKeepsSessionWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(deleteResult = false)
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.deleteSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun archiveSession_disablesWhileInFlight() =
+        runTest(testDispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val sessionRepository = FakeSessionRepository(archiveHoldUntil = gate)
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.archiveSession()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isLifecycleActionInFlight)
+
+            viewModel.archiveSession()
+            advanceUntilIdle()
+            assertEquals(1, sessionRepository.archiveCallCount)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+        }
 
     @Test
     fun orderedPermissionRequests_prioritizesRootAndIncludesNewDescendants() {
@@ -517,6 +654,181 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun openRenameSession_prefillsCurrentTitle() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+
+            val rename = viewModel.uiState.value.rename
+            assertTrue(rename.isDialogVisible)
+            assertEquals("Original title", rename.draftTitle)
+            assertEquals(null, rename.errorMessage)
+            assertFalse(rename.isSubmitting)
+        }
+
+    @Test
+    fun confirmRenameSession_emptyTitle_keepsDialogWithoutApiCall() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("   ")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.updateRequest)
+            assertTrue(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Enter a session title", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun confirmRenameSession_unchangedTitle_dismissesWithoutApiCall() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("  Original title  ")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.updateRequest)
+            assertFalse(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun confirmRenameSession_success_updatesTitleAndDismisses() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Renamed title")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.UpdateRequest("ses-1", "Renamed title", "/repo"),
+                sessionRepository.updateRequest,
+            )
+            assertFalse(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Renamed title", viewModel.uiState.value.sessionTitle)
+            assertEquals("ses-1", viewModel.uiState.value.sessionId)
+        }
+
+    @Test
+    fun confirmRenameSession_failure_keepsPreviousTitleAndShowsError() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(updateSessionError = SessionError.Http(500, "boom"))
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Renamed title")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.rename.isDialogVisible)
+            assertFalse(viewModel.uiState.value.rename.isSubmitting)
+            assertEquals("boom", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun sessionUpdatedEvent_appliesTitleForOpenSession() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.updated",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "info",
+                                buildJsonObject {
+                                    put("id", "ses-1")
+                                    put("title", "Live title")
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("Live title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun cancelRenameSession_hidesDialog() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Draft")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.rename.isDialogVisible)
+            viewModel.cancelRenameSession()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.rename.isDialogVisible)
+            assertEquals("Original title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
+    fun bind_sameSessionKeepsRenamedTitleWhenNavTitleIsStale() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openRenameSession()
+            advanceUntilIdle()
+            viewModel.updateRenameDraft("Renamed title")
+            advanceUntilIdle()
+            viewModel.confirmRenameSession()
+            advanceUntilIdle()
+            assertEquals("Renamed title", viewModel.uiState.value.sessionTitle)
+
+            // Simulate configuration change re-running LaunchedEffect with stale nav title.
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("Renamed title", viewModel.uiState.value.sessionTitle)
+        }
+
+    @Test
     fun loadMessages_error() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository(shouldFailLoad = true))
@@ -572,6 +884,247 @@ class SessionChatViewModelTest {
                     .single()
                     .text,
             )
+        }
+
+    @Test
+    fun attachmentOnlyPrompt_sendsAndCreatesOptimisticAttachmentMessage() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val attachment = testAttachment()
+
+            viewModel.addAttachments(listOf(attachment))
+            runCurrent()
+            assertTrue(viewModel.uiState.value.composer.canSend)
+            viewModel.sendPrompt()
+            runCurrent()
+
+            assertEquals(listOf(attachment), repository.sentOptions?.attachments)
+            assertEquals("", repository.sentOptions?.text)
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.attachments.singleOrNull()?.filename == "photo.png"
+                },
+            )
+            assertEquals(listOf(attachment), viewModel.uiState.value.composer.attachments)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun attach_disabledForTextOnlyModelAndStripsUnsupportedPendingAttachments() =
+        runTest(testDispatcher) {
+            val textOnly =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "text-only",
+                    modelName = "Text Only",
+                    supportsImageInput = false,
+                    supportsPdfInput = false,
+                )
+            val vision =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "vision",
+                    modelName = "Vision",
+                    supportsImageInput = true,
+                    supportsPdfInput = false,
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(options = listOf(vision, textOnly), serverDefault = vision),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.composer.canAttach)
+            assertTrue(viewModel.uiState.value.composer.canAttachPhotos)
+
+            val image = testAttachment(id = "img", filename = "shot.png", kind = AttachmentKind.Image, mime = "image/png")
+            val pdf = testAttachment(id = "pdf", filename = "brief.pdf", kind = AttachmentKind.Pdf, mime = "application/pdf")
+            val text = testAttachment(id = "txt", filename = "notes.txt", kind = AttachmentKind.Text, mime = "text/plain")
+            viewModel.addAttachments(listOf(image, pdf, text))
+            runCurrent()
+            assertEquals(listOf("img", "txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+            assertEquals(
+                "This model does not support PDF attachments.",
+                viewModel.uiState.value.errorMessage,
+            )
+
+            viewModel.selectModel(textOnly)
+            runCurrent()
+            assertFalse(viewModel.uiState.value.composer.canAttach)
+            assertEquals(listOf("txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+        }
+
+    @Test
+    fun failedAttachmentPrompt_restoresDraftAndAttachmentsWithoutOverwritingNewEdits() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(shouldFailSend = true, holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val original = testAttachment()
+
+            viewModel.updateComposerText("Original")
+            viewModel.addAttachments(listOf(original))
+            runCurrent()
+            viewModel.sendPrompt()
+            runCurrent()
+            viewModel.updateComposerText("New edit")
+            val newer = testAttachment(id = "attachment-2", filename = "new.txt", kind = AttachmentKind.Text)
+            viewModel.addAttachments(listOf(newer))
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("New edit", viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(original.id, newer.id),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun successfulPrompt_clearsOnlySubmittedValuesAndPreservesNewEditsAndSelection() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val secondModel =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-4",
+                    modelName = "GPT-4",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val defaultModel =
+                ModelSelectionOption(
+                    providerId = "anthropic",
+                    providerName = "Anthropic",
+                    modelId = "claude-sonnet",
+                    modelName = "Claude Sonnet",
+                    variants = emptyList(),
+                    contextLimitTokens = 128_000,
+                )
+            val viewModel =
+                createViewModel(
+                    repository,
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(listOf(defaultModel, secondModel), defaultModel),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val submitted = testAttachment()
+            val newer = testAttachment(id = "attachment-2", filename = "new.txt", kind = AttachmentKind.Text)
+
+            viewModel.updateComposerText("Submitted")
+            viewModel.addAttachments(listOf(submitted))
+            viewModel.sendPrompt()
+            runCurrent()
+            viewModel.updateComposerText("New edit")
+            viewModel.addAttachments(listOf(newer))
+            viewModel.selectModel(secondModel)
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("New edit", viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(newer.id),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+            assertEquals(
+                "gpt-4",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun successfulPrompt_preservesInFlightSameTextAndReaddedAttachment() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdSendUntil = sendGate)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val attachment = testAttachment()
+
+            viewModel.updateComposerText("Submitted")
+            viewModel.addAttachments(listOf(attachment))
+            viewModel.sendPrompt()
+            runCurrent()
+            viewModel.updateComposerText("Edited")
+            viewModel.updateComposerText("Submitted")
+            viewModel.removeAttachment(attachment.id)
+            viewModel.addAttachments(listOf(attachment))
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("Submitted", viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(attachment.id),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun repeatedAttachmentOnlySend_doesNotReconcileAgainstOlderMatchingMessage() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val oldFile =
+                MessagePart.File(
+                    id = "server-old",
+                    filename = "notes.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,SGk=",
+                )
+            val repository =
+                FakeMessageRepository(
+                    messages =
+                        listOf(
+                            Message(id = "msg-old", role = MessageRole.User, text = "", parts = listOf(oldFile)),
+                        ),
+                    holdSendUntil = sendGate,
+                )
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(testAttachment(id = "client-new", filename = "notes.txt", kind = AttachmentKind.Text)))
+            viewModel.sendPrompt()
+            runCurrent()
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceTimeBy(350)
+            runCurrent()
+
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.id.startsWith("pending-") },
+            )
+            sendGate.complete(Unit)
+            advanceUntilIdle()
         }
 
     @Test
@@ -1127,6 +1680,33 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sessionErrorEvent_surfacesMessageWithoutRestoringAttachments() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.error",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put("error", buildJsonObject { put("message", "Image exceeds the size limit") })
+                        },
+                ),
+            )
+            runCurrent()
+
+            assertEquals("Image exceeds the size limit", viewModel.uiState.value.errorMessage)
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
     fun sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository(failListMessagesAfterSend = true)
@@ -1315,6 +1895,59 @@ class SessionChatViewModelTest {
             assertFalse(item.isStreaming)
             val tool = item.blocks.single() as SessionChatTimelineBlock.ToolCard
             assertEquals("Shell", tool.title)
+        }
+
+    @Test
+    fun toMessageItem_userParts_preserveTextAndAttachmentOrder() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val firstFile =
+                MessagePart.File(
+                    id = "file-1",
+                    filename = "first.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,QQ==",
+                )
+            val secondFile = firstFile.copy(id = "file-2", filename = "second.txt", dataUrl = "data:text/plain;base64,Qg==")
+            val message =
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.User,
+                    text = "Between",
+                    parts = listOf(firstFile, MessagePart.Text("Between"), secondFile),
+                )
+
+            val item = requireNotNull(viewModel.toMessageItem(message))
+
+            assertEquals(3, item.blocks.size)
+            assertEquals("first.txt", (item.blocks[0] as SessionChatTimelineBlock.Attachment).attachment.filename)
+            assertEquals("Between", (item.blocks[1] as SessionChatTimelineBlock.Text).text)
+            assertEquals("second.txt", (item.blocks[2] as SessionChatTimelineBlock.Attachment).attachment.filename)
+        }
+
+    @Test
+    fun toMessageItem_attachmentOnlyUserMessage_isKept() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            val file =
+                MessagePart.File(
+                    id = "file-1",
+                    filename = "notes.txt",
+                    mime = "text/plain",
+                    kind = AttachmentKind.Text,
+                    dataUrl = "data:text/plain;base64,SGk=",
+                )
+
+            val item =
+                requireNotNull(
+                    viewModel.toMessageItem(
+                        Message(id = "msg-1", role = MessageRole.User, text = "", parts = listOf(file)),
+                    ),
+                )
+
+            assertEquals(1, item.blocks.size)
+            assertTrue(item.blocks.single() is SessionChatTimelineBlock.Attachment)
         }
 
     @Test
@@ -1679,6 +2312,12 @@ private class FakeMessageRepository(
         text: String,
     ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
 
+    override suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+        attachments: List<Attachment>,
+    ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text, attachments)
+
     override fun clearMessageCache() = Unit
 
     override suspend fun listMessages(
@@ -1710,9 +2349,32 @@ private class FakeMessageRepository(
     ) {
         sendPromptAsyncCalled = true
         sentOptions = options
-        if (shouldFailSend) error("send failed")
         holdSendUntil?.await()
+        if (shouldFailSend) error("send failed")
     }
+}
+
+private fun testAttachment(
+    id: String = "attachment-1",
+    filename: String = "photo.png",
+    kind: AttachmentKind = AttachmentKind.Image,
+    mime: String? = null,
+): Attachment {
+    val resolvedMime =
+        mime
+            ?: when (kind) {
+                AttachmentKind.Text -> "text/plain"
+                AttachmentKind.Pdf -> "application/pdf"
+                AttachmentKind.Image -> "image/png"
+            }
+    return Attachment(
+        id = id,
+        filename = filename,
+        mime = resolvedMime,
+        kind = kind,
+        dataUrl = "data:$resolvedMime;base64,AA==",
+        byteCount = 1,
+    )
 }
 
 private class FakeModelRepository(
@@ -1744,10 +2406,27 @@ private class FakeSessionRepository(
     private val sessionDiffError: SessionError? = null,
     private val sessionStatusType: String = "idle",
     private val sessionStatusError: SessionError? = null,
+    private val updateSessionError: SessionError? = null,
+    private val archiveError: Throwable? = null,
+    private val deleteError: Throwable? = null,
+    private val deleteResult: Boolean = true,
+    private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
+    private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
         val messageId: String?,
+        val directory: String?,
+    )
+
+    data class UpdateRequest(
+        val id: String,
+        val title: String?,
+        val directory: String?,
+    )
+
+    data class LifecycleRequest(
+        val id: String,
         val directory: String?,
     )
 
@@ -1758,6 +2437,16 @@ private class FakeSessionRepository(
     var respondedSessionId: String? = null
         private set
     var diffRequest: DiffRequest? = null
+        private set
+    var updateRequest: UpdateRequest? = null
+        private set
+    var archiveRequest: LifecycleRequest? = null
+        private set
+    var archiveCallCount: Int = 0
+        private set
+    var deleteRequest: LifecycleRequest? = null
+        private set
+    var deleteCallCount: Int = 0
         private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
@@ -1790,12 +2479,33 @@ private class FakeSessionRepository(
         id: String,
         title: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        updateRequest = UpdateRequest(id, title, directory)
+        updateSessionError?.let { throw it }
+        return Session(id = id, title = title.orEmpty(), directory = directory)
+    }
+
+    override suspend fun archiveSession(
+        id: String,
+        directory: String?,
+    ): Session {
+        archiveCallCount += 1
+        archiveRequest = LifecycleRequest(id = id, directory = directory)
+        archiveHoldUntil?.await()
+        archiveError?.let { throw it }
+        return Session(id = id, title = "Archived", archivedAtEpochMs = 1L)
+    }
 
     override suspend fun deleteSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        deleteCallCount += 1
+        deleteRequest = LifecycleRequest(id = id, directory = directory)
+        deleteHoldUntil?.await()
+        deleteError?.let { throw it }
+        return deleteResult
+    }
 
     override suspend fun listChildSessions(
         id: String,

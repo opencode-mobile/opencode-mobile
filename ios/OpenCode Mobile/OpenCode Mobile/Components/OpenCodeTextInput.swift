@@ -13,9 +13,8 @@ enum OpenCodeTextInputSubmitAction {
 }
 
 struct OpenCodeTextInput: View {
-    var label: String?
     @Binding var text: String
-    var placeholder: String = ""
+    var hint: String = ""
     var accessibilityLabel: String?
     var kind: OpenCodeTextInputKind = .text
     var enabled = true
@@ -27,9 +26,8 @@ struct OpenCodeTextInput: View {
     @FocusState private var focused: Bool
 
     init(
-        label: String? = nil,
         text: Binding<String>,
-        placeholder: String = "",
+        hint: String = "",
         accessibilityLabel: String? = nil,
         kind: OpenCodeTextInputKind = .text,
         enabled: Bool = true,
@@ -39,12 +37,11 @@ struct OpenCodeTextInput: View {
         onSubmit: (() -> Void)? = nil
     ) {
         precondition(
-            Self.resolveAccessibilityLabel(label: label, accessibilityLabel: accessibilityLabel) != nil,
-            "OpenCodeTextInput requires a visible label or a non-blank accessibilityLabel"
+            Self.resolveAccessibilityLabel(hint: hint, accessibilityLabel: accessibilityLabel) != nil,
+            "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
         )
-        self.label = label
         _text = text
-        self.placeholder = placeholder
+        self.hint = hint
         self.accessibilityLabel = accessibilityLabel
         self.kind = kind
         self.enabled = enabled
@@ -56,12 +53,6 @@ struct OpenCodeTextInput: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let label {
-                Text(label)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
-            }
-
             field
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
@@ -102,22 +93,22 @@ struct OpenCodeTextInput: View {
     private var field: some View {
         Group {
             if kind == .password {
-                SecureField(placeholder, text: $text)
+                SecureField(hint, text: $text)
                     .textContentType(.password)
             } else {
-                TextField(placeholder, text: $text)
+                TextField(hint, text: $text)
                     .textContentType(contentType)
                     .keyboardType(kind == .url ? .URL : .default)
             }
         }
-        .accessibilityLabel(Self.resolveAccessibilityLabel(label: label, accessibilityLabel: accessibilityLabel)!)
+        .accessibilityLabel(Self.resolveAccessibilityLabel(hint: hint, accessibilityLabel: accessibilityLabel)!)
     }
 
-    static func resolveAccessibilityLabel(label: String?, accessibilityLabel: String?) -> String? {
+    static func resolveAccessibilityLabel(hint: String?, accessibilityLabel: String?) -> String? {
         if let accessibilityLabel, !accessibilityLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return accessibilityLabel
         }
-        if let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return label }
+        if let hint, !hint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return hint }
         return nil
     }
 
@@ -137,7 +128,7 @@ struct OpenCodeTextInput: View {
 }
 
 #Preview("Text Input") {
-    OpenCodeTextInput(label: "Server URL", text: .constant("http://127.0.0.1:4096/"), kind: .url)
+    OpenCodeTextInput(text: .constant(""), hint: "Server URL", kind: .url)
         .padding()
         .openCodeTheme()
 }

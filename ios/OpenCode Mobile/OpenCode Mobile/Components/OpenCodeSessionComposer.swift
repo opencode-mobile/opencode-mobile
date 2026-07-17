@@ -3,13 +3,39 @@ import SwiftUI
 enum OpenCodeSessionComposerState {
     struct Prompt {
         let text: String
+        let attachments: [OpenCodeAttachmentPresentation]
         let selectedModelLabel: String
         let selectedModeLabel: String
         let selectedVariantLabel: String
         let showVariant: Bool
         let sendEnabled: Bool
+        let attachEnabled: Bool
         let showStop: Bool
         let stopEnabled: Bool
+
+        init(
+            text: String,
+            attachments: [OpenCodeAttachmentPresentation] = [],
+            selectedModelLabel: String,
+            selectedModeLabel: String,
+            selectedVariantLabel: String,
+            showVariant: Bool,
+            sendEnabled: Bool,
+            attachEnabled: Bool = true,
+            showStop: Bool,
+            stopEnabled: Bool
+        ) {
+            self.text = text
+            self.attachments = attachments
+            self.selectedModelLabel = selectedModelLabel
+            self.selectedModeLabel = selectedModeLabel
+            self.selectedVariantLabel = selectedVariantLabel
+            self.showVariant = showVariant
+            self.sendEnabled = sendEnabled
+            self.attachEnabled = attachEnabled
+            self.showStop = showStop
+            self.stopEnabled = stopEnabled
+        }
     }
 
     struct Permission {
@@ -53,6 +79,7 @@ enum OpenCodeSessionComposerAction {
     case selectMode
     case selectVariant
     case attach
+    case removeAttachment(String)
     case send
     case stop
     case allowPermissionOnce(requestID: String, sessionID: String)
@@ -96,6 +123,16 @@ struct OpenCodeSessionComposer: View {
 
     @ViewBuilder
     private func promptEntryContent(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
+            if !prompt.attachments.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(prompt.attachments) { attachment in
+                        OpenCodeAttachmentChip(attachment: attachment) { id in
+                            onAction(.removeAttachment(id))
+                        }
+                    }
+                }
+            }
+
             TextField("Ask anything...", text: textBinding, axis: .vertical)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
@@ -114,7 +151,8 @@ struct OpenCodeSessionComposer: View {
 
             HStack {
                 OpenCodeButton(
-                    variant: .iconCircle(.add, accessibilityLabel: "Attach context"),
+                    variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                    enabled: prompt.attachEnabled,
                     contrast: .low,
                     action: { onAction(.attach) }
                 )

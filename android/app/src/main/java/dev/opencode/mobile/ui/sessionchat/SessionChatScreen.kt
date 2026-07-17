@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -21,7 +25,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeDialog
+import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
@@ -43,6 +54,9 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +72,8 @@ fun SessionChatScreen(
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val attachmentIngestion = remember(context) { AttachmentIngestionService(context.contentResolver) }
 
     LaunchedEffect(sessionId, sessionTitle, worktree) {
         viewModel.bind(sessionId, sessionTitle, worktree)
@@ -65,11 +81,32 @@ fun SessionChatScreen(
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
+    val lifecycleActionsEnabled = !uiState.isLifecycleActionInFlight
+    var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
+
+    fun ingestAttachments(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) return
+        coroutineScope.launch {
+            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris) }
+            viewModel.addAttachments(result.attachments)
+            result.errors.firstOrNull()?.let(viewModel::reportAttachmentError)
+        }
+    }
+
+    val photoPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+            ingestAttachments(uris)
+        }
+    val documentPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            ingestAttachments(uris)
+        }
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -78,6 +115,38 @@ fun SessionChatScreen(
         }
     }
 
+    LaunchedEffect(uiState.shouldLeaveSession) {
+        if (uiState.shouldLeaveSession) {
+            onNavigateBack()
+        }
+    }
+
+    OpenCodeDialog(
+        visible = showDeleteConfirmation,
+        title = "Delete session",
+        subtitle = "Delete session “${uiState.sessionTitle}”?",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Delete",
+                enabled = lifecycleActionsEnabled,
+                onClick = {
+                    showDeleteConfirmation = false
+                    viewModel.deleteSession()
+                },
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                enabled = lifecycleActionsEnabled,
+                onClick = { showDeleteConfirmation = false },
+            ),
+        onDismissRequest = {
+            if (lifecycleActionsEnabled) {
+                showDeleteConfirmation = false
+            }
+        },
+    )
+
     Box(modifier = modifier.fillMaxSize().imePadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBarOverflowHost(
@@ -85,6 +154,14 @@ fun SessionChatScreen(
                 onDismissRequest = { menuExpanded = false },
                 entries =
                     listOf(
+                        OpenCodeOverflowMenuEntry(
+                            title = "Rename session",
+                            icon = OpenCodeIcons.Edit,
+                            onClick = {
+                                menuExpanded = false
+                                viewModel.openRenameSession()
+                            },
+                        ),
                         OpenCodeOverflowMenuEntry(
                             title = "Review changes",
                             icon = OpenCodeIcons.Description,
@@ -109,10 +186,29 @@ fun SessionChatScreen(
                                 copySessionIdToClipboard(context, uiState.sessionId)
                             },
                         ),
+                        OpenCodeOverflowMenuEntry(
+                            title = "Archive",
+                            icon = OpenCodeIcons.Archive,
+                            enabled = lifecycleActionsEnabled,
+                            onClick = {
+                                menuExpanded = false
+                                viewModel.archiveSession()
+                            },
+                        ),
+                        OpenCodeOverflowMenuEntry(
+                            title = "Delete",
+                            icon = OpenCodeIcons.Close,
+                            enabled = lifecycleActionsEnabled,
+                            destructive = true,
+                            onClick = {
+                                menuExpanded = false
+                                showDeleteConfirmation = true
+                            },
+                        ),
                     ),
             ) {
                 OpenCodeTopBar(
-                    title = "Session",
+                    title = uiState.sessionTitle.ifBlank { sessionTitle },
                     subtitleAccessory =
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
                             uiState.connectionStatus.toOpenCodeSessionConnectionStatus(),
@@ -201,15 +297,18 @@ fun SessionChatScreen(
                     )
                 } ?: OpenCodeSessionComposerState.Prompt(
                     text = uiState.composer.text,
+                    attachments =
+                        uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                     selectedModelLabel = uiState.composer.selectedModelLabel,
                     selectedModeLabel = uiState.composer.selectedMode,
                     selectedVariantLabel = uiState.composer.selectedVariantLabel,
                     showVariant = uiState.composer.canSelectVariant,
                     sendEnabled =
-                        uiState.composer.text.isNotBlank() &&
+                        uiState.composer.canSend &&
                             uiState.composer.selectedModel != null &&
                             uiState.composer.isModelSelectionReady &&
                             !uiState.isSending,
+                    attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
                     showStop = uiState.sessionStatusLabel != null,
                     stopEnabled = !uiState.isAborting,
                 )
@@ -231,7 +330,19 @@ fun SessionChatScreen(
                         }
                         OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
                         OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
-                        OpenCodeSessionComposerAction.Attach -> Unit
+                        OpenCodeSessionComposerAction.Attach -> {
+                            val photos = uiState.composer.canAttachPhotos
+                            val files = uiState.composer.canAttachFiles
+                            when {
+                                photos && files -> showAttachmentSource = true
+                                photos ->
+                                    photoPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                files -> documentPicker.launch(arrayOf("*/*"))
+                            }
+                        }
+                        is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
                         OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                         OpenCodeSessionComposerAction.Stop -> viewModel.abort()
                         is OpenCodeSessionComposerAction.AllowPermissionOnce ->
@@ -253,6 +364,33 @@ fun SessionChatScreen(
             target = toolDetailTarget,
             onDismiss = { toolDetailTarget = null },
         )
+
+        OpenCodeBottomSheet(
+            visible = showAttachmentSource,
+            title = "Add attachment",
+            onDismissRequest = { showAttachmentSource = false },
+        ) {
+            if (uiState.composer.canAttachPhotos) {
+                OpenCodeBottomSheetEntry(
+                    title = "Photos",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
+                    onClick = {
+                        showAttachmentSource = false
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                )
+            }
+            if (uiState.composer.canAttachFiles) {
+                OpenCodeBottomSheetEntry(
+                    title = "Files",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                    onClick = {
+                        showAttachmentSource = false
+                        documentPicker.launch(arrayOf("*/*"))
+                    },
+                )
+            }
+        }
 
         SessionChatPickerSheet(
             activePicker = activePicker,
@@ -283,6 +421,36 @@ fun SessionChatScreen(
             onSelectVariant = { variant ->
                 viewModel.selectVariant(variant)
                 activePicker = null
+            },
+        )
+
+        OpenCodeDialog(
+            visible = uiState.rename.isDialogVisible,
+            title = "Rename session",
+            primaryOption =
+                OpenCodeDialogOption(
+                    title = "Save",
+                    enabled = !uiState.rename.isSubmitting,
+                    onClick = viewModel::confirmRenameSession,
+                ),
+            secondaryOption =
+                OpenCodeDialogOption(
+                    title = "Cancel",
+                    enabled = !uiState.rename.isSubmitting,
+                    onClick = viewModel::cancelRenameSession,
+                ),
+            textField =
+                OpenCodeDialogTextField(
+                    value = uiState.rename.draftTitle,
+                    onValueChange = viewModel::updateRenameDraft,
+                    hint = "Title",
+                    enabled = !uiState.rename.isSubmitting,
+                    errorMessage = uiState.rename.errorMessage,
+                ),
+            onDismissRequest = {
+                if (!uiState.rename.isSubmitting) {
+                    viewModel.cancelRenameSession()
+                }
             },
         )
     }

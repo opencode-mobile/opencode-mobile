@@ -8,11 +8,11 @@
 
 ## Dialog, not inline title edit
 
-- Decision: Use a modal dialog with `OpenCodeTextInput`, not tap-to-edit on the
-  top bar and not a bottom sheet.
+- Decision: Use `OpenCodeDialog` with an in-field `OpenCodeTextInput` hint, not
+  tap-to-edit on the top bar and not a bottom sheet.
 - Reason: Matches TUI’s prompt pattern and fits mobile top-bar chrome; desktop
   web’s inline editor does not map cleanly when the title is also the navigation
-  title.
+  title. Shared Dialog chrome keeps rename aligned with other short confirmations.
 
 ## Show title in the top bar
 
@@ -39,3 +39,11 @@
 - Decision: Rename remains available while the session is busy or a permission
   request is pending; only an in-flight rename submit disables Save.
 - Reason: Title is independent of prompt execution and permission resolution.
+
+## Shared Dialog chrome
+
+- Decision: Both platforms use `OpenCodeDialog` with Cancel/Save and an in-field
+  title hint.
+- Reason: Keep short confirmations and single-field edits on one design-system
+  modal; platform Dialog host differences are recorded in
+  `docs/design-system/divergences.md`.

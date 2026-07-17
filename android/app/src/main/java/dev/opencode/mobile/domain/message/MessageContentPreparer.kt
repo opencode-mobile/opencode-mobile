@@ -63,12 +63,28 @@ class MessageContentPreparer
         suspend fun prepareOptimisticUserMessage(
             id: String,
             text: String,
+            attachments: List<Attachment> = emptyList(),
         ): DisplayMessage =
             prepareMessage(
                 Message(
                     id = id,
                     role = MessageRole.User,
                     text = text,
+                    parts =
+                        buildList {
+                            if (text.isNotBlank()) add(MessagePart.Text(text))
+                            attachments.forEach { attachment ->
+                                add(
+                                    MessagePart.File(
+                                        id = attachment.id,
+                                        filename = attachment.filename,
+                                        mime = attachment.mime,
+                                        kind = attachment.kind,
+                                        dataUrl = attachment.dataUrl,
+                                    ),
+                                )
+                            }
+                        },
                 ),
             )
 

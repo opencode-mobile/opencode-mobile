@@ -23,6 +23,8 @@ class ModelDomainAdapter {
                                     ?.sortedWith(String.CASE_INSENSITIVE_ORDER)
                                     .orEmpty(),
                             contextLimitTokens = model.limit?.context,
+                            supportsImageInput = model.capabilities?.input?.image ?: true,
+                            supportsPdfInput = model.capabilities?.input?.pdf ?: true,
                         )
                     }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.modelLabel })
             }

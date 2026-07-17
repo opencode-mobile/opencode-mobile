@@ -19,11 +19,13 @@ enum class ComponentGalleryEntryId {
     Colors,
     Typography,
     Icons,
+    Attachment,
     OutgoingMessage,
     ToolCallCard,
     TopBar,
     OverflowMenu,
     BottomSheet,
+    Dialog,
     ListItem,
     ListGroup,
     ChoiceBadge,
@@ -88,7 +90,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.TextInput,
             title = "Text Input",
-            description = "Labeled single-line entry for text, URLs, usernames, and passwords.",
+            description = "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
@@ -110,6 +112,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Dialog,
+            title = "Dialog",
+            description = "Centered popup with title, optional subtitle, two options, and optional text field.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.OverflowMenu,
             title = "Overflow Menu",
             description = "Compact anchored popup menu with icon and label entries.",
@@ -120,6 +128,12 @@ val ComponentGalleryEntries =
             title = "Top Bar",
             description = "Page-level navigation bar with leading affordance and actions.",
             category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Attachment,
+            title = "Attachment",
+            description = "Pending attachment chips and sent-message attachment rows.",
+            category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.MessageList,

@@ -11,12 +11,14 @@ of styling native text fields locally.
 - Variants: `text`, `url`, `username`, `password`.
 - States: empty, populated, focused, disabled, and error.
 - Required content: value binding/callback.
-- Optional content: visible label, placeholder, accessibility label, error
+- Optional content: hint (in-field empty-state copy), accessibility label, error
   message, enabled state, and semantic submit action (`next` or `done`).
 
-When the visible label is omitted, the component removes both the label and its
-spacing. The caller must provide an accessibility label; placeholder copy does
-not replace the semantic name.
+There is no external label above the field. The hint appears inside the field
+only while the value is empty. Callers must provide a non-blank hint or a
+non-blank accessibility label so the control has an accessible name; when both
+are supplied, the accessibility label wins for semantics and the hint remains
+the visible empty-state copy.
 
 The variant selects secure entry, capitalization, autocorrection, keyboard, and
 content-type behavior. Visual styling is not exposed for feature-level override.
@@ -25,9 +27,10 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 
 - Semantic tokens: `surface-raised-base`, `text-strong`, `text-base`,
   `text-weaker`, `border-weaker-base`, `interactive`, and `error`.
-- Component tokens: `textInput.cornerRadius`, `textInput.minHeight`,
-  `textInput.paddingHorizontal`, and `textInput.labelSpacing`.
-- Typography roles: `type.caption` for labels and messages; `type.body` for input.
+- Component tokens: `textInput.cornerRadius`, `textInput.minHeight`, and
+  `textInput.paddingHorizontal`.
+- Typography roles: `type.caption` for error messages; `type.body` for input and
+  hint.
 
 ## Behavior
 
@@ -36,34 +39,36 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 - Disabled fields remain readable but do not accept input.
 - Password values use native secure-entry behavior and are not revealed by the
   component.
-- Supplied labels remain visible when values or placeholders are empty.
+- The hint is visible only when the value is empty; it does not float or move
+  outside the field.
 - `next` advances to the next focusable field; `done` clears field focus and
   dismisses the keyboard according to native behavior.
 
 ## Platform Notes
 
 - iOS: SwiftUI `TextField`/`SecureField` provide native content types and submit
-  behavior.
+  behavior. Hint maps to the field's placeholder string.
 - Android: Material `OutlinedTextField` provides native focus, keyboard, and
-  password transformation behavior.
+  password transformation behavior. Hint maps to the field's placeholder; no
+  Material floating label is used.
 
 ## Previews
 
 Both Component Galleries provide one live field with controls for input kind,
-visible-label presence, enabled state, and error state. The shared theme control
-covers light and dark.
+enabled state, error state, and empty vs populated value so the in-field hint
+can be reviewed. The shared theme control covers light and dark.
 
 ## Completion Ledger
 
 - Public API and applicable states: complete.
-- Token and typography mapping: complete; unchanged.
-- iOS and Android implementations: complete. Both enforce a visible label or
-  explicit non-empty accessibility label, and placeholder text is not accepted
-  as the semantic name.
+- Token and typography mapping: complete; `textInput.labelSpacing` removed with
+  the external label.
+- iOS and Android implementations: complete. Both enforce a non-blank hint or
+  accessibility label, and neither renders an external label.
 - Gallery entries and previews: complete.
 - Parity and divergences: complete; none known.
-- Automated checks: complete. Both platforms cover explicit-label precedence,
-  visible-label fallback, and rejection of empty unlabeled configurations.
+- Automated checks: complete. Both platforms cover accessibility-label
+  precedence, hint fallback, and rejection of empty unlabeled configurations.
 
 ## Parity And Divergence
 

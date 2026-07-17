@@ -17,11 +17,11 @@ import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 
 @Composable
 fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
-    var value by rememberSaveable { mutableStateOf("http://127.0.0.1:4096/") }
+    var value by rememberSaveable { mutableStateOf("") }
     var kindName by rememberSaveable { mutableStateOf(OpenCodeTextInputKind.Url.name) }
     var enabled by rememberSaveable { mutableStateOf(true) }
     var showsError by rememberSaveable { mutableStateOf(false) }
-    var showsLabel by rememberSaveable { mutableStateOf(true) }
+    var isEmpty by rememberSaveable { mutableStateOf(true) }
     val kind = OpenCodeTextInputKind.valueOf(kindName)
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -32,7 +32,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
                     selected = option == kind,
                     onClick = {
                         kindName = option.name
-                        value = option.sampleValue
+                        value = if (isEmpty) "" else option.sampleValue
                     },
                 )
             }
@@ -40,37 +40,33 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
             OpenCodeChoiceBadge(label = "Error", selected = showsError, onClick = { showsError = !showsError })
-            OpenCodeChoiceBadge(label = "Label", selected = showsLabel, onClick = { showsLabel = !showsLabel })
+            OpenCodeChoiceBadge(
+                label = "Empty",
+                selected = isEmpty,
+                onClick = {
+                    isEmpty = !isEmpty
+                    value = if (isEmpty) "" else kind.sampleValue
+                },
+            )
         }
         OpenCodeTextInput(
-            label = kind.fieldLabel.takeIf { showsLabel },
             value = value,
             onValueChange = { value = it },
-            placeholder = kind.placeholder,
-            accessibilityLabel = kind.fieldLabel.takeUnless { showsLabel },
+            hint = kind.fieldHint,
             kind = kind,
             enabled = enabled,
-            errorMessage = if (showsError) "Enter a valid ${kind.fieldLabel.lowercase()}" else null,
+            errorMessage = if (showsError) "Enter a valid ${kind.fieldHint.lowercase()}" else null,
         )
     }
 }
 
-private val OpenCodeTextInputKind.fieldLabel: String
+private val OpenCodeTextInputKind.fieldHint: String
     get() =
         when (this) {
             OpenCodeTextInputKind.Text -> "Project name"
             OpenCodeTextInputKind.Url -> "Server URL"
             OpenCodeTextInputKind.Username -> "Username"
             OpenCodeTextInputKind.Password -> "Password"
-        }
-
-private val OpenCodeTextInputKind.placeholder: String
-    get() =
-        when (this) {
-            OpenCodeTextInputKind.Text -> "OpenCode Mobile"
-            OpenCodeTextInputKind.Url -> "http://127.0.0.1:4096/"
-            OpenCodeTextInputKind.Username -> "opencode"
-            OpenCodeTextInputKind.Password -> "Server password"
         }
 
 private val OpenCodeTextInputKind.sampleValue: String

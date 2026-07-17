@@ -97,11 +97,13 @@ applicable item is complete.
 ## Current Component Docs
 
 - `../icons.md` (shared Material icon catalog and sync workflow)
+- `attachment.md`
 - `outgoing-message.md`
 - `tool-call-card.md`
 - `top-bar.md`
 - `overflow-menu.md`
 - `bottom-sheet.md`
+- `dialog.md`
 - `choice-badge.md`
 - `list-item.md`
 - `list-group.md`

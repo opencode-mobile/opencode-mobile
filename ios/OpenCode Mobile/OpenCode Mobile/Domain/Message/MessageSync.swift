@@ -279,7 +279,21 @@ final class MessageSync {
     }
 
     private func messageFingerprint(_ messages: [Message]) -> String {
-        messages.map { "\($0.id):\($0.text.count):\($0.text.hashValue)" }.joined(separator: "|")
+        messages.map { message in
+            let parts = message.parts.map(partFingerprint).joined(separator: ",")
+            return "\(message.id):\(message.text.count):\(message.text.hashValue):\(parts)"
+        }.joined(separator: "|")
+    }
+
+    private func partFingerprint(_ part: MessagePart) -> String {
+        switch part {
+        case .text(let text):
+            "text:\(text.text.count):\(text.text.hashValue):\(text.isStreaming)"
+        case .file(let file):
+            "file:\(file.id):\(file.mime):\(file.filename):\(file.dataURL.count):\(file.dataURL.hashValue)"
+        case .tool(let tool):
+            "tool:\(tool.toolName):\(tool.status.rawValue):\(tool.title ?? ""):\(tool.error ?? "")"
+        }
     }
 
     private func markChanged(sessionID: String, messages: [Message]) -> Bool {

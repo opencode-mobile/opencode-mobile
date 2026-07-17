@@ -1,9 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,31 +35,22 @@ enum class OpenCodeTextInputSubmitAction {
 
 @Composable
 fun OpenCodeTextInput(
-    label: String? = null,
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "",
+    hint: String = "",
     accessibilityLabel: String? = null,
     kind: OpenCodeTextInputKind = OpenCodeTextInputKind.Text,
     enabled: Boolean = true,
     errorMessage: String? = null,
     submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
 ) {
-    val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(label, accessibilityLabel)
+    val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(hint, accessibilityLabel)
     requireNotNull(resolvedAccessibilityLabel) {
-        "OpenCodeTextInput requires a visible label or a non-blank accessibilityLabel"
+        "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
     }
     val focusManager = LocalFocusManager.current
     Column(modifier = modifier.fillMaxWidth()) {
-        label?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -72,10 +61,10 @@ fun OpenCodeTextInput(
             enabled = enabled,
             singleLine = true,
             placeholder =
-                if (placeholder.isEmpty()) {
+                if (hint.isEmpty()) {
                     null
                 } else {
-                    { Text(placeholder) }
+                    { Text(hint) }
                 },
             isError = errorMessage != null,
             supportingText =
@@ -122,6 +111,6 @@ fun OpenCodeTextInput(
 }
 
 internal fun resolveOpenCodeTextInputAccessibilityLabel(
-    label: String?,
+    hint: String?,
     accessibilityLabel: String?,
-): String? = accessibilityLabel?.takeIf { it.isNotBlank() } ?: label?.takeIf { it.isNotBlank() }
+): String? = accessibilityLabel?.takeIf { it.isNotBlank() } ?: hint?.takeIf { it.isNotBlank() }

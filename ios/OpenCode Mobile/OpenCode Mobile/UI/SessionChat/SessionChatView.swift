@@ -1,6 +1,8 @@
 import Factory
+import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,9 +13,14 @@ struct SessionChatView: View {
     @State private var showSessionContext = false
     @State private var changesTarget: ChangesNavigationTarget?
     @State private var menuExpanded = false
+    @State private var showDeleteConfirmation = false
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
+    @State private var showAttachmentSources = false
+    @State private var showFilesPicker = false
+    @State private var showPhotosPicker = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -35,7 +42,7 @@ struct SessionChatView: View {
                 entries: sessionOverflowMenuEntries
             ) {
                 OpenCodeTopBar(
-                    title: "Session",
+                    title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
                     subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
                     leading: .back(action: leaveSession),
                     actions: [
@@ -107,6 +114,41 @@ struct SessionChatView: View {
             onSelectMode: { viewModel.selectMode($0) },
             onSelectVariant: { viewModel.selectVariant($0) }
         )
+        .openCodeBottomSheet(isPresented: $showAttachmentSources, title: "Add attachment") {
+            if viewModel.uiState.composer.canAttachPhotos {
+                OpenCodeBottomSheetEntry(
+                    title: "Photos",
+                    startDecorator: .icon(.description, accessibilityLabel: "Photos"),
+                    action: {
+                        showAttachmentSources = false
+                        showPhotosPicker = true
+                    }
+                )
+            }
+            if viewModel.uiState.composer.canAttachFiles {
+                OpenCodeBottomSheetEntry(
+                    title: "Files",
+                    startDecorator: .icon(.folder, accessibilityLabel: "Files"),
+                    action: {
+                        showAttachmentSources = false
+                        showFilesPicker = true
+                    }
+                )
+            }
+        }
+        .photosPicker(
+            isPresented: $showPhotosPicker,
+            selection: $selectedPhotoItems,
+            matching: .images
+        )
+        .fileImporter(
+            isPresented: $showFilesPicker,
+            allowedContentTypes: [.image, .pdf, .text, .sourceCode],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case let .success(urls) = result else { return }
+            Task { await viewModel.addAttachmentFiles(urls) }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSessionContext) {
             SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
@@ -139,9 +181,82 @@ struct SessionChatView: View {
                 modelFilterText = ""
             }
         }
+        .onChange(of: viewModel.uiState.shouldLeaveSession) { _, shouldLeave in
+            if shouldLeave {
+                leaveSession()
+            }
+        }
+        .onChange(of: selectedPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await importPhotos(items) }
+        }
+        .openCodeDialog(
+            isPresented: deleteDialogBinding,
+            title: "Delete session",
+            subtitle: "Delete session “\(viewModel.uiState.sessionTitle)”?",
+            primaryOption: OpenCodeDialogOption(
+                title: "Delete",
+                enabled: !viewModel.uiState.isLifecycleActionInFlight
+            ) {
+                showDeleteConfirmation = false
+                viewModel.deleteSession()
+            },
+            secondaryOption: OpenCodeDialogOption(
+                title: "Cancel",
+                enabled: !viewModel.uiState.isLifecycleActionInFlight
+            ) {
+                showDeleteConfirmation = false
+            }
+        )
         .onDisappear {
             viewModel.stopObserving()
         }
+        .openCodeDialog(
+            isPresented: renameDialogBinding,
+            title: "Rename session",
+            primaryOption: OpenCodeDialogOption(
+                title: "Save",
+                enabled: !viewModel.uiState.rename.isSubmitting
+            ) {
+                Task { await viewModel.confirmRenameSession() }
+            },
+            secondaryOption: OpenCodeDialogOption(
+                title: "Cancel",
+                enabled: !viewModel.uiState.rename.isSubmitting,
+                action: viewModel.cancelRenameSession
+            ),
+            textField: OpenCodeDialogTextField(
+                text: Binding(
+                    get: { viewModel.uiState.rename.draftTitle },
+                    set: viewModel.updateRenameDraft
+                ),
+                hint: "Title",
+                enabled: !viewModel.uiState.rename.isSubmitting,
+                errorMessage: viewModel.uiState.rename.errorMessage
+            )
+        )
+    }
+
+    private var deleteDialogBinding: Binding<Bool> {
+        Binding(
+            get: { showDeleteConfirmation },
+            set: { visible in
+                if !visible, !viewModel.uiState.isLifecycleActionInFlight {
+                    showDeleteConfirmation = false
+                }
+            }
+        )
+    }
+
+    private var renameDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.rename.isDialogVisible },
+            set: { visible in
+                if !visible, !viewModel.uiState.rename.isSubmitting {
+                    viewModel.cancelRenameSession()
+                }
+            }
+        )
     }
 
     private func leaveSession() {
@@ -149,8 +264,34 @@ struct SessionChatView: View {
         dismiss()
     }
 
+    private func importPhotos(_ items: [PhotosPickerItem]) async {
+        defer { selectedPhotoItems = [] }
+        for (index, item) in items.enumerated() {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                viewModel.reportAttachmentReadFailure()
+                continue
+            }
+            let type = item.supportedContentTypes.first(where: { $0.conforms(to: .image) })
+            let fileExtension = type?.preferredFilenameExtension ?? "jpg"
+            viewModel.addAttachmentData(
+                data,
+                filename: "Photo \(index + 1).\(fileExtension)",
+                declaredMime: type?.preferredMIMEType
+            )
+        }
+    }
+
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
-        [
+        let lifecycleEnabled = !viewModel.uiState.isLifecycleActionInFlight
+        return [
+            OpenCodeOverflowMenuEntry(
+                title: "Rename session",
+                icon: .edit,
+                action: {
+                    menuExpanded = false
+                    viewModel.openRenameSession()
+                }
+            ),
             OpenCodeOverflowMenuEntry(
                 title: "Review changes",
                 icon: .description,
@@ -173,6 +314,25 @@ struct SessionChatView: View {
                 action: {
                     menuExpanded = false
                     UIPasteboard.general.string = viewModel.uiState.sessionID
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Archive",
+                icon: .archive,
+                enabled: lifecycleEnabled,
+                action: {
+                    menuExpanded = false
+                    viewModel.archiveSession()
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Delete",
+                icon: .close,
+                enabled: lifecycleEnabled,
+                destructive: true,
+                action: {
+                    menuExpanded = false
+                    showDeleteConfirmation = true
                 }
             ),
         ]
@@ -199,15 +359,17 @@ struct SessionChatView: View {
             state = .prompt(
                 .init(
                     text: composer.text,
+                    attachments: composer.attachments.map(attachmentPresentation),
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedMode,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
                     sendEnabled:
-                        !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        composer.hasSendableContent &&
                         composer.selectedModel != nil &&
                         composer.isModelSelectionReady &&
                         !isSending,
+                    attachEnabled: composer.canAttach && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting
                 )
@@ -232,7 +394,17 @@ struct SessionChatView: View {
                 case .selectVariant:
                     activePicker = .variant
                 case .attach:
-                    break
+                    let photos = composer.canAttachPhotos
+                    let files = composer.canAttachFiles
+                    if photos, files {
+                        showAttachmentSources = true
+                    } else if photos {
+                        showPhotosPicker = true
+                    } else if files {
+                        showFilesPicker = true
+                    }
+                case let .removeAttachment(id):
+                    viewModel.removeAttachment(id: id)
                 case .send:
                     Task { await viewModel.sendPrompt() }
                 case .stop:
@@ -244,6 +416,10 @@ struct SessionChatView: View {
                 }
             }
         )
+    }
+
+    private func attachmentPresentation(_ attachment: Attachment) -> OpenCodeAttachmentPresentation {
+        AttachmentPresentationMapper.presentation(from: attachment)
     }
 }
 

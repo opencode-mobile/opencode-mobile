@@ -35,6 +35,7 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `widgets` | Home top-bar action that opens the developer-only Component Gallery (`accessibilityLabel`: Developer components) |
 | `add` | **Browse projects** list row on home (start decorator) |
 | `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
+| `archive` | Session Chat overflow **Archive** action |
 | `arrow_downward` | **Scroll to end** action pill on session chat |
 
 Manifest `notes` may mention SF Symbol equivalents; feature decisions live under

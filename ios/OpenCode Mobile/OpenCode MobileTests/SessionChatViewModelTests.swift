@@ -5,6 +5,82 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
+    @Test func archiveSession_successLeavesSession() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.archiveSession()
+        await waitUntil { viewModel.uiState.shouldLeaveSession }
+
+        #expect(sessionRepository.archiveRequest == .init(id: "ses-1", directory: "/repo"))
+        #expect(viewModel.uiState.isLifecycleActionInFlight == false)
+        #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    @Test func archiveSession_failureKeepsSessionWithError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            archiveError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.archiveSession()
+        await waitUntil { viewModel.uiState.errorMessage == "Couldn't archive session." }
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func deleteSession_successLeavesSession() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.deleteSession()
+        await waitUntil { viewModel.uiState.shouldLeaveSession }
+
+        #expect(sessionRepository.deleteRequest == .init(id: "ses-1", directory: "/repo"))
+    }
+
+    @Test func deleteSession_failureKeepsSessionWithError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            deleteError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.deleteSession()
+        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func deleteSession_falseResultKeepsSessionWithError() async {
+        let sessionRepository = FakeChatSessionRepository(deleteResult: false)
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.deleteSession()
+        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func archiveSession_disablesWhileInFlight() async {
+        let gate = AsyncGate()
+        let sessionRepository = FakeChatSessionRepository(archiveHold: gate)
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.archiveSession()
+        await waitUntil { sessionRepository.archiveCallCount == 1 && viewModel.uiState.isLifecycleActionInFlight }
+        viewModel.archiveSession()
+        #expect(sessionRepository.archiveCallCount == 1)
+
+        await gate.open()
+        await waitUntil { viewModel.uiState.shouldLeaveSession }
+    }
+
     @Test func orderedPermissionRequests_prioritizesRootAndIncludesNewDescendants() {
         let rootRequest = permissionRequest(id: "root-request", sessionID: "root")
         let childRequest = permissionRequest(id: "child-request", sessionID: "child")
@@ -96,6 +172,117 @@ struct SessionChatViewModelTests {
         let messages = viewModel.uiState.messages
         #expect(messages.count == 1)
         #expect(messages[0].text == "Hello")
+    }
+
+    @Test func openRenameSession_prefillsCurrentTitle() async {
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.rename.draftTitle == "Title")
+        #expect(viewModel.uiState.rename.errorMessage == nil)
+        #expect(!viewModel.uiState.rename.isSubmitting)
+    }
+
+    @Test func confirmRenameSession_emptyTitle_keepsDialogWithoutApiCall() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("   ")
+        await viewModel.confirmRenameSession()
+
+        #expect(sessionRepository.updateRequest == nil)
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.rename.errorMessage == "Enter a session title")
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
+    @Test func confirmRenameSession_unchangedTitle_dismissesWithoutApiCall() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("  Title  ")
+        await viewModel.confirmRenameSession()
+
+        #expect(sessionRepository.updateRequest == nil)
+        #expect(!viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
+    @Test func confirmRenameSession_success_updatesTitleAndDismisses() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("Renamed title")
+        await viewModel.confirmRenameSession()
+
+        #expect(sessionRepository.updateRequest == .init(id: "ses-1", title: "Renamed title", directory: "/repo"))
+        #expect(!viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.sessionTitle == "Renamed title")
+        #expect(viewModel.uiState.sessionID == "ses-1")
+    }
+
+    @Test func confirmRenameSession_failure_keepsPreviousTitleAndShowsError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            updateSessionError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("Renamed title")
+        await viewModel.confirmRenameSession()
+
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        #expect(!viewModel.uiState.rename.isSubmitting)
+        #expect(viewModel.uiState.rename.errorMessage == "boom")
+        #expect(viewModel.uiState.sessionTitle == "Title")
+    }
+
+    @Test func sessionUpdatedEvent_appliesTitleForOpenSession() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream)
+        defer { viewModel.stopObserving() }
+
+        // Let SessionInfo finish subscribing to the fake event stream.
+        try? await Task.sleep(for: .milliseconds(50))
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.updated",
+                sessionID: "ses-1",
+                rawProperties: [
+                    "info": .dictionary([
+                        "id": .string("ses-1"),
+                        "title": .string("Live title"),
+                    ]),
+                ]
+            )
+        )
+        let updated = await waitUntil { viewModel.uiState.sessionTitle == "Live title" }
+        #expect(updated)
+        #expect(viewModel.uiState.sessionTitle == "Live title")
+    }
+
+    @Test func cancelRenameSession_hidesDialog() async {
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+
+        viewModel.openRenameSession()
+        viewModel.updateRenameDraft("Draft")
+        #expect(viewModel.uiState.rename.isDialogVisible)
+        viewModel.cancelRenameSession()
+
+        #expect(!viewModel.uiState.rename.isDialogVisible)
+        #expect(viewModel.uiState.sessionTitle == "Title")
     }
 
     @Test func completedLatestTurnLoadsReviewChangesSummaryWithWorktree() async {
@@ -292,6 +479,225 @@ struct SessionChatViewModelTests {
         viewModel.updateComposerText("Plan me")
         await viewModel.sendPrompt()
         #expect(repository.sentOptions?.mode == "plan")
+    }
+
+    @Test func attachments_canBeAddedAndRemovedFromComposer() async {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "one", filename: "notes.txt")
+
+        viewModel.addAttachments([attachment])
+        #expect(viewModel.uiState.composer.attachments == [attachment])
+
+        viewModel.removeAttachment(id: attachment.id)
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+    }
+
+    @Test func attach_disabledForTextOnlyModelAndStripsUnsupportedPendingAttachments() async {
+        let textOnly = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "text-only",
+            modelName: "Text Only",
+            variants: [],
+            contextLimitTokens: 128_000,
+            supportsImageInput: false,
+            supportsPdfInput: false
+        )
+        let vision = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "vision",
+            modelName: "Vision",
+            variants: [],
+            contextLimitTokens: 128_000,
+            supportsImageInput: true,
+            supportsPdfInput: false
+        )
+        let viewModel = makeViewModel(
+            modelRepository: FakeModelRepository(
+                catalog: ModelSelectionCatalog(options: [vision, textOnly], serverDefault: vision)
+            )
+        )
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.composer.canAttach)
+        #expect(viewModel.uiState.composer.canAttachPhotos)
+
+        let image = testAttachment(id: "img", filename: "shot.png", kind: .image, mime: "image/png")
+        let pdf = testAttachment(id: "pdf", filename: "brief.pdf", kind: .pdf, mime: "application/pdf")
+        let text = testAttachment(id: "txt", filename: "notes.txt", kind: .text, mime: "text/plain")
+        viewModel.addAttachments([image, pdf, text])
+        #expect(viewModel.uiState.composer.attachments.map(\.id) == ["img", "txt"])
+        #expect(viewModel.uiState.errorMessage == "This model does not support PDF attachments.")
+
+        viewModel.selectModel(textOnly)
+        #expect(viewModel.uiState.composer.canAttach == false)
+        #expect(viewModel.uiState.composer.attachments.map(\.id) == ["txt"])
+    }
+
+    @Test func addAttachmentData_acceptsSupportedTypesAndCoercesTextLikeFiles() {
+        let viewModel = makeViewModel()
+        let cases: [(String, String?, String, AttachmentKind)] = [
+            ("photo.png", "image/png", "image/png", .image),
+            ("photo.jpg", "image/jpeg", "image/jpeg", .image),
+            ("animation.gif", "image/gif", "image/gif", .image),
+            ("preview.webp", "image/webp", "image/webp", .image),
+            ("brief.pdf", "application/pdf", "application/pdf", .pdf),
+            ("notes.md", "text/markdown", "text/plain", .text),
+            ("events.jsonl", "application/json", "text/plain", .text),
+        ]
+
+        for (filename, declaredMime, expectedMime, expectedKind) in cases {
+            viewModel.addAttachmentData(Data("content".utf8), filename: filename, declaredMime: declaredMime)
+            let attachment = viewModel.uiState.composer.attachments.last
+            #expect(attachment?.filename == filename)
+            #expect(attachment?.mime == expectedMime)
+            #expect(attachment?.kind == expectedKind)
+            #expect(attachment?.dataURL == "data:\(expectedMime);base64,Y29udGVudA==")
+        }
+        #expect(viewModel.uiState.composer.attachments.count == cases.count)
+    }
+
+    @Test func addAttachmentData_rejectsUnsupportedBinaryAndPreservesDraft() {
+        let viewModel = makeViewModel()
+        viewModel.updateComposerText("Keep this draft")
+
+        viewModel.addAttachmentData(Data([0, 1, 2]), filename: "archive.zip", declaredMime: "application/zip")
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.composer.text == "Keep this draft")
+        #expect(viewModel.uiState.errorMessage == "Only images, PDFs, or text files can be attached here.")
+    }
+
+    @Test func sendPrompt_attachmentOnly_sendsAndRendersOptimistically() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "one", filename: "notes.txt")
+        viewModel.addAttachments([attachment])
+
+        await viewModel.sendPrompt()
+
+        #expect(repository.sentOptions?.text.isEmpty == true)
+        #expect(repository.sentOptions?.attachments == [attachment])
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.messages.contains { row in
+            row.isPending && row.blocks.contains {
+                guard case let .attachment(file) = $0 else { return false }
+                return file.filename == "notes.txt"
+            }
+        })
+    }
+
+    @Test func sendPrompt_httpFailure_restoresDraftAndAttachments() async {
+        let repository = FakeMessageRepository(shouldFailSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "one", filename: "notes.txt")
+        viewModel.updateComposerText("Retry me")
+        viewModel.addAttachments([attachment])
+
+        await viewModel.sendPrompt()
+
+        #expect(viewModel.uiState.composer.text == "Retry me")
+        #expect(viewModel.uiState.composer.attachments == [attachment])
+    }
+
+    @Test func sendPrompt_httpFailure_doesNotOverwriteNewDraftEdits() async {
+        let repository = FakeMessageRepository(shouldFailSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("Submitted")
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        viewModel.updateComposerText("New draft")
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.text == "New draft")
+    }
+
+    @Test func sendPrompt_httpFailure_restoresSubmittedAttachmentsAlongsideNewSelections() async {
+        let repository = FakeMessageRepository(shouldFailSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let submitted = testAttachment(id: "submitted", filename: "submitted.txt")
+        let newlySelected = testAttachment(id: "new", filename: "new.txt")
+        viewModel.addAttachments([submitted])
+
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        viewModel.addAttachments([newlySelected])
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.attachments == [submitted, newlySelected])
+    }
+
+    @Test func sendPrompt_successPreservesVisibleDraftUntilAcceptedThenClearsOnlySubmittedValues() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let submitted = testAttachment(id: "submitted", filename: "submitted.txt")
+        let newlySelected = testAttachment(id: "new", filename: "new.txt")
+        viewModel.updateComposerText("Submitted")
+        viewModel.addAttachments([submitted])
+
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+
+        #expect(viewModel.uiState.composer.text == "Submitted")
+        #expect(viewModel.uiState.composer.attachments == [submitted])
+
+        viewModel.updateComposerText("New draft")
+        viewModel.addAttachments([newlySelected])
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.text == "New draft")
+        #expect(viewModel.uiState.composer.attachments == [newlySelected])
+    }
+
+    @Test func sendPrompt_successPreservesAttachmentReselectedDuringFlight() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "same", filename: "notes.txt")
+        viewModel.addAttachments([attachment])
+
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        viewModel.removeAttachment(id: attachment.id)
+        viewModel.addAttachments([attachment])
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.attachments == [attachment])
+    }
+
+    @Test func sessionError_surfacesWithoutRestoringAcceptedAttachments() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream)
+        await viewModel.loadMessages()
+        viewModel.addAttachments([testAttachment(id: "one", filename: "large.png")])
+        await viewModel.sendPrompt()
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.error",
+                sessionID: "ses-1",
+                rawProperties: [
+                    "error": .dictionary([
+                        "name": .string("MessageOutputLengthError"),
+                        "data": .dictionary(["message": .string("Image exceeds the maximum size")]),
+                    ]),
+                ]
+            )
+        )
+        await waitUntil { viewModel.uiState.errorMessage == "Image exceeds the maximum size" }
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
     }
 
     @Test func loadMessages_restoresCachedModelSelectionOverHistory() async {
@@ -684,6 +1090,59 @@ struct SessionChatViewModelTests {
         await sendTask.value
     }
 
+    @Test func quietRefreshDuringAttachmentOnlySend_requiresNewMatchingServerMessage() async {
+        let attachment = testAttachment(id: "repeat", filename: "repeat.txt")
+        let file = FilePart(
+            id: attachment.id,
+            filename: attachment.filename,
+            mime: attachment.mime,
+            kind: attachment.kind,
+            dataURL: attachment.dataURL
+        )
+        let existing = Message(
+            id: "msg-existing",
+            role: .user,
+            text: "",
+            parts: [.file(file)],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1
+        )
+        let repository = FakeMessageRepository(messages: [existing], holdSend: true)
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(messageRepository: repository, eventStream: eventStream)
+        await viewModel.loadMessages()
+        viewModel.addAttachments([attachment])
+
+        let sendTask = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil { viewModel.uiState.messages.count == 2 }
+        #expect(viewModel.uiState.messages.contains { $0.isPending })
+
+        repository.messages = [
+            existing,
+            Message(
+                id: "msg-new",
+                role: .user,
+                text: "",
+                parts: [.file(file)],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        let reconciled = await waitUntil(timeoutMs: 5_000) {
+            viewModel.uiState.messages.count == 2 && !viewModel.uiState.messages.contains(where: \.isPending)
+        }
+
+        #expect(reconciled)
+        #expect(!viewModel.uiState.messages.contains { $0.isPending })
+        repository.releaseSend()
+        await sendTask.value
+    }
+
     @Test func startObserving_afterStop_resumesEventReloads() async {
         let repository = FakeObservingMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
@@ -793,6 +1252,46 @@ struct SessionChatViewModelTests {
             return
         }
         #expect(card.title == "Shell")
+    }
+
+    @Test func rowFromUserMessage_preservesOrderedTextAndAttachmentBlocks() {
+        let first = FilePart(
+            id: "first",
+            filename: "first.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,Rmlyc3Q="
+        )
+        let second = FilePart(
+            id: "second",
+            filename: "second.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,U2Vjb25k"
+        )
+        let message = Message(
+            id: "msg-ordered",
+            role: .user,
+            text: "Before\nAfter",
+            parts: [
+                .text(TextPart(text: "Before", isStreaming: false)),
+                .file(first),
+                .text(TextPart(text: "After", isStreaming: false)),
+                .file(second),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+
+        let row = makeViewModel().row(from: message)
+
+        #expect(row?.blocks == [
+            .text("Before"),
+            .attachment(first),
+            .text("After"),
+            .attachment(second),
+        ])
     }
 
     @Test func contextUsageFraction_usesLatestAssistantTokensAndModelLimit() async {
@@ -947,6 +1446,21 @@ struct SessionChatViewModelTests {
                 sentAtEpochMs: Int64(messageIndex)
             )
         }
+    }
+
+    private func testAttachment(
+        id: String,
+        filename: String,
+        kind: AttachmentKind = .text,
+        mime: String = "text/plain"
+    ) -> OpenCode_Mobile.Attachment {
+        OpenCode_Mobile.Attachment(
+            id: id,
+            filename: filename,
+            mime: mime,
+            kind: kind,
+            dataURL: "data:\(mime);base64,SGVsbG8="
+        )
     }
 
     private func milliseconds(_ block: () -> Void) -> Int64 {
@@ -1129,6 +1643,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     var sentOptions: PromptSendOptions?
     private var listMessagesCallCount = 0
     private var sendContinuation: CheckedContinuation<Void, Never>?
+    private var sendReleaseRequested = false
 
     init(
         messages: [Message] = [
@@ -1147,8 +1662,12 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     }
 
     func releaseSend() {
-        sendContinuation?.resume()
-        sendContinuation = nil
+        if let sendContinuation {
+            sendContinuation.resume()
+            self.sendContinuation = nil
+        } else {
+            sendReleaseRequested = true
+        }
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -1208,9 +1727,11 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         sendPromptAsyncCalled = true
         sentOptions = options
         if shouldFailSend {
+            if holdSend, !sendReleaseRequested {
+                await withCheckedContinuation { sendContinuation = $0 }
+            }
             throw MessageError.transport("send failed")
-        }
-        if holdSend {
+        } else if holdSend, !sendReleaseRequested {
             await withCheckedContinuation { sendContinuation = $0 }
         }
     }
@@ -1339,6 +1860,17 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         let directory: String?
     }
 
+    struct UpdateRequest: Equatable {
+        let id: String
+        let title: String?
+        let directory: String?
+    }
+
+    struct LifecycleRequest: Equatable {
+        let id: String
+        let directory: String?
+    }
+
     private let sessions: [Session]
     private let pendingPermissions: [PermissionRequest]
     private let permissionResponseError: SessionError?
@@ -1347,11 +1879,22 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let sessionDiffError: SessionError?
     private let sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])?
     private let sessionStatusType: String
+    private let updateSessionError: SessionError?
+    private let archiveError: SessionError?
+    private let deleteError: SessionError?
+    private let deleteResult: Bool
+    private let archiveHold: AsyncGate?
+    private let deleteHold: AsyncGate?
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
     private(set) var pendingPermissionLoads = 0
     private(set) var diffRequest: DiffRequest?
+    private(set) var updateRequest: UpdateRequest?
+    private(set) var archiveRequest: LifecycleRequest?
+    private(set) var archiveCallCount = 0
+    private(set) var deleteRequest: LifecycleRequest?
+    private(set) var deleteCallCount = 0
 
     init(
         sessions: [Session] = [],
@@ -1361,7 +1904,13 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         sessionDiffs: [FileDiff] = [],
         sessionDiffError: SessionError? = nil,
         sessionStatusType: String = "idle",
-        sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil
+        sessionDiffProvider: (@Sendable (String?) async throws -> [FileDiff])? = nil,
+        updateSessionError: SessionError? = nil,
+        archiveError: SessionError? = nil,
+        deleteError: SessionError? = nil,
+        deleteResult: Bool = true,
+        archiveHold: AsyncGate? = nil,
+        deleteHold: AsyncGate? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -1371,6 +1920,12 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.sessionDiffError = sessionDiffError
         self.sessionStatusType = sessionStatusType
         self.sessionDiffProvider = sessionDiffProvider
+        self.updateSessionError = updateSessionError
+        self.archiveError = archiveError
+        self.deleteError = deleteError
+        self.deleteResult = deleteResult
+        self.archiveHold = archiveHold
+        self.deleteHold = deleteHold
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
@@ -1387,8 +1942,42 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         [SessionStatus(sessionID: "ses-1", raw: ["type": sessionStatusType])]
     }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
-    func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String) async throws -> Bool { fatalError() }
+    func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
+        updateRequest = UpdateRequest(id: id, title: title, directory: directory)
+        if let updateSessionError { throw updateSessionError }
+        return Session(
+            id: id,
+            title: title ?? "",
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: nil
+        )
+    }
+    func archiveSession(id: String, directory: String?) async throws -> Session {
+        archiveCallCount += 1
+        archiveRequest = LifecycleRequest(id: id, directory: directory)
+        if let archiveHold { await archiveHold.wait() }
+        if let archiveError { throw archiveError }
+        return Session(
+            id: id,
+            title: "Archived",
+            slug: nil,
+            projectID: nil,
+            directory: nil,
+            parentID: nil,
+            updatedAtEpochMs: nil,
+            archivedAtEpochMs: 1
+        )
+    }
+    func deleteSession(id: String, directory: String?) async throws -> Bool {
+        deleteCallCount += 1
+        deleteRequest = LifecycleRequest(id: id, directory: directory)
+        if let deleteHold { await deleteHold.wait() }
+        if let deleteError { throw deleteError }
+        return deleteResult
+    }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
@@ -1451,4 +2040,27 @@ private func permissionRequest(
         toolMessageID: nil,
         toolCallID: nil
     )
+}
+
+private final class AsyncGate: @unchecked Sendable {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { continuation in
+            if isOpen {
+                continuation.resume()
+            } else {
+                continuations.append(continuation)
+            }
+        }
+    }
+
+    func open() async {
+        isOpen = true
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
 }

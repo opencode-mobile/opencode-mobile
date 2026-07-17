@@ -59,9 +59,7 @@ None (all operations are local).
 ## Design-System Components
 
 - Reuse `OpenCodeListItem` with a trash/deletion icon.
-- No new reusable components needed.
-- iOS: native `.alert` for confirmation.
-- Android: native `AlertDialog` for confirmation.
+- Confirmation uses `OpenCodeDialog` (title, subtitle, Cancel/Clear).
 
 ## Platform Entry Points
 

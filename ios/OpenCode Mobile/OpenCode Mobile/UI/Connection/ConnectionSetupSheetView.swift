@@ -10,24 +10,24 @@ struct ConnectionSetupSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             OpenCodeTextInput(
-                label: "Server URL",
                 text: $viewModel.baseURL,
+                hint: "Server URL",
                 kind: .url,
                 submitAction: .next,
                 isFocused: $urlFocused,
                 onSubmit: { usernameFocused = true }
             )
             OpenCodeTextInput(
-                label: "Username",
                 text: $viewModel.username,
+                hint: "Username",
                 kind: .username,
                 submitAction: .next,
                 isFocused: $usernameFocused,
                 onSubmit: { passwordFocused = true }
             )
             OpenCodeTextInput(
-                label: "Password",
                 text: $viewModel.password,
+                hint: "Password",
                 kind: .password,
                 isFocused: $passwordFocused,
                 onSubmit: { passwordFocused = false }

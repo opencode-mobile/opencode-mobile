@@ -16,23 +16,26 @@ many entries with scrolling.
 - Variants: default anchored popup menu.
 - States:
   - menu: expanded, dismissed.
-  - entries: enabled, disabled.
+  - entries: enabled, disabled; optional destructive emphasis.
 - Required content: entry `title` and `onClick` handler.
 - Optional content:
   - leading icon; omitting it preserves the standard icon slot so mixed icon
     and no-icon rows stay aligned.
   - entry accessibility label when the title alone is insufficient.
+  - `destructive` (default false) — uses semantic error text/icon color when
+    enabled so irreversible actions such as Delete read as destructive.
   - iOS trigger via `OpenCodeOverflowMenu` label closure and `isPresented`
     binding.
   - Android trigger via `OpenCodeTopBarAction.Icon(MoreVert)` toggling `expanded`.
 
-Entries are action rows only in this version. Toggles, dividers, subtitles, and
-destructive styling are out of scope.
+Entries are action rows only in this version. Toggles, dividers, and subtitles
+are out of scope.
 
 ## Token Usage
 
 - Semantic tokens: `color.background.elevated`, `color.text.primary`,
-  `color.text.disabled`, `color.icon.default`.
+  `color.text.disabled`, `color.icon.default`, and `color.status.error` (or the
+  platform error mapping) for destructive entry text and icons.
 - Component tokens: `overflowMenu.cornerRadius`, `overflowMenu.minWidth`,
   `overflowMenu.paddingVertical`, `overflowMenu.entry.minHeight`,
   `overflowMenu.entry.paddingHorizontal`, `overflowMenu.entry.iconSize`,
@@ -73,12 +76,13 @@ label rather than visible label suffixes.
 - Default: included.
 - Pressed: covered through platform interaction behavior.
 - Disabled: included.
+- Destructive: included.
 - Selected and unselected aligned rows: included.
 - Loading: not applicable for this component version.
 - Error: not applicable for this component version.
 
 Component Gallery includes one live top-bar preview with controls for entry
-count, enabled state, and aligned selection rows.
+count, enabled state, destructive emphasis, and aligned selection rows.
 
 ## Parity And Divergence
 

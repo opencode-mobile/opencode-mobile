@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct TextInputGalleryView: View {
-    @State private var text = "http://127.0.0.1:4096/"
+    @State private var text = ""
     @State private var kind: OpenCodeTextInputKind = .url
     @State private var enabled = true
     @State private var showsError = false
-    @State private var showsLabel = true
+    @State private var isEmpty = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -13,20 +13,21 @@ struct TextInputGalleryView: View {
                 ForEach(OpenCodeTextInputKind.allCases, id: \.self) { option in
                     OpenCodeChoiceBadge(label: label(option), selected: kind == option) {
                         kind = option
-                        text = sampleValue(option)
+                        text = isEmpty ? "" : sampleValue(option)
                     }
                 }
             }
             HStack(spacing: 8) {
                 OpenCodeChoiceBadge(label: "Enabled", selected: enabled) { enabled.toggle() }
                 OpenCodeChoiceBadge(label: "Error", selected: showsError) { showsError.toggle() }
-                OpenCodeChoiceBadge(label: "Label", selected: showsLabel) { showsLabel.toggle() }
+                OpenCodeChoiceBadge(label: "Empty", selected: isEmpty) {
+                    isEmpty.toggle()
+                    text = isEmpty ? "" : sampleValue(kind)
+                }
             }
             OpenCodeTextInput(
-                label: showsLabel ? fieldLabel : nil,
                 text: $text,
-                placeholder: placeholder,
-                accessibilityLabel: showsLabel ? nil : fieldLabel,
+                hint: fieldHint,
                 kind: kind,
                 enabled: enabled,
                 errorMessage: showsError ? errorMessage : nil
@@ -43,7 +44,7 @@ struct TextInputGalleryView: View {
         }
     }
 
-    private var fieldLabel: String {
+    private var fieldHint: String {
         switch kind {
         case .text: "Project name"
         case .url: "Server URL"
@@ -52,16 +53,7 @@ struct TextInputGalleryView: View {
         }
     }
 
-    private var placeholder: String {
-        switch kind {
-        case .text: "OpenCode Mobile"
-        case .url: "http://127.0.0.1:4096/"
-        case .username: "opencode"
-        case .password: "Server password"
-        }
-    }
-
-    private var errorMessage: String { "Enter a valid \(fieldLabel.lowercased())" }
+    private var errorMessage: String { "Enter a valid \(fieldHint.lowercased())" }
 
     private func sampleValue(_ kind: OpenCodeTextInputKind) -> String {
         switch kind {

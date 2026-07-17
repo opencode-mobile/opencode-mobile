@@ -313,6 +313,7 @@ final class ProjectListHomeViewModel {
             let project = try await projectRepository.getCurrentProject(directory: worktree)
             let sessions =
                 try await sessionRepository.listSessions(directory: worktree)
+                    .activeSessions()
                     .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
             let statusBySessionID =
                 Dictionary(
@@ -443,6 +444,7 @@ final class ProjectListHomeViewModel {
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
         let items =
             sessions
+                .activeSessions()
                 .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
                 .map { session in
                     sessionAdapter.listItem(

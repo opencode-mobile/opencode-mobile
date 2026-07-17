@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
@@ -42,6 +43,7 @@ class SessionChatTimeline(
     private var transformJob: Job? = null
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
+    private var pendingBaselineSignatures: Map<String, String> = emptyMap()
     private var lastLoadedMessages: List<Message> = emptyList()
 
     fun bind(
@@ -55,6 +57,7 @@ class SessionChatTimeline(
         boundWorktree = worktree
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
@@ -154,6 +157,10 @@ class SessionChatTimeline(
     fun beginOptimisticSend(enrichedRows: List<SessionChatMessageItem>) {
         mergePendingWhileSending = true
         pendingOptimisticRows = enrichedRows
+        pendingBaselineSignatures =
+            _state.value.messages
+                .filterNot { it.isPending }
+                .associate { it.id to it.reconciliationSignature() }
         _state.update {
             it.copy(
                 messages = it.messages + enrichedRows,
@@ -169,6 +176,7 @@ class SessionChatTimeline(
     ) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
         _state.update {
             it.copy(
                 messages = it.messages.filterNot { item -> item.id == optimisticId },
@@ -180,6 +188,7 @@ class SessionChatTimeline(
     fun clearSendingState() {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
     }
 
     fun latestModelHint(): LatestModelHint? = latestModelHintFromMessages(lastLoadedMessages)
@@ -212,7 +221,8 @@ class SessionChatTimeline(
                 message.text.isNotBlank() -> listOf(SessionChatTimelineBlock.Text(message.text))
                 else -> emptyList()
             }
-        if (resolvedBlocks.isEmpty()) return null
+        val attachments = blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
+        if (resolvedBlocks.isEmpty() && attachments.isEmpty()) return null
 
         val isStreaming = display.isStreaming
         val renderedMarkdown =
@@ -228,6 +238,7 @@ class SessionChatTimeline(
             isStreaming = isStreaming,
             renderedMarkdown = renderedMarkdown,
             blocks = resolvedBlocks,
+            attachments = attachments,
             modelProviderId = message.modelProviderId,
             modelId = message.modelId,
             contextInputTokens = message.contextInputTokens,
@@ -314,7 +325,7 @@ class SessionChatTimeline(
                 val stateSnapshot = _state.value
                 val previousById = stateSnapshot.messages.associateBy { it.id }
                 val structuralStartedAt = System.nanoTime()
-                val structural = timelineMessages(displayMessages, previousById)
+                val structural = withContext(ioDispatcher) { timelineMessages(displayMessages, previousById) }
                 val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
                 val merged =
                     if (fromQuietRefresh && mergePendingWhileSending) {
@@ -358,6 +369,7 @@ class SessionChatTimeline(
                 if (!fromQuietRefresh) {
                     mergePendingWhileSending = false
                     pendingOptimisticRows = emptyList()
+                    pendingBaselineSignatures = emptyMap()
                 }
                 onPublished?.invoke()
             }
@@ -366,6 +378,7 @@ class SessionChatTimeline(
     private fun applyLoadError(throwable: Throwable) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
         _state.update {
             it.copy(
                 timeline = SessionChatTimelineState.Error,
@@ -387,10 +400,34 @@ class SessionChatTimeline(
         if (pendingItems.isEmpty()) return serverItems
         val pendingToKeep =
             pendingItems.filter { pending ->
-                !serverItems.any { it.role == MessageRole.User && it.text == pending.text }
+                !serverItems.any { server ->
+                    pendingBaselineSignatures[server.id] != server.reconciliationSignature() &&
+                        server.matchesOptimistic(pending)
+                }
             }
         return serverItems + pendingToKeep
     }
+
+    private fun SessionChatMessageItem.matchesOptimistic(pending: SessionChatMessageItem): Boolean =
+        role == MessageRole.User &&
+            text == pending.text &&
+            attachments.size == pending.attachments.size &&
+            attachments.zip(pending.attachments).all { (server, optimistic) ->
+                server.id == optimistic.id || server.signature == optimistic.signature
+            }
+
+    private fun SessionChatMessageItem.reconciliationSignature(): String =
+        buildString {
+            append(role.name)
+            append('\u0000')
+            append(text)
+            attachments.forEach { attachment ->
+                append('\u0000')
+                append(attachment.id)
+                append('\u0000')
+                append(attachment.signature)
+            }
+        }
 
     private fun timelineMessages(
         displayMessages: List<DisplayMessage>,

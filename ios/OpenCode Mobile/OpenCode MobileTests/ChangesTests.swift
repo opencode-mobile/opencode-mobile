@@ -3,15 +3,16 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct OpenCodeTextInputTests {
-    @Test func accessibilityLabelPrefersExplicitValueThenVisibleLabel() {
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: "Filter changed files") == "Filter changed files")
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Server URL", accessibilityLabel: nil) == "Server URL")
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "Visible", accessibilityLabel: "Explicit") == "Explicit")
+    @Test func accessibilityLabelPrefersExplicitValueThenHint() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "Filter", accessibilityLabel: "Filter changed files") == "Filter changed files")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "Server URL", accessibilityLabel: nil) == "Server URL")
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "Visible hint", accessibilityLabel: "Explicit") == "Explicit")
     }
 
-    @Test func placeholderDoesNotSatisfyAccessibilityContract() {
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: nil, accessibilityLabel: nil) == nil)
-        #expect(OpenCodeTextInput.resolveAccessibilityLabel(label: "  ", accessibilityLabel: "\n") == nil)
+    @Test func blankHintAndAccessibilityLabelFailContract() {
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: nil, accessibilityLabel: nil) == nil)
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "  ", accessibilityLabel: "\n") == nil)
+        #expect(OpenCodeTextInput.resolveAccessibilityLabel(hint: "", accessibilityLabel: nil) == nil)
     }
 }
 
@@ -311,8 +312,9 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
-    func updateSession(id: String, title: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String) async throws -> Bool { false }
+    func updateSession(id: String, title: String?, directory: String?) async throws -> Session { fatalError() }
+    func archiveSession(id: String, directory: String?) async throws -> Session { fatalError() }
+    func deleteSession(id: String, directory: String?) async throws -> Bool { false }
     func listChildSessions(id: String) async throws -> [Session] { [] }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { [] }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { false }

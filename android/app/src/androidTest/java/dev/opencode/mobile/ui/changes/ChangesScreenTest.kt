@@ -166,6 +166,11 @@ private object ChangesScreenRepository : SessionRepository {
         directory: String?,
     ) = error("unused")
 
+    override suspend fun archiveSession(
+        id: String,
+        directory: String?,
+    ) = error("unused")
+
     override suspend fun deleteSession(
         id: String,
         directory: String?,

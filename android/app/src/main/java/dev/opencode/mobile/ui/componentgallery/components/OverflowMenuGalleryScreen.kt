@@ -27,6 +27,7 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var entriesEnabled by rememberSaveable { mutableStateOf(true) }
     var selectionRowsEnabled by rememberSaveable { mutableStateOf(false) }
+    var showDestructive by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
 
     val entries =
@@ -68,6 +69,17 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                     ),
                 )
             }
+            if (showDestructive) {
+                add(
+                    OpenCodeOverflowMenuEntry(
+                        title = "Delete",
+                        icon = OpenCodeIcons.Close,
+                        enabled = entriesEnabled,
+                        destructive = true,
+                        onClick = { menuExpanded = false },
+                    ),
+                )
+            }
         }
 
     Column(
@@ -94,6 +106,11 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                     label = "Selection rows",
                     selected = selectionRowsEnabled,
                     onClick = { selectionRowsEnabled = !selectionRowsEnabled },
+                )
+                OpenCodeChoiceBadge(
+                    label = "Destructive",
+                    selected = showDestructive,
+                    onClick = { showDestructive = !showDestructive },
                 )
             }
 

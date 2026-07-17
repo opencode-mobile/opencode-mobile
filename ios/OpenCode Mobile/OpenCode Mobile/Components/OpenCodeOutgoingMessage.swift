@@ -5,6 +5,18 @@ private let outgoingMessagePaddingVertical: CGFloat = 8
 
 private let outgoingMessageMaxWidthFraction: CGFloat = 0.8
 
+enum OpenCodeOutgoingMessageContent: Identifiable {
+    case text(id: String, text: String)
+    case attachment(OpenCodeAttachmentPresentation)
+
+    var id: String {
+        switch self {
+        case .text(let id, _): "text-\(id)"
+        case .attachment(let attachment): "attachment-\(attachment.id)"
+        }
+    }
+}
+
 private struct OutgoingMessageTrailingMaxWidthLayout: Layout {
     let maxWidthFraction: CGFloat
 
@@ -39,7 +51,7 @@ private struct OutgoingMessageTrailingMaxWidthLayout: Layout {
 }
 
 struct OpenCodeOutgoingMessage: View {
-    let text: String
+    let content: [OpenCodeOutgoingMessageContent]
     let renderedMarkdown: NativeMarkdownDocument?
     let metadataLabel: String
     let onTap: (() -> Void)?
@@ -48,11 +60,28 @@ struct OpenCodeOutgoingMessage: View {
     init(
         text: String,
         renderedMarkdown: NativeMarkdownDocument? = nil,
+        attachments: [OpenCodeAttachmentPresentation] = [],
         metadataLabel: String,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
-        self.text = text
+        self.content = attachments.map(OpenCodeOutgoingMessageContent.attachment) + [
+            .text(id: "message", text: text),
+        ]
+        self.renderedMarkdown = renderedMarkdown
+        self.metadataLabel = metadataLabel
+        self.onTap = onTap
+        self.onLongPress = onLongPress
+    }
+
+    init(
+        content: [OpenCodeOutgoingMessageContent],
+        renderedMarkdown: NativeMarkdownDocument? = nil,
+        metadataLabel: String,
+        onTap: (() -> Void)? = nil,
+        onLongPress: (() -> Void)? = nil
+    ) {
+        self.content = content
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
         self.onTap = onTap
@@ -62,14 +91,23 @@ struct OpenCodeOutgoingMessage: View {
     var body: some View {
         OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
             VStack(alignment: .trailing, spacing: 4) {
-                interactiveTextPill
+                ForEach(content) { item in
+                    switch item {
+                    case .text(_, let text):
+                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            interactiveTextPill(text: text)
+                        }
+                    case .attachment(let attachment):
+                        OpenCodeMessageAttachment(attachment: attachment)
+                    }
+                }
                 metadataFooter
             }
         }
     }
 
-    private var textPill: some View {
-        pillContent
+    private func textPill(text: String) -> some View {
+        pillContent(text: text)
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
@@ -77,19 +115,19 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     @ViewBuilder
-    private var interactiveTextPill: some View {
+    private func interactiveTextPill(text: String) -> some View {
         if let onLongPress {
-            textPill
+            textPill(text: text)
                 .onLongPressGesture(perform: onLongPress)
                 .accessibilityLabel("Outgoing message")
                 .accessibilityHint("Long press to show message actions")
         } else if let onTap {
-            textPill
+            textPill(text: text)
                 .onTapGesture(perform: onTap)
                 .accessibilityLabel("Outgoing message")
                 .accessibilityHint("Shows message actions")
         } else {
-            textPill
+            textPill(text: text)
         }
     }
 
@@ -103,8 +141,11 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     @ViewBuilder
-    private var pillContent: some View {
-        if let renderedMarkdown {
+    private func pillContent(text: String) -> some View {
+        if let renderedMarkdown, content.lazy.filter({
+            if case .text = $0 { return true }
+            return false
+        }).count == 1 {
             OpenCodeRenderedMarkdown(
                 document: renderedMarkdown,
                 variant: .outgoingMessage

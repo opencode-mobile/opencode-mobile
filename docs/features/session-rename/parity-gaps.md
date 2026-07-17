@@ -1,6 +1,9 @@
 # Session Rename Parity Gaps
 
-No known iOS/Android parity gaps (implementation not started).
+None known between iOS and Android for this slice.
+
+Rename uses shared `OpenCodeDialog` presentation. Intentional Dialog host
+differences live in `docs/design-system/divergences.md`.
 
 Intentional product difference vs desktop web (not an iOS/Android gap): mobile
 allows renaming child sessions; web’s session header blocks title edit when a

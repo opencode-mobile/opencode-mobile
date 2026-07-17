@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
@@ -125,10 +126,9 @@ class SessionChatViewModel
             sessionTitle: String,
             worktree: String,
         ) {
-            if (boundSessionId == sessionId &&
-                boundWorktree == worktree &&
-                boundSessionTitle == sessionTitle
-            ) {
+            // Identity is session + worktree. Title may diverge after rename / session.updated;
+            // do not full-reset when navigation still carries a stale title.
+            if (boundSessionId == sessionId && boundWorktree == worktree) {
                 return
             }
             boundSessionId = sessionId
@@ -154,8 +154,28 @@ class SessionChatViewModel
             timeline.refreshMessages()
         }
 
+        fun archiveSession() {
+            sessionInfo.archiveSession()
+        }
+
+        fun deleteSession() {
+            sessionInfo.deleteSession()
+        }
+
         fun updateComposerText(text: String) {
             composer.updateComposerText(text)
+        }
+
+        fun addAttachments(attachments: List<Attachment>) {
+            composer.addAttachments(attachments)
+        }
+
+        fun removeAttachment(id: String) {
+            composer.removeAttachment(id)
+        }
+
+        fun reportAttachmentError(message: String) {
+            composer.reportAttachmentError(message)
         }
 
         fun retryModelCatalog() {
@@ -176,6 +196,22 @@ class SessionChatViewModel
 
         fun restoreComposerText(text: String) {
             composer.restoreComposerText(text)
+        }
+
+        fun openRenameSession() {
+            sessionInfo.openRenameSession()
+        }
+
+        fun cancelRenameSession() {
+            sessionInfo.cancelRenameSession()
+        }
+
+        fun updateRenameDraft(text: String) {
+            sessionInfo.updateRenameDraft(text)
+        }
+
+        fun confirmRenameSession() {
+            sessionInfo.confirmRenameSession()
         }
 
         fun sendPrompt() {
@@ -321,9 +357,11 @@ class SessionChatViewModel
         ): SessionChatUiState {
             val errorMessage =
                 when {
+                    infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
                     timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
                     composerState.errorMessage != null -> composerState.errorMessage
                     composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                    infoState.errorMessage != null -> infoState.errorMessage
                     permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
                     else -> timelineState.errorMessage
                 }
@@ -345,12 +383,15 @@ class SessionChatViewModel
                         composerState.composer.selectedModel,
                     ),
                 errorMessage = errorMessage,
+                isLifecycleActionInFlight = infoState.isLifecycleActionInFlight,
+                shouldLeaveSession = infoState.shouldLeaveSession,
                 permissionRequest = permissionRequests.firstOrNull(),
                 permissionQueueCount = permissionRequests.size,
                 permissionSubmitting = permissionSubmittingId != null,
                 permissionErrorMessage = permissionError ?: permissionTopologyError,
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
+                rename = infoState.rename,
             )
         }
 

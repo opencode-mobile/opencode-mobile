@@ -14,11 +14,13 @@ enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
     case icons
+    case attachment
     case outgoingMessage
     case toolCallCard
     case topBar
     case overflowMenu
     case bottomSheet
+    case dialog
     case listItem
     case listGroup
     case choiceBadge
@@ -82,7 +84,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .textInput,
         title: "Text Input",
-        description: "Labeled single-line entry for text, URLs, usernames, and passwords.",
+        description: "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
         category: .controls
     ),
     ComponentGalleryEntry(
@@ -104,6 +106,12 @@ let componentGalleryEntries = [
         category: .navigation
     ),
     ComponentGalleryEntry(
+        id: .dialog,
+        title: "Dialog",
+        description: "Centered popup with title, optional subtitle, two options, and optional text field.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
         id: .overflowMenu,
         title: "Overflow Menu",
         description: "Compact anchored popup menu with icon and label entries.",
@@ -114,6 +122,12 @@ let componentGalleryEntries = [
         title: "Top Bar",
         description: "Page-level navigation bar with leading affordance and actions.",
         category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .attachment,
+        title: "Attachment",
+        description: "Pending attachment chips and sent image, PDF, and text rows.",
+        category: .chat
     ),
     ComponentGalleryEntry(
         id: .messageList,

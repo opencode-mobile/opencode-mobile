@@ -72,6 +72,8 @@ struct ComponentGalleryDetailView: View {
             TypographyGalleryView()
         case .icons:
             IconsGalleryView()
+        case .attachment:
+            AttachmentGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
         case .toolCallCard:
@@ -82,6 +84,8 @@ struct ComponentGalleryDetailView: View {
             OverflowMenuGalleryView()
         case .bottomSheet:
             BottomSheetGalleryView()
+        case .dialog:
+            DialogGalleryView()
         case .listItem:
             ListItemGalleryView()
         case .listGroup:

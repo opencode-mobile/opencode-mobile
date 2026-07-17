@@ -2,6 +2,8 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -14,6 +16,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
@@ -59,6 +62,9 @@ class SessionChatComposer(
     private var latestTimelineState: SessionChatTimelineRegionState? = null
     private var latestHistoryHints: ModelSelectionHistoryHints? = null
     private var lastSelectionTimestamp = 0L
+    private var draftRevision = 0
+    private var nextAttachmentRevision = 1
+    private val attachmentRevisions = mutableMapOf<String, Int>()
 
     fun bind(
         sessionId: String,
@@ -79,6 +85,9 @@ class SessionChatComposer(
         initialSelectionState = InitialSelectionState.LoadingCache
         latestTimelineState = null
         latestHistoryHints = null
+        draftRevision = 0
+        nextAttachmentRevision = 1
+        attachmentRevisions.clear()
         _state.value = SessionChatComposerRegionState()
         logI("bind session=$sessionId worktree=$worktree")
         loadCachedSelection()
@@ -180,12 +189,17 @@ class SessionChatComposer(
                 InitialSelectionState.Resolved
             }
         _state.update { state ->
+            val keptAttachments = state.composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
+            state.composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
+                .forEach { attachmentRevisions.remove(it.id) }
             state.copy(
                 composer =
                     state.composer.copy(
                         modelOptions = catalog.options,
                         selectedModel = ModelSelection(option, variant),
                         selectedVariant = variant,
+                        attachments = keptAttachments,
                         isModelSelectionReady = true,
                         modelCatalogError = null,
                         modelNotice =
@@ -224,16 +238,58 @@ class SessionChatComposer(
     }
 
     fun updateComposerText(text: String) {
+        draftRevision += 1
         updateComposer { it.copy(text = text) }
+    }
+
+    fun addAttachments(attachments: List<Attachment>) {
+        if (attachments.isEmpty()) return
+        val option = _state.value.composer.selectedModel?.option
+        val accepted = attachments.filter { option?.acceptsAttachmentKind(it.kind) != false }
+        val rejected = attachments.filter { option?.acceptsAttachmentKind(it.kind) == false }
+        if (accepted.isNotEmpty()) {
+            updateComposer { composer ->
+                val ordered = composer.attachments.toMutableList()
+                accepted.forEach { attachment ->
+                    attachmentRevisions[attachment.id] = nextAttachmentRevision++
+                    val index = ordered.indexOfFirst { it.id == attachment.id }
+                    if (index >= 0) {
+                        ordered[index] = attachment
+                    } else {
+                        ordered.add(attachment)
+                    }
+                }
+                composer.copy(attachments = ordered)
+            }
+        }
+        if (rejected.isNotEmpty()) {
+            reportAttachmentError(unsupportedAttachmentMessage(rejected))
+        } else if (accepted.isNotEmpty()) {
+            _state.update { it.copy(errorMessage = null) }
+        }
+    }
+
+    fun removeAttachment(id: String) {
+        attachmentRevisions.remove(id)
+        updateComposer { composer -> composer.copy(attachments = composer.attachments.filterNot { it.id == id }) }
+    }
+
+    fun reportAttachmentError(message: String) {
+        _state.update { it.copy(errorMessage = message) }
     }
 
     fun selectModel(option: ModelSelectionOption) {
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
             val variant = previousVariant?.takeIf { it in option.variants }
+            val keptAttachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
+            composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
+                .forEach { attachmentRevisions.remove(it.id) }
             composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
+                attachments = keptAttachments,
                 modelNotice = null,
             )
         }
@@ -265,6 +321,7 @@ class SessionChatComposer(
     }
 
     fun restoreComposerText(text: String) {
+        draftRevision += 1
         updateComposer { it.copy(text = text) }
     }
 
@@ -277,8 +334,14 @@ class SessionChatComposer(
     ) {
         val composer = _state.value.composer
         val prompt = composer.text.trim()
+        val attachments = composer.attachments
+        val submittedDraftRevision = draftRevision
+        val submittedAttachmentRevisions =
+            attachments.mapNotNull { attachment ->
+                attachmentRevisions[attachment.id]?.let { attachment.id to it }
+            }.toMap()
         val selectedModel = composer.selectedModel ?: return
-        if (prompt.isEmpty() || _state.value.isSending || !composer.isModelSelectionReady) return
+        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
 
         scope.launch {
             val display =
@@ -286,27 +349,31 @@ class SessionChatComposer(
                     messageRepository.prepareOptimisticUserMessage(
                         id = "pending-${UUID.randomUUID()}",
                         text = prompt,
+                        attachments = attachments,
                     )
                 }
             val enriched =
-                listOf(
-                    SessionChatMessageItem(
-                        id = display.id,
-                        role = dev.opencode.mobile.domain.message.MessageRole.User,
-                        text = display.text,
-                        metadataLabel = composerMetadataLabel(composer),
-                        isPending = true,
-                        isStreaming = false,
-                        renderedMarkdown = display.renderedMarkdown,
-                        blocks =
-                            listOf(
-                                SessionChatTimelineBlock.Text(text = display.text),
-                            ),
-                    ),
-                )
+                attachments.map(AttachmentPresentationMapper::toItem).let { attachmentItems ->
+                    listOf(
+                        SessionChatMessageItem(
+                            id = display.id,
+                            role = dev.opencode.mobile.domain.message.MessageRole.User,
+                            text = display.text,
+                            metadataLabel = composerMetadataLabel(composer),
+                            isPending = true,
+                            isStreaming = false,
+                            renderedMarkdown = display.renderedMarkdown,
+                            attachments = attachmentItems,
+                            blocks =
+                                buildList {
+                                    if (display.text.isNotBlank()) add(SessionChatTimelineBlock.Text(display.text))
+                                    attachmentItems.forEach { add(SessionChatTimelineBlock.Attachment(it)) }
+                                },
+                        ),
+                    )
+                }
             _state.update {
                 it.copy(
-                    composer = composer.copy(text = ""),
                     isSending = true,
                     errorMessage = null,
                 )
@@ -318,11 +385,16 @@ class SessionChatComposer(
                     options =
                         PromptSendOptions(
                             text = prompt,
+                            attachments = attachments,
                             model = PromptModelSelection(selectedModel.option.providerId, selectedModel.option.modelId),
                             variant = composer.selectedVariant,
                             mode = agentMode(composer.selectedMode),
                         ),
                     directory = worktree,
+                )
+                clearAcceptedSubmission(
+                    textRevision = submittedDraftRevision,
+                    submittedAttachmentRevisions = submittedAttachmentRevisions,
                 )
                 persistCurrentSelection(updatePreference = false)
                 onSendAccepted()
@@ -331,6 +403,31 @@ class SessionChatComposer(
                 _state.update { it.copy(isSending = false) }
                 onSendFailed(display.id, errorMessage(throwable))
             }
+        }
+    }
+
+    private fun clearAcceptedSubmission(
+        textRevision: Int,
+        submittedAttachmentRevisions: Map<String, Int>,
+    ) {
+        _state.update { state ->
+            val keptAttachments =
+                state.composer.attachments.filterNot { current ->
+                    val submittedRevision = submittedAttachmentRevisions[current.id] ?: return@filterNot false
+                    attachmentRevisions[current.id] == submittedRevision
+                }
+            submittedAttachmentRevisions.forEach { (id, revision) ->
+                if (attachmentRevisions[id] == revision) {
+                    attachmentRevisions.remove(id)
+                }
+            }
+            state.copy(
+                composer =
+                    state.composer.copy(
+                        text = if (draftRevision == textRevision) "" else state.composer.text,
+                        attachments = keptAttachments,
+                    ),
+            )
         }
     }
 
@@ -508,6 +605,15 @@ class SessionChatComposer(
             .ofEpochMilli(epochMs)
             .atZone(ZoneId.systemDefault())
             .format(SentTimeFormatter)
+
+    private fun unsupportedAttachmentMessage(rejected: List<Attachment>): String {
+        val kinds = rejected.map { it.kind }.toSet()
+        return when (kinds) {
+            setOf(AttachmentKind.Image) -> "This model does not support image attachments."
+            setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
+            else -> "This model does not support some of the selected attachments."
+        }
+    }
 
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {

@@ -12,7 +12,9 @@ struct ModelDomainAdapter: Sendable {
                         modelID: model.id ?? key,
                         modelName: model.name ?? model.id ?? key,
                         variants: variantKeys(from: model),
-                        contextLimitTokens: model.limit?.context
+                        contextLimitTokens: model.limit?.context,
+                        supportsImageInput: model.capabilities?.input?.image ?? true,
+                        supportsPdfInput: model.capabilities?.input?.pdf ?? true
                     )
                 }
                 .sorted { $0.modelLabel.localizedCaseInsensitiveCompare($1.modelLabel) == .orderedAscending }
