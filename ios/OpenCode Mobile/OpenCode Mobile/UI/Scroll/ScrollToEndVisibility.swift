@@ -22,9 +22,23 @@ enum ScrollToEndVisibility {
     }
 }
 
+enum ScrollToEndUserScrollClassifier {
+    static func isUserDrivenOffsetChange(
+        contentOffsetChanged: Bool,
+        contentSizeChanged: Bool,
+        containerSizeChanged: Bool,
+        isProgrammaticScrolling: Bool
+    ) -> Bool {
+        guard contentOffsetChanged, !isProgrammaticScrolling else { return false }
+        return !contentSizeChanged && !containerSizeChanged
+    }
+}
+
 private struct ScrollToEndScrollSnapshot: Equatable {
     let distanceFromBottom: CGFloat
     let contentOffsetY: CGFloat
+    let contentHeight: CGFloat
+    let containerHeight: CGFloat
 }
 
 struct ScrollToEndScrollObserver: ViewModifier {
@@ -34,7 +48,6 @@ struct ScrollToEndScrollObserver: ViewModifier {
     let isProgrammaticScrolling: () -> Bool
 
     @State private var scrollEndTask: Task<Void, Never>?
-    @State private var lastContentOffsetY: CGFloat?
 
     func body(content: Content) -> some View {
         if #available(iOS 18, *) {
@@ -45,14 +58,20 @@ struct ScrollToEndScrollObserver: ViewModifier {
                             0,
                             geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
                         ),
-                        contentOffsetY: geometry.contentOffset.y
+                        contentOffsetY: geometry.contentOffset.y,
+                        contentHeight: geometry.contentSize.height,
+                        containerHeight: geometry.containerSize.height
                     )
-                } action: { _, current in
+                } action: { previous, current in
                     distanceFromBottom = current.distanceFromBottom
-                    if let lastContentOffsetY, lastContentOffsetY != current.contentOffsetY {
-                        markUserScrollingIfNeeded()
+                    if ScrollToEndUserScrollClassifier.isUserDrivenOffsetChange(
+                        contentOffsetChanged: previous.contentOffsetY != current.contentOffsetY,
+                        contentSizeChanged: previous.contentHeight != current.contentHeight,
+                        containerSizeChanged: previous.containerHeight != current.containerHeight,
+                        isProgrammaticScrolling: isProgrammaticScrolling()
+                    ) {
+                        markUserScrolling()
                     }
-                    lastContentOffsetY = current.contentOffsetY
                 }
         } else {
             content

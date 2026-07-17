@@ -40,30 +40,15 @@ private struct MessageListGalleryPreview: View {
                 MessageListReversedTimelineStack(
                     items: messages,
                     bottomAnchorID: messageListGalleryBottomAnchorID,
-                    itemID: \.id,
-                    onLastMessageContentSizeSettled: {
-                        timeline.followLayoutChangeIfNeededAfterLayoutSettles(
-                            messageCount: messageCount,
-                            autoFollowEnabled: autoFollowEnabled,
-                            scrollTargetID: messages.last?.id
-                        )
-                    }
-                ) { message, isNewestMessage, onContentSizeSettled in
+                    itemID: \.id
+                ) { message, _ in
                     HStack {
                         if message.role == .assistant {
-                            MessageListGalleryMessageRow(
-                                message: message,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
-                            )
+                            MessageListGalleryMessageRow(message: message)
                             Spacer(minLength: 0)
                         } else {
                             Spacer(minLength: 0)
-                            MessageListGalleryMessageRow(
-                                message: message,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
-                            )
+                            MessageListGalleryMessageRow(message: message)
                         }
                     }
                 }
@@ -188,8 +173,6 @@ private struct MessageListAutoFollowIndicator: View {
 
 private struct MessageListGalleryMessageRow: View {
     let message: MessageListGalleryMessage
-    let animateSizeChanges: Bool
-    let onContentSizeAnimationFinished: (() -> Void)?
 
     var body: some View {
         Group {
@@ -212,10 +195,6 @@ private struct MessageListGalleryMessageRow: View {
                     )
             }
         }
-        .messageListAnimateLastMessageSize(
-            animateSizeChanges: animateSizeChanges,
-            onContentSizeAnimationFinished: onContentSizeAnimationFinished
-        )
     }
 }
 

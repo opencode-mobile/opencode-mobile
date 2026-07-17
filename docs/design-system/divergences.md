@@ -114,18 +114,22 @@ implementation belong in the feature's `parity-gaps.md`.
 - Status: intentional
 - Area: component | motion
 - Shared intent: show the scroll-to-end action pill when the timeline is not
-  pinned to the bottom; scroll to the latest messages on tap.
-- iOS behavior: Session Chat temporarily uses eager SwiftUI `VStack` timeline
-  layout and `ScrollViewReader.scrollTo(lastMessage, anchor: .bottom)`.
-- Android behavior: Session Chat uses lazy Compose list state and scrolls to the
-  bottom anchor item.
-- Reason: SwiftUI `LazyVStack` programmatic scrolling is unreliable for
-  variable-height markdown chat rows; it can miss the target or land in blank
-  estimated space. Eager layout trades long-history performance for correct
-  scroll-to-end behavior while the durable iOS timeline is rebuilt.
+  pinned to the bottom; scroll to the latest messages on tap; keep Follow Latest
+  armed while the viewport is near the bottom.
+- iOS behavior: Session Chat uses `ScrollView` + `LazyVStack` with
+  `.defaultScrollAnchor(.bottom)`, `scrollPosition(id:anchor: .bottom)`, and a
+  bottom-anchor row. Programmatic snaps are serialized. Streaming row growth is
+  published instantly (no last-row size animation).
+- Android behavior: Session Chat uses a reverse-layout `LazyColumn` with a
+  bottom-anchor item and `animateContentSize` on the newest message.
+- Reason: SwiftUI has no first-class reverse layout or `animateContentSize`
+  equivalent that grows chat rows without feeding the follow loop. Instant
+  growth plus `defaultScrollAnchor(.bottom)` keeps the pin stable under
+  streaming on iOS while Android can animate natively.
 - Review trigger: replace the iOS SwiftUI scroll view with a UIKit-backed
-  `UICollectionView`/`UITableView` timeline using hosted SwiftUI cells before
-  treating long-history chat performance as production-ready.
+  `UICollectionView`/`UITableView` timeline using hosted SwiftUI cells, or if
+  SwiftUI gains a layout-safe content-size animation that does not thrash
+  scroll geometry observers.
 
 ## Overflow menu presentation
 

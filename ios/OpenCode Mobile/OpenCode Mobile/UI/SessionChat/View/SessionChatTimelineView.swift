@@ -113,16 +113,8 @@ private struct SessionChatTimelineReadyView: View {
                 MessageListReversedTimelineStack(
                     items: props.messages,
                     bottomAnchorID: sessionChatTimelineBottomAnchorID,
-                    itemID: \.id,
-                    onLastMessageContentSizeSettled: {
-                        timeline.followLayoutChangeIfNeededAfterLayoutSettles(
-                            messageCount: messageCount,
-                            autoFollowEnabled: true,
-                            scrollTargetID: props.messages.last?.id,
-                            onLog: logScroll
-                        )
-                    }
-                ) { message, isNewestMessage, onContentSizeSettled in
+                    itemID: \.id
+                ) { message, _ in
                     HStack {
                         if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
                             SessionChatMessageRow(
@@ -130,9 +122,7 @@ private struct SessionChatTimelineReadyView: View {
                                 onMessageActionsTap: props.onMessageActionsTap,
                                 onToolDetailTap: props.onToolDetailTap,
                                 onChildSessionTap: props.onChildSessionTap,
-                                onChangesReviewTap: props.onChangesReviewTap,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
+                                onChangesReviewTap: props.onChangesReviewTap
                             )
                             Spacer(minLength: 0)
                         } else {
@@ -142,9 +132,7 @@ private struct SessionChatTimelineReadyView: View {
                                 onMessageActionsTap: props.onMessageActionsTap,
                                 onToolDetailTap: props.onToolDetailTap,
                                 onChildSessionTap: props.onChildSessionTap,
-                                onChangesReviewTap: props.onChangesReviewTap,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
+                                onChangesReviewTap: props.onChangesReviewTap
                             )
                         }
                     }
@@ -226,8 +214,6 @@ private struct SessionChatMessageRow: View {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
-    let animateSizeChanges: Bool
-    let onContentSizeAnimationFinished: (() -> Void)?
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -270,10 +256,6 @@ private struct SessionChatMessageRow: View {
                 )
             }
         }
-        .messageListAnimateLastMessageSize(
-            animateSizeChanges: animateSizeChanges,
-            onContentSizeAnimationFinished: onContentSizeAnimationFinished
-        )
     }
 }
 
@@ -410,8 +392,7 @@ private struct AssistantMessageBubble: View {
             if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
-                    variant: .assistantMessage,
-                    measuresHeight: true
+                    variant: .assistantMessage
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)

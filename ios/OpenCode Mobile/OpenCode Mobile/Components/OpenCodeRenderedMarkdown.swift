@@ -470,113 +470,23 @@ private struct InlineMarkdownText: View {
     let font: Font
     let color: Color
 
-    @State private var styled: AttributedString?
-
     var body: some View {
-        Text(styled ?? AttributedString(inlines.plainText))
+        Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
             .fixedSize(horizontal: false, vertical: true)
-            .task(id: inlines.stableCacheKey) {
-                styled = NativeMarkdownAttributedString.inline(inlines, font: font, color: color)
-            }
     }
 }
 
-private struct NativeMarkdownBlockIdentityEntry: Identifiable {
+struct NativeMarkdownBlockIdentityEntry: Identifiable {
     let identity: String
     let block: NativeMarkdownBlock
 
     var id: String { identity }
 }
 
-private extension NativeMarkdownDocument {
+extension NativeMarkdownDocument {
     var blocksWithStableIdentities: [NativeMarkdownBlockIdentityEntry] {
-        var seenCounts: [String: Int] = [:]
-        return blocks.map { block in
-            let base = block.stableIdentity
-            let count = seenCounts[base, default: 0]
-            seenCounts[base] = count + 1
-            let identity = count == 0 ? base : "\(base)-\(count)"
-            return NativeMarkdownBlockIdentityEntry(identity: identity, block: block)
-        }
-    }
-}
-
-private extension NativeMarkdownBlock {
-    var stableIdentity: String {
-        switch self {
-        case .paragraph(let inlines):
-            return "p-\(inlines.stableCacheKey)"
-        case .heading(let level, let inlines):
-            return "h\(level)-\(inlines.stableCacheKey)"
-        case .blockquote(let inlines):
-            return "q-\(inlines.stableCacheKey)"
-        case .bulletList(let items):
-            return "ul-\(items.map(\.stableCacheKey).joined(separator: "|"))"
-        case .orderedList(let start, let items):
-            return "ol-\(start)-\(items.map(\.stableCacheKey).joined(separator: "|"))"
-        case .codeBlock(let language, let code, _):
-            return "code-\(language ?? "")-\(code.hashValue)"
-        case .diffBlock(let lines):
-            return "diff-\(lines.map(\.text).joined().hashValue)"
-        case .table(let header, let rows):
-            return "table-\(header.flatMap { $0 }.stableCacheKey)-\(rows.count)"
-        case .thematicBreak:
-            return "hr"
-        }
-    }
-}
-
-private extension Array where Element == NativeMarkdownInline {
-    var stableCacheKey: String {
-        map(\.stableCacheKey).joined(separator: "\u{1f}")
-    }
-
-    var plainText: String {
-        reduce(into: "") { result, inline in
-            result.append(inline.plainText)
-        }
-    }
-}
-
-private extension NativeMarkdownInline {
-    var stableCacheKey: String {
-        switch self {
-        case .text(let value):
-            return "t:\(value)"
-        case .code(let value):
-            return "c:\(value)"
-        case .emphasis(let children):
-            return "e:\(children.stableCacheKey)"
-        case .strong(let children):
-            return "s:\(children.stableCacheKey)"
-        case .link(let destination, let children):
-            return "l:\(destination):\(children.stableCacheKey)"
-        case .imageAlt(let alt):
-            return "i:\(alt)"
-        case .softBreak:
-            return "sb"
-        case .hardBreak:
-            return "hb"
-        }
-    }
-
-    var plainText: String {
-        switch self {
-        case .text(let value):
-            return value
-        case .code(let value):
-            return value
-        case .emphasis(let children):
-            return children.plainText
-        case .strong(let children):
-            return children.plainText
-        case .link(let destination, let children):
-            let childText = children.plainText
-            return childText.isEmpty ? destination : childText
-        case .imageAlt(let alt):
-            return "[image: \(alt)]"
-        case .softBreak, .hardBreak:
-            return "\n"
+        blocks.enumerated().map { index, block in
+            NativeMarkdownBlockIdentityEntry(identity: "block-\(index)", block: block)
         }
     }
 }

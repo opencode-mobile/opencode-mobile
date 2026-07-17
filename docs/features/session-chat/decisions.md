@@ -3,6 +3,11 @@
 ## Use eager SwiftUI timeline before UIKit-backed iOS timeline
 
 - Date: 2026-06-29
+- Superseded (2026-07-17): production Session Chat now uses `LazyVStack` with
+  `.scrollTargetLayout()`, `.defaultScrollAnchor(.bottom)`, and
+  `scrollPosition(id:anchor: .bottom)`. See **Stabilize iOS timeline scroll
+  under streaming growth** below. The UIKit-backed virtualized timeline
+  follow-up remains open.
 - Decision: iOS Session Chat temporarily renders the message timeline with
   eager SwiftUI `VStack` layout and `ScrollViewReader.scrollTo(lastMessage,
   anchor: .bottom)` for the scroll-to-end action pill. Do not reintroduce
@@ -142,6 +147,37 @@
   decision above).
 - Revisit when: the UIKit-backed iOS timeline lands, or Follow Latest is
   reintroduced and needs a reliable iOS 17 near-bottom signal.
+
+## Stabilize iOS timeline scroll under streaming growth
+
+- Date: 2026-07-17
+- Decision: keep pinned-bottom Follow Latest on iOS, but fix the mechanics that
+  caused scrolling glitches and row-height resizing during streaming:
+  1. Serialize `snapToEnd` / `animateToEnd` so overlapping layout-follow tasks
+     cannot thrash `scrollPositionID` or clear `isProgrammaticScrolling` early.
+  2. Treat content-size and container-size driven offset changes as non-user
+     scrolls on iOS 18+ so streaming growth and keyboard/composer resize do not
+     flip `isUserScrolling`.
+  3. Use index-stable markdown block identities and synchronous inline
+     attributed-string styling so streaming chunks reuse views with final
+     metrics instead of destroying blocks and flashing unstyled 17pt text.
+  4. Drop last-row size animation on iOS. Publish streaming height changes
+     instantly and let `defaultScrollAnchor(.bottom)` plus discrete follow snaps
+     keep the pin.
+- Consequence: Android still animates newest-message growth via
+  `animateContentSize`; iOS does not. Shared follow semantics (armed when
+  pinned, disarmed when reading history, re-armed by scroll-to-end) stay the
+  same.
+- Reason: the previous iOS port combined content-hash block identities, a
+  GeometryReader-driven row animation, per-frame content-height follow, and
+  uncancellable overlapping scroll tasks. Those mechanisms fought
+  `defaultScrollAnchor(.bottom)` and produced visible jitter.
+- Supersedes in practice: the 2026-06-29 **eager SwiftUI VStack** note for the
+  current timeline. Production Session Chat now uses `LazyVStack` with
+  `.scrollTargetLayout()`, `.defaultScrollAnchor(.bottom)`, and
+  `scrollPosition(id:anchor: .bottom)`.
+- Revisit when: a UIKit-backed timeline lands, or a first-class SwiftUI
+  `animateContentSize` equivalent can grow rows without feeding the follow loop.
 
 ## Promote Session status bar to Component Collection
 

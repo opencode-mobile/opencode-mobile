@@ -103,6 +103,13 @@
 - **2026-07-13:** Native composer permission state observes pending requests,
   prioritizes the root session before descendants, and resolves allow-once or
   deny decisions with stale-request reconciliation.
+- **2026-07-17:** Stabilized Session Chat scrolling and streaming resize on iOS.
+  Programmatic scroll tasks are serialized; content-growth and viewport-resize
+  offset changes no longer count as user scrolling; markdown block identities
+  stay stable across streaming growth; inline markdown styles apply
+  synchronously; last-row size animation (and its per-frame follow storm) is
+  removed so `defaultScrollAnchor(.bottom)` plus discrete follow snaps handle
+  pin.
 
 ## Architecture guardrails
 
@@ -121,6 +128,10 @@
   one-time initial scroll-to-latest as iOS.
 - Production Session Chat uses non-animated exact end correction for layout and
   viewport growth; append and manual scroll-to-end actions remain animated.
+- **2026-07-17:** iOS no longer animates last-row size growth. Streaming and
+  markdown height changes publish instantly; Android keeps `animateContentSize`
+  on the newest message. See
+  [Stabilize iOS timeline scroll under streaming growth](decisions.md#stabilize-ios-timeline-scroll-under-streaming-growth).
 - Android observes IME-driven viewport height changes and re-anchors while
   follow is armed.
 - `OpenCodeOutgoingMessage` always renders outgoing prompts at full height so

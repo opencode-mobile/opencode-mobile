@@ -27,6 +27,7 @@ final class MessageListTimelineState {
     var isUserScrolling = false
     var isProgrammaticScrolling = false
     var autoFollowState: MessageListAutoFollowState
+    private var programmaticScrollTask: Task<Void, Never>?
 
     init(bottomAnchorID: String, initialMessageCount: Int = 0) {
         self.bottomAnchorID = bottomAnchorID
@@ -85,10 +86,12 @@ final class MessageListTimelineState {
 
         let targetID = scrollTargetID ?? bottomAnchorID
         onLog?("\(reason) snap start count=\(messageCount) target=\(targetID)")
+        programmaticScrollTask?.cancel()
         isProgrammaticScrolling = true
         scrollPositionID = nil
-        Task { @MainActor in
+        programmaticScrollTask = Task { @MainActor in
             await Task.yield()
+            guard !Task.isCancelled else { return }
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
@@ -99,12 +102,14 @@ final class MessageListTimelineState {
             if scrollTargetID != nil, scrollTargetID != bottomAnchorID {
                 await Task.yield()
                 await Task.yield()
+                guard !Task.isCancelled else { return }
             }
             withTransaction(transaction) {
                 scrollPositionID = bottomAnchorID
             }
             await Task.yield()
             await Task.yield()
+            guard !Task.isCancelled else { return }
             isProgrammaticScrolling = false
             settleProgrammaticScroll(
                 messageCount: messageCount,
@@ -125,16 +130,19 @@ final class MessageListTimelineState {
 
         let targetID = scrollTargetID ?? bottomAnchorID
         onLog?("animate-to-end start count=\(messageCount) target=\(targetID)")
+        programmaticScrollTask?.cancel()
         isProgrammaticScrolling = true
         scrollPositionID = nil
-        Task { @MainActor in
+        programmaticScrollTask = Task { @MainActor in
             await Task.yield()
+            guard !Task.isCancelled else { return }
             if let scrollTargetID, scrollTargetID != bottomAnchorID {
                 withAnimation(.easeOut(duration: messageListScrollAnimationDuration)) {
                     scrollPositionID = scrollTargetID
                 }
                 await Task.yield()
                 await Task.yield()
+                guard !Task.isCancelled else { return }
             }
             withAnimation(.easeOut(duration: messageListScrollAnimationDuration)) {
                 scrollPositionID = bottomAnchorID
@@ -142,6 +150,7 @@ final class MessageListTimelineState {
             try? await Task.sleep(for: .milliseconds(messageListScrollAnimationSettleMilliseconds))
             await Task.yield()
             await Task.yield()
+            guard !Task.isCancelled else { return }
             isProgrammaticScrolling = false
             settleProgrammaticScroll(
                 messageCount: messageCount,
@@ -226,8 +235,7 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
     let items: [Item]
     let bottomAnchorID: String
     let itemID: KeyPath<Item, String>
-    let onLastMessageContentSizeSettled: (() -> Void)?
-    let itemContent: (Item, Bool, (() -> Void)?) -> ItemContent
+    let itemContent: (Item, Bool) -> ItemContent
 
     private var newestItemID: String? {
         items.last?[keyPath: itemID]
@@ -240,7 +248,6 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
                     item: item,
                     itemID: itemID,
                     newestItemID: newestItemID,
-                    onLastMessageContentSizeSettled: onLastMessageContentSizeSettled,
                     itemContent: itemContent
                 )
             }
@@ -263,69 +270,21 @@ private struct MessageListTimelineRow<Item, ItemContent: View>: View {
     let item: Item
     let itemID: KeyPath<Item, String>
     let newestItemID: String?
-    let onLastMessageContentSizeSettled: (() -> Void)?
-    let itemContent: (Item, Bool, (() -> Void)?) -> ItemContent
+    let itemContent: (Item, Bool) -> ItemContent
 
     private var isNewestMessage: Bool {
         item[keyPath: itemID] == newestItemID
     }
 
     var body: some View {
-        itemContent(
-            item,
-            isNewestMessage,
-            isNewestMessage ? onLastMessageContentSizeSettled : nil
-        )
-        .messageListTimelineItemSpacing(isNewestMessage: isNewestMessage)
+        itemContent(item, isNewestMessage)
+            .messageListTimelineItemSpacing(isNewestMessage: isNewestMessage)
     }
 }
 
 extension View {
     func messageListTimelineItemSpacing(isNewestMessage: Bool) -> some View {
         padding(.bottom, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
-    }
-
-    func messageListAnimateLastMessageSize(
-        animateSizeChanges: Bool,
-        onContentSizeAnimationFinished: (() -> Void)?
-    ) -> some View {
-        modifier(
-            MessageListAnimateLastMessageSizeModifier(
-                animateSizeChanges: animateSizeChanges,
-                onContentSizeAnimationFinished: onContentSizeAnimationFinished
-            )
-        )
-    }
-}
-
-private struct MessageListAnimateLastMessageSizeModifier: ViewModifier {
-    let animateSizeChanges: Bool
-    let onContentSizeAnimationFinished: (() -> Void)?
-
-    @State private var contentHeight: CGFloat = 0
-    @State private var settleTask: Task<Void, Never>?
-
-    func body(content: Content) -> some View {
-        if animateSizeChanges {
-            content
-                .animation(.easeInOut(duration: 0.2), value: contentHeight)
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onChange(of: geometry.size.height, initial: true) { _, height in
-                                contentHeight = height
-                                settleTask?.cancel()
-                                settleTask = Task { @MainActor in
-                                    try? await Task.sleep(for: .milliseconds(200))
-                                    guard !Task.isCancelled else { return }
-                                    onContentSizeAnimationFinished?()
-                                }
-                            }
-                    }
-                }
-        } else {
-            content
-        }
     }
 }
 

@@ -49,8 +49,8 @@ Pressed feedback uses native button interaction with shared token mapping.
 ## Platform Notes
 
 - iOS: `Button` with plain style, capsule background, and light shadow.
-- iOS session chat temporarily uses eager SwiftUI timeline layout for reliable
-  scroll-to-end behavior; see
+- iOS session chat uses `ScrollView` + `LazyVStack` with
+  `.defaultScrollAnchor(.bottom)` for scroll-to-end and Follow Latest; see
   `docs/design-system/divergences.md`.
 - Android: Material 3 `Surface(onClick = ...)` with capsule shape, border, and
   shadow elevation.
