@@ -46,7 +46,7 @@ final class MessageListTimelineState {
             return scrollDistanceFromBottom <= MessageListTimelineDefaults.autoFollowTolerance
         }
 
-        return scrollPositionID == bottomAnchorID
+        return scrollPositionID == bottomAnchorID || scrollPositionID == nil
     }
 
     func shouldShowScrollToEnd(messageCount: Int) -> Bool {
@@ -84,17 +84,7 @@ final class MessageListTimelineState {
         onLog: ((String) -> Void)? = nil
     ) {
         guard messageCount > 0 else { return }
-        let isLayoutCorrection =
-            reason == "layout-check"
-            || reason == "layout-snap"
-            || reason == "content-height"
-            || reason == "viewport-height"
-            || reason == "layout-signature"
-
-        if isLayoutCorrection,
-           reason != "viewport-height",
-           isPinnedToEnd(messageCount: messageCount)
-        {
+        if isPinnedToEnd(messageCount: messageCount), reason != "initial-scroll", reason != "message-count" {
             onLog?("\(reason) snap skip-pinned count=\(messageCount)")
             return
         }
@@ -246,28 +236,34 @@ struct MessageListReversedTimelineStack<Item, ItemContent: View>: View {
         items.last?[keyPath: itemID]
     }
 
+    private var reversedItems: [Item] {
+        Array(items.reversed())
+    }
+
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(items, id: itemID) { item in
+            Color.clear
+                .frame(height: MessageListTimelineDefaults.bottomAnchorHeight)
+                .id(bottomAnchorID)
+                .accessibilityHidden(true)
+
+            Color.clear
+                .frame(height: MessageListTimelineDefaults.bottomContentPadding)
+                .accessibilityHidden(true)
+
+            ForEach(reversedItems, id: itemID) { item in
                 MessageListTimelineRow(
                     item: item,
                     itemID: itemID,
                     newestItemID: newestItemID,
                     itemContent: itemContent
                 )
+                .messageListBottomAnchored()
             }
-
-            Color.clear
-                .frame(height: MessageListTimelineDefaults.bottomContentPadding)
-                .accessibilityHidden(true)
-
-            Color.clear
-                .frame(height: MessageListTimelineDefaults.bottomAnchorHeight)
-                .id(bottomAnchorID)
-                .accessibilityHidden(true)
         }
         .padding(.horizontal, MessageListTimelineDefaults.horizontalContentPadding)
-        .padding(.top, MessageListTimelineDefaults.topContentPadding)
+        .padding(.bottom, MessageListTimelineDefaults.topContentPadding)
+        .messageListBottomAnchored()
     }
 }
 
@@ -289,7 +285,11 @@ private struct MessageListTimelineRow<Item, ItemContent: View>: View {
 
 extension View {
     func messageListTimelineItemSpacing(isNewestMessage: Bool) -> some View {
-        padding(.bottom, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
+        padding(.top, isNewestMessage ? 0 : MessageListTimelineDefaults.messageSpacing)
+    }
+
+    func messageListBottomAnchored() -> some View {
+        scaleEffect(x: 1, y: -1)
     }
 }
 
@@ -311,12 +311,13 @@ private struct MessageListTimelineScrollModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scrollPosition(id: $timeline.scrollPositionID, anchor: .bottom)
+            .scrollPosition(id: $timeline.scrollPositionID, anchor: .top)
             .scrollToEndScrollObserver(
                 distanceFromBottom: $timeline.scrollDistanceFromBottom,
                 isUserScrolling: $timeline.isUserScrolling,
                 scrollPositionID: timeline.scrollPositionID,
-                isProgrammaticScrolling: { timeline.isProgrammaticScrolling }
+                isProgrammaticScrolling: { timeline.isProgrammaticScrolling },
+                reverseLayout: true
             )
             .background {
                 GeometryReader { geometry in
@@ -404,14 +405,6 @@ extension View {
             }
             .onChange(of: timeline.viewportHeight) { _, height in
                 onLog?("viewport-height count=\(messageCount) height=\(timeline.contentHeight) viewport=\(height)")
-                timeline.followLayoutChangeIfNeededAfterLayoutSettles(
-                    messageCount: messageCount,
-                    autoFollowEnabled: autoFollowEnabled,
-                    scrollTargetID: lastMessageID,
-                    reason: "viewport-height",
-                    settleMilliseconds: 250,
-                    onLog: onLog
-                )
             }
             .onChange(of: layoutSignature) { _, _ in
                 onLog?("layout-signature changed count=\(messageCount) signature=\(layoutSignature)")

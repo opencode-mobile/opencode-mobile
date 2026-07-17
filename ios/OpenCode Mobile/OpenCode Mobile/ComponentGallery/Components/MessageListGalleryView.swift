@@ -55,7 +55,7 @@ private struct MessageListGalleryPreview: View {
                 .scrollTargetLayout()
                 .messageListTimelineContentHeight(timeline: timeline)
             }
-            .defaultScrollAnchor(.bottom)
+            .defaultScrollAnchor(.top)
             .messageListTimelineScrollChrome(timeline: timeline)
 
             MessageListScrollToEndOverlay(

@@ -46,6 +46,7 @@ struct ScrollToEndScrollObserver: ViewModifier {
     @Binding var isUserScrolling: Bool
     let scrollPositionID: String?
     let isProgrammaticScrolling: () -> Bool
+    let reverseLayout: Bool
 
     @State private var scrollEndTask: Task<Void, Never>?
 
@@ -53,11 +54,13 @@ struct ScrollToEndScrollObserver: ViewModifier {
         if #available(iOS 18, *) {
             content
                 .onScrollGeometryChange(for: ScrollToEndScrollSnapshot.self) { geometry in
-                    ScrollToEndScrollSnapshot(
-                        distanceFromBottom: max(
-                            0,
-                            geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
-                        ),
+                    let forwardDistance = max(
+                        0,
+                        geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
+                    )
+                    let reverseDistance = max(0, geometry.contentOffset.y)
+                    return ScrollToEndScrollSnapshot(
+                        distanceFromBottom: reverseLayout ? reverseDistance : forwardDistance,
                         contentOffsetY: geometry.contentOffset.y,
                         contentHeight: geometry.contentSize.height,
                         containerHeight: geometry.containerSize.height
@@ -103,14 +106,16 @@ extension View {
         distanceFromBottom: Binding<CGFloat>,
         isUserScrolling: Binding<Bool>,
         scrollPositionID: String?,
-        isProgrammaticScrolling: @escaping () -> Bool = { false }
+        isProgrammaticScrolling: @escaping () -> Bool = { false },
+        reverseLayout: Bool = false
     ) -> some View {
         modifier(
             ScrollToEndScrollObserver(
                 distanceFromBottom: distanceFromBottom,
                 isUserScrolling: isUserScrolling,
                 scrollPositionID: scrollPositionID,
-                isProgrammaticScrolling: isProgrammaticScrolling
+                isProgrammaticScrolling: isProgrammaticScrolling,
+                reverseLayout: reverseLayout
             )
         )
     }

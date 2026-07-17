@@ -97,7 +97,9 @@ struct SessionChatView: View {
                     }
                 )
             )
-            composer
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                composer
+            }
         }
         .background(OpenCodeColors.backgroundBase)
         .sessionChatMessageActionsSheet(
