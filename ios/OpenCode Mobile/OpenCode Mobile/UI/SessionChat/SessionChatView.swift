@@ -21,6 +21,7 @@ struct SessionChatView: View {
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var composerFocused = false
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -102,7 +103,10 @@ struct SessionChatView: View {
         .background(OpenCodeColors.backgroundBase)
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,
-            onRestoreToComposer: { viewModel.restoreComposerText($0) }
+            onRestoreToComposer: { text in
+                viewModel.restoreComposerText(text)
+                composerFocused = true
+            }
         )
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatPickerSheet(
@@ -378,6 +382,7 @@ struct SessionChatView: View {
 
         return OpenCodeSessionComposer(
             state: state,
+            isFocused: $composerFocused,
             onAction: { action in
                 switch action {
                 case let .textChanged(text):

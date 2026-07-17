@@ -153,6 +153,7 @@ private struct SessionChatTimelineReadyView: View {
                 .messageListTimelineContentHeight(timeline: timeline)
             }
             .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.interactively)
             .messageListTimelineScrollChrome(timeline: timeline)
             .refreshable {
                 await props.onRefresh()

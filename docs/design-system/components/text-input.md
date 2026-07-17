@@ -42,7 +42,9 @@ content-type behavior. Visual styling is not exposed for feature-level override.
 - The hint is visible only when the value is empty; it does not float or move
   outside the field.
 - `next` advances to the next focusable field; `done` clears field focus and
-  dismisses the keyboard according to native behavior.
+  dismisses the keyboard according to native behavior. Broader keyboard
+  dismissal policy (forms, chat, overlays) lives in
+  [`keyboard-dismissal.md`](../keyboard-dismissal.md).
 
 ## Platform Notes
 

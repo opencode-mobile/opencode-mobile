@@ -25,9 +25,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -100,13 +104,27 @@ fun OpenCodeSessionComposer(
     state: OpenCodeSessionComposerState,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
     modifier: Modifier = Modifier,
+    promptFocusRequester: FocusRequester? = null,
 ) {
+    val focusManager = LocalFocusManager.current
     val outlineColor =
         when (state) {
             is OpenCodeSessionComposerState.Permission ->
                 if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
             is OpenCodeSessionComposerState.Prompt -> MaterialTheme.colorScheme.outlineVariant
         }
+
+    LaunchedEffect(state is OpenCodeSessionComposerState.Permission) {
+        if (state is OpenCodeSessionComposerState.Permission) {
+            focusManager.clearFocus()
+        }
+    }
+
+    fun endEditingThen(action: OpenCodeSessionComposerAction) {
+        focusManager.clearFocus()
+        onAction(action)
+    }
+
     Column(
         modifier =
             modifier
@@ -143,18 +161,20 @@ fun OpenCodeSessionComposer(
             },
             contentKey = { it::class },
             label = "composer-content",
-        ) { state ->
+        ) { contentState ->
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when (state) {
+                when (contentState) {
                     is OpenCodeSessionComposerState.Prompt ->
                         PromptEntryContent(
-                            state = state,
+                            state = contentState,
                             onAction = onAction,
+                            endEditingThen = ::endEditingThen,
+                            promptFocusRequester = promptFocusRequester,
                         )
 
                     is OpenCodeSessionComposerState.Permission ->
                         PermissionApprovalContent(
-                            state = state,
+                            state = contentState,
                             onAction = onAction,
                         )
                 }
@@ -167,6 +187,8 @@ fun OpenCodeSessionComposer(
 private fun PromptEntryContent(
     state: OpenCodeSessionComposerState.Prompt,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
+    endEditingThen: (OpenCodeSessionComposerAction) -> Unit,
+    promptFocusRequester: FocusRequester?,
 ) {
     if (state.attachments.isNotEmpty()) {
         Column(
@@ -187,7 +209,17 @@ private fun PromptEntryContent(
         onValueChange = { onAction(OpenCodeSessionComposerAction.TextChanged(it)) },
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .then(
+                    if (promptFocusRequester != null) {
+                        Modifier.focusRequester(promptFocusRequester)
+                    } else {
+                        Modifier
+                    },
+                ),
         decorationBox = { innerTextField ->
             Box {
                 if (state.text.isBlank()) {
@@ -202,6 +234,8 @@ private fun PromptEntryContent(
         },
     )
 
+    // Chip row is editor chrome: horizontal scroll must not clear prompt focus
+    // (timeline user-drag is the only scroll-driven dismiss path).
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -210,18 +244,18 @@ private fun PromptEntryContent(
         OpenCodeChoiceBadge(
             label = state.selectedModelLabel,
             selected = false,
-            onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
+            onClick = { endEditingThen(OpenCodeSessionComposerAction.SelectModel) },
         )
         OpenCodeChoiceBadge(
             label = state.selectedModeLabel,
             selected = false,
-            onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+            onClick = { endEditingThen(OpenCodeSessionComposerAction.SelectMode) },
         )
         if (state.showVariant) {
             OpenCodeChoiceBadge(
                 label = state.selectedVariantLabel,
                 selected = false,
-                onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
+                onClick = { endEditingThen(OpenCodeSessionComposerAction.SelectVariant) },
             )
         }
     }
@@ -234,7 +268,7 @@ private fun PromptEntryContent(
             variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
             enabled = state.attachEnabled,
             contrast = OpenCodeButtonContrast.Low,
-            onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
+            onClick = { endEditingThen(OpenCodeSessionComposerAction.Attach) },
         )
         Spacer(Modifier.weight(1f))
         Row(
@@ -253,7 +287,7 @@ private fun PromptEntryContent(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send prompt"),
                 enabled = state.sendEnabled,
                 contrast = OpenCodeButtonContrast.Low,
-                onClick = { onAction(OpenCodeSessionComposerAction.Send) },
+                onClick = { endEditingThen(OpenCodeSessionComposerAction.Send) },
             )
         }
     }

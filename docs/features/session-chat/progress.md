@@ -131,6 +131,10 @@
 - **2026-07-16 / OPE-55:** Native Photos and Files/document pickers, removable
   pending chips, file-part prompt send, and outgoing attachment rows shipped on
   iOS and Android.
+- **2026-07-17:** Session Chat keyboard dismissal follows the design-system chat
+  strategy: interactive timeline scroll dismiss on iOS, user-drag clear-focus on
+  Android (not sticky-follow), composer-owned focus clear on send/sheet/permission,
+  chip scroll excluded, restore-to-composer refocus.
 
 ## Remaining Work
 

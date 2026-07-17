@@ -20,9 +20,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -146,6 +149,16 @@ private fun SessionChatTimelineReadyView(
             layoutSignature = messages.layoutSignature(),
             autoFollowEnabled = true,
         )
+    val focusManager = LocalFocusManager.current
+
+    // Clear IME only on user drag — not sticky-follow / programmatic scroll-to-end.
+    LaunchedEffect(timeline.listState) {
+        timeline.listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                focusManager.clearFocus()
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         PullToRefreshBox(

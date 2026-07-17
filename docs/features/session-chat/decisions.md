@@ -1,5 +1,42 @@
 # Session Chat Decisions
 
+## Session Chat uses the design-system chat keyboard strategy
+
+- Date: 2026-07-17
+- Decision: Session Chat adopts the **chat / timeline + composer** specialization
+  from
+  [`docs/design-system/keyboard-dismissal.md`](../../design-system/keyboard-dismissal.md).
+  Concretely:
+  - **Primary dismiss:** scrolling the message timeline dismisses the keyboard
+    (iOS `.scrollDismissesKeyboard(.interactively)`; Android clear-focus on
+    **user drag** of the timeline). Fall back to iOS `.immediately` only if
+    interactive dismiss fights sticky-follow. Programmatic sticky-follow and
+    scroll-to-end must **not** dismiss the keyboard.
+  - **Composer-owned focus:** `OpenCodeSessionComposer` holds view-local focus
+    (`@FocusState` / Compose focus). Optional parent focus binding / requester
+    exists only so restore-to-composer can refocus. Screen Models do not store
+    focus or keyboard visibility.
+  - **Clear focus when editing intent ends:** send, opening model/mode/variant
+    or attachment pickers/sheets, and swapping the shell to permission
+    approval (field unmounts).
+  - **Do not dismiss from editor controls:** horizontal model/mode/variant chip
+    scrolling must not dismiss the keyboard.
+  - **Restore-to-composer:** pasting a prior prompt into the draft also refocuses
+    the field so the keyboard returns.
+  - **Layout:** keep the composer as a timeline sibling in the chat `VStack`,
+    not a bottom `safeAreaInset`, so interactive keyboard drag does not depend
+    on the known inset-tracking bug.
+  - **Out of scope for this screen:** tap-anywhere dismiss, Done toolbar
+    accessories, and UIKit `resignFirstResponder` hacks.
+- Reason: Session Chat is the main long-lived editor; users need a reliable way
+  to reclaim the timeline while drafting, without fighting chip swipes, message
+  actions, or sticky-follow. The design-system chat defaults already encode that
+  trade-off; this decision locks them for this feature.
+- Parity: same intent on both platforms; interactive IME drag is iOS-only (see
+  [`divergences.md`](../../design-system/divergences.md#chat-timeline-scroll-keyboard-dismiss)).
+- Revisit when: sticky-follow regresses under interactive dismiss, or product
+  wants keep-keyboard-after-send for rapid follow-ups.
+
 ## Use eager SwiftUI timeline before UIKit-backed iOS timeline
 
 - Date: 2026-06-29

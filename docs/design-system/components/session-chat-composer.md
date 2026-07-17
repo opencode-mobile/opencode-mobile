@@ -70,6 +70,16 @@ server DTOs, repositories, and Screen Models are not component inputs.
 - An error keeps the decisions available and announces the failure.
 - The shell height remains content-adaptive in both variants.
 
+## Keyboard
+
+Prompt entry follows the chat specialization in
+[`keyboard-dismissal.md`](../keyboard-dismissal.md): the composer owns focus,
+clears it on send / picker open / permission swap, and must not dismiss from
+horizontal selector chip scrolling. An optional parent focus binding (iOS) or
+`FocusRequester` (Android) exists only so Session Chat can refocus after
+restore-to-composer. Timeline scroll dismiss is owned by Session Chat, not this
+component.
+
 ## Platform Notes
 
 - iOS uses SwiftUI selection, accessibility, and progress primitives.

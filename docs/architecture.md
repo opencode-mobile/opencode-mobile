@@ -160,6 +160,10 @@ the design-system component workflow before the feature screen depends on it.
 Feature-local layout is allowed when it is specific to one screen and does not
 create a reusable design-system concept.
 
+Keyboard dismissal uses one shared policy:
+[`docs/design-system/keyboard-dismissal.md`](design-system/keyboard-dismissal.md).
+Focus stays view-local; Screen Models do not own keyboard or focus flags.
+
 ## iOS Source Layout
 
 Feature screens and screen models live under `UI/<Feature>/` inside the app

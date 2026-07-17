@@ -88,7 +88,20 @@ enum OpenCodeSessionComposerAction {
 
 struct OpenCodeSessionComposer: View {
     let state: OpenCodeSessionComposerState
+    var isFocused: Binding<Bool>?
     let onAction: (OpenCodeSessionComposerAction) -> Void
+
+    @FocusState private var promptFocused: Bool
+
+    init(
+        state: OpenCodeSessionComposerState,
+        isFocused: Binding<Bool>? = nil,
+        onAction: @escaping (OpenCodeSessionComposerAction) -> Void
+    ) {
+        self.state = state
+        self.isFocused = isFocused
+        self.onAction = onAction
+    }
 
     private var textBinding: Binding<String> {
         Binding(
@@ -119,6 +132,21 @@ struct OpenCodeSessionComposer: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
         .animation(.easeInOut(duration: 0.24), value: isPermission)
+        .onChange(of: promptFocused) { _, value in
+            if isFocused?.wrappedValue != value {
+                isFocused?.wrappedValue = value
+            }
+        }
+        .onChange(of: isFocused?.wrappedValue, initial: true) { _, value in
+            if let value, promptFocused != value {
+                promptFocused = value
+            }
+        }
+        .onChange(of: isPermission) { _, permissionActive in
+            if permissionActive {
+                clearPromptFocus()
+            }
+        }
     }
 
     @ViewBuilder
@@ -136,25 +164,33 @@ struct OpenCodeSessionComposer: View {
             TextField("Ask anything...", text: textBinding, axis: .vertical)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
+                .focused($promptFocused)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: prompt.selectedModelLabel, selected: false, action: { onAction(.selectModel) })
-                    OpenCodeChoiceBadge(label: prompt.selectedModeLabel, selected: false, action: { onAction(.selectMode) })
+                    OpenCodeChoiceBadge(label: prompt.selectedModelLabel, selected: false, action: {
+                        endEditingThen(.selectModel)
+                    })
+                    OpenCodeChoiceBadge(label: prompt.selectedModeLabel, selected: false, action: {
+                        endEditingThen(.selectMode)
+                    })
                     if prompt.showVariant {
-                        OpenCodeChoiceBadge(label: prompt.selectedVariantLabel, selected: false, action: { onAction(.selectVariant) })
+                        OpenCodeChoiceBadge(label: prompt.selectedVariantLabel, selected: false, action: {
+                            endEditingThen(.selectVariant)
+                        })
                     }
                 }
             }
+            .scrollDismissesKeyboard(.never)
 
             HStack {
                 OpenCodeButton(
                     variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
                     enabled: prompt.attachEnabled,
                     contrast: .low,
-                    action: { onAction(.attach) }
+                    action: { endEditingThen(.attach) }
                 )
 
                 Spacer(minLength: 0)
@@ -173,10 +209,22 @@ struct OpenCodeSessionComposer: View {
                         variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send prompt"),
                         enabled: prompt.sendEnabled,
                         contrast: .low,
-                        action: { onAction(.send) }
+                        action: { endEditingThen(.send) }
                     )
                 }
             }
+    }
+
+    private func endEditingThen(_ action: OpenCodeSessionComposerAction) {
+        clearPromptFocus()
+        onAction(action)
+    }
+
+    private func clearPromptFocus() {
+        promptFocused = false
+        if isFocused?.wrappedValue == true {
+            isFocused?.wrappedValue = false
+        }
     }
 
     @ViewBuilder

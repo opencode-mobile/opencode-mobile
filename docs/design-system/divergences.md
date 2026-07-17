@@ -147,6 +147,23 @@ implementation belong in the feature's `parity-gaps.md`.
   popup implementation or if a shared overflow trigger API is added directly to
   `OpenCodeTopBar`.
 
+## Chat timeline scroll keyboard dismiss
+
+- Status: intentional
+- Area: component | motion
+- Shared intent: scrolling the Session Chat timeline ends editing intent and
+  dismisses the software keyboard so message history regains canvas. See
+  [`keyboard-dismissal.md`](keyboard-dismissal.md).
+- iOS behavior: timeline uses `.scrollDismissesKeyboard(.interactively)` so the
+  keyboard can track the drag and cancel mid-gesture.
+- Android behavior: timeline **user drag** clears focus / hides the IME.
+  Programmatic sticky-follow and scroll-to-end do not. Compose does not require
+  interactive IME drag parity.
+- Reason: both platforms share “scroll canvas → keyboard goes away”; interactive
+  drag tracking is an iOS platform strength, not a shared visual contract.
+- Review trigger: revisit if Android gains a stable interactive IME-dismiss API
+  that matches sticky-follow timeline behavior without fighting nested scroll.
+
 ## Bottom sheet form keyboard presentation
 
 - Status: intentional

@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -89,6 +90,7 @@ fun SessionChatScreen(
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     val lifecycleActionsEnabled = !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
+    val promptFocusRequester = remember { FocusRequester() }
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
         if (uris.isEmpty()) return
@@ -314,6 +316,7 @@ fun SessionChatScreen(
                 )
             OpenCodeSessionComposer(
                 state = composerState,
+                promptFocusRequester = promptFocusRequester,
                 onAction = { action ->
                     when (action) {
                         is OpenCodeSessionComposerAction.TextChanged -> viewModel.updateComposerText(action.text)
@@ -357,7 +360,10 @@ fun SessionChatScreen(
         SessionChatMessageActionsSheet(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
-            onRestoreToComposer = viewModel::restoreComposerText,
+            onRestoreToComposer = { text ->
+                viewModel.restoreComposerText(text)
+                promptFocusRequester.requestFocus()
+            },
         )
 
         SessionChatToolDetailSheet(
