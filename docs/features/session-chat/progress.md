@@ -127,14 +127,16 @@
   uncertain collapse height does not destabilize follow behavior.
 - Temporary scroll diagnostics remain available through Android
   `SessionChatScroll` logs and the iOS `session-chat` logger category.
-- Composer selector chips open bottom sheets for model, agent mode, and Variant;
-  attachment remains a no-op.
+- Composer selector chips open bottom sheets for model, agent mode, and Variant.
+- **2026-07-16 / OPE-55:** Native Photos and Files/document pickers, removable
+  pending chips, file-part prompt send, and outgoing attachment rows shipped on
+  iOS and Android.
 
 ## Remaining Work
 
 - No remaining implementation work in the current Session Chat slice.
-- Dedicated diff viewing and real attachment handling remain separate feature
-  work.
+- Dedicated diff viewing remains separate feature work. Real attachment handling
+  is delivered under [File Attachments](../file-attachments/progress.md).
 
 ## Big Session Performance Investigation
 

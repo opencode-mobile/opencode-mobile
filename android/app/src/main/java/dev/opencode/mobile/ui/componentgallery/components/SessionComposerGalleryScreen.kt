@@ -133,6 +133,7 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.SelectMode -> "Select mode"
             OpenCodeSessionComposerAction.SelectVariant -> "Select variant"
             OpenCodeSessionComposerAction.Attach -> "Attach"
+            is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"

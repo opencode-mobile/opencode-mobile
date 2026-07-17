@@ -150,6 +150,65 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun toSendRequest_mapsTextAndAttachmentsToPromptParts() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "Describe these",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "attachment-1",
+                                filename = "photo.png",
+                                mime = "image/png",
+                                kind = AttachmentKind.Image,
+                                dataUrl = "data:image/png;base64,AA==",
+                                byteCount = 1,
+                            ),
+                            Attachment(
+                                id = "attachment-2",
+                                filename = "notes.txt",
+                                mime = "text/plain",
+                                kind = AttachmentKind.Text,
+                                dataUrl = "data:text/plain;base64,SGk=",
+                                byteCount = 2,
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals(listOf("text", "file", "file"), body.parts.map { it.type })
+        assertEquals("Describe these", body.parts[0].text)
+        assertEquals("image/png", body.parts[1].mime)
+        assertEquals("data:image/png;base64,AA==", body.parts[1].url)
+        assertEquals("photo.png", body.parts[1].filename)
+    }
+
+    @Test
+    fun toSendRequest_allowsAttachmentOnlyPrompt() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "attachment-1",
+                                filename = "brief.pdf",
+                                mime = "application/pdf",
+                                kind = AttachmentKind.Pdf,
+                                dataUrl = "data:application/pdf;base64,AA==",
+                                byteCount = 1,
+                            ),
+                        ),
+                ),
+            )
+
+        assertEquals(listOf("file"), body.parts.map { it.type })
+        assertEquals("brief.pdf", body.parts.single().filename)
+    }
+
+    @Test
     fun compactToolLabel_pending_returnsHourglass() {
         assertEquals(
             "\u231B webfetch",
@@ -353,6 +412,94 @@ class MessageDomainAdapterTest {
     fun toMessagePart_toolTypeMissingTool_returnsNull() {
         val dto = MessagePartDto(id = "prt-1", type = "tool")
         assertNull(adapter.toMessagePart(dto))
+    }
+
+    @Test
+    fun toMessagePart_dataUrlFile_returnsFilePart() {
+        val dto =
+            MessagePartDto(
+                id = "prt-file",
+                type = "file",
+                mime = "image/png",
+                url = "data:image/png;base64,AA==",
+                filename = "photo.png",
+            )
+
+        val file = adapter.toMessagePart(dto) as MessagePart.File
+
+        assertEquals("prt-file", file.id)
+        assertEquals("photo.png", file.filename)
+        assertEquals(AttachmentKind.Image, file.kind)
+        assertEquals("data:image/png;base64,AA==", file.dataUrl)
+    }
+
+    @Test
+    fun toMessagePart_nonDataUrlFile_returnsNull() {
+        val dto = MessagePartDto(type = "file", mime = "text/plain", url = "file:///repo/readme.txt", filename = "readme.txt")
+
+        assertNull(adapter.toMessagePart(dto))
+    }
+
+    @Test
+    fun toMessagePart_dataUrlMimeHeaderMismatch_returnsNull() {
+        val dto =
+            MessagePartDto(
+                type = "file",
+                mime = "image/png",
+                url = "data:image/jpeg;base64,AA==",
+                filename = "photo.png",
+            )
+
+        assertNull(adapter.toMessagePart(dto))
+    }
+
+    @Test
+    fun toMessagePart_malformedDataUrlHeader_returnsNull() {
+        val dto =
+            MessagePartDto(
+                type = "file",
+                mime = "image/png",
+                url = "data:image/png,AA==",
+                filename = "photo.png",
+            )
+
+        assertNull(adapter.toMessagePart(dto))
+    }
+
+    @Test
+    fun toMessagePart_invalidBase64_returnsNull() {
+        val dto =
+            MessagePartDto(
+                type = "file",
+                mime = "text/plain",
+                url = "data:text/plain;base64,not base64!",
+                filename = "notes.txt",
+            )
+
+        assertNull(adapter.toMessagePart(dto))
+    }
+
+    @Test
+    fun toMessagePart_unsupportedDataUrlKind_returnsNull() {
+        val dto =
+            MessagePartDto(
+                type = "file",
+                mime = "application/zip",
+                url = "data:application/zip;base64,AA==",
+                filename = "archive.zip",
+            )
+
+        assertNull(adapter.toMessagePart(dto))
+    }
+
+    @Test
+    fun toMessagePart_missingId_usesDataUrlAsStableIdentity() {
+        val dataUrl = "data:text/plain;base64,SGk="
+        val dto = MessagePartDto(type = "file", mime = "text/plain", url = dataUrl, filename = "notes.txt")
+
+        val file = adapter.toMessagePart(dto) as MessagePart.File
+
+        assertEquals(dataUrl, file.id)
     }
 
     @Test

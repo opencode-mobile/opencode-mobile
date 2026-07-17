@@ -97,6 +97,7 @@ applicable item is complete.
 ## Current Component Docs
 
 - `../icons.md` (shared Material icon catalog and sync workflow)
+- `attachment.md`
 - `outgoing-message.md`
 - `tool-call-card.md`
 - `top-bar.md`

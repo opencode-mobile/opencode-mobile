@@ -84,6 +84,44 @@ struct MessageDomainAdapterTests {
         #expect(body.agent == nil)
     }
 
+    @Test func sendRequest_mapsTextAndAttachmentsToPromptParts() throws {
+        let attachment = Attachment(
+            id: "attachment-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGVsbG8="
+        )
+
+        let body = adapter.sendRequest(
+            options: PromptSendOptions(text: "Review this", attachments: [attachment])
+        )
+
+        #expect(body.parts.count == 2)
+        #expect(body.parts[0].type == "text")
+        #expect(body.parts[0].text == "Review this")
+        #expect(body.parts[1].type == "file")
+        #expect(body.parts[1].id == "attachment-1")
+        #expect(body.parts[1].mime == "text/plain")
+        #expect(body.parts[1].filename == "notes.txt")
+        #expect(body.parts[1].url == "data:text/plain;base64,SGVsbG8=")
+    }
+
+    @Test func sendRequest_attachmentOnly_omitsEmptyTextPart() throws {
+        let attachment = Attachment(
+            id: "attachment-1",
+            filename: "diagram.png",
+            mime: "image/png",
+            kind: .image,
+            dataURL: "data:image/png;base64,iVBORw0KGgo="
+        )
+
+        let body = adapter.sendRequest(options: PromptSendOptions(text: "  ", attachments: [attachment]))
+
+        #expect(body.parts.count == 1)
+        #expect(body.parts[0].type == "file")
+    }
+
     @Test func compactToolLabel_pending_returnsHourglass() {
         #expect(
             adapter.compactToolLabel(for: ToolPart(toolName: "webfetch", status: .pending)) == "\u{231B} webfetch"
@@ -283,6 +321,32 @@ struct MessageDomainAdapterTests {
             MessagePartDTO.self,
             from: #"{"id":"prt-1","type":"text"}"#.data(using: .utf8)!
         )
+        #expect(adapter.messagePart(from: dto) == nil)
+    }
+
+    @Test func messagePart_fileDataURL_returnsFilePart() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-file","type":"file","mime":"application/pdf","filename":"brief.pdf","url":"data:application/pdf;base64,JVBERi0="}"#.data(using: .utf8)!
+        )
+
+        guard case .file(let file) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected file part")
+            return
+        }
+        #expect(file.id == "prt-file")
+        #expect(file.filename == "brief.pdf")
+        #expect(file.mime == "application/pdf")
+        #expect(file.kind == .pdf)
+        #expect(file.dataURL == "data:application/pdf;base64,JVBERi0=")
+    }
+
+    @Test func messagePart_fileURLThatIsNotData_returnsNil() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-file","type":"file","mime":"text/plain","filename":"secret.txt","url":"file:///repo/secret.txt"}"#.data(using: .utf8)!
+        )
+
         #expect(adapter.messagePart(from: dto) == nil)
     }
 

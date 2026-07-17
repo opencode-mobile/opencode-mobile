@@ -205,6 +205,42 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == 2)
     }
 
+    @Test func messagePartUpdated_fileChangeEmitsWhenFlattenedTextIsUnchanged() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        let file = FilePart(
+            id: "prt-file",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGVsbG8="
+        )
+        repo.messages = [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Hello",
+                parts: [.text(TextPart(text: "Hello", isStreaming: false)), .file(file)],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        eventStream.emit(eventWithFilePart(file, messageID: "msg-1", sessionID: "ses-1"))
+
+        let updated = await waitUntil {
+            collector.latest()?.first?.parts.contains(.file(file)) == true
+        }
+        task.cancel()
+        #expect(updated)
+    }
+
     @Test func messageRemoved_deletesSlotAndEmits() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -332,6 +368,13 @@ struct MessageSyncTests {
     private func eventWithTextPart(partID: String, messageID: String, text: String, sessionID: String) -> OpencodeEvent {
         let json = """
         {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"text","text":"\(text)"}}}}
+        """
+        return EventDomainAdapter().parseEvent(dataLine: json)!
+    }
+
+    private func eventWithFilePart(_ file: FilePart, messageID: String, sessionID: String) -> OpencodeEvent {
+        let json = """
+        {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(file.id)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"file","mime":"\(file.mime)","filename":"\(file.filename)","url":"\(file.dataURL)"}}}}
         """
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }

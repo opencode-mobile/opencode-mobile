@@ -10,8 +10,8 @@ identical width, shape, inset, background, and border behavior.
 ## Public API
 
 - Component state: `prompt` or `permission`.
-- Prompt-entry states: empty, populated, sending-disabled, stop available, and
-  model/mode/variant selection.
+- Prompt-entry states: empty, populated, pending attachments,
+  sending-disabled, stop available, and model/mode/variant selection.
 - Permission states: pending, submitting/disabled, queued, and response error.
 - Required permission content: opaque request and session identifiers, category,
   one or more patterns, allow-once action, and deny action.
@@ -19,11 +19,13 @@ identical width, shape, inset, background, and border behavior.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed, select model, select mode, select variant,
-attach, send, and stop. Permission actions are allow once and deny, and return
-the opaque request and session identifiers rendered with the decision. The
-feature supplies product content and handles actions; it does not choose shell
-colors, radii, spacing, motion, or other visual overrides. Domain models,
-server DTOs, repositories, and Screen Models are not component inputs.
+attach, remove attachment, send, and stop. Pending attachment content uses
+presentation-safe `OpenCodeAttachmentChip` state. Permission actions are allow
+once and deny, and return the opaque request and session identifiers rendered
+with the decision. The feature supplies product content and handles actions; it
+does not choose shell colors, radii, spacing, motion, or other visual overrides.
+Domain models, server DTOs, repositories, and Screen Models are not component
+inputs.
 
 ## Token Usage
 
@@ -43,6 +45,8 @@ server DTOs, repositories, and Screen Models are not component inputs.
 
 - Exactly one composer shell is mounted at the bottom of Session Chat.
 - Without a pending request, it renders prompt entry and its normal controls.
+- Prompt send is available when trimmed text or at least one pending attachment
+  exists. Pending attachments render as removable chips above the prompt input.
 - With a pending request, the shell replaces its inner content with permission
   details and decisions. Draft text and selection state remain in the Screen
   Model and return after the request resolves.

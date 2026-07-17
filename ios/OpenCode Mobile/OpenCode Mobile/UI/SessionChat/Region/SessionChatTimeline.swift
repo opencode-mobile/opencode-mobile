@@ -15,6 +15,7 @@ final class SessionChatTimeline {
     private var transformTask: Task<Void, Never>?
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: [SessionChatRow] = []
+    private var pendingBaselineSignatureCounts: [String: Int] = [:]
     private var lastLoadedMessages: [Message] = []
 
     init(
@@ -37,6 +38,7 @@ final class SessionChatTimeline {
         transformTask?.cancel()
         mergePendingWhileSending = false
         pendingOptimisticRows = []
+        pendingBaselineSignatureCounts = [:]
         lastLoadedMessages = []
         state = SessionChatTimelineRegionState()
         notifyChange()
@@ -101,6 +103,7 @@ final class SessionChatTimeline {
     func beginOptimisticSend(_ rows: [SessionChatRow]) {
         mergePendingWhileSending = true
         pendingOptimisticRows = rows
+        pendingBaselineSignatureCounts = signatureCounts(state.messages.filter { !$0.isPending })
         state.messages.append(contentsOf: rows)
         state.timeline = .ready
         state.errorMessage = nil
@@ -110,6 +113,7 @@ final class SessionChatTimeline {
     func failOptimisticSend(optimisticID: String, error: String) {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
+        pendingBaselineSignatureCounts = [:]
         state.messages.removeAll { $0.id == optimisticID }
         state.errorMessage = error
         notifyChange()
@@ -118,6 +122,7 @@ final class SessionChatTimeline {
     func clearSendingState() {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
+        pendingBaselineSignatureCounts = [:]
     }
 
     func reloadAfterSend(onComplete: @escaping () -> Void, onReloadFailed: @escaping () -> Void) async {
@@ -265,6 +270,7 @@ final class SessionChatTimeline {
         if !fromQuietRefresh {
             mergePendingWhileSending = false
             pendingOptimisticRows = []
+            pendingBaselineSignatureCounts = [:]
         }
         notifyChange()
         SessionPerformanceProbe.emit("styled_timeline_published")
@@ -274,6 +280,7 @@ final class SessionChatTimeline {
     private func applyError(_ error: Error) {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
+        pendingBaselineSignatureCounts = [:]
         lastLoadedMessages = []
         state.timeline = .error
         state.messages = []
@@ -312,11 +319,37 @@ final class SessionChatTimeline {
 
     private func mergeWithPending(_ serverRows: [SessionChatRow], pendingRows: [SessionChatRow]) -> [SessionChatRow] {
         guard !pendingRows.isEmpty else { return serverRows }
+        var serverCounts = signatureCounts(serverRows)
         let pendingToKeep =
             pendingRows.filter { pending in
-                !serverRows.contains(where: { $0.role == .user && $0.text == pending.text })
+                let signature = optimisticSignature(pending)
+                let baselineCount = pendingBaselineSignatureCounts[signature, default: 0]
+                guard serverCounts[signature, default: 0] > baselineCount else { return true }
+                serverCounts[signature, default: 0] -= 1
+                return false
             }
         return serverRows + pendingToKeep
+    }
+
+    private func signatureCounts(_ rows: [SessionChatRow]) -> [String: Int] {
+        rows.reduce(into: [:]) { counts, row in
+            guard row.role == .user else { return }
+            counts[optimisticSignature(row), default: 0] += 1
+        }
+    }
+
+    private func optimisticSignature(_ row: SessionChatRow) -> String {
+        let content = row.blocks.compactMap { block -> String? in
+            switch block {
+            case .text(let text):
+                "text:\(text)"
+            case .attachment(let file):
+                "file:\(file.id):\(file.mime):\(file.dataURL)"
+            case .toolCard, .toolGroup:
+                nil
+            }
+        }
+        return content.isEmpty ? "text:\(row.text)" : content.joined(separator: "|")
     }
 
     private func metadataLabel(mode: String?, model: String?, variant: String? = nil, sentAtEpochMs: Int64? = nil) -> String {

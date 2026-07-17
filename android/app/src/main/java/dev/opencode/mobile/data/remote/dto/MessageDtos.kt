@@ -73,6 +73,9 @@ data class MessagePartDto(
     @SerialName("messageID") val messageId: String? = null,
     val type: String,
     val text: String? = null,
+    val mime: String? = null,
+    val url: String? = null,
+    val filename: String? = null,
     val system: String? = null,
     val tool: String? = null,
     val source: JsonObject? = null,
@@ -137,5 +140,8 @@ data class SendPromptModelDto(
 @Serializable
 data class SendMessagePartDto(
     val type: String,
-    val text: String,
+    val text: String? = null,
+    val mime: String? = null,
+    val url: String? = null,
+    val filename: String? = null,
 )

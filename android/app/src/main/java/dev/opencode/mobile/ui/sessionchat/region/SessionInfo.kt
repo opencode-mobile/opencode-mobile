@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 class SessionInfo(
     private val sessionRepository: SessionRepository,
@@ -306,6 +309,9 @@ class SessionInfo(
                                 "SSE event observed session=$sessionId type=${event.type} " +
                                     "eventSession=${event.sessionId ?: "-"} scope=$eventScope",
                             )
+                            if (event.type == "session.error" && event.sessionId == sessionId) {
+                                _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
+                            }
                             applySessionUpdatedTitle(event, sessionId)
                         }
                     }
@@ -348,6 +354,17 @@ class SessionInfo(
             is SessionError.Decoding -> "Unable to read server response"
             else -> throwable.message ?: "Something went wrong"
         }
+
+    private fun sessionErrorMessage(properties: JsonObject?): String {
+        val error = properties?.get("error") as? JsonObject
+        val data = error?.get("data") as? JsonObject
+        return sequenceOf(
+            (data?.get("message") as? JsonPrimitive)?.contentOrNull,
+            (error?.get("message") as? JsonPrimitive)?.contentOrNull,
+            (properties?.get("message") as? JsonPrimitive)?.contentOrNull,
+            (error?.get("name") as? JsonPrimitive)?.contentOrNull,
+        ).firstOrNull { !it.isNullOrBlank() } ?: "Session work failed"
+    }
 
     private fun logI(message: String) {
         runCatching { Log.i(TAG, message) }

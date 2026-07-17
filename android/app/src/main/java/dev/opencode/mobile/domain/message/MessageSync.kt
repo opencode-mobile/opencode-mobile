@@ -257,7 +257,19 @@ class MessageSync(
         }
 
         private fun messageFingerprint(messages: List<Message>): String =
-            messages.joinToString("|") { "${it.id}:${it.text.length}:${it.text.hashCode()}" }
+            messages.joinToString("|") { message ->
+                val parts =
+                    message.parts.joinToString(",") { part ->
+                        when (part) {
+                            is MessagePart.Text -> "text:${part.text.length}:${part.text.hashCode()}:${part.isStreaming}"
+                            is MessagePart.Tool -> "tool:${part.callId}:${part.status}:${part.output?.hashCode()}:${part.error?.hashCode()}"
+                            is MessagePart.File ->
+                                "file:${part.id}:${part.filename}:${part.mime}:" +
+                                    "${part.dataUrl.length}:${part.dataUrl.hashCode()}"
+                        }
+                    }
+                "${message.id}:${message.text.length}:${message.text.hashCode()}:$parts"
+            }
 
         private fun markChanged(
             sessionId: String,

@@ -40,6 +40,12 @@ class DefaultMessageRepository
             text: String,
         ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
 
+        override suspend fun prepareOptimisticUserMessage(
+            id: String,
+            text: String,
+            attachments: List<Attachment>,
+        ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text, attachments)
+
         override fun clearMessageCache() {
             messageSync.clearCache()
         }
@@ -84,6 +90,10 @@ class DefaultMessageRepository
             options: PromptSendOptions,
             directory: String?,
         ) {
+            logI(
+                "sendPromptAsync session=$sessionId directory=${directory ?: "-"} " +
+                    "text=${options.text.isNotBlank()} files=${options.attachments.size}",
+            )
             runCatching { api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory) }
                 .getOrElse { throw adapter.mapError(it) }
         }

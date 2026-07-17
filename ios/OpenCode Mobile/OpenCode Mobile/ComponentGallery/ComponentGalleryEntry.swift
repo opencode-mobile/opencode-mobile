@@ -9,6 +9,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
     case icons
+    case attachment
     case outgoingMessage
     case toolCallCard
     case topBar
@@ -56,6 +57,12 @@ let componentGalleryEntries = [
         title: "Icons",
         description: "Material Icons catalog synced from icons/manifest.yaml.",
         category: .foundation
+    ),
+    ComponentGalleryEntry(
+        id: .attachment,
+        title: "Attachment",
+        description: "Pending attachment chips and sent image, PDF, and text rows.",
+        category: .components
     ),
     ComponentGalleryEntry(
         id: .outgoingMessage,

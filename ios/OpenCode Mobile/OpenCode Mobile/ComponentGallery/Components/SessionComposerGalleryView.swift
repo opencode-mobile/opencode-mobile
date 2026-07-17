@@ -4,6 +4,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case empty
     case prompt
     case active
+    case attachments
     case permission
     case queued
     case submitting
@@ -56,6 +57,11 @@ struct SessionComposerGalleryView: View {
             promptState(text: draftText)
         case .active:
             promptState(text: draftText, showStop: true)
+        case .attachments:
+            promptState(text: "", attachments: [
+                .init(id: "pdf", filename: "requirements.pdf", variant: .pdf),
+                .init(id: "text", filename: "notes.md", variant: .text),
+            ])
         case .permission:
             permissionState()
         case .queued:
@@ -67,15 +73,20 @@ struct SessionComposerGalleryView: View {
         }
     }
 
-    private func promptState(text: String, showStop: Bool = false) -> OpenCodeSessionComposerState {
+    private func promptState(
+        text: String,
+        attachments: [OpenCodeAttachmentPresentation] = [],
+        showStop: Bool = false
+    ) -> OpenCodeSessionComposerState {
         .prompt(
             .init(
                 text: text,
+                attachments: attachments,
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
                 selectedVariantLabel: "Default",
                 showVariant: true,
-                sendEnabled: !text.isEmpty,
+                sendEnabled: !text.isEmpty || !attachments.isEmpty,
                 showStop: showStop,
                 stopEnabled: showStop
             )
@@ -116,6 +127,7 @@ private extension OpenCodeSessionComposerAction {
         case .selectMode: "Select mode"
         case .selectVariant: "Select variant"
         case .attach: "Attach"
+        case .removeAttachment: "Remove attachment"
         case .send: "Send"
         case .stop: "Stop"
         case .allowPermissionOnce: "Allow once"

@@ -233,6 +233,10 @@ final class SessionInfo {
 
     private func observeEvents() async {
         for await event in foregroundEventStream.events() {
+            if event.sessionID == state.sessionID, let message = event.sessionErrorMessage {
+                state.errorMessage = message
+                notifyChange()
+            }
             let scope =
                 if event.sessionID == state.sessionID {
                     "bound"

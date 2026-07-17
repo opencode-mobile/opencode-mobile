@@ -76,6 +76,7 @@ class MessageDomainAdapter {
                 val stateDto = parseToolState(dto.state)
                 toToolPart(toolName = toolName, callId = dto.callId, state = stateDto)
             }
+            "file" -> toFilePart(dto)
             else -> null
         }
     }
@@ -133,7 +134,22 @@ class MessageDomainAdapter {
 
     fun toSendRequest(options: PromptSendOptions): SendMessageRequestDto =
         SendMessageRequestDto(
-            parts = listOf(SendMessagePartDto(type = "text", text = options.text)),
+            parts =
+                buildList {
+                    if (options.text.isNotBlank()) {
+                        add(SendMessagePartDto(type = "text", text = options.text))
+                    }
+                    options.attachments.forEach { attachment ->
+                        add(
+                            SendMessagePartDto(
+                                type = "file",
+                                mime = attachment.mime,
+                                url = attachment.dataUrl,
+                                filename = attachment.filename,
+                            ),
+                        )
+                    }
+                },
             model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
             variant = options.variant,
             agent = options.mode,
@@ -187,6 +203,7 @@ class MessageDomainAdapter {
                 when (part) {
                     is MessagePart.Text -> part.text.trim().takeIf { it.isNotEmpty() }
                     is MessagePart.Tool -> null
+                    is MessagePart.File -> null
                 }
             }
         return segments.joinToString("\n")
@@ -248,6 +265,20 @@ class MessageDomainAdapter {
     }
 
     private fun Int?.orZero(): Int = this ?: 0
+
+    private fun toFilePart(dto: MessagePartDto): MessagePart.File? {
+        val dataUrl = dto.url ?: return null
+        val mime = dto.mime?.lowercase() ?: return null
+        if (!AttachmentDataUrl.validates(dataUrl, mime)) return null
+        val kind = AttachmentDataUrl.kind(mime) ?: return null
+        return MessagePart.File(
+            id = dto.id ?: dataUrl,
+            filename = dto.filename?.takeIf { it.isNotBlank() } ?: "Attachment",
+            mime = mime,
+            kind = kind,
+            dataUrl = dataUrl,
+        )
+    }
 
     private fun JsonObject?.stringAt(vararg path: String): String? {
         var current: kotlinx.serialization.json.JsonElement = this ?: return null

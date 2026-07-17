@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
@@ -163,6 +164,18 @@ class SessionChatViewModel
 
         fun updateComposerText(text: String) {
             composer.updateComposerText(text)
+        }
+
+        fun addAttachments(attachments: List<Attachment>) {
+            composer.addAttachments(attachments)
+        }
+
+        fun removeAttachment(id: String) {
+            composer.removeAttachment(id)
+        }
+
+        fun reportAttachmentError(message: String) {
+            composer.reportAttachmentError(message)
         }
 
         fun retryModelCatalog() {
@@ -348,6 +361,7 @@ class SessionChatViewModel
                     timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
                     composerState.errorMessage != null -> composerState.errorMessage
                     composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                    infoState.errorMessage != null -> infoState.errorMessage
                     permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
                     else -> timelineState.errorMessage
                 }

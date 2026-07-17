@@ -20,9 +20,10 @@ outgoing message.
 - States:
   - default full-height display.
 - Required content:
-  - message text.
   - metadata label using dot-separated sent-message context.
 - Optional content:
+  - message text.
+  - one or more `OpenCodeMessageAttachment` presentation values.
   - rendered markdown document and initial height cache for prepared content.
   - tap or long-press interaction handled by the owning feature.
 
@@ -39,14 +40,18 @@ outgoing message.
 
 ## Behavior
 
-Messages render trailing aligned in their parent conversation row. The rounded
-bubble may grow with message content up to the shared
+Messages render trailing aligned in their parent conversation row. When text is
+present, the rounded bubble may grow with message content up to the shared
 `outgoingMessage.maxWidthFraction` cap so long prompts wrap naturally. Short
 prompts shrink to their content width; there is no minimum bubble width. The
 message text is shown without a role prefix; alignment communicates that the
 message is outgoing. The bubble uses `color.surface.inset` so it
 remains distinct from the page background in light mode without introducing a
 component-only raw color. Bubble corners match `listItem.cornerRadius`.
+
+Attachments render as a separate row of `OpenCodeMessageAttachment` items
+inside the same outgoing-message grouping. Attachment-only messages omit the
+empty text bubble but retain the attachment row and metadata footer.
 
 Outgoing message content is always rendered at full height. Long prompts do not
 collapse in place, which keeps message height deterministic after optimistic

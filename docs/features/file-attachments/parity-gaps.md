@@ -1,9 +1,19 @@
 # File Attachments — Parity Gaps
 
-No implementation parity gaps yet. Both platforms are equally unimplemented
-for real attachment handling; the composer attach control is a shared visual
-no-op from Session Chat.
+## Native picker MIME filters
 
-When implementation diverges (picker UX, Photos vs Files entry points, chip
-layout), record each gap here with expected shared intent, current iOS/Android
-state, reason, owner, and temporary vs intentional status.
+- Expected shared intent: Photos for images; Files/documents for PDF and
+  text-like files; unsupported binaries rejected after selection with shared
+  copy.
+- Current iOS state: PhotosPicker is image-only; document importer uses UTTypes
+  for PDF/text-like files.
+- Current Android state: Photo Picker for images; document provider uses `*/*`
+  so application/json and other text-like MIME types reach central validation.
+- Affected area: behavior / picker UX.
+- Reason: Android document MIME filters cannot reliably enumerate every
+  text-like provider type without excluding accepted content.
+- Owner / next action: keep post-selection validation as the source of truth.
+- Status: intentional.
+
+Image thumbnail generation is bounded on both platforms; native decoder APIs
+may still differ while preserving shared presentation variants.

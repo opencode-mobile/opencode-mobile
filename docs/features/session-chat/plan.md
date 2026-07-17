@@ -88,10 +88,9 @@ is a thin facade. Any change to the facade is an architectural decision — see
   variant keys for the selected model).
 - Model and Variant are server-backed by `/config/providers`; selected model and
   non-default Variant are sent with async prompts.
-- The attachment `+` is visually present but remains a no-op in this scaffold
-  slice. Real **Attachments** are specified in
-  [File Attachments](../file-attachments/plan.md); implementation should use
-  **Attach** / **Add attachment** (not **Attach context**).
+- The attachment `+` opens native Photos and Files/document entry points through
+  the delivered [File Attachments](../file-attachments/plan.md) slice. It uses
+  **Add attachment** rather than the legacy **Attach context** label.
 
 ## Session Status Bar
 

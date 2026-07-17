@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -8,10 +9,12 @@ import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 
 data class SessionChatComposerState(
     val text: String = "",
+    val attachments: List<Attachment> = emptyList(),
     val selectedModel: ModelSelection? = null,
     val modelOptions: List<ModelSelectionOption> = emptyList(),
     val selectedMode: String = SessionChatComposer.AvailableModes.first(),
@@ -31,6 +34,9 @@ data class SessionChatComposerState(
 
     val canSelectVariant: Boolean
         get() = selectedModel?.option?.supportsVariants == true
+
+    val canSend: Boolean
+        get() = text.isNotBlank() || attachments.isNotEmpty()
 }
 
 data class SessionRenameUiState(
@@ -201,6 +207,7 @@ data class SessionInfoRegionState(
     val isLifecycleActionInFlight: Boolean = false,
     val lifecycleErrorMessage: String? = null,
     val shouldLeaveSession: Boolean = false,
+    val errorMessage: String? = null,
 )
 
 data class SessionChatReviewChangesRegionState(
@@ -261,10 +268,31 @@ data class SessionChatMessageItem(
     val isStreaming: Boolean = false,
     val renderedMarkdown: MarkdownDocument? = null,
     val blocks: List<SessionChatTimelineBlock> = emptyList(),
+    val attachments: List<SessionChatAttachmentItem> = emptyList(),
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,
 )
+
+data class SessionChatAttachmentItem(
+    val id: String,
+    val filename: String,
+    val variant: OpenCodeAttachmentVariant,
+    val signature: String,
+    val imageBytes: ByteArray? = null,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is SessionChatAttachmentItem &&
+            id == other.id &&
+            filename == other.filename &&
+            variant == other.variant &&
+            signature == other.signature &&
+            imageBytes.contentEquals(other.imageBytes)
+
+    override fun hashCode(): Int =
+        31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
+            imageBytes.contentHashCode()
+}
 
 fun MessageRole.displayLabel(): String =
     when (this) {

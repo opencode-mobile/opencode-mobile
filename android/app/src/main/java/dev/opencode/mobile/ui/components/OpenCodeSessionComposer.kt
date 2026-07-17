@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
         val text: String,
+        val attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
         val selectedModelLabel: String,
         val selectedModeLabel: String,
         val selectedVariantLabel: String,
@@ -73,6 +74,10 @@ sealed interface OpenCodeSessionComposerAction {
     data object SelectVariant : OpenCodeSessionComposerAction
 
     data object Attach : OpenCodeSessionComposerAction
+
+    data class RemoveAttachment(
+        val id: String,
+    ) : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
 
@@ -162,6 +167,20 @@ private fun PromptEntryContent(
     state: OpenCodeSessionComposerState.Prompt,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
+    if (state.attachments.isNotEmpty()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.attachments.forEach { attachment ->
+                OpenCodeAttachmentChip(
+                    attachment = attachment,
+                    onRemove = { onAction(OpenCodeSessionComposerAction.RemoveAttachment(it)) },
+                )
+            }
+        }
+    }
+
     BasicTextField(
         value = state.text,
         onValueChange = { onAction(OpenCodeSessionComposerAction.TextChanged(it)) },
@@ -211,7 +230,7 @@ private fun PromptEntryContent(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Attach context"),
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
             contrast = OpenCodeButtonContrast.Low,
             onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
         )

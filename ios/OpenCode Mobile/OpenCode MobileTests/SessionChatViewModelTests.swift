@@ -481,6 +481,183 @@ struct SessionChatViewModelTests {
         #expect(repository.sentOptions?.mode == "plan")
     }
 
+    @Test func attachments_canBeAddedAndRemovedFromComposer() async {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "one", filename: "notes.txt")
+
+        viewModel.addAttachments([attachment])
+        #expect(viewModel.uiState.composer.attachments == [attachment])
+
+        viewModel.removeAttachment(id: attachment.id)
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+    }
+
+    @Test func addAttachmentData_acceptsSupportedTypesAndCoercesTextLikeFiles() {
+        let viewModel = makeViewModel()
+        let cases: [(String, String?, String, AttachmentKind)] = [
+            ("photo.png", "image/png", "image/png", .image),
+            ("photo.jpg", "image/jpeg", "image/jpeg", .image),
+            ("animation.gif", "image/gif", "image/gif", .image),
+            ("preview.webp", "image/webp", "image/webp", .image),
+            ("brief.pdf", "application/pdf", "application/pdf", .pdf),
+            ("notes.md", "text/markdown", "text/plain", .text),
+            ("events.jsonl", "application/json", "text/plain", .text),
+        ]
+
+        for (filename, declaredMime, expectedMime, expectedKind) in cases {
+            viewModel.addAttachmentData(Data("content".utf8), filename: filename, declaredMime: declaredMime)
+            let attachment = viewModel.uiState.composer.attachments.last
+            #expect(attachment?.filename == filename)
+            #expect(attachment?.mime == expectedMime)
+            #expect(attachment?.kind == expectedKind)
+            #expect(attachment?.dataURL == "data:\(expectedMime);base64,Y29udGVudA==")
+        }
+        #expect(viewModel.uiState.composer.attachments.count == cases.count)
+    }
+
+    @Test func addAttachmentData_rejectsUnsupportedBinaryAndPreservesDraft() {
+        let viewModel = makeViewModel()
+        viewModel.updateComposerText("Keep this draft")
+
+        viewModel.addAttachmentData(Data([0, 1, 2]), filename: "archive.zip", declaredMime: "application/zip")
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.composer.text == "Keep this draft")
+        #expect(viewModel.uiState.errorMessage == "Only images, PDFs, or text files can be attached here.")
+    }
+
+    @Test func sendPrompt_attachmentOnly_sendsAndRendersOptimistically() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "one", filename: "notes.txt")
+        viewModel.addAttachments([attachment])
+
+        await viewModel.sendPrompt()
+
+        #expect(repository.sentOptions?.text.isEmpty == true)
+        #expect(repository.sentOptions?.attachments == [attachment])
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.messages.contains { row in
+            row.isPending && row.blocks.contains {
+                guard case let .attachment(file) = $0 else { return false }
+                return file.filename == "notes.txt"
+            }
+        })
+    }
+
+    @Test func sendPrompt_httpFailure_restoresDraftAndAttachments() async {
+        let repository = FakeMessageRepository(shouldFailSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "one", filename: "notes.txt")
+        viewModel.updateComposerText("Retry me")
+        viewModel.addAttachments([attachment])
+
+        await viewModel.sendPrompt()
+
+        #expect(viewModel.uiState.composer.text == "Retry me")
+        #expect(viewModel.uiState.composer.attachments == [attachment])
+    }
+
+    @Test func sendPrompt_httpFailure_doesNotOverwriteNewDraftEdits() async {
+        let repository = FakeMessageRepository(shouldFailSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("Submitted")
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        viewModel.updateComposerText("New draft")
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.text == "New draft")
+    }
+
+    @Test func sendPrompt_httpFailure_restoresSubmittedAttachmentsAlongsideNewSelections() async {
+        let repository = FakeMessageRepository(shouldFailSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let submitted = testAttachment(id: "submitted", filename: "submitted.txt")
+        let newlySelected = testAttachment(id: "new", filename: "new.txt")
+        viewModel.addAttachments([submitted])
+
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        viewModel.addAttachments([newlySelected])
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.attachments == [submitted, newlySelected])
+    }
+
+    @Test func sendPrompt_successPreservesVisibleDraftUntilAcceptedThenClearsOnlySubmittedValues() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let submitted = testAttachment(id: "submitted", filename: "submitted.txt")
+        let newlySelected = testAttachment(id: "new", filename: "new.txt")
+        viewModel.updateComposerText("Submitted")
+        viewModel.addAttachments([submitted])
+
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+
+        #expect(viewModel.uiState.composer.text == "Submitted")
+        #expect(viewModel.uiState.composer.attachments == [submitted])
+
+        viewModel.updateComposerText("New draft")
+        viewModel.addAttachments([newlySelected])
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.text == "New draft")
+        #expect(viewModel.uiState.composer.attachments == [newlySelected])
+    }
+
+    @Test func sendPrompt_successPreservesAttachmentReselectedDuringFlight() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let attachment = testAttachment(id: "same", filename: "notes.txt")
+        viewModel.addAttachments([attachment])
+
+        let task = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        viewModel.removeAttachment(id: attachment.id)
+        viewModel.addAttachments([attachment])
+        repository.releaseSend()
+        await task.value
+
+        #expect(viewModel.uiState.composer.attachments == [attachment])
+    }
+
+    @Test func sessionError_surfacesWithoutRestoringAcceptedAttachments() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream)
+        await viewModel.loadMessages()
+        viewModel.addAttachments([testAttachment(id: "one", filename: "large.png")])
+        await viewModel.sendPrompt()
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.error",
+                sessionID: "ses-1",
+                rawProperties: [
+                    "error": .dictionary([
+                        "name": .string("MessageOutputLengthError"),
+                        "data": .dictionary(["message": .string("Image exceeds the maximum size")]),
+                    ]),
+                ]
+            )
+        )
+        await waitUntil { viewModel.uiState.errorMessage == "Image exceeds the maximum size" }
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+    }
+
     @Test func loadMessages_restoresCachedModelSelectionOverHistory() async {
         let defaultOption = ModelSelectionOption(
             providerID: "anthropic",
@@ -871,6 +1048,59 @@ struct SessionChatViewModelTests {
         await sendTask.value
     }
 
+    @Test func quietRefreshDuringAttachmentOnlySend_requiresNewMatchingServerMessage() async {
+        let attachment = testAttachment(id: "repeat", filename: "repeat.txt")
+        let file = FilePart(
+            id: attachment.id,
+            filename: attachment.filename,
+            mime: attachment.mime,
+            kind: attachment.kind,
+            dataURL: attachment.dataURL
+        )
+        let existing = Message(
+            id: "msg-existing",
+            role: .user,
+            text: "",
+            parts: [.file(file)],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1
+        )
+        let repository = FakeMessageRepository(messages: [existing], holdSend: true)
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(messageRepository: repository, eventStream: eventStream)
+        await viewModel.loadMessages()
+        viewModel.addAttachments([attachment])
+
+        let sendTask = Task { await viewModel.sendPrompt() }
+        await waitUntil { viewModel.uiState.isSending }
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil { viewModel.uiState.messages.count == 2 }
+        #expect(viewModel.uiState.messages.contains { $0.isPending })
+
+        repository.messages = [
+            existing,
+            Message(
+                id: "msg-new",
+                role: .user,
+                text: "",
+                parts: [.file(file)],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        let reconciled = await waitUntil(timeoutMs: 5_000) {
+            viewModel.uiState.messages.count == 2 && !viewModel.uiState.messages.contains(where: \.isPending)
+        }
+
+        #expect(reconciled)
+        #expect(!viewModel.uiState.messages.contains { $0.isPending })
+        repository.releaseSend()
+        await sendTask.value
+    }
+
     @Test func startObserving_afterStop_resumesEventReloads() async {
         let repository = FakeObservingMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
@@ -980,6 +1210,46 @@ struct SessionChatViewModelTests {
             return
         }
         #expect(card.title == "Shell")
+    }
+
+    @Test func rowFromUserMessage_preservesOrderedTextAndAttachmentBlocks() {
+        let first = FilePart(
+            id: "first",
+            filename: "first.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,Rmlyc3Q="
+        )
+        let second = FilePart(
+            id: "second",
+            filename: "second.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,U2Vjb25k"
+        )
+        let message = Message(
+            id: "msg-ordered",
+            role: .user,
+            text: "Before\nAfter",
+            parts: [
+                .text(TextPart(text: "Before", isStreaming: false)),
+                .file(first),
+                .text(TextPart(text: "After", isStreaming: false)),
+                .file(second),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+
+        let row = makeViewModel().row(from: message)
+
+        #expect(row?.blocks == [
+            .text("Before"),
+            .attachment(first),
+            .text("After"),
+            .attachment(second),
+        ])
     }
 
     @Test func contextUsageFraction_usesLatestAssistantTokensAndModelLimit() async {
@@ -1134,6 +1404,16 @@ struct SessionChatViewModelTests {
                 sentAtEpochMs: Int64(messageIndex)
             )
         }
+    }
+
+    private func testAttachment(id: String, filename: String) -> OpenCode_Mobile.Attachment {
+        OpenCode_Mobile.Attachment(
+            id: id,
+            filename: filename,
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGVsbG8="
+        )
     }
 
     private func milliseconds(_ block: () -> Void) -> Int64 {
@@ -1316,6 +1596,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     var sentOptions: PromptSendOptions?
     private var listMessagesCallCount = 0
     private var sendContinuation: CheckedContinuation<Void, Never>?
+    private var sendReleaseRequested = false
 
     init(
         messages: [Message] = [
@@ -1334,8 +1615,12 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     }
 
     func releaseSend() {
-        sendContinuation?.resume()
-        sendContinuation = nil
+        if let sendContinuation {
+            sendContinuation.resume()
+            self.sendContinuation = nil
+        } else {
+            sendReleaseRequested = true
+        }
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -1395,9 +1680,11 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         sendPromptAsyncCalled = true
         sentOptions = options
         if shouldFailSend {
+            if holdSend, !sendReleaseRequested {
+                await withCheckedContinuation { sendContinuation = $0 }
+            }
             throw MessageError.transport("send failed")
-        }
-        if holdSend {
+        } else if holdSend, !sendReleaseRequested {
             await withCheckedContinuation { sendContinuation = $0 }
         }
     }
