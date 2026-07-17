@@ -138,6 +138,7 @@ fun OpenCodeBottomSheet(
     modifier: Modifier = Modifier,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null,
     contentMode: OpenCodeBottomSheetContentMode = OpenCodeBottomSheetContentMode.ActionList,
+    alwaysFixedHeight: Boolean = false,
     pinnedContent: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -245,6 +246,7 @@ fun OpenCodeBottomSheet(
                         title = title,
                         headerLeadingAction = headerLeadingAction,
                         contentMode = contentMode,
+                        alwaysFixedHeight = alwaysFixedHeight,
                         onDismissRequest = ::dismissWithAnimation,
                         headerDragModifier =
                             Modifier.draggable(
@@ -272,6 +274,7 @@ private fun BottomSheetContent(
     title: String,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
     contentMode: OpenCodeBottomSheetContentMode,
+    alwaysFixedHeight: Boolean,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
     pinnedContent: @Composable ColumnScope.() -> Unit,
@@ -284,9 +287,14 @@ private fun BottomSheetContent(
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedContentHeight by remember { mutableStateOf(0.dp) }
     var lockedSheetHeight by remember { mutableStateOf<Dp?>(null) }
-    var committedToScrollable by remember { mutableStateOf(false) }
+    var committedToScrollable by remember { mutableStateOf(alwaysFixedHeight) }
     var previousContentMode by remember { mutableStateOf(contentMode) }
     val scrollState = rememberScrollState()
+
+    if (alwaysFixedHeight && !committedToScrollable) {
+        committedToScrollable = true
+        lockedSheetHeight = maxSheetHeight
+    }
 
     if (contentMode != previousContentMode) {
         val switchingIntoForm =
@@ -296,7 +304,7 @@ private fun BottomSheetContent(
         // Invalidate the previous body's measured height so layout mode is not chosen
         // from stale provider-list metrics while the new model list is already rendering.
         contentHeight = 0.dp
-        if (switchingIntoForm) {
+        if (switchingIntoForm || alwaysFixedHeight) {
             // Filtered model lists are always the long-sheet case; lock immediately so the
             // first frame does not expand unconstrained under Compact.
             committedToScrollable = true
@@ -308,18 +316,25 @@ private fun BottomSheetContent(
     }
 
     val layoutMode =
-        remember(contentHeight, headerHeight, pinnedContentHeight, committedToScrollable, contentMode) {
-            if (contentHeight == 0.dp && !committedToScrollable) {
+        remember(
+            contentHeight,
+            headerHeight,
+            pinnedContentHeight,
+            committedToScrollable,
+            contentMode,
+            alwaysFixedHeight,
+        ) {
+            if (alwaysFixedHeight || committedToScrollable) {
+                BottomSheetLayoutMode.Scrollable
+            } else if (contentHeight == 0.dp) {
                 BottomSheetLayoutMode.Measuring
             } else {
                 val resolvedHeader =
                     if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
                 val total =
                     resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
-                if (committedToScrollable || total > BottomSheetCompactMaxHeight) {
+                if (total > BottomSheetCompactMaxHeight) {
                     BottomSheetLayoutMode.Scrollable
-                } else if (contentHeight == 0.dp) {
-                    BottomSheetLayoutMode.Measuring
                 } else {
                     BottomSheetLayoutMode.Compact
                 }

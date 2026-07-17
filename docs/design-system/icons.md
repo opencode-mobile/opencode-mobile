@@ -33,7 +33,9 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | Icon | Usage |
 | --- | --- |
 | `widgets` | Home top-bar action that opens the developer-only Component Gallery (`accessibilityLabel`: Developer components) |
-| `add` | **Browse projects** list row on home (start decorator) |
+| `add` | **Add project** tile on home (start decorator) |
+| `folder` | Directory rows and current path in Add project sheet |
+| `arrow_upward` | **Go up** row in Add project sheet |
 | `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
 | `archive` | Session Chat overflow **Archive** action |
 | `arrow_downward` | **Scroll to end** action pill on session chat |

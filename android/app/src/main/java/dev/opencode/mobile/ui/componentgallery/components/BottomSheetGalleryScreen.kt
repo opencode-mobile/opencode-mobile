@@ -40,6 +40,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var startDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.Icon.name) }
     var endDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.None.name) }
     var formMode by rememberSaveable { mutableStateOf(false) }
+    var alwaysFixedHeight by rememberSaveable { mutableStateOf(false) }
     var formValue by rememberSaveable { mutableStateOf("http://10.0.2.2:4096/") }
 
     val startDecoratorKind = galleryDecoratorKind(startDecoratorName)
@@ -62,6 +63,11 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
                 OpenCodeChoiceBadge(label = "Form mode", selected = formMode, onClick = { formMode = !formMode })
+                OpenCodeChoiceBadge(
+                    label = "Fixed 50%",
+                    selected = alwaysFixedHeight,
+                    onClick = { alwaysFixedHeight = !alwaysFixedHeight },
+                )
             }
         }
 
@@ -98,6 +104,21 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 null
             },
         contentMode = if (formMode) OpenCodeBottomSheetContentMode.Form else OpenCodeBottomSheetContentMode.ActionList,
+        alwaysFixedHeight = alwaysFixedHeight,
+        pinnedContent = {
+            if (alwaysFixedHeight) {
+                OpenCodeBottomSheetEntry(
+                    title = "Go up",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward, null),
+                    onClick = {},
+                )
+                OpenCodeBottomSheetEntry(
+                    title = "/Users/demo/Projects",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, null),
+                    onClick = {},
+                )
+            }
+        },
     ) {
         if (formMode) {
             OpenCodeTextInput(

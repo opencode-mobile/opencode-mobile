@@ -22,6 +22,7 @@ struct BottomSheetGalleryView: View {
     @State private var startDecorator: GalleryBottomSheetDecoratorKind = .icon
     @State private var endDecorator: GalleryBottomSheetDecoratorKind = .none
     @State private var formMode = false
+    @State private var alwaysFixedHeight = false
     @State private var formValue = "http://127.0.0.1:4096/"
 
     private var entryStartDecorator: BottomSheetEntryDecorator {
@@ -65,6 +66,11 @@ struct BottomSheetGalleryView: View {
                         selected: formMode,
                         action: { formMode.toggle() }
                     )
+                    OpenCodeChoiceBadge(
+                        label: "Fixed 50%",
+                        selected: alwaysFixedHeight,
+                        action: { alwaysFixedHeight.toggle() }
+                    )
                 }
             }
 
@@ -97,7 +103,22 @@ struct BottomSheetGalleryView: View {
                     action: { showsHeaderBack = false }
                 )
                 : nil,
-            contentMode: formMode ? .form : .actionList
+            contentMode: formMode ? .form : .actionList,
+            alwaysFixedHeight: alwaysFixedHeight,
+            pinnedContent: {
+                if alwaysFixedHeight {
+                    OpenCodeBottomSheetEntry(
+                        title: "Go up",
+                        startDecorator: .icon(.arrowUpward),
+                        action: {}
+                    )
+                    OpenCodeBottomSheetEntry(
+                        title: "/Users/demo/Projects",
+                        startDecorator: .icon(.folder),
+                        action: {}
+                    )
+                }
+            }
         ) {
             if formMode {
                 OpenCodeTextInput(

@@ -16,6 +16,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /path:
+    get:
+      operationId: getPaths
+      responses:
+        "200":
+          description: Server path info (home, directory, worktree)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Path"
+  /file:
+    get:
+      operationId: listFiles
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Files and directories under path
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileNode"
   /project:
     get:
       operationId: listProjects
@@ -53,6 +81,35 @@ components:
           type: boolean
         version:
           type: string
+    Path:
+      type: object
+      required: [home, worktree, directory]
+      properties:
+        home:
+          type: string
+        state:
+          type: string
+        config:
+          type: string
+        worktree:
+          type: string
+        directory:
+          type: string
+    FileNode:
+      type: object
+      required: [name, path, absolute, type, ignored]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        absolute:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        ignored:
+          type: boolean
     Project:
       type: object
       required: [id, worktree]

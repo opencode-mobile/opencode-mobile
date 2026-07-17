@@ -195,7 +195,7 @@ private fun AddProjectSessionSelectorTile(onClick: () -> Unit) {
             Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .semantics { contentDescription = "Browse projects" }
+                .semantics { contentDescription = "Add project" }
                 .clickable(
                     role = Role.Button,
                     onClick = onClick,

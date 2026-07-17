@@ -44,20 +44,51 @@ struct ProjectListHomeView: View {
                 viewModel.consumePendingSessionOpen()
             }
         }
-        .openCodeBottomSheet(isPresented: addProjectSheetBinding, title: "Browse projects") {
-            if addProjectCandidates.isEmpty {
+        .openCodeBottomSheet(
+            isPresented: addProjectSheetBinding,
+            title: "Add project",
+            alwaysFixedHeight: true,
+            pinnedContent: {
+                let navigator = addProjectNavigator ?? .empty
                 OpenCodeBottomSheetEntry(
-                    title: "No more projects on this server",
-                    enabled: false,
-                    action: {}
+                    title: "Go up",
+                    enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
+                    startDecorator: .icon(.arrowUpward),
+                    action: { Task { await viewModel.navigateAddProjectUp() } }
                 )
+                OpenCodeBottomSheetEntry(
+                    title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
+                    enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
+                    startDecorator: .icon(.folder),
+                    action: { Task { await viewModel.selectCurrentDirectory() } }
+                )
+            }
+        ) {
+            let navigator = addProjectNavigator ?? .empty
+            if navigator.isLoading || navigator.isValidating {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
+            } else if let errorMessage = navigator.errorMessage {
+                VStack(spacing: 12) {
+                    Text(errorMessage)
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .multilineTextAlignment(.center)
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: "Retry"),
+                        action: { Task { await viewModel.retryAddProjectNavigator() } }
+                    )
+                }
+                .padding(20)
+            } else if navigator.entries.isEmpty {
+                OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
             } else {
-                ForEach(addProjectCandidates) { candidate in
+                ForEach(navigator.entries) { entry in
                     OpenCodeBottomSheetEntry(
-                        title: candidate.displayName,
-                        action: {
-                            Task { await viewModel.addProject(worktree: candidate.worktree) }
-                        }
+                        title: entry.name,
+                        startDecorator: .icon(.folder),
+                        action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
                     )
                 }
             }
@@ -197,12 +228,12 @@ struct ProjectListHomeView: View {
         )
     }
 
-    private var addProjectCandidates: [AddProjectCandidateItem] {
+    private var addProjectNavigator: AddProjectNavigatorState? {
         switch viewModel.state {
-        case let .empty(_, items, _), let .loaded(_, _, items, _, _, _):
-            items
+        case let .empty(_, navigator, _), let .loaded(_, _, navigator, _, _, _):
+            navigator
         default:
-            []
+            nil
         }
     }
 
@@ -306,6 +337,7 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
     )
     return ProjectListHomeViewModel(
         projectRepository: PreviewProjectRepository(),
+        filesystemRepository: PreviewFilesystemRepository(),
         sessionRepository: PreviewSessionRepository(),
         connectionProfileStore: store,
         activeConnectionManager: manager,
@@ -321,6 +353,16 @@ private struct PreviewProjectRepository: ProjectRepository {
     func listProjects() async throws -> [Project] { [] }
     func getCurrentProject(directory: String?) async throws -> Project {
         Project(id: "1", worktree: "/demo", displayName: "demo")
+    }
+}
+
+private struct PreviewFilesystemRepository: FilesystemRepository {
+    func getPaths() async throws -> ServerPaths {
+        ServerPaths(home: "/demo", directory: "/demo", worktree: "/")
+    }
+
+    func listDirectory(path: String) async throws -> [DirectoryNode] {
+        []
     }
 }
 

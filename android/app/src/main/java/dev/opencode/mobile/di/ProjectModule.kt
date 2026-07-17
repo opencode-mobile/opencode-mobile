@@ -6,11 +6,15 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.domain.event.DefaultForegroundEventStream
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
+import dev.opencode.mobile.domain.filesystem.FilesystemDomainAdapter
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
@@ -26,6 +30,10 @@ abstract class ProjectModule {
     @Singleton
     abstract fun bindProjectRepository(impl: DefaultProjectRepository): ProjectRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindFilesystemRepository(impl: DefaultFilesystemRepository): FilesystemRepository
+
     companion object {
         @Provides
         @Singleton
@@ -37,7 +45,15 @@ abstract class ProjectModule {
 
         @Provides
         @Singleton
+        fun provideFilesystemApi(httpClient: OpencodeHttpClient): FilesystemApi = FilesystemApi(httpClient)
+
+        @Provides
+        @Singleton
         fun provideProjectDomainAdapter(): ProjectDomainAdapter = ProjectDomainAdapter()
+
+        @Provides
+        @Singleton
+        fun provideFilesystemDomainAdapter(): FilesystemDomainAdapter = FilesystemDomainAdapter()
     }
 }
 

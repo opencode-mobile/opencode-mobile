@@ -22,7 +22,7 @@ owning the visual treatment for project tiles or session preview rows.
   - optional per-project load error.
 - Required callbacks:
   - `onProjectSelected(worktree)`.
-  - `onBrowseProjects()`.
+  - `onBrowseProjects()` (Add project tile; opens directory navigator).
   - `onSessionSelected(project, session)`.
   - `onShowAllSessions(worktree)`.
   - `onNewSession(worktree)`.

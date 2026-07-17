@@ -13,6 +13,8 @@ import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -45,6 +47,7 @@ class MainScreenViewModel
     @Inject
     constructor(
         private val projectRepository: ProjectRepository,
+        private val filesystemRepository: FilesystemRepository,
         private val sessionRepository: SessionRepository,
         private val connectionProfileStore: ConnectionProfileStore,
         private val sessionDomainAdapter: SessionDomainAdapter,
@@ -105,25 +108,67 @@ class MainScreenViewModel
         }
 
         fun showAddProjectSheet() {
-            viewModelScope.launch { loadAddProjectCandidates() }
+            viewModelScope.launch { openDirectoryNavigator() }
         }
 
         fun dismissAddProjectSheet() {
             _uiState.update { state ->
                 when (state) {
-                    is MainScreenUiState.Empty -> state.copy(showAddProjectSheet = false, addProjectCandidates = emptyList())
-                    is MainScreenUiState.Loaded -> state.copy(showAddProjectSheet = false, addProjectCandidates = emptyList())
+                    is MainScreenUiState.Empty ->
+                        state.copy(showAddProjectSheet = false, addProjectNavigator = null)
+                    is MainScreenUiState.Loaded ->
+                        state.copy(showAddProjectSheet = false, addProjectNavigator = null)
                     else -> state
                 }
             }
         }
 
+        fun navigateAddProjectUp() {
+            val navigator = currentAddProjectNavigator() ?: return
+            val parent = DirectoryListingPolicy.parentPath(navigator.currentPath) ?: return
+            viewModelScope.launch { loadDirectoryNavigator(parent) }
+        }
+
+        fun navigateAddProjectInto(path: String) {
+            viewModelScope.launch { loadDirectoryNavigator(path) }
+        }
+
+        fun retryAddProjectNavigator() {
+            val navigator = currentAddProjectNavigator() ?: return
+            viewModelScope.launch { loadDirectoryNavigator(navigator.currentPath) }
+        }
+
+        fun selectCurrentDirectory() {
+            val navigator = currentAddProjectNavigator() ?: return
+            if (navigator.currentPath.isBlank() || navigator.isLoading || navigator.isValidating) return
+            viewModelScope.launch { addProject(navigator.currentPath) }
+        }
+
         fun addProject(worktree: String) {
             viewModelScope.launch {
-                connectionProfileStore.addWorktree(serverBaseUrl, worktree)
-                requestedFocusWorktree = worktree
-                dismissAddProjectSheet()
-                runHomeLoad(skipProbe = true)
+                val added = connectionProfileStore.addedWorktrees(serverBaseUrl)
+                if (worktree in added) {
+                    requestedFocusWorktree = worktree
+                    dismissAddProjectSheet()
+                    runHomeLoad(skipProbe = true)
+                    return@launch
+                }
+                updateAddProjectNavigator { it.copy(isValidating = true, errorMessage = null) }
+                val result = runCatching { projectRepository.getCurrentProject(directory = worktree) }
+                result
+                    .onSuccess { project ->
+                        connectionProfileStore.addWorktree(serverBaseUrl, project.worktree)
+                        requestedFocusWorktree = project.worktree
+                        dismissAddProjectSheet()
+                        runHomeLoad(skipProbe = true)
+                    }.onFailure { error ->
+                        updateAddProjectNavigator {
+                            it.copy(
+                                isValidating = false,
+                                errorMessage = error.message ?: "Unable to add this directory",
+                            )
+                        }
+                    }
             }
         }
 
@@ -306,38 +351,104 @@ class MainScreenViewModel
             )
         }
 
-        private suspend fun loadAddProjectCandidates() {
+        private suspend fun openDirectoryNavigator() {
+            updateAddProjectNavigator(
+                AddProjectNavigatorUi(
+                    currentPath = "",
+                    canGoUp = false,
+                    entries = emptyList(),
+                    isLoading = true,
+                    isValidating = false,
+                    errorMessage = null,
+                ),
+            )
             try {
-                val added = connectionProfileStore.addedWorktrees(serverBaseUrl).toSet()
-                val candidates =
-                    projectRepository
-                        .listProjects()
-                        .filter { it.worktree !in added }
-                        .map { project ->
-                            AddProjectCandidateUi(
-                                worktree = project.worktree,
-                                displayName = project.displayName,
-                                pathSubtitle = project.worktree,
-                                letter = letterCharacterForProject(project.displayName),
-                                letterAccent = letterAccentForWorktree(project.worktree),
-                            )
-                        }
-                _uiState.update { state ->
-                    when (state) {
-                        is MainScreenUiState.Empty ->
-                            state.copy(showAddProjectSheet = true, addProjectCandidates = candidates)
-                        is MainScreenUiState.Loaded ->
-                            state.copy(showAddProjectSheet = true, addProjectCandidates = candidates)
-                        else -> state
+                val paths = filesystemRepository.getPaths()
+                loadDirectoryNavigator(paths.home)
+            } catch (error: Throwable) {
+                updateAddProjectNavigator(
+                    AddProjectNavigatorUi(
+                        currentPath = "",
+                        canGoUp = false,
+                        entries = emptyList(),
+                        isLoading = false,
+                        isValidating = false,
+                        errorMessage = error.message ?: "Unable to open home directory",
+                    ),
+                )
+            }
+        }
+
+        private suspend fun loadDirectoryNavigator(path: String) {
+            updateAddProjectNavigator { current ->
+                current.copy(
+                    currentPath = path,
+                    canGoUp = DirectoryListingPolicy.parentPath(path) != null,
+                    isLoading = true,
+                    isValidating = false,
+                    errorMessage = null,
+                )
+            }
+            try {
+                val entries =
+                    filesystemRepository.listDirectory(path).map { node ->
+                        AddProjectDirectoryUi(name = node.name, absolutePath = node.absolutePath)
                     }
+                updateAddProjectNavigator { current ->
+                    current.copy(
+                        currentPath = path,
+                        canGoUp = DirectoryListingPolicy.parentPath(path) != null,
+                        entries = entries,
+                        isLoading = false,
+                        isValidating = false,
+                        errorMessage = null,
+                    )
                 }
             } catch (error: Throwable) {
-                _uiState.update { state ->
-                    when (state) {
-                        is MainScreenUiState.Empty -> state.copy(addProjectError = error.message)
-                        is MainScreenUiState.Loaded -> state.copy(addProjectError = error.message)
-                        else -> state
+                updateAddProjectNavigator { current ->
+                    current.copy(
+                        currentPath = path,
+                        canGoUp = DirectoryListingPolicy.parentPath(path) != null,
+                        entries = emptyList(),
+                        isLoading = false,
+                        isValidating = false,
+                        errorMessage = error.message ?: "Unable to list directory",
+                    )
+                }
+            }
+        }
+
+        private fun currentAddProjectNavigator(): AddProjectNavigatorUi? =
+            when (val state = _uiState.value) {
+                is MainScreenUiState.Empty -> state.addProjectNavigator
+                is MainScreenUiState.Loaded -> state.addProjectNavigator
+                else -> null
+            }
+
+        private fun updateAddProjectNavigator(navigator: AddProjectNavigatorUi) {
+            _uiState.update { state ->
+                when (state) {
+                    is MainScreenUiState.Empty ->
+                        state.copy(showAddProjectSheet = true, addProjectNavigator = navigator)
+                    is MainScreenUiState.Loaded ->
+                        state.copy(showAddProjectSheet = true, addProjectNavigator = navigator)
+                    else -> state
+                }
+            }
+        }
+
+        private fun updateAddProjectNavigator(transform: (AddProjectNavigatorUi) -> AddProjectNavigatorUi) {
+            _uiState.update { state ->
+                when (state) {
+                    is MainScreenUiState.Empty -> {
+                        val current = state.addProjectNavigator ?: AddProjectNavigatorUi.empty()
+                        state.copy(showAddProjectSheet = true, addProjectNavigator = transform(current))
                     }
+                    is MainScreenUiState.Loaded -> {
+                        val current = state.addProjectNavigator ?: AddProjectNavigatorUi.empty()
+                        state.copy(showAddProjectSheet = true, addProjectNavigator = transform(current))
+                    }
+                    else -> state
                 }
             }
         }
@@ -445,16 +556,14 @@ sealed interface MainScreenUiState {
 
     data class Empty(
         val showAddProjectSheet: Boolean = false,
-        val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
-        val addProjectError: String? = null,
+        val addProjectNavigator: AddProjectNavigatorUi? = null,
         val projectSessionCreateError: String? = null,
     ) : MainScreenUiState
 
     data class Loaded(
         val sections: List<ProjectSectionUi>,
         val showAddProjectSheet: Boolean = false,
-        val addProjectCandidates: List<AddProjectCandidateUi> = emptyList(),
-        val addProjectError: String? = null,
+        val addProjectNavigator: AddProjectNavigatorUi? = null,
         val seeAllSessions: SeeAllSessionsSheet? = null,
         val pendingOpenSession: SessionOpenTarget? = null,
         val focusedWorktree: String? = null,
@@ -474,13 +583,31 @@ data class ProjectSectionUi(
     val loadError: String? = null,
 )
 
-data class AddProjectCandidateUi(
-    val worktree: String,
-    val displayName: String,
-    val pathSubtitle: String,
-    val letter: Char,
-    val letterAccent: LetterAccent,
+data class AddProjectDirectoryUi(
+    val name: String,
+    val absolutePath: String,
 )
+
+data class AddProjectNavigatorUi(
+    val currentPath: String,
+    val canGoUp: Boolean,
+    val entries: List<AddProjectDirectoryUi>,
+    val isLoading: Boolean,
+    val isValidating: Boolean,
+    val errorMessage: String?,
+) {
+    companion object {
+        fun empty(): AddProjectNavigatorUi =
+            AddProjectNavigatorUi(
+                currentPath = "",
+                canGoUp = false,
+                entries = emptyList(),
+                isLoading = false,
+                isValidating = false,
+                errorMessage = null,
+            )
+    }
+}
 
 data class SeeAllSessionsSheet(
     val worktree: String,

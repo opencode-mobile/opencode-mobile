@@ -9,8 +9,9 @@ with correct worktree scoping on a single opencode server.
 
 - Curated **added projects** (worktree paths) persisted per server URL.
 - Home redesign: app-name top bar, **widgets** action to Component Gallery, project
-  sections with letter list items, 3 recent sessions, **See all...** bottom sheet,
-  **Browse projects** sheet from `GET /project` catalog.
+  sections with letter list items, 3 recent sessions, **See all...** bottom sheet.
+  Project add via catalog **Browse projects** is superseded by
+  [Add Project Directory Navigator](../add-project/plan.md).
 - Query param **`directory={worktree}`** on all Session and Message repository calls.
 - Inline **`GET /global/health`** probe with retry on home load.
 - First-launch seed: auto-add boot project worktree when list is empty.

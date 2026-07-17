@@ -17,6 +17,10 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
+import dev.opencode.mobile.domain.filesystem.DirectoryNode
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -174,6 +178,146 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun showAddProjectSheet_startsAtHomeAndListsDirectories() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/home", directory = "/home/work", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/home" to
+                                listOf(
+                                    DirectoryNode(name = "projects", absolutePath = "/home/projects", isDirectory = true),
+                                    DirectoryNode(name = ".cache", absolutePath = "/home/.cache", isDirectory = true),
+                                    DirectoryNode(name = "readme", absolutePath = "/home/readme", isDirectory = false),
+                                ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    filesystemRepository = filesystem,
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val navigator = loaded.addProjectNavigator
+            assertTrue(loaded.showAddProjectSheet)
+            assertEquals("/home", navigator?.currentPath)
+            assertEquals(listOf("projects"), navigator?.entries?.map { it.name })
+            assertTrue(navigator?.canGoUp == true)
+        }
+
+    @Test
+    fun navigateAddProjectInto_loadsChildDirectory() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/home" to listOf(DirectoryNode("projects", "/home/projects", true)),
+                            "/home/projects" to listOf(DirectoryNode("app", "/home/projects/app", true)),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    filesystemRepository = filesystem,
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.navigateAddProjectInto("/home/projects")
+            advanceUntilIdle()
+            val navigator = (viewModel.uiState.value as MainScreenUiState.Loaded).addProjectNavigator
+            assertEquals("/home/projects", navigator?.currentPath)
+            assertEquals(listOf("app"), navigator?.entries?.map { it.name })
+        }
+
+    @Test
+    fun selectCurrentDirectory_validatesAndFocuses() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val projectRepository = FakeProjectRepository(bootWorktree = "/one")
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+                    listings = mapOf("/home" to emptyList()),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = projectRepository,
+                    filesystemRepository = filesystem,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/home" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.selectCurrentDirectory()
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/one", "/home"), store.added(serverUrl))
+            assertEquals("/home", loaded.focusedWorktree)
+            assertTrue(projectRepository.validatedDirectories.contains("/home"))
+            assertTrue(!loaded.showAddProjectSheet)
+        }
+
+    @Test
+    fun addProject_alreadyAdded_refocusesWithoutRevalidate() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one", "/two"))
+            val projectRepository = FakeProjectRepository(bootWorktree = "/one")
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = projectRepository,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+            projectRepository.validatedDirectories.clear()
+            viewModel.addProject("/two")
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/two", loaded.focusedWorktree)
+            assertEquals(listOf("/one", "/two"), store.added(serverUrl))
+            // Already-added path skips GET /project/current validation before reload.
+            assertTrue(projectRepository.validatedDirectories.none { it == null })
+            assertEquals(setOf("/one", "/two"), projectRepository.validatedDirectories.toSet())
+        }
+
+    @Test
+    fun selectCurrentDirectory_validationFailureKeepsSheetOpen() =
+        runTest(testDispatcher) {
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    currentProjectError = IllegalStateException("not a project"),
+                )
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+                    listings = mapOf("/home" to emptyList()),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    projectRepository = projectRepository,
+                    filesystemRepository = filesystem,
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.selectCurrentDirectory()
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertTrue(loaded.showAddProjectSheet)
+            assertEquals("not a project", loaded.addProjectNavigator?.errorMessage)
+        }
+
+    @Test
     fun createSession_usesFocusedWorktreeAndClearsError() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
@@ -285,6 +429,8 @@ class MainScreenViewModelTest {
         eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(sessionsByWorktree.toMutableMap()),
         selectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
+        projectRepository: FakeProjectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
+        filesystemRepository: FilesystemRepository = FakeFilesystemRepository(),
         modelRepository: ModelRepository =
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
@@ -309,7 +455,8 @@ class MainScreenViewModelTest {
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
         val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope)
         return MainScreenViewModel(
-            projectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
+            projectRepository = projectRepository,
+            filesystemRepository = filesystemRepository,
             sessionRepository = sessionRepository,
             connectionProfileStore = connectionProfileStore,
             sessionDomainAdapter = SessionDomainAdapter(),
@@ -329,17 +476,33 @@ class MainScreenViewModelTest {
 }
 
 private class FakeProjectRepository(
-    private val shouldFailProbe: Boolean,
-    private val bootWorktree: String,
+    private val shouldFailProbe: Boolean = false,
+    private val bootWorktree: String = "/boot/project",
+    private val currentProjectError: Throwable? = null,
 ) : ProjectRepository {
+    val validatedDirectories = mutableListOf<String?>()
+
     override suspend fun probeServer() {
         if (shouldFailProbe) throw ServerProbeError.Transport(IllegalStateException("down"))
     }
 
     override suspend fun listProjects(): List<Project> = emptyList()
 
-    override suspend fun getCurrentProject(directory: String?): Project =
-        Project(id = "p1", worktree = directory ?: bootWorktree, displayName = "demo")
+    override suspend fun getCurrentProject(directory: String?): Project {
+        validatedDirectories += directory
+        currentProjectError?.let { throw it }
+        return Project(id = "p1", worktree = directory ?: bootWorktree, displayName = "demo")
+    }
+}
+
+private class FakeFilesystemRepository(
+    private val paths: ServerPaths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+    private val listings: Map<String, List<DirectoryNode>> = emptyMap(),
+) : FilesystemRepository {
+    override suspend fun getPaths(): ServerPaths = paths
+
+    override suspend fun listDirectory(path: String): List<DirectoryNode> =
+        DirectoryListingPolicy.prepare(listings[path].orEmpty())
 }
 
 private class FakeSessionRepository(

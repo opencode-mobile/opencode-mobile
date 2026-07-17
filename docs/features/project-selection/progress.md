@@ -17,8 +17,10 @@
 
 ## Home UX polish
 
-- [x] App-name top bar; **Browse projects** row and sheet; empty hint; three-session
-  previews; **See all...** sheet; per-section **New Session** when empty
+- [x] App-name top bar; three-session previews; **See all...** sheet; per-section
+  **New Session** when empty
+- [x] Catalog **Browse projects** superseded by
+  [Add Project Directory Navigator](../add-project/progress.md)
 - [x] `widgets` icon for developer Component Gallery entry (replaced `edit` on home)
 - [x] iOS stable home section order (insertion order; fixed Set save + task-group reorder)
 - [x] Shared **Project Session Selector** is the only project/session selector
