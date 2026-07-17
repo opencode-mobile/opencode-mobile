@@ -114,10 +114,23 @@ struct SessionChatView: View {
             onSelectMode: { viewModel.selectMode($0) },
             onSelectVariant: { viewModel.selectVariant($0) }
         )
-        .confirmationDialog("Add attachment", isPresented: $showAttachmentSources, titleVisibility: .visible) {
-            Button("Photos") { showPhotosPicker = true }
-            Button("Files") { showFilesPicker = true }
-            Button("Cancel", role: .cancel) {}
+        .openCodeBottomSheet(isPresented: $showAttachmentSources, title: "Add attachment") {
+            OpenCodeBottomSheetEntry(
+                title: "Photos",
+                startDecorator: .icon(.description, accessibilityLabel: "Photos"),
+                action: {
+                    showAttachmentSources = false
+                    showPhotosPicker = true
+                }
+            )
+            OpenCodeBottomSheetEntry(
+                title: "Files",
+                startDecorator: .icon(.folder, accessibilityLabel: "Files"),
+                action: {
+                    showAttachmentSources = false
+                    showFilesPicker = true
+                }
+            )
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
