@@ -25,11 +25,53 @@ private enum GallerySubtitleKind: String, CaseIterable, Identifiable {
     var label: String { rawValue.capitalized }
 }
 
+private enum GalleryFooterKind: String, CaseIterable, Identifiable {
+    case off
+    case statusAndCaption
+    case statusOnly
+    case captionOnly
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .off: "Off"
+        case .statusAndCaption: "Status+Caption"
+        case .statusOnly: "Status only"
+        case .captionOnly: "Caption only"
+        }
+    }
+}
+
+private enum GalleryStatusTone: String, CaseIterable, Identifiable {
+    case interactive
+    case success
+    case warning
+    case error
+    case info
+
+    var id: String { rawValue }
+
+    var label: String { rawValue.capitalized }
+
+    var tone: OpenCodeListItemStatusTone {
+        switch self {
+        case .interactive: .interactive
+        case .success: .success
+        case .warning: .warning
+        case .error: .error
+        case .info: .info
+        }
+    }
+}
+
 struct ListItemGalleryView: View {
     @State private var selected = false
     @State private var enabled = true
     @State private var cardStyle = false
     @State private var subtitleKind: GallerySubtitleKind = .plain
+    @State private var footerKind: GalleryFooterKind = .statusAndCaption
+    @State private var statusTone: GalleryStatusTone = .interactive
     @State private var decoratorKind: GalleryDecoratorKind = .none
     @State private var letterAccent: LetterAccent = .violet
 
@@ -45,6 +87,24 @@ struct ListItemGalleryView: View {
             .init(text: " ", tone: .secondary),
             .init(text: "−7", tone: .deletion)
         ]
+    }
+
+    private var status: OpenCodeListItemStatus? {
+        switch footerKind {
+        case .off, .captionOnly:
+            nil
+        case .statusAndCaption, .statusOnly:
+            OpenCodeListItemStatus(text: "Working · 14m", tone: statusTone.tone)
+        }
+    }
+
+    private var caption: String? {
+        switch footerKind {
+        case .off, .statusOnly:
+            nil
+        case .statusAndCaption, .captionOnly:
+            "sidebar-v2-concepts"
+        }
     }
 
     private var startDecorator: StartDecorator {
@@ -81,6 +141,42 @@ struct ListItemGalleryView: View {
                             selected: subtitleKind == kind,
                             action: { subtitleKind = kind }
                         )
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Footer")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(GalleryFooterKind.allCases) { kind in
+                            OpenCodeChoiceBadge(
+                                label: kind.label,
+                                selected: footerKind == kind,
+                                action: { footerKind = kind }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if footerKind == .statusAndCaption || footerKind == .statusOnly {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Status tone")
+                        .font(OpenCodeTypography.button)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(GalleryStatusTone.allCases) { tone in
+                                OpenCodeChoiceBadge(
+                                    label: tone.label,
+                                    selected: statusTone == tone,
+                                    action: { statusTone = tone }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -133,6 +229,8 @@ struct ListItemGalleryView: View {
                 title: "Material Design Icons integration plan",
                 subtitle: subtitle,
                 subtitleSegments: subtitleSegments,
+                status: status,
+                caption: caption,
                 selected: selected,
                 enabled: enabled,
                 style: cardStyle ? .card : .plain,

@@ -1,6 +1,9 @@
 import SwiftUI
 
 private let listItemCornerRadius: CGFloat = 8
+private let listItemStatusDotSize: CGFloat = 6
+private let listItemStatusDotSpacing: CGFloat = 4
+private let listItemFooterCaptionSpacing: CGFloat = 8
 
 enum OpenCodeListItemStyle {
     case plain
@@ -18,10 +21,25 @@ struct OpenCodeListItemSubtitleSegment {
     let tone: OpenCodeListItemSubtitleTone
 }
 
+enum OpenCodeListItemStatusTone {
+    case interactive
+    case success
+    case warning
+    case error
+    case info
+}
+
+struct OpenCodeListItemStatus {
+    let text: String
+    let tone: OpenCodeListItemStatusTone
+}
+
 struct OpenCodeListItem<Trailing: View>: View {
     let title: String
     let subtitle: String?
     let subtitleSegments: [OpenCodeListItemSubtitleSegment]?
+    let status: OpenCodeListItemStatus?
+    let caption: String?
     let selected: Bool
     let enabled: Bool
     let style: OpenCodeListItemStyle
@@ -33,6 +51,8 @@ struct OpenCodeListItem<Trailing: View>: View {
         title: String,
         subtitle: String? = nil,
         subtitleSegments: [OpenCodeListItemSubtitleSegment]? = nil,
+        status: OpenCodeListItemStatus? = nil,
+        caption: String? = nil,
         selected: Bool = false,
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
@@ -44,6 +64,8 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.title = title
         self.subtitle = subtitle
         self.subtitleSegments = subtitleSegments
+        self.status = status
+        self.caption = caption
         self.selected = selected
         self.enabled = enabled
         self.style = style
@@ -67,7 +89,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     }
 
     private var content: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: rowAlignment, spacing: 12) {
             startDecoratorContent
 
             VStack(alignment: .leading, spacing: 4) {
@@ -85,6 +107,10 @@ struct OpenCodeListItem<Trailing: View>: View {
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                         .lineLimit(1)
+                }
+
+                if status != nil || caption != nil {
+                    footerRow
                 }
             }
 
@@ -109,6 +135,35 @@ struct OpenCodeListItem<Trailing: View>: View {
         .opacity(enabled ? 1 : 0.7)
     }
 
+    private var rowAlignment: VerticalAlignment {
+        if case .letter = startDecorator { return .top }
+        return .center
+    }
+
+    private var footerRow: some View {
+        HStack(spacing: listItemFooterCaptionSpacing) {
+            if let status {
+                HStack(spacing: listItemStatusDotSpacing) {
+                    Circle()
+                        .fill(statusColor(status.tone))
+                        .frame(width: listItemStatusDotSize, height: listItemStatusDotSize)
+                    Text(status.text)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(statusColor(status.tone))
+                        .lineLimit(1)
+                }
+            }
+
+            if let caption {
+                Text(caption)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .lineLimit(1)
+            }
+        }
+        .lineLimit(1)
+    }
+
     private func semanticSubtitle(_ segments: [OpenCodeListItemSubtitleSegment]) -> Text {
         segments.reduce(Text("")) { result, segment in
             result + Text(segment.text)
@@ -125,6 +180,22 @@ struct OpenCodeListItem<Trailing: View>: View {
             return OpenCodeColors.diffAdd
         case .deletion:
             return OpenCodeColors.diffDelete
+        }
+    }
+
+    private func statusColor(_ tone: OpenCodeListItemStatusTone) -> Color {
+        guard enabled else { return OpenCodeColors.textWeaker }
+        switch tone {
+        case .interactive:
+            return OpenCodeColors.interactive
+        case .success:
+            return OpenCodeColors.success
+        case .warning:
+            return OpenCodeColors.warning
+        case .error:
+            return OpenCodeColors.error
+        case .info:
+            return OpenCodeColors.info
         }
     }
 
@@ -149,10 +220,10 @@ struct OpenCodeListItem<Trailing: View>: View {
             EmptyView()
         case let .letter(character, accent):
             Text(normalizedBadgeLetter(character))
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(accent.badgeTint)
-                .frame(width: 24, height: 24)
-                .background(accent.badgeFill, in: RoundedRectangle(cornerRadius: 4))
+                .frame(width: 36, height: 36)
+                .background(accent.badgeFill, in: RoundedRectangle(cornerRadius: 6))
                 .accessibilityHidden(true)
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon)
@@ -187,6 +258,13 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
             ]
         )
         OpenCodeListItem(
+            title: "Sidebar v2 UX Redesign",
+            subtitle: "There's a local SQLite state database — I can look at the real threads…",
+            status: OpenCodeListItemStatus(text: "Working · 14m", tone: .interactive),
+            caption: "sidebar-v2-concepts",
+            startDecorator: .letter(Character("t"), .blue)
+        )
+        OpenCodeListItem(
             title: "iOS color palette and typography screens",
             subtitle: "http://127.0.0.1:4096/",
             selected: true
@@ -194,6 +272,8 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
         OpenCodeListItem(
             title: "Update agents.md with notes on screenshot",
             subtitle: "Unavailable",
+            status: OpenCodeListItemStatus(text: "Working · 14m", tone: .interactive),
+            caption: "sidebar-v2-concepts",
             enabled: false
         )
         OpenCodeListItem(

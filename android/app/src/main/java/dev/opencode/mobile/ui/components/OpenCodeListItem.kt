@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,14 +34,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
 
-private val ListItemStartDecoratorSize = 24.dp
-private val ListItemLetterBadgeCornerRadius = 4.dp
+private val ListItemLetterBadgeSize = 36.dp
+private val ListItemLetterBadgeCornerRadius = 6.dp
+private val ListItemLetterGlyphSize = 18.sp
+private val ListItemIconDecoratorSize = 24.dp
 private val ListItemCornerRadius = 8.dp
+private val ListItemStatusDotSize = 6.dp
+private val ListItemStatusDotSpacing = 4.dp
+private val ListItemFooterCaptionSpacing = 8.dp
 
 enum class OpenCodeListItemStyle {
     Plain,
@@ -58,11 +65,26 @@ data class OpenCodeListItemSubtitleSegment(
     val tone: OpenCodeListItemSubtitleTone,
 )
 
+enum class OpenCodeListItemStatusTone {
+    Interactive,
+    Success,
+    Warning,
+    Error,
+    Info,
+}
+
+data class OpenCodeListItemStatus(
+    val text: String,
+    val tone: OpenCodeListItemStatusTone,
+)
+
 @Composable
 fun OpenCodeListItem(
     title: String,
     subtitle: String? = null,
     subtitleSegments: List<OpenCodeListItemSubtitleSegment>? = null,
+    status: OpenCodeListItemStatus? = null,
+    caption: String? = null,
     selected: Boolean = false,
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
@@ -113,7 +135,12 @@ fun OpenCodeListItem(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment =
+                if (startDecorator is StartDecorator.Letter) {
+                    Alignment.Top
+                } else {
+                    Alignment.CenterVertically
+                },
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
@@ -157,6 +184,10 @@ fun OpenCodeListItem(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+
+                if (status != null || caption != null) {
+                    ListItemFooterRow(status = status, caption = caption, enabled = enabled)
+                }
             }
             if (trailing != null) {
                 Box(contentAlignment = Alignment.Center) { trailing() }
@@ -164,6 +195,61 @@ fun OpenCodeListItem(
         }
     }
 }
+
+@Composable
+private fun ListItemFooterRow(
+    status: OpenCodeListItemStatus?,
+    caption: String?,
+    enabled: Boolean,
+) {
+    val weakerColor = openCodeColor("text-weaker")
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(ListItemFooterCaptionSpacing),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (status != null) {
+            val statusColor = if (enabled) status.tone.color() else weakerColor
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(ListItemStatusDotSpacing),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(ListItemStatusDotSize)
+                            .clip(CircleShape)
+                            .background(statusColor),
+                )
+                Text(
+                    text = status.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (caption != null) {
+            Text(
+                text = caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = weakerColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OpenCodeListItemStatusTone.color(): Color =
+    when (this) {
+        OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive")
+        OpenCodeListItemStatusTone.Success -> openCodeColor("success")
+        OpenCodeListItemStatusTone.Warning -> openCodeColor("warning")
+        OpenCodeListItemStatusTone.Error -> openCodeColor("error")
+        OpenCodeListItemStatusTone.Info -> openCodeColor("info")
+    }
 
 @Composable
 private fun ListItemStartDecoration(
@@ -182,7 +268,7 @@ private fun ListItemStartDecoration(
             Box(
                 modifier =
                     Modifier
-                        .size(ListItemStartDecoratorSize)
+                        .size(ListItemLetterBadgeSize)
                         .clip(RoundedCornerShape(ListItemLetterBadgeCornerRadius))
                         .background(fill)
                         .semantics { hideFromAccessibility() }
@@ -191,7 +277,7 @@ private fun ListItemStartDecoration(
             ) {
                 Text(
                     text = normalizedBadgeLetter(decorator.character),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = ListItemLetterGlyphSize),
                     fontWeight = FontWeight.SemiBold,
                     color = tint,
                     textAlign = TextAlign.Center,
@@ -209,7 +295,7 @@ private fun ListItemStartDecoration(
             Icon(
                 imageVector = decorator.imageVector,
                 contentDescription = decorator.contentDescription,
-                modifier = Modifier.size(ListItemStartDecoratorSize).then(emphasize),
+                modifier = Modifier.size(ListItemIconDecoratorSize).then(emphasize),
                 tint = tint,
             )
         }
@@ -247,6 +333,20 @@ private fun OpenCodeListItemSemanticSubtitlePreview() {
 
 @Preview(showBackground = true)
 @Composable
+private fun OpenCodeListItemStatusCaptionPreview() {
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeListItem(
+            title = "Sidebar v2 UX Redesign",
+            subtitle = "There's a local SQLite state database — I can look at the real threads…",
+            status = OpenCodeListItemStatus(text = "Working · 14m", tone = OpenCodeListItemStatusTone.Interactive),
+            caption = "sidebar-v2-concepts",
+            startDecorator = StartDecorator.Letter('t', LetterAccent.Blue),
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
 private fun OpenCodeListItemLetterPreview() {
     OpenCodeTheme(darkTheme = false) {
         OpenCodeListItem(
@@ -276,6 +376,8 @@ private fun OpenCodeListItemDisabledPreview() {
         OpenCodeListItem(
             title = "Update agents.md with notes on screenshot",
             subtitle = "Unavailable",
+            status = OpenCodeListItemStatus(text = "Working · 14m", tone = OpenCodeListItemStatusTone.Interactive),
+            caption = "sidebar-v2-concepts",
             enabled = false,
             startDecorator = StartDecorator.Letter('x', LetterAccent.Teal),
         )

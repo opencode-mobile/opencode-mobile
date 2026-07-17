@@ -21,29 +21,33 @@ struct ComponentGalleryHomeView: View {
                 showDivider: true
             )
 
-            List {
-                ForEach(entriesByCategory, id: \.0) { category, entries in
-                    Section(category.rawValue) {
-                        ForEach(entries) { entry in
-                            NavigationLink {
-                                ComponentGalleryDetailView(entry: entry, themeMode: $themeMode)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(entry.title)
-                                        .font(OpenCodeTypography.heading)
-                                        .foregroundStyle(OpenCodeColors.textStrong)
-                                    Text(entry.description)
-                                        .font(OpenCodeTypography.bodySecondary)
-                                        .foregroundStyle(OpenCodeColors.textBase)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(entriesByCategory, id: \.0) { category, entries in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(category.rawValue)
+                                .font(OpenCodeTypography.heading)
+                                .foregroundStyle(OpenCodeColors.textStrong)
+                                .padding(.horizontal, 16)
+
+                            ForEach(entries) { entry in
+                                NavigationLink {
+                                    ComponentGalleryDetailView(entry: entry, themeMode: $themeMode)
+                                } label: {
+                                    OpenCodeListItem(
+                                        title: entry.title,
+                                        subtitle: entry.description,
+                                        style: .card
+                                    )
                                 }
-                                .padding(.vertical, 4)
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
                             }
-                            .listRowBackground(OpenCodeColors.surfaceBase)
                         }
                     }
                 }
+                .padding(.vertical, 16)
             }
-            .scrollContentBackground(.hidden)
         }
         .background(OpenCodeColors.backgroundBase)
         .navigationBarHidden(true)
