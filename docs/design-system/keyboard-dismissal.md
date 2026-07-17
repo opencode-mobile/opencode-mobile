@@ -77,8 +77,10 @@ Ask in order when adding UI:
 Session Chat (and future timeline + composer screens) apply the taxonomy as:
 
 - Timeline `ScrollView` / list: `.scrollDismissesKeyboard(.interactively)` on
-  iOS; Android clears focus on **user drag** of the timeline (not sticky-follow
-  or programmatic scroll-to-end).
+  iOS, reinforced with UIKit `keyboardDismissMode = .interactive` when the
+  focused field is outside the scroll view (Session Chat composer). Android
+  clears focus on **user drag** of the timeline (not sticky-follow or
+  programmatic scroll-to-end).
 - Composer owns `@FocusState` / Compose focus; clear on send, picker/sheet open,
   and permission-state swap.
 - Horizontal selector chip row must not dismiss (`scrollDismissesKeyboard(.never)`

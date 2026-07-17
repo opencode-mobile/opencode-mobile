@@ -8,7 +8,9 @@
   [`docs/design-system/keyboard-dismissal.md`](../../design-system/keyboard-dismissal.md).
   Concretely:
   - **Primary dismiss:** scrolling the message timeline dismisses the keyboard
-    (iOS `.scrollDismissesKeyboard(.interactively)`; Android clear-focus on
+    (iOS `.scrollDismissesKeyboard(.interactively)` plus UIKit
+    `keyboardDismissMode = .interactive` on the timeline scroll view, because the
+    composer field is outside the `ScrollView`; Android clear-focus on
     **user drag** of the timeline). Fall back to iOS `.immediately` only if
     interactive dismiss fights sticky-follow. Programmatic sticky-follow and
     scroll-to-end must **not** dismiss the keyboard.

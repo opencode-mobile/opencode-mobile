@@ -154,6 +154,9 @@ private struct SessionChatTimelineReadyView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            // Composer TextField is outside this ScrollView; SwiftUI's modifier alone
+            // often leaves the keyboard up. UIKit mode resigns any first responder.
+            .scrollViewKeyboardDismissMode(.interactive)
             .messageListTimelineScrollChrome(timeline: timeline)
             .refreshable {
                 await props.onRefresh()
