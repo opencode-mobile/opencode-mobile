@@ -82,7 +82,7 @@ accessibility label or description using the platform convention.
   their natural header and body height, capped at 560pt, so the sheet fits its
   content before the keyboard appears. Keyboard-safe-area changes resize the
   internal scroll region rather than the measured content. Short entry lists use
-  a measured compact height detent. Longer lists switch to a fixed 55% height
+  a measured compact height detent. Longer lists switch to a fixed 50% height
   detent with an internal `ScrollView`. Scrollable sheets disable interactive
   swipe-to-dismiss so list scrolling does not close the sheet; use the close
   button instead. Short compact sheets keep the default swipe-to-dismiss behavior.
@@ -94,7 +94,7 @@ accessibility label or description using the platform convention.
   includes the IME and would resize every route behind a focused form. The component can use
   its own bottom-sheet motion timing while preserving close, scrim tap, back
   press, and downward drag dismissal. Short entry lists wrap to content height.
-  Longer lists cap at 55% of screen height and scroll inside the sheet body.
+  Longer lists cap at 50% of screen height and scroll inside the sheet body.
   Drag-to-dismiss is limited to the header so list scrolling is not blocked.
 
 ## Previews

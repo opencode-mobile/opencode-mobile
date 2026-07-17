@@ -37,9 +37,12 @@ fun ComponentGalleryScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Explicit category order (matches iOS enum / declaration order), not map iteration order.
+            // Explicit category order (matches iOS enum); entries A–Z by title within each group.
             ComponentGalleryCategory.entries.forEach { category ->
-                val categoryEntries = entries.filter { it.category == category }
+                val categoryEntries =
+                    entries
+                        .filter { it.category == category }
+                        .sortedBy { it.title.lowercase() }
                 if (categoryEntries.isEmpty()) return@forEach
                 item {
                     Text(

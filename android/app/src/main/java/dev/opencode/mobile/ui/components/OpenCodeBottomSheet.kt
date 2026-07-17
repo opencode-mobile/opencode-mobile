@@ -97,7 +97,7 @@ private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
 
 @Suppress("ktlint:standard:property-naming")
-private const val BottomSheetScrollableHeightFraction = 0.55f
+private const val BottomSheetScrollableHeightFraction = 0.50f
 
 private val BottomSheetCompactMaxHeight = 360.dp
 private val BottomSheetEstimatedHeaderHeight =
