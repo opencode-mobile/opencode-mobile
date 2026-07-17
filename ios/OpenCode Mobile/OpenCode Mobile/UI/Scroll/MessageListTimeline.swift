@@ -398,15 +398,8 @@ extension View {
                     onLog: onLog
                 )
             }
-            .onChange(of: timeline.viewportHeight) { _, _ in
-                onLog?("viewport-height count=\(messageCount) height=\(timeline.contentHeight) viewport=\(timeline.viewportHeight)")
-                timeline.followLayoutChangeIfNeededAfterLayoutSettles(
-                    messageCount: messageCount,
-                    autoFollowEnabled: autoFollowEnabled,
-                    scrollTargetID: lastMessageID,
-                    reason: "viewport-height",
-                    onLog: onLog
-                )
+            .onChange(of: timeline.viewportHeight) { _, height in
+                onLog?("viewport-height count=\(messageCount) height=\(timeline.contentHeight) viewport=\(height)")
             }
             .onChange(of: layoutSignature) { _, _ in
                 onLog?("layout-signature changed count=\(messageCount) signature=\(layoutSignature)")
