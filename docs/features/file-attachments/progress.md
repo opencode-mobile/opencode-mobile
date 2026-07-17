@@ -57,7 +57,6 @@
 
 ## Remaining work
 
-- Model capability gating for Attach (image/PDF input) is implemented on both
-  platforms.
+- No remaining implementation work in OPE-55.
 - Exercise native Photos and Files/document providers on release devices before
-  shipping.
+  shipping. PDF/text tap-to-open via system viewer remains optional follow-up.

@@ -13,12 +13,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 
 private enum class OutgoingMessageSample(
     val label: String,
     val text: String,
+    val attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
 ) {
     Short(
         label = "Short",
@@ -32,6 +35,15 @@ private enum class OutgoingMessageSample(
                 "Keep the answer practical and note where pricing depends on the booking channel or destination. " +
                 "Then summarize the recommendation in one concise sentence for a mobile chat user.",
     ),
+    Attachments(
+        label = "Attachments",
+        text = "",
+        attachments =
+            listOf(
+                OpenCodeAttachmentPresentation("pdf", "requirements.pdf", OpenCodeAttachmentVariant.Pdf),
+                OpenCodeAttachmentPresentation("text", "notes.md", OpenCodeAttachmentVariant.Text),
+            ),
+    ),
 }
 
 @Composable
@@ -41,7 +53,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Switch samples to review short and long outgoing messages at full height.",
+            text = "Switch samples to review short, long, and attachment outgoing messages at full height.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -59,6 +71,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeOutgoingMessage(
             text = sample.text,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            attachments = sample.attachments,
             modifier = Modifier.fillMaxWidth(),
             onClick = {},
         )

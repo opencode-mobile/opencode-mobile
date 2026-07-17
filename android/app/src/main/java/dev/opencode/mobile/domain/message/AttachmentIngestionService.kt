@@ -117,7 +117,7 @@ class AttachmentIngestionService private constructor(
 
     companion object {
         const val UNSUPPORTED_ERROR = "Only images, PDFs, or text files can be attached here."
-        const val READ_ERROR = "Unable to read the selected attachment."
+        const val READ_ERROR = "The attachment could not be read."
         private const val TAG = "AttachmentIngestion"
         internal const val MAX_PREVIEW_BYTES = 128 * 1024
         private val IMAGE_MIMES = setOf("image/png", "image/jpeg", "image/gif", "image/webp")

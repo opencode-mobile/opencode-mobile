@@ -96,6 +96,8 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
 - Reason: Upstream enforces unsupported media at send time via
   `capabilities.input[modality]`; mobile should prevent the dead-end before
   send. Catalog `capabilities.attachment` alone can diverge from modalities.
+  When the provider omits `capabilities.input`, treat image/pdf as supported so
+  older catalogs and local fixtures keep Attach available.
 - Revisit when: audio/video attach enters mobile scope or upstream changes the
   provider capability contract.
 

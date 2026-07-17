@@ -51,6 +51,7 @@ fun OpenCodeAttachmentChip(
     onRemove: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val kindLabel = attachment.variant.label.uppercase()
     Row(
         modifier =
             modifier
@@ -62,7 +63,12 @@ fun OpenCodeAttachmentChip(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         AttachmentPreview(attachment, Modifier.size(36.dp))
-        AttachmentLabels(attachment, Modifier.weight(1f))
+        AttachmentLabels(
+            attachment,
+            Modifier
+                .weight(1f)
+                .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
+        )
         IconButton(onClick = { onRemove(attachment.id) }, modifier = Modifier.size(36.dp)) {
             Icon(
                 OpenCodeIcons.Close,
