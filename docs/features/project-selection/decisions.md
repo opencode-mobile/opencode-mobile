@@ -54,10 +54,19 @@ the same accent across launches.
 
 ## Project Session Selector
 
-Home uses the shared Component Collection **Project Session Selector** as the
-primary project and session selector. The legacy **Browse projects** row and
-repeated project/session sections are removed from home; browsing remains
+Home uses the shared Component Collection **Project Session Selector** for
+project-scoped session preview and actions. The legacy **Browse projects** row
+and repeated project/session sections are removed from home; browsing remains
 available from the selector add tile.
+
+## Session List above selector
+
+Home also shows a shared **Session List** above the selector: sessions from all
+added projects sorted by recency. Rows use project letter, session title,
+project path subtitle, always-visible **Idle** / **Running** status (busy and
+retry map to Running; other statuses map to Idle), and a relative-time caption
+from `session.updatedAt`. This Idle/Running copy is Session List–local and does
+not replace the existing Working/Retrying labels used by See all and chat.
 
 Project selection is local home UI state only. It chooses which added project's
 sessions appear in the selector card and which worktree the selector **New

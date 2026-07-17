@@ -31,6 +31,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case button
     case textInput
     case projectSessionSelector
+    case sessionList
     case sessionStatusBar
     case sessionComposer
     case renderedMarkdown
@@ -157,6 +158,12 @@ let componentGalleryEntries = [
         id: .projectSessionSelector,
         title: "Project Session Selector",
         description: "Project-scoped session picker with project tiles and session actions.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .sessionList,
+        title: "Session List",
+        description: "Cross-project recent sessions with status and relative time.",
         category: .session
     ),
     ComponentGalleryEntry(

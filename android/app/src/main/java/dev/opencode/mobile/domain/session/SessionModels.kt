@@ -26,6 +26,7 @@ data class SessionSummary(
     val title: String,
     val statusLabel: String? = null,
     val updatedAtLabel: String? = null,
+    val updatedAtEpochMs: Long? = null,
 )
 
 data class SessionStatus(

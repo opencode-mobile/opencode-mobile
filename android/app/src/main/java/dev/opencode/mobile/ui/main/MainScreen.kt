@@ -31,11 +31,17 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.components.ProjectSessionSelector
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
+import dev.opencode.mobile.ui.components.SessionList
+import dev.opencode.mobile.ui.components.SessionListSession
+import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -123,6 +129,14 @@ internal fun MainScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
                 title = appName,
+                subtitleAccessory =
+                    if (showsLiveUpdatesStatus(uiState)) {
+                        OpenCodeTopBarSubtitleAccessory.StatusDot(
+                            liveUpdatesConnectionState.toOpenCodeSessionConnectionStatus(),
+                        )
+                    } else {
+                        null
+                    },
                 showDivider = true,
                 actions =
                     listOf(
@@ -133,10 +147,6 @@ internal fun MainScreen(
                         ),
                     ),
             )
-
-            if (showsLiveUpdatesStatus(uiState)) {
-                LiveUpdatesConnectionBanner(state = liveUpdatesConnectionState)
-            }
 
             when (uiState) {
                 is MainScreenUiState.Disconnected -> {
@@ -332,11 +342,28 @@ private fun HomeProjectsContent(
     onNewSession: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val crossProjectSessions = sections.toCrossProjectSessionListSessions()
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.Bottom,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (crossProjectSessions.isNotEmpty()) {
+            item(key = "session-list") {
+                SessionList(
+                    sessions = crossProjectSessions,
+                    onSessionSelected = { session ->
+                        onSessionClick(
+                            SessionOpenTarget(
+                                sessionId = session.id,
+                                title = session.title,
+                                worktree = session.worktree,
+                            ),
+                        )
+                    },
+                )
+            }
+        }
         item(key = "project-session-selector") {
             ProjectSessionSelector(
                 projects = sections.map(ProjectSectionUi::toProjectSessionSelectorProject),
@@ -380,10 +407,46 @@ private fun SessionSummary.toProjectSessionSelectorSession(): ProjectSessionSele
         subtitle = updatedAtLabel ?: statusLabel,
     )
 
+private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
+    flatMap { section ->
+        section.allSessions.map { session ->
+            section to session
+        }
+    }.sortedByDescending { (_, session) -> session.updatedAtEpochMs ?: 0L }
+        .map { (section, session) ->
+            SessionListSession(
+                id = session.id,
+                title = session.title,
+                worktree = section.worktree,
+                letter = section.letter,
+                letterAccent = section.letterAccent,
+                subtitle = section.pathSubtitle,
+                status = session.toSessionListStatus(),
+                caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+            )
+        }
+
+private fun SessionSummary.toSessionListStatus(): SessionListStatus =
+    when (statusLabel) {
+        "Working", "Retrying" -> SessionListStatus.Running
+        else -> SessionListStatus.Idle
+    }
+
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
     when (uiState) {
         MainScreenUiState.Disconnected, MainScreenUiState.Probing, MainScreenUiState.Loading -> false
         else -> true
+    }
+
+private fun EventStreamConnectionState.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
+    when (this) {
+        EventStreamConnectionState.Connected -> OpenCodeSessionConnectionStatus.Live
+        EventStreamConnectionState.Connecting,
+        EventStreamConnectionState.Reconnecting,
+        -> OpenCodeSessionConnectionStatus.Connecting
+        EventStreamConnectionState.Idle,
+        EventStreamConnectionState.Disconnected,
+        -> OpenCodeSessionConnectionStatus.Offline
     }
 
 @Preview(showBackground = true)

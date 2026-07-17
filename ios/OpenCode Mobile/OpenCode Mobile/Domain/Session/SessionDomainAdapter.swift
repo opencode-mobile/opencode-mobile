@@ -23,7 +23,8 @@ struct SessionDomainAdapter: Sendable {
             title: session.title,
             worktree: worktree,
             statusLabel: statusLabel,
-            updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel)
+            updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel),
+            updatedAtEpochMs: session.updatedAtEpochMs
         )
     }
 

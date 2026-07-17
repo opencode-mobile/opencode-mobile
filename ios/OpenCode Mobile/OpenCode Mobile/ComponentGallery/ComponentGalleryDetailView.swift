@@ -106,6 +106,8 @@ struct ComponentGalleryDetailView: View {
             TextInputGalleryView()
         case .projectSessionSelector:
             ProjectSessionSelectorGalleryView()
+        case .sessionList:
+            SessionListGalleryView()
         case .sessionStatusBar:
             SessionStatusBarGalleryView()
         case .sessionComposer:

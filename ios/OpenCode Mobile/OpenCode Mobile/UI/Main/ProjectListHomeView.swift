@@ -16,14 +16,14 @@ struct ProjectListHomeView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "OpenCode Mobile",
+                subtitleAccessory: showsLiveUpdatesStatus
+                    ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
+                    : nil,
                 actions: [
                     .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
                 ],
                 showDivider: true
             )
-            if showsLiveUpdatesStatus {
-                LiveUpdatesConnectionBanner(state: viewModel.liveUpdatesConnectionState)
-            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -206,26 +206,38 @@ struct ProjectListHomeView: View {
         focusedWorktree: String?,
         createError: String?
     ) -> some View {
-        GeometryReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ProjectSessionSelector(
-                        projects: sections.map(\.projectSessionSelectorProject),
-                        selectedWorktree: focusedWorktree,
-                        createError: createError,
-                        onProjectSelected: { viewModel.focusProject(worktree: $0) },
-                        onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                        onSessionSelected: { project, session in
-                            selectedSession = SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
-                        },
-                        onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
-                        onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+        let crossProjectSessions = sections.crossProjectSessionListSessions()
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                if !crossProjectSessions.isEmpty {
+                    SessionList(
+                        sessions: crossProjectSessions,
+                        onSessionSelected: { session in
+                            selectedSession = SessionListItem(
+                                id: session.id,
+                                title: session.title,
+                                worktree: session.worktree
+                            )
+                        }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
                 }
-                .frame(minHeight: proxy.size.height, alignment: .bottom)
+
+                ProjectSessionSelector(
+                    projects: sections.map(\.projectSessionSelectorProject),
+                    selectedWorktree: focusedWorktree,
+                    createError: createError,
+                    onProjectSelected: { viewModel.focusProject(worktree: $0) },
+                    onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                    onSessionSelected: { project, session in
+                        selectedSession = SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                    },
+                    onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
+                    onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(OpenCodeColors.backgroundBase)
     }
@@ -245,13 +257,22 @@ struct SessionListItem: Identifiable, Hashable {
     let worktree: String
     let statusLabel: String?
     let updatedAtLabel: String?
+    let updatedAtEpochMs: Int64?
 
-    init(id: String, title: String, worktree: String, statusLabel: String? = nil, updatedAtLabel: String? = nil) {
+    init(
+        id: String,
+        title: String,
+        worktree: String,
+        statusLabel: String? = nil,
+        updatedAtLabel: String? = nil,
+        updatedAtEpochMs: Int64? = nil
+    ) {
         self.id = id
         self.title = title
         self.worktree = worktree
         self.statusLabel = statusLabel
         self.updatedAtLabel = updatedAtLabel
+        self.updatedAtEpochMs = updatedAtEpochMs
     }
 }
 
@@ -277,6 +298,52 @@ private extension SessionListItem {
             title: title,
             subtitle: updatedAtLabel ?? statusLabel
         )
+    }
+
+    func sessionListStatus() -> SessionListStatus {
+        switch statusLabel {
+        case "Working", "Retrying":
+            .running
+        default:
+            .idle
+        }
+    }
+}
+
+private extension Array where Element == ProjectSectionItem {
+    func crossProjectSessionListSessions() -> [SessionListSession] {
+        flatMap { section in
+            section.allSessions.map { session in
+                (
+                    session.updatedAtEpochMs ?? 0,
+                    SessionListSession(
+                        id: session.id,
+                        title: session.title,
+                        worktree: section.worktree,
+                        letter: section.letter,
+                        letterAccent: section.letterAccent,
+                        subtitle: section.pathSubtitle,
+                        status: session.sessionListStatus(),
+                        caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
+                    )
+                )
+            }
+        }
+        .sorted { $0.0 > $1.0 }
+        .map(\.1)
+    }
+}
+
+private extension EventStreamConnectionState {
+    var openCodeSessionConnectionStatus: OpenCodeSessionConnectionStatus {
+        switch self {
+        case .connected:
+            .live
+        case .connecting, .reconnecting:
+            .connecting
+        case .idle, .disconnected:
+            .offline
+        }
     }
 }
 

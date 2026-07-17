@@ -32,4 +32,8 @@ with correct worktree scoping on a single opencode server.
 
 ## Design-System
 
-- Reuse `OpenCodeListItem` with letter start decorator for projects; title-only for sessions.
+- Reuse `OpenCodeListItem` with letter start decorator for projects; title-only
+  for Project Session Selector session previews.
+- **Session List** for the cross-project recent feed above the selector
+  (`docs/design-system/components/session-list.md`): letter, title, project
+  path subtitle, Idle/Running status, relative-time caption.
