@@ -114,7 +114,7 @@ struct BottomSheetGalleryView: View {
                     )
                     OpenCodeBottomSheetEntry(
                         title: "/Users/demo/Projects",
-                        startDecorator: .icon(.folder),
+                        startDecorator: .icon(.folderCheck),
                         action: {}
                     )
                 }

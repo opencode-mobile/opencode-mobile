@@ -18,7 +18,7 @@ struct DefaultFilesystemRepository: FilesystemRepository, Sendable {
     }
 
     func listDirectory(path: String) async throws -> [DirectoryNode] {
-        let nodes = try await api.listFiles(path: path).map { dto in
+        let nodes = try await api.listFiles(absoluteDirectory: path).map { dto in
             DirectoryNode(
                 name: dto.name,
                 absolutePath: dto.absolute,

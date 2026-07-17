@@ -40,6 +40,10 @@ icons:
   - name: folder
     style: filled
     notes: SF Symbol folder.fill
+  - name: folder_check
+    source: material_symbols
+    style: filled
+    notes: Current directory row in Add project sheet
   - name: list
     style: filled
     notes: SF Symbol list.bullet
@@ -67,6 +71,9 @@ icons:
   - name: stop_circle
     style: filled
     notes: SF Symbol stop.circle
+  - name: subdirectory_arrow_right
+    style: filled
+    notes: Subdirectory rows in Add project sheet
   - name: undo
     style: filled
     notes: SF Symbol arrow.uturn.backward

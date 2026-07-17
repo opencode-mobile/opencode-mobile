@@ -218,7 +218,7 @@ internal fun MainScreen(
                     enabled = navigator.currentPath.isNotBlank() && !navigator.isLoading && !navigator.isValidating,
                     startDecorator =
                         BottomSheetEntryDecorator.Icon(
-                            imageVector = OpenCodeIcons.Folder,
+                            imageVector = OpenCodeIcons.FolderCheck,
                             contentDescription = null,
                         ),
                     onClick = onSelectCurrentDirectory,
@@ -263,7 +263,7 @@ internal fun MainScreen(
                             title = entry.name,
                             startDecorator =
                                 BottomSheetEntryDecorator.Icon(
-                                    imageVector = OpenCodeIcons.Folder,
+                                    imageVector = OpenCodeIcons.SubdirectoryArrowRight,
                                     contentDescription = null,
                                 ),
                             onClick = { onNavigateAddProjectInto(entry.absolutePath) },

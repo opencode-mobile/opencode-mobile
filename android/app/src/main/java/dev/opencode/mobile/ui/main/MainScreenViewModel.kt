@@ -156,9 +156,11 @@ class MainScreenViewModel
                 updateAddProjectNavigator { it.copy(isValidating = true, errorMessage = null) }
                 val result = runCatching { projectRepository.getCurrentProject(directory = worktree) }
                 result
-                    .onSuccess { project ->
-                        connectionProfileStore.addWorktree(serverBaseUrl, project.worktree)
-                        requestedFocusWorktree = project.worktree
+                    .onSuccess {
+                        // Persist the selected directory (web open-project behavior), not the
+                        // /project/current worktree — non-git dirs resolve to global "/".
+                        connectionProfileStore.addWorktree(serverBaseUrl, worktree)
+                        requestedFocusWorktree = worktree
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
                     }.onFailure { error ->
@@ -321,7 +323,7 @@ class MainScreenViewModel
             }
 
         private suspend fun loadSection(worktree: String): ProjectSectionUi {
-            val project = projectRepository.getCurrentProject(directory = worktree)
+            projectRepository.getCurrentProject(directory = worktree)
             val sessions =
                 sessionRepository
                     .listSessions(directory = worktree)
@@ -340,9 +342,9 @@ class MainScreenViewModel
                 }
             return ProjectSectionUi(
                 worktree = worktree,
-                displayName = project.displayName,
-                pathSubtitle = project.worktree,
-                letter = letterCharacterForProject(project.displayName),
+                displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
+                pathSubtitle = worktree,
+                letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
                 letterAccent = letterAccentForWorktree(worktree),
                 previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
                 allSessions = summaries,

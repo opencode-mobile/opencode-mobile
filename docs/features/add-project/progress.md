@@ -27,3 +27,8 @@ Linear: [OPE-63](https://linear.app/opencode-mobile/issue/OPE-63/add-project-dir
 ## Remaining
 
 - None for OPE-63 intended scope
+
+## Follow-up (same branch)
+
+- Fixed home listing: `/file` must use `path=.&directory=<absolute>` because absolute
+  `path` values outside the server boot directory return `500 UnknownError`.

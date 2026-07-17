@@ -114,7 +114,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 )
                 OpenCodeBottomSheetEntry(
                     title = "/Users/demo/Projects",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck, null),
                     onClick = {},
                 )
             }

@@ -3,13 +3,24 @@
 ## Filesystem browse replaces project catalog
 
 Adding a project no longer lists `GET /project`. Users browse the server
-filesystem from `GET /path` home via `GET /file?path=`, then confirm the current
-directory. Catalog browse in project-selection is superseded.
+filesystem from `GET /path` home via `GET /file?path=.&directory=`, then confirm
+the current directory. Catalog browse in project-selection is superseded.
+
+## Scope `/file` with `directory=`
+
+`GET /file` resolves `path` under the server instance directory
+(`path.join(Instance.directory, path)`). Absolute paths outside the boot
+directory escape that scope and return `500 UnknownError`. The navigator always
+lists with `path=.` and `directory=<absolute path being browsed>` so home and
+parents of the boot worktree are reachable.
 
 ## Validate before persist
 
-Confirming the current directory calls `GET /project/current?directory=` and
-persists the returned worktree. Invalid paths stay in the sheet with Retry.
+Confirming the current directory calls `GET /project/current?directory=` to ensure
+the path is usable, then persists the **selected directory** (same as web
+`projects.open(directory)`). Do not persist the response `worktree`: for non-git
+directories the server returns the global project with `worktree` `/`, which is
+not the path the user chose. Home section titles use the curated path.
 
 ## Already-added re-focus
 

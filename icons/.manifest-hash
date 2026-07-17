@@ -11,6 +11,7 @@ material_icons/filled/description:md_description
 material_icons/filled/edit:md_edit
 material_symbols/filled/expand_content:md_expand_content
 material_icons/filled/folder:md_folder
+material_symbols/filled/folder_check:md_folder_check
 material_icons/filled/list:md_list
 material_icons/filled/more_vert:md_more_vert
 material_icons/filled/search:md_search
@@ -20,5 +21,6 @@ material_icons/filled/archive:md_archive
 material_icons/filled/cloud:md_cloud
 material_icons/filled/stop:md_stop
 material_icons/filled/stop_circle:md_stop_circle
+material_icons/filled/subdirectory_arrow_right:md_subdirectory_arrow_right
 material_icons/filled/undo:md_undo
 material_icons/filled/widgets:md_widgets

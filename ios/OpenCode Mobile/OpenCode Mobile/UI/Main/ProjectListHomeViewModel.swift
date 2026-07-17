@@ -68,6 +68,10 @@ enum ProjectListHomeState: Equatable {
 @Observable
 final class ProjectListHomeViewModel {
     private(set) var state: ProjectListHomeState = .probing
+    /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
+    private(set) var isAddProjectPresented = false
+    private(set) var addProjectNavigator = AddProjectNavigatorState.empty
+    private(set) var seeAllSessionsSheet: SeeAllSessionsSheetState?
     private let projectRepository: any ProjectRepository
     private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
@@ -150,6 +154,8 @@ final class ProjectListHomeViewModel {
     }
 
     func dismissAddProjectSheet() {
+        isAddProjectPresented = false
+        addProjectNavigator = .empty
         switch state {
         case let .empty(_, _, createError):
             state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: createError)
@@ -207,9 +213,11 @@ final class ProjectListHomeViewModel {
             return next
         }
         do {
-            let project = try await projectRepository.getCurrentProject(directory: worktree)
-            await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: project.worktree)
-            requestedFocusWorktree = project.worktree
+            // Validate the path is usable, then persist the selected directory (web
+            // open-project behavior). Non-git dirs resolve /project/current to "/".
+            _ = try await projectRepository.getCurrentProject(directory: worktree)
+            await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
+            requestedFocusWorktree = worktree
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
         } catch {
@@ -240,21 +248,24 @@ final class ProjectListHomeViewModel {
     func showSeeAllSessions(worktree: String) {
         guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
+        let sheet = SeeAllSessionsSheetState(
+            worktree: worktree,
+            projectName: section.displayName,
+            sessions: section.allSessions
+        )
+        seeAllSessionsSheet = sheet
         state = .loaded(
             sections: sections,
             showAddProjectSheet: showAdd,
             navigator: navigator,
-            seeAllSessions: SeeAllSessionsSheetState(
-                worktree: worktree,
-                projectName: section.displayName,
-                sessions: section.allSessions
-            ),
+            seeAllSessions: sheet,
             focusedWorktree: focused,
             projectSessionCreateError: createError
         )
     }
 
     func dismissSeeAllSessions() {
+        seeAllSessionsSheet = nil
         guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
         state = .loaded(
             sections: sections,
@@ -376,7 +387,7 @@ final class ProjectListHomeViewModel {
 
     private func loadSection(worktree: String) async -> ProjectSectionItem {
         do {
-            let project = try await projectRepository.getCurrentProject(directory: worktree)
+            _ = try await projectRepository.getCurrentProject(directory: worktree)
             let sessions =
                 try await sessionRepository.listSessions(directory: worktree)
                     .activeSessions()
@@ -394,12 +405,13 @@ final class ProjectListHomeViewModel {
                         statusLabel: statusBySessionID[session.id].flatMap(eventAdapter.statusLabel)
                     )
                 }
+            let name = ProjectDomainAdapter.displayName(from: worktree)
             return ProjectSectionItem(
                 id: worktree,
                 worktree: worktree,
-                displayName: project.displayName,
-                pathSubtitle: project.worktree,
-                letter: letterCharacter(for: project.displayName),
+                displayName: name,
+                pathSubtitle: worktree,
+                letter: letterCharacter(for: name),
                 letterAccent: letterAccent(for: worktree),
                 previewSessions: Array(items.prefix(Self.previewSessionLimit)),
                 allSessions: items,
@@ -490,17 +502,12 @@ final class ProjectListHomeViewModel {
     }
 
     private func currentNavigator() -> AddProjectNavigatorState? {
-        switch state {
-        case let .empty(_, navigator, _):
-            navigator
-        case let .loaded(_, _, navigator, _, _, _):
-            navigator
-        default:
-            nil
-        }
+        isAddProjectPresented ? addProjectNavigator : nil
     }
 
     private func setNavigator(_ navigator: AddProjectNavigatorState) {
+        addProjectNavigator = navigator
+        isAddProjectPresented = true
         switch state {
         case let .empty(_, _, createError):
             state = .empty(showAddProjectSheet: true, navigator: navigator, projectSessionCreateError: createError)
@@ -519,8 +526,7 @@ final class ProjectListHomeViewModel {
     }
 
     private func updateNavigator(_ transform: (AddProjectNavigatorState) -> AddProjectNavigatorState) {
-        let current = currentNavigator() ?? .empty
-        setNavigator(transform(current))
+        setNavigator(transform(addProjectNavigator))
     }
 
     private static let previewSessionLimit = 3
@@ -609,6 +615,9 @@ final class ProjectListHomeViewModel {
             } else {
                 seeAll
             }
+        if seeAllSessionsSheet?.worktree == worktree {
+            seeAllSessionsSheet = updatedSeeAll
+        }
         state = .loaded(
             sections: updatedSections,
             showAddProjectSheet: showAdd,

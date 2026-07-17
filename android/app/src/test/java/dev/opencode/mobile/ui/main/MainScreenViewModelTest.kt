@@ -289,6 +289,77 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun selectCurrentDirectory_persistsSelectedPathEvenWhenCurrentResolvesGlobal() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projectsByDirectory =
+                        mapOf(
+                            "/home" to Project(id = "global", worktree = "/", displayName = "/"),
+                        ),
+                )
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+                    listings = mapOf("/home" to emptyList()),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = projectRepository,
+                    filesystemRepository = filesystem,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/home" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.selectCurrentDirectory()
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/one", "/home"), store.added(serverUrl))
+            assertEquals("/home", loaded.focusedWorktree)
+            assertTrue(!loaded.showAddProjectSheet)
+        }
+
+    @Test
+    fun selectCurrentDirectory_nestedPathPersistsSelectedDirectory() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projectsByDirectory =
+                        mapOf(
+                            "/repo/android" to
+                                Project(id = "repo", worktree = "/repo", displayName = "repo"),
+                        ),
+                )
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/repo/android", directory = "/repo/android", worktree = "/"),
+                    listings = mapOf("/repo/android" to emptyList()),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = projectRepository,
+                    filesystemRepository = filesystem,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/repo/android" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.selectCurrentDirectory()
+            advanceUntilIdle()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/one", "/repo/android"), store.added(serverUrl))
+            assertEquals("/repo/android", loaded.focusedWorktree)
+            assertTrue(!loaded.showAddProjectSheet)
+        }
+
+    @Test
     fun selectCurrentDirectory_validationFailureKeepsSheetOpen() =
         runTest(testDispatcher) {
             val projectRepository =
@@ -479,6 +550,7 @@ private class FakeProjectRepository(
     private val shouldFailProbe: Boolean = false,
     private val bootWorktree: String = "/boot/project",
     private val currentProjectError: Throwable? = null,
+    private val projectsByDirectory: Map<String, Project> = emptyMap(),
 ) : ProjectRepository {
     val validatedDirectories = mutableListOf<String?>()
 
@@ -491,6 +563,9 @@ private class FakeProjectRepository(
     override suspend fun getCurrentProject(directory: String?): Project {
         validatedDirectories += directory
         currentProjectError?.let { throw it }
+        if (directory != null) {
+            projectsByDirectory[directory]?.let { return it }
+        }
         return Project(id = "p1", worktree = directory ?: bootWorktree, displayName = "demo")
     }
 }

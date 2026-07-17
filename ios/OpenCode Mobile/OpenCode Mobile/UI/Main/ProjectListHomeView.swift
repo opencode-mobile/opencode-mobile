@@ -45,11 +45,11 @@ struct ProjectListHomeView: View {
             }
         }
         .openCodeBottomSheet(
-            isPresented: addProjectSheetBinding,
+            isPresented: addProjectPresentedBinding,
             title: "Add project",
             alwaysFixedHeight: true,
             pinnedContent: {
-                let navigator = addProjectNavigator ?? .empty
+                let navigator = viewModel.addProjectNavigator
                 OpenCodeBottomSheetEntry(
                     title: "Go up",
                     enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
@@ -59,12 +59,12 @@ struct ProjectListHomeView: View {
                 OpenCodeBottomSheetEntry(
                     title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
                     enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
-                    startDecorator: .icon(.folder),
+                    startDecorator: .icon(.folderCheck),
                     action: { Task { await viewModel.selectCurrentDirectory() } }
                 )
             }
         ) {
-            let navigator = addProjectNavigator ?? .empty
+            let navigator = viewModel.addProjectNavigator
             if navigator.isLoading || navigator.isValidating {
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -87,17 +87,17 @@ struct ProjectListHomeView: View {
                 ForEach(navigator.entries) { entry in
                     OpenCodeBottomSheetEntry(
                         title: entry.name,
-                        startDecorator: .icon(.folder),
+                        startDecorator: .icon(.subdirectoryArrowRight),
                         action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
                     )
                 }
             }
         }
         .openCodeBottomSheet(
-            isPresented: seeAllSheetPresentedBinding,
-            title: seeAllSheetState?.projectName ?? "Sessions"
+            isPresented: seeAllPresentedBinding,
+            title: viewModel.seeAllSessionsSheet?.projectName ?? "Sessions"
         ) {
-            if let sheet = seeAllSheetState {
+            if let sheet = viewModel.seeAllSessionsSheet {
                 ForEach(sheet.sessions) { session in
                     OpenCodeBottomSheetEntry(
                         title: seeAllSessionEntryTitle(session),
@@ -122,6 +122,24 @@ struct ProjectListHomeView: View {
                 }
             )
         }
+    }
+
+    private var addProjectPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.isAddProjectPresented },
+            set: { presented in
+                if !presented { viewModel.dismissAddProjectSheet() }
+            }
+        )
+    }
+
+    private var seeAllPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.seeAllSessionsSheet != nil },
+            set: { presented in
+                if !presented { viewModel.dismissSeeAllSessions() }
+            }
+        )
     }
 
     private func presentConnectionSetup() {
@@ -210,54 +228,6 @@ struct ProjectListHomeView: View {
             }
         }
         .background(OpenCodeColors.backgroundBase)
-    }
-
-    private var addProjectSheetBinding: Binding<Bool> {
-        Binding(
-            get: {
-                switch viewModel.state {
-                case let .empty(show, _, _), let .loaded(_, show, _, _, _, _):
-                    show
-                default:
-                    false
-                }
-            },
-            set: { isPresented in
-                if !isPresented { viewModel.dismissAddProjectSheet() }
-            }
-        )
-    }
-
-    private var addProjectNavigator: AddProjectNavigatorState? {
-        switch viewModel.state {
-        case let .empty(_, navigator, _), let .loaded(_, _, navigator, _, _, _):
-            navigator
-        default:
-            nil
-        }
-    }
-
-    private var seeAllSheetPresentedBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case let .loaded(_, _, _, sheet, _, _) = viewModel.state {
-                    sheet != nil
-                } else {
-                    false
-                }
-            },
-            set: { isPresented in
-                if !isPresented { viewModel.dismissSeeAllSessions() }
-            }
-        )
-    }
-
-    private var seeAllSheetState: SeeAllSessionsSheetState? {
-        if case let .loaded(_, _, _, sheet, _, _) = viewModel.state {
-            sheet
-        } else {
-            nil
-        }
     }
 }
 

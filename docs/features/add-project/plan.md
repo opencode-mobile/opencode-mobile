@@ -12,10 +12,10 @@ focused on home.
 
 - Replace catalog **Browse projects** with an **Add project** bottom sheet.
 - Fixed 50% sheet height with pinned **Go up** and **Current dir** rows.
-- `GET /path` for home start; `GET /file?path=` for directory listing.
+- `GET /path` for home start; `GET /file?path=.&directory=` for directory listing.
 - Directory-only rows; hide `.*` names; truncate long listings.
 - Tap current directory validates via `GET /project/current?directory=`,
-  persists worktree, focuses project, dismisses sheet.
+  persists the selected directory (not response worktree), focuses, dismisses.
 - Loading / error + Retry; already-added re-focus without re-validation.
 - iOS and Android parity.
 
@@ -29,11 +29,11 @@ focused on home.
 ## Server APIs
 
 - `GET /path`
-- `GET /file?path=`
+- `GET /file?path=.&directory=`
 - `GET /project/current?directory=`
 
 ## Design System
 
 - `OpenCodeBottomSheet` `alwaysFixedHeight` for always-50% presentation.
 - Pinned content for Go up + Current dir.
-- Folder / arrow-upward catalog icons on rows.
+- Folder Check / Subdirectory Arrow Right / arrow-upward catalog icons on rows.

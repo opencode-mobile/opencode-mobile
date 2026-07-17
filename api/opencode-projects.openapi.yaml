@@ -33,6 +33,17 @@ paths:
         - name: path
           in: query
           required: true
+          description: >
+            Path relative to the scoped instance directory. Use `.` when
+            browsing an absolute directory via the `directory` query parameter.
+          schema:
+            type: string
+        - name: directory
+          in: query
+          description: >
+            Absolute directory that becomes the server instance scope for this
+            request. Required when listing outside the server boot directory
+            (e.g. browsing home for Add project).
           schema:
             type: string
       responses:

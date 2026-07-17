@@ -15,6 +15,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case edit = "md_edit"
     case expandContent = "md_expand_content"
     case folder = "md_folder"
+    case folderCheck = "md_folder_check"
     case list = "md_list"
     case moreVert = "md_more_vert"
     case search = "md_search"
@@ -24,6 +25,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case cloud = "md_cloud"
     case stop = "md_stop"
     case stopCircle = "md_stop_circle"
+    case subdirectoryArrowRight = "md_subdirectory_arrow_right"
     case undo = "md_undo"
     case widgets = "md_widgets"
 

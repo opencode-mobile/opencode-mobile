@@ -12,5 +12,5 @@ class DefaultFilesystemRepository
         override suspend fun getPaths(): ServerPaths = adapter.toServerPaths(api.getPaths())
 
         override suspend fun listDirectory(path: String): List<DirectoryNode> =
-            DirectoryListingPolicy.prepare(api.listFiles(path).map(adapter::toDirectoryNode))
+            DirectoryListingPolicy.prepare(api.listFiles(absoluteDirectory = path).map(adapter::toDirectoryNode))
     }

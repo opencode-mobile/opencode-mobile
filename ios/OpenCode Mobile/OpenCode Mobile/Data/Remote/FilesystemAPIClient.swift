@@ -16,14 +16,15 @@ struct FilesystemAPIClient: Sendable {
         try await get(path: "path")
     }
 
-    func listFiles(path: String) async throws -> [FileNodeDTO] {
+    // Lists absoluteDirectory via path=. + directory= so paths outside the boot worktree work.
+    func listFiles(absoluteDirectory: String) async throws -> [FileNodeDTO] {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        var request = connection.authorizedRequest(path: "file")
+        var request = connection.authorizedRequest(path: "file", directory: absoluteDirectory)
         if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
             var items = components.queryItems ?? []
-            items.append(URLQueryItem(name: "path", value: path))
+            items.append(URLQueryItem(name: "path", value: "."))
             components.queryItems = items
             request.url = components.url
         }
