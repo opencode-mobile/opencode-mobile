@@ -1,0 +1,16 @@
+schemaVersion: 1
+
+# Lean tool surface for this repo. Expand when needed (device, debugging, etc.).
+enabledWorkflows:
+  - simulator
+  - simulator-management
+  - ui-automation
+  - project-discovery
+
+sentryDisabled: true
+
+sessionDefaults:
+  projectPath: "./ios/OpenCode Mobile/OpenCode Mobile.xcodeproj"
+  scheme: "OpenCode Mobile"
+  configuration: Debug
+  simulatorName: "iPhone 17 Pro"
