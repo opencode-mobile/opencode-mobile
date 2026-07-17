@@ -919,6 +919,57 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun attach_disabledForTextOnlyModelAndStripsUnsupportedPendingAttachments() =
+        runTest(testDispatcher) {
+            val textOnly =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "text-only",
+                    modelName = "Text Only",
+                    supportsImageInput = false,
+                    supportsPdfInput = false,
+                )
+            val vision =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "vision",
+                    modelName = "Vision",
+                    supportsImageInput = true,
+                    supportsPdfInput = false,
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository =
+                        FakeModelRepository(
+                            ModelSelectionCatalog(options = listOf(vision, textOnly), serverDefault = vision),
+                        ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.composer.canAttach)
+            assertTrue(viewModel.uiState.value.composer.canAttachPhotos)
+
+            val image = testAttachment(id = "img", filename = "shot.png", kind = AttachmentKind.Image, mime = "image/png")
+            val pdf = testAttachment(id = "pdf", filename = "brief.pdf", kind = AttachmentKind.Pdf, mime = "application/pdf")
+            val text = testAttachment(id = "txt", filename = "notes.txt", kind = AttachmentKind.Text, mime = "text/plain")
+            viewModel.addAttachments(listOf(image, pdf, text))
+            runCurrent()
+            assertEquals(listOf("img", "txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+            assertEquals(
+                "This model does not support PDF attachments.",
+                viewModel.uiState.value.errorMessage,
+            )
+
+            viewModel.selectModel(textOnly)
+            runCurrent()
+            assertFalse(viewModel.uiState.value.composer.canAttach)
+            assertEquals(listOf("txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+        }
+
+    @Test
     fun failedAttachmentPrompt_restoresDraftAndAttachmentsWithoutOverwritingNewEdits() =
         runTest(testDispatcher) {
             val sendGate = CompletableDeferred<Unit>()
@@ -2307,15 +2358,24 @@ private fun testAttachment(
     id: String = "attachment-1",
     filename: String = "photo.png",
     kind: AttachmentKind = AttachmentKind.Image,
-): Attachment =
-    Attachment(
+    mime: String? = null,
+): Attachment {
+    val resolvedMime =
+        mime
+            ?: when (kind) {
+                AttachmentKind.Text -> "text/plain"
+                AttachmentKind.Pdf -> "application/pdf"
+                AttachmentKind.Image -> "image/png"
+            }
+    return Attachment(
         id = id,
         filename = filename,
-        mime = if (kind == AttachmentKind.Text) "text/plain" else "image/png",
+        mime = resolvedMime,
         kind = kind,
-        dataUrl = if (kind == AttachmentKind.Text) "data:text/plain;base64,SGk=" else "data:image/png;base64,AA==",
+        dataUrl = "data:$resolvedMime;base64,AA==",
         byteCount = 1,
     )
+}
 
 private class FakeModelRepository(
     private val catalog: ModelSelectionCatalog? = null,

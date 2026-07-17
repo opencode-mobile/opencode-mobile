@@ -85,6 +85,18 @@ struct SessionChatComposerState: Equatable {
     var hasSendableContent: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
     }
+
+    var canAttach: Bool {
+        selectedModel?.option.canAttach == true
+    }
+
+    var canAttachPhotos: Bool {
+        selectedModel?.option.canAttachPhotos == true
+    }
+
+    var canAttachFiles: Bool {
+        selectedModel?.option.canAttachFiles == true
+    }
 }
 
 enum SessionChatTimelineState: Equatable {

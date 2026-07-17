@@ -101,7 +101,7 @@ struct MessageDomainAdapterTests {
         #expect(body.parts[0].type == "text")
         #expect(body.parts[0].text == "Review this")
         #expect(body.parts[1].type == "file")
-        #expect(body.parts[1].id == "attachment-1")
+        #expect(body.parts[1].id == nil)
         #expect(body.parts[1].mime == "text/plain")
         #expect(body.parts[1].filename == "notes.txt")
         #expect(body.parts[1].url == "data:text/plain;base64,SGVsbG8=")

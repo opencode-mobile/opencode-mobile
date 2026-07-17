@@ -49,5 +49,52 @@ class ModelDomainAdapterTest {
         assertEquals("claude-sonnet", catalog.options.single().modelId)
         assertEquals(listOf("high", "low"), catalog.options.single().variants)
         assertEquals(catalog.options.single(), catalog.serverDefault)
+        assertEquals(true, catalog.options.single().supportsImageInput)
+        assertEquals(true, catalog.options.single().supportsPdfInput)
+    }
+
+    @Test
+    fun toCatalog_mapsInputCapabilities() {
+        val raw =
+            """
+            {
+              "providers": [
+                {
+                  "id": "openai",
+                  "name": "OpenAI",
+                  "models": {
+                    "text-only": {
+                      "id": "text-only",
+                      "name": "Text Only",
+                      "capabilities": {
+                        "attachment": false,
+                        "input": { "text": true, "image": false, "pdf": false }
+                      }
+                    },
+                    "vision": {
+                      "id": "vision",
+                      "name": "Vision",
+                      "capabilities": {
+                        "attachment": true,
+                        "input": { "text": true, "image": true, "pdf": false }
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {}
+            }
+            """.trimIndent()
+
+        val catalog = adapter.toCatalog(json.decodeFromString<ConfigProvidersResponseDto>(raw))
+        val textOnly = catalog.options.first { it.modelId == "text-only" }
+        val vision = catalog.options.first { it.modelId == "vision" }
+
+        assertEquals(false, textOnly.canAttach)
+        assertEquals(false, textOnly.canAttachPhotos)
+        assertEquals(true, vision.canAttach)
+        assertEquals(true, vision.canAttachPhotos)
+        assertEquals(false, vision.supportsPdfInput)
+        assertEquals(true, vision.canAttachFiles)
     }
 }

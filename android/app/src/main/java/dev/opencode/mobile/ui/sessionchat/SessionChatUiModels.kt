@@ -37,6 +37,15 @@ data class SessionChatComposerState(
 
     val canSend: Boolean
         get() = text.isNotBlank() || attachments.isNotEmpty()
+
+    val canAttach: Boolean
+        get() = selectedModel?.option?.canAttach == true
+
+    val canAttachPhotos: Boolean
+        get() = selectedModel?.option?.canAttachPhotos == true
+
+    val canAttachFiles: Boolean
+        get() = selectedModel?.option?.canAttachFiles == true
 }
 
 data class SessionRenameUiState(

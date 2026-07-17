@@ -115,22 +115,26 @@ struct SessionChatView: View {
             onSelectVariant: { viewModel.selectVariant($0) }
         )
         .openCodeBottomSheet(isPresented: $showAttachmentSources, title: "Add attachment") {
-            OpenCodeBottomSheetEntry(
-                title: "Photos",
-                startDecorator: .icon(.description, accessibilityLabel: "Photos"),
-                action: {
-                    showAttachmentSources = false
-                    showPhotosPicker = true
-                }
-            )
-            OpenCodeBottomSheetEntry(
-                title: "Files",
-                startDecorator: .icon(.folder, accessibilityLabel: "Files"),
-                action: {
-                    showAttachmentSources = false
-                    showFilesPicker = true
-                }
-            )
+            if viewModel.uiState.composer.canAttachPhotos {
+                OpenCodeBottomSheetEntry(
+                    title: "Photos",
+                    startDecorator: .icon(.description, accessibilityLabel: "Photos"),
+                    action: {
+                        showAttachmentSources = false
+                        showPhotosPicker = true
+                    }
+                )
+            }
+            if viewModel.uiState.composer.canAttachFiles {
+                OpenCodeBottomSheetEntry(
+                    title: "Files",
+                    startDecorator: .icon(.folder, accessibilityLabel: "Files"),
+                    action: {
+                        showAttachmentSources = false
+                        showFilesPicker = true
+                    }
+                )
+            }
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
@@ -365,6 +369,7 @@ struct SessionChatView: View {
                         composer.selectedModel != nil &&
                         composer.isModelSelectionReady &&
                         !isSending,
+                    attachEnabled: composer.canAttach && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting
                 )
@@ -389,7 +394,15 @@ struct SessionChatView: View {
                 case .selectVariant:
                     activePicker = .variant
                 case .attach:
-                    showAttachmentSources = true
+                    let photos = composer.canAttachPhotos
+                    let files = composer.canAttachFiles
+                    if photos, files {
+                        showAttachmentSources = true
+                    } else if photos {
+                        showPhotosPicker = true
+                    } else if files {
+                        showFilesPicker = true
+                    }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
                 case .send:

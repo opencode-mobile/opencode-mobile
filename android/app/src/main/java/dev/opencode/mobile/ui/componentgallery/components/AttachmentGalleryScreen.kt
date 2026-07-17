@@ -1,18 +1,15 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
 import android.util.Base64
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentChip
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
@@ -23,13 +20,8 @@ import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 fun AttachmentGalleryScreen() {
     var chips by remember { mutableStateOf(AttachmentExamples) }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        Text("Pending", style = MaterialTheme.typography.titleMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             chips.forEach { attachment ->
                 OpenCodeAttachmentChip(
                     attachment = attachment,
@@ -37,8 +29,12 @@ fun AttachmentGalleryScreen() {
                 )
             }
         }
-        AttachmentExamples.forEach { attachment ->
-            OpenCodeMessageAttachment(attachment)
+
+        Text("Sent", style = MaterialTheme.typography.titleMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AttachmentExamples.forEach { attachment ->
+                OpenCodeMessageAttachment(attachment)
+            }
         }
     }
 }

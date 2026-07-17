@@ -493,6 +493,48 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.attachments.isEmpty)
     }
 
+    @Test func attach_disabledForTextOnlyModelAndStripsUnsupportedPendingAttachments() async {
+        let textOnly = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "text-only",
+            modelName: "Text Only",
+            variants: [],
+            contextLimitTokens: 128_000,
+            supportsImageInput: false,
+            supportsPdfInput: false
+        )
+        let vision = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "vision",
+            modelName: "Vision",
+            variants: [],
+            contextLimitTokens: 128_000,
+            supportsImageInput: true,
+            supportsPdfInput: false
+        )
+        let viewModel = makeViewModel(
+            modelRepository: FakeModelRepository(
+                catalog: ModelSelectionCatalog(options: [vision, textOnly], serverDefault: vision)
+            )
+        )
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.composer.canAttach)
+        #expect(viewModel.uiState.composer.canAttachPhotos)
+
+        let image = testAttachment(id: "img", filename: "shot.png", kind: .image, mime: "image/png")
+        let pdf = testAttachment(id: "pdf", filename: "brief.pdf", kind: .pdf, mime: "application/pdf")
+        let text = testAttachment(id: "txt", filename: "notes.txt", kind: .text, mime: "text/plain")
+        viewModel.addAttachments([image, pdf, text])
+        #expect(viewModel.uiState.composer.attachments.map(\.id) == ["img", "txt"])
+        #expect(viewModel.uiState.errorMessage == "This model does not support PDF attachments.")
+
+        viewModel.selectModel(textOnly)
+        #expect(viewModel.uiState.composer.canAttach == false)
+        #expect(viewModel.uiState.composer.attachments.map(\.id) == ["txt"])
+    }
+
     @Test func addAttachmentData_acceptsSupportedTypesAndCoercesTextLikeFiles() {
         let viewModel = makeViewModel()
         let cases: [(String, String?, String, AttachmentKind)] = [
@@ -1406,13 +1448,18 @@ struct SessionChatViewModelTests {
         }
     }
 
-    private func testAttachment(id: String, filename: String) -> OpenCode_Mobile.Attachment {
+    private func testAttachment(
+        id: String,
+        filename: String,
+        kind: AttachmentKind = .text,
+        mime: String = "text/plain"
+    ) -> OpenCode_Mobile.Attachment {
         OpenCode_Mobile.Attachment(
             id: id,
             filename: filename,
-            mime: "text/plain",
-            kind: .text,
-            dataURL: "data:text/plain;base64,SGVsbG8="
+            mime: mime,
+            kind: kind,
+            dataURL: "data:\(mime);base64,SGVsbG8="
         )
     }
 

@@ -137,8 +137,10 @@ struct MessageDomainAdapter: Sendable {
         if !options.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append(SendMessagePartDTO(type: "text", text: options.text))
         }
+        // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
+        // Local Attachment ids are UUIDs for composer chip identity.
         parts.append(contentsOf: options.attachments.map {
-            SendMessagePartDTO(id: $0.id, type: "file", mime: $0.mime, filename: $0.filename, url: $0.dataURL)
+            SendMessagePartDTO(type: "file", mime: $0.mime, filename: $0.filename, url: $0.dataURL)
         })
         return SendMessageRequestDTO(
             parts: parts,

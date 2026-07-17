@@ -120,6 +120,8 @@ components:
       properties:
         id:
           type: string
+          pattern: "^prt"
+          description: Optional. When present must match ^prt; omit for client-generated local attachment ids.
         type:
           type: string
           const: file

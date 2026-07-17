@@ -308,6 +308,7 @@ fun SessionChatScreen(
                             uiState.composer.selectedModel != null &&
                             uiState.composer.isModelSelectionReady &&
                             !uiState.isSending,
+                    attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
                     showStop = uiState.sessionStatusLabel != null,
                     stopEnabled = !uiState.isAborting,
                 )
@@ -329,7 +330,18 @@ fun SessionChatScreen(
                         }
                         OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
                         OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
-                        OpenCodeSessionComposerAction.Attach -> showAttachmentSource = true
+                        OpenCodeSessionComposerAction.Attach -> {
+                            val photos = uiState.composer.canAttachPhotos
+                            val files = uiState.composer.canAttachFiles
+                            when {
+                                photos && files -> showAttachmentSource = true
+                                photos ->
+                                    photoPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                files -> documentPicker.launch(arrayOf("*/*"))
+                            }
+                        }
                         is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
                         OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                         OpenCodeSessionComposerAction.Stop -> viewModel.abort()
@@ -358,22 +370,26 @@ fun SessionChatScreen(
             title = "Add attachment",
             onDismissRequest = { showAttachmentSource = false },
         ) {
-            OpenCodeBottomSheetEntry(
-                title = "Photos",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
-                onClick = {
-                    showAttachmentSource = false
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-            )
-            OpenCodeBottomSheetEntry(
-                title = "Files",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
-                onClick = {
-                    showAttachmentSource = false
-                    documentPicker.launch(arrayOf("*/*"))
-                },
-            )
+            if (uiState.composer.canAttachPhotos) {
+                OpenCodeBottomSheetEntry(
+                    title = "Photos",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
+                    onClick = {
+                        showAttachmentSource = false
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                )
+            }
+            if (uiState.composer.canAttachFiles) {
+                OpenCodeBottomSheetEntry(
+                    title = "Files",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                    onClick = {
+                        showAttachmentSource = false
+                        documentPicker.launch(arrayOf("*/*"))
+                    },
+                )
+            }
         }
 
         SessionChatPickerSheet(

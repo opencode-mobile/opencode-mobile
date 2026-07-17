@@ -9,6 +9,7 @@ enum OpenCodeSessionComposerState {
         let selectedVariantLabel: String
         let showVariant: Bool
         let sendEnabled: Bool
+        let attachEnabled: Bool
         let showStop: Bool
         let stopEnabled: Bool
 
@@ -20,6 +21,7 @@ enum OpenCodeSessionComposerState {
             selectedVariantLabel: String,
             showVariant: Bool,
             sendEnabled: Bool,
+            attachEnabled: Bool = true,
             showStop: Bool,
             stopEnabled: Bool
         ) {
@@ -30,6 +32,7 @@ enum OpenCodeSessionComposerState {
             self.selectedVariantLabel = selectedVariantLabel
             self.showVariant = showVariant
             self.sendEnabled = sendEnabled
+            self.attachEnabled = attachEnabled
             self.showStop = showStop
             self.stopEnabled = stopEnabled
         }
@@ -121,7 +124,7 @@ struct OpenCodeSessionComposer: View {
     @ViewBuilder
     private func promptEntryContent(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
             if !prompt.attachments.isEmpty {
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     ForEach(prompt.attachments) { attachment in
                         OpenCodeAttachmentChip(attachment: attachment) { id in
                             onAction(.removeAttachment(id))
@@ -149,6 +152,7 @@ struct OpenCodeSessionComposer: View {
             HStack {
                 OpenCodeButton(
                     variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                    enabled: prompt.attachEnabled,
                     contrast: .low,
                     action: { onAction(.attach) }
                 )

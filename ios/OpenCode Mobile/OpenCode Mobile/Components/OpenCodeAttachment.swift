@@ -29,8 +29,8 @@ struct OpenCodeAttachmentChip: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                attachmentPreview(size: 28)
+            attachmentPreview(size: 28)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.filename)
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textStrong)
@@ -39,9 +39,9 @@ struct OpenCodeAttachmentChip: View {
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(attachment.filename), \(attachment.variant.label)")
-            Spacer(minLength: 4)
             Button(action: { onRemove(attachment.id) }) {
                 OpenCodeIconImage(icon: .close)
                     .frame(width: 20, height: 20)
@@ -52,6 +52,7 @@ struct OpenCodeAttachmentChip: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
         .accessibilityElement(children: .contain)

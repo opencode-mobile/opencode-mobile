@@ -22,17 +22,21 @@ struct AttachmentGalleryView: View {
             Text("Pending")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            ForEach(attachments) { attachment in
-                OpenCodeAttachmentChip(attachment: attachment) { id in
-                    attachments.removeAll { $0.id == id }
+            VStack(spacing: 8) {
+                ForEach(attachments) { attachment in
+                    OpenCodeAttachmentChip(attachment: attachment) { id in
+                        attachments.removeAll { $0.id == id }
+                    }
                 }
             }
 
             Text("Sent")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            ForEach(Self.sentAttachments) { attachment in
-                OpenCodeMessageAttachment(attachment: attachment)
+            VStack(spacing: 8) {
+                ForEach(Self.sentAttachments) { attachment in
+                    OpenCodeMessageAttachment(attachment: attachment)
+                }
             }
         }
     }

@@ -14,6 +14,7 @@
 - [x] Timeline attachment-row rendering
 - [x] Session.Event.Error surfacing for post-204 failures
 - [x] Cross-platform automated validation
+- [x] Gate Attach on provider `capabilities.input.image` / `pdf`
 
 ## Design-system dependencies
 
@@ -29,6 +30,9 @@
 - Failed HTTP sends restore the submitted draft and attachments without
   overwriting newer edits; accepted sends remain cleared when a later session
   error is surfaced.
+- Attach is disabled when the selected model lacks image and PDF input; Photos
+  is hidden without image input; incompatible pending chips are stripped on
+  model change.
 
 ## Android implementation
 
@@ -40,6 +44,9 @@
 - Failed HTTP sends restore the submitted draft and attachments without
   overwriting newer edits; accepted sends remain cleared when a later session
   error is surfaced.
+- Attach is disabled when the selected model lacks image and PDF input; Photos
+  is hidden without image input; incompatible pending chips are stripped on
+  model change.
 
 ## Validation
 
@@ -50,6 +57,7 @@
 
 ## Remaining work
 
-- No remaining implementation work in OPE-55.
+- Model capability gating for Attach (image/PDF input) is implemented on both
+  platforms.
 - Exercise native Photos and Files/document providers on release devices before
   shipping.

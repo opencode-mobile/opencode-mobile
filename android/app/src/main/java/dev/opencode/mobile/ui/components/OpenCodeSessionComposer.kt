@@ -46,6 +46,7 @@ sealed interface OpenCodeSessionComposerState {
         val selectedVariantLabel: String,
         val showVariant: Boolean,
         val sendEnabled: Boolean,
+        val attachEnabled: Boolean = true,
         val showStop: Boolean,
         val stopEnabled: Boolean,
     ) : OpenCodeSessionComposerState
@@ -168,9 +169,9 @@ private fun PromptEntryContent(
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     if (state.attachments.isNotEmpty()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             state.attachments.forEach { attachment ->
                 OpenCodeAttachmentChip(
@@ -231,6 +232,7 @@ private fun PromptEntryContent(
     ) {
         OpenCodeButton(
             variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
+            enabled = state.attachEnabled,
             contrast = OpenCodeButtonContrast.Low,
             onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
         )

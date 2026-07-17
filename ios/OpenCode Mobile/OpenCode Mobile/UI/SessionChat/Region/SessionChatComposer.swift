@@ -145,6 +145,11 @@ final class SessionChatComposer {
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
         updateComposer {
+            let removed = $0.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+            for attachment in removed {
+                attachmentRevisions[attachment.id] = nil
+            }
+            $0.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
             $0.modelOptions = catalog.options
             $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
             $0.selectedVariant = variant
@@ -188,18 +193,29 @@ final class SessionChatComposer {
 
     func addAttachments(_ attachments: [Attachment]) {
         guard !attachments.isEmpty else { return }
-        updateComposer { composer in
-            var ordered = composer.attachments
-            for attachment in attachments {
-                attachmentRevision += 1
-                attachmentRevisions[attachment.id] = attachmentRevision
-                if let index = ordered.firstIndex(where: { $0.id == attachment.id }) {
-                    ordered[index] = attachment
-                } else {
-                    ordered.append(attachment)
+        let option = state.composer.selectedModel?.option
+        let accepted = attachments.filter { option?.acceptsAttachmentKind($0.kind) != false }
+        let rejected = attachments.filter { option?.acceptsAttachmentKind($0.kind) == false }
+        if !accepted.isEmpty {
+            updateComposer { composer in
+                var ordered = composer.attachments
+                for attachment in accepted {
+                    attachmentRevision += 1
+                    attachmentRevisions[attachment.id] = attachmentRevision
+                    if let index = ordered.firstIndex(where: { $0.id == attachment.id }) {
+                        ordered[index] = attachment
+                    } else {
+                        ordered.append(attachment)
+                    }
                 }
+                composer.attachments = ordered
             }
-            composer.attachments = ordered
+        }
+        if !rejected.isEmpty {
+            setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
+        } else if !accepted.isEmpty {
+            state.errorMessage = nil
+            notifyChange()
         }
     }
 
@@ -212,7 +228,9 @@ final class SessionChatComposer {
         do {
             let attachment = try AttachmentLoader().load(data: data, filename: filename, declaredMime: declaredMime)
             addAttachments([attachment])
-            OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime, privacy: .public) bytes=\(data.count) count=1")
+            if state.composer.attachments.contains(where: { $0.id == attachment.id }) {
+                OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime, privacy: .public) bytes=\(data.count) count=1")
+            }
         } catch {
             setAttachmentError(error.localizedDescription)
         }
@@ -235,11 +253,8 @@ final class SessionChatComposer {
             guard case let .failure(error) = result else { return nil }
             return error
         }
-        if let failure = failures.first {
+        if let failure = failures.first, state.errorMessage == nil {
             setAttachmentError(failure.localizedDescription)
-        } else if !attachments.isEmpty {
-            state.errorMessage = nil
-            notifyChange()
         }
         OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
     }
@@ -250,9 +265,25 @@ final class SessionChatComposer {
         notifyChange()
     }
 
+    private static func unsupportedAttachmentMessage(for rejected: [Attachment]) -> String {
+        let kinds = Set(rejected.map(\.kind))
+        if kinds == [.image] {
+            return "This model does not support image attachments."
+        }
+        if kinds == [.pdf] {
+            return "This model does not support PDF attachments."
+        }
+        return "This model does not support some of the selected attachments."
+    }
+
     func selectModel(_ option: ModelSelectionOption) {
         updateComposer { composer in
             let previousVariant = composer.selectedVariant
+            let removed = composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+            for attachment in removed {
+                attachmentRevisions[attachment.id] = nil
+            }
+            composer.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
             composer.selectedModel = ModelSelection(
                 option: option,
                 selectedVariant: previousVariant.flatMap { option.variants.contains($0) ? $0 : nil }

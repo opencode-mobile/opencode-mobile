@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 enum class OpenCodeAttachmentVariant(
@@ -55,9 +54,9 @@ fun OpenCodeAttachmentChip(
     Row(
         modifier =
             modifier
-                .width(220.dp)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, AttachmentShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant, AttachmentShape)
+                .fillMaxWidth()
+                .border(1.dp, openCodeColor("border-weaker-base"), AttachmentShape)
+                .background(openCodeColor("surface-raised-base"), AttachmentShape)
                 .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -65,7 +64,11 @@ fun OpenCodeAttachmentChip(
         AttachmentPreview(attachment, Modifier.size(36.dp))
         AttachmentLabels(attachment, Modifier.weight(1f))
         IconButton(onClick = { onRemove(attachment.id) }, modifier = Modifier.size(36.dp)) {
-            Icon(OpenCodeIcons.Close, contentDescription = "Remove ${attachment.filename}")
+            Icon(
+                OpenCodeIcons.Close,
+                contentDescription = "Remove ${attachment.filename}",
+                tint = openCodeColor("icon-strong-base"),
+            )
         }
     }
 }
@@ -75,14 +78,15 @@ fun OpenCodeMessageAttachment(
     attachment: OpenCodeAttachmentPresentation,
     modifier: Modifier = Modifier,
 ) {
+    val kindLabel = attachment.variant.label.uppercase()
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, AttachmentShape)
-                .background(MaterialTheme.colorScheme.surface, AttachmentShape)
+                .border(1.dp, openCodeColor("border-weaker-base"), AttachmentShape)
+                .background(openCodeColor("surface-raised-base"), AttachmentShape)
                 .padding(8.dp)
-                .semantics { contentDescription = "${attachment.filename}, ${attachment.variant.label}" },
+                .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -104,7 +108,7 @@ private fun AttachmentPreview(
             attachment.imageBytes?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
         }
     Box(
-        modifier = modifier.clip(AttachmentShape).background(MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier.clip(AttachmentShape).background(openCodeColor("surface-raised-base")),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
@@ -115,7 +119,11 @@ private fun AttachmentPreview(
                 modifier = Modifier.matchParentSize(),
             )
         } else {
-            Icon(OpenCodeIcons.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                OpenCodeIcons.Description,
+                contentDescription = null,
+                tint = openCodeColor("icon-base"),
+            )
         }
     }
 }
@@ -129,13 +137,14 @@ private fun AttachmentLabels(
         Text(
             text = attachment.filename,
             style = MaterialTheme.typography.bodyMedium,
+            color = openCodeColor("text-strong"),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = attachment.variant.label.uppercase(),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = openCodeColor("text-base"),
         )
     }
 }

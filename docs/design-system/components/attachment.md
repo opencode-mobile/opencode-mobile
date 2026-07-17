@@ -34,11 +34,15 @@ before a chip is created and send progress belongs to the composer.
 
 ## Behavior
 
-- Chips show a compact preview or file-kind marker, a single-line truncating
-  filename, and a remove control labeled with the filename.
+- Each chip is full width of its parent content. Internals are preview, then a
+  stacked filename and uppercase kind label, then a remove control labeled with
+  the filename. The filename truncates to a single line.
 - Message attachments show an image thumbnail when preview data is available;
-  otherwise they show a file card with filename and kind.
-- Multiple items wrap or stack without hiding remove controls or filenames.
+  otherwise they show a file card with the same stacked filename and kind.
+- Callers own multi-item arrangement. Pending chips and sent message attachments
+  stack vertically at 6–8 logical-pixel spacing, each item full width, without
+  hiding remove controls or filenames. There is no horizontal scroll strip and
+  no fixed chip width.
 - The owning feature performs validation, decoding, file opening, and actions.
   Components never execute attached content or decode arbitrary data URLs.
 - Accessibility combines filename and kind for the item label. The chip remove
@@ -57,6 +61,7 @@ before a chip is created and send progress belongs to the composer.
 - Android Component Gallery: Attachment.
 - Both galleries include image, PDF, text, long-filename, multiple-chip, and
   sent-message examples in light and dark themes with live remove actions.
+  Pending chips and sent rows stack vertically with section labels.
 
 ## Parity And Divergence
 

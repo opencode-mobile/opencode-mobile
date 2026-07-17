@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat.region
 import android.util.Log
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -188,12 +189,17 @@ class SessionChatComposer(
                 InitialSelectionState.Resolved
             }
         _state.update { state ->
+            val keptAttachments = state.composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
+            state.composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
+                .forEach { attachmentRevisions.remove(it.id) }
             state.copy(
                 composer =
                     state.composer.copy(
                         modelOptions = catalog.options,
                         selectedModel = ModelSelection(option, variant),
                         selectedVariant = variant,
+                        attachments = keptAttachments,
                         isModelSelectionReady = true,
                         modelCatalogError = null,
                         modelNotice =
@@ -238,20 +244,29 @@ class SessionChatComposer(
 
     fun addAttachments(attachments: List<Attachment>) {
         if (attachments.isEmpty()) return
-        updateComposer { composer ->
-            val ordered = composer.attachments.toMutableList()
-            attachments.forEach { attachment ->
-                attachmentRevisions[attachment.id] = nextAttachmentRevision++
-                val index = ordered.indexOfFirst { it.id == attachment.id }
-                if (index >= 0) {
-                    ordered[index] = attachment
-                } else {
-                    ordered.add(attachment)
+        val option = _state.value.composer.selectedModel?.option
+        val accepted = attachments.filter { option?.acceptsAttachmentKind(it.kind) != false }
+        val rejected = attachments.filter { option?.acceptsAttachmentKind(it.kind) == false }
+        if (accepted.isNotEmpty()) {
+            updateComposer { composer ->
+                val ordered = composer.attachments.toMutableList()
+                accepted.forEach { attachment ->
+                    attachmentRevisions[attachment.id] = nextAttachmentRevision++
+                    val index = ordered.indexOfFirst { it.id == attachment.id }
+                    if (index >= 0) {
+                        ordered[index] = attachment
+                    } else {
+                        ordered.add(attachment)
+                    }
                 }
+                composer.copy(attachments = ordered)
             }
-            composer.copy(attachments = ordered)
         }
-        _state.update { it.copy(errorMessage = null) }
+        if (rejected.isNotEmpty()) {
+            reportAttachmentError(unsupportedAttachmentMessage(rejected))
+        } else if (accepted.isNotEmpty()) {
+            _state.update { it.copy(errorMessage = null) }
+        }
     }
 
     fun removeAttachment(id: String) {
@@ -267,9 +282,14 @@ class SessionChatComposer(
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
             val variant = previousVariant?.takeIf { it in option.variants }
+            val keptAttachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
+            composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
+                .forEach { attachmentRevisions.remove(it.id) }
             composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
+                attachments = keptAttachments,
                 modelNotice = null,
             )
         }
@@ -585,6 +605,15 @@ class SessionChatComposer(
             .ofEpochMilli(epochMs)
             .atZone(ZoneId.systemDefault())
             .format(SentTimeFormatter)
+
+    private fun unsupportedAttachmentMessage(rejected: List<Attachment>): String {
+        val kinds = rejected.map { it.kind }.toSet()
+        return when (kinds) {
+            setOf(AttachmentKind.Image) -> "This model does not support image attachments."
+            setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
+            else -> "This model does not support some of the selected attachments."
+        }
+    }
 
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {

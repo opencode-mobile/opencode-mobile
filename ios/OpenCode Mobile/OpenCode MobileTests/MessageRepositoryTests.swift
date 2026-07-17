@@ -33,7 +33,7 @@ struct MessageRepositoryTests {
         #expect(api.sentSessionID == "session-1")
         #expect(api.sentDirectory == "/repo")
         #expect(api.sentBody?.parts.map(\.type) == ["text", "file"])
-        #expect(api.sentBody?.parts.last?.id == "attachment-1")
+        #expect(api.sentBody?.parts.last?.id == nil)
         #expect(api.sentBody?.parts.last?.filename == "notes.txt")
     }
 }

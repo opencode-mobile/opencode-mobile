@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.model
 
+import dev.opencode.mobile.domain.message.AttachmentKind
+
 data class ModelSelectionCatalog(
     val options: List<ModelSelectionOption>,
     val serverDefault: ModelSelectionOption?,
@@ -41,12 +43,24 @@ data class ModelSelectionOption(
     val modelName: String,
     val variants: List<String> = emptyList(),
     val contextLimitTokens: Long? = null,
+    val supportsImageInput: Boolean = true,
+    val supportsPdfInput: Boolean = true,
 ) {
     val id: String = "$providerId:$modelId"
     val modelLabel: String = modelName.ifBlank { modelId }
     val providerLabel: String = providerName.ifBlank { providerId }
     val displayLabel: String = "$modelLabel · $providerLabel"
     val supportsVariants: Boolean = variants.isNotEmpty()
+    val canAttach: Boolean = supportsImageInput || supportsPdfInput
+    val canAttachPhotos: Boolean = supportsImageInput
+    val canAttachFiles: Boolean = canAttach
+
+    fun acceptsAttachmentKind(kind: AttachmentKind): Boolean =
+        when (kind) {
+            AttachmentKind.Image -> supportsImageInput
+            AttachmentKind.Pdf -> supportsPdfInput
+            AttachmentKind.Text -> true
+        }
 
     fun matchesFilter(query: String): Boolean {
         val needle = query.trim()
