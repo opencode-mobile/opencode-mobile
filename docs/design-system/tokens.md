@@ -444,7 +444,7 @@ entries.
 | `bottomSheet.motion.exitDuration` | 280 ms |
 | `bottomSheet.scrim.alpha` | 0.32 |
 | `bottomSheet.drag.dismissThreshold` | 96 (logical px) |
-| `bottomSheet.formMaxHeight` | 560 (logical px; iOS content-measured form cap) |
+| `bottomSheet.formMaxHeight` | 560 (logical px; iOS form detent cap after first measure) |
 
 ### Outgoing message
 

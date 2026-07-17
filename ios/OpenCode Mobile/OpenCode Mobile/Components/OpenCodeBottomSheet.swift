@@ -74,6 +74,8 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     @ViewBuilder let sheetContent: () -> SheetContent
     @State private var mode: BottomSheetPresentationMode = .scrollable
     @State private var compactHeight: CGFloat = bottomSheetFormInitialHeight
+    @State private var hasMeasuredFormHeight = false
+    @State private var hasLockedScrollable = false
     @State private var contentHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var pinnedContentHeight: CGFloat = 0
@@ -84,7 +86,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     }
 
     private var presentationDetents: Set<PresentationDetent> {
-        if contentMode == .form { return [.height(compactHeight)] }
+        if contentMode == .form {
+            if hasLockedScrollable {
+                return [.fraction(bottomSheetScrollableDetentFraction)]
+            }
+            return [.height(compactHeight)]
+        }
         switch mode {
         case .scrollable:
             return [.fraction(bottomSheetScrollableDetentFraction)]
@@ -128,6 +135,21 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         .onChange(of: pinnedContentHeight) { _, _ in
             updatePresentationMode()
         }
+        .onChange(of: contentMode) { oldMode, newMode in
+            contentHeight = 0
+            if oldMode == .actionList && newMode == .form {
+                // Match Android: entering the filtered model list locks to 50% immediately.
+                hasLockedScrollable = true
+                hasMeasuredFormHeight = false
+                mode = .scrollable
+                selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
+            } else {
+                hasLockedScrollable = false
+                hasMeasuredFormHeight = false
+                mode = .scrollable
+                selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
+            }
+        }
         .presentationDetents(presentationDetents, selection: $selectedDetent)
         .presentationContentInteraction(resolvedMode == .scrollable ? .scrolls : .automatic)
         .interactiveDismissDisabled(resolvedMode == .scrollable)
@@ -145,21 +167,42 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
 
         let totalHeight =
             resolvedHeaderHeight + pinnedContentHeight + contentHeight + bottomSheetContentBottomPadding
+
         if contentMode == .form {
+            // Match Android: short forms size to content; long forms lock to the
+            // fixed 50% scrollable height and do not shrink when body content changes.
+            if hasLockedScrollable || totalHeight > bottomSheetCompactMaxHeight {
+                hasLockedScrollable = true
+                compactHeight = max(compactHeight, min(totalHeight, bottomSheetFormMaxHeight))
+                selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
+                return
+            }
             let measuredHeight = min(max(totalHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
-            guard abs(compactHeight - measuredHeight) > 1 else { return }
+            if !hasMeasuredFormHeight {
+                compactHeight = measuredHeight
+                hasMeasuredFormHeight = true
+                selectedDetent = .height(measuredHeight)
+                return
+            }
+            guard measuredHeight > compactHeight + 1 else { return }
             compactHeight = measuredHeight
             selectedDetent = .height(measuredHeight)
             return
         }
 
+        // Keep the fixed scrollable fraction once a long list has been shown so
+        // filtering or other body changes do not collapse the sheet.
+        if hasLockedScrollable {
+            return
+        }
+
         if totalHeight <= bottomSheetCompactMaxHeight {
-            compactHeight = max(totalHeight, bottomSheetInitialHeight)
-            if mode != .compact {
-                mode = .compact
-                selectedDetent = .height(compactHeight)
-            }
-        } else if mode != .scrollable {
+            let nextHeight = max(totalHeight, bottomSheetInitialHeight)
+            compactHeight = nextHeight
+            mode = .compact
+            selectedDetent = .height(nextHeight)
+        } else {
+            hasLockedScrollable = true
             mode = .scrollable
             selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
         }
@@ -177,7 +220,10 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 
     func body(content: Content) -> some View {
         content
-            .modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+            // Keep the host keyboard safe-area policy stable for the whole
+            // presentation. Toggling it when contentMode flips (provider list →
+            // filtered models) resizes the screen behind the sheet.
+            .modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: isPresented))
             .sheet(isPresented: $isPresented) {
                 OpenCodeBottomSheetSheetBody(
                     title: title,
@@ -193,11 +239,11 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 }
 
 private struct BottomSheetKeyboardHostPolicy: ViewModifier {
-    let contentMode: OpenCodeBottomSheetContentMode
+    let ignoreKeyboardSafeArea: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if contentMode == .form {
+        if ignoreKeyboardSafeArea {
             content.ignoresSafeArea(.keyboard)
         } else {
             content
@@ -443,7 +489,7 @@ extension View {
         contentMode: OpenCodeBottomSheetContentMode = .actionList,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+        modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: item.wrappedValue != nil))
             .sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
@@ -466,7 +512,7 @@ extension View {
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy(contentMode: contentMode))
+        modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: item.wrappedValue != nil))
             .sheet(item: item) { value in
             OpenCodeBottomSheetSheetBody(
                 title: title,
