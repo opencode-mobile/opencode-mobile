@@ -14,13 +14,28 @@ struct ProjectSectionItem: Identifiable, Equatable {
     let loadError: String?
 }
 
-struct AddProjectCandidateItem: Identifiable, Equatable {
-    let id: String
-    let worktree: String
-    let displayName: String
-    let pathSubtitle: String
-    let letter: Character
-    let letterAccent: LetterAccent
+struct AddProjectDirectoryItem: Identifiable, Equatable {
+    var id: String { absolutePath }
+    let name: String
+    let absolutePath: String
+}
+
+struct AddProjectNavigatorState: Equatable {
+    var currentPath: String
+    var canGoUp: Bool
+    var entries: [AddProjectDirectoryItem]
+    var isLoading: Bool
+    var isValidating: Bool
+    var errorMessage: String?
+
+    static let empty = AddProjectNavigatorState(
+        currentPath: "",
+        canGoUp: false,
+        entries: [],
+        isLoading: false,
+        isValidating: false,
+        errorMessage: nil
+    )
 }
 
 struct SeeAllSessionsSheetState: Equatable {
@@ -36,13 +51,13 @@ enum ProjectListHomeState: Equatable {
     case loading
     case empty(
         showAddProjectSheet: Bool,
-        candidates: [AddProjectCandidateItem],
+        navigator: AddProjectNavigatorState?,
         projectSessionCreateError: String?
     )
     case loaded(
         sections: [ProjectSectionItem],
         showAddProjectSheet: Bool,
-        candidates: [AddProjectCandidateItem],
+        navigator: AddProjectNavigatorState?,
         seeAllSessions: SeeAllSessionsSheetState?,
         focusedWorktree: String?,
         projectSessionCreateError: String?
@@ -53,7 +68,12 @@ enum ProjectListHomeState: Equatable {
 @Observable
 final class ProjectListHomeViewModel {
     private(set) var state: ProjectListHomeState = .probing
+    /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
+    private(set) var isAddProjectPresented = false
+    private(set) var addProjectNavigator = AddProjectNavigatorState.empty
+    private(set) var seeAllSessionsSheet: SeeAllSessionsSheetState?
     private let projectRepository: any ProjectRepository
+    private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
@@ -77,6 +97,7 @@ final class ProjectListHomeViewModel {
 
     init(
         projectRepository: any ProjectRepository,
+        filesystemRepository: any FilesystemRepository,
         sessionRepository: any SessionRepository,
         connectionProfileStore: any ConnectionProfileStore,
         activeConnectionManager: ActiveConnectionManager,
@@ -87,6 +108,7 @@ final class ProjectListHomeViewModel {
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
     ) {
         self.projectRepository = projectRepository
+        self.filesystemRepository = filesystemRepository
         self.sessionRepository = sessionRepository
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
@@ -128,18 +150,20 @@ final class ProjectListHomeViewModel {
     }
 
     func showAddProjectSheet() async {
-        await loadAddProjectCandidates()
+        await openDirectoryNavigator()
     }
 
     func dismissAddProjectSheet() {
+        isAddProjectPresented = false
+        addProjectNavigator = .empty
         switch state {
-        case let .empty(_, candidates, createError):
-            state = .empty(showAddProjectSheet: false, candidates: candidates, projectSessionCreateError: createError)
-        case let .loaded(sections, _, candidates, seeAll, focused, createError):
+        case let .empty(_, _, createError):
+            state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: createError)
+        case let .loaded(sections, _, _, seeAll, focused, createError):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
-                candidates: candidates,
+                navigator: nil,
                 seeAllSessions: seeAll,
                 focusedWorktree: focused,
                 projectSessionCreateError: createError
@@ -149,22 +173,72 @@ final class ProjectListHomeViewModel {
         }
     }
 
+    func navigateAddProjectUp() async {
+        guard let navigator = currentNavigator(),
+              let parent = DirectoryListingPolicy.parentPath(navigator.currentPath)
+        else { return }
+        await loadDirectoryNavigator(path: parent)
+    }
+
+    func navigateAddProjectInto(path: String) async {
+        await loadDirectoryNavigator(path: path)
+    }
+
+    func retryAddProjectNavigator() async {
+        guard let navigator = currentNavigator() else { return }
+        await loadDirectoryNavigator(path: navigator.currentPath)
+    }
+
+    func selectCurrentDirectory() async {
+        guard let navigator = currentNavigator(),
+              !navigator.currentPath.isEmpty,
+              !navigator.isLoading,
+              !navigator.isValidating
+        else { return }
+        await addProject(worktree: navigator.currentPath)
+    }
+
     func addProject(worktree: String) async {
-        await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
-        requestedFocusWorktree = worktree
-        dismissAddProjectSheet()
-        await runHomeLoad(skipProbe: true)
+        let added = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
+        if added.contains(worktree) {
+            requestedFocusWorktree = worktree
+            dismissAddProjectSheet()
+            await runHomeLoad(skipProbe: true)
+            return
+        }
+        updateNavigator { current in
+            var next = current
+            next.isValidating = true
+            next.errorMessage = nil
+            return next
+        }
+        do {
+            // Validate the path is usable, then persist the selected directory (web
+            // open-project behavior). Non-git dirs resolve /project/current to "/".
+            _ = try await projectRepository.getCurrentProject(directory: worktree)
+            await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
+            requestedFocusWorktree = worktree
+            dismissAddProjectSheet()
+            await runHomeLoad(skipProbe: true)
+        } catch {
+            updateNavigator { current in
+                var next = current
+                next.isValidating = false
+                next.errorMessage = error.localizedDescription
+                return next
+            }
+        }
     }
 
     func focusProject(worktree: String) {
-        guard case let .loaded(sections, showAdd, candidates, seeAll, _, _) = state,
+        guard case let .loaded(sections, showAdd, navigator, seeAll, _, _) = state,
               sections.contains(where: { $0.worktree == worktree })
         else { return }
         homeFocusedWorktree = worktree
         state = .loaded(
             sections: sections,
             showAddProjectSheet: showAdd,
-            candidates: candidates,
+            navigator: navigator,
             seeAllSessions: seeAll,
             focusedWorktree: worktree,
             projectSessionCreateError: nil
@@ -172,28 +246,31 @@ final class ProjectListHomeViewModel {
     }
 
     func showSeeAllSessions(worktree: String) {
-        guard case let .loaded(sections, showAdd, candidates, _, focused, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
+        let sheet = SeeAllSessionsSheetState(
+            worktree: worktree,
+            projectName: section.displayName,
+            sessions: section.allSessions
+        )
+        seeAllSessionsSheet = sheet
         state = .loaded(
             sections: sections,
             showAddProjectSheet: showAdd,
-            candidates: candidates,
-            seeAllSessions: SeeAllSessionsSheetState(
-                worktree: worktree,
-                projectName: section.displayName,
-                sessions: section.allSessions
-            ),
+            navigator: navigator,
+            seeAllSessions: sheet,
             focusedWorktree: focused,
             projectSessionCreateError: createError
         )
     }
 
     func dismissSeeAllSessions() {
-        guard case let .loaded(sections, showAdd, candidates, _, focused, createError) = state else { return }
+        seeAllSessionsSheet = nil
+        guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
         state = .loaded(
             sections: sections,
             showAddProjectSheet: showAdd,
-            candidates: candidates,
+            navigator: navigator,
             seeAllSessions: nil,
             focusedWorktree: focused,
             projectSessionCreateError: createError
@@ -264,7 +341,7 @@ final class ProjectListHomeViewModel {
             if worktrees.isEmpty {
                 stopLiveObservations()
                 homeFocusedWorktree = nil
-                state = .empty(showAddProjectSheet: false, candidates: [], projectSessionCreateError: nil)
+                state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
                 return
             }
 
@@ -272,11 +349,11 @@ final class ProjectListHomeViewModel {
             let focusedWorktree = resolvedFocusedWorktree(in: sections)
             homeFocusedWorktree = focusedWorktree
             state = sections.isEmpty
-                ? .empty(showAddProjectSheet: false, candidates: [], projectSessionCreateError: nil)
+                ? .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
                 : .loaded(
                     sections: sections,
                     showAddProjectSheet: false,
-                    candidates: [],
+                    navigator: nil,
                     seeAllSessions: nil,
                     focusedWorktree: focusedWorktree,
                     projectSessionCreateError: nil
@@ -310,7 +387,7 @@ final class ProjectListHomeViewModel {
 
     private func loadSection(worktree: String) async -> ProjectSectionItem {
         do {
-            let project = try await projectRepository.getCurrentProject(directory: worktree)
+            _ = try await projectRepository.getCurrentProject(directory: worktree)
             let sessions =
                 try await sessionRepository.listSessions(directory: worktree)
                     .activeSessions()
@@ -328,12 +405,13 @@ final class ProjectListHomeViewModel {
                         statusLabel: statusBySessionID[session.id].flatMap(eventAdapter.statusLabel)
                     )
                 }
+            let name = ProjectDomainAdapter.displayName(from: worktree)
             return ProjectSectionItem(
                 id: worktree,
                 worktree: worktree,
-                displayName: project.displayName,
-                pathSubtitle: project.worktree,
-                letter: letterCharacter(for: project.displayName),
+                displayName: name,
+                pathSubtitle: worktree,
+                letter: letterCharacter(for: name),
                 letterAccent: letterAccent(for: worktree),
                 previewSessions: Array(items.prefix(Self.previewSessionLimit)),
                 allSessions: items,
@@ -357,40 +435,98 @@ final class ProjectListHomeViewModel {
         }
     }
 
-    private func loadAddProjectCandidates() async {
+    private func openDirectoryNavigator() async {
+        setNavigator(
+            AddProjectNavigatorState(
+                currentPath: "",
+                canGoUp: false,
+                entries: [],
+                isLoading: true,
+                isValidating: false,
+                errorMessage: nil
+            )
+        )
         do {
-            let added = Set(await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL))
-            let candidates =
-                try await projectRepository.listProjects()
-                    .filter { !added.contains($0.worktree) }
-                    .map { project in
-                        AddProjectCandidateItem(
-                            id: project.worktree,
-                            worktree: project.worktree,
-                            displayName: project.displayName,
-                            pathSubtitle: project.worktree,
-                            letter: letterCharacter(for: project.displayName),
-                            letterAccent: letterAccent(for: project.worktree)
-                        )
-                    }
-            switch state {
-            case let .empty(_, _, createError):
-                state = .empty(showAddProjectSheet: true, candidates: candidates, projectSessionCreateError: createError)
-            case let .loaded(sections, _, _, seeAll, focused, createError):
-                state = .loaded(
-                    sections: sections,
-                    showAddProjectSheet: true,
-                    candidates: candidates,
-                    seeAllSessions: seeAll,
-                    focusedWorktree: focused,
-                    projectSessionCreateError: createError
+            let paths = try await filesystemRepository.getPaths()
+            await loadDirectoryNavigator(path: paths.home)
+        } catch {
+            setNavigator(
+                AddProjectNavigatorState(
+                    currentPath: "",
+                    canGoUp: false,
+                    entries: [],
+                    isLoading: false,
+                    isValidating: false,
+                    errorMessage: error.localizedDescription
                 )
-            default:
-                break
+            )
+        }
+    }
+
+    private func loadDirectoryNavigator(path: String) async {
+        updateNavigator { current in
+            var next = current
+            next.currentPath = path
+            next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
+            next.isLoading = true
+            next.isValidating = false
+            next.errorMessage = nil
+            return next
+        }
+        do {
+            let entries = try await filesystemRepository.listDirectory(path: path).map {
+                AddProjectDirectoryItem(name: $0.name, absolutePath: $0.absolutePath)
+            }
+            updateNavigator { current in
+                var next = current
+                next.currentPath = path
+                next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
+                next.entries = entries
+                next.isLoading = false
+                next.isValidating = false
+                next.errorMessage = nil
+                return next
             }
         } catch {
-            return
+            updateNavigator { current in
+                var next = current
+                next.currentPath = path
+                next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
+                next.entries = []
+                next.isLoading = false
+                next.isValidating = false
+                next.errorMessage = error.localizedDescription
+                return next
+            }
         }
+    }
+
+    private func currentNavigator() -> AddProjectNavigatorState? {
+        isAddProjectPresented ? addProjectNavigator : nil
+    }
+
+    private func setNavigator(_ navigator: AddProjectNavigatorState) {
+        addProjectNavigator = navigator
+        isAddProjectPresented = true
+        switch state {
+        case let .empty(_, _, createError):
+            state = .empty(showAddProjectSheet: true, navigator: navigator, projectSessionCreateError: createError)
+        case let .loaded(sections, _, _, seeAll, focused, createError):
+            state = .loaded(
+                sections: sections,
+                showAddProjectSheet: true,
+                navigator: navigator,
+                seeAllSessions: seeAll,
+                focusedWorktree: focused,
+                projectSessionCreateError: createError
+            )
+        default:
+            break
+        }
+    }
+
+    private func updateNavigator(_ transform: (AddProjectNavigatorState) -> AddProjectNavigatorState) {
+        setNavigator(transform(addProjectNavigator))
     }
 
     private static let previewSessionLimit = 3
@@ -440,7 +576,7 @@ final class ProjectListHomeViewModel {
         sessions: [Session],
         statuses: [String: SessionStatus]
     ) {
-        guard case let .loaded(sections, showAdd, candidates, seeAll, focused, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, navigator, seeAll, focused, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
         let items =
             sessions
@@ -479,10 +615,13 @@ final class ProjectListHomeViewModel {
             } else {
                 seeAll
             }
+        if seeAllSessionsSheet?.worktree == worktree {
+            seeAllSessionsSheet = updatedSeeAll
+        }
         state = .loaded(
             sections: updatedSections,
             showAddProjectSheet: showAdd,
-            candidates: candidates,
+            navigator: navigator,
             seeAllSessions: updatedSeeAll,
             focusedWorktree: focused,
             projectSessionCreateError: createError
@@ -503,13 +642,13 @@ final class ProjectListHomeViewModel {
 
     private func setProjectSessionCreateError(_ message: String?) {
         switch state {
-        case let .empty(showAdd, candidates, _):
-            state = .empty(showAddProjectSheet: showAdd, candidates: candidates, projectSessionCreateError: message)
-        case let .loaded(sections, showAdd, candidates, seeAll, focused, _):
+        case let .empty(showAdd, navigator, _):
+            state = .empty(showAddProjectSheet: showAdd, navigator: navigator, projectSessionCreateError: message)
+        case let .loaded(sections, showAdd, navigator, seeAll, focused, _):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: showAdd,
-                candidates: candidates,
+                navigator: navigator,
                 seeAllSessions: seeAll,
                 focusedWorktree: focused,
                 projectSessionCreateError: message

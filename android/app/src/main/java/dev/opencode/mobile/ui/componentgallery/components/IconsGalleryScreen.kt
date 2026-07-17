@@ -39,6 +39,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "edit" to OpenCodeIcons.Edit,
             "expand_content" to OpenCodeIcons.ExpandContent,
             "folder" to OpenCodeIcons.Folder,
+            "folder_check" to OpenCodeIcons.FolderCheck,
             "more_vert" to OpenCodeIcons.MoreVert,
             "search" to OpenCodeIcons.Search,
             "architecture" to OpenCodeIcons.Architecture,
@@ -46,6 +47,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "cloud" to OpenCodeIcons.Cloud,
             "stop" to OpenCodeIcons.Stop,
             "stop_circle" to OpenCodeIcons.StopCircle,
+            "subdirectory_arrow_right" to OpenCodeIcons.SubdirectoryArrowRight,
             "undo" to OpenCodeIcons.Undo,
             "widgets" to OpenCodeIcons.Widgets,
         )

@@ -16,6 +16,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /path:
+    get:
+      operationId: getPaths
+      responses:
+        "200":
+          description: Server path info (home, directory, worktree)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Path"
+  /file:
+    get:
+      operationId: listFiles
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: >
+            Path relative to the scoped instance directory. Use `.` when
+            browsing an absolute directory via the `directory` query parameter.
+          schema:
+            type: string
+        - name: directory
+          in: query
+          description: >
+            Absolute directory that becomes the server instance scope for this
+            request. Required when listing outside the server boot directory
+            (e.g. browsing home for Add project).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Files and directories under path
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileNode"
   /project:
     get:
       operationId: listProjects
@@ -53,6 +92,35 @@ components:
           type: boolean
         version:
           type: string
+    Path:
+      type: object
+      required: [home, worktree, directory]
+      properties:
+        home:
+          type: string
+        state:
+          type: string
+        config:
+          type: string
+        worktree:
+          type: string
+        directory:
+          type: string
+    FileNode:
+      type: object
+      required: [name, path, absolute, type, ignored]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        absolute:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        ignored:
+          type: boolean
     Project:
       type: object
       required: [id, worktree]

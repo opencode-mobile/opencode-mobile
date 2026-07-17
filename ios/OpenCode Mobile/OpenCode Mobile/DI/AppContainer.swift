@@ -56,6 +56,10 @@ extension Container {
         self { ProjectsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
+    var filesystemAPIClient: Factory<FilesystemAPIClient> {
+        self { FilesystemAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
     var projectDomainAdapter: Factory<ProjectDomainAdapter> {
         self { ProjectDomainAdapter() }.singleton
     }
@@ -66,6 +70,12 @@ extension Container {
                 api: self.projectsAPIClient(),
                 adapter: self.projectDomainAdapter()
             )
+        }.singleton
+    }
+
+    var filesystemRepository: Factory<any FilesystemRepository> {
+        self {
+            DefaultFilesystemRepository(api: self.filesystemAPIClient())
         }.singleton
     }
 
@@ -230,6 +240,7 @@ extension Container {
         self { @MainActor in
             ProjectListHomeViewModel(
                 projectRepository: self.projectRepository(),
+                filesystemRepository: self.filesystemRepository(),
                 sessionRepository: self.sessionRepository(),
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),

@@ -127,6 +127,115 @@ struct ProjectListHomeViewModelTests {
         #expect(focusedWorktree == "/two")
     }
 
+    @Test func showAddProjectSheet_startsAtHomeAndListsDirectories() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [
+                    DirectoryNode(name: "projects", absolutePath: "/home/projects", isDirectory: true),
+                    DirectoryNode(name: ".cache", absolutePath: "/home/.cache", isDirectory: true),
+                    DirectoryNode(name: "readme", absolutePath: "/home/readme", isDirectory: false),
+                ],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        guard case let .loaded(_, show, navigator, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(show)
+        #expect(navigator?.currentPath == "/home")
+        #expect(navigator?.entries.map(\.name) == ["projects"])
+        #expect(navigator?.canGoUp == true)
+    }
+
+    @Test func selectCurrentDirectory_validatesAndFocuses() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let projectRepository = FakeProjectRepository()
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": []]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: projectRepository,
+            filesystemRepository: filesystem,
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        await viewModel.selectCurrentDirectory()
+        guard case let .loaded(_, show, _, _, focusedWorktree, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(show == false)
+        #expect(focusedWorktree == "/home")
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/home"))
+        #expect(projectRepository.validatedDirectories.contains("/home"))
+    }
+
+    @Test func selectCurrentDirectory_persistsSelectedPathEvenWhenCurrentResolvesGlobal() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let projectRepository = FakeProjectRepository(
+            projectsByDirectory: [
+                "/home": Project(id: "global", worktree: "/", displayName: "/"),
+            ]
+        )
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": []]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: projectRepository,
+            filesystemRepository: filesystem,
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        await viewModel.selectCurrentDirectory()
+        guard case let .loaded(_, show, _, _, focusedWorktree, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(show == false)
+        #expect(focusedWorktree == "/home")
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/home"])
+    }
+
+    @Test func selectCurrentDirectory_nestedPathPersistsSelectedDirectory() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let projectRepository = FakeProjectRepository(
+            projectsByDirectory: [
+                "/repo/android": Project(id: "repo", worktree: "/repo", displayName: "repo"),
+            ]
+        )
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/repo/android", directory: "/repo/android", worktree: "/"),
+            listings: ["/repo/android": []]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: projectRepository,
+            filesystemRepository: filesystem,
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        await viewModel.selectCurrentDirectory()
+        guard case let .loaded(_, show, _, _, focusedWorktree, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(show == false)
+        #expect(focusedWorktree == "/repo/android")
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/repo/android"])
+    }
+
     @Test func createSession_usesFocusedWorktreeAndClearsError() async {
         let sessionRepository = FakeSessionRepository()
         let viewModel = makeViewModel(
@@ -209,6 +318,7 @@ struct ProjectListHomeViewModelTests {
 @MainActor
 private func makeViewModel(
     projectRepository: any ProjectRepository,
+    filesystemRepository: any FilesystemRepository = FakeFilesystemRepository(),
     sessionRepository: any SessionRepository = FakeSessionRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     eventStream: FakeForegroundEventStream? = nil,
@@ -231,6 +341,7 @@ private func makeViewModel(
     )
     return ProjectListHomeViewModel(
         projectRepository: projectRepository,
+        filesystemRepository: filesystemRepository,
         sessionRepository: sessionRepository,
         connectionProfileStore: connectionProfileStore,
         activeConnectionManager: manager,
@@ -312,15 +423,23 @@ private final class HomeSelectionStore: SessionModelSelectionStore, @unchecked S
     }
 }
 
-private struct FakeProjectRepository: ProjectRepository {
+private final class FakeProjectRepository: ProjectRepository, @unchecked Sendable {
     let shouldFailProbe: Bool
     let bootWorktree: String
     let projects: [Project]
+    let projectsByDirectory: [String: Project]
+    private(set) var validatedDirectories: [String?] = []
 
-    init(shouldFailProbe: Bool = false, bootWorktree: String = "/boot", projects: [Project] = []) {
+    init(
+        shouldFailProbe: Bool = false,
+        bootWorktree: String = "/boot",
+        projects: [Project] = [],
+        projectsByDirectory: [String: Project] = [:]
+    ) {
         self.shouldFailProbe = shouldFailProbe
         self.bootWorktree = bootWorktree
         self.projects = projects
+        self.projectsByDirectory = projectsByDirectory
     }
 
     func probeServer() async throws {
@@ -330,7 +449,30 @@ private struct FakeProjectRepository: ProjectRepository {
     func listProjects() async throws -> [Project] { projects }
 
     func getCurrentProject(directory: String?) async throws -> Project {
-        Project(id: "p1", worktree: directory ?? bootWorktree, displayName: "demo")
+        validatedDirectories.append(directory)
+        if let directory, let project = projectsByDirectory[directory] {
+            return project
+        }
+        return Project(id: "p1", worktree: directory ?? bootWorktree, displayName: "demo")
+    }
+}
+
+private struct FakeFilesystemRepository: FilesystemRepository {
+    let paths: ServerPaths
+    let listings: [String: [DirectoryNode]]
+
+    init(
+        paths: ServerPaths = ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+        listings: [String: [DirectoryNode]] = [:]
+    ) {
+        self.paths = paths
+        self.listings = listings
+    }
+
+    func getPaths() async throws -> ServerPaths { paths }
+
+    func listDirectory(path: String) async throws -> [DirectoryNode] {
+        DirectoryListingPolicy.prepare(listings[path] ?? [])
     }
 }
 

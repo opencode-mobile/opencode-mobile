@@ -26,6 +26,7 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -61,7 +62,10 @@ fun MainScreen(
         onAddProjectClick = viewModel::showAddProjectSheet,
         onFocusProject = viewModel::focusProject,
         onDismissAddProject = viewModel::dismissAddProjectSheet,
-        onSelectAddProject = viewModel::addProject,
+        onNavigateAddProjectUp = viewModel::navigateAddProjectUp,
+        onNavigateAddProjectInto = viewModel::navigateAddProjectInto,
+        onRetryAddProjectNavigator = viewModel::retryAddProjectNavigator,
+        onSelectCurrentDirectory = viewModel::selectCurrentDirectory,
         onSeeAllSessions = viewModel::showSeeAllSessions,
         onDismissSeeAll = viewModel::dismissSeeAllSessions,
         onNewSession = viewModel::createSession,
@@ -83,7 +87,10 @@ internal fun MainScreen(
     onAddProjectClick: () -> Unit,
     onFocusProject: (String) -> Unit,
     onDismissAddProject: () -> Unit,
-    onSelectAddProject: (String) -> Unit,
+    onNavigateAddProjectUp: () -> Unit,
+    onNavigateAddProjectInto: (String) -> Unit,
+    onRetryAddProjectNavigator: () -> Unit,
+    onSelectCurrentDirectory: () -> Unit,
     onSeeAllSessions: (String) -> Unit,
     onDismissSeeAll: () -> Unit,
     onNewSession: (String) -> Unit,
@@ -104,11 +111,11 @@ internal fun MainScreen(
             is MainScreenUiState.Loaded -> uiState.showAddProjectSheet
             else -> false
         }
-    val addCandidates =
+    val addNavigator =
         when (uiState) {
-            is MainScreenUiState.Empty -> uiState.addProjectCandidates
-            is MainScreenUiState.Loaded -> uiState.addProjectCandidates
-            else -> emptyList()
+            is MainScreenUiState.Empty -> uiState.addProjectNavigator
+            is MainScreenUiState.Loaded -> uiState.addProjectNavigator
+            else -> null
         }
     val seeAllSheet = (uiState as? MainScreenUiState.Loaded)?.seeAllSessions
 
@@ -184,15 +191,84 @@ internal fun MainScreen(
     }
 
     if (showAddSheet) {
-        OpenCodeBottomSheet(visible = true, title = "Browse projects", onDismissRequest = onDismissAddProject) {
-            if (addCandidates.isEmpty()) {
-                OpenCodeBottomSheetEntry(title = "No more projects on this server", enabled = false, onClick = {})
-            } else {
-                addCandidates.forEach { candidate ->
-                    OpenCodeBottomSheetEntry(
-                        title = candidate.displayName,
-                        onClick = { onSelectAddProject(candidate.worktree) },
-                    )
+        val navigator = addNavigator ?: AddProjectNavigatorUi.empty()
+        OpenCodeBottomSheet(
+            visible = true,
+            title = "Add project",
+            onDismissRequest = onDismissAddProject,
+            alwaysFixedHeight = true,
+            pinnedContent = {
+                OpenCodeBottomSheetEntry(
+                    title = "Go up",
+                    enabled = navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
+                    startDecorator =
+                        BottomSheetEntryDecorator.Icon(
+                            imageVector = OpenCodeIcons.ArrowUpward,
+                            contentDescription = null,
+                        ),
+                    onClick = onNavigateAddProjectUp,
+                )
+                val currentTitle =
+                    when {
+                        navigator.currentPath.isBlank() -> "Current directory"
+                        else -> navigator.currentPath
+                    }
+                OpenCodeBottomSheetEntry(
+                    title = currentTitle,
+                    enabled = navigator.currentPath.isNotBlank() && !navigator.isLoading && !navigator.isValidating,
+                    startDecorator =
+                        BottomSheetEntryDecorator.Icon(
+                            imageVector = OpenCodeIcons.FolderCheck,
+                            contentDescription = null,
+                        ),
+                    onClick = onSelectCurrentDirectory,
+                )
+            },
+        ) {
+            when {
+                navigator.isLoading || navigator.isValidating -> {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                navigator.errorMessage != null -> {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = navigator.errorMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                        OpenCodeButton(
+                            variant = OpenCodeButtonVariant.FullWidthText("Retry"),
+                            onClick = onRetryAddProjectNavigator,
+                        )
+                    }
+                }
+                navigator.entries.isEmpty() -> {
+                    OpenCodeBottomSheetEntry(title = "No subdirectories", enabled = false, onClick = {})
+                }
+                else -> {
+                    navigator.entries.forEach { entry ->
+                        OpenCodeBottomSheetEntry(
+                            title = entry.name,
+                            startDecorator =
+                                BottomSheetEntryDecorator.Icon(
+                                    imageVector = OpenCodeIcons.SubdirectoryArrowRight,
+                                    contentDescription = null,
+                                ),
+                            onClick = { onNavigateAddProjectInto(entry.absolutePath) },
+                        )
+                    }
                 }
             }
         }
@@ -350,7 +426,10 @@ fun MainScreenPreview() {
             onAddProjectClick = {},
             onFocusProject = {},
             onDismissAddProject = {},
-            onSelectAddProject = {},
+            onNavigateAddProjectUp = {},
+            onNavigateAddProjectInto = {},
+            onRetryAddProjectNavigator = {},
+            onSelectCurrentDirectory = {},
             onSeeAllSessions = {},
             onDismissSeeAll = {},
             onNewSession = {},

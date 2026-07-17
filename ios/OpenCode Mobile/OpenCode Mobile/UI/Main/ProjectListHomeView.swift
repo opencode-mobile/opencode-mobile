@@ -44,29 +44,60 @@ struct ProjectListHomeView: View {
                 viewModel.consumePendingSessionOpen()
             }
         }
-        .openCodeBottomSheet(isPresented: addProjectSheetBinding, title: "Browse projects") {
-            if addProjectCandidates.isEmpty {
+        .openCodeBottomSheet(
+            isPresented: addProjectPresentedBinding,
+            title: "Add project",
+            alwaysFixedHeight: true,
+            pinnedContent: {
+                let navigator = viewModel.addProjectNavigator
                 OpenCodeBottomSheetEntry(
-                    title: "No more projects on this server",
-                    enabled: false,
-                    action: {}
+                    title: "Go up",
+                    enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
+                    startDecorator: .icon(.arrowUpward),
+                    action: { Task { await viewModel.navigateAddProjectUp() } }
                 )
+                OpenCodeBottomSheetEntry(
+                    title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
+                    enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
+                    startDecorator: .icon(.folderCheck),
+                    action: { Task { await viewModel.selectCurrentDirectory() } }
+                )
+            }
+        ) {
+            let navigator = viewModel.addProjectNavigator
+            if navigator.isLoading || navigator.isValidating {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
+            } else if let errorMessage = navigator.errorMessage {
+                VStack(spacing: 12) {
+                    Text(errorMessage)
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .multilineTextAlignment(.center)
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: "Retry"),
+                        action: { Task { await viewModel.retryAddProjectNavigator() } }
+                    )
+                }
+                .padding(20)
+            } else if navigator.entries.isEmpty {
+                OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
             } else {
-                ForEach(addProjectCandidates) { candidate in
+                ForEach(navigator.entries) { entry in
                     OpenCodeBottomSheetEntry(
-                        title: candidate.displayName,
-                        action: {
-                            Task { await viewModel.addProject(worktree: candidate.worktree) }
-                        }
+                        title: entry.name,
+                        startDecorator: .icon(.subdirectoryArrowRight),
+                        action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
                     )
                 }
             }
         }
         .openCodeBottomSheet(
-            isPresented: seeAllSheetPresentedBinding,
-            title: seeAllSheetState?.projectName ?? "Sessions"
+            isPresented: seeAllPresentedBinding,
+            title: viewModel.seeAllSessionsSheet?.projectName ?? "Sessions"
         ) {
-            if let sheet = seeAllSheetState {
+            if let sheet = viewModel.seeAllSessionsSheet {
                 ForEach(sheet.sessions) { session in
                     OpenCodeBottomSheetEntry(
                         title: seeAllSessionEntryTitle(session),
@@ -91,6 +122,24 @@ struct ProjectListHomeView: View {
                 }
             )
         }
+    }
+
+    private var addProjectPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.isAddProjectPresented },
+            set: { presented in
+                if !presented { viewModel.dismissAddProjectSheet() }
+            }
+        )
+    }
+
+    private var seeAllPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.seeAllSessionsSheet != nil },
+            set: { presented in
+                if !presented { viewModel.dismissSeeAllSessions() }
+            }
+        )
     }
 
     private func presentConnectionSetup() {
@@ -180,54 +229,6 @@ struct ProjectListHomeView: View {
         }
         .background(OpenCodeColors.backgroundBase)
     }
-
-    private var addProjectSheetBinding: Binding<Bool> {
-        Binding(
-            get: {
-                switch viewModel.state {
-                case let .empty(show, _, _), let .loaded(_, show, _, _, _, _):
-                    show
-                default:
-                    false
-                }
-            },
-            set: { isPresented in
-                if !isPresented { viewModel.dismissAddProjectSheet() }
-            }
-        )
-    }
-
-    private var addProjectCandidates: [AddProjectCandidateItem] {
-        switch viewModel.state {
-        case let .empty(_, items, _), let .loaded(_, _, items, _, _, _):
-            items
-        default:
-            []
-        }
-    }
-
-    private var seeAllSheetPresentedBinding: Binding<Bool> {
-        Binding(
-            get: {
-                if case let .loaded(_, _, _, sheet, _, _) = viewModel.state {
-                    sheet != nil
-                } else {
-                    false
-                }
-            },
-            set: { isPresented in
-                if !isPresented { viewModel.dismissSeeAllSessions() }
-            }
-        )
-    }
-
-    private var seeAllSheetState: SeeAllSessionsSheetState? {
-        if case let .loaded(_, _, _, sheet, _, _) = viewModel.state {
-            sheet
-        } else {
-            nil
-        }
-    }
 }
 
 private func seeAllSessionEntryTitle(_ session: SessionListItem) -> String {
@@ -306,6 +307,7 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
     )
     return ProjectListHomeViewModel(
         projectRepository: PreviewProjectRepository(),
+        filesystemRepository: PreviewFilesystemRepository(),
         sessionRepository: PreviewSessionRepository(),
         connectionProfileStore: store,
         activeConnectionManager: manager,
@@ -321,6 +323,16 @@ private struct PreviewProjectRepository: ProjectRepository {
     func listProjects() async throws -> [Project] { [] }
     func getCurrentProject(directory: String?) async throws -> Project {
         Project(id: "1", worktree: "/demo", displayName: "demo")
+    }
+}
+
+private struct PreviewFilesystemRepository: FilesystemRepository {
+    func getPaths() async throws -> ServerPaths {
+        ServerPaths(home: "/demo", directory: "/demo", worktree: "/")
+    }
+
+    func listDirectory(path: String) async throws -> [DirectoryNode] {
+        []
     }
 }
 

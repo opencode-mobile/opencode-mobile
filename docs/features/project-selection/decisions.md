@@ -36,9 +36,9 @@ for gallery samples and other edit affordances.
 
 ## Browse projects affordance
 
-Curated add flow uses list row and bottom sheet title **Browse projects** (add
-icon start decorator). Sheet lists server projects not already in the added set;
-empty catalog shows **No more projects on this server**.
+> **Superseded** by [Add Project Directory Navigator](../add-project/decisions.md):
+> home add tile opens a filesystem **Add project** navigator instead of the
+> `GET /project` catalog sheet.
 
 ## Home empty and session previews
 

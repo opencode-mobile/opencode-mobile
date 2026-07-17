@@ -68,9 +68,11 @@ changing keyboard safe area.
 fraction-height scroll sheet only when the content exceeds the compact
 threshold. Once a presentation is scrollable, it stays at that fixed height for
 the rest of the presentation so filtering or other body changes do not resize
-the sheet. `form` always uses a scrollable body because keyboard appearance can
-reduce the available height at any time, and it locks to the first measured
-height (growing only if content needs more room, never shrinking).
+the sheet. Callers may set `alwaysFixedHeight` to force the 50% scrollable
+detent for the whole presentation (used by Add project). `form` always uses a
+scrollable body because keyboard appearance can reduce the available height at
+any time, and it locks to the first measured height (growing only if content
+needs more room, never shrinking).
 
 On Android, the component owns vertical scrolling for long content. Feature
 content inside the sheet body should not add its own vertical scroll container.

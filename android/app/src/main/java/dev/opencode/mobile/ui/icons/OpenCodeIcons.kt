@@ -23,6 +23,7 @@ private var _description: ImageVector? = null
 private var _edit: ImageVector? = null
 private var _expand_content: ImageVector? = null
 private var _folder: ImageVector? = null
+private var _folder_check: ImageVector? = null
 private var _list: ImageVector? = null
 private var _more_vert: ImageVector? = null
 private var _search: ImageVector? = null
@@ -32,6 +33,7 @@ private var _archive: ImageVector? = null
 private var _cloud: ImageVector? = null
 private var _stop: ImageVector? = null
 private var _stop_circle: ImageVector? = null
+private var _subdirectory_arrow_right: ImageVector? = null
 private var _undo: ImageVector? = null
 private var _widgets: ImageVector? = null
 
@@ -292,6 +294,30 @@ private var _widgets: ImageVector? = null
       return _folder!!
     }
 
+  val FolderCheck: ImageVector
+    get() {
+      if (_folder_check != null) return _folder_check!!
+      _folder_check = ImageVector.Builder(
+        name = "FolderCheck",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 960f,
+        viewportHeight = 960f,
+      ).apply {
+    group(
+      translationX = 0f,
+      translationY = 960f,
+    ) {
+    addPath(
+      pathData = PathParser().parsePathString("m434-297 226-227-56-56-170 170-85-85-57 57 142 141ZM160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h240l80 80h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H447l-80-80H160v480Zm0 0v-480 480Z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+    }
+      }.build()
+      return _folder_check!!
+    }
+
   val List: ImageVector
     get() {
       if (_list != null) return _list!!
@@ -461,6 +487,25 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _stop_circle!!
+    }
+
+  val SubdirectoryArrowRight: ImageVector
+    get() {
+      if (_subdirectory_arrow_right != null) return _subdirectory_arrow_right!!
+      _subdirectory_arrow_right = ImageVector.Builder(
+        name = "SubdirectoryArrowRight",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("m19 15-6 6-1.42-1.42L15.17 16H4V4h2v10h9.17l-3.59-3.58L13 9l6 6z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _subdirectory_arrow_right!!
     }
 
   val Undo: ImageVector

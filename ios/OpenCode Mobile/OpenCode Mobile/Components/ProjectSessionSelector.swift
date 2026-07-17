@@ -232,7 +232,7 @@ private struct AddProjectSessionSelectorTile: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Browse projects")
+        .accessibilityLabel("Add project")
     }
 }
 
