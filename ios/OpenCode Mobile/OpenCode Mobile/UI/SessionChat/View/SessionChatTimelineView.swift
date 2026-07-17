@@ -15,6 +15,7 @@ struct SessionChatTimelineViewProps {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let onUserScrollDismissKeyboard: () -> Void
 
     init(
         timeline: SessionChatTimelineState,
@@ -27,7 +28,8 @@ struct SessionChatTimelineViewProps {
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
-        onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in }
+        onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
+        onUserScrollDismissKeyboard: @escaping () -> Void = {}
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -40,6 +42,7 @@ struct SessionChatTimelineViewProps {
         self.onToolDetailTap = onToolDetailTap
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
+        self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
     }
 }
 
@@ -153,10 +156,18 @@ private struct SessionChatTimelineReadyView: View {
                 .messageListTimelineContentHeight(timeline: timeline)
             }
             .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            // Composer TextField is outside this ScrollView; SwiftUI's modifier alone
-            // often leaves the keyboard up. UIKit mode resigns any first responder.
-            .scrollViewKeyboardDismissMode(.interactive)
+            .scrollDismissesKeyboard(.immediately)
+            // Composer TextField is outside this ScrollView. Clear focus on user pan
+            // (UIKit keyboardDismissMode alone is unreliable with SwiftUI ScrollView).
+            .scrollViewKeyboardDismissMode(.onDrag) {
+                props.onUserScrollDismissKeyboard()
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { _ in
+                        props.onUserScrollDismissKeyboard()
+                    }
+            )
             .messageListTimelineScrollChrome(timeline: timeline)
             .refreshable {
                 await props.onRefresh()

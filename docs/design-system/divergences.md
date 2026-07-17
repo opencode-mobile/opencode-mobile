@@ -154,10 +154,10 @@ implementation belong in the feature's `parity-gaps.md`.
 - Shared intent: scrolling the Session Chat timeline ends editing intent and
   dismisses the software keyboard so message history regains canvas. See
   [`keyboard-dismissal.md`](keyboard-dismissal.md).
-- iOS behavior: timeline uses `.scrollDismissesKeyboard(.interactively)` plus a
-  UIKit `keyboardDismissMode = .interactive` bridge so dismissal still works when
-  the composer field sits outside the scroll view (VStack sibling). The keyboard
-  can track the drag and cancel mid-gesture.
+- iOS behavior: timeline user drag clears composer focus and resigns first
+  responder (composer field is outside the `ScrollView`). Also sets UIKit
+  `keyboardDismissMode = .onDrag` when the underlying scroll view can be found.
+  Interactive keyboard-tracking dismiss is not relied on for this layout.
 - Android behavior: timeline **user drag** clears focus / hides the IME.
   Programmatic sticky-follow and scroll-to-end do not. Compose does not require
   interactive IME drag parity.

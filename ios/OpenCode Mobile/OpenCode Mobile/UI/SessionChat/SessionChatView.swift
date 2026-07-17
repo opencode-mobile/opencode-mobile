@@ -95,6 +95,17 @@ struct SessionChatView: View {
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
+                    },
+                    onUserScrollDismissKeyboard: {
+                        composerFocused = false
+                        // FocusState sync is unreliable when the field sits outside
+                        // the ScrollView; resign any first responder on user drag.
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
                     }
                 )
             )

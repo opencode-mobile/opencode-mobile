@@ -7,13 +7,12 @@
   from
   [`docs/design-system/keyboard-dismissal.md`](../../design-system/keyboard-dismissal.md).
   Concretely:
-  - **Primary dismiss:** scrolling the message timeline dismisses the keyboard
-    (iOS `.scrollDismissesKeyboard(.interactively)` plus UIKit
-    `keyboardDismissMode = .interactive` on the timeline scroll view, because the
-    composer field is outside the `ScrollView`; Android clear-focus on
-    **user drag** of the timeline). Fall back to iOS `.immediately` only if
-    interactive dismiss fights sticky-follow. Programmatic sticky-follow and
-    scroll-to-end must **not** dismiss the keyboard.
+  - **Primary dismiss:** scrolling the message timeline dismisses the keyboard.
+    Because the composer field is outside the timeline `ScrollView`, iOS clears
+    focus (and resigns first responder) on user drag, with UIKit
+    `keyboardDismissMode = .onDrag` as a secondary path. Android clears focus on
+    **user drag** of the timeline. Programmatic sticky-follow and scroll-to-end
+    must **not** dismiss the keyboard.
   - **Composer-owned focus:** `OpenCodeSessionComposer` holds view-local focus
     (`@FocusState` / Compose focus). Optional parent focus binding / requester
     exists only so restore-to-composer can refocus. Screen Models do not store
