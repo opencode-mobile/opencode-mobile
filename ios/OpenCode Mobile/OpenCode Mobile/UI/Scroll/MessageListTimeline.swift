@@ -91,7 +91,10 @@ final class MessageListTimelineState {
             || reason == "viewport-height"
             || reason == "layout-signature"
 
-        if isLayoutCorrection, isPinnedToEnd(messageCount: messageCount) {
+        if isLayoutCorrection,
+           reason != "viewport-height",
+           isPinnedToEnd(messageCount: messageCount)
+        {
             onLog?("\(reason) snap skip-pinned count=\(messageCount)")
             return
         }
@@ -213,12 +216,13 @@ final class MessageListTimelineState {
         autoFollowEnabled: Bool,
         scrollTargetID: String? = nil,
         reason: String = "layout-check",
+        settleMilliseconds: Int = 80,
         onLog: ((String) -> Void)? = nil
     ) {
         onLog?("\(reason) scheduled count=\(messageCount)")
         layoutFollowTask?.cancel()
         layoutFollowTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(80))
+            try? await Task.sleep(for: .milliseconds(settleMilliseconds))
             guard !Task.isCancelled else { return }
             await Task.yield()
             followLayoutChangeIfNeeded(
@@ -400,6 +404,14 @@ extension View {
             }
             .onChange(of: timeline.viewportHeight) { _, height in
                 onLog?("viewport-height count=\(messageCount) height=\(timeline.contentHeight) viewport=\(height)")
+                timeline.followLayoutChangeIfNeededAfterLayoutSettles(
+                    messageCount: messageCount,
+                    autoFollowEnabled: autoFollowEnabled,
+                    scrollTargetID: lastMessageID,
+                    reason: "viewport-height",
+                    settleMilliseconds: 250,
+                    onLog: onLog
+                )
             }
             .onChange(of: layoutSignature) { _, _ in
                 onLog?("layout-signature changed count=\(messageCount) signature=\(layoutSignature)")
