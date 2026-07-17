@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -97,7 +98,7 @@ private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
 
 @Suppress("ktlint:standard:property-naming")
-private const val BottomSheetScrollableHeightFraction = 0.55f
+private const val BottomSheetScrollableHeightFraction = 0.50f
 
 private val BottomSheetCompactMaxHeight = 360.dp
 private val BottomSheetEstimatedHeaderHeight =
@@ -278,37 +279,88 @@ private fun BottomSheetContent(
 ) {
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
-    val maxSheetHeight =
-        configuration.screenHeightDp.dp *
-            if (contentMode == OpenCodeBottomSheetContentMode.Form) 0.9f else BottomSheetScrollableHeightFraction
+    val maxSheetHeight = configuration.screenHeightDp.dp * BottomSheetScrollableHeightFraction
     var contentHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedContentHeight by remember { mutableStateOf(0.dp) }
+    var lockedSheetHeight by remember { mutableStateOf<Dp?>(null) }
+    var committedToScrollable by remember { mutableStateOf(false) }
+    var previousContentMode by remember { mutableStateOf(contentMode) }
     val scrollState = rememberScrollState()
 
+    if (contentMode != previousContentMode) {
+        val switchingIntoForm =
+            previousContentMode == OpenCodeBottomSheetContentMode.ActionList &&
+                contentMode == OpenCodeBottomSheetContentMode.Form
+        previousContentMode = contentMode
+        // Invalidate the previous body's measured height so layout mode is not chosen
+        // from stale provider-list metrics while the new model list is already rendering.
+        contentHeight = 0.dp
+        if (switchingIntoForm) {
+            // Filtered model lists are always the long-sheet case; lock immediately so the
+            // first frame does not expand unconstrained under Compact.
+            committedToScrollable = true
+            lockedSheetHeight = maxSheetHeight
+        } else {
+            lockedSheetHeight = null
+            committedToScrollable = false
+        }
+    }
+
     val layoutMode =
-        remember(contentHeight, headerHeight, pinnedContentHeight) {
-            if (contentHeight == 0.dp) {
+        remember(contentHeight, headerHeight, pinnedContentHeight, committedToScrollable, contentMode) {
+            if (contentHeight == 0.dp && !committedToScrollable) {
                 BottomSheetLayoutMode.Measuring
             } else {
                 val resolvedHeader =
                     if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
                 val total =
                     resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
-                if (contentMode == OpenCodeBottomSheetContentMode.Form) {
+                if (committedToScrollable || total > BottomSheetCompactMaxHeight) {
                     BottomSheetLayoutMode.Scrollable
-                } else if (total <= BottomSheetCompactMaxHeight) {
-                    BottomSheetLayoutMode.Compact
+                } else if (contentHeight == 0.dp) {
+                    BottomSheetLayoutMode.Measuring
                 } else {
-                    BottomSheetLayoutMode.Scrollable
+                    BottomSheetLayoutMode.Compact
                 }
             }
         }
 
+    LaunchedEffect(layoutMode) {
+        if (layoutMode == BottomSheetLayoutMode.Scrollable) {
+            committedToScrollable = true
+        }
+    }
+
+    LaunchedEffect(contentHeight, headerHeight, pinnedContentHeight, contentMode, maxSheetHeight) {
+        if (contentMode != OpenCodeBottomSheetContentMode.Form || contentHeight == 0.dp) return@LaunchedEffect
+        val resolvedHeader =
+            if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
+        val total =
+            resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
+        val target =
+            if (total > BottomSheetCompactMaxHeight || committedToScrollable) {
+                maxSheetHeight
+            } else {
+                total.coerceAtLeast(BottomSheetEntryMinHeight)
+            }
+        lockedSheetHeight =
+            when (val current = lockedSheetHeight) {
+                null -> target
+                else -> maxOf(current, target)
+            }
+    }
+
     val resolvedHeaderHeight =
         if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
+    val resolvedSheetHeight =
+        when {
+            contentMode == OpenCodeBottomSheetContentMode.Form ->
+                lockedSheetHeight ?: maxSheetHeight
+            else -> maxSheetHeight
+        }
     val scrollBodyMaxHeight =
-        (maxSheetHeight - resolvedHeaderHeight - pinnedContentHeight - BottomSheetContentBottomPadding)
+        (resolvedSheetHeight - resolvedHeaderHeight - pinnedContentHeight - BottomSheetContentBottomPadding)
             .coerceAtLeast(BottomSheetEntryMinHeight)
 
     val bodyModifier =
@@ -324,8 +376,19 @@ private fun BottomSheetContent(
                     .fillMaxWidth()
                     .then(
                         when (layoutMode) {
-                            BottomSheetLayoutMode.Compact -> Modifier.wrapContentHeight()
-                            else -> Modifier.heightIn(max = maxSheetHeight)
+                            // Cap Compact so a stale short contentHeight cannot let a newly
+                            // swapped long body expand the sheet to full screen for a frame.
+                            BottomSheetLayoutMode.Compact ->
+                                Modifier
+                                    .heightIn(max = BottomSheetCompactMaxHeight)
+                                    .wrapContentHeight()
+                            BottomSheetLayoutMode.Measuring -> Modifier.heightIn(max = maxSheetHeight)
+                            BottomSheetLayoutMode.Scrollable ->
+                                if (contentMode == OpenCodeBottomSheetContentMode.Form) {
+                                    Modifier.height(lockedSheetHeight ?: maxSheetHeight)
+                                } else {
+                                    Modifier.height(maxSheetHeight)
+                                }
                         },
                     ),
         ) {

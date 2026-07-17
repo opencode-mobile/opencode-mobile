@@ -31,7 +31,7 @@ private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
 private val OutgoingMessagePaddingHorizontal = 12.dp
 private val OutgoingMessagePaddingVertical = 8.dp
-private val OutgoingMessageFooterSpacing = 6.dp
+private val OutgoingMessageFooterSpacing = 4.dp
 
 sealed interface OpenCodeOutgoingMessageContent {
     data class Text(

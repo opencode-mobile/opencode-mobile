@@ -90,7 +90,7 @@ struct OpenCodeOutgoingMessage: View {
 
     var body: some View {
         OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
-            VStack(alignment: .trailing, spacing: 6) {
+            VStack(alignment: .trailing, spacing: 4) {
                 ForEach(content) { item in
                     switch item {
                     case .text(_, let text):

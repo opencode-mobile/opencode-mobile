@@ -33,9 +33,19 @@ struct SessionChatPickerSheetModifier: ViewModifier {
                 title: modelPickerSheetTitle,
                 leadingAction: modelPickerHeaderLeadingAction,
                 scrollTargetID: modelPickerScrollTargetID,
+                contentMode: modelPickerContentMode,
                 pinnedContent: { modelPickerPinnedContent },
                 content: { pickerSheetEntries }
             )
+    }
+
+    private var showsModelFilter: Bool {
+        activePicker == .model &&
+            activeModelProvider.map { $0.models.count > SessionChatPickers.modelFilterThreshold } == true
+    }
+
+    private var modelPickerContentMode: OpenCodeBottomSheetContentMode {
+        showsModelFilter ? .form : .actionList
     }
 
     private var pickerPresentedBinding: Binding<Bool> {
@@ -92,11 +102,8 @@ struct SessionChatPickerSheetModifier: ViewModifier {
 
     @ViewBuilder
     private var modelPickerPinnedContent: some View {
-        if activePicker == .model {
-            if let provider = activeModelProvider,
-               provider.models.count > SessionChatPickers.modelFilterThreshold {
-                ModelPickerFilterField(text: $modelFilterText)
-            }
+        if showsModelFilter {
+            ModelPickerFilterField(text: $modelFilterText)
         }
     }
 

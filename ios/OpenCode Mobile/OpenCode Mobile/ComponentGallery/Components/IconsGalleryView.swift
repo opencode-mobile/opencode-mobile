@@ -1,37 +1,41 @@
 import SwiftUI
 
 struct IconsGalleryView: View {
-    private let columns = [GridItem(.adaptive(minimum: 88), spacing: 16)]
+    private let columns = [GridItem(.adaptive(minimum: 80), spacing: 12)]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Material Icons catalog from icons/manifest.yaml")
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textBase)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Material Icons catalog from icons/manifest.yaml")
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textBase)
 
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(OpenCodeIcon.allCases, id: \.self) { icon in
-                        VStack(spacing: 4) {
-                            OpenCodeIconImage(icon: icon)
-                                .font(.system(size: 24))
-                                .foregroundStyle(OpenCodeColors.iconBase)
-                                .frame(width: 32, height: 32)
-                            Text(icon.rawValue.replacingOccurrences(of: "md_", with: ""))
-                                .font(OpenCodeTypography.caption)
-                                .foregroundStyle(OpenCodeColors.textBase)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(OpenCodeIcon.allCases, id: \.self) { icon in
+                    VStack(spacing: 6) {
+                        OpenCodeIconImage(icon: icon)
+                            .font(.system(size: 24))
+                            .foregroundStyle(OpenCodeColors.iconBase)
+                            .frame(width: 32, height: 32)
+                        Text(icon.rawValue.replacingOccurrences(of: "md_", with: ""))
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.textBase)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
                     }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 72, alignment: .top)
                 }
             }
-            .padding(16)
         }
     }
 }
 
 #Preview {
-    IconsGalleryView()
-        .openCodeTheme()
+    ScrollView {
+        IconsGalleryView()
+            .padding(16)
+    }
+    .openCodeTheme()
 }

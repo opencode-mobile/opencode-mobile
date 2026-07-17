@@ -4,12 +4,12 @@ struct ComponentGalleryHomeView: View {
     @State private var themeMode: ComponentGalleryThemeMode = .system
     @Environment(\.dismiss) private var dismiss
 
-    /// Matches Android: foundations first, then components (declaration order), not alphabetical by label.
+    /// Matches Android: fixed category order; entries sorted alphabetically by title within each group.
     private var entriesByCategory: [(ComponentGalleryCategory, [ComponentGalleryEntry])] {
         let grouped = Dictionary(grouping: componentGalleryEntries, by: \.category)
         return ComponentGalleryCategory.allCases.compactMap { category in
             guard let entries = grouped[category], !entries.isEmpty else { return nil }
-            return (category, entries)
+            return (category, entries.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending })
         }
     }
 
