@@ -28,6 +28,7 @@ final class MessageListTimelineState {
     var isProgrammaticScrolling = false
     var autoFollowState: MessageListAutoFollowState
     private var programmaticScrollTask: Task<Void, Never>?
+    private var layoutFollowTask: Task<Void, Never>?
 
     init(bottomAnchorID: String, initialMessageCount: Int = 0) {
         self.bottomAnchorID = bottomAnchorID
@@ -83,28 +84,30 @@ final class MessageListTimelineState {
         onLog: ((String) -> Void)? = nil
     ) {
         guard messageCount > 0 else { return }
+        let isLayoutCorrection =
+            reason == "layout-check"
+            || reason == "layout-snap"
+            || reason == "content-height"
+            || reason == "viewport-height"
+            || reason == "layout-signature"
 
-        let targetID = scrollTargetID ?? bottomAnchorID
-        onLog?("\(reason) snap start count=\(messageCount) target=\(targetID)")
+        if isLayoutCorrection, isPinnedToEnd(messageCount: messageCount) {
+            onLog?("\(reason) snap skip-pinned count=\(messageCount)")
+            return
+        }
+
+        onLog?("\(reason) snap start count=\(messageCount) target=\(bottomAnchorID)")
         programmaticScrollTask?.cancel()
         isProgrammaticScrolling = true
-        scrollPositionID = nil
         programmaticScrollTask = Task { @MainActor in
             await Task.yield()
             guard !Task.isCancelled else { return }
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if let scrollTargetID, scrollTargetID != bottomAnchorID {
-                    scrollPositionID = scrollTargetID
+                if scrollPositionID == bottomAnchorID {
+                    scrollPositionID = nil
                 }
-            }
-            if scrollTargetID != nil, scrollTargetID != bottomAnchorID {
-                await Task.yield()
-                await Task.yield()
-                guard !Task.isCancelled else { return }
-            }
-            withTransaction(transaction) {
                 scrollPositionID = bottomAnchorID
             }
             await Task.yield()
@@ -128,23 +131,16 @@ final class MessageListTimelineState {
     ) {
         guard messageCount > 0 else { return }
 
-        let targetID = scrollTargetID ?? bottomAnchorID
-        onLog?("animate-to-end start count=\(messageCount) target=\(targetID)")
+        onLog?("animate-to-end start count=\(messageCount) target=\(bottomAnchorID)")
         programmaticScrollTask?.cancel()
         isProgrammaticScrolling = true
-        scrollPositionID = nil
         programmaticScrollTask = Task { @MainActor in
             await Task.yield()
             guard !Task.isCancelled else { return }
-            if let scrollTargetID, scrollTargetID != bottomAnchorID {
-                withAnimation(.easeOut(duration: messageListScrollAnimationDuration)) {
-                    scrollPositionID = scrollTargetID
-                }
-                await Task.yield()
-                await Task.yield()
-                guard !Task.isCancelled else { return }
-            }
             withAnimation(.easeOut(duration: messageListScrollAnimationDuration)) {
+                if scrollPositionID == bottomAnchorID {
+                    scrollPositionID = nil
+                }
                 scrollPositionID = bottomAnchorID
             }
             try? await Task.sleep(for: .milliseconds(messageListScrollAnimationSettleMilliseconds))
@@ -180,11 +176,12 @@ final class MessageListTimelineState {
         messageCount: Int,
         autoFollowEnabled: Bool,
         scrollTargetID: String? = nil,
+        reason: String = "layout-check",
         onLog: ((String) -> Void)? = nil
     ) {
         let ensureLayoutEnd = autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled: autoFollowEnabled)
         if isUserScrolling, !ensureLayoutEnd {
-            onLog?("layout-check no-op count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount)) userScrolling=\(isUserScrolling)")
+            onLog?("\(reason) no-op count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount)) userScrolling=\(isUserScrolling)")
             autoFollowState.updatePinnedState(
                 isPinnedToEnd: isPinnedToEnd(messageCount: messageCount),
                 messageCount: messageCount
@@ -193,18 +190,18 @@ final class MessageListTimelineState {
         }
 
         if ensureLayoutEnd {
-            onLog?("layout-check ensure-end count=\(messageCount)")
+            onLog?("\(reason) ensure-end count=\(messageCount)")
             snapToEnd(
                 messageCount: messageCount,
                 scrollTargetID: scrollTargetID,
                 autoFollowEnabled: autoFollowEnabled,
-                reason: "layout-check",
+                reason: reason,
                 onLog: onLog
             )
             return
         }
 
-        onLog?("layout-check update-armed count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount))")
+        onLog?("\(reason) update-armed count=\(messageCount) pinned=\(isPinnedToEnd(messageCount: messageCount))")
         autoFollowState.updatePinnedState(
             isPinnedToEnd: isPinnedToEnd(messageCount: messageCount),
             messageCount: messageCount
@@ -215,16 +212,20 @@ final class MessageListTimelineState {
         messageCount: Int,
         autoFollowEnabled: Bool,
         scrollTargetID: String? = nil,
+        reason: String = "layout-check",
         onLog: ((String) -> Void)? = nil
     ) {
-        onLog?("layout-check scheduled count=\(messageCount)")
-        Task { @MainActor in
-            await Task.yield()
+        onLog?("\(reason) scheduled count=\(messageCount)")
+        layoutFollowTask?.cancel()
+        layoutFollowTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
             await Task.yield()
             followLayoutChangeIfNeeded(
                 messageCount: messageCount,
                 autoFollowEnabled: autoFollowEnabled,
                 scrollTargetID: scrollTargetID,
+                reason: reason,
                 onLog: onLog
             )
         }
@@ -385,30 +386,25 @@ extension View {
                         isPinnedToEnd: pinnedToEnd,
                         messageCount: messageCount
                     )
-                } else {
-                    timeline.followLayoutChangeIfNeeded(
-                        messageCount: messageCount,
-                        autoFollowEnabled: autoFollowEnabled,
-                        scrollTargetID: lastMessageID,
-                        onLog: onLog
-                    )
                 }
             }
             .onChange(of: timeline.contentHeight) { _, _ in
                 onLog?("content-height count=\(messageCount) height=\(timeline.contentHeight) viewport=\(timeline.viewportHeight)")
-                timeline.followLayoutChangeIfNeeded(
+                timeline.followLayoutChangeIfNeededAfterLayoutSettles(
                     messageCount: messageCount,
                     autoFollowEnabled: autoFollowEnabled,
                     scrollTargetID: lastMessageID,
+                    reason: "content-height",
                     onLog: onLog
                 )
             }
             .onChange(of: timeline.viewportHeight) { _, _ in
                 onLog?("viewport-height count=\(messageCount) height=\(timeline.contentHeight) viewport=\(timeline.viewportHeight)")
-                timeline.followLayoutChangeIfNeeded(
+                timeline.followLayoutChangeIfNeededAfterLayoutSettles(
                     messageCount: messageCount,
                     autoFollowEnabled: autoFollowEnabled,
                     scrollTargetID: lastMessageID,
+                    reason: "viewport-height",
                     onLog: onLog
                 )
             }
@@ -418,6 +414,7 @@ extension View {
                     messageCount: messageCount,
                     autoFollowEnabled: autoFollowEnabled,
                     scrollTargetID: lastMessageID,
+                    reason: "layout-signature",
                     onLog: onLog
                 )
             }
