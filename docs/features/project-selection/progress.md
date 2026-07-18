@@ -30,6 +30,8 @@
   from all added projects sorted by recency, with project letter, path
   subtitle, Idle/Running status, and relative-time caption; gallery entry on
   both platforms
+- [x] Settings **Appearance** toggle to show/hide Session List on home
+  (default off; persisted via `HomeDisplayPreferences`)
 - [x] `OpenCodeListItem` full-row tap target on iOS and Android (session rows
   and other list items)
 - [x] iOS home **Browse projects** and **See all sessions** use

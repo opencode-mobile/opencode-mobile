@@ -325,6 +325,7 @@ extension Container {
             shared.permissionLiveStore().clearCache()
             shared.messageRepository().clearMessageCache()
             ThemeManager.shared.clearAll()
+            HomeDisplayPreferences.shared.clear()
         }
     }
 }

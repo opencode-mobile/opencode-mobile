@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.ThemeManager
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -37,6 +38,7 @@ class SettingsViewModel
                 sessionStatusLiveStore.clearCache()
                 messageRepository.clearMessageCache()
                 ThemeManager.clearAll()
+                HomeDisplayPreferences.clear()
             }
         }
 
@@ -46,5 +48,9 @@ class SettingsViewModel
 
         fun applyPreset(id: String) {
             ThemeManager.applyPreset(id)
+        }
+
+        fun setShowSessionListOnHome(enabled: Boolean) {
+            HomeDisplayPreferences.updateShowSessionListOnHome(enabled)
         }
     }

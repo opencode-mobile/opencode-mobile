@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemePreset
@@ -41,6 +43,8 @@ fun SettingsScreen(
     onClearData: () -> Unit,
     onImportTheme: (android.net.Uri) -> Unit,
     onApplyPreset: (String) -> Unit,
+    showSessionListOnHome: Boolean,
+    onShowSessionListOnHomeChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
@@ -85,6 +89,18 @@ fun SettingsScreen(
                 subtitle = currentTheme.name,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
                 onClick = { showThemePicker = true },
+            )
+
+            OpenCodeListItem(
+                title = "Session List",
+                subtitle = "Show recent sessions above project selector",
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Session List"),
+                trailing = {
+                    Switch(
+                        checked = showSessionListOnHome,
+                        onCheckedChange = onShowSessionListOnHomeChange,
+                    )
+                },
             )
 
             OpenCodeListItem(
@@ -194,6 +210,8 @@ private fun SettingsScreenLightPreview() {
             onClearData = {},
             onImportTheme = {},
             onApplyPreset = {},
+            showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
+            onShowSessionListOnHomeChange = {},
         )
     }
 }
@@ -209,6 +227,8 @@ private fun SettingsScreenDarkPreview() {
             onClearData = {},
             onImportTheme = {},
             onApplyPreset = {},
+            showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
+            onShowSessionListOnHomeChange = {},
         )
     }
 }

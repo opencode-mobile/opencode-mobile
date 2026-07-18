@@ -7,6 +7,7 @@ struct ProjectListHomeView: View {
     @State private var selectedSession: SessionListItem?
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     init(viewModel: ProjectListHomeViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -206,38 +207,47 @@ struct ProjectListHomeView: View {
         focusedWorktree: String?,
         createError: String?
     ) -> some View {
-        let crossProjectSessions = sections.crossProjectSessionListSessions()
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                if !crossProjectSessions.isEmpty {
-                    SessionList(
-                        sessions: crossProjectSessions,
-                        onSessionSelected: { session in
-                            selectedSession = SessionListItem(
-                                id: session.id,
-                                title: session.title,
-                                worktree: session.worktree
-                            )
-                        }
-                    )
-                }
+        let showSessionList = homeDisplayPreferences.showSessionListOnHome
+        let crossProjectSessions =
+            showSessionList ? sections.crossProjectSessionListSessions() : []
+        let showsSessionListContent = !crossProjectSessions.isEmpty
+        return GeometryReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    if showsSessionListContent {
+                        SessionList(
+                            sessions: crossProjectSessions,
+                            onSessionSelected: { session in
+                                selectedSession = SessionListItem(
+                                    id: session.id,
+                                    title: session.title,
+                                    worktree: session.worktree
+                                )
+                            }
+                        )
+                    }
 
-                ProjectSessionSelector(
-                    projects: sections.map(\.projectSessionSelectorProject),
-                    selectedWorktree: focusedWorktree,
-                    createError: createError,
-                    onProjectSelected: { viewModel.focusProject(worktree: $0) },
-                    onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                    onSessionSelected: { project, session in
-                        selectedSession = SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
-                    },
-                    onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
-                    onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                    ProjectSessionSelector(
+                        projects: sections.map(\.projectSessionSelectorProject),
+                        selectedWorktree: focusedWorktree,
+                        createError: createError,
+                        onProjectSelected: { viewModel.focusProject(worktree: $0) },
+                        onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                        onSessionSelected: { project, session in
+                            selectedSession = SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                        },
+                        onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
+                        onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                }
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: proxy.size.height,
+                    alignment: showsSessionListContent ? .topLeading : .bottom
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(OpenCodeColors.backgroundBase)
     }

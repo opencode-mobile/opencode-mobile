@@ -68,6 +68,10 @@ retry map to Running; other statuses map to Idle), and a relative-time caption
 from `session.updatedAt`. This Idle/Running copy is Session List–local and does
 not replace the existing Working/Retrying labels used by See all and chat.
 
+Visibility is controlled by Settings → Appearance → **Session List**
+(`HomeDisplayPreferences`), default off. Clear All Data resets the preference to
+off.
+
 Project selection is local home UI state only. It chooses which added project's
 sessions appear in the selector card and which worktree the selector **New
 session** action uses. It does not switch the server's current project, mutate

@@ -35,6 +35,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.components.ProjectSessionSelector
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
@@ -342,13 +343,25 @@ private fun HomeProjectsContent(
     onNewSession: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val crossProjectSessions = sections.toCrossProjectSessionListSessions()
+    val showSessionList = HomeDisplayPreferences.showSessionListOnHome
+    val crossProjectSessions =
+        if (showSessionList) {
+            sections.toCrossProjectSessionListSessions()
+        } else {
+            emptyList()
+        }
+    val showsSessionListContent = crossProjectSessions.isNotEmpty()
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement =
+            if (showsSessionListContent) {
+                Arrangement.spacedBy(16.dp)
+            } else {
+                Arrangement.Bottom
+            },
     ) {
-        if (crossProjectSessions.isNotEmpty()) {
+        if (showsSessionListContent) {
             item(key = "session-list") {
                 SessionList(
                     sessions = crossProjectSessions,
