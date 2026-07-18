@@ -13,7 +13,7 @@
 - [x] Events API + domain adapter + `DefaultForegroundEventStream`
 - [x] Hilt module + `ProcessLifecycleOwner` coordinator in `MainActivity`
 - [x] **Live Stores:** `MessageLiveStore`, `SessionStatusLiveStore`, `SessionLiveStore` with `WhileSubscribed(5000)`
-- [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates banner
+- [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates top-bar status
 - [x] Session status on list rows and chat
 - [x] Unit tests (stores + ViewModels)
 
@@ -22,7 +22,7 @@
 - [x] Events API client + domain adapter + stream service
 - [x] Factory registration + `scenePhase` lifecycle in `AppRootView`
 - [x] **Live Stores:** mirrored protocols + `SharedLiveObservation` subscriber lifecycle
-- [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates banner
+- [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates top-bar status
 - [x] Session status on list rows and chat
 - [x] Unit tests
 

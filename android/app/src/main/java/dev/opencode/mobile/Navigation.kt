@@ -47,7 +47,9 @@ import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
@@ -140,6 +142,9 @@ fun MainNavigation() {
                                                 onClearData = settingsViewModel::clearAllData,
                                                 onImportTheme = settingsViewModel::importThemeFromUri,
                                                 onApplyPreset = settingsViewModel::applyPreset,
+                                                showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
+                                                onShowSessionListOnHomeChange =
+                                                    settingsViewModel::setShowSessionListOnHome,
                                             )
                                         }
                                     }
@@ -187,6 +192,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                         ComponentGalleryEntryId.ProjectSessionSelector ->
                                                             ProjectSessionSelectorGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionList ->
+                                                            SessionListGalleryScreen()
                                                         ComponentGalleryEntryId.SessionStatusBar ->
                                                             SessionStatusBarGalleryScreen()
                                                         ComponentGalleryEntryId.SessionComposer ->

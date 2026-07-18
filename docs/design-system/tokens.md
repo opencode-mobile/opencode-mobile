@@ -225,17 +225,20 @@ corner radius.
 | Token | Value |
 | --- | --- |
 | `listItem.cornerRadius` | 8 (logical px) |
+| `listItem.statusDotSize` | 6 (logical px) |
+| `listItem.statusDotSpacing` | 4 (logical px) |
 
 ### List item start decorator (letter badge)
 
-The letter variant of `OpenCodeListItem` uses a fixed **24×24** badge with a
-small corner radius (`listItem.startDecorator.letter.cornerRadius`, **4**)
+The letter variant of `OpenCodeListItem` uses a fixed **36×36** badge with a
+small corner radius (`listItem.startDecorator.letter.cornerRadius`, **6**)
 derived from these pairs. Do not use these tokens outside the list-item letter
 badge without revisiting the design-system docs.
 
 | Token | Light | Dark |
 | --- | --- | --- |
-| `listItem.startDecorator.letter.cornerRadius` | 4 (logical px) | 4 (logical px) |
+| `listItem.startDecorator.letter.size` | 36 (logical px) | 36 (logical px) |
+| `listItem.startDecorator.letter.cornerRadius` | 6 (logical px) | 6 (logical px) |
 | `listItem.startDecorator.letter.accent.violet.fill` | `#4c3d5c` | `#3a2f47` |
 | `listItem.startDecorator.letter.accent.violet.tint` | `#e2d5f5` | `#d8c8ee` |
 | `listItem.startDecorator.letter.accent.teal.fill` | `#2d4a42` | `#243832` |

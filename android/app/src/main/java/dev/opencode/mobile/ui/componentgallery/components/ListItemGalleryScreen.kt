@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
+import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
 import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
@@ -36,12 +38,21 @@ private enum class GallerySubtitleKind {
     Off,
 }
 
+private enum class GalleryFooterKind {
+    Off,
+    StatusAndCaption,
+    StatusOnly,
+    CaptionOnly,
+}
+
 @Composable
 fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
     var cardStyle by rememberSaveable { mutableStateOf(false) }
     var subtitleKindName by rememberSaveable { mutableStateOf(GallerySubtitleKind.Plain.name) }
+    var footerKindName by rememberSaveable { mutableStateOf(GalleryFooterKind.StatusAndCaption.name) }
+    var statusToneName by rememberSaveable { mutableStateOf(OpenCodeListItemStatusTone.Interactive.name) }
     var decoratorKindName by rememberSaveable { mutableStateOf(GalleryDecoratorKind.None.name) }
     var letterAccentName by rememberSaveable { mutableStateOf(LetterAccent.Violet.name) }
 
@@ -62,6 +73,18 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             GallerySubtitleKind.valueOf(subtitleKindName)
         } catch (_: IllegalArgumentException) {
             GallerySubtitleKind.Plain
+        }
+    val footerKind =
+        try {
+            GalleryFooterKind.valueOf(footerKindName)
+        } catch (_: IllegalArgumentException) {
+            GalleryFooterKind.StatusAndCaption
+        }
+    val statusTone =
+        try {
+            OpenCodeListItemStatusTone.valueOf(statusToneName)
+        } catch (_: IllegalArgumentException) {
+            OpenCodeListItemStatusTone.Interactive
         }
 
     val startDecorator: StartDecorator =
@@ -85,6 +108,18 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             null
         }
 
+    val status =
+        when (footerKind) {
+            GalleryFooterKind.Off, GalleryFooterKind.CaptionOnly -> null
+            GalleryFooterKind.StatusAndCaption, GalleryFooterKind.StatusOnly ->
+                OpenCodeListItemStatus(text = "Working · 14m", tone = statusTone)
+        }
+    val caption =
+        when (footerKind) {
+            GalleryFooterKind.Off, GalleryFooterKind.StatusOnly -> null
+            GalleryFooterKind.StatusAndCaption, GalleryFooterKind.CaptionOnly -> "sidebar-v2-concepts"
+        }
+
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(text = "List item", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
@@ -103,6 +138,46 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
                         selected = subtitleKind == kind,
                         onClick = { subtitleKindName = kind.name },
                     )
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = "Footer", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GalleryFooterKind.entries.forEach { kind ->
+                    OpenCodeChoiceBadge(
+                        label =
+                            when (kind) {
+                                GalleryFooterKind.Off -> "Off"
+                                GalleryFooterKind.StatusAndCaption -> "Status+Caption"
+                                GalleryFooterKind.StatusOnly -> "Status only"
+                                GalleryFooterKind.CaptionOnly -> "Caption only"
+                            },
+                        selected = footerKind == kind,
+                        onClick = { footerKindName = kind.name },
+                    )
+                }
+            }
+        }
+
+        if (footerKind == GalleryFooterKind.StatusAndCaption || footerKind == GalleryFooterKind.StatusOnly) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "Status tone", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OpenCodeListItemStatusTone.entries.forEach { tone ->
+                        OpenCodeChoiceBadge(
+                            label = tone.name,
+                            selected = statusTone == tone,
+                            onClick = { statusToneName = tone.name },
+                        )
+                    }
                 }
             }
         }
@@ -150,6 +225,8 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             title = "Material Design Icons integration plan",
             subtitle = subtitle,
             subtitleSegments = subtitleSegments,
+            status = status,
+            caption = caption,
             selected = selected,
             enabled = enabled,
             style = if (cardStyle) OpenCodeListItemStyle.Card else OpenCodeListItemStyle.Plain,

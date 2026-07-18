@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var showThemeImporter = false
     @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,6 +56,23 @@ struct SettingsView: View {
                         subtitle: themeManager.currentTheme.name,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
                         action: { showThemePicker = true }
+                    )
+
+                    OpenCodeListItem(
+                        title: "Session List",
+                        subtitle: "Show recent sessions above project selector",
+                        startDecorator: .icon(.list, accessibilityLabel: "Session List"),
+                        trailing: {
+                            Toggle(
+                                "Session List",
+                                isOn: Binding(
+                                    get: { homeDisplayPreferences.showSessionListOnHome },
+                                    set: { homeDisplayPreferences.setShowSessionListOnHome($0) }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
                     )
 
                     OpenCodeListItem(

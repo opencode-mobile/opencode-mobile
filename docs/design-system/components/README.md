@@ -114,6 +114,7 @@ applicable item is complete.
 - `hunk-navigation-pill.md`
 - `unified-diff.md`
 - `project-session-selector.md`
+- `session-list.md`
 - `session-status-bar.md`
 - `session-chat-composer.md`
 - `rendered-markdown.md`

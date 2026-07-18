@@ -43,7 +43,7 @@
 
 - [x] `LetterAccent` — no change needed (hardcoded component tokens)
 - [x] `ColorGalleryView` / `ColorGalleryScreen` — new token names and groups
-- [x] `EventStreamConnectionStateHomeStatus` — updated to use new token API
+- [x] `OpenCodeConnectionStatusLabel` / top-bar status mapping — uses semantic success/warning/error tokens
 - [x] iOS feature files — migrate from deprecated aliases to canonical names
 
 ## Follow-up (out of scope for OPE-17)

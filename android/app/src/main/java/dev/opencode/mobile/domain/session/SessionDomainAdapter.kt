@@ -41,6 +41,7 @@ class SessionDomainAdapter {
             title = session.title,
             statusLabel = statusLabel,
             updatedAtLabel = session.updatedAtEpochMs?.let(::updatedAtLabel),
+            updatedAtEpochMs = session.updatedAtEpochMs,
         )
 
     fun toSessionStatus(
