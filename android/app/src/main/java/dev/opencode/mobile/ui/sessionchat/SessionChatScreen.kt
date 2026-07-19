@@ -288,26 +288,48 @@ fun SessionChatScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                if (uiState.slashSuggestionsVisible && uiState.permissionRequest == null) {
-                    OpenCodeComposerSuggestionOverlay(
-                        items =
-                            uiState.slashSuggestions.map { suggestion ->
-                                OpenCodeComposerSuggestionItem(
-                                    id = suggestion.id,
-                                    title = suggestion.title,
-                                    subtitle = suggestion.subtitle,
-                                    badge = suggestion.badge,
-                                )
-                            },
-                        onSelect = { item ->
-                            viewModel.selectSlashSuggestion(item.id)
-                        },
-                        emptyMessage = "No commands",
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
+                if (uiState.permissionRequest == null) {
+                    when {
+                        uiState.atSuggestionsVisible ->
+                            OpenCodeComposerSuggestionOverlay(
+                                items =
+                                    uiState.atSuggestions.map { suggestion ->
+                                        OpenCodeComposerSuggestionItem(
+                                            id = suggestion.id,
+                                            title = suggestion.title,
+                                            subtitle = suggestion.subtitle,
+                                        )
+                                    },
+                                onSelect = { item ->
+                                    viewModel.selectAtSuggestion(item.id)
+                                },
+                                emptyMessage = "No agents",
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                            )
+                        uiState.slashSuggestionsVisible ->
+                            OpenCodeComposerSuggestionOverlay(
+                                items =
+                                    uiState.slashSuggestions.map { suggestion ->
+                                        OpenCodeComposerSuggestionItem(
+                                            id = suggestion.id,
+                                            title = suggestion.title,
+                                            subtitle = suggestion.subtitle,
+                                            badge = suggestion.badge,
+                                        )
+                                    },
+                                onSelect = { item ->
+                                    viewModel.selectSlashSuggestion(item.id)
+                                },
+                                emptyMessage = "No commands",
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                            )
+                    }
                 }
             }
 
@@ -324,6 +346,10 @@ fun SessionChatScreen(
                     )
                 } ?: OpenCodeSessionComposerState.Prompt(
                     text = uiState.composer.text,
+                    mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
+                    selectionStart = uiState.composer.cursor,
+                    selectionEnd = uiState.composer.cursor,
+                    selectionRevision = uiState.composer.selectionRevision,
                     attachments =
                         uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                     selectedModelLabel = uiState.composer.selectedModelLabel,
@@ -343,7 +369,8 @@ fun SessionChatScreen(
                 state = composerState,
                 onAction = { action ->
                     when (action) {
-                        is OpenCodeSessionComposerAction.TextChanged -> viewModel.updateComposerText(action.text)
+                        is OpenCodeSessionComposerAction.TextChanged ->
+                            viewModel.updateComposerText(action.text, action.selectionStart)
                         OpenCodeSessionComposerAction.SelectModel -> {
                             if (uiState.composer.modelOptions.isEmpty()) {
                                 viewModel.retryModelCatalog()

@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
+import dev.opencode.mobile.domain.agent.AgentMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -206,6 +207,29 @@ class MessageDomainAdapterTest {
 
         assertEquals(listOf("file"), body.parts.map { it.type })
         assertEquals("brief.pdf", body.parts.single().filename)
+    }
+
+    @Test
+    fun toSendRequest_includesStructuredAgentPartsForMentions() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "@explore please",
+                    agentMentions =
+                        listOf(
+                            AgentMention(id = "m1", name = "explore", start = 0, end = 8),
+                        ),
+                    mode = "build",
+                ),
+            )
+
+        assertEquals(listOf("text", "agent"), body.parts.map { it.type })
+        assertEquals("@explore please", body.parts[0].text)
+        assertEquals("explore", body.parts[1].name)
+        assertEquals("@explore", body.parts[1].source?.value)
+        assertEquals(0, body.parts[1].source?.start)
+        assertEquals(8, body.parts[1].source?.end)
+        assertEquals("build", body.agent)
     }
 
     @Test

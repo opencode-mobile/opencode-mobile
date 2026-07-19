@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
@@ -41,6 +42,7 @@ class SessionChatViewModel
         messageRepository: MessageRepository,
         modelRepository: ModelRepository,
         commandRepository: CommandRepository,
+        agentRepository: AgentRepository,
         private val sessionRepository: SessionRepository,
         private val permissionLiveStore: PermissionLiveStore = EmptyPermissionLiveStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
@@ -67,6 +69,7 @@ class SessionChatViewModel
                 messageRepository = messageRepository,
                 modelRepository = modelRepository,
                 commandRepository = commandRepository,
+                agentRepository = agentRepository,
                 sessionRepository = sessionRepository,
                 connectionSessionCoordinator = connectionSessionCoordinator,
                 sessionModelSelectionStore = sessionModelSelectionStore,
@@ -156,6 +159,7 @@ class SessionChatViewModel
         fun refreshMessages() {
             timeline.refreshMessages()
             composer.loadServerCommands(force = true)
+            composer.loadMentionableAgents(force = true)
         }
 
         fun archiveSession() {
@@ -166,16 +170,27 @@ class SessionChatViewModel
             sessionInfo.deleteSession()
         }
 
-        fun updateComposerText(text: String) {
-            composer.updateComposerText(text)
+        fun updateComposerText(
+            text: String,
+            cursor: Int = text.length,
+        ) {
+            composer.updateComposerText(text, cursor)
         }
 
         fun selectSlashSuggestion(commandName: String) {
             composer.selectSlashSuggestion(commandName)
         }
 
+        fun selectAtSuggestion(agentName: String) {
+            composer.selectAtSuggestion(agentName)
+        }
+
         fun refreshServerCommands() {
             composer.loadServerCommands(force = true)
+        }
+
+        fun refreshMentionableAgents() {
+            composer.loadMentionableAgents(force = true)
         }
 
         fun addAttachments(attachments: List<Attachment>) {
@@ -406,6 +421,8 @@ class SessionChatViewModel
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,
+                atSuggestionsVisible = composerState.atSuggestionsVisible,
+                atSuggestions = composerState.atSuggestions,
             )
         }
 

@@ -137,6 +137,13 @@ struct MessageDomainAdapter: Sendable {
         if !options.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append(SendMessagePartDTO(type: "text", text: options.text))
         }
+        parts.append(contentsOf: ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
+            SendMessagePartDTO(
+                type: "agent",
+                name: part.name,
+                source: AgentPartSourceDTO(value: part.sourceValue, start: part.start, end: part.end)
+            )
+        })
         // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
         // Local Attachment ids are UUIDs for composer chip identity.
         parts.append(contentsOf: options.attachments.map {

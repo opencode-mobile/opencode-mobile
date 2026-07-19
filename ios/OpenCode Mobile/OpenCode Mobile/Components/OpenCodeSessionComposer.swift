@@ -3,6 +3,10 @@ import SwiftUI
 enum OpenCodeSessionComposerState {
     struct Prompt {
         let text: String
+        let mentionRanges: [Range<Int>]
+        let selectionStart: Int?
+        let selectionEnd: Int?
+        let selectionRevision: Int
         let attachments: [OpenCodeAttachmentPresentation]
         let selectedModelLabel: String
         let selectedModeLabel: String
@@ -15,6 +19,10 @@ enum OpenCodeSessionComposerState {
 
         init(
             text: String,
+            mentionRanges: [Range<Int>] = [],
+            selectionStart: Int? = nil,
+            selectionEnd: Int? = nil,
+            selectionRevision: Int = 0,
             attachments: [OpenCodeAttachmentPresentation] = [],
             selectedModelLabel: String,
             selectedModeLabel: String,
@@ -26,6 +34,10 @@ enum OpenCodeSessionComposerState {
             stopEnabled: Bool
         ) {
             self.text = text
+            self.mentionRanges = mentionRanges
+            self.selectionStart = selectionStart
+            self.selectionEnd = selectionEnd
+            self.selectionRevision = selectionRevision
             self.attachments = attachments
             self.selectedModelLabel = selectedModelLabel
             self.selectedModeLabel = selectedModeLabel
@@ -74,7 +86,7 @@ enum OpenCodeSessionComposerState {
 }
 
 enum OpenCodeSessionComposerAction {
-    case textChanged(String)
+    case textChanged(text: String, selectionStart: Int, selectionEnd: Int)
     case selectModel
     case selectMode
     case selectVariant
@@ -89,16 +101,6 @@ enum OpenCodeSessionComposerAction {
 struct OpenCodeSessionComposer: View {
     let state: OpenCodeSessionComposerState
     let onAction: (OpenCodeSessionComposerAction) -> Void
-
-    private var textBinding: Binding<String> {
-        Binding(
-            get: {
-                guard case let .prompt(prompt) = state else { return "" }
-                return prompt.text
-            },
-            set: { onAction(.textChanged($0)) }
-        )
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -133,11 +135,19 @@ struct OpenCodeSessionComposer: View {
                 }
             }
 
-            TextField("Ask anything...", text: textBinding, axis: .vertical)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 4)
+            OpenCodeMentionTextView(
+                text: prompt.text,
+                mentionRanges: prompt.mentionRanges,
+                selectionStart: prompt.selectionStart,
+                selectionEnd: prompt.selectionEnd,
+                selectionRevision: prompt.selectionRevision,
+                placeholder: "Ask anything...",
+                onChange: { text, selectionStart, selectionEnd in
+                    onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
+                }
+            )
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -268,6 +278,47 @@ struct OpenCodeSessionComposer: View {
                 sessionID: "session-preview",
                 permission: "external_directory",
                 patterns: ["/Users/ivan/Projects/opencode-web/**"]
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}
+
+#Preview("Mention composer") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "Ask @explore about this",
+                mentionRanges: [4 ..< 12],
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                showStop: false,
+                stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Mention composer dark") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "Ask @explore about this",
+                mentionRanges: [4 ..< 12],
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                showStop: false,
+                stopEnabled: false
             )
         ),
         onAction: { _ in }

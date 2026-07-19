@@ -40,6 +40,8 @@ struct OpenCodeComposerSuggestionOverlay: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
             } else {
+                // Hug row content like Android `heightIn(max=…)`. Without
+                // `fixedSize`, ScrollView expands to maxHeight even for 1–2 rows.
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(items) { item in
@@ -50,6 +52,7 @@ struct OpenCodeComposerSuggestionOverlay: View {
                     }
                 }
                 .frame(maxHeight: Self.maxHeight)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,6 +62,7 @@ struct OpenCodeComposerSuggestionOverlay: View {
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .animation(.easeInOut(duration: 0.15), value: items.count)
     }
 
     private static let cornerRadius: CGFloat = 12

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
@@ -24,6 +26,9 @@ data class SessionChatComposerState(
     val modelNotice: String? = null,
     val isModelSelectionReady: Boolean = false,
     val modelCatalogError: String? = null,
+    val agentMentions: List<AgentMention> = emptyList(),
+    val cursor: Int = 0,
+    val selectionRevision: Int = 0,
 ) {
     val selectedModelLabel: String
         get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
@@ -81,6 +86,8 @@ data class SessionChatUiState(
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
+    val atSuggestionsVisible: Boolean = false,
+    val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
 ) {
     val latestCompletedUserMessageId: String?
         get() {
@@ -210,6 +217,13 @@ data class SessionChatSlashSuggestion(
     val commandName: String,
 )
 
+data class SessionChatAtSuggestion(
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+    val agentName: String,
+)
+
 data class SessionChatComposerRegionState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
@@ -217,8 +231,11 @@ data class SessionChatComposerRegionState(
     val errorMessage: String? = null,
     val abortErrorMessage: String? = null,
     val serverCommands: List<ServerCommand> = emptyList(),
+    val mentionableAgents: List<MentionableAgent> = emptyList(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
+    val atSuggestionsVisible: Boolean = false,
+    val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
 )
 
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
@@ -233,6 +250,14 @@ fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
                 ServerCommandSource.Command -> null
             },
         commandName = name,
+    )
+
+fun MentionableAgent.toAtSuggestion(): SessionChatAtSuggestion =
+    SessionChatAtSuggestion(
+        id = name,
+        title = "@$name",
+        subtitle = description,
+        agentName = name,
     )
 
 data class SessionInfoRegionState(

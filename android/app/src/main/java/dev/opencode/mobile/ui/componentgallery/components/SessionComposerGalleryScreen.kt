@@ -30,6 +30,7 @@ private enum class SessionComposerGalleryScenario(
 ) {
     Empty("Empty"),
     Prompt("Prompt"),
+    Mentions("Mentions"),
     Active("Active"),
     Attachments("Attachments"),
     Permission("Permission"),
@@ -38,10 +39,15 @@ private enum class SessionComposerGalleryScenario(
     Error("Error"),
 }
 
+private const val MentionGalleryText = "Ask @explore about this"
+private val MentionGalleryRanges = listOf(4 until 12)
+
 @Composable
 fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var scenarioName by rememberSaveable { mutableStateOf(SessionComposerGalleryScenario.Empty.name) }
     var draftText by rememberSaveable { mutableStateOf("Summarize the current changes") }
+    var mentionText by rememberSaveable { mutableStateOf(MentionGalleryText) }
+    var mentionsCleared by rememberSaveable { mutableStateOf(false) }
     var lastAction by rememberSaveable { mutableStateOf("None") }
     val scenario =
         runCatching { SessionComposerGalleryScenario.valueOf(scenarioName) }
@@ -50,6 +56,11 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
         when (scenario) {
             SessionComposerGalleryScenario.Empty -> promptState(text = "")
             SessionComposerGalleryScenario.Prompt -> promptState(text = draftText)
+            SessionComposerGalleryScenario.Mentions ->
+                promptState(
+                    text = mentionText,
+                    mentionRanges = if (mentionsCleared) emptyList() else MentionGalleryRanges,
+                )
             SessionComposerGalleryScenario.Active ->
                 promptState(
                     text = draftText,
@@ -109,7 +120,13 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
             state = state,
             onAction = { action ->
                 if (action is OpenCodeSessionComposerAction.TextChanged) {
-                    draftText = action.text
+                    when (scenario) {
+                        SessionComposerGalleryScenario.Mentions -> {
+                            mentionText = action.text
+                            mentionsCleared = true
+                        }
+                        else -> draftText = action.text
+                    }
                 }
                 lastAction = action.label
             },
@@ -119,10 +136,12 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
 
 private fun promptState(
     text: String,
+    mentionRanges: List<IntRange> = emptyList(),
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
     showStop: Boolean = false,
 ) = OpenCodeSessionComposerState.Prompt(
     text = text,
+    mentionRanges = mentionRanges,
     attachments = attachments,
     selectedModelLabel = "Claude Sonnet 4",
     selectedModeLabel = "Build",

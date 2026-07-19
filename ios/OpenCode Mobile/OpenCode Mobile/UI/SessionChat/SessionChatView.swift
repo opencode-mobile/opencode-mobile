@@ -99,23 +99,41 @@ struct SessionChatView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .bottom) {
-                if viewModel.uiState.slashSuggestionsVisible, viewModel.uiState.permissionRequest == nil {
-                    OpenCodeComposerSuggestionOverlay(
-                        items: viewModel.uiState.slashSuggestions.map { suggestion in
-                            OpenCodeComposerSuggestionItem(
-                                id: suggestion.id,
-                                title: suggestion.title,
-                                subtitle: suggestion.subtitle,
-                                badge: suggestion.badge
-                            )
-                        },
-                        emptyMessage: "No commands",
-                        onSelect: { item in
-                            viewModel.selectSlashSuggestion(commandName: item.id)
-                        }
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
+                if viewModel.uiState.permissionRequest == nil {
+                    if viewModel.uiState.atSuggestionsVisible {
+                        OpenCodeComposerSuggestionOverlay(
+                            items: viewModel.uiState.atSuggestions.map { suggestion in
+                                OpenCodeComposerSuggestionItem(
+                                    id: suggestion.id,
+                                    title: suggestion.title,
+                                    subtitle: suggestion.subtitle
+                                )
+                            },
+                            emptyMessage: "No agents",
+                            onSelect: { item in
+                                viewModel.selectAtSuggestion(agentName: item.id)
+                            }
+                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                    } else if viewModel.uiState.slashSuggestionsVisible {
+                        OpenCodeComposerSuggestionOverlay(
+                            items: viewModel.uiState.slashSuggestions.map { suggestion in
+                                OpenCodeComposerSuggestionItem(
+                                    id: suggestion.id,
+                                    title: suggestion.title,
+                                    subtitle: suggestion.subtitle,
+                                    badge: suggestion.badge
+                                )
+                            },
+                            emptyMessage: "No commands",
+                            onSelect: { item in
+                                viewModel.selectSlashSuggestion(commandName: item.id)
+                            }
+                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                    }
                 }
             }
             composer
@@ -380,6 +398,10 @@ struct SessionChatView: View {
             state = .prompt(
                 .init(
                     text: composer.text,
+                    mentionRanges: composer.agentMentions.map { $0.start ..< $0.end },
+                    selectionStart: composer.cursor,
+                    selectionEnd: composer.cursor,
+                    selectionRevision: composer.selectionRevision,
                     attachments: composer.attachments.map(attachmentPresentation),
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedMode,
@@ -401,8 +423,8 @@ struct SessionChatView: View {
             state: state,
             onAction: { action in
                 switch action {
-                case let .textChanged(text):
-                    viewModel.updateComposerText(text)
+                case let .textChanged(text, selectionStart, _):
+                    viewModel.updateComposerText(text, cursor: selectionStart)
                 case .selectModel:
                     guard !composer.modelOptions.isEmpty else {
                         Task { await viewModel.retryModelCatalog() }

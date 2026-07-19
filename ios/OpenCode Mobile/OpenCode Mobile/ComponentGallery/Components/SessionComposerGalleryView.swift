@@ -3,6 +3,7 @@ import SwiftUI
 private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable {
     case empty
     case prompt
+    case mentions
     case active
     case attachments
     case permission
@@ -14,9 +15,14 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     var label: String { rawValue.capitalized }
 }
 
+private let mentionGalleryText = "Ask @explore about this"
+private let mentionGalleryRanges: [Range<Int>] = [4 ..< 12]
+
 struct SessionComposerGalleryView: View {
     @State private var scenario: SessionComposerGalleryScenario = .empty
     @State private var draftText = "Summarize the current changes"
+    @State private var mentionText = mentionGalleryText
+    @State private var mentionsCleared = false
     @State private var lastAction = "None"
 
     var body: some View {
@@ -55,6 +61,11 @@ struct SessionComposerGalleryView: View {
             promptState(text: "")
         case .prompt:
             promptState(text: draftText)
+        case .mentions:
+            promptState(
+                text: mentionText,
+                mentionRanges: mentionsCleared ? [] : mentionGalleryRanges
+            )
         case .active:
             promptState(text: draftText, showStop: true)
         case .attachments:
@@ -75,12 +86,14 @@ struct SessionComposerGalleryView: View {
 
     private func promptState(
         text: String,
+        mentionRanges: [Range<Int>] = [],
         attachments: [OpenCodeAttachmentPresentation] = [],
         showStop: Bool = false
     ) -> OpenCodeSessionComposerState {
         .prompt(
             .init(
                 text: text,
+                mentionRanges: mentionRanges,
                 attachments: attachments,
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
@@ -112,8 +125,14 @@ struct SessionComposerGalleryView: View {
     }
 
     private func handle(_ action: OpenCodeSessionComposerAction) {
-        if case let .textChanged(text) = action {
-            draftText = text
+        if case let .textChanged(text, _, _) = action {
+            switch scenario {
+            case .mentions:
+                mentionText = text
+                mentionsCleared = true
+            default:
+                draftText = text
+            }
         }
         lastAction = action.label
     }

@@ -911,6 +911,74 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun atSuggestion_selectInsertsMentionAndSendsAgentParts() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository = repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("@", cursor = 1)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.atSuggestionsVisible)
+            assertTrue(viewModel.uiState.value.atSuggestions.any { it.agentName == "explore" })
+
+            viewModel.selectAtSuggestion("explore")
+            runCurrent()
+            assertEquals("@explore ", viewModel.uiState.value.composer.text)
+            assertEquals(1, viewModel.uiState.value.composer.agentMentions.size)
+            assertFalse(viewModel.uiState.value.atSuggestionsVisible)
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("@explore", repository.sentOptions?.text)
+            assertEquals(1, repository.sentOptions?.agentMentions?.size)
+            assertEquals("explore", repository.sentOptions?.agentMentions?.single()?.name)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertTrue(viewModel.uiState.value.composer.agentMentions.isEmpty())
+        }
+
+    @Test
+    fun atSuggestion_winsOverSlashSuggestions() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(repository = FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/init @", cursor = 7)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.atSuggestionsVisible)
+            assertFalse(viewModel.uiState.value.slashSuggestionsVisible)
+        }
+
+    @Test
+    fun sendPrompt_serverCommand_doesNotAttachMentionParts() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository = FakeCommandRepository()
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/init @", cursor = 7)
+            advanceUntilIdle()
+            viewModel.selectAtSuggestion("explore")
+            runCurrent()
+            assertEquals("/init @explore ", viewModel.uiState.value.composer.text)
+            assertEquals(1, viewModel.uiState.value.composer.agentMentions.size)
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(commandRepository.runCommandCalled)
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("init", commandRepository.lastRunOptions?.command)
+            assertEquals("@explore", commandRepository.lastRunOptions?.arguments)
+        }
+
+    @Test
     fun sendPrompt_success_reloadsMessages() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -2090,6 +2158,7 @@ class SessionChatViewModelTest {
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
+        agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
@@ -2118,6 +2187,7 @@ class SessionChatViewModelTest {
             messageRepository = repository,
             modelRepository = modelRepository,
             commandRepository = commandRepository,
+            agentRepository = agentRepository,
             sessionRepository = sessionRepository,
             permissionLiveStore = permissionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
@@ -2306,6 +2376,17 @@ private class FakeCommandRepository(
         lastRunSessionId = sessionId
         lastRunOptions = options
     }
+}
+
+private class FakeAgentRepository(
+    var agents: List<dev.opencode.mobile.domain.agent.MentionableAgent> =
+        listOf(
+            dev.opencode.mobile.domain.agent.MentionableAgent(name = "explore", description = "Read-only explorer"),
+            dev.opencode.mobile.domain.agent.MentionableAgent(name = "general", description = "General helper"),
+        ),
+) : dev.opencode.mobile.domain.agent.AgentRepository {
+    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> =
+        agents
 }
 
 private class FakeMessageRepository(

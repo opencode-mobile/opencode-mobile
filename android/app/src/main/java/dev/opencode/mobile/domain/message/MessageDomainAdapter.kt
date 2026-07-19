@@ -6,7 +6,9 @@ import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
+import dev.opencode.mobile.data.remote.dto.AgentPartSourceDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
+import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
 import io.ktor.client.plugins.ResponseException
@@ -138,6 +140,20 @@ class MessageDomainAdapter {
                 buildList {
                     if (options.text.isNotBlank()) {
                         add(SendMessagePartDto(type = "text", text = options.text))
+                    }
+                    ComposerMentionRouting.agentParts(options.text, options.agentMentions).forEach { part ->
+                        add(
+                            SendMessagePartDto(
+                                type = "agent",
+                                name = part.name,
+                                source =
+                                    AgentPartSourceDto(
+                                        value = part.sourceValue,
+                                        start = part.start,
+                                        end = part.end,
+                                    ),
+                            ),
+                        )
                     }
                     options.attachments.forEach { attachment ->
                         add(

@@ -65,6 +65,9 @@ struct SessionChatComposerState: Equatable {
     var modelNotice: String?
     var isModelSelectionReady = false
     var modelCatalogError: String?
+    var agentMentions: [AgentMention] = []
+    var cursor: Int = 0
+    var selectionRevision: Int = 0
 
     var selectedModelLabel: String {
         isModelSelectionReady ? selectedModel?.modelLabel ?? "Model" : "Loading model…"
@@ -137,6 +140,8 @@ struct SessionChatUiState: Equatable {
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
+    var atSuggestionsVisible = false
+    var atSuggestions: [SessionChatAtSuggestion] = []
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -286,6 +291,13 @@ struct SessionChatSlashSuggestion: Equatable, Identifiable {
     let commandName: String
 }
 
+struct SessionChatAtSuggestion: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String?
+    let agentName: String
+}
+
 struct SessionChatComposerRegionState: Equatable {
     var composer: SessionChatComposerState = SessionChatComposerState(
         text: "",
@@ -300,8 +312,11 @@ struct SessionChatComposerRegionState: Equatable {
     var errorMessage: String?
     var abortErrorMessage: String?
     var serverCommands: [ServerCommand] = []
+    var mentionableAgents: [MentionableAgent] = []
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
+    var atSuggestionsVisible = false
+    var atSuggestions: [SessionChatAtSuggestion] = []
 }
 
 extension ServerCommand {
@@ -318,6 +333,17 @@ extension ServerCommand {
                 }
             }(),
             commandName: name
+        )
+    }
+}
+
+extension MentionableAgent {
+    func toAtSuggestion() -> SessionChatAtSuggestion {
+        SessionChatAtSuggestion(
+            id: name,
+            title: "@\(name)",
+            subtitle: description,
+            agentName: name
         )
     }
 }
