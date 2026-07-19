@@ -403,6 +403,15 @@ fun SessionChatScreen(
                             viewModel.allowPermissionOnce(action.requestId, action.sessionId)
                         is OpenCodeSessionComposerAction.DenyPermission ->
                             viewModel.denyPermission(action.requestId, action.sessionId)
+                        // Question request actions are wired in OPE-66.
+                        is OpenCodeSessionComposerAction.ToggleQuestionOption,
+                        is OpenCodeSessionComposerAction.ToggleQuestionCustom,
+                        is OpenCodeSessionComposerAction.QuestionCustomTextChanged,
+                        is OpenCodeSessionComposerAction.QuestionBack,
+                        is OpenCodeSessionComposerAction.QuestionNext,
+                        is OpenCodeSessionComposerAction.SubmitQuestion,
+                        is OpenCodeSessionComposerAction.DismissQuestion,
+                        -> Unit
                     }
                 },
             )

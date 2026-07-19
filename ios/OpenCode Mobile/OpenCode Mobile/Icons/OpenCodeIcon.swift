@@ -27,6 +27,8 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case stopCircle = "md_stop_circle"
     case subdirectoryArrowRight = "md_subdirectory_arrow_right"
     case undo = "md_undo"
+    case radioButtonChecked = "md_radio_button_checked"
+    case radioButtonUnchecked = "md_radio_button_unchecked"
     case widgets = "md_widgets"
 
     var accessibilityIdentifier: String { rawValue }

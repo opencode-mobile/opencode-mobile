@@ -23,4 +23,6 @@ material_icons/filled/stop:md_stop
 material_icons/filled/stop_circle:md_stop_circle
 material_icons/filled/subdirectory_arrow_right:md_subdirectory_arrow_right
 material_icons/filled/undo:md_undo
+material_icons/filled/radio_button_checked:md_radio_button_checked
+material_icons/filled/radio_button_unchecked:md_radio_button_unchecked
 material_icons/filled/widgets:md_widgets

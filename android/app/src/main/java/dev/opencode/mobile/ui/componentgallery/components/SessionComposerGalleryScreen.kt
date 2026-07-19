@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -37,10 +38,32 @@ private enum class SessionComposerGalleryScenario(
     Queued("Queued"),
     Submitting("Submitting"),
     Error("Error"),
+    Question("Question"),
+    QuestionWizard("Wizard"),
+    MultiSelect("Multi-select"),
+    Custom("Custom"),
+    QuestionSubmitting("Q Submit"),
+    QuestionError("Q Error"),
 }
 
 private const val MentionGalleryText = "Ask @explore about this"
 private val MentionGalleryRanges = listOf(4 until 12)
+
+private val SampleQuestionOptions =
+    listOf(
+        OpenCodeSessionComposerState.QuestionOption(
+            label = "Minimal patch",
+            description = "Touch only the failing path",
+        ),
+        OpenCodeSessionComposerState.QuestionOption(
+            label = "Broader refactor",
+            description = "Clean up nearby callers too",
+        ),
+        OpenCodeSessionComposerState.QuestionOption(
+            label = "Investigate first",
+            description = "Gather more evidence before changing code",
+        ),
+    )
 
 @Composable
 fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
@@ -49,9 +72,19 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var mentionText by rememberSaveable { mutableStateOf(MentionGalleryText) }
     var mentionsCleared by rememberSaveable { mutableStateOf(false) }
     var lastAction by rememberSaveable { mutableStateOf("None") }
+    var selectedLabels by rememberSaveable { mutableStateOf(listOf("Minimal patch")) }
+    var customSelected by rememberSaveable { mutableStateOf(false) }
+    var customText by rememberSaveable { mutableStateOf("") }
+    var questionIndex by rememberSaveable { mutableIntStateOf(0) }
     val scenario =
         runCatching { SessionComposerGalleryScenario.valueOf(scenarioName) }
             .getOrDefault(SessionComposerGalleryScenario.Empty)
+    val questionAnswered =
+        if (customSelected) {
+            customText.isNotBlank()
+        } else {
+            selectedLabels.isNotEmpty()
+        }
     val state =
         when (scenario) {
             SessionComposerGalleryScenario.Empty -> promptState(text = "")
@@ -87,6 +120,67 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
             SessionComposerGalleryScenario.Submitting -> permissionState(submitting = true)
             SessionComposerGalleryScenario.Error -> permissionState(errorMessage = "The permission response failed. Try again.")
+            SessionComposerGalleryScenario.Question ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    selectedLabels = selectedLabels,
+                    customSelected = customSelected,
+                    customText = customText,
+                    submitEnabled = questionAnswered,
+                )
+            SessionComposerGalleryScenario.QuestionWizard ->
+                questionState(
+                    questionIndex = questionIndex,
+                    questionCount = 2,
+                    header = if (questionIndex == 0) "Approach" else "Tests",
+                    question =
+                        if (questionIndex == 0) {
+                            "How should we implement this change?"
+                        } else {
+                            "Which tests should we prioritize?"
+                        },
+                    selectedLabels = selectedLabels,
+                    customSelected = customSelected,
+                    customText = customText,
+                    backEnabled = questionIndex > 0,
+                    nextEnabled = questionAnswered && questionIndex < 1,
+                    submitEnabled = questionAnswered && questionIndex == 1,
+                )
+            SessionComposerGalleryScenario.MultiSelect ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    multiple = true,
+                    selectedLabels = selectedLabels,
+                    customAllowed = false,
+                    submitEnabled = selectedLabels.isNotEmpty(),
+                )
+            SessionComposerGalleryScenario.Custom ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    selectedLabels = selectedLabels,
+                    customSelected = true,
+                    customText = customText.ifBlank { "Ship a focused fix tonight" },
+                    submitEnabled = true,
+                )
+            SessionComposerGalleryScenario.QuestionSubmitting ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    selectedLabels = listOf("Minimal patch"),
+                    submitEnabled = true,
+                    submitting = true,
+                )
+            SessionComposerGalleryScenario.QuestionError ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    selectedLabels = listOf("Minimal patch"),
+                    submitEnabled = true,
+                    errorMessage = "The question response failed. Try again.",
+                )
         }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -103,7 +197,33 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     OpenCodeChoiceBadge(
                         label = option.label,
                         selected = option == scenario,
-                        onClick = { scenarioName = option.name },
+                        onClick = {
+                            scenarioName = option.name
+                            when (option) {
+                                SessionComposerGalleryScenario.MultiSelect -> {
+                                    selectedLabels = listOf("Minimal patch", "Investigate first")
+                                    customSelected = false
+                                    customText = ""
+                                }
+                                SessionComposerGalleryScenario.Custom -> {
+                                    selectedLabels = emptyList()
+                                    customSelected = true
+                                    customText = "Ship a focused fix tonight"
+                                }
+                                SessionComposerGalleryScenario.QuestionWizard -> {
+                                    questionIndex = 0
+                                    selectedLabels = listOf("Minimal patch")
+                                    customSelected = false
+                                    customText = ""
+                                }
+                                SessionComposerGalleryScenario.Question -> {
+                                    selectedLabels = listOf("Minimal patch")
+                                    customSelected = false
+                                    customText = ""
+                                }
+                                else -> Unit
+                            }
+                        },
                     )
                 }
             }
@@ -119,14 +239,40 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeSessionComposer(
             state = state,
             onAction = { action ->
-                if (action is OpenCodeSessionComposerAction.TextChanged) {
-                    when (scenario) {
-                        SessionComposerGalleryScenario.Mentions -> {
-                            mentionText = action.text
-                            mentionsCleared = true
+                when (action) {
+                    is OpenCodeSessionComposerAction.TextChanged ->
+                        when (scenario) {
+                            SessionComposerGalleryScenario.Mentions -> {
+                                mentionText = action.text
+                                mentionsCleared = true
+                            }
+                            else -> draftText = action.text
                         }
-                        else -> draftText = action.text
+                    is OpenCodeSessionComposerAction.ToggleQuestionOption -> {
+                        selectedLabels =
+                            if (scenario == SessionComposerGalleryScenario.MultiSelect) {
+                                if (action.label in selectedLabels) {
+                                    selectedLabels - action.label
+                                } else {
+                                    selectedLabels + action.label
+                                }
+                            } else {
+                                listOf(action.label)
+                            }
+                        customSelected = false
                     }
+                    is OpenCodeSessionComposerAction.ToggleQuestionCustom -> {
+                        customSelected = !customSelected
+                        if (customSelected) {
+                            selectedLabels = emptyList()
+                        }
+                    }
+                    is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> customText = action.text
+                    is OpenCodeSessionComposerAction.QuestionBack ->
+                        questionIndex = (questionIndex - 1).coerceAtLeast(0)
+                    is OpenCodeSessionComposerAction.QuestionNext ->
+                        questionIndex = (questionIndex + 1).coerceAtMost(1)
+                    else -> Unit
                 }
                 lastAction = action.label
             },
@@ -166,6 +312,41 @@ private fun permissionState(
     errorMessage = errorMessage,
 )
 
+private fun questionState(
+    questionIndex: Int,
+    questionCount: Int,
+    header: String = "Approach",
+    question: String = "How should we implement this change?",
+    multiple: Boolean = false,
+    customAllowed: Boolean = true,
+    selectedLabels: List<String> = emptyList(),
+    customText: String = "",
+    customSelected: Boolean = false,
+    backEnabled: Boolean = false,
+    nextEnabled: Boolean = false,
+    submitEnabled: Boolean = false,
+    submitting: Boolean = false,
+    errorMessage: String? = null,
+) = OpenCodeSessionComposerState.Question(
+    requestId = "question-gallery",
+    sessionId = "session-gallery",
+    questionIndex = questionIndex,
+    questionCount = questionCount,
+    header = header,
+    question = question,
+    options = SampleQuestionOptions,
+    multiple = multiple,
+    customAllowed = customAllowed,
+    selectedLabels = selectedLabels,
+    customText = customText,
+    customSelected = customSelected,
+    backEnabled = backEnabled,
+    nextEnabled = nextEnabled,
+    submitEnabled = submitEnabled,
+    submitting = submitting,
+    errorMessage = errorMessage,
+)
+
 private val OpenCodeSessionComposerAction.label: String
     get() =
         when (this) {
@@ -179,4 +360,11 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
+            is OpenCodeSessionComposerAction.ToggleQuestionOption -> "Toggle option"
+            is OpenCodeSessionComposerAction.ToggleQuestionCustom -> "Toggle custom"
+            is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> "Custom text changed"
+            is OpenCodeSessionComposerAction.QuestionBack -> "Back"
+            is OpenCodeSessionComposerAction.QuestionNext -> "Next"
+            is OpenCodeSessionComposerAction.SubmitQuestion -> "Submit"
+            is OpenCodeSessionComposerAction.DismissQuestion -> "Dismiss"
         }

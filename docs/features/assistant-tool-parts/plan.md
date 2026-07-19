@@ -11,7 +11,7 @@ Android.
 - Structured tool parts in the domain (status, tool name, input/title/output/error/metadata).
 - Design-system Tool Call Card with status variants.
 - Generic tool cards in the Session Chat timeline for unknown tools.
-- Hide `todowrite` and in-flight `question` (live ask stays on Permission Approval).
+- Hide `todowrite` and in-flight `question` (live ask stays on Question Request).
 - Lightweight specialized chrome (OPE-50): context (`read`/`glob`/`grep` with
   consecutive **tool group** summary cards), shell (`bash` command + Bottom
   Sheet for output), network (`webfetch`/`websearch` + sheet for search
@@ -78,7 +78,8 @@ Android.
 
 ## Permission behavior
 
-- Live `question` / permission approval remains owned by Permission Approval.
+- Live permission approval remains owned by Permission Approval. Live question
+  requests remain owned by Question Request.
 - In-flight `question` tools stay hidden in the timeline; completed `question`
   may show as interact chrome later.
 - Do not set persistent permission `remember` from tool cards.

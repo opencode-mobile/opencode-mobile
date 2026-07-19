@@ -35,6 +35,8 @@ private var _stop: ImageVector? = null
 private var _stop_circle: ImageVector? = null
 private var _subdirectory_arrow_right: ImageVector? = null
 private var _undo: ImageVector? = null
+private var _radio_button_checked: ImageVector? = null
+private var _radio_button_unchecked: ImageVector? = null
 private var _widgets: ImageVector? = null
 
   val Add: ImageVector
@@ -525,6 +527,44 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _undo!!
+    }
+
+  val RadioButtonChecked: ImageVector
+    get() {
+      if (_radio_button_checked != null) return _radio_button_checked!!
+      _radio_button_checked = ImageVector.Builder(
+        name = "RadioButtonChecked",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _radio_button_checked!!
+    }
+
+  val RadioButtonUnchecked: ImageVector
+    get() {
+      if (_radio_button_unchecked != null) return _radio_button_unchecked!!
+      _radio_button_unchecked = ImageVector.Builder(
+        name = "RadioButtonUnchecked",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _radio_button_unchecked!!
     }
 
   val Widgets: ImageVector

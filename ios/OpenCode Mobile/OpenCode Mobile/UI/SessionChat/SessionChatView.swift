@@ -456,6 +456,10 @@ struct SessionChatView: View {
                     Task { await viewModel.allowPermissionOnce(requestID: requestID, sessionID: sessionID) }
                 case let .denyPermission(requestID, sessionID):
                     Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
+                case .toggleQuestionOption, .toggleQuestionCustom, .questionCustomTextChanged,
+                     .questionBack, .questionNext, .submitQuestion, .dismissQuestion:
+                    // Question request actions are wired in OPE-66.
+                    break
                 }
             }
         )
