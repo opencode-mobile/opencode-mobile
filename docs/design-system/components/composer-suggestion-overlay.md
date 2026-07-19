@@ -12,8 +12,9 @@ component owns **how** the list looks and behaves above the composer.
 - Variants: none (single presentation).
 - States: **visible**, **empty** (optional empty message), **hidden** (not
   applicable as a rendered state — callers omit the view).
-- Required content: ordered suggestion items (`id`, title, optional subtitle,
-  optional badge label, `onSelect`).
+- Required content: ordered suggestion items (`id`, title such as `/name`,
+  optional description, optional source badge label such as `skill` / `mcp`,
+  `onSelect`).
 - Optional content: empty message when the filtered list is empty while visible.
 - Interaction: tap/select an item; dismiss is owned by the caller (for example
   when the trigger closes).
@@ -21,31 +22,47 @@ component owns **how** the list looks and behaves above the composer.
 Pressed / focused / disabled / loading / error: not applicable for v1 (items are
 always enabled when shown; loading is handled by the caller before opening).
 
+## Row layout (internal)
+
+Each suggestion uses an **internal row**, not `OpenCodeListItem`:
+
+1. **Primary line:** optional source label as literal bracketed text
+   (`[skill]`, `[mcp]`), then the command title (`/skill-name`). Same typography
+   as the title; source label uses a weaker text color.
+2. **Secondary line:** description when present (single line, ellipsis).
+
 ## Token Usage
 
-- Semantic tokens: `surface-raised-base`, `border-weaker-base`, `text-strong`,
-  `text-weak`.
-- Typography roles: list title/subtitle via `OpenCodeListItem` mappings.
-- Geometry: raised panel with standard list-item rows; max height ~40% of the
-  available space above the composer.
+- Semantic tokens: `surface-base` and `border-weaker-base` for the panel (same
+  shell as Session Composer); `text-strong` for the title; `text-weak` for the
+  bracketed source label and description.
+- Typography roles: `type.body` for both the bracketed source label and title;
+  `type.bodySecondary` for the description.
+- Geometry: panel matching composer fill (no raised elevation/shadow); max
+  height ~40% of the available space above the composer; internal row padding
+  (not list-item chrome).
 
 ## Behavior
 
-- Anchored immediately above the Session Chat composer (or gallery mock
-  composer).
+- Callers float the panel over the timeline, anchored to the bottom edge above
+  the Session Chat composer. It must not take layout height from the timeline
+  (overlay, not a stacked sibling that pushes content).
 - Scrollable when items exceed max height.
 - Selecting an item invokes `onSelect` for that item; the caller updates
   composer text and closes the overlay.
 - Empty state shows the provided empty message without inventing catalog errors.
 
-Accessibility: each row is a button with the title (and badge when present).
+Accessibility: each row is a button announcing `[source]` (when present), title,
+and description.
 
 ## Platform Notes
 
-- iOS: SwiftUI overlay in a `VStack` above the composer; raised material
-  background and clip.
-- Android: Compose `Surface` above the composer in the same column; Material 3
-  raised surface + outline.
+- iOS: float over the timeline via `.overlay(alignment: .bottom)` above the
+  composer; `surface-base` fill + border (same as composer); private row view
+  inside the overlay file.
+- Android: float over the timeline in a `Box` (`Alignment.BottomCenter`) above
+  the composer; `colorScheme.surface` fill + outline (same as composer), no
+  tonal/shadow elevation; private row composable inside the overlay file.
 
 ## Review Surfaces
 

@@ -25,12 +25,19 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -182,9 +189,29 @@ private fun PromptEntryContent(
         }
     }
 
+    // Own TextFieldValue so typing keeps the caret, while programmatic text
+    // updates (slash insert, restore, clear) move the caret to the end.
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
+    }
+    LaunchedEffect(state.text) {
+        if (state.text != textFieldValue.text) {
+            textFieldValue =
+                TextFieldValue(
+                    text = state.text,
+                    selection = TextRange(state.text.length),
+                )
+        }
+    }
+
     BasicTextField(
-        value = state.text,
-        onValueChange = { onAction(OpenCodeSessionComposerAction.TextChanged(it)) },
+        value = textFieldValue,
+        onValueChange = { newValue ->
+            textFieldValue = newValue
+            if (newValue.text != state.text) {
+                onAction(OpenCodeSessionComposerAction.TextChanged(newValue.text))
+            }
+        },
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),

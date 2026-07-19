@@ -43,13 +43,9 @@ struct OpenCodeComposerSuggestionOverlay: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(items) { item in
-                            OpenCodeListItem(
-                                title: item.title,
-                                subtitle: item.subtitle,
-                                caption: item.badge,
-                                style: .plain,
-                                action: { onSelect(item) }
-                            )
+                            ComposerSuggestionRow(item: item) {
+                                onSelect(item)
+                            }
                         }
                     }
                 }
@@ -57,17 +53,64 @@ struct OpenCodeComposerSuggestionOverlay: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
-        .shadow(color: Color.black.opacity(0.12), radius: 8, y: 2)
     }
 
     private static let cornerRadius: CGFloat = 12
     private static let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.4
+}
+
+private struct ComposerSuggestionRow: View {
+    let item: OpenCodeComposerSuggestionItem
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if let badge = item.badge, !badge.isEmpty {
+                        Text("[\(badge)]")
+                            .font(OpenCodeTypography.body)
+                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .lineLimit(1)
+                    }
+                    Text(item.title)
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                        .lineLimit(1)
+                }
+                if let subtitle = item.subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(OpenCodeTypography.bodySecondary)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        var parts: [String] = []
+        if let badge = item.badge, !badge.isEmpty {
+            parts.append("[\(badge)]")
+        }
+        parts.append(item.title)
+        if let subtitle = item.subtitle, !subtitle.isEmpty {
+            parts.append(subtitle)
+        }
+        return parts.joined(separator: ", ")
+    }
 }
 
 #Preview("Suggestions") {

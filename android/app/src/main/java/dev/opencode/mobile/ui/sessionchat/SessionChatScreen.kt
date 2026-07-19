@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -251,58 +252,63 @@ fun SessionChatScreen(
                 }
             }
 
-            SessionChatTimelineView(
-                props =
-                    SessionChatTimelineViewProps(
-                        timeline = uiState.timeline,
-                        messages = uiState.messages,
-                        isRefreshing = uiState.isRefreshing,
-                        errorMessage = uiState.errorMessage,
-                        reviewChangesSummary = uiState.reviewChangesSummary,
-                        onRefresh = viewModel::refreshMessages,
-                        onReviewChangesClick = {
-                            uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
-                        },
-                        onMessageActionsTap = { messageActionsTarget = it },
-                        onToolDetailTap = { toolDetailTarget = it },
-                        onChildSessionTap = { childSessionId, childTitle ->
-                            onChildSessionClick(
-                                ChildSessionNavigationTarget(
-                                    sessionId = childSessionId,
-                                    sessionTitle = childTitle,
-                                    worktree = worktree,
-                                ),
-                            )
-                        },
-                        onChangesReviewTap = { assistantMessageId, initialFilePath ->
-                            uiState
-                                .fileChangeNavigationTarget(
-                                    worktree = worktree,
-                                    assistantMessageId = assistantMessageId,
-                                    initialFilePath = initialFilePath,
-                                )?.let(onReviewChangesClick)
-                        },
-                    ),
-                modifier = Modifier.weight(1f),
-            )
-
-            if (uiState.slashSuggestionsVisible && uiState.permissionRequest == null) {
-                OpenCodeComposerSuggestionOverlay(
-                    items =
-                        uiState.slashSuggestions.map { suggestion ->
-                            OpenCodeComposerSuggestionItem(
-                                id = suggestion.id,
-                                title = suggestion.title,
-                                subtitle = suggestion.subtitle,
-                                badge = suggestion.badge,
-                            )
-                        },
-                    onSelect = { item ->
-                        viewModel.selectSlashSuggestion(item.id)
-                    },
-                    emptyMessage = "No commands",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            Box(modifier = Modifier.weight(1f)) {
+                SessionChatTimelineView(
+                    props =
+                        SessionChatTimelineViewProps(
+                            timeline = uiState.timeline,
+                            messages = uiState.messages,
+                            isRefreshing = uiState.isRefreshing,
+                            errorMessage = uiState.errorMessage,
+                            reviewChangesSummary = uiState.reviewChangesSummary,
+                            onRefresh = viewModel::refreshMessages,
+                            onReviewChangesClick = {
+                                uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
+                            },
+                            onMessageActionsTap = { messageActionsTarget = it },
+                            onToolDetailTap = { toolDetailTarget = it },
+                            onChildSessionTap = { childSessionId, childTitle ->
+                                onChildSessionClick(
+                                    ChildSessionNavigationTarget(
+                                        sessionId = childSessionId,
+                                        sessionTitle = childTitle,
+                                        worktree = worktree,
+                                    ),
+                                )
+                            },
+                            onChangesReviewTap = { assistantMessageId, initialFilePath ->
+                                uiState
+                                    .fileChangeNavigationTarget(
+                                        worktree = worktree,
+                                        assistantMessageId = assistantMessageId,
+                                        initialFilePath = initialFilePath,
+                                    )?.let(onReviewChangesClick)
+                            },
+                        ),
+                    modifier = Modifier.fillMaxSize(),
                 )
+
+                if (uiState.slashSuggestionsVisible && uiState.permissionRequest == null) {
+                    OpenCodeComposerSuggestionOverlay(
+                        items =
+                            uiState.slashSuggestions.map { suggestion ->
+                                OpenCodeComposerSuggestionItem(
+                                    id = suggestion.id,
+                                    title = suggestion.title,
+                                    subtitle = suggestion.subtitle,
+                                    badge = suggestion.badge,
+                                )
+                            },
+                        onSelect = { item ->
+                            viewModel.selectSlashSuggestion(item.id)
+                        },
+                        emptyMessage = "No commands",
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
             }
 
             val composerState =
