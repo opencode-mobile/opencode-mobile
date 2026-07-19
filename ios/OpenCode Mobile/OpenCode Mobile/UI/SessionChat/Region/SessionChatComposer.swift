@@ -555,6 +555,9 @@ final class SessionChatComposer {
                     ),
                     directory: worktree
                 )
+                if !mentionsForSend.isEmpty {
+                    OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
+                }
             }
             clearAcceptedSubmission(
                 textRevision: submittedDraftRevision,

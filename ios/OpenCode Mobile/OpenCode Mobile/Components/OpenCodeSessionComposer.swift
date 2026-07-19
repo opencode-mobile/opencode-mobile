@@ -285,3 +285,44 @@ struct OpenCodeSessionComposer: View {
     .openCodeTheme()
     .environment(\.colorScheme, .dark)
 }
+
+#Preview("Mention composer") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "Ask @explore about this",
+                mentionRanges: [4 ..< 12],
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                showStop: false,
+                stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Mention composer dark") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "Ask @explore about this",
+                mentionRanges: [4 ..< 12],
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                showStop: false,
+                stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}

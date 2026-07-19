@@ -403,6 +403,18 @@ private fun PermissionComposerDarkPreview() {
     PermissionComposerPreviewContent()
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun MentionComposerPreview() {
+    MentionComposerPreviewContent()
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun MentionComposerDarkPreview() {
+    MentionComposerPreviewContent()
+}
+
 @Composable
 private fun PermissionComposerPreviewContent() {
     OpenCodeTheme {
@@ -414,6 +426,27 @@ private fun PermissionComposerPreviewContent() {
                     permission = "bash",
                     patterns = listOf("git status", "git diff --stat"),
                     queueCount = 2,
+                ),
+            onAction = {},
+        )
+    }
+}
+
+@Composable
+private fun MentionComposerPreviewContent() {
+    OpenCodeTheme {
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.Prompt(
+                    text = "Ask @explore about this",
+                    mentionRanges = listOf(4 until 12),
+                    selectedModelLabel = "Claude Sonnet 4",
+                    selectedModeLabel = "Build",
+                    selectedVariantLabel = "Default",
+                    showVariant = true,
+                    sendEnabled = true,
+                    showStop = false,
+                    stopEnabled = false,
                 ),
             onAction = {},
         )

@@ -81,7 +81,11 @@ Screen Models are not component inputs.
   representable applies caret placement only when `selectionRevision`
   changes, matching Android's revision-gated selection updates.
 - Android uses Compose selection, live-region semantics, and progress
-  primitives. Its fixed screen gutter and bottom inset sit outside the animated
+  primitives. Prompt mention spans render through a `VisualTransformation` on
+  `BasicTextField` (not `AnnotatedString` on `TextFieldValue`) so
+  `syntax-type` styling survives IME updates that drop local span state; caret
+  and selection sync from Screen Model values only when `selectionRevision`
+  changes. Its fixed screen gutter and bottom inset sit outside the animated
   content boundary. `AnimatedContent` coordinates the crossfade and
   `SizeTransform`; the background and outline wrap that boundary so the shell
   redraws at each intermediate height instead of revealing already-switched
@@ -90,15 +94,17 @@ Screen Models are not component inputs.
 
 ## Previews
 
-Both platform component files include permission-state previews with stable
-shell-command examples for light and dark theme review. Both Component
-Galleries expose one live, edge-to-edge composer with interactive controls for
-empty prompt, populated prompt, active work, pending attachments, pending
-permission, queued permission, submitting, and error states. The pending
-attachments scenario shows at least two sample chips with empty draft text and
-send enabled. The live composer is anchored to the bottom of the available
-gallery page below its controls so screen-edge geometry and resize motion can
-be reviewed in a realistic Session Chat placement.
+Both platform component files include permission-state and mention-styled
+prompt previews for light and dark theme review. Both Component Galleries
+expose one live, edge-to-edge composer with interactive controls for empty
+prompt, populated prompt, mention-styled prompt, active work, pending
+attachments, pending permission, queued permission, submitting, and error
+states. The Mentions scenario seeds an inline `@name` range with
+`syntax-type` color. The pending attachments scenario shows at least two
+sample chips with empty draft text and send enabled. The live composer is
+anchored to the bottom of the available gallery page below its controls so
+screen-edge geometry and resize motion can be reviewed in a realistic Session
+Chat placement.
 
 ## Parity And Divergence
 

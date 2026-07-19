@@ -605,7 +605,7 @@ class SessionChatComposer(
                                 ),
                             directory = worktree,
                         )
-                    is ComposerSubmitIntent.Prompt ->
+                    is ComposerSubmitIntent.Prompt -> {
                         messageRepository.sendPromptAsync(
                             sessionId = sessionId,
                             options =
@@ -623,9 +623,10 @@ class SessionChatComposer(
                                 ),
                             directory = worktree,
                         )
-                }
-                if (mentionsForSend.isNotEmpty()) {
-                    logI("prompt send agentParts=${mentionsForSend.size}")
+                        if (mentionsForSend.isNotEmpty()) {
+                            logI("prompt send agentParts=${mentionsForSend.size}")
+                        }
+                    }
                 }
                 clearAcceptedSubmission(
                     textRevision = submittedDraftRevision,
