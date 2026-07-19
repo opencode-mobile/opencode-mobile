@@ -112,7 +112,7 @@ struct SessionComposerGalleryView: View {
     }
 
     private func handle(_ action: OpenCodeSessionComposerAction) {
-        if case let .textChanged(text) = action {
+        if case let .textChanged(text, _, _) = action {
             draftText = text
         }
         lastAction = action.label

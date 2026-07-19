@@ -19,15 +19,17 @@ identical width, shape, inset, background, and border behavior.
 - Optional permission content: queue position/count and error message.
 
 The public native API accepts one semantic state value and one action callback.
-Prompt actions are text changed, select model, select mode, select variant,
-attach, remove attachment, send, and stop. Prompt content includes
-`attachEnabled` so the feature can disable Attach when the selected model lacks
-image and PDF input. Pending attachment content uses presentation-safe
-`OpenCodeAttachmentChip` state. Permission actions are allow once and deny, and
-return the opaque request and session identifiers rendered with the decision.
-The feature supplies product content and handles actions; it does not choose
-shell colors, radii, spacing, motion, or other visual overrides. Domain models,
-server DTOs, repositories, and Screen Models are not component inputs.
+Prompt actions are text changed (text plus selection), select model, select mode,
+select variant, attach, remove attachment, send, and stop. Prompt content
+includes `attachEnabled` so the feature can disable Attach when the selected
+model lacks image and PDF input. Prompt text may include mention ranges that
+render with the `syntax-type` token (inline `@name` agent mentions). Pending
+attachment content uses presentation-safe `OpenCodeAttachmentChip` state.
+Permission actions are allow once and deny, and return the opaque request and
+session identifiers rendered with the decision. The feature supplies product
+content and handles actions; it does not choose shell colors, radii, spacing,
+motion, or other visual overrides. Domain models, server DTOs, repositories, and
+Screen Models are not component inputs.
 
 ## Token Usage
 
@@ -72,7 +74,12 @@ server DTOs, repositories, and Screen Models are not component inputs.
 
 ## Platform Notes
 
-- iOS uses SwiftUI selection, accessibility, and progress primitives.
+- iOS uses SwiftUI selection, accessibility, and progress primitives. Prompt
+  text renders through a `UITextView`-backed representable (not SwiftUI
+  `TextField`) so mention spans can be attributed with `syntax-type` while
+  still reporting caret/selection changes back through `textChanged`; the
+  representable applies caret placement only when `selectionRevision`
+  changes, matching Android's revision-gated selection updates.
 - Android uses Compose selection, live-region semantics, and progress
   primitives. Its fixed screen gutter and bottom inset sit outside the animated
   content boundary. `AnimatedContent` coordinates the crossfade and

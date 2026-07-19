@@ -134,6 +134,8 @@ struct SendMessagePartDTO: Codable, Sendable {
     let mime: String?
     let filename: String?
     let url: String?
+    let name: String?
+    let source: AgentPartSourceDTO?
 
     init(
         id: String? = nil,
@@ -141,7 +143,9 @@ struct SendMessagePartDTO: Codable, Sendable {
         text: String? = nil,
         mime: String? = nil,
         filename: String? = nil,
-        url: String? = nil
+        url: String? = nil,
+        name: String? = nil,
+        source: AgentPartSourceDTO? = nil
     ) {
         self.id = id
         self.type = type
@@ -149,7 +153,15 @@ struct SendMessagePartDTO: Codable, Sendable {
         self.mime = mime
         self.filename = filename
         self.url = url
+        self.name = name
+        self.source = source
     }
+}
+
+struct AgentPartSourceDTO: Codable, Sendable {
+    let value: String
+    let start: Int
+    let end: Int
 }
 
 /// A type-erased Codable value for flexible JSON content.

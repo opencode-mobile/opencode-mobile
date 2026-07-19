@@ -36,8 +36,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -47,6 +50,10 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
         val text: String,
+        val mentionRanges: List<IntRange> = emptyList(),
+        val selectionStart: Int? = null,
+        val selectionEnd: Int? = null,
+        val selectionRevision: Int = 0,
         val attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
         val selectedModelLabel: String,
         val selectedModeLabel: String,
@@ -73,6 +80,8 @@ sealed interface OpenCodeSessionComposerState {
 sealed interface OpenCodeSessionComposerAction {
     data class TextChanged(
         val text: String,
+        val selectionStart: Int,
+        val selectionEnd: Int = selectionStart,
     ) : OpenCodeSessionComposerAction
 
     data object SelectModel : OpenCodeSessionComposerAction
@@ -189,17 +198,56 @@ private fun PromptEntryContent(
         }
     }
 
+    val mentionColor = openCodeColor("syntax-type")
+    val bodyColor = MaterialTheme.colorScheme.onSurface
+    val annotatedText =
+        remember(state.text, state.mentionRanges, mentionColor, bodyColor) {
+            buildAnnotatedString {
+                if (state.mentionRanges.isEmpty()) {
+                    append(state.text)
+                    return@buildAnnotatedString
+                }
+                var index = 0
+                state.mentionRanges
+                    .filter { range -> range.first in 0..state.text.length && range.last < state.text.length }
+                    .sortedBy { it.first }
+                    .forEach { range ->
+                        val start = range.first.coerceAtMost(state.text.length)
+                        val end = (range.last + 1).coerceAtMost(state.text.length)
+                        if (start < index || start >= end) return@forEach
+                        append(state.text.substring(index, start))
+                        withStyle(SpanStyle(color = mentionColor)) {
+                            append(state.text.substring(start, end))
+                        }
+                        index = end
+                    }
+                if (index < state.text.length) {
+                    append(state.text.substring(index))
+                }
+            }
+        }
+
     // Own TextFieldValue so typing keeps the caret, while programmatic text
-    // updates (slash insert, restore, clear) move the caret to the end.
+    // updates (slash/mention insert, atomic delete, restore, clear) sync selection.
     var textFieldValue by remember {
-        mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
+        mutableStateOf(
+            TextFieldValue(
+                annotatedString = annotatedText,
+                selection = TextRange(state.text.length),
+            ),
+        )
     }
-    LaunchedEffect(state.text) {
-        if (state.text != textFieldValue.text) {
+    LaunchedEffect(state.text, state.selectionRevision, annotatedText) {
+        val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
+        val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
+        if (textFieldValue.text != state.text ||
+            textFieldValue.selection != TextRange(selectionStart, selectionEnd) ||
+            textFieldValue.annotatedString != annotatedText
+        ) {
             textFieldValue =
                 TextFieldValue(
-                    text = state.text,
-                    selection = TextRange(state.text.length),
+                    annotatedString = annotatedText,
+                    selection = TextRange(selectionStart, selectionEnd),
                 )
         }
     }
@@ -208,12 +256,16 @@ private fun PromptEntryContent(
         value = textFieldValue,
         onValueChange = { newValue ->
             textFieldValue = newValue
-            if (newValue.text != state.text) {
-                onAction(OpenCodeSessionComposerAction.TextChanged(newValue.text))
-            }
+            onAction(
+                OpenCodeSessionComposerAction.TextChanged(
+                    text = newValue.text,
+                    selectionStart = newValue.selection.start,
+                    selectionEnd = newValue.selection.end,
+                ),
+            )
         },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
+        cursorBrush = SolidColor(bodyColor),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         decorationBox = { innerTextField ->
             Box {

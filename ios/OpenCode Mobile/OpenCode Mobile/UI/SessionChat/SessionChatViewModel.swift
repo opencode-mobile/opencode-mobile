@@ -30,6 +30,7 @@ final class SessionChatViewModel {
         messageRepository: any MessageRepository,
         modelRepository: any ModelRepository,
         commandRepository: any CommandRepository,
+        agentRepository: any AgentRepository,
         sessionRepository: any SessionRepository,
         permissionLiveStore: (any PermissionLiveStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
@@ -54,6 +55,7 @@ final class SessionChatViewModel {
             messageRepository: messageRepository,
             modelRepository: modelRepository,
             commandRepository: commandRepository,
+            agentRepository: agentRepository,
             sessionRepository: sessionRepository,
             sessionModelSelectionStore: sessionModelSelectionStore,
             activeConnectionManager: activeConnectionManager
@@ -95,6 +97,7 @@ final class SessionChatViewModel {
     func refreshMessages() async {
         await timeline.refreshMessages()
         composer.loadServerCommands(force: true)
+        composer.loadMentionableAgents(force: true)
     }
 
     func archiveSession() {
@@ -105,12 +108,20 @@ final class SessionChatViewModel {
         sessionInfo.deleteSession()
     }
 
-    func updateComposerText(_ text: String) {
-        composer.updateComposerText(text)
+    func updateComposerText(_ text: String, cursor: Int? = nil) {
+        composer.updateComposerText(text, cursor: cursor)
     }
 
     func selectSlashSuggestion(commandName: String) {
         composer.selectSlashSuggestion(commandName: commandName)
+    }
+
+    func selectAtSuggestion(agentName: String) {
+        composer.selectAtSuggestion(agentName: agentName)
+    }
+
+    func refreshMentionableAgents() {
+        composer.loadMentionableAgents(force: true)
     }
 
     func addAttachments(_ attachments: [Attachment]) {
@@ -362,7 +373,9 @@ final class SessionChatViewModel {
             reviewChangesSummary: reviewChangesState.summary,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
-            slashSuggestions: composerState.slashSuggestions
+            slashSuggestions: composerState.slashSuggestions,
+            atSuggestionsVisible: composerState.atSuggestionsVisible,
+            atSuggestions: composerState.atSuggestions
         )
     }
 

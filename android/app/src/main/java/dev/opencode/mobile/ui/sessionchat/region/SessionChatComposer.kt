@@ -1,6 +1,9 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.domain.agent.AgentRepository
+import dev.opencode.mobile.domain.agent.ComposerMentionRouting
+import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ComposerSubmitIntent
@@ -30,6 +33,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.toAtSuggestion
 import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +53,7 @@ class SessionChatComposer(
     private val messageRepository: MessageRepository,
     private val modelRepository: ModelRepository,
     private val commandRepository: CommandRepository,
+    private val agentRepository: AgentRepository,
     private val sessionRepository: SessionRepository,
     private val connectionSessionCoordinator: ConnectionSessionCoordinator,
     private val sessionModelSelectionStore: SessionModelSelectionStore,
@@ -98,6 +103,7 @@ class SessionChatComposer(
         logI("bind session=$sessionId worktree=$worktree")
         loadCachedSelection()
         loadServerCommands()
+        loadMentionableAgents()
     }
 
     fun loadServerCommands(force: Boolean = false) {
@@ -111,13 +117,54 @@ class SessionChatComposer(
             }.onSuccess { commands ->
                 if (boundWorktree != worktree) return@onSuccess
                 _state.update { state ->
-                    state.copy(serverCommands = commands).withSlashSuggestions(state.composer.text)
+                    state.copy(serverCommands = commands).withComposerSuggestions(
+                        text = state.composer.text,
+                        cursor = state.composer.cursor,
+                        mentions = state.composer.agentMentions,
+                    )
                 }
             }.onFailure { throwable ->
                 if (boundWorktree != worktree) return@onFailure
                 logW("server command catalog failed: ${throwable.message}")
                 // Keep any previously loaded catalog on transient refresh failures.
-                _state.update { state -> state.withSlashSuggestions(state.composer.text) }
+                _state.update { state ->
+                    state.withComposerSuggestions(
+                        text = state.composer.text,
+                        cursor = state.composer.cursor,
+                        mentions = state.composer.agentMentions,
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadMentionableAgents(force: Boolean = false) {
+        val worktree = boundWorktree ?: return
+        if (!force && _state.value.mentionableAgents.isNotEmpty()) return
+        scope.launch {
+            runCatching {
+                withContext(ioDispatcher) {
+                    agentRepository.listMentionableAgents(directory = worktree)
+                }
+            }.onSuccess { agents ->
+                if (boundWorktree != worktree) return@onSuccess
+                _state.update { state ->
+                    state.copy(mentionableAgents = agents).withComposerSuggestions(
+                        text = state.composer.text,
+                        cursor = state.composer.cursor,
+                        mentions = state.composer.agentMentions,
+                    )
+                }
+            }.onFailure { throwable ->
+                if (boundWorktree != worktree) return@onFailure
+                logW("mentionable agent catalog failed: ${throwable.message}")
+                _state.update { state ->
+                    state.withComposerSuggestions(
+                        text = state.composer.text,
+                        cursor = state.composer.cursor,
+                        mentions = state.composer.agentMentions,
+                    )
+                }
             }
         }
     }
@@ -266,21 +313,126 @@ class SessionChatComposer(
         return assistantHint?.let(InitialSelection::History) ?: preference?.let(InitialSelection::Preference)
     }
 
-    fun updateComposerText(text: String) {
-        draftRevision += 1
-        val query = ComposerSubmitRouting.slashSuggestionQuery(text)
-        if (query != null && _state.value.serverCommands.isEmpty()) {
-            loadServerCommands(force = true)
+    fun updateComposerText(
+        text: String,
+        cursor: Int = text.length,
+    ) {
+        val previous = _state.value.composer
+        if (text == previous.text) {
+            val mode =
+                ComposerMentionRouting.suggestionMode(
+                    text = text,
+                    cursor = cursor,
+                    mentions = previous.agentMentions,
+                )
+            when (mode) {
+                is ComposerSuggestionMode.At -> {
+                    if (_state.value.mentionableAgents.isEmpty()) {
+                        loadMentionableAgents(force = true)
+                    }
+                }
+                is ComposerSuggestionMode.Slash -> {
+                    if (_state.value.serverCommands.isEmpty()) {
+                        loadServerCommands(force = true)
+                    }
+                }
+                ComposerSuggestionMode.None -> Unit
+            }
+            _state.update { state ->
+                state
+                    .copy(composer = state.composer.copy(cursor = cursor.coerceIn(0, text.length)))
+                    .withComposerSuggestions(
+                        text = text,
+                        cursor = cursor.coerceIn(0, text.length),
+                        mentions = previous.agentMentions,
+                    )
+            }
+            return
         }
+
+        draftRevision += 1
+        val reconciled =
+            ComposerMentionRouting.reconcileAfterEdit(
+                previousText = previous.text,
+                previousMentions = previous.agentMentions,
+                proposedText = text,
+                proposedCursor = cursor,
+            )
+        val mode =
+            ComposerMentionRouting.suggestionMode(
+                text = reconciled.text,
+                cursor = reconciled.cursor,
+                mentions = reconciled.mentions,
+            )
+        when (mode) {
+            is ComposerSuggestionMode.At -> {
+                if (_state.value.mentionableAgents.isEmpty()) {
+                    loadMentionableAgents(force = true)
+                }
+            }
+            is ComposerSuggestionMode.Slash -> {
+                if (_state.value.serverCommands.isEmpty()) {
+                    loadServerCommands(force = true)
+                }
+            }
+            ComposerSuggestionMode.None -> Unit
+        }
+        val selectionChanged = reconciled.text != text || reconciled.cursor != cursor
         _state.update { state ->
             state
-                .copy(composer = state.composer.copy(text = text))
-                .withSlashSuggestions(text)
+                .copy(
+                    composer =
+                        state.composer.copy(
+                            text = reconciled.text,
+                            agentMentions = reconciled.mentions,
+                            cursor = reconciled.cursor,
+                            selectionRevision =
+                                if (selectionChanged) {
+                                    state.composer.selectionRevision + 1
+                                } else {
+                                    state.composer.selectionRevision
+                                },
+                        ),
+                ).withComposerSuggestions(
+                    text = reconciled.text,
+                    cursor = reconciled.cursor,
+                    mentions = reconciled.mentions,
+                )
         }
     }
 
     fun selectSlashSuggestion(commandName: String) {
-        updateComposerText(ComposerSubmitRouting.insertSelection(commandName))
+        val inserted = ComposerSubmitRouting.insertSelection(commandName)
+        updateComposerText(inserted, cursor = inserted.length)
+    }
+
+    fun selectAtSuggestion(agentName: String) {
+        val composer = _state.value.composer
+        val result =
+            ComposerMentionRouting.insertMention(
+                text = composer.text,
+                cursor = composer.cursor,
+                agentName = agentName,
+                mentionId = UUID.randomUUID().toString(),
+                existingMentions = composer.agentMentions,
+            )
+        draftRevision += 1
+        _state.update { state ->
+            state.copy(
+                composer =
+                    state.composer.copy(
+                        text = result.text,
+                        agentMentions = result.mentions,
+                        cursor = result.cursor,
+                        selectionRevision = state.composer.selectionRevision + 1,
+                    ),
+                // Close after select; `@name` would otherwise still match the at-trigger.
+                atSuggestionsVisible = false,
+                atSuggestions = emptyList(),
+                slashSuggestionsVisible = false,
+                slashSuggestions = emptyList(),
+            )
+        }
     }
 
     fun addAttachments(attachments: List<Attachment>) {
@@ -363,7 +515,14 @@ class SessionChatComposer(
 
     fun restoreComposerText(text: String) {
         draftRevision += 1
-        updateComposer { it.copy(text = text) }
+        updateComposer {
+            it.copy(
+                text = text,
+                agentMentions = emptyList(),
+                cursor = text.length,
+                selectionRevision = it.selectionRevision + 1,
+            )
+        }
     }
 
     fun sendPrompt(
@@ -374,7 +533,8 @@ class SessionChatComposer(
         onSendFailed: (optimisticId: String, error: String) -> Unit,
     ) {
         val composer = _state.value.composer
-        val prompt = composer.text.trim()
+        val (prompt, mentionsForSend) =
+            ComposerMentionRouting.trimForSend(composer.text, composer.agentMentions)
         val attachments = composer.attachments
         val submittedDraftRevision = draftRevision
         val submittedAttachmentRevisions =
@@ -459,9 +619,13 @@ class SessionChatComposer(
                                         ),
                                     variant = composer.selectedVariant,
                                     mode = agentMode(composer.selectedMode),
+                                    agentMentions = mentionsForSend,
                                 ),
                             directory = worktree,
                         )
+                }
+                if (mentionsForSend.isNotEmpty()) {
+                    logI("prompt send agentParts=${mentionsForSend.size}")
                 }
                 clearAcceptedSubmission(
                     textRevision = submittedDraftRevision,
@@ -493,14 +657,23 @@ class SessionChatComposer(
                 }
             }
             val clearedText = if (draftRevision == textRevision) "" else state.composer.text
+            val clearedMentions = if (draftRevision == textRevision) emptyList() else state.composer.agentMentions
+            val clearedCursor = if (draftRevision == textRevision) 0 else state.composer.cursor
             state
                 .copy(
                     composer =
                         state.composer.copy(
                             text = clearedText,
                             attachments = keptAttachments,
+                            agentMentions = clearedMentions,
+                            cursor = clearedCursor,
+                            selectionRevision = state.composer.selectionRevision + 1,
                         ),
-                ).withSlashSuggestions(clearedText)
+                ).withComposerSuggestions(
+                    text = clearedText,
+                    cursor = clearedCursor,
+                    mentions = clearedMentions,
+                )
         }
     }
 
@@ -672,23 +845,48 @@ class SessionChatComposer(
     private fun updateComposer(transform: (SessionChatComposerState) -> SessionChatComposerState) {
         _state.update { state ->
             val composer = transform(state.composer)
-            state.copy(composer = composer).withSlashSuggestions(composer.text)
+            state.copy(composer = composer).withComposerSuggestions(
+                text = composer.text,
+                cursor = composer.cursor,
+                mentions = composer.agentMentions,
+            )
         }
     }
 
-    private fun SessionChatComposerRegionState.withSlashSuggestions(text: String): SessionChatComposerRegionState {
-        val query = ComposerSubmitRouting.slashSuggestionQuery(text) ?: return copy(
-            slashSuggestionsVisible = false,
-            slashSuggestions = emptyList(),
-        )
-        val suggestions =
-            ComposerSubmitRouting
-                .filterCommands(serverCommands, query)
-                .map { it.toSlashSuggestion() }
-        return copy(
-            slashSuggestionsVisible = true,
-            slashSuggestions = suggestions,
-        )
+    private fun SessionChatComposerRegionState.withComposerSuggestions(
+        text: String,
+        cursor: Int,
+        mentions: List<dev.opencode.mobile.domain.agent.AgentMention> = emptyList(),
+    ): SessionChatComposerRegionState {
+        return when (val mode = ComposerMentionRouting.suggestionMode(text, cursor, mentions)) {
+            is ComposerSuggestionMode.At ->
+                copy(
+                    atSuggestionsVisible = true,
+                    atSuggestions =
+                        ComposerMentionRouting
+                            .filterAgents(mentionableAgents, mode.query)
+                            .map { it.toAtSuggestion() },
+                    slashSuggestionsVisible = false,
+                    slashSuggestions = emptyList(),
+                )
+            is ComposerSuggestionMode.Slash ->
+                copy(
+                    slashSuggestionsVisible = true,
+                    slashSuggestions =
+                        ComposerSubmitRouting
+                            .filterCommands(serverCommands, mode.query)
+                            .map { it.toSlashSuggestion() },
+                    atSuggestionsVisible = false,
+                    atSuggestions = emptyList(),
+                )
+            ComposerSuggestionMode.None ->
+                copy(
+                    slashSuggestionsVisible = false,
+                    slashSuggestions = emptyList(),
+                    atSuggestionsVisible = false,
+                    atSuggestions = emptyList(),
+                )
+        }
     }
 
     private fun formatSentTime(epochMs: Long): String =

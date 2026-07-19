@@ -520,6 +520,70 @@ struct SessionChatViewModelTests {
         #expect(repository.sentOptions?.text == "/not-a-command hi")
     }
 
+    @Test func atSuggestion_selectInsertsMentionAndSendsAgentParts() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("@", cursor: 1)
+        let catalogReady = await waitUntil {
+            viewModel.uiState.atSuggestionsVisible &&
+                viewModel.uiState.atSuggestions.contains { $0.agentName == "explore" }
+        }
+        guard catalogReady else {
+            Issue.record("Expected mentionable agent catalog to load")
+            return
+        }
+
+        viewModel.selectAtSuggestion(agentName: "explore")
+        #expect(viewModel.uiState.composer.text == "@explore")
+        #expect(viewModel.uiState.composer.agentMentions.count == 1)
+
+        await viewModel.sendPrompt()
+
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(repository.sentOptions?.text == "@explore")
+        #expect(repository.sentOptions?.agentMentions.count == 1)
+        #expect(repository.sentOptions?.agentMentions.first?.name == "explore")
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(viewModel.uiState.composer.agentMentions.isEmpty)
+    }
+
+    @Test func atSuggestion_winsOverSlashSuggestions() async {
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("/init @", cursor: 7)
+        let ready = await waitUntil {
+            viewModel.uiState.atSuggestionsVisible
+        }
+        #expect(ready)
+        #expect(viewModel.uiState.slashSuggestionsVisible == false)
+    }
+
+    @Test func sendPrompt_serverCommand_doesNotAttachMentionParts() async {
+        let repository = FakeMessageRepository()
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            commandRepository: commandRepository
+        )
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("/init ", cursor: 6)
+        viewModel.updateComposerText("/init @", cursor: 7)
+        _ = await waitUntil { viewModel.uiState.atSuggestionsVisible }
+        viewModel.selectAtSuggestion(agentName: "explore")
+        #expect(viewModel.uiState.composer.agentMentions.count == 1)
+        viewModel.updateComposerText("/init @explore please", cursor: 22)
+
+        await viewModel.sendPrompt()
+
+        #expect(commandRepository.runCommandCalled)
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(commandRepository.lastRunOptions?.command == "init")
+    }
+
     @Test func sendPrompt_planMode_sendsPlanAgent() async {
         let repository = FakeMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
@@ -1439,6 +1503,7 @@ struct SessionChatViewModelTests {
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
         modelRepository: FakeModelRepository = FakeModelRepository(),
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
+        agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionRepository: FakeChatSessionRepository? = nil,
         permissionLiveStore: (any PermissionLiveStore)? = nil
     ) -> SessionChatViewModel {
@@ -1471,6 +1536,7 @@ struct SessionChatViewModelTests {
             messageRepository: repo,
             modelRepository: modelRepository,
             commandRepository: commandRepository,
+            agentRepository: agentRepository,
             sessionRepository: sessionRepository,
             permissionLiveStore: permissionLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore,
@@ -1833,6 +1899,23 @@ private final class FakeCommandRepository: CommandRepository, @unchecked Sendabl
         runCommandCalled = true
         lastRunSessionID = sessionID
         lastRunOptions = options
+    }
+}
+
+private final class FakeAgentRepository: AgentRepository, @unchecked Sendable {
+    var agents: [MentionableAgent]
+
+    init(
+        agents: [MentionableAgent] = [
+            MentionableAgent(name: "explore", description: "Read-only explorer"),
+            MentionableAgent(name: "general", description: "General helper"),
+        ]
+    ) {
+        self.agents = agents
+    }
+
+    func listMentionableAgents(directory: String?) async throws -> [MentionableAgent] {
+        agents
     }
 }
 

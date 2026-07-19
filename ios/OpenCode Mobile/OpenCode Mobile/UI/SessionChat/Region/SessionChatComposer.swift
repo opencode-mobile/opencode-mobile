@@ -12,6 +12,7 @@ final class SessionChatComposer {
     private let messageRepository: any MessageRepository
     private let modelRepository: any ModelRepository
     private let commandRepository: any CommandRepository
+    private let agentRepository: any AgentRepository
     private let sessionRepository: any SessionRepository
     private let sessionModelSelectionStore: any SessionModelSelectionStore
     private let activeConnectionManager: ActiveConnectionManager
@@ -27,6 +28,7 @@ final class SessionChatComposer {
     private var attachmentRevision = 0
     private var attachmentRevisions: [String: Int] = [:]
     private var serverCommandsTask: Task<Void, Never>?
+    private var mentionableAgentsTask: Task<Void, Never>?
 
     init(
         sessionID: String,
@@ -34,6 +36,7 @@ final class SessionChatComposer {
         messageRepository: any MessageRepository,
         modelRepository: any ModelRepository,
         commandRepository: any CommandRepository,
+        agentRepository: any AgentRepository,
         sessionRepository: any SessionRepository,
         sessionModelSelectionStore: any SessionModelSelectionStore,
         activeConnectionManager: ActiveConnectionManager
@@ -43,6 +46,7 @@ final class SessionChatComposer {
         self.messageRepository = messageRepository
         self.modelRepository = modelRepository
         self.commandRepository = commandRepository
+        self.agentRepository = agentRepository
         self.sessionRepository = sessionRepository
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.activeConnectionManager = activeConnectionManager
@@ -52,6 +56,7 @@ final class SessionChatComposer {
         self.sentTimeFormatter = formatter
         Task { await self.loadCachedSelection() }
         loadServerCommands()
+        loadMentionableAgents()
     }
 
     func reset() {
@@ -90,7 +95,7 @@ final class SessionChatComposer {
                 let commands = try await commandRepository.listCommands(directory: worktree)
                 guard !Task.isCancelled else { return }
                 state.serverCommands = commands
-                refreshSlashSuggestions(for: state.composer.text)
+                refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
                 notifyChange()
             } catch {
                 guard !Task.isCancelled else { return }
@@ -98,7 +103,29 @@ final class SessionChatComposer {
                     "server command catalog failed error=\(error.localizedDescription, privacy: .public)"
                 )
                 // Keep any previously loaded catalog on transient refresh failures.
-                refreshSlashSuggestions(for: state.composer.text)
+                refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
+                notifyChange()
+            }
+        }
+    }
+
+    func loadMentionableAgents(force: Bool = false) {
+        if !force, !state.mentionableAgents.isEmpty { return }
+        mentionableAgentsTask?.cancel()
+        mentionableAgentsTask = Task {
+            do {
+                let agents = try await agentRepository.listMentionableAgents(directory: worktree)
+                guard !Task.isCancelled else { return }
+                state.mentionableAgents = agents
+                refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
+                notifyChange()
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "mentionable agent catalog failed error=\(error.localizedDescription, privacy: .public)"
+                )
+                // Keep any previously loaded catalog on transient refresh failures.
+                refreshComposerSuggestions(for: state.composer.text, cursor: state.composer.cursor)
                 notifyChange()
             }
         }
@@ -213,16 +240,85 @@ final class SessionChatComposer {
         return assistantHint.map(InitialSelection.history) ?? preference.map(InitialSelection.preference)
     }
 
-    func updateComposerText(_ text: String) {
-        draftRevision += 1
-        if ComposerSubmitRouting.slashSuggestionQuery(text) != nil, state.serverCommands.isEmpty {
-            loadServerCommands(force: true)
+    func updateComposerText(_ text: String, cursor: Int? = nil) {
+        let cursor = cursor ?? text.count
+        let previous = state.composer
+        if text == previous.text {
+            ensureSuggestionCatalogLoaded(
+                for: ComposerMentionRouting.suggestionMode(
+                    text: text,
+                    cursor: cursor,
+                    mentions: previous.agentMentions
+                )
+            )
+            let clampedCursor = max(0, min(cursor, text.count))
+            state.composer.cursor = clampedCursor
+            refreshComposerSuggestions(for: text, cursor: clampedCursor, mentions: previous.agentMentions)
+            notifyChange()
+            return
         }
-        updateComposer { $0.text = text }
+
+        draftRevision += 1
+        let reconciled = ComposerMentionRouting.reconcileAfterEdit(
+            previousText: previous.text,
+            previousMentions: previous.agentMentions,
+            proposedText: text,
+            proposedCursor: cursor
+        )
+        ensureSuggestionCatalogLoaded(
+            for: ComposerMentionRouting.suggestionMode(
+                text: reconciled.text,
+                cursor: reconciled.cursor,
+                mentions: reconciled.mentions
+            )
+        )
+        let selectionChanged = reconciled.text != text || reconciled.cursor != cursor
+        state.composer.text = reconciled.text
+        state.composer.agentMentions = reconciled.mentions
+        state.composer.cursor = reconciled.cursor
+        if selectionChanged {
+            state.composer.selectionRevision += 1
+        }
+        refreshComposerSuggestions(for: reconciled.text, cursor: reconciled.cursor, mentions: reconciled.mentions)
+        notifyChange()
     }
 
     func selectSlashSuggestion(commandName: String) {
-        updateComposerText(ComposerSubmitRouting.insertSelection(commandName: commandName))
+        let inserted = ComposerSubmitRouting.insertSelection(commandName: commandName)
+        updateComposerText(inserted, cursor: inserted.count)
+    }
+
+    func selectAtSuggestion(agentName: String) {
+        let composer = state.composer
+        let result = ComposerMentionRouting.insertMention(
+            text: composer.text,
+            cursor: composer.cursor,
+            agentName: agentName,
+            mentionID: UUID().uuidString,
+            existingMentions: composer.agentMentions
+        )
+        draftRevision += 1
+        state.composer.text = result.text
+        state.composer.agentMentions = result.mentions
+        state.composer.cursor = result.cursor
+        state.composer.selectionRevision += 1
+        // Close after select; `@name` would otherwise still match the at-trigger.
+        state.atSuggestionsVisible = false
+        state.atSuggestions = []
+        state.slashSuggestionsVisible = false
+        state.slashSuggestions = []
+        notifyChange()
+    }
+
+    private func ensureSuggestionCatalogLoaded(for mode: ComposerSuggestionMode) {
+        switch mode {
+        case .at:
+            if state.mentionableAgents.isEmpty { loadMentionableAgents(force: true) }
+        case .slash:
+            if state.serverCommands.isEmpty { loadServerCommands(force: true) }
+        case .none:
+            break
+        }
     }
 
     func addAttachments(_ attachments: [Attachment]) {
@@ -349,7 +445,12 @@ final class SessionChatComposer {
 
     func restoreComposerText(_ text: String) {
         draftRevision += 1
-        updateComposer { $0.text = text }
+        updateComposer {
+            $0.text = text
+            $0.agentMentions = []
+            $0.cursor = text.count
+            $0.selectionRevision += 1
+        }
     }
 
     func sendPrompt(
@@ -359,7 +460,10 @@ final class SessionChatComposer {
         onSendFailed: (String, String) -> Void
     ) async {
         let submittedText = state.composer.text
-        let trimmed = submittedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let (trimmed, mentionsForSend) = ComposerMentionRouting.trimForSend(
+            text: submittedText,
+            mentions: state.composer.agentMentions
+        )
         let submittedAttachments = state.composer.attachments
         let submittedDraftRevision = draftRevision
         let submittedAttachmentRevisions = Dictionary(
@@ -446,7 +550,8 @@ final class SessionChatComposer {
                             modelID: selectedModel.option.modelID
                         ),
                         variant: composer.selectedVariant,
-                        mode: agentMode(mode: composer.selectedMode)
+                        mode: agentMode(mode: composer.selectedMode),
+                        agentMentions: mentionsForSend
                     ),
                     directory: worktree
                 )
@@ -600,20 +705,41 @@ final class SessionChatComposer {
         var composer = state.composer
         update(&composer)
         state.composer = composer
-        refreshSlashSuggestions(for: composer.text)
+        refreshComposerSuggestions(
+            for: composer.text,
+            cursor: composer.cursor,
+            mentions: composer.agentMentions
+        )
         notifyChange()
     }
 
-    private func refreshSlashSuggestions(for text: String) {
-        guard let query = ComposerSubmitRouting.slashSuggestionQuery(text) else {
+    private func refreshComposerSuggestions(
+        for text: String,
+        cursor: Int,
+        mentions: [AgentMention]? = nil
+    ) {
+        let mentions = mentions ?? state.composer.agentMentions
+        switch ComposerMentionRouting.suggestionMode(text: text, cursor: cursor, mentions: mentions) {
+        case let .at(query):
+            state.atSuggestionsVisible = true
+            state.atSuggestions = ComposerMentionRouting
+                .filterAgents(state.mentionableAgents, query: query)
+                .map { $0.toAtSuggestion() }
             state.slashSuggestionsVisible = false
             state.slashSuggestions = []
-            return
+        case let .slash(query):
+            state.slashSuggestionsVisible = true
+            state.slashSuggestions = ComposerSubmitRouting
+                .filterCommands(state.serverCommands, query: query)
+                .map { $0.toSlashSuggestion() }
+            state.atSuggestionsVisible = false
+            state.atSuggestions = []
+        case .none:
+            state.slashSuggestionsVisible = false
+            state.slashSuggestions = []
+            state.atSuggestionsVisible = false
+            state.atSuggestions = []
         }
-        state.slashSuggestionsVisible = true
-        state.slashSuggestions = ComposerSubmitRouting
-            .filterCommands(state.serverCommands, query: query)
-            .map { $0.toSlashSuggestion() }
     }
 
     private func clearAcceptedSubmission(
@@ -623,6 +749,9 @@ final class SessionChatComposer {
         var composer = state.composer
         if draftRevision == textRevision {
             composer.text = ""
+            composer.agentMentions = []
+            composer.cursor = 0
+            composer.selectionRevision += 1
         }
         composer.attachments.removeAll { attachment in
             guard let submittedRevision = submittedAttachmentRevisions[attachment.id] else { return false }
@@ -632,7 +761,7 @@ final class SessionChatComposer {
             attachmentRevisions[id] = nil
         }
         state.composer = composer
-        refreshSlashSuggestions(for: composer.text)
+        refreshComposerSuggestions(for: composer.text, cursor: composer.cursor)
         notifyChange()
     }
 

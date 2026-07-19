@@ -143,6 +143,35 @@ from a timeline message with role `command`.
 _Avoid_: slash command (as the name for this concept); custom command (when
 meaning the whole server catalog).
 
+### Agent Repository
+
+The mobile integration layer that lists agents for the current project so
+Session Chat can offer **mentionable agents** under `@`.
+
+Distinct from the composer's selected agent/mode picker and from **Command
+Repository**. Mentions do not change which agent owns the turn.
+
+### mentionable agent
+
+An agent from the server catalog that the user may `@` mention in the Session
+Chat composer: not a primary turn-owning agent, and not hidden from `@`
+autocomplete.
+
+Distinct from the composer's selected Build/Plan (or other) mode.
+_Avoid_: subagent (as the product name for this concept).
+
+### agent mention
+
+A structured reference to a **mentionable agent** pending in the Session Chat
+composer or sent on a prompt as an `agent` part.
+
+In the composer it appears as inline `@name` text (not an Attachment chip). On
+prompt send it becomes an `agent` part so the server can route task-tool work;
+it may lead to a **child session**. It is not a shortcut for changing the
+composer's selected agent/mode.
+_Avoid_: @ mention (unqualified); subagent mention; treating it as an
+Attachment.
+
 ### Live Store
 
 A reactive observation layer above CRUD repositories that keeps screen data fresh
@@ -186,8 +215,12 @@ model defines three variants:
   _Avoid_: upload; treating project `file://` mentions as FileParts in this
   slice; confusing with **file-change tool**.
 
+Outbound **agent mention** parts on prompt send are domain-modeled for the
+composer. Inbound `agent` parts on timeline messages stay adapter-consumed
+without dedicated Session Chat chrome in v1.
+
 Server-only part types that remain adapter-consumed without a visible domain
-part in v1 include `step-start`, `step-finish`, `agent`, `subtask`,
+part in v1 include `step-start`, `step-finish`, inbound `agent`, `subtask`,
 `snapshot`, `patch`, `compaction`, `retry`, and non-`data:` `file` parts
 (project path mentions).
 
@@ -201,7 +234,8 @@ composer (removable chips before send) and **sent** on a user message as a
 **FilePart**. Bytes travel inside the async prompt as a data URL; there is no
 separate upload API.
 _Avoid_: upload; Attach context (legacy composer label for device files);
-project `@` / `file://` context (different concept).
+project `@` / `file://` context (different concept); **agent mention** (different
+concept).
 
 ### timeline block
 
@@ -237,7 +271,8 @@ A session spawned from a parent session to carry out delegated work.
 The parent timeline surfaces that work as a `task` ToolPart. Opening the card
 navigates into the child session when a session id is available. A child
 session has the same title and rename behavior as any other session.
-_Avoid_: subagent (informal/desktop slang for the same child session).
+_Avoid_: subagent (informal/desktop slang for the same child session; also avoid
+using subagent as the name for a **mentionable agent**).
 
 ### tool status
 

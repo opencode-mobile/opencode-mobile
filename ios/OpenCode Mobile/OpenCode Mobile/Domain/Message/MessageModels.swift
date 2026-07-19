@@ -152,19 +152,22 @@ struct PromptSendOptions: Equatable, Sendable {
     let model: PromptModelSelection?
     let variant: String?
     let mode: String?
+    let agentMentions: [AgentMention]
 
     init(
         text: String,
         attachments: [Attachment] = [],
         model: PromptModelSelection? = nil,
         variant: String? = nil,
-        mode: String? = nil
+        mode: String? = nil,
+        agentMentions: [AgentMention] = []
     ) {
         self.text = text
         self.attachments = attachments
         self.model = model
         self.variant = variant
         self.mode = mode
+        self.agentMentions = agentMentions
     }
 }
 

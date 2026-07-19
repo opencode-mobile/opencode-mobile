@@ -144,4 +144,13 @@ data class SendMessagePartDto(
     val mime: String? = null,
     val url: String? = null,
     val filename: String? = null,
+    val name: String? = null,
+    val source: AgentPartSourceDto? = null,
+)
+
+@Serializable
+data class AgentPartSourceDto(
+    val value: String,
+    val start: Int,
+    val end: Int,
 )

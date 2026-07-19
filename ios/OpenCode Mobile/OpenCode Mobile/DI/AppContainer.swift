@@ -179,6 +179,23 @@ extension Container {
         }.singleton
     }
 
+    var agentsAPIClient: Factory<AgentsAPIClient> {
+        self { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var agentDomainAdapter: Factory<AgentDomainAdapter> {
+        self { AgentDomainAdapter() }.singleton
+    }
+
+    var agentRepository: Factory<any AgentRepository> {
+        self {
+            DefaultAgentRepository(
+                api: self.agentsAPIClient(),
+                adapter: self.agentDomainAdapter()
+            )
+        }.singleton
+    }
+
     var eventsAPIClient: Factory<EventsAPIClient> {
         self { EventsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
@@ -282,6 +299,7 @@ extension Container {
                 messageRepository: self.messageRepository(),
                 modelRepository: self.modelRepository(),
                 commandRepository: self.commandRepository(),
+                agentRepository: self.agentRepository(),
                 sessionRepository: self.sessionRepository(),
                 permissionLiveStore: self.permissionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),

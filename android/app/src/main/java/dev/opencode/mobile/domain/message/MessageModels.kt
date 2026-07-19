@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.domain.agent.AgentMention
 import kotlinx.serialization.json.JsonObject
 
 data class Message(
@@ -91,6 +92,7 @@ data class PromptSendOptions(
     val model: PromptModelSelection? = null,
     val variant: String? = null,
     val mode: String? = null,
+    val agentMentions: List<AgentMention> = emptyList(),
 )
 
 data class PromptModelSelection(
