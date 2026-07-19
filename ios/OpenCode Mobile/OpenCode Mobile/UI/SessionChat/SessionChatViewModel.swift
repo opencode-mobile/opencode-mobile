@@ -427,15 +427,19 @@ final class SessionChatViewModel {
     }
 
     private func handleQuestionMutationFailure(requestID: String, error: Error, dismiss: Bool) async {
-        questionSubmittingID = nil
+        if questionSubmittingID == requestID {
+            questionSubmittingID = nil
+        }
         if case let .http(statusCode, _) = error as? SessionError, statusCode == 404 {
             if await refreshQuestionSnapshot(), !questionRequests.contains(where: { $0.id == requestID }) {
                 questionError = nil
                 publishUiState()
                 return
             }
-            questionError = "Question request is no longer available"
-        } else {
+            if visibleQuestionRequest()?.id == requestID {
+                questionError = "Question request is no longer available"
+            }
+        } else if visibleQuestionRequest()?.id == requestID {
             questionError = error.localizedDescription.isEmpty
                 ? (dismiss ? "Question dismiss failed" : "Question response failed")
                 : error.localizedDescription
@@ -531,6 +535,7 @@ final class SessionChatViewModel {
             isSending: composerState.isSending
         )
         let reviewChangesState = reviewChanges.state
+        let visibleQuestion = visibleQuestionRequest()
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -558,13 +563,15 @@ final class SessionChatViewModel {
             permissionQueueCount: permissionRequests.count,
             permissionSubmitting: permissionSubmittingID != nil,
             permissionErrorMessage: permissionError ?? permissionTopologyError,
-            questionRequest: visibleQuestionRequest(),
+            questionRequest: visibleQuestion,
             questionWizardIndex: questionWizardIndex,
             questionSelectedLabels: questionDrafts[questionWizardIndex]?.selectedLabels ?? [],
             questionCustomText: questionDrafts[questionWizardIndex]?.customText ?? "",
             questionCustomSelected: questionDrafts[questionWizardIndex]?.customSelected ?? false,
-            questionSubmitting: questionSubmittingID != nil,
-            questionErrorMessage: questionError ?? questionTopologyError,
+            questionSubmitting: questionSubmittingID != nil && questionSubmittingID == visibleQuestion?.id,
+            questionErrorMessage: visibleQuestion != nil
+                ? (questionError ?? questionTopologyError)
+                : nil,
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
             rename: infoState.rename,

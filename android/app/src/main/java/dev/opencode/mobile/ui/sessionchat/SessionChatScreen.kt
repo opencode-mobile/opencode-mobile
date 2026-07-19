@@ -354,6 +354,7 @@ fun SessionChatScreen(
                         } else {
                             uiState.questionSelectedLabels.isNotEmpty()
                         }
+                    val submitting = uiState.questionSubmitting
                     OpenCodeSessionComposerState.Question(
                         requestId = request.id,
                         sessionId = request.sessionId,
@@ -373,10 +374,10 @@ fun SessionChatScreen(
                         selectedLabels = uiState.questionSelectedLabels,
                         customText = uiState.questionCustomText,
                         customSelected = uiState.questionCustomSelected,
-                        backEnabled = index > 0,
-                        nextEnabled = answered && index < questionCount - 1,
-                        submitEnabled = answered && index == questionCount - 1,
-                        submitting = uiState.questionSubmitting,
+                        backEnabled = index > 0 && !submitting,
+                        nextEnabled = answered && index < questionCount - 1 && !submitting,
+                        submitEnabled = answered && index == questionCount - 1 && !submitting,
+                        submitting = submitting,
                         errorMessage = uiState.questionErrorMessage,
                     )
                 } ?: OpenCodeSessionComposerState.Prompt(

@@ -202,6 +202,40 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.pendingQuestionLoads == 1)
     }
 
+    @Test func lateQuestionDismissFailure_doesNotPaintErrorOnVisibleRequest() async {
+        let first = questionRequest(id: "que-1", sessionID: "ses-1")
+        let second = questionRequest(id: "que-2", sessionID: "child")
+        let gate = AsyncGate()
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(id: "child", title: "Child", slug: nil, projectID: nil, directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil)
+            ],
+            questionResponseError: .http(statusCode: 500, message: "boom"),
+            questionHold: gate
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            questionLiveStore: FakeQuestionLiveStore(requests: [first, second])
+        )
+        defer { viewModel.stopObserving() }
+
+        await waitUntil { viewModel.uiState.questionRequest?.id == "que-1" }
+        let dismissTask = Task {
+            await viewModel.dismissQuestion(requestID: second.id, sessionID: second.sessionID)
+        }
+        await waitUntil { sessionRepository.rejectedQuestionID == "que-2" }
+        #expect(viewModel.uiState.questionSubmitting == false)
+        #expect(viewModel.uiState.questionRequest?.id == "que-1")
+
+        await gate.open()
+        await dismissTask.value
+
+        #expect(viewModel.uiState.questionRequest?.id == "que-1")
+        #expect(viewModel.uiState.questionErrorMessage == nil)
+        #expect(viewModel.uiState.questionSubmitting == false)
+    }
+
     @Test func loadMessages_success() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
         await viewModel.loadMessages()
@@ -2091,6 +2125,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let deleteResult: Bool
     private let archiveHold: AsyncGate?
     private let deleteHold: AsyncGate?
+    private let questionHold: AsyncGate?
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
@@ -2121,7 +2156,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         deleteError: SessionError? = nil,
         deleteResult: Bool = true,
         archiveHold: AsyncGate? = nil,
-        deleteHold: AsyncGate? = nil
+        deleteHold: AsyncGate? = nil,
+        questionHold: AsyncGate? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -2139,6 +2175,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.deleteResult = deleteResult
         self.archiveHold = archiveHold
         self.deleteHold = deleteHold
+        self.questionHold = questionHold
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
@@ -2227,12 +2264,14 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
 
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool {
         repliedQuestionID = questionID
+        if let questionHold { await questionHold.wait() }
         if let questionResponseError { throw questionResponseError }
         return true
     }
 
     func rejectQuestion(questionID: String, directory: String?) async throws -> Bool {
         rejectedQuestionID = questionID
+        if let questionHold { await questionHold.wait() }
         if let questionResponseError { throw questionResponseError }
         return true
     }

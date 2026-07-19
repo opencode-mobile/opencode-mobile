@@ -394,36 +394,38 @@ struct SessionChatView: View {
                     errorMessage: viewModel.uiState.permissionErrorMessage
                 )
             )
-        } else if let request = viewModel.uiState.questionRequest,
-                  let question = request.questions.indices.contains(viewModel.uiState.questionWizardIndex)
-                      ? request.questions[viewModel.uiState.questionWizardIndex]
-                      : nil {
+        } else if let request = viewModel.uiState.questionRequest {
             let draft = viewModel.uiState
-            let isValid = isQuestionAnswerValid(
-                question: question,
-                draft: QuestionAnswerDraft(
-                    selectedLabels: draft.questionSelectedLabels,
-                    customText: draft.questionCustomText,
-                    customSelected: draft.questionCustomSelected
+            let questionCount = max(request.questions.count, 1)
+            let index = min(max(draft.questionWizardIndex, 0), questionCount - 1)
+            let question = request.questions.indices.contains(index) ? request.questions[index] : nil
+            let isValid = question.map {
+                isQuestionAnswerValid(
+                    question: $0,
+                    draft: QuestionAnswerDraft(
+                        selectedLabels: draft.questionSelectedLabels,
+                        customText: draft.questionCustomText,
+                        customSelected: draft.questionCustomSelected
+                    )
                 )
-            )
+            } ?? false
             state = .question(
                 .init(
                     requestID: request.id,
                     sessionID: request.sessionID,
-                    questionIndex: draft.questionWizardIndex,
-                    questionCount: request.questions.count,
-                    header: question.header,
-                    question: question.question,
-                    options: question.options.map { .init(label: $0.label, description: $0.description) },
-                    multiple: question.multiple,
-                    customAllowed: question.custom,
+                    questionIndex: index,
+                    questionCount: questionCount,
+                    header: question?.header ?? "",
+                    question: question?.question ?? "",
+                    options: (question?.options ?? []).map { .init(label: $0.label, description: $0.description) },
+                    multiple: question?.multiple ?? false,
+                    customAllowed: question?.custom ?? true,
                     selectedLabels: draft.questionSelectedLabels,
                     customText: draft.questionCustomText,
                     customSelected: draft.questionCustomSelected,
-                    backEnabled: draft.questionWizardIndex > 0 && !draft.questionSubmitting,
-                    nextEnabled: isValid && draft.questionWizardIndex < request.questions.count - 1 && !draft.questionSubmitting,
-                    submitEnabled: isValid && draft.questionWizardIndex == request.questions.count - 1 && !draft.questionSubmitting,
+                    backEnabled: index > 0 && !draft.questionSubmitting,
+                    nextEnabled: isValid && index < questionCount - 1 && !draft.questionSubmitting,
+                    submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting,
                     submitting: draft.questionSubmitting,
                     errorMessage: draft.questionErrorMessage
                 )

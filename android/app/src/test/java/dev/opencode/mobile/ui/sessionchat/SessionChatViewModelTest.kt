@@ -408,6 +408,47 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun lateQuestionDismissFailure_doesNotPaintErrorOnVisibleRequest() =
+        runTest(testDispatcher) {
+            val first = questionRequest("que-1", "ses-1")
+            val second = questionRequest("que-2", "child")
+            val gate = CompletableDeferred<Unit>()
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Child", parentId = "ses-1"),
+                        ),
+                    questionResponseError = SessionError.Http(500, "boom"),
+                    questionHoldUntil = gate,
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    questionLiveStore = FakeQuestionLiveStore(listOf(first, second)),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+
+            viewModel.dismissQuestion(second.id, second.sessionId)
+            advanceUntilIdle()
+            assertEquals(false, viewModel.uiState.value.questionSubmitting)
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("que-2", sessionRepository.rejectedQuestionId)
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+            assertEquals(null, viewModel.uiState.value.questionErrorMessage)
+            assertEquals(false, viewModel.uiState.value.questionSubmitting)
+        }
+
+    @Test
     fun loadMessages_success() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())
@@ -2654,6 +2695,7 @@ private class FakeSessionRepository(
     private val deleteResult: Boolean = true,
     private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
     private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
+    private val questionHoldUntil: CompletableDeferred<Unit>? = null,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
@@ -2847,6 +2889,7 @@ private class FakeSessionRepository(
         directory: String?,
     ): Boolean {
         repliedQuestionId = requestId
+        questionHoldUntil?.await()
         questionResponseError?.let { throw it }
         return true
     }
@@ -2856,6 +2899,7 @@ private class FakeSessionRepository(
         directory: String?,
     ): Boolean {
         rejectedQuestionId = requestId
+        questionHoldUntil?.await()
         questionResponseError?.let { throw it }
         return true
     }

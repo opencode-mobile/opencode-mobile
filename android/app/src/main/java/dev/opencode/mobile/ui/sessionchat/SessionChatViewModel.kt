@@ -536,7 +536,9 @@ class SessionChatViewModel
             error: Throwable,
             dismiss: Boolean,
         ) {
-            questionSubmittingId = null
+            if (questionSubmittingId == requestId) {
+                questionSubmittingId = null
+            }
             if (error is SessionError.Http && error.statusCode == 404) {
                 viewModelScope.launch(ioDispatcher) {
                     val refreshed = refreshQuestionSnapshot()
@@ -545,14 +547,18 @@ class SessionChatViewModel
                         publishUiState()
                         return@launch
                     }
-                    questionError = "Question request is no longer available"
+                    if (visibleQuestionRequest()?.id == requestId) {
+                        questionError = "Question request is no longer available"
+                    }
                     publishUiState()
                 }
                 return
             }
-            questionError =
-                error.message
-                    ?: if (dismiss) "Question dismiss failed" else "Question response failed"
+            if (visibleQuestionRequest()?.id == requestId) {
+                questionError =
+                    error.message
+                        ?: if (dismiss) "Question dismiss failed" else "Question response failed"
+            }
             publishUiState()
         }
 
@@ -664,8 +670,13 @@ class SessionChatViewModel
                 questionSelectedLabels = questionDraft.selectedLabels,
                 questionCustomText = questionDraft.customText,
                 questionCustomSelected = questionDraft.customSelected,
-                questionSubmitting = questionSubmittingId != null,
-                questionErrorMessage = questionError ?: questionTopologyError,
+                questionSubmitting = questionSubmittingId != null && questionSubmittingId == visibleQuestion?.id,
+                questionErrorMessage =
+                    if (visibleQuestion != null) {
+                        questionError ?: questionTopologyError
+                    } else {
+                        null
+                    },
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
                 rename = infoState.rename,
