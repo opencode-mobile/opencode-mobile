@@ -32,15 +32,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -200,53 +204,27 @@ private fun PromptEntryContent(
 
     val mentionColor = openCodeColor("syntax-type")
     val bodyColor = MaterialTheme.colorScheme.onSurface
-    val annotatedText =
-        remember(state.text, state.mentionRanges, mentionColor, bodyColor) {
-            buildAnnotatedString {
-                if (state.mentionRanges.isEmpty()) {
-                    append(state.text)
-                    return@buildAnnotatedString
-                }
-                var index = 0
-                state.mentionRanges
-                    .filter { range -> range.first in 0..state.text.length && range.last < state.text.length }
-                    .sortedBy { it.first }
-                    .forEach { range ->
-                        val start = range.first.coerceAtMost(state.text.length)
-                        val end = (range.last + 1).coerceAtMost(state.text.length)
-                        if (start < index || start >= end) return@forEach
-                        append(state.text.substring(index, start))
-                        withStyle(SpanStyle(color = mentionColor)) {
-                            append(state.text.substring(start, end))
-                        }
-                        index = end
-                    }
-                if (index < state.text.length) {
-                    append(state.text.substring(index))
-                }
-            }
+    val mentionTransformation =
+        remember(state.mentionRanges, mentionColor) {
+            MentionVisualTransformation(mentionRanges = state.mentionRanges, mentionColor = mentionColor)
         }
 
     // Own TextFieldValue so typing keeps the caret, while programmatic text
     // updates (slash/mention insert, atomic delete, restore, clear) sync selection.
+    // Mention chrome is applied via VisualTransformation so it always tracks
+    // state.mentionRanges (AnnotatedString on TextFieldValue is dropped by IME updates).
     var textFieldValue by remember {
-        mutableStateOf(
-            TextFieldValue(
-                annotatedString = annotatedText,
-                selection = TextRange(state.text.length),
-            ),
-        )
+        mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
     }
-    LaunchedEffect(state.text, state.selectionRevision, annotatedText) {
+    LaunchedEffect(state.text, state.selectionRevision) {
         val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
         val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
         if (textFieldValue.text != state.text ||
-            textFieldValue.selection != TextRange(selectionStart, selectionEnd) ||
-            textFieldValue.annotatedString != annotatedText
+            textFieldValue.selection != TextRange(selectionStart, selectionEnd)
         ) {
             textFieldValue =
                 TextFieldValue(
-                    annotatedString = annotatedText,
+                    text = state.text,
                     selection = TextRange(selectionStart, selectionEnd),
                 )
         }
@@ -266,6 +244,7 @@ private fun PromptEntryContent(
         },
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
         cursorBrush = SolidColor(bodyColor),
+        visualTransformation = mentionTransformation,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         decorationBox = { innerTextField ->
             Box {
@@ -335,6 +314,29 @@ private fun PromptEntryContent(
                 onClick = { onAction(OpenCodeSessionComposerAction.Send) },
             )
         }
+    }
+}
+
+private class MentionVisualTransformation(
+    private val mentionRanges: List<IntRange>,
+    private val mentionColor: Color,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        if (mentionRanges.isEmpty() || text.isEmpty()) {
+            return TransformedText(text, OffsetMapping.Identity)
+        }
+        val styled =
+            buildAnnotatedString {
+                append(text)
+                mentionRanges.forEach { range ->
+                    val start = range.first.coerceIn(0, text.length)
+                    val end = (range.last + 1).coerceIn(0, text.length)
+                    if (start < end) {
+                        addStyle(SpanStyle(color = mentionColor), start, end)
+                    }
+                }
+            }
+        return TransformedText(styled, OffsetMapping.Identity)
     }
 }
 
