@@ -1,6 +1,10 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.domain.command.CommandRepository
+import dev.opencode.mobile.domain.command.CommandRunOptions
+import dev.opencode.mobile.domain.command.ComposerSubmitIntent
+import dev.opencode.mobile.domain.command.ComposerSubmitRouting
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
@@ -26,6 +30,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +48,7 @@ import java.util.UUID
 class SessionChatComposer(
     private val messageRepository: MessageRepository,
     private val modelRepository: ModelRepository,
+    private val commandRepository: CommandRepository,
     private val sessionRepository: SessionRepository,
     private val connectionSessionCoordinator: ConnectionSessionCoordinator,
     private val sessionModelSelectionStore: SessionModelSelectionStore,
@@ -91,6 +97,29 @@ class SessionChatComposer(
         _state.value = SessionChatComposerRegionState()
         logI("bind session=$sessionId worktree=$worktree")
         loadCachedSelection()
+        loadServerCommands()
+    }
+
+    fun loadServerCommands(force: Boolean = false) {
+        val worktree = boundWorktree ?: return
+        if (!force && _state.value.serverCommands.isNotEmpty()) return
+        scope.launch {
+            runCatching {
+                withContext(ioDispatcher) {
+                    commandRepository.listCommands(directory = worktree)
+                }
+            }.onSuccess { commands ->
+                if (boundWorktree != worktree) return@onSuccess
+                _state.update { state ->
+                    state.copy(serverCommands = commands).withSlashSuggestions(state.composer.text)
+                }
+            }.onFailure { throwable ->
+                if (boundWorktree != worktree) return@onFailure
+                logW("server command catalog failed: ${throwable.message}")
+                // Keep any previously loaded catalog on transient refresh failures.
+                _state.update { state -> state.withSlashSuggestions(state.composer.text) }
+            }
+        }
     }
 
     fun loadCatalog() {
@@ -239,7 +268,19 @@ class SessionChatComposer(
 
     fun updateComposerText(text: String) {
         draftRevision += 1
-        updateComposer { it.copy(text = text) }
+        val query = ComposerSubmitRouting.slashSuggestionQuery(text)
+        if (query != null && _state.value.serverCommands.isEmpty()) {
+            loadServerCommands(force = true)
+        }
+        _state.update { state ->
+            state
+                .copy(composer = state.composer.copy(text = text))
+                .withSlashSuggestions(text)
+        }
+    }
+
+    fun selectSlashSuggestion(commandName: String) {
+        updateComposerText(ComposerSubmitRouting.insertSelection(commandName))
     }
 
     fun addAttachments(attachments: List<Attachment>) {
@@ -380,18 +421,48 @@ class SessionChatComposer(
             }
             onOptimisticRows(enriched)
             try {
-                messageRepository.sendPromptAsync(
-                    sessionId = sessionId,
-                    options =
-                        PromptSendOptions(
-                            text = prompt,
-                            attachments = attachments,
-                            model = PromptModelSelection(selectedModel.option.providerId, selectedModel.option.modelId),
-                            variant = composer.selectedVariant,
-                            mode = agentMode(composer.selectedMode),
-                        ),
-                    directory = worktree,
-                )
+                val intent =
+                    ComposerSubmitRouting.resolve(
+                        text = prompt,
+                        serverCommandNames = _state.value.serverCommands.map { it.name }.toSet(),
+                    )
+                when (intent) {
+                    is ComposerSubmitIntent.ServerCommand ->
+                        commandRepository.runCommand(
+                            sessionId = sessionId,
+                            options =
+                                CommandRunOptions(
+                                    command = intent.command,
+                                    arguments = intent.arguments,
+                                    attachments = attachments,
+                                    model =
+                                        PromptModelSelection(
+                                            selectedModel.option.providerId,
+                                            selectedModel.option.modelId,
+                                        ),
+                                    variant = composer.selectedVariant,
+                                    mode = agentMode(composer.selectedMode),
+                                ),
+                            directory = worktree,
+                        )
+                    is ComposerSubmitIntent.Prompt ->
+                        messageRepository.sendPromptAsync(
+                            sessionId = sessionId,
+                            options =
+                                PromptSendOptions(
+                                    text = intent.text,
+                                    attachments = attachments,
+                                    model =
+                                        PromptModelSelection(
+                                            selectedModel.option.providerId,
+                                            selectedModel.option.modelId,
+                                        ),
+                                    variant = composer.selectedVariant,
+                                    mode = agentMode(composer.selectedMode),
+                                ),
+                            directory = worktree,
+                        )
+                }
                 clearAcceptedSubmission(
                     textRevision = submittedDraftRevision,
                     submittedAttachmentRevisions = submittedAttachmentRevisions,
@@ -421,13 +492,15 @@ class SessionChatComposer(
                     attachmentRevisions.remove(id)
                 }
             }
-            state.copy(
-                composer =
-                    state.composer.copy(
-                        text = if (draftRevision == textRevision) "" else state.composer.text,
-                        attachments = keptAttachments,
-                    ),
-            )
+            val clearedText = if (draftRevision == textRevision) "" else state.composer.text
+            state
+                .copy(
+                    composer =
+                        state.composer.copy(
+                            text = clearedText,
+                            attachments = keptAttachments,
+                        ),
+                ).withSlashSuggestions(clearedText)
         }
     }
 
@@ -597,7 +670,25 @@ class SessionChatComposer(
         }
 
     private fun updateComposer(transform: (SessionChatComposerState) -> SessionChatComposerState) {
-        _state.update { it.copy(composer = transform(it.composer)) }
+        _state.update { state ->
+            val composer = transform(state.composer)
+            state.copy(composer = composer).withSlashSuggestions(composer.text)
+        }
+    }
+
+    private fun SessionChatComposerRegionState.withSlashSuggestions(text: String): SessionChatComposerRegionState {
+        val query = ComposerSubmitRouting.slashSuggestionQuery(text) ?: return copy(
+            slashSuggestionsVisible = false,
+            slashSuggestions = emptyList(),
+        )
+        val suggestions =
+            ComposerSubmitRouting
+                .filterCommands(serverCommands, query)
+                .map { it.toSlashSuggestion() }
+        return copy(
+            slashSuggestionsVisible = true,
+            slashSuggestions = suggestions,
+        )
     }
 
     private fun formatSentTime(epochMs: Long): String =

@@ -34,6 +34,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionList
     case sessionStatusBar
     case sessionComposer
+    case composerSuggestionOverlay
     case renderedMarkdown
     case messageList
 }
@@ -170,6 +171,12 @@ let componentGalleryEntries = [
         id: .sessionComposer,
         title: "Session Composer",
         description: "Prompt entry and blocking permission states in one persistent session surface.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .composerSuggestionOverlay,
+        title: "Composer Suggestion Overlay",
+        description: "Compact suggestion list anchored above the Session Chat composer for / commands.",
         category: .session
     ),
     ComponentGalleryEntry(

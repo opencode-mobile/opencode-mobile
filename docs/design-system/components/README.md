@@ -110,6 +110,7 @@ applicable item is complete.
 - `button.md`
 - `text-input.md`
 - `action-pill.md`
+- `composer-suggestion-overlay.md`
 - `review-changes-pill.md`
 - `hunk-navigation-pill.md`
 - `unified-diff.md`

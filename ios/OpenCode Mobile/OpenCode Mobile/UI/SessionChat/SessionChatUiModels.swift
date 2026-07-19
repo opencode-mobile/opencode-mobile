@@ -135,6 +135,8 @@ struct SessionChatUiState: Equatable {
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
     var rename = SessionRenameUiState()
+    var slashSuggestionsVisible = false
+    var slashSuggestions: [SessionChatSlashSuggestion] = []
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -276,6 +278,14 @@ struct SessionChatTimelineRegionState: Equatable {
     var errorMessage: String?
 }
 
+struct SessionChatSlashSuggestion: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String?
+    let badge: String?
+    let commandName: String
+}
+
 struct SessionChatComposerRegionState: Equatable {
     var composer: SessionChatComposerState = SessionChatComposerState(
         text: "",
@@ -289,6 +299,27 @@ struct SessionChatComposerRegionState: Equatable {
     var isAborting: Bool = false
     var errorMessage: String?
     var abortErrorMessage: String?
+    var serverCommands: [ServerCommand] = []
+    var slashSuggestionsVisible = false
+    var slashSuggestions: [SessionChatSlashSuggestion] = []
+}
+
+extension ServerCommand {
+    func toSlashSuggestion() -> SessionChatSlashSuggestion {
+        SessionChatSlashSuggestion(
+            id: name,
+            title: "/\(name)",
+            subtitle: description,
+            badge: {
+                switch source {
+                case .skill: "skill"
+                case .mcp: "mcp"
+                case .command: nil
+                }
+            }(),
+            commandName: name
+        )
+    }
 }
 
 struct SessionInfoRegionState: Equatable {

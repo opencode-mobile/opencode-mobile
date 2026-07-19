@@ -1,5 +1,9 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.command.CommandRepository
+import dev.opencode.mobile.domain.command.CommandRunOptions
+import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
@@ -858,6 +862,52 @@ class SessionChatViewModelTest {
             assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
             assertEquals(1, viewModel.uiState.value.messages.size)
             assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun sendPrompt_matchingServerCommand_runsCommandApi() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository = FakeCommandRepository()
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/in")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
+            assertTrue(viewModel.uiState.value.slashSuggestions.any { it.commandName == "init" })
+            viewModel.selectSlashSuggestion("init")
+            runCurrent()
+            assertEquals("/init ", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.slashSuggestionsVisible)
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(commandRepository.runCommandCalled)
+            assertEquals("init", commandRepository.lastRunOptions?.command)
+            assertEquals("please", commandRepository.lastRunOptions?.arguments)
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_unknownSlash_fallsThroughToPrompt() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository = FakeCommandRepository()
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/not-a-command hi")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertFalse(commandRepository.runCommandCalled)
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("/not-a-command hi", repository.sentOptions?.text)
         }
 
     @Test
@@ -2039,6 +2089,7 @@ class SessionChatViewModelTest {
     private fun createViewModel(
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
+        commandRepository: FakeCommandRepository = FakeCommandRepository(),
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
@@ -2066,6 +2117,7 @@ class SessionChatViewModelTest {
         return SessionChatViewModel(
             messageRepository = repository,
             modelRepository = modelRepository,
+            commandRepository = commandRepository,
             sessionRepository = sessionRepository,
             permissionLiveStore = permissionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
@@ -2230,6 +2282,30 @@ private class FakeSecureCredentialStore : dev.opencode.mobile.domain.connection.
     override fun deletePassword(serverBaseUrl: String) = Unit
 
     override fun clearAll() = Unit
+}
+
+private class FakeCommandRepository(
+    var commands: List<ServerCommand> =
+        listOf(
+            ServerCommand(name = "init", description = "Create AGENTS.md", source = ServerCommandSource.Command),
+            ServerCommand(name = "my-skill", description = "A skill", source = ServerCommandSource.Skill),
+        ),
+) : CommandRepository {
+    var runCommandCalled: Boolean = false
+    var lastRunOptions: CommandRunOptions? = null
+    var lastRunSessionId: String? = null
+
+    override suspend fun listCommands(directory: String?): List<ServerCommand> = commands
+
+    override suspend fun runCommand(
+        sessionId: String,
+        options: CommandRunOptions,
+        directory: String?,
+    ) {
+        runCommandCalled = true
+        lastRunSessionId = sessionId
+        lastRunOptions = options
+    }
 }
 
 private class FakeMessageRepository(

@@ -34,6 +34,8 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -283,6 +285,25 @@ fun SessionChatScreen(
                     ),
                 modifier = Modifier.weight(1f),
             )
+
+            if (uiState.slashSuggestionsVisible && uiState.permissionRequest == null) {
+                OpenCodeComposerSuggestionOverlay(
+                    items =
+                        uiState.slashSuggestions.map { suggestion ->
+                            OpenCodeComposerSuggestionItem(
+                                id = suggestion.id,
+                                title = suggestion.title,
+                                subtitle = suggestion.subtitle,
+                                badge = suggestion.badge,
+                            )
+                        },
+                    onSelect = { item ->
+                        viewModel.selectSlashSuggestion(item.id)
+                    },
+                    emptyMessage = "No commands",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
 
             val composerState =
                 uiState.permissionRequest?.let { request ->

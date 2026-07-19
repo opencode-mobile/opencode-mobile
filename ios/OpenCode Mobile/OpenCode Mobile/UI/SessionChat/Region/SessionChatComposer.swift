@@ -11,6 +11,7 @@ final class SessionChatComposer {
     private let worktree: String
     private let messageRepository: any MessageRepository
     private let modelRepository: any ModelRepository
+    private let commandRepository: any CommandRepository
     private let sessionRepository: any SessionRepository
     private let sessionModelSelectionStore: any SessionModelSelectionStore
     private let activeConnectionManager: ActiveConnectionManager
@@ -25,12 +26,14 @@ final class SessionChatComposer {
     private var draftRevision = 0
     private var attachmentRevision = 0
     private var attachmentRevisions: [String: Int] = [:]
+    private var serverCommandsTask: Task<Void, Never>?
 
     init(
         sessionID: String,
         worktree: String,
         messageRepository: any MessageRepository,
         modelRepository: any ModelRepository,
+        commandRepository: any CommandRepository,
         sessionRepository: any SessionRepository,
         sessionModelSelectionStore: any SessionModelSelectionStore,
         activeConnectionManager: ActiveConnectionManager
@@ -39,6 +42,7 @@ final class SessionChatComposer {
         self.worktree = worktree
         self.messageRepository = messageRepository
         self.modelRepository = modelRepository
+        self.commandRepository = commandRepository
         self.sessionRepository = sessionRepository
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.activeConnectionManager = activeConnectionManager
@@ -47,6 +51,7 @@ final class SessionChatComposer {
         formatter.dateFormat = "h:mm a"
         self.sentTimeFormatter = formatter
         Task { await self.loadCachedSelection() }
+        loadServerCommands()
     }
 
     func reset() {
@@ -73,6 +78,28 @@ final class SessionChatComposer {
                 $0.isModelSelectionReady = false
                 $0.modelCatalogError = "Unable to load models. Tap Model to retry."
                 $0.modelNotice = "Unable to load models. Tap Model to retry."
+            }
+        }
+    }
+
+    func loadServerCommands(force: Bool = false) {
+        if !force, !state.serverCommands.isEmpty { return }
+        serverCommandsTask?.cancel()
+        serverCommandsTask = Task {
+            do {
+                let commands = try await commandRepository.listCommands(directory: worktree)
+                guard !Task.isCancelled else { return }
+                state.serverCommands = commands
+                refreshSlashSuggestions(for: state.composer.text)
+                notifyChange()
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning(
+                    "server command catalog failed error=\(error.localizedDescription, privacy: .public)"
+                )
+                // Keep any previously loaded catalog on transient refresh failures.
+                refreshSlashSuggestions(for: state.composer.text)
+                notifyChange()
             }
         }
     }
@@ -188,7 +215,14 @@ final class SessionChatComposer {
 
     func updateComposerText(_ text: String) {
         draftRevision += 1
+        if ComposerSubmitRouting.slashSuggestionQuery(text) != nil, state.serverCommands.isEmpty {
+            loadServerCommands(force: true)
+        }
         updateComposer { $0.text = text }
+    }
+
+    func selectSlashSuggestion(commandName: String) {
+        updateComposerText(ComposerSubmitRouting.insertSelection(commandName: commandName))
     }
 
     func addAttachments(_ attachments: [Attachment]) {
@@ -380,20 +414,43 @@ final class SessionChatComposer {
         await onOptimisticRows(enriched)
 
         do {
-            try await messageRepository.sendPromptAsync(
-                sessionID: sessionID,
-                options: PromptSendOptions(
-                    text: trimmed,
-                    attachments: submittedAttachments,
-                    model: PromptModelSelection(
-                        providerID: selectedModel.option.providerID,
-                        modelID: selectedModel.option.modelID
-                    ),
-                    variant: composer.selectedVariant,
-                    mode: agentMode(mode: composer.selectedMode)
-                ),
-                directory: worktree
+            let intent = ComposerSubmitRouting.resolve(
+                text: trimmed,
+                serverCommandNames: Set(state.serverCommands.map(\.name))
             )
+            switch intent {
+            case let .serverCommand(command, arguments):
+                try await commandRepository.runCommand(
+                    sessionID: sessionID,
+                    options: CommandRunOptions(
+                        command: command,
+                        arguments: arguments,
+                        attachments: submittedAttachments,
+                        model: PromptModelSelection(
+                            providerID: selectedModel.option.providerID,
+                            modelID: selectedModel.option.modelID
+                        ),
+                        variant: composer.selectedVariant,
+                        mode: agentMode(mode: composer.selectedMode)
+                    ),
+                    directory: worktree
+                )
+            case let .prompt(text):
+                try await messageRepository.sendPromptAsync(
+                    sessionID: sessionID,
+                    options: PromptSendOptions(
+                        text: text,
+                        attachments: submittedAttachments,
+                        model: PromptModelSelection(
+                            providerID: selectedModel.option.providerID,
+                            modelID: selectedModel.option.modelID
+                        ),
+                        variant: composer.selectedVariant,
+                        mode: agentMode(mode: composer.selectedMode)
+                    ),
+                    directory: worktree
+                )
+            }
             clearAcceptedSubmission(
                 textRevision: submittedDraftRevision,
                 attachmentRevisions: submittedAttachmentRevisions
@@ -543,7 +600,20 @@ final class SessionChatComposer {
         var composer = state.composer
         update(&composer)
         state.composer = composer
+        refreshSlashSuggestions(for: composer.text)
         notifyChange()
+    }
+
+    private func refreshSlashSuggestions(for text: String) {
+        guard let query = ComposerSubmitRouting.slashSuggestionQuery(text) else {
+            state.slashSuggestionsVisible = false
+            state.slashSuggestions = []
+            return
+        }
+        state.slashSuggestionsVisible = true
+        state.slashSuggestions = ComposerSubmitRouting
+            .filterCommands(state.serverCommands, query: query)
+            .map { $0.toSlashSuggestion() }
     }
 
     private func clearAcceptedSubmission(
@@ -562,12 +632,23 @@ final class SessionChatComposer {
             attachmentRevisions[id] = nil
         }
         state.composer = composer
+        refreshSlashSuggestions(for: composer.text)
         notifyChange()
     }
 
     private func errorMessage(_ error: Error) -> String {
         if let messageError = error as? MessageError {
             return messageError.localizedDescription
+        }
+        if let commandError = error as? CommandError {
+            switch commandError {
+            case let .http(_, message):
+                return message ?? "Request failed"
+            case .transport:
+                return "Unable to reach the server"
+            case .decoding:
+                return "Unable to read server response"
+            }
         }
         return error.localizedDescription
     }

@@ -97,6 +97,24 @@ struct SessionChatView: View {
                     }
                 )
             )
+            if viewModel.uiState.slashSuggestionsVisible, viewModel.uiState.permissionRequest == nil {
+                OpenCodeComposerSuggestionOverlay(
+                    items: viewModel.uiState.slashSuggestions.map { suggestion in
+                        OpenCodeComposerSuggestionItem(
+                            id: suggestion.id,
+                            title: suggestion.title,
+                            subtitle: suggestion.subtitle,
+                            badge: suggestion.badge
+                        )
+                    },
+                    emptyMessage: "No commands",
+                    onSelect: { item in
+                        viewModel.selectSlashSuggestion(commandName: item.id)
+                    }
+                )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+            }
             composer
         }
         .background(OpenCodeColors.backgroundBase)

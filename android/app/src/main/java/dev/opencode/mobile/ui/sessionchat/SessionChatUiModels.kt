@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.MessageRole
@@ -77,6 +79,8 @@ data class SessionChatUiState(
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
     val rename: SessionRenameUiState = SessionRenameUiState(),
+    val slashSuggestionsVisible: Boolean = false,
+    val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
 ) {
     val latestCompletedUserMessageId: String?
         get() {
@@ -198,13 +202,38 @@ data class SessionChatTimelineRegionState(
     val errorMessage: String? = null,
 )
 
+data class SessionChatSlashSuggestion(
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+    val badge: String?,
+    val commandName: String,
+)
+
 data class SessionChatComposerRegionState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
     val isAborting: Boolean = false,
     val errorMessage: String? = null,
     val abortErrorMessage: String? = null,
+    val serverCommands: List<ServerCommand> = emptyList(),
+    val slashSuggestionsVisible: Boolean = false,
+    val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
 )
+
+fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
+    SessionChatSlashSuggestion(
+        id = name,
+        title = "/$name",
+        subtitle = description,
+        badge =
+            when (source) {
+                ServerCommandSource.Skill -> "skill"
+                ServerCommandSource.Mcp -> "mcp"
+                ServerCommandSource.Command -> null
+            },
+        commandName = name,
+    )
 
 data class SessionInfoRegionState(
     val sessionId: String = "",
