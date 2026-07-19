@@ -30,6 +30,7 @@ enum class ComponentGalleryEntryId {
     ListGroup,
     ChoiceBadge,
     ActionPill,
+    ComposerSuggestionOverlay,
     ReviewChangesPill,
     HunkNavigationPill,
     UnifiedDiff,
@@ -74,6 +75,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ActionPill,
             title = "Action Pill",
             description = "Floating pill for contextual overlay actions such as scroll to end.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ComposerSuggestionOverlay,
+            title = "Composer Suggestion Overlay",
+            description = "Composer-anchored suggestion list for slash commands and future @ mentions.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(

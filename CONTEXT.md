@@ -122,6 +122,27 @@ The mobile integration layer that reads and sends **messages** for a session
 Distinct from a **message**: the repository is app infrastructure; a message is
 a single item in a session timeline.
 
+### Command Repository
+
+The mobile integration layer that lists **server commands** for the current
+project and runs a chosen server command against a session.
+
+Distinct from **Message Repository** (normal prompt send) and **Session
+Repository** (session lifecycle and controls). Session Chat chooses command vs
+prompt on send; it does not treat a server command as a message write.
+
+### server command
+
+A named command registered on the opencode server for the current project —
+config commands, built-ins such as `init`/`review`, MCP prompts, and skills —
+that the client lists and runs against a session instead of sending as a normal
+prompt.
+
+Distinct from client slash actions (local UI under the same `/` trigger) and
+from a timeline message with role `command`.
+_Avoid_: slash command (as the name for this concept); custom command (when
+meaning the whole server catalog).
+
 ### Live Store
 
 A reactive observation layer above CRUD repositories that keeps screen data fresh

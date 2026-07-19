@@ -162,6 +162,23 @@ extension Container {
         }.singleton
     }
 
+    var commandsAPIClient: Factory<CommandsAPIClient> {
+        self { CommandsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var commandDomainAdapter: Factory<CommandDomainAdapter> {
+        self { CommandDomainAdapter() }.singleton
+    }
+
+    var commandRepository: Factory<any CommandRepository> {
+        self {
+            DefaultCommandRepository(
+                api: self.commandsAPIClient(),
+                adapter: self.commandDomainAdapter()
+            )
+        }.singleton
+    }
+
     var eventsAPIClient: Factory<EventsAPIClient> {
         self { EventsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
@@ -264,6 +281,7 @@ extension Container {
                 worktree: $0.worktree,
                 messageRepository: self.messageRepository(),
                 modelRepository: self.modelRepository(),
+                commandRepository: self.commandRepository(),
                 sessionRepository: self.sessionRepository(),
                 permissionLiveStore: self.permissionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),

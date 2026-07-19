@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -39,6 +40,7 @@ class SessionChatViewModel
     constructor(
         messageRepository: MessageRepository,
         modelRepository: ModelRepository,
+        commandRepository: CommandRepository,
         private val sessionRepository: SessionRepository,
         private val permissionLiveStore: PermissionLiveStore = EmptyPermissionLiveStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
@@ -64,6 +66,7 @@ class SessionChatViewModel
             SessionChatComposer(
                 messageRepository = messageRepository,
                 modelRepository = modelRepository,
+                commandRepository = commandRepository,
                 sessionRepository = sessionRepository,
                 connectionSessionCoordinator = connectionSessionCoordinator,
                 sessionModelSelectionStore = sessionModelSelectionStore,
@@ -152,6 +155,7 @@ class SessionChatViewModel
 
         fun refreshMessages() {
             timeline.refreshMessages()
+            composer.loadServerCommands(force = true)
         }
 
         fun archiveSession() {
@@ -164,6 +168,14 @@ class SessionChatViewModel
 
         fun updateComposerText(text: String) {
             composer.updateComposerText(text)
+        }
+
+        fun selectSlashSuggestion(commandName: String) {
+            composer.selectSlashSuggestion(commandName)
+        }
+
+        fun refreshServerCommands() {
+            composer.loadServerCommands(force = true)
         }
 
         fun addAttachments(attachments: List<Attachment>) {
@@ -392,6 +404,8 @@ class SessionChatViewModel
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
                 rename = infoState.rename,
+                slashSuggestionsVisible = composerState.slashSuggestionsVisible,
+                slashSuggestions = composerState.slashSuggestions,
             )
         }
 

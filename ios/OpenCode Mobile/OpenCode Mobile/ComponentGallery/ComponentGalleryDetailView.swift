@@ -22,7 +22,7 @@ struct ComponentGalleryDetailView: View {
             if entry.id == .messageList {
                 MessageListGalleryView(model: messageListGalleryModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if entry.id == .sessionComposer {
+            } else if entry.id == .sessionComposer || entry.id == .composerSuggestionOverlay {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(entry.description)
                         .font(OpenCodeTypography.bodySecondary)
@@ -32,8 +32,14 @@ struct ComponentGalleryDetailView: View {
                     ComponentGalleryControls(themeMode: $themeMode)
                         .padding(.horizontal, horizontalPadding)
 
-                    content
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if entry.id == .composerSuggestionOverlay {
+                        content
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.horizontal, horizontalPadding)
+                    } else {
+                        content
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
                 .padding(.top, 16)
             } else {
@@ -112,6 +118,8 @@ struct ComponentGalleryDetailView: View {
             SessionStatusBarGalleryView()
         case .sessionComposer:
             SessionComposerGalleryView()
+        case .composerSuggestionOverlay:
+            ComposerSuggestionOverlayGalleryView()
         case .renderedMarkdown:
             RenderedMarkdownGalleryView()
         case .messageList:

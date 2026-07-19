@@ -471,6 +471,55 @@ struct SessionChatViewModelTests {
         #expect(messages.contains { $0.text == "Hello" })
     }
 
+    @Test func sendPrompt_matchingServerCommand_runsCommandApi() async {
+        let repository = FakeMessageRepository()
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            commandRepository: commandRepository
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/")
+        let catalogReady = await waitUntil {
+            viewModel.uiState.slashSuggestionsVisible &&
+                viewModel.uiState.slashSuggestions.contains { $0.commandName == "init" }
+        }
+        guard catalogReady else {
+            Issue.record("Expected server command catalog to load")
+            return
+        }
+
+        viewModel.updateComposerText("/init please")
+        await viewModel.sendPrompt()
+
+        #expect(commandRepository.runCommandCalled)
+        #expect(commandRepository.lastRunOptions?.command == "init")
+        #expect(commandRepository.lastRunOptions?.arguments == "please")
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(viewModel.uiState.composer.text == "")
+    }
+
+    @Test func sendPrompt_unknownSlash_fallsThroughToPrompt() async {
+        let repository = FakeMessageRepository()
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            commandRepository: commandRepository
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/")
+        _ = await waitUntil {
+            viewModel.uiState.slashSuggestionsVisible && !viewModel.uiState.slashSuggestions.isEmpty
+        }
+
+        viewModel.updateComposerText("/not-a-command hi")
+        await viewModel.sendPrompt()
+
+        #expect(commandRepository.runCommandCalled == false)
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(repository.sentOptions?.text == "/not-a-command hi")
+    }
+
     @Test func sendPrompt_planMode_sendsPlanAgent() async {
         let repository = FakeMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
@@ -1389,6 +1438,7 @@ struct SessionChatViewModelTests {
         eventStream: FakeForegroundEventStream? = nil,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
         modelRepository: FakeModelRepository = FakeModelRepository(),
+        commandRepository: FakeCommandRepository = FakeCommandRepository(),
         sessionRepository: FakeChatSessionRepository? = nil,
         permissionLiveStore: (any PermissionLiveStore)? = nil
     ) -> SessionChatViewModel {
@@ -1420,6 +1470,7 @@ struct SessionChatViewModelTests {
             worktree: "/repo",
             messageRepository: repo,
             modelRepository: modelRepository,
+            commandRepository: commandRepository,
             sessionRepository: sessionRepository,
             permissionLiveStore: permissionLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore,
@@ -1754,6 +1805,34 @@ private struct FakeModelRepository: ModelRepository {
 
     func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
         catalog
+    }
+}
+
+private final class FakeCommandRepository: CommandRepository, @unchecked Sendable {
+    var commands: [ServerCommand]
+    var listCommandsCalled = false
+    var runCommandCalled = false
+    var lastRunOptions: CommandRunOptions?
+    var lastRunSessionID: String?
+
+    init(
+        commands: [ServerCommand] = [
+            ServerCommand(name: "init", description: "Create AGENTS.md", source: .command),
+            ServerCommand(name: "my-skill", description: "A skill", source: .skill),
+        ]
+    ) {
+        self.commands = commands
+    }
+
+    func listCommands(directory: String?) async throws -> [ServerCommand] {
+        listCommandsCalled = true
+        return commands
+    }
+
+    func runCommand(sessionID: String, options: CommandRunOptions, directory: String?) async throws {
+        runCommandCalled = true
+        lastRunSessionID = sessionID
+        lastRunOptions = options
     }
 }
 

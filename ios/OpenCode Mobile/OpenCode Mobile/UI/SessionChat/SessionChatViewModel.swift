@@ -29,6 +29,7 @@ final class SessionChatViewModel {
         worktree: String,
         messageRepository: any MessageRepository,
         modelRepository: any ModelRepository,
+        commandRepository: any CommandRepository,
         sessionRepository: any SessionRepository,
         permissionLiveStore: (any PermissionLiveStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
@@ -52,6 +53,7 @@ final class SessionChatViewModel {
             worktree: worktree,
             messageRepository: messageRepository,
             modelRepository: modelRepository,
+            commandRepository: commandRepository,
             sessionRepository: sessionRepository,
             sessionModelSelectionStore: sessionModelSelectionStore,
             activeConnectionManager: activeConnectionManager
@@ -92,6 +94,7 @@ final class SessionChatViewModel {
 
     func refreshMessages() async {
         await timeline.refreshMessages()
+        composer.loadServerCommands(force: true)
     }
 
     func archiveSession() {
@@ -104,6 +107,10 @@ final class SessionChatViewModel {
 
     func updateComposerText(_ text: String) {
         composer.updateComposerText(text)
+    }
+
+    func selectSlashSuggestion(commandName: String) {
+        composer.selectSlashSuggestion(commandName: commandName)
     }
 
     func addAttachments(_ attachments: [Attachment]) {
@@ -353,7 +360,9 @@ final class SessionChatViewModel {
             permissionErrorMessage: permissionError ?? permissionTopologyError,
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
-            rename: infoState.rename
+            rename: infoState.rename,
+            slashSuggestionsVisible: composerState.slashSuggestionsVisible,
+            slashSuggestions: composerState.slashSuggestions
         )
     }
 
