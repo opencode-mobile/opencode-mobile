@@ -40,6 +40,8 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `edit` | Edit/rename affordances in gallery and samples; not the gallery entry on home |
 | `archive` | Session Chat overflow **Archive** action |
 | `arrow_downward` | **Scroll to end** action pill on session chat |
+| `radio_button_checked` | Selected question-request option / custom answer |
+| `radio_button_unchecked` | Unselected question-request option / custom answer |
 
 Manifest `notes` may mention SF Symbol equivalents; feature decisions live under
 `docs/features/<feature-slug>/decisions.md`.

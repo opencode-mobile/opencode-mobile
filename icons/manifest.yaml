@@ -77,6 +77,12 @@ icons:
   - name: undo
     style: filled
     notes: SF Symbol arrow.uturn.backward
+  - name: radio_button_checked
+    style: filled
+    notes: SF Symbol circle.inset.filled; question option selected
+  - name: radio_button_unchecked
+    style: filled
+    notes: SF Symbol circle; question option unselected
   - name: widgets
     style: filled
     notes: SF Symbol square.grid.2x2 (component gallery)

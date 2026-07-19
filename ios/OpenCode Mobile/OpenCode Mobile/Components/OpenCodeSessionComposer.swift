@@ -338,12 +338,14 @@ struct OpenCodeSessionComposer: View {
 
             VStack(spacing: 8) {
                 ForEach(question.options) { option in
+                    let optionSelected = question.selectedLabels.contains(option.label)
                     OpenCodeListItem(
                         title: option.label,
                         subtitle: option.description.isEmpty ? nil : option.description,
-                        selected: question.selectedLabels.contains(option.label),
+                        selected: optionSelected,
                         enabled: !question.submitting,
                         style: .card,
+                        startDecorator: Self.questionSelectionDecorator(selected: optionSelected),
                         action: {
                             onAction(
                                 .toggleQuestionOption(
@@ -359,9 +361,13 @@ struct OpenCodeSessionComposer: View {
                 if question.customAllowed {
                     OpenCodeListItem(
                         title: "Type your own answer",
+                        subtitle: question.customSelected || question.customText.isEmpty
+                            ? nil
+                            : question.customText,
                         selected: question.customSelected,
                         enabled: !question.submitting,
                         style: .card,
+                        startDecorator: Self.questionSelectionDecorator(selected: question.customSelected),
                         action: {
                             onAction(
                                 .toggleQuestionCustom(
@@ -447,12 +453,10 @@ struct OpenCodeSessionComposer: View {
 
     private var outlineColor: Color {
         switch state {
-        case .prompt:
+        case .prompt, .question:
             OpenCodeColors.borderWeakerBase
         case let .permission(permission):
             permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
-        case let .question(question):
-            question.errorMessage == nil ? OpenCodeColors.interactive : OpenCodeColors.error
         }
     }
 
@@ -462,6 +466,13 @@ struct OpenCodeSessionComposer: View {
         case .permission: "permission"
         case .question: "question"
         }
+    }
+
+    private static func questionSelectionDecorator(selected: Bool) -> StartDecorator {
+        .icon(
+            selected ? .radioButtonChecked : .radioButtonUnchecked,
+            accessibilityLabel: selected ? "Selected" : "Not selected"
+        )
     }
 }
 

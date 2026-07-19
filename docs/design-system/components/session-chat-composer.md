@@ -45,8 +45,7 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 
 - Shell tokens: `surface-base`, `border-weaker-base`, `text-strong`, and
   `text-base`.
-- Status/action tokens: `warning`, `interactive`, `error`, and
-  `button-primary-base`.
+- Status/action tokens: `warning`, `error`, and `button-primary-base`.
 - Shared shell geometry: 26 logical-pixel corner radius, 12 logical-pixel
   content padding, 12 logical-pixel screen gutters, 10 logical-pixel bottom
   inset, and 10 logical-pixel row spacing.
@@ -69,10 +68,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 - With a pending permission or question request, the shell replaces its inner
   content with that decision UI. Draft prompt text and selection state remain in
   the Screen Model and return after the request resolves.
-- The shell keeps its normal neutral outline for prompt entry, uses the warning
-  outline for a pending permission, uses the interactive outline for a pending
-  question, and uses the error outline after a failed permission or question
-  response.
+- The shell keeps its normal neutral outline for prompt entry and question
+  request. It uses the warning outline for a pending permission and the error
+  outline after a failed permission response. Question response failures keep
+  the neutral outline and surface the error in content copy.
 - The shell coordinates content replacement with its size change when switching
   between prompt entry, permission approval, and question request. Android fades
   outgoing content over 80 ms, resizes over 240 ms, and fades incoming content
@@ -84,11 +83,16 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   disabled and the active mutation shows progress.
 - The question state shows one question at a time with optional wizard progress
   (`N of M`), Back / Next when multiple questions exist, and Submit on the last
-  question. Options use list-item cards with label and description. Multi-select
-  questions may keep several labels selected. When custom answer is allowed, a
-  dedicated custom row appears; selecting it reveals a text field. Submit is
-  always explicit — including single-question single-select. Dismiss is an
-  explicit control; the component does not dismiss on navigation or swipe.
+  question. Options use list-item cards with label, description, and
+  `radio_button_checked` / `radio_button_unchecked` start decorators for
+  selection. Multi-select questions may keep several labels selected. When
+  custom answer is allowed, a dedicated custom row uses the same radio
+  decorators; the custom text field is visible only while that radio is
+  selected, and when unselected any entered custom value shows as the row
+  subtitle. Submit is always explicit — including single-question
+  single-select.
+  Dismiss is an explicit control; the component does not dismiss on navigation
+  or swipe.
 - Feature code owns selection rules, wizard index, and enablement of Back /
   Next / Submit. During question submission, option and navigation actions are
   disabled and the active mutation shows progress.

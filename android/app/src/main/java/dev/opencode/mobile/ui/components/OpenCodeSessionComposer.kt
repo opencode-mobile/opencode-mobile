@@ -187,9 +187,9 @@ fun OpenCodeSessionComposer(
         when (state) {
             is OpenCodeSessionComposerState.Permission ->
                 if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
-            is OpenCodeSessionComposerState.Question ->
-                if (state.errorMessage == null) openCodeColor("interactive") else openCodeColor("error")
-            is OpenCodeSessionComposerState.Prompt -> MaterialTheme.colorScheme.outlineVariant
+            is OpenCodeSessionComposerState.Question,
+            is OpenCodeSessionComposerState.Prompt,
+            -> MaterialTheme.colorScheme.outlineVariant
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
@@ -500,12 +500,14 @@ private fun QuestionRequestContent(
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.options.forEach { option ->
+                val optionSelected = option.label in state.selectedLabels
                 OpenCodeListItem(
                     title = option.label,
                     subtitle = option.description.takeIf { it.isNotBlank() },
-                    selected = option.label in state.selectedLabels,
+                    selected = optionSelected,
                     enabled = !state.submitting,
                     style = OpenCodeListItemStyle.Card,
+                    startDecorator = questionSelectionDecorator(selected = optionSelected),
                     onClick = {
                         onAction(
                             OpenCodeSessionComposerAction.ToggleQuestionOption(
@@ -520,9 +522,16 @@ private fun QuestionRequestContent(
             if (state.customAllowed) {
                 OpenCodeListItem(
                     title = "Type your own answer",
+                    subtitle =
+                        if (!state.customSelected) {
+                            state.customText.takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        },
                     selected = state.customSelected,
                     enabled = !state.submitting,
                     style = OpenCodeListItemStyle.Card,
+                    startDecorator = questionSelectionDecorator(selected = state.customSelected),
                     onClick = {
                         onAction(
                             OpenCodeSessionComposerAction.ToggleQuestionCustom(
@@ -604,6 +613,12 @@ private fun QuestionRequestContent(
         }
     }
 }
+
+private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
+    StartDecorator.Icon(
+        imageVector = if (selected) OpenCodeIcons.RadioButtonChecked else OpenCodeIcons.RadioButtonUnchecked,
+        contentDescription = if (selected) "Selected" else "Not selected",
+    )
 
 @Preview(showBackground = true)
 @Composable
