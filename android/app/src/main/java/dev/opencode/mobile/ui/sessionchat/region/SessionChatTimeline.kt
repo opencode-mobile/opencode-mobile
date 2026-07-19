@@ -193,6 +193,8 @@ class SessionChatTimeline(
 
     fun latestModelHint(): LatestModelHint? = latestModelHintFromMessages(lastLoadedMessages)
 
+    fun loadedMessages(): List<Message> = lastLoadedMessages
+
     fun modelSelectionHistoryHints(): dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints {
         val sorted =
             lastLoadedMessages.sortedWith(

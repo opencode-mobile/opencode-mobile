@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -25,6 +26,7 @@ class SettingsViewModel
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val foregroundEventStream: ForegroundEventStream,
         private val permissionLiveStore: PermissionLiveStore,
+        private val questionLiveStore: QuestionLiveStore,
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val messageRepository: MessageRepository,
@@ -34,6 +36,7 @@ class SettingsViewModel
                 foregroundEventStream.stop()
                 connectionSessionCoordinator.clearConnectionData()
                 permissionLiveStore.clearCache()
+                questionLiveStore.clearCache()
                 sessionLiveStore.clearCache()
                 sessionStatusLiveStore.clearCache()
                 messageRepository.clearMessageCache()

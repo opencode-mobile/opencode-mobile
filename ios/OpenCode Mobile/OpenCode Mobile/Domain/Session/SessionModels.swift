@@ -78,6 +78,29 @@ struct PermissionRequest: Sendable, Equatable, Identifiable {
     let toolCallID: String?
 }
 
+struct QuestionOption: Sendable, Equatable, Identifiable {
+    let label: String
+    let description: String
+
+    var id: String { label }
+}
+
+struct QuestionInfo: Sendable, Equatable {
+    let question: String
+    let header: String
+    let options: [QuestionOption]
+    let multiple: Bool
+    let custom: Bool
+}
+
+struct QuestionRequest: Sendable, Equatable, Identifiable {
+    let id: String
+    let sessionID: String
+    let questions: [QuestionInfo]
+    let toolMessageID: String?
+    let toolCallID: String?
+}
+
 enum SessionError: Error, Equatable {
     case transport(String)
     case http(statusCode: Int, message: String?)

@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
@@ -81,6 +82,13 @@ data class SessionChatUiState(
     val permissionQueueCount: Int = 0,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
+    val questionRequest: QuestionRequest? = null,
+    val questionWizardIndex: Int = 0,
+    val questionSelectedLabels: List<String> = emptyList(),
+    val questionCustomText: String = "",
+    val questionCustomSelected: Boolean = false,
+    val questionSubmitting: Boolean = false,
+    val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
     val rename: SessionRenameUiState = SessionRenameUiState(),

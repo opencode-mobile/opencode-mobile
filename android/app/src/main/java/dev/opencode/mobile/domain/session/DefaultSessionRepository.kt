@@ -6,6 +6,7 @@ import dev.opencode.mobile.data.remote.dto.CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
+import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
@@ -25,6 +26,10 @@ class DefaultSessionRepository
     ) : SessionRepository {
         override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> =
             runCatching { api.listPendingPermissions(directory).map(adapter::toPermissionRequest) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
+            runCatching { api.listPendingQuestions(directory).map(adapter::toQuestionRequest) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun listSessions(directory: String?): List<Session> =
@@ -218,4 +223,24 @@ class DefaultSessionRepository
                     directory,
                 )
             }.getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun replyToQuestion(
+            requestId: String,
+            answers: List<List<String>>,
+            directory: String?,
+        ): Boolean =
+            runCatching {
+                api.replyToQuestion(
+                    requestId,
+                    QuestionReplyRequestDto(answers = answers),
+                    directory,
+                )
+            }.getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun rejectQuestion(
+            requestId: String,
+            directory: String?,
+        ): Boolean =
+            runCatching { api.rejectQuestion(requestId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
     }

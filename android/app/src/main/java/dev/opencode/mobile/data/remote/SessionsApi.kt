@@ -6,6 +6,8 @@ import dev.opencode.mobile.data.remote.dto.ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.InitSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.PermissionResponseRequestDto
+import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.RevertSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
@@ -39,6 +41,13 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .get("permission") {
+                applyDirectory(directory)
+            }.body()
+
+    suspend fun listPendingQuestions(directory: String? = null): List<QuestionRequestDto> =
+        httpClient
+            .get()
+            .get("question") {
                 applyDirectory(directory)
             }.body()
 
@@ -250,6 +259,28 @@ class SessionsApi private constructor(
             .post("session/$sessionId/permissions/$permissionId") {
                 applyDirectory(directory)
                 setJsonBody(json, body)
+            }.body()
+
+    suspend fun replyToQuestion(
+        requestId: String,
+        body: QuestionReplyRequestDto,
+        directory: String? = null,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("question/$requestId/reply") {
+                applyDirectory(directory)
+                setJsonBody(json, body)
+            }.body()
+
+    suspend fun rejectQuestion(
+        requestId: String,
+        directory: String? = null,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("question/$requestId/reject") {
+                applyDirectory(directory)
             }.body()
 
     private fun interface ClientProvider {

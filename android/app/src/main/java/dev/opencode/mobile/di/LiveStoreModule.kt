@@ -8,7 +8,9 @@ import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.DefaultPermissionLiveStore
+import dev.opencode.mobile.domain.live.DefaultQuestionLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -21,6 +23,10 @@ abstract class LiveStoreModule {
     @Binds
     @Singleton
     abstract fun bindPermissionLiveStore(impl: DefaultPermissionLiveStore): PermissionLiveStore
+
+    @Binds
+    @Singleton
+    abstract fun bindQuestionLiveStore(impl: DefaultQuestionLiveStore): QuestionLiveStore
 
     @Binds
     @Singleton

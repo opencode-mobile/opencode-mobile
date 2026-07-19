@@ -288,7 +288,7 @@ fun SessionChatScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                if (uiState.permissionRequest == null) {
+                if (uiState.permissionRequest == null && uiState.questionRequest == null) {
                     when {
                         uiState.atSuggestionsVisible ->
                             OpenCodeComposerSuggestionOverlay(
@@ -343,6 +343,41 @@ fun SessionChatScreen(
                         queueCount = uiState.permissionQueueCount,
                         submitting = uiState.permissionSubmitting,
                         errorMessage = uiState.permissionErrorMessage,
+                    )
+                } ?: uiState.questionRequest?.let { request ->
+                    val question = request.questions.getOrNull(uiState.questionWizardIndex)
+                    val questionCount = request.questions.size.coerceAtLeast(1)
+                    val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
+                    val answered =
+                        if (uiState.questionCustomSelected) {
+                            uiState.questionCustomText.isNotBlank()
+                        } else {
+                            uiState.questionSelectedLabels.isNotEmpty()
+                        }
+                    OpenCodeSessionComposerState.Question(
+                        requestId = request.id,
+                        sessionId = request.sessionId,
+                        questionIndex = index,
+                        questionCount = questionCount,
+                        header = question?.header.orEmpty(),
+                        question = question?.question.orEmpty(),
+                        options =
+                            question?.options.orEmpty().map { option ->
+                                OpenCodeSessionComposerState.QuestionOption(
+                                    label = option.label,
+                                    description = option.description,
+                                )
+                            },
+                        multiple = question?.multiple == true,
+                        customAllowed = question?.custom != false,
+                        selectedLabels = uiState.questionSelectedLabels,
+                        customText = uiState.questionCustomText,
+                        customSelected = uiState.questionCustomSelected,
+                        backEnabled = index > 0,
+                        nextEnabled = answered && index < questionCount - 1,
+                        submitEnabled = answered && index == questionCount - 1,
+                        submitting = uiState.questionSubmitting,
+                        errorMessage = uiState.questionErrorMessage,
                     )
                 } ?: OpenCodeSessionComposerState.Prompt(
                     text = uiState.composer.text,
@@ -403,15 +438,20 @@ fun SessionChatScreen(
                             viewModel.allowPermissionOnce(action.requestId, action.sessionId)
                         is OpenCodeSessionComposerAction.DenyPermission ->
                             viewModel.denyPermission(action.requestId, action.sessionId)
-                        // Question request actions are wired in OPE-66.
-                        is OpenCodeSessionComposerAction.ToggleQuestionOption,
-                        is OpenCodeSessionComposerAction.ToggleQuestionCustom,
-                        is OpenCodeSessionComposerAction.QuestionCustomTextChanged,
-                        is OpenCodeSessionComposerAction.QuestionBack,
-                        is OpenCodeSessionComposerAction.QuestionNext,
-                        is OpenCodeSessionComposerAction.SubmitQuestion,
-                        is OpenCodeSessionComposerAction.DismissQuestion,
-                        -> Unit
+                        is OpenCodeSessionComposerAction.ToggleQuestionOption ->
+                            viewModel.toggleQuestionOption(action.requestId, action.sessionId, action.label)
+                        is OpenCodeSessionComposerAction.ToggleQuestionCustom ->
+                            viewModel.toggleQuestionCustom(action.requestId, action.sessionId)
+                        is OpenCodeSessionComposerAction.QuestionCustomTextChanged ->
+                            viewModel.updateQuestionCustomText(action.requestId, action.sessionId, action.text)
+                        is OpenCodeSessionComposerAction.QuestionBack ->
+                            viewModel.questionBack(action.requestId, action.sessionId)
+                        is OpenCodeSessionComposerAction.QuestionNext ->
+                            viewModel.questionNext(action.requestId, action.sessionId)
+                        is OpenCodeSessionComposerAction.SubmitQuestion ->
+                            viewModel.submitQuestion(action.requestId, action.sessionId)
+                        is OpenCodeSessionComposerAction.DismissQuestion ->
+                            viewModel.dismissQuestion(action.requestId, action.sessionId)
                     }
                 },
             )

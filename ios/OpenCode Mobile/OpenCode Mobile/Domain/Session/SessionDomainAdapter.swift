@@ -83,6 +83,26 @@ struct SessionDomainAdapter: Sendable {
         )
     }
 
+    func questionRequest(from dto: QuestionRequestDTO) -> QuestionRequest {
+        QuestionRequest(
+            id: dto.id,
+            sessionID: dto.sessionID,
+            questions: dto.questions.map(questionInfo),
+            toolMessageID: dto.tool?.messageID,
+            toolCallID: dto.tool?.callID
+        )
+    }
+
+    func questionInfo(from dto: QuestionInfoDTO) -> QuestionInfo {
+        QuestionInfo(
+            question: dto.question,
+            header: dto.header,
+            options: dto.options.map { QuestionOption(label: $0.label, description: $0.description ?? "") },
+            multiple: dto.multiple ?? false,
+            custom: dto.custom != false
+        )
+    }
+
     func mapError(_ error: Error) -> SessionError {
         if let sessionError = error as? SessionError {
             return sessionError

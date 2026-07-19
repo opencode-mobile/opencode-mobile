@@ -99,7 +99,7 @@ struct SessionChatView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .bottom) {
-                if viewModel.uiState.permissionRequest == nil {
+                if viewModel.uiState.permissionRequest == nil, viewModel.uiState.questionRequest == nil {
                     if viewModel.uiState.atSuggestionsVisible {
                         OpenCodeComposerSuggestionOverlay(
                             items: viewModel.uiState.atSuggestions.map { suggestion in
@@ -394,6 +394,40 @@ struct SessionChatView: View {
                     errorMessage: viewModel.uiState.permissionErrorMessage
                 )
             )
+        } else if let request = viewModel.uiState.questionRequest,
+                  let question = request.questions.indices.contains(viewModel.uiState.questionWizardIndex)
+                      ? request.questions[viewModel.uiState.questionWizardIndex]
+                      : nil {
+            let draft = viewModel.uiState
+            let isValid = isQuestionAnswerValid(
+                question: question,
+                draft: QuestionAnswerDraft(
+                    selectedLabels: draft.questionSelectedLabels,
+                    customText: draft.questionCustomText,
+                    customSelected: draft.questionCustomSelected
+                )
+            )
+            state = .question(
+                .init(
+                    requestID: request.id,
+                    sessionID: request.sessionID,
+                    questionIndex: draft.questionWizardIndex,
+                    questionCount: request.questions.count,
+                    header: question.header,
+                    question: question.question,
+                    options: question.options.map { .init(label: $0.label, description: $0.description) },
+                    multiple: question.multiple,
+                    customAllowed: question.custom,
+                    selectedLabels: draft.questionSelectedLabels,
+                    customText: draft.questionCustomText,
+                    customSelected: draft.questionCustomSelected,
+                    backEnabled: draft.questionWizardIndex > 0 && !draft.questionSubmitting,
+                    nextEnabled: isValid && draft.questionWizardIndex < request.questions.count - 1 && !draft.questionSubmitting,
+                    submitEnabled: isValid && draft.questionWizardIndex == request.questions.count - 1 && !draft.questionSubmitting,
+                    submitting: draft.questionSubmitting,
+                    errorMessage: draft.questionErrorMessage
+                )
+            )
         } else {
             state = .prompt(
                 .init(
@@ -456,10 +490,20 @@ struct SessionChatView: View {
                     Task { await viewModel.allowPermissionOnce(requestID: requestID, sessionID: sessionID) }
                 case let .denyPermission(requestID, sessionID):
                     Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
-                case .toggleQuestionOption, .toggleQuestionCustom, .questionCustomTextChanged,
-                     .questionBack, .questionNext, .submitQuestion, .dismissQuestion:
-                    // Question request actions are wired in OPE-66.
-                    break
+                case let .toggleQuestionOption(requestID, sessionID, label):
+                    viewModel.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
+                case let .toggleQuestionCustom(requestID, sessionID):
+                    viewModel.toggleQuestionCustom(requestID: requestID, sessionID: sessionID)
+                case let .questionCustomTextChanged(requestID, sessionID, text):
+                    viewModel.updateQuestionCustomText(requestID: requestID, sessionID: sessionID, text: text)
+                case let .questionBack(requestID, sessionID):
+                    viewModel.questionBack(requestID: requestID, sessionID: sessionID)
+                case let .questionNext(requestID, sessionID):
+                    viewModel.questionNext(requestID: requestID, sessionID: sessionID)
+                case let .submitQuestion(requestID, sessionID):
+                    Task { await viewModel.submitQuestion(requestID: requestID, sessionID: sessionID) }
+                case let .dismissQuestion(requestID, sessionID):
+                    Task { await viewModel.dismissQuestion(requestID: requestID, sessionID: sessionID) }
                 }
             }
         )

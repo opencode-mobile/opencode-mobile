@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.session
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
+import dev.opencode.mobile.data.remote.dto.QuestionInfoDto
+import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
@@ -92,6 +94,27 @@ class SessionDomainAdapter {
             always = dto.always,
             toolMessageId = dto.tool?.messageId,
             toolCallId = dto.tool?.callId,
+        )
+
+    fun toQuestionRequest(dto: QuestionRequestDto): QuestionRequest =
+        QuestionRequest(
+            id = dto.id,
+            sessionId = dto.sessionId,
+            questions = dto.questions.map(::toQuestionInfo),
+            toolMessageId = dto.tool?.messageId,
+            toolCallId = dto.tool?.callId,
+        )
+
+    fun toQuestionInfo(dto: QuestionInfoDto): QuestionInfo =
+        QuestionInfo(
+            question = dto.question,
+            header = dto.header,
+            options =
+                dto.options.map { option ->
+                    QuestionOption(label = option.label, description = option.description)
+                },
+            multiple = dto.multiple == true,
+            custom = dto.custom != false,
         )
 
     fun mapError(throwable: Throwable): SessionError =
