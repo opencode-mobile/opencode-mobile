@@ -496,7 +496,7 @@ private fun QuestionRequestContent(
         Text(
             selectionHint,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = openCodeColor("text-base"),
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.options.forEach { option ->

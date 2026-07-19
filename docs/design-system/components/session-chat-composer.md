@@ -53,8 +53,8 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.
 - Typography: body for prompt entry; heading, body-secondary, code, caption, and
-  button roles for permission approval and question request. Question options
-  reuse `OpenCodeListItem` card style.
+  button roles for permission approval and question request. Question selection
+  hints use `text-base`. Question options reuse `OpenCodeListItem` card style.
 
 ## Behavior
 
@@ -136,6 +136,21 @@ scenarios keep local selection drafts so option, custom, Back / Next, Submit,
 and Dismiss actions can be reviewed. The live composer is anchored to the bottom
 of the available gallery page below its controls so screen-edge geometry and
 resize motion can be reviewed in a realistic Session Chat placement.
+
+## Completion Ledger
+
+- Public API and applicable states: complete (`prompt`, `permission`,
+  `question`).
+- Token and typography mapping: complete. Question selection hints use
+  `text-base` on both platforms; question shell outline stays neutral.
+- iOS and Android implementations: complete for the shared question-request
+  composer state, including radio selection chrome and custom-answer field
+  visibility.
+- Gallery entries and previews: complete for question single, wizard,
+  multi-select, custom, submitting, and error scenarios on both platforms.
+- Parity and divergences: complete; none known for this component update.
+- Automated checks: complete for compile on iOS simulator and Android
+  `compileDebugKotlin`. Session Chat wiring remains OPE-66.
 
 ## Parity And Divergence
 
