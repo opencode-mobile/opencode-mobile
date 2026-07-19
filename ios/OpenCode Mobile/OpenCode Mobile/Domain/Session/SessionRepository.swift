@@ -2,6 +2,7 @@ import Foundation
 
 protocol SessionRepository: Sendable {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest]
+    func listPendingQuestions(directory: String?) async throws -> [QuestionRequest]
     func listSessions(directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
@@ -23,10 +24,15 @@ protocol SessionRepository: Sendable {
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
+    func rejectQuestion(questionID: String, directory: String?) async throws -> Bool
 }
 
 extension SessionRepository {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] { [] }
+    func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] { [] }
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool { false }
+    func rejectQuestion(questionID: String, directory: String?) async throws -> Bool { false }
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -38,6 +44,14 @@ extension SessionRepository {
 
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
         try await respondToPermission(sessionID: sessionID, permissionID: permissionID, decision: decision, directory: nil)
+    }
+
+    func replyToQuestion(questionID: String, answers: [[String]]) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: nil)
+    }
+
+    func rejectQuestion(questionID: String) async throws -> Bool {
+        try await rejectQuestion(questionID: questionID, directory: nil)
     }
 
     func getSessionDiff(id: String, messageID: String?) async throws -> [FileDiff] {
@@ -77,6 +91,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
         try await run { try await api.listPendingPermissions(directory: directory).map { adapter.permissionRequest(from: $0) } }
+    }
+
+    func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
+        try await run { try await api.listPendingQuestions(directory: directory).map { adapter.questionRequest(from: $0) } }
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
@@ -207,6 +225,20 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
                 directory: directory
             )
         }
+    }
+
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool {
+        try await run {
+            try await api.replyToQuestion(
+                questionID: questionID,
+                body: QuestionReplyRequestDTO(answers: answers),
+                directory: directory
+            )
+        }
+    }
+
+    func rejectQuestion(questionID: String, directory: String?) async throws -> Bool {
+        try await run { try await api.rejectQuestion(questionID: questionID, directory: directory) }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

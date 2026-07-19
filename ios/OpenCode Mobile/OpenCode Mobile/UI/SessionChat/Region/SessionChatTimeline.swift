@@ -147,6 +147,10 @@ final class SessionChatTimeline {
         )
     }
 
+    func loadedMessages() -> [Message] {
+        lastLoadedMessages
+    }
+
     func row(from message: Message, previous: SessionChatRow? = nil) -> SessionChatRow? {
         row(from: DisplayMessage(message: message), previous: previous)
     }

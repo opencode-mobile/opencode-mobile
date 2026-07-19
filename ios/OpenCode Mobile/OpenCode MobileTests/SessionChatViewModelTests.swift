@@ -162,6 +162,80 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.permissionRequest == nil)
     }
 
+    @Test func permissionRequest_takesPriorityOverQuestionRequest() async {
+        let viewModel = makeViewModel(
+            sessionRepository: FakeChatSessionRepository(
+                sessions: [
+                    Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil)
+                ]
+            ),
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")]),
+            questionLiveStore: FakeQuestionLiveStore(requests: [questionRequest(id: "que-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+
+        await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" }
+        #expect(viewModel.uiState.questionRequest == nil)
+    }
+
+    @Test func staleQuestionReply_refreshesAndRemovesMissingRequest() async {
+        let request = questionRequest(id: "que-1", sessionID: "ses-1")
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil)
+            ],
+            pendingQuestions: [],
+            questionResponseError: .http(statusCode: 404, message: "Missing")
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            questionLiveStore: FakeQuestionLiveStore(requests: [request])
+        )
+        defer { viewModel.stopObserving() }
+
+        await waitUntil { viewModel.uiState.questionRequest?.id == "que-1" }
+        viewModel.toggleQuestionOption(requestID: request.id, sessionID: request.sessionID, label: "A")
+        await viewModel.submitQuestion(requestID: request.id, sessionID: request.sessionID)
+        await waitUntil { viewModel.uiState.questionRequest == nil }
+
+        #expect(sessionRepository.repliedQuestionID == "que-1")
+        #expect(sessionRepository.pendingQuestionLoads == 1)
+    }
+
+    @Test func lateQuestionDismissFailure_doesNotPaintErrorOnVisibleRequest() async {
+        let first = questionRequest(id: "que-1", sessionID: "ses-1")
+        let second = questionRequest(id: "que-2", sessionID: "child")
+        let gate = AsyncGate()
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(id: "child", title: "Child", slug: nil, projectID: nil, directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil)
+            ],
+            questionResponseError: .http(statusCode: 500, message: "boom"),
+            questionHold: gate
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            questionLiveStore: FakeQuestionLiveStore(requests: [first, second])
+        )
+        defer { viewModel.stopObserving() }
+
+        await waitUntil { viewModel.uiState.questionRequest?.id == "que-1" }
+        let dismissTask = Task {
+            await viewModel.dismissQuestion(requestID: second.id, sessionID: second.sessionID)
+        }
+        await waitUntil { sessionRepository.rejectedQuestionID == "que-2" }
+        #expect(viewModel.uiState.questionSubmitting == false)
+        #expect(viewModel.uiState.questionRequest?.id == "que-1")
+
+        await gate.open()
+        await dismissTask.value
+
+        #expect(viewModel.uiState.questionRequest?.id == "que-1")
+        #expect(viewModel.uiState.questionErrorMessage == nil)
+        #expect(viewModel.uiState.questionSubmitting == false)
+    }
+
     @Test func loadMessages_success() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
         await viewModel.loadMessages()
@@ -1505,7 +1579,8 @@ struct SessionChatViewModelTests {
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionRepository: FakeChatSessionRepository? = nil,
-        permissionLiveStore: (any PermissionLiveStore)? = nil
+        permissionLiveStore: (any PermissionLiveStore)? = nil,
+        questionLiveStore: (any QuestionLiveStore)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         let sessionRepository = sessionRepository ?? FakeChatSessionRepository()
@@ -1539,6 +1614,7 @@ struct SessionChatViewModelTests {
             agentRepository: agentRepository,
             sessionRepository: sessionRepository,
             permissionLiveStore: permissionLiveStore,
+            questionLiveStore: questionLiveStore,
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
@@ -2035,7 +2111,9 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
 
     private let sessions: [Session]
     private let pendingPermissions: [PermissionRequest]
+    private let pendingQuestions: [QuestionRequest]
     private let permissionResponseError: SessionError?
+    private let questionResponseError: SessionError?
     private let listSessionsError: SessionError?
     private let sessionDiffs: [FileDiff]
     private let sessionDiffError: SessionError?
@@ -2047,10 +2125,14 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let deleteResult: Bool
     private let archiveHold: AsyncGate?
     private let deleteHold: AsyncGate?
+    private let questionHold: AsyncGate?
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
     private(set) var pendingPermissionLoads = 0
+    private(set) var pendingQuestionLoads = 0
+    private(set) var repliedQuestionID: String?
+    private(set) var rejectedQuestionID: String?
     private(set) var diffRequest: DiffRequest?
     private(set) var updateRequest: UpdateRequest?
     private(set) var archiveRequest: LifecycleRequest?
@@ -2061,7 +2143,9 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     init(
         sessions: [Session] = [],
         pendingPermissions: [PermissionRequest] = [],
+        pendingQuestions: [QuestionRequest] = [],
         permissionResponseError: SessionError? = nil,
+        questionResponseError: SessionError? = nil,
         listSessionsError: SessionError? = nil,
         sessionDiffs: [FileDiff] = [],
         sessionDiffError: SessionError? = nil,
@@ -2072,11 +2156,14 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         deleteError: SessionError? = nil,
         deleteResult: Bool = true,
         archiveHold: AsyncGate? = nil,
-        deleteHold: AsyncGate? = nil
+        deleteHold: AsyncGate? = nil,
+        questionHold: AsyncGate? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
+        self.pendingQuestions = pendingQuestions
         self.permissionResponseError = permissionResponseError
+        self.questionResponseError = questionResponseError
         self.listSessionsError = listSessionsError
         self.sessionDiffs = sessionDiffs
         self.sessionDiffError = sessionDiffError
@@ -2088,11 +2175,17 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.deleteResult = deleteResult
         self.archiveHold = archiveHold
         self.deleteHold = deleteHold
+        self.questionHold = questionHold
     }
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
         pendingPermissionLoads += 1
         return pendingPermissions
+    }
+
+    func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
+        pendingQuestionLoads += 1
+        return pendingQuestions
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
@@ -2168,6 +2261,20 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let permissionResponseError { throw permissionResponseError }
         return true
     }
+
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool {
+        repliedQuestionID = questionID
+        if let questionHold { await questionHold.wait() }
+        if let questionResponseError { throw questionResponseError }
+        return true
+    }
+
+    func rejectQuestion(questionID: String, directory: String?) async throws -> Bool {
+        rejectedQuestionID = questionID
+        if let questionHold { await questionHold.wait() }
+        if let questionResponseError { throw questionResponseError }
+        return true
+    }
 }
 
 @MainActor
@@ -2225,4 +2332,43 @@ private final class AsyncGate: @unchecked Sendable {
         continuations.removeAll()
         pending.forEach { $0.resume() }
     }
+}
+
+
+private final class FakeQuestionLiveStore: QuestionLiveStore {
+    private let requests: [QuestionRequest]
+
+    init(requests: [QuestionRequest]) {
+        self.requests = requests
+    }
+
+    func observeQuestions(directory: String) -> AsyncStream<[QuestionRequest]> {
+        AsyncStream { continuation in
+            continuation.yield(requests)
+            continuation.finish()
+        }
+    }
+
+    func clearCache() {}
+}
+
+private func questionRequest(
+    id: String,
+    sessionID: String
+) -> QuestionRequest {
+    QuestionRequest(
+        id: id,
+        sessionID: sessionID,
+        questions: [
+            QuestionInfo(
+                question: "Which approach?",
+                header: "Approach",
+                options: [QuestionOption(label: "A", description: "First")],
+                multiple: false,
+                custom: true
+            )
+        ],
+        toolMessageID: nil,
+        toolCallID: nil
+    )
 }

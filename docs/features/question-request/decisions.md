@@ -73,3 +73,10 @@ errors without a matching reply/reject event.
 
 Foreground SSE only. No push, no remember-answer, no minimize-without-answer in
 v1.
+
+## Keep live interruption wiring beside Permission Approval
+
+OPE-66 wires question observation, tree selection, and reply/dismiss in the
+Session Chat facade next to Permission Approval, rather than extracting a new
+region in the same change. A shared interruption region remains a follow-up if
+both queues grow further.

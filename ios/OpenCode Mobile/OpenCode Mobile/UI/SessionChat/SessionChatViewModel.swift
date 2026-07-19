@@ -17,12 +17,22 @@ final class SessionChatViewModel {
     private let reviewChanges: SessionChatReviewChanges
     private let sessionRepository: any SessionRepository
     private let permissionLiveStore: any PermissionLiveStore
+    private let questionLiveStore: any QuestionLiveStore
     private var permissionTask: Task<Void, Never>?
+    private var questionTask: Task<Void, Never>?
     private var permissionSessions: [Session] = []
     private var permissionRequests: [PermissionRequest] = []
     private var permissionSubmittingID: String?
     private var permissionError: String?
     private var permissionTopologyError: String?
+    private var questionSessions: [Session] = []
+    private var questionRequests: [QuestionRequest] = []
+    private var questionSubmittingID: String?
+    private var questionError: String?
+    private var questionTopologyError: String?
+    private var questionDraftRequestID: String?
+    private var questionWizardIndex = 0
+    private var questionDrafts: [Int: QuestionAnswerDraft] = [:]
     init(
         sessionID: String,
         sessionTitle: String,
@@ -33,6 +43,7 @@ final class SessionChatViewModel {
         agentRepository: any AgentRepository,
         sessionRepository: any SessionRepository,
         permissionLiveStore: (any PermissionLiveStore)? = nil,
+        questionLiveStore: (any QuestionLiveStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
@@ -44,6 +55,7 @@ final class SessionChatViewModel {
         self.uiState = .initial(sessionID: sessionID, sessionTitle: sessionTitle)
         self.sessionRepository = sessionRepository
         self.permissionLiveStore = permissionLiveStore ?? EmptyPermissionLiveStore()
+        self.questionLiveStore = questionLiveStore ?? EmptyQuestionLiveStore()
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -85,6 +97,7 @@ final class SessionChatViewModel {
         sessionInfo.startObserving()
         timeline.startObserving()
         startPermissionObservation()
+        startQuestionObservation()
     }
 
     func loadMessages() async {
@@ -181,6 +194,7 @@ final class SessionChatViewModel {
     }
 
     func sendPrompt() async {
+        guard permissionRequests.isEmpty, questionRequests.isEmpty else { return }
         await composer.sendPrompt(
             sessionID: sessionID,
             onOptimisticRows: { [weak self] rows in
@@ -213,11 +227,102 @@ final class SessionChatViewModel {
         await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .deny)
     }
 
+    func toggleQuestionOption(requestID: String, sessionID: String, label: String) {
+        guard let request = visibleQuestionRequest(),
+              request.id == requestID, request.sessionID == sessionID, questionSubmittingID == nil,
+              request.questions.indices.contains(questionWizardIndex)
+        else { return }
+        let question = request.questions[questionWizardIndex]
+        let draft = questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()
+        let selected = question.multiple
+            ? (draft.selectedLabels.contains(label) ? draft.selectedLabels.filter { $0 != label } : draft.selectedLabels + [label])
+            : [label]
+        questionDrafts[questionWizardIndex] = QuestionAnswerDraft(
+            selectedLabels: selected, customText: draft.customText, customSelected: false
+        )
+        publishUiState()
+    }
+
+    func toggleQuestionCustom(requestID: String, sessionID: String) {
+        guard let request = visibleQuestionRequest(),
+              request.id == requestID, request.sessionID == sessionID, questionSubmittingID == nil,
+              request.questions.indices.contains(questionWizardIndex),
+              request.questions[questionWizardIndex].custom
+        else { return }
+        var draft = questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()
+        draft.customSelected.toggle()
+        if draft.customSelected { draft.selectedLabels = [] }
+        questionDrafts[questionWizardIndex] = draft
+        publishUiState()
+    }
+
+    func updateQuestionCustomText(requestID: String, sessionID: String, text: String) {
+        guard let request = visibleQuestionRequest(),
+              request.id == requestID, request.sessionID == sessionID, questionSubmittingID == nil
+        else { return }
+        questionDrafts[questionWizardIndex] = QuestionAnswerDraft(selectedLabels: [], customText: text, customSelected: true)
+        publishUiState()
+    }
+
+    func questionBack(requestID: String, sessionID: String) {
+        guard visibleQuestionRequest()?.id == requestID, visibleQuestionRequest()?.sessionID == sessionID,
+              questionSubmittingID == nil, questionWizardIndex > 0 else { return }
+        questionWizardIndex -= 1
+        publishUiState()
+    }
+
+    func questionNext(requestID: String, sessionID: String) {
+        guard let request = visibleQuestionRequest(), request.id == requestID, request.sessionID == sessionID,
+              questionSubmittingID == nil, request.questions.indices.contains(questionWizardIndex),
+              isQuestionAnswerValid(question: request.questions[questionWizardIndex], draft: questionDrafts[questionWizardIndex] ?? QuestionAnswerDraft()),
+              questionWizardIndex < request.questions.count - 1 else { return }
+        questionWizardIndex += 1
+        publishUiState()
+    }
+
+    func submitQuestion(requestID: String, sessionID: String) async {
+        guard let request = questionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
+              questionSubmittingID == nil, let answers = buildQuestionAnswers(questions: request.questions, drafts: questionDrafts)
+        else { return }
+        questionSubmittingID = request.id
+        questionError = nil
+        OpenCodeLog.sessionChat.info("question reply request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
+        publishUiState()
+        do {
+            _ = try await sessionRepository.replyToQuestion(questionID: request.id, answers: answers, directory: worktree)
+        } catch {
+            await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: false)
+        }
+    }
+
+    func dismissQuestion(requestID: String, sessionID: String) async {
+        guard let request = questionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
+              questionSubmittingID == nil else { return }
+        questionSubmittingID = request.id
+        questionError = nil
+        OpenCodeLog.sessionChat.info("question dismiss request=\(request.id, privacy: .public) session=\(request.sessionID, privacy: .public)")
+        publishUiState()
+        do {
+            _ = try await sessionRepository.rejectQuestion(questionID: request.id, directory: worktree)
+        } catch {
+            await handleQuestionMutationFailure(requestID: request.id, error: error, dismiss: true)
+        }
+    }
+
     private func startPermissionObservation() {
         permissionTask?.cancel()
         permissionTask = Task {
             for await requests in permissionLiveStore.observePermissions(directory: worktree) {
                 await applyPermissionSnapshot(requests)
+            }
+        }
+    }
+
+    private func startQuestionObservation() {
+        questionTask?.cancel()
+        questionTask = Task {
+            for await requests in questionLiveStore.observeQuestions(directory: worktree) {
+                await applyQuestionSnapshot(requests)
             }
         }
     }
@@ -266,6 +371,15 @@ final class SessionChatViewModel {
         }
     }
 
+    private func refreshQuestionSnapshot() async -> Bool {
+        do {
+            await applyQuestionSnapshot(try await sessionRepository.listPendingQuestions(directory: worktree))
+            return true
+        } catch {
+            return false
+        }
+    }
+
     private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
         do {
             let sessions = try await sessionRepository.listSessions(directory: worktree)
@@ -285,6 +399,83 @@ final class SessionChatViewModel {
             permissionError = nil
         }
         publishUiState()
+    }
+
+    private func applyQuestionSnapshot(_ requests: [QuestionRequest]) async {
+        do {
+            questionSessions = try await sessionRepository.listSessions(directory: worktree)
+            questionTopologyError = nil
+        } catch {
+            questionSessions = []
+            questionTopologyError = "Unable to refresh question session tree"
+        }
+        let previousVisibleID = questionRequests.first?.id
+        questionRequests = dropOrphanQuestionRequests(
+            orderedQuestionRequests(rootSessionID: sessionID, sessions: questionSessions, requests: requests),
+            messages: timeline.loadedMessages()
+        )
+        syncQuestionDraftState()
+        if let submitting = questionSubmittingID, !questionRequests.contains(where: { $0.id == submitting }) {
+            questionSubmittingID = nil
+            questionError = nil
+        }
+        let visibleID = questionRequests.first?.id
+        if visibleID != previousVisibleID {
+            OpenCodeLog.sessionChat.info("question visible=\(visibleID ?? "none", privacy: .public) queue=\(self.questionRequests.count, privacy: .public)")
+        }
+        publishUiState()
+    }
+
+    private func handleQuestionMutationFailure(requestID: String, error: Error, dismiss: Bool) async {
+        if questionSubmittingID == requestID {
+            questionSubmittingID = nil
+        }
+        if case let .http(statusCode, _) = error as? SessionError, statusCode == 404 {
+            if await refreshQuestionSnapshot(), !questionRequests.contains(where: { $0.id == requestID }) {
+                questionError = nil
+                publishUiState()
+                return
+            }
+            if visibleQuestionRequest()?.id == requestID {
+                questionError = "Question request is no longer available"
+            }
+        } else if visibleQuestionRequest()?.id == requestID {
+            questionError = error.localizedDescription.isEmpty
+                ? (dismiss ? "Question dismiss failed" : "Question response failed")
+                : error.localizedDescription
+        }
+        publishUiState()
+    }
+
+    private func syncQuestionDraftState() {
+        guard let visible = questionRequests.first else {
+            questionDraftRequestID = nil
+            questionWizardIndex = 0
+            questionDrafts.removeAll()
+            return
+        }
+        if questionDraftRequestID != visible.id {
+            questionDraftRequestID = visible.id
+            questionWizardIndex = 0
+            questionDrafts.removeAll()
+        } else {
+            questionWizardIndex = min(max(questionWizardIndex, 0), max(0, visible.questions.count - 1))
+        }
+    }
+
+    private func visibleQuestionRequest() -> QuestionRequest? {
+        permissionRequests.isEmpty ? questionRequests.first : nil
+    }
+
+    private func refilterQuestionOrphans() {
+        let filtered = dropOrphanQuestionRequests(questionRequests, messages: timeline.loadedMessages())
+        guard filtered != questionRequests else { return }
+        questionRequests = filtered
+        syncQuestionDraftState()
+        if let submitting = questionSubmittingID, !questionRequests.contains(where: { $0.id == submitting }) {
+            questionSubmittingID = nil
+            questionError = nil
+        }
     }
 
     nonisolated static func orderedPermissionRequests(
@@ -313,6 +504,7 @@ final class SessionChatViewModel {
         timeline.stopObserving()
         sessionInfo.stopObserving()
         permissionTask?.cancel()
+        questionTask?.cancel()
         reviewChanges.stop()
     }
 
@@ -328,6 +520,7 @@ final class SessionChatViewModel {
     }
 
     private func publishUiState() {
+        refilterQuestionOrphans()
         let timelineState = timeline.state
         let composerState = composer.state
         let infoState = sessionInfo.state
@@ -342,6 +535,7 @@ final class SessionChatViewModel {
             isSending: composerState.isSending
         )
         let reviewChangesState = reviewChanges.state
+        let visibleQuestion = visibleQuestionRequest()
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -369,6 +563,15 @@ final class SessionChatViewModel {
             permissionQueueCount: permissionRequests.count,
             permissionSubmitting: permissionSubmittingID != nil,
             permissionErrorMessage: permissionError ?? permissionTopologyError,
+            questionRequest: visibleQuestion,
+            questionWizardIndex: questionWizardIndex,
+            questionSelectedLabels: questionDrafts[questionWizardIndex]?.selectedLabels ?? [],
+            questionCustomText: questionDrafts[questionWizardIndex]?.customText ?? "",
+            questionCustomSelected: questionDrafts[questionWizardIndex]?.customSelected ?? false,
+            questionSubmitting: questionSubmittingID != nil && questionSubmittingID == visibleQuestion?.id,
+            questionErrorMessage: visibleQuestion != nil
+                ? (questionError ?? questionTopologyError)
+                : nil,
             reviewChangesMessageID: reviewChangesState.messageID,
             reviewChangesSummary: reviewChangesState.summary,
             rename: infoState.rename,
@@ -402,12 +605,23 @@ final class SessionChatViewModel {
         if permissionRequests.isEmpty, let error = permissionTopologyError {
             return error
         }
+        if questionRequests.isEmpty, let error = questionTopologyError {
+            return error
+        }
         return timelineState.errorMessage
     }
 }
 
 private final class EmptyPermissionLiveStore: PermissionLiveStore {
     func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
+        AsyncStream { $0.yield([]); $0.finish() }
+    }
+    func clearCache() {}
+}
+
+@MainActor
+private final class EmptyQuestionLiveStore: QuestionLiveStore {
+    func observeQuestions(directory: String) -> AsyncStream<[QuestionRequest]> {
         AsyncStream { $0.yield([]); $0.finish() }
     }
     func clearCache() {}

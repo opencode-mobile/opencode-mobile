@@ -83,6 +83,35 @@ struct PermissionToolDTO: Codable, Sendable {
     let callID: String
 }
 
+struct QuestionReplyRequestDTO: Codable, Sendable {
+    let answers: [[String]]
+}
+
+struct QuestionRequestDTO: Codable, Sendable {
+    let id: String
+    let sessionID: String
+    let questions: [QuestionInfoDTO]
+    let tool: QuestionToolDTO?
+}
+
+struct QuestionInfoDTO: Codable, Sendable {
+    let question: String
+    let header: String
+    let options: [QuestionOptionDTO]
+    let multiple: Bool?
+    let custom: Bool?
+}
+
+struct QuestionOptionDTO: Codable, Sendable {
+    let label: String
+    let description: String?
+}
+
+struct QuestionToolDTO: Codable, Sendable {
+    let messageID: String
+    let callID: String
+}
+
 struct TodoDTO: Codable, Sendable {}
 
 struct FileDiffDTO: Decodable, Sendable {

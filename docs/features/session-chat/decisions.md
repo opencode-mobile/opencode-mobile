@@ -210,6 +210,7 @@
 ## Keep SessionChatViewModel as a thin facade
 
 - Date: 2026-06-28
+- Updated: 2026-07-19 (OPE-66)
 - Decision: treat `SessionChatViewModel` as a **coordinator**, not a feature
   brain. New Session Chat work must land in a region class first. The facade
   grows only when wiring regions together — not when implementing behavior.
@@ -222,6 +223,14 @@
   | `SessionInfo` | Session id/title, SSE connection, agent status, context usage |
   | `SessionChatReviewChanges` | Completed-turn eligibility, diff-count lifecycle, request diagnostics |
   | `SessionChatViewModel` | `bind()` orchestration, `mergeUiState()`, minimal cross-region callbacks |
+
+- **Exception (OPE-66):** Question Request live observation, session-tree
+  selection, wizard drafts, and reply/dismiss stay on the facade next to
+  Permission Approval for this slice. See
+  [question-request decisions](../question-request/decisions.md) (“Keep live
+  interruption wiring beside Permission Approval”). Extracting a shared
+  interruption region remains an optional follow-up when both queues grow
+  further.
 
 - **Allowed in the facade**
 

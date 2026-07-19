@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
@@ -34,6 +35,9 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionInfo
+import dev.opencode.mobile.domain.session.QuestionOption
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -324,6 +328,124 @@ class SessionChatViewModelTest {
 
             assertEquals(null, viewModel.uiState.value.permissionRequest)
             assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun permissionRequest_takesPriorityOverQuestionRequest() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository =
+                        FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title"))),
+                    permissionLiveStore = FakePermissionLiveStore(listOf(permissionRequest("permission-1", "ses-1"))),
+                    questionLiveStore = FakeQuestionLiveStore(listOf(questionRequest("que-1", "ses-1"))),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("permission-1", viewModel.uiState.value.permissionRequest?.id)
+            assertEquals(null, viewModel.uiState.value.questionRequest)
+        }
+
+    @Test
+    fun staleQuestionReply_refreshesAndRemovesMissingRequest() =
+        runTest(testDispatcher) {
+            val request = questionRequest("que-1", "ses-1")
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions = listOf(Session(id = "ses-1", title = "Title")),
+                    pendingQuestions = emptyList(),
+                    questionResponseError = SessionError.Http(404, "Missing"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    questionLiveStore = FakeQuestionLiveStore(listOf(request)),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+
+            viewModel.toggleQuestionOption(request.id, request.sessionId, "A")
+            viewModel.submitQuestion(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.questionRequest)
+            assertEquals(1, sessionRepository.pendingQuestionLoads)
+            assertEquals("que-1", sessionRepository.repliedQuestionId)
+        }
+
+    @Test
+    fun lateQuestionDismiss_usesRenderedRequestIdentity() =
+        runTest(testDispatcher) {
+            val first = questionRequest("que-1", "ses-1")
+            val second = questionRequest("que-2", "child")
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Child", parentId = "ses-1"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    questionLiveStore = FakeQuestionLiveStore(listOf(first, second)),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.dismissQuestion(second.id, second.sessionId)
+            advanceUntilIdle()
+
+            assertEquals("que-2", sessionRepository.rejectedQuestionId)
+        }
+
+    @Test
+    fun lateQuestionDismissFailure_doesNotPaintErrorOnVisibleRequest() =
+        runTest(testDispatcher) {
+            val first = questionRequest("que-1", "ses-1")
+            val second = questionRequest("que-2", "child")
+            val gate = CompletableDeferred<Unit>()
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Child", parentId = "ses-1"),
+                        ),
+                    questionResponseError = SessionError.Http(500, "boom"),
+                    questionHoldUntil = gate,
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    questionLiveStore = FakeQuestionLiveStore(listOf(first, second)),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+
+            viewModel.dismissQuestion(second.id, second.sessionId)
+            advanceUntilIdle()
+            assertEquals(false, viewModel.uiState.value.questionSubmitting)
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("que-2", sessionRepository.rejectedQuestionId)
+            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+            assertEquals(null, viewModel.uiState.value.questionErrorMessage)
+            assertEquals(false, viewModel.uiState.value.questionSubmitting)
         }
 
     @Test
@@ -2162,6 +2284,7 @@ class SessionChatViewModelTest {
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
+        questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -2190,6 +2313,7 @@ class SessionChatViewModelTest {
             agentRepository = agentRepository,
             sessionRepository = sessionRepository,
             permissionLiveStore = permissionLiveStore,
+            questionLiveStore = questionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(json),
@@ -2555,7 +2679,9 @@ private class FakeModelRepository(
 private class FakeSessionRepository(
     private val sessions: List<Session> = emptyList(),
     private val pendingPermissions: List<PermissionRequest> = emptyList(),
+    private val pendingQuestions: List<QuestionRequest> = emptyList(),
     private val permissionResponseError: SessionError? = null,
+    private val questionResponseError: SessionError? = null,
     private val listSessionsError: Throwable? = null,
     private val sessionDiffs: List<FileDiff> = emptyList(),
     private val sessionDiffsByMessageId: Map<String, List<FileDiff>> = emptyMap(),
@@ -2569,6 +2695,7 @@ private class FakeSessionRepository(
     private val deleteResult: Boolean = true,
     private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
     private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
+    private val questionHoldUntil: CompletableDeferred<Unit>? = null,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
@@ -2589,9 +2716,15 @@ private class FakeSessionRepository(
 
     var pendingPermissionLoads: Int = 0
         private set
+    var pendingQuestionLoads: Int = 0
+        private set
     var respondedPermissionId: String? = null
         private set
     var respondedSessionId: String? = null
+        private set
+    var repliedQuestionId: String? = null
+        private set
+    var rejectedQuestionId: String? = null
         private set
     var diffRequest: DiffRequest? = null
         private set
@@ -2609,6 +2742,11 @@ private class FakeSessionRepository(
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
         pendingPermissionLoads += 1
         return pendingPermissions
+    }
+
+    override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> {
+        pendingQuestionLoads += 1
+        return pendingQuestions
     }
 
     override suspend fun listSessions(directory: String?): List<Session> {
@@ -2744,6 +2882,27 @@ private class FakeSessionRepository(
         permissionResponseError?.let { throw it }
         return true
     }
+
+    override suspend fun replyToQuestion(
+        requestId: String,
+        answers: List<List<String>>,
+        directory: String?,
+    ): Boolean {
+        repliedQuestionId = requestId
+        questionHoldUntil?.await()
+        questionResponseError?.let { throw it }
+        return true
+    }
+
+    override suspend fun rejectQuestion(
+        requestId: String,
+        directory: String?,
+    ): Boolean {
+        rejectedQuestionId = requestId
+        questionHoldUntil?.await()
+        questionResponseError?.let { throw it }
+        return true
+    }
 }
 
 private class FakePermissionLiveStore(
@@ -2766,6 +2925,34 @@ private fun permissionRequest(
     patterns = listOf("git status"),
     metadata = kotlinx.serialization.json.JsonObject(emptyMap()),
     always = emptyList(),
+    toolMessageId = null,
+    toolCallId = null,
+)
+
+private class FakeQuestionLiveStore(
+    initialRequests: List<QuestionRequest>,
+) : QuestionLiveStore {
+    private val requests = MutableStateFlow(initialRequests)
+
+    override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> = requests
+
+    override fun clearCache() = Unit
+}
+
+private fun questionRequest(
+    id: String,
+    sessionId: String,
+) = QuestionRequest(
+    id = id,
+    sessionId = sessionId,
+    questions =
+        listOf(
+            QuestionInfo(
+                question = "Which approach?",
+                header = "Approach",
+                options = listOf(QuestionOption(label = "A", description = "First")),
+            ),
+        ),
     toolMessageId = null,
     toolCallId = null,
 )

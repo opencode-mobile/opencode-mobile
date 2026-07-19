@@ -98,6 +98,40 @@ data class PermissionToolDto(
 )
 
 @Serializable
+data class QuestionReplyRequestDto(
+    val answers: List<List<String>>,
+)
+
+@Serializable
+data class QuestionRequestDto(
+    val id: String,
+    @SerialName("sessionID") val sessionId: String,
+    val questions: List<QuestionInfoDto> = emptyList(),
+    val tool: QuestionToolDto? = null,
+)
+
+@Serializable
+data class QuestionInfoDto(
+    val question: String,
+    val header: String,
+    val options: List<QuestionOptionDto> = emptyList(),
+    val multiple: Boolean? = null,
+    val custom: Boolean? = null,
+)
+
+@Serializable
+data class QuestionOptionDto(
+    val label: String,
+    val description: String = "",
+)
+
+@Serializable
+data class QuestionToolDto(
+    @SerialName("messageID") val messageId: String,
+    @SerialName("callID") val callId: String,
+)
+
+@Serializable
 data class TodoDto(
     val value: JsonElement? = null,
 )

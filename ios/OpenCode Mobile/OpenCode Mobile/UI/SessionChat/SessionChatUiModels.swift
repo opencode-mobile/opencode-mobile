@@ -135,6 +135,13 @@ struct SessionChatUiState: Equatable {
     var permissionQueueCount: Int = 0
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
+    var questionRequest: QuestionRequest?
+    var questionWizardIndex: Int = 0
+    var questionSelectedLabels: [String] = []
+    var questionCustomText = ""
+    var questionCustomSelected = false
+    var questionSubmitting = false
+    var questionErrorMessage: String?
     var reviewChangesMessageID: String?
     var reviewChangesSummary: ReviewChangesSummary?
     var rename = SessionRenameUiState()

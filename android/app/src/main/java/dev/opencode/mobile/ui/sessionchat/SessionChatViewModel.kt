@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -19,6 +20,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -45,6 +47,7 @@ class SessionChatViewModel
         agentRepository: AgentRepository,
         private val sessionRepository: SessionRepository,
         private val permissionLiveStore: PermissionLiveStore = EmptyPermissionLiveStore,
+        private val questionLiveStore: QuestionLiveStore = EmptyQuestionLiveStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
         eventDomainAdapter: EventDomainAdapter,
@@ -102,6 +105,15 @@ class SessionChatViewModel
         private var permissionError: String? = null
         private var permissionTopologyError: String? = null
         private var permissionObservationJob: kotlinx.coroutines.Job? = null
+        private var questionSessions: List<Session> = emptyList()
+        private var questionRequests: List<QuestionRequest> = emptyList()
+        private var questionSubmittingId: String? = null
+        private var questionError: String? = null
+        private var questionTopologyError: String? = null
+        private var questionObservationJob: kotlinx.coroutines.Job? = null
+        private var questionDraftRequestId: String? = null
+        private var questionWizardIndex: Int = 0
+        private val questionDrafts = mutableMapOf<Int, QuestionAnswerDraft>()
 
         init {
             timeline.ioDispatcher = ioDispatcher
@@ -147,6 +159,7 @@ class SessionChatViewModel
             sessionInfo.bind(sessionId, sessionTitle, worktree)
             reviewChanges.bind(sessionId, worktree)
             observePermissions(sessionId, worktree)
+            observeQuestions(sessionId, worktree)
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -242,6 +255,7 @@ class SessionChatViewModel
         }
 
         fun sendPrompt() {
+            if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) return
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
             composer.sendPrompt(
@@ -275,6 +289,118 @@ class SessionChatViewModel
             sessionId: String,
         ) = respondToPermission(requestId, sessionId, PermissionDecision.Deny)
 
+        fun toggleQuestionOption(
+            requestId: String,
+            sessionId: String,
+            label: String,
+        ) {
+            val request = visibleQuestionRequest() ?: return
+            if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
+            val question = request.questions.getOrNull(questionWizardIndex) ?: return
+            val current = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            val selected =
+                if (question.multiple) {
+                    if (label in current.selectedLabels) current.selectedLabels - label else current.selectedLabels + label
+                } else {
+                    listOf(label)
+                }
+            questionDrafts[questionWizardIndex] =
+                current.copy(selectedLabels = selected, customSelected = false)
+            publishUiState()
+        }
+
+        fun toggleQuestionCustom(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val request = visibleQuestionRequest() ?: return
+            if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
+            val question = request.questions.getOrNull(questionWizardIndex) ?: return
+            if (!question.custom) return
+            val current = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            val customSelected = !current.customSelected
+            questionDrafts[questionWizardIndex] =
+                current.copy(
+                    customSelected = customSelected,
+                    selectedLabels = if (customSelected) emptyList() else current.selectedLabels,
+                )
+            publishUiState()
+        }
+
+        fun updateQuestionCustomText(
+            requestId: String,
+            sessionId: String,
+            text: String,
+        ) {
+            val request = visibleQuestionRequest() ?: return
+            if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
+            val current = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            questionDrafts[questionWizardIndex] = current.copy(customText = text, customSelected = true, selectedLabels = emptyList())
+            publishUiState()
+        }
+
+        fun questionBack(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val request = visibleQuestionRequest() ?: return
+            if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
+            if (questionWizardIndex <= 0) return
+            questionWizardIndex -= 1
+            publishUiState()
+        }
+
+        fun questionNext(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val request = visibleQuestionRequest() ?: return
+            if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
+            val question = request.questions.getOrNull(questionWizardIndex) ?: return
+            val draft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            if (!isQuestionAnswerValid(question, draft)) return
+            if (questionWizardIndex >= request.questions.lastIndex) return
+            questionWizardIndex += 1
+            publishUiState()
+        }
+
+        fun submitQuestion(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val request =
+                questionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId } ?: return
+            if (questionSubmittingId != null) return
+            val answers = buildQuestionAnswers(request.questions, questionDrafts) ?: return
+            questionSubmittingId = request.id
+            questionError = null
+            logI("question reply request=${request.id} session=${request.sessionId}")
+            publishUiState()
+            viewModelScope.launch(ioDispatcher) {
+                runCatching {
+                    sessionRepository.replyToQuestion(request.id, answers, boundWorktree)
+                }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = false) }
+            }
+        }
+
+        fun dismissQuestion(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val request =
+                questionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId } ?: return
+            if (questionSubmittingId != null) return
+            questionSubmittingId = request.id
+            questionError = null
+            logI("question dismiss request=${request.id} session=${request.sessionId}")
+            publishUiState()
+            viewModelScope.launch(ioDispatcher) {
+                runCatching {
+                    sessionRepository.rejectQuestion(request.id, boundWorktree)
+                }.onFailure { handleQuestionMutationFailure(request.id, it, dismiss = true) }
+            }
+        }
+
         private fun observePermissions(
             sessionId: String,
             worktree: String,
@@ -284,6 +410,19 @@ class SessionChatViewModel
                 viewModelScope.launch(ioDispatcher) {
                     permissionLiveStore.observePermissions(worktree).collect { requests ->
                         applyPermissionSnapshot(sessionId, worktree, requests)
+                    }
+                }
+        }
+
+        private fun observeQuestions(
+            sessionId: String,
+            worktree: String,
+        ) {
+            questionObservationJob?.cancel()
+            questionObservationJob =
+                viewModelScope.launch(ioDispatcher) {
+                    questionLiveStore.observeQuestions(worktree).collect { requests ->
+                        applyQuestionSnapshot(sessionId, worktree, requests)
                     }
                 }
         }
@@ -353,6 +492,112 @@ class SessionChatViewModel
             publishUiState()
         }
 
+        private suspend fun refreshQuestionSnapshot(): Boolean {
+            val sessionId = boundSessionId ?: return false
+            val worktree = boundWorktree ?: return false
+            return runCatching { sessionRepository.listPendingQuestions(worktree) }
+                .onSuccess { applyQuestionSnapshot(sessionId, worktree, it) }
+                .isSuccess
+        }
+
+        private suspend fun applyQuestionSnapshot(
+            sessionId: String,
+            worktree: String,
+            requests: List<QuestionRequest>,
+        ) {
+            runCatching { sessionRepository.listSessions(worktree) }
+                .onSuccess {
+                    questionSessions = it
+                    questionTopologyError = null
+                }.onFailure {
+                    questionSessions = emptyList()
+                    questionTopologyError = "Unable to refresh question session tree"
+                }
+            val ordered = orderedQuestionRequests(sessionId, questionSessions, requests)
+            val previousVisibleId = questionRequests.firstOrNull()?.id
+            questionRequests = dropOrphanQuestionRequests(ordered, timeline.loadedMessages())
+            syncQuestionDraftState()
+            if (
+                questionSubmittingId != null &&
+                questionRequests.none { request -> request.id == questionSubmittingId }
+            ) {
+                questionSubmittingId = null
+                questionError = null
+            }
+            val visibleId = questionRequests.firstOrNull()?.id
+            if (visibleId != previousVisibleId) {
+                logI("question visible=${visibleId ?: "none"} queue=${questionRequests.size}")
+            }
+            publishUiState()
+        }
+
+        private fun handleQuestionMutationFailure(
+            requestId: String,
+            error: Throwable,
+            dismiss: Boolean,
+        ) {
+            if (questionSubmittingId == requestId) {
+                questionSubmittingId = null
+            }
+            if (error is SessionError.Http && error.statusCode == 404) {
+                viewModelScope.launch(ioDispatcher) {
+                    val refreshed = refreshQuestionSnapshot()
+                    if (refreshed && questionRequests.none { pending -> pending.id == requestId }) {
+                        questionError = null
+                        publishUiState()
+                        return@launch
+                    }
+                    if (visibleQuestionRequest()?.id == requestId) {
+                        questionError = "Question request is no longer available"
+                    }
+                    publishUiState()
+                }
+                return
+            }
+            if (visibleQuestionRequest()?.id == requestId) {
+                questionError =
+                    error.message
+                        ?: if (dismiss) "Question dismiss failed" else "Question response failed"
+            }
+            publishUiState()
+        }
+
+        private fun syncQuestionDraftState() {
+            val visible = questionRequests.firstOrNull()
+            if (visible == null) {
+                questionDraftRequestId = null
+                questionWizardIndex = 0
+                questionDrafts.clear()
+                return
+            }
+            if (questionDraftRequestId != visible.id) {
+                questionDraftRequestId = visible.id
+                questionWizardIndex = 0
+                questionDrafts.clear()
+            } else {
+                questionWizardIndex = questionWizardIndex.coerceIn(0, (visible.questions.size - 1).coerceAtLeast(0))
+            }
+        }
+
+        private fun visibleQuestionRequest(): QuestionRequest? =
+            if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()
+
+        private fun refilterQuestionOrphans() {
+            val before = questionRequests
+            val filtered = dropOrphanQuestionRequests(before, timeline.loadedMessages())
+            if (filtered != before) {
+                questionRequests = filtered
+                syncQuestionDraftState()
+                if (
+                    questionSubmittingId != null &&
+                    questionRequests.none { request -> request.id == questionSubmittingId }
+                ) {
+                    questionSubmittingId = null
+                    questionError = null
+                }
+            }
+        }
+
         internal fun toMessageItem(
             message: Message,
             previous: SessionChatMessageItem? = null,
@@ -382,6 +627,9 @@ class SessionChatViewModel
             infoState: SessionInfoRegionState,
             reviewChangesState: SessionChatReviewChangesRegionState,
         ): SessionChatUiState {
+            refilterQuestionOrphans()
+            val visibleQuestion = visibleQuestionRequest()
+            val questionDraft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
             val errorMessage =
                 when {
                     infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
@@ -390,6 +638,7 @@ class SessionChatViewModel
                     composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                     infoState.errorMessage != null -> infoState.errorMessage
                     permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
+                    questionRequests.isEmpty() && questionTopologyError != null -> questionTopologyError
                     else -> timelineState.errorMessage
                 }
             return SessionChatUiState(
@@ -416,6 +665,18 @@ class SessionChatViewModel
                 permissionQueueCount = permissionRequests.size,
                 permissionSubmitting = permissionSubmittingId != null,
                 permissionErrorMessage = permissionError ?: permissionTopologyError,
+                questionRequest = visibleQuestion,
+                questionWizardIndex = questionWizardIndex,
+                questionSelectedLabels = questionDraft.selectedLabels,
+                questionCustomText = questionDraft.customText,
+                questionCustomSelected = questionDraft.customSelected,
+                questionSubmitting = questionSubmittingId != null && questionSubmittingId == visibleQuestion?.id,
+                questionErrorMessage =
+                    if (visibleQuestion != null) {
+                        questionError ?: questionTopologyError
+                    } else {
+                        null
+                    },
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
                 rename = infoState.rename,
@@ -439,6 +700,12 @@ class SessionChatViewModel
 
 private object EmptyPermissionLiveStore : PermissionLiveStore {
     override fun observePermissions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<PermissionRequest>())
+
+    override fun clearCache() = Unit
+}
+
+private object EmptyQuestionLiveStore : QuestionLiveStore {
+    override fun observeQuestions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<QuestionRequest>())
 
     override fun clearCache() = Unit
 }

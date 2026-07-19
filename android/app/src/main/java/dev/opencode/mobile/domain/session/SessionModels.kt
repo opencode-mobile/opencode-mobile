@@ -86,6 +86,27 @@ data class PermissionRequest(
     val toolCallId: String?,
 )
 
+data class QuestionOption(
+    val label: String,
+    val description: String,
+)
+
+data class QuestionInfo(
+    val question: String,
+    val header: String,
+    val options: List<QuestionOption>,
+    val multiple: Boolean = false,
+    val custom: Boolean = true,
+)
+
+data class QuestionRequest(
+    val id: String,
+    val sessionId: String,
+    val questions: List<QuestionInfo>,
+    val toolMessageId: String?,
+    val toolCallId: String?,
+)
+
 sealed class SessionError : Exception() {
     data class Transport(
         override val cause: Throwable,

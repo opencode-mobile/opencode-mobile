@@ -35,6 +35,10 @@ struct SessionsAPIClient: Sendable {
         try await get(path: "permission", directory: directory)
     }
 
+    func listPendingQuestions(directory: String? = nil) async throws -> [QuestionRequestDTO] {
+        try await get(path: "question", directory: directory)
+    }
+
     func createSession(parentID: String?, title: String?, directory: String? = nil) async throws -> SessionDTO {
         try await post(path: "session", body: CreateSessionRequestDTO(parentID: parentID, title: title), directory: directory)
     }
@@ -146,6 +150,18 @@ struct SessionsAPIClient: Sendable {
         directory: String? = nil
     ) async throws -> Bool {
         try await postEmpty(path: "session/\(sessionID)/permissions/\(permissionID)", body: body, directory: directory)
+    }
+
+    func replyToQuestion(
+        questionID: String,
+        body: QuestionReplyRequestDTO,
+        directory: String? = nil
+    ) async throws -> Bool {
+        try await postEmpty(path: "question/\(questionID)/reply", body: body, directory: directory)
+    }
+
+    func rejectQuestion(questionID: String, directory: String? = nil) async throws -> Bool {
+        try await postEmpty(path: "question/\(questionID)/reject", body: EmptyBody(), directory: directory)
     }
 
     private struct EmptyBody: Codable {}

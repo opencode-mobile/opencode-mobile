@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.session
 interface SessionRepository {
     suspend fun listPendingPermissions(directory: String? = null): List<PermissionRequest> = emptyList()
 
+    suspend fun listPendingQuestions(directory: String? = null): List<QuestionRequest> = emptyList()
+
     suspend fun listSessions(directory: String? = null): List<Session>
 
     suspend fun createSession(
@@ -112,4 +114,15 @@ interface SessionRepository {
         decision: PermissionDecision,
         directory: String? = null,
     ): Boolean
+
+    suspend fun replyToQuestion(
+        requestId: String,
+        answers: List<List<String>>,
+        directory: String? = null,
+    ): Boolean = false
+
+    suspend fun rejectQuestion(
+        requestId: String,
+        directory: String? = null,
+    ): Boolean = false
 }

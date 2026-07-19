@@ -19,15 +19,15 @@
 
 ## Session Chat
 
-- [ ] [OPE-66](https://linear.app/opencode-mobile/issue/OPE-66/answer-question-requests-in-session-chat)
-  — live store, SSE, tree, reply/dismiss, composer wiring (blocked by OPE-65)
+- [x] [OPE-66](https://linear.app/opencode-mobile/issue/OPE-66/answer-question-requests-in-session-chat)
+  — live store, SSE, tree, reply/dismiss, composer wiring on iOS and Android
 
 ## Blockers
 
-- OPE-66 blocked by OPE-65 until this branch merges. Timeline hide rules and
-  completed interact chrome already exist under Assistant Tool Parts.
+- None. OPE-65 shipped via PR #59. Timeline hide rules and completed interact
+  chrome already exist under Assistant Tool Parts.
 
 ## Remaining work
 
-- Implement OPE-66 per `plan.md` and `decisions.md` (blocked until OPE-65
-  ships; design-system question state is done on this branch).
+- None for the OPE-66 Session Chat slice. Optional follow-up: completed Q→A
+  Bottom Sheet expansion (explicitly out of scope for v1 of this feature).
