@@ -18,7 +18,7 @@ session, without returning to the desktop client.
 
 - Allow always, remember, auto-accept, or permission-rule editing.
 - Push notifications, background SSE, or resolved permission history.
-- Question-request UI.
+- Question Request UI (`docs/features/question-request/`).
 
 ## Server APIs And Events
 

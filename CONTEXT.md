@@ -326,6 +326,17 @@ session.
 The mobile client may approve or deny a permission request in v1, but it should
 not create persistent `remember` decisions from mobile.
 
+### question request
+
+A request from opencode for the user to answer one or more structured questions
+during a session so the agent can continue.
+
+The user answers with option labels (and optional custom text) or **dismisses**
+the request. A question request is not a permission request and is not the same
+as a completed `question` ToolPart in the timeline.
+_Avoid_: treating it as a permission request; naming the live ask after the
+tool alone; implying dismiss from navigation away.
+
 ### diff
 
 The line-level representation of one file's changes inside a **Change Set**.

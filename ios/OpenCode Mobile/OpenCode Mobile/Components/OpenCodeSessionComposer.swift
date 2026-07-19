@@ -81,8 +81,74 @@ enum OpenCodeSessionComposerState {
         }
     }
 
+    struct QuestionOption: Identifiable, Hashable {
+        let label: String
+        let description: String
+
+        var id: String { label }
+    }
+
+    struct Question {
+        let requestID: String
+        let sessionID: String
+        let questionIndex: Int
+        let questionCount: Int
+        let header: String
+        let question: String
+        let options: [QuestionOption]
+        let multiple: Bool
+        let customAllowed: Bool
+        let selectedLabels: [String]
+        let customText: String
+        let customSelected: Bool
+        let backEnabled: Bool
+        let nextEnabled: Bool
+        let submitEnabled: Bool
+        let submitting: Bool
+        let errorMessage: String?
+
+        init(
+            requestID: String,
+            sessionID: String,
+            questionIndex: Int,
+            questionCount: Int,
+            header: String,
+            question: String,
+            options: [QuestionOption],
+            multiple: Bool = false,
+            customAllowed: Bool = true,
+            selectedLabels: [String] = [],
+            customText: String = "",
+            customSelected: Bool = false,
+            backEnabled: Bool = false,
+            nextEnabled: Bool = false,
+            submitEnabled: Bool = false,
+            submitting: Bool = false,
+            errorMessage: String? = nil
+        ) {
+            self.requestID = requestID
+            self.sessionID = sessionID
+            self.questionIndex = questionIndex
+            self.questionCount = questionCount
+            self.header = header
+            self.question = question
+            self.options = options
+            self.multiple = multiple
+            self.customAllowed = customAllowed
+            self.selectedLabels = selectedLabels
+            self.customText = customText
+            self.customSelected = customSelected
+            self.backEnabled = backEnabled
+            self.nextEnabled = nextEnabled
+            self.submitEnabled = submitEnabled
+            self.submitting = submitting
+            self.errorMessage = errorMessage
+        }
+    }
+
     case prompt(Prompt)
     case permission(Permission)
+    case question(Question)
 }
 
 enum OpenCodeSessionComposerAction {
@@ -96,6 +162,13 @@ enum OpenCodeSessionComposerAction {
     case stop
     case allowPermissionOnce(requestID: String, sessionID: String)
     case denyPermission(requestID: String, sessionID: String)
+    case toggleQuestionOption(requestID: String, sessionID: String, label: String)
+    case toggleQuestionCustom(requestID: String, sessionID: String)
+    case questionCustomTextChanged(requestID: String, sessionID: String, text: String)
+    case questionBack(requestID: String, sessionID: String)
+    case questionNext(requestID: String, sessionID: String)
+    case submitQuestion(requestID: String, sessionID: String)
+    case dismissQuestion(requestID: String, sessionID: String)
 }
 
 struct OpenCodeSessionComposer: View {
@@ -107,6 +180,8 @@ struct OpenCodeSessionComposer: View {
             switch state {
             case let .permission(permission):
                 permissionApprovalContent(permission)
+            case let .question(question):
+                questionRequestContent(question)
             case let .prompt(prompt):
                 promptEntryContent(prompt)
             }
@@ -120,7 +195,7 @@ struct OpenCodeSessionComposer: View {
         )
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
-        .animation(.easeInOut(duration: 0.24), value: isPermission)
+        .animation(.easeInOut(duration: 0.24), value: contentKind)
     }
 
     @ViewBuilder
@@ -239,18 +314,182 @@ struct OpenCodeSessionComposer: View {
         .accessibilityElement(children: .contain)
     }
 
+    @ViewBuilder
+    private func questionRequestContent(_ question: OpenCodeSessionComposerState.Question) -> some View {
+        let showBack = question.questionIndex > 0
+        let showNext = question.questionIndex < question.questionCount - 1
+        let selectionHint = question.multiple ? "Select all that apply" : "Select one"
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(question.header.isEmpty ? "Question" : question.header)
+                    .font(OpenCodeTypography.heading)
+                Spacer()
+                if question.questionCount > 1 {
+                    Text("\(question.questionIndex + 1) of \(question.questionCount)")
+                        .font(OpenCodeTypography.caption)
+                }
+            }
+            Text(question.question)
+                .font(OpenCodeTypography.bodySecondary)
+            Text(selectionHint)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textBase)
+
+            VStack(spacing: 8) {
+                ForEach(question.options) { option in
+                    OpenCodeListItem(
+                        title: option.label,
+                        subtitle: option.description.isEmpty ? nil : option.description,
+                        selected: question.selectedLabels.contains(option.label),
+                        enabled: !question.submitting,
+                        style: .card,
+                        action: {
+                            onAction(
+                                .toggleQuestionOption(
+                                    requestID: question.requestID,
+                                    sessionID: question.sessionID,
+                                    label: option.label
+                                )
+                            )
+                        }
+                    )
+                }
+
+                if question.customAllowed {
+                    OpenCodeListItem(
+                        title: "Type your own answer",
+                        selected: question.customSelected,
+                        enabled: !question.submitting,
+                        style: .card,
+                        action: {
+                            onAction(
+                                .toggleQuestionCustom(
+                                    requestID: question.requestID,
+                                    sessionID: question.sessionID
+                                )
+                            )
+                        }
+                    )
+
+                    if question.customSelected {
+                        QuestionCustomTextField(
+                            text: question.customText,
+                            enabled: !question.submitting,
+                            onChange: { text in
+                                onAction(
+                                    .questionCustomTextChanged(
+                                        requestID: question.requestID,
+                                        sessionID: question.sessionID,
+                                        text: text
+                                    )
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            if let errorMessage = question.errorMessage {
+                Text(errorMessage)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.error)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+
+        HStack {
+            OpenCodeButton(
+                variant: .compactText(title: "Dismiss"),
+                enabled: !question.submitting,
+                contrast: .low,
+                action: {
+                    onAction(.dismissQuestion(requestID: question.requestID, sessionID: question.sessionID))
+                }
+            )
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                if question.submitting {
+                    ProgressView().controlSize(.small)
+                }
+                if showBack {
+                    OpenCodeButton(
+                        variant: .compactText(title: "Back"),
+                        enabled: question.backEnabled && !question.submitting,
+                        contrast: .low,
+                        action: {
+                            onAction(.questionBack(requestID: question.requestID, sessionID: question.sessionID))
+                        }
+                    )
+                }
+                if showNext {
+                    OpenCodeButton(
+                        variant: .compactText(title: "Next"),
+                        enabled: question.nextEnabled && !question.submitting,
+                        action: {
+                            onAction(.questionNext(requestID: question.requestID, sessionID: question.sessionID))
+                        }
+                    )
+                } else {
+                    OpenCodeButton(
+                        variant: .compactText(title: "Submit"),
+                        enabled: question.submitEnabled && !question.submitting,
+                        action: {
+                            onAction(.submitQuestion(requestID: question.requestID, sessionID: question.sessionID))
+                        }
+                    )
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     private var outlineColor: Color {
         switch state {
         case .prompt:
             OpenCodeColors.borderWeakerBase
         case let .permission(permission):
             permission.errorMessage == nil ? OpenCodeColors.warning : OpenCodeColors.error
+        case let .question(question):
+            question.errorMessage == nil ? OpenCodeColors.interactive : OpenCodeColors.error
         }
     }
 
-    private var isPermission: Bool {
-        if case .permission = state { return true }
-        return false
+    private var contentKind: String {
+        switch state {
+        case .prompt: "prompt"
+        case .permission: "permission"
+        case .question: "question"
+        }
+    }
+}
+
+private struct QuestionCustomTextField: View {
+    let text: String
+    let enabled: Bool
+    let onChange: (String) -> Void
+
+    @State private var draft: String = ""
+
+    var body: some View {
+        OpenCodeTextInput(
+            text: Binding(
+                get: { draft },
+                set: { newValue in
+                    draft = newValue
+                    onChange(newValue)
+                }
+            ),
+            hint: "Enter a custom answer",
+            enabled: enabled
+        )
+        .onAppear { draft = text }
+        .onChange(of: text) { _, newValue in
+            if draft != newValue {
+                draft = newValue
+            }
+        }
     }
 }
 
@@ -319,6 +558,53 @@ struct OpenCodeSessionComposer: View {
                 sendEnabled: true,
                 showStop: false,
                 stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}
+
+#Preview("Question composer") {
+    OpenCodeSessionComposer(
+        state: .question(
+            .init(
+                requestID: "question-preview",
+                sessionID: "session-preview",
+                questionIndex: 0,
+                questionCount: 2,
+                header: "Approach",
+                question: "How should we implement this change?",
+                options: [
+                    .init(label: "Minimal patch", description: "Touch only the failing path"),
+                    .init(label: "Broader refactor", description: "Clean up nearby callers too"),
+                ],
+                selectedLabels: ["Minimal patch"],
+                nextEnabled: true
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Question composer dark") {
+    OpenCodeSessionComposer(
+        state: .question(
+            .init(
+                requestID: "question-preview",
+                sessionID: "session-preview",
+                questionIndex: 0,
+                questionCount: 2,
+                header: "Approach",
+                question: "How should we implement this change?",
+                options: [
+                    .init(label: "Minimal patch", description: "Touch only the failing path"),
+                    .init(label: "Broader refactor", description: "Clean up nearby callers too"),
+                ],
+                selectedLabels: ["Minimal patch"],
+                nextEnabled: true
             )
         ),
         onAction: { _ in }

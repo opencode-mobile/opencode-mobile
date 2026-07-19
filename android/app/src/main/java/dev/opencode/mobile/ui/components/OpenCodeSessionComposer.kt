@@ -79,6 +79,31 @@ sealed interface OpenCodeSessionComposerState {
         val submitting: Boolean = false,
         val errorMessage: String? = null,
     ) : OpenCodeSessionComposerState
+
+    data class QuestionOption(
+        val label: String,
+        val description: String,
+    )
+
+    data class Question(
+        val requestId: String,
+        val sessionId: String,
+        val questionIndex: Int,
+        val questionCount: Int,
+        val header: String,
+        val question: String,
+        val options: List<QuestionOption>,
+        val multiple: Boolean = false,
+        val customAllowed: Boolean = true,
+        val selectedLabels: List<String> = emptyList(),
+        val customText: String = "",
+        val customSelected: Boolean = false,
+        val backEnabled: Boolean = false,
+        val nextEnabled: Boolean = false,
+        val submitEnabled: Boolean = false,
+        val submitting: Boolean = false,
+        val errorMessage: String? = null,
+    ) : OpenCodeSessionComposerState
 }
 
 sealed interface OpenCodeSessionComposerAction {
@@ -113,6 +138,43 @@ sealed interface OpenCodeSessionComposerAction {
         val requestId: String,
         val sessionId: String,
     ) : OpenCodeSessionComposerAction
+
+    data class ToggleQuestionOption(
+        val requestId: String,
+        val sessionId: String,
+        val label: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class ToggleQuestionCustom(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class QuestionCustomTextChanged(
+        val requestId: String,
+        val sessionId: String,
+        val text: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class QuestionBack(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class QuestionNext(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class SubmitQuestion(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class DismissQuestion(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
 }
 
 @Composable
@@ -125,8 +187,12 @@ fun OpenCodeSessionComposer(
         when (state) {
             is OpenCodeSessionComposerState.Permission ->
                 if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
+            is OpenCodeSessionComposerState.Question ->
+                if (state.errorMessage == null) openCodeColor("interactive") else openCodeColor("error")
             is OpenCodeSessionComposerState.Prompt -> MaterialTheme.colorScheme.outlineVariant
         }
+    val announceBlocking =
+        state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
     Column(
         modifier =
             modifier
@@ -137,7 +203,7 @@ fun OpenCodeSessionComposer(
                 .border(1.dp, outlineColor, RoundedCornerShape(26.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp)
                 .then(
-                    if (state is OpenCodeSessionComposerState.Permission) {
+                    if (announceBlocking) {
                         Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                     } else {
                         Modifier
@@ -174,6 +240,12 @@ fun OpenCodeSessionComposer(
 
                     is OpenCodeSessionComposerState.Permission ->
                         PermissionApprovalContent(
+                            state = state,
+                            onAction = onAction,
+                        )
+
+                    is OpenCodeSessionComposerState.Question ->
+                        QuestionRequestContent(
                             state = state,
                             onAction = onAction,
                         )
@@ -391,6 +463,148 @@ private fun PermissionApprovalContent(
     }
 }
 
+@Composable
+private fun QuestionRequestContent(
+    state: OpenCodeSessionComposerState.Question,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    val showBack = state.questionIndex > 0
+    val showNext = state.questionIndex < state.questionCount - 1
+    val selectionHint =
+        when {
+            state.multiple -> "Select all that apply"
+            else -> "Select one"
+        }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = state.header.ifBlank { "Question" },
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (state.questionCount > 1) {
+                Text(
+                    "${state.questionIndex + 1} of ${state.questionCount}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        Text(state.question, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            selectionHint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.options.forEach { option ->
+                OpenCodeListItem(
+                    title = option.label,
+                    subtitle = option.description.takeIf { it.isNotBlank() },
+                    selected = option.label in state.selectedLabels,
+                    enabled = !state.submitting,
+                    style = OpenCodeListItemStyle.Card,
+                    onClick = {
+                        onAction(
+                            OpenCodeSessionComposerAction.ToggleQuestionOption(
+                                requestId = state.requestId,
+                                sessionId = state.sessionId,
+                                label = option.label,
+                            ),
+                        )
+                    },
+                )
+            }
+            if (state.customAllowed) {
+                OpenCodeListItem(
+                    title = "Type your own answer",
+                    selected = state.customSelected,
+                    enabled = !state.submitting,
+                    style = OpenCodeListItemStyle.Card,
+                    onClick = {
+                        onAction(
+                            OpenCodeSessionComposerAction.ToggleQuestionCustom(
+                                requestId = state.requestId,
+                                sessionId = state.sessionId,
+                            ),
+                        )
+                    },
+                )
+                if (state.customSelected) {
+                    OpenCodeTextInput(
+                        value = state.customText,
+                        onValueChange = { text ->
+                            onAction(
+                                OpenCodeSessionComposerAction.QuestionCustomTextChanged(
+                                    requestId = state.requestId,
+                                    sessionId = state.sessionId,
+                                    text = text,
+                                ),
+                            )
+                        },
+                        hint = "Enter a custom answer",
+                        enabled = !state.submitting,
+                    )
+                }
+            }
+        }
+        state.errorMessage?.let {
+            Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("Dismiss"),
+            onClick = {
+                onAction(OpenCodeSessionComposerAction.DismissQuestion(state.requestId, state.sessionId))
+            },
+            enabled = !state.submitting,
+            contrast = OpenCodeButtonContrast.Low,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state.submitting) {
+                CircularProgressIndicator(modifier = Modifier.padding(horizontal = 4.dp), strokeWidth = 2.dp)
+            }
+            if (showBack) {
+                OpenCodeButton(
+                    OpenCodeButtonVariant.CompactText("Back"),
+                    onClick = {
+                        onAction(OpenCodeSessionComposerAction.QuestionBack(state.requestId, state.sessionId))
+                    },
+                    enabled = state.backEnabled && !state.submitting,
+                    contrast = OpenCodeButtonContrast.Low,
+                )
+            }
+            if (showNext) {
+                OpenCodeButton(
+                    OpenCodeButtonVariant.CompactText("Next"),
+                    onClick = {
+                        onAction(OpenCodeSessionComposerAction.QuestionNext(state.requestId, state.sessionId))
+                    },
+                    enabled = state.nextEnabled && !state.submitting,
+                )
+            } else {
+                OpenCodeButton(
+                    OpenCodeButtonVariant.CompactText("Submit"),
+                    onClick = {
+                        onAction(OpenCodeSessionComposerAction.SubmitQuestion(state.requestId, state.sessionId))
+                    },
+                    enabled = state.submitEnabled && !state.submitting,
+                )
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun PermissionComposerPreview() {
@@ -447,6 +661,50 @@ private fun MentionComposerPreviewContent() {
                     sendEnabled = true,
                     showStop = false,
                     stopEnabled = false,
+                ),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun QuestionComposerPreview() {
+    QuestionComposerPreviewContent()
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun QuestionComposerDarkPreview() {
+    QuestionComposerPreviewContent()
+}
+
+@Composable
+private fun QuestionComposerPreviewContent() {
+    OpenCodeTheme {
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.Question(
+                    requestId = "question-preview",
+                    sessionId = "session-preview",
+                    questionIndex = 0,
+                    questionCount = 2,
+                    header = "Approach",
+                    question = "How should we implement this change?",
+                    options =
+                        listOf(
+                            OpenCodeSessionComposerState.QuestionOption(
+                                label = "Minimal patch",
+                                description = "Touch only the failing path",
+                            ),
+                            OpenCodeSessionComposerState.QuestionOption(
+                                label = "Broader refactor",
+                                description = "Clean up nearby callers too",
+                            ),
+                        ),
+                    selectedLabels = listOf("Minimal patch"),
+                    submitEnabled = false,
+                    nextEnabled = true,
                 ),
             onAction = {},
         )

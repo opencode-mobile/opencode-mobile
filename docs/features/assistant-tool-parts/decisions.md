@@ -53,7 +53,8 @@ Superseded by **OPE-51 file-change tool cards (grilling)** below.
 ## Visibility
 
 - Match desktop hide rules for `todowrite` and in-flight `question`.
-- Live permission/question UX remains owned by Permission Approval.
+- Live permission UX remains owned by Permission Approval. Live question-request
+  UX is owned by Question Request (`docs/features/question-request/`).
 
 ## OPE-49 generic Session Chat cards (grilling)
 
