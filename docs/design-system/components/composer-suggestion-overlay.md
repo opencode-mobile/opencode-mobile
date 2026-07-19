@@ -38,16 +38,17 @@ Each suggestion uses an **internal row**, not `OpenCodeListItem`:
   bracketed source label and description.
 - Typography roles: `type.body` for both the bracketed source label and title;
   `type.bodySecondary` for the description.
-- Geometry: panel matching composer fill (no raised elevation/shadow); max
-  height ~40% of the available space above the composer; internal row padding
-  (not list-item chrome).
+- Geometry: panel matching composer fill (no raised elevation/shadow); height
+  hugs the current suggestion rows up to a max of ~40% of screen height;
+  internal row padding (not list-item chrome).
 
 ## Behavior
 
 - Callers float the panel over the timeline, anchored to the bottom edge above
   the Session Chat composer. It must not take layout height from the timeline
   (overlay, not a stacked sibling that pushes content).
-- Scrollable when items exceed max height.
+- Panel height follows the filtered result count (and empty-state message).
+  Scrollable only when content would exceed the max height.
 - Selecting an item invokes `onSelect` for that item; the caller updates
   composer text and closes the overlay.
 - Empty state shows the provided empty message without inventing catalog errors.
@@ -59,10 +60,13 @@ and description.
 
 - iOS: float over the timeline via `.overlay(alignment: .bottom)` above the
   composer; `surface-base` fill + border (same as composer); private row view
-  inside the overlay file.
+  inside the overlay file. Use `frame(maxHeight:)` plus
+  `fixedSize(horizontal:false, vertical:true)` so `ScrollView` hugs row
+  content instead of expanding to the max when few rows are shown.
 - Android: float over the timeline in a `Box` (`Alignment.BottomCenter`) above
   the composer; `colorScheme.surface` fill + outline (same as composer), no
-  tonal/shadow elevation; private row composable inside the overlay file.
+  tonal/shadow elevation; private row composable inside the overlay file. Use
+  `heightIn(max = …)` so the column wraps content until the max.
 
 ## Review Surfaces
 
