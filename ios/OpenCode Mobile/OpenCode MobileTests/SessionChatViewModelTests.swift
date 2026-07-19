@@ -536,7 +536,7 @@ struct SessionChatViewModelTests {
         }
 
         viewModel.selectAtSuggestion(agentName: "explore")
-        #expect(viewModel.uiState.composer.text == "@explore")
+        #expect(viewModel.uiState.composer.text == "@explore ")
         #expect(viewModel.uiState.composer.agentMentions.count == 1)
 
         await viewModel.sendPrompt()

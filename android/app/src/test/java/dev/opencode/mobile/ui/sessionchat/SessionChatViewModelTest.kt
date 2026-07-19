@@ -925,7 +925,7 @@ class SessionChatViewModelTest {
 
             viewModel.selectAtSuggestion("explore")
             runCurrent()
-            assertEquals("@explore", viewModel.uiState.value.composer.text)
+            assertEquals("@explore ", viewModel.uiState.value.composer.text)
             assertEquals(1, viewModel.uiState.value.composer.agentMentions.size)
             assertFalse(viewModel.uiState.value.atSuggestionsVisible)
 
@@ -967,7 +967,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             viewModel.selectAtSuggestion("explore")
             runCurrent()
-            assertEquals("/init @explore", viewModel.uiState.value.composer.text)
+            assertEquals("/init @explore ", viewModel.uiState.value.composer.text)
             assertEquals(1, viewModel.uiState.value.composer.agentMentions.size)
             viewModel.sendPrompt()
             advanceUntilIdle()

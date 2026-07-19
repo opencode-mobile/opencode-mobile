@@ -59,8 +59,9 @@ object ComposerMentionRouting {
         val atIndex = before.lastIndexOf('@')
         require(atIndex >= 0) { "No @ token before cursor" }
         val token = "@$agentName"
-        val newText = text.substring(0, atIndex) + token + text.substring(clamped)
-        val delta = token.length - (clamped - atIndex)
+        val insertion = "$token "
+        val newText = text.substring(0, atIndex) + insertion + text.substring(clamped)
+        val delta = insertion.length - (clamped - atIndex)
         val shifted =
             existingMentions.mapNotNull { mention ->
                 when {
@@ -74,7 +75,7 @@ object ComposerMentionRouting {
         val mentions = (shifted + inserted).sortedBy { it.start }
         return MentionInsertResult(
             text = newText,
-            cursor = atIndex + token.length,
+            cursor = atIndex + insertion.length,
             mentions = mentions,
         )
     }

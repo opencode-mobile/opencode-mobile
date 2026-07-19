@@ -61,8 +61,9 @@ enum ComposerMentionRouting {
         }
         let atIndex = before.distance(from: before.startIndex, to: atIndexChar)
         let token = "@\(agentName)"
-        let newText = substring(text, start: 0, end: atIndex) + token + substring(text, start: clamped, end: text.count)
-        let delta = token.count - (clamped - atIndex)
+        let insertion = "\(token) "
+        let newText = substring(text, start: 0, end: atIndex) + insertion + substring(text, start: clamped, end: text.count)
+        let delta = insertion.count - (clamped - atIndex)
         let shifted = existingMentions.compactMap { mention -> AgentMention? in
             if mention.end <= atIndex { return mention }
             if mention.start >= clamped {
@@ -77,7 +78,7 @@ enum ComposerMentionRouting {
         }
         let inserted = AgentMention(id: mentionID, name: agentName, start: atIndex, end: atIndex + token.count)
         let mentions = (shifted + [inserted]).sorted { $0.start < $1.start }
-        return MentionInsertResult(text: newText, cursor: atIndex + token.count, mentions: mentions)
+        return MentionInsertResult(text: newText, cursor: atIndex + insertion.count, mentions: mentions)
     }
 
     static func reconcileAfterEdit(

@@ -57,8 +57,8 @@ struct ComposerMentionRoutingTests {
             agentName: "explore",
             mentionID: "m1"
         )
-        #expect(result.text == "ask @explore")
-        #expect(result.cursor == 12)
+        #expect(result.text == "ask @explore ")
+        #expect(result.cursor == 13)
         #expect(result.mentions == [AgentMention(id: "m1", name: "explore", start: 4, end: 12)])
     }
 
@@ -69,7 +69,7 @@ struct ComposerMentionRoutingTests {
             agentName: "explore",
             mentionID: "m1"
         )
-        let secondText = first.text + " and @"
+        let secondText = first.text + "and @"
         let second = ComposerMentionRouting.insertMention(
             text: secondText,
             cursor: secondText.count,
@@ -77,7 +77,7 @@ struct ComposerMentionRoutingTests {
             mentionID: "m2",
             existingMentions: first.mentions
         )
-        #expect(second.text == "@explore and @general")
+        #expect(second.text == "@explore and @general ")
         #expect(second.mentions.map(\.name) == ["explore", "general"])
     }
 

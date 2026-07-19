@@ -90,8 +90,8 @@ class ComposerMentionRoutingTest {
                 agentName = "explore",
                 mentionId = "m1",
             )
-        assertEquals("ask @explore", result.text)
-        assertEquals(12, result.cursor)
+        assertEquals("ask @explore ", result.text)
+        assertEquals(13, result.cursor)
         assertEquals(1, result.mentions.size)
         assertEquals(AgentMention(id = "m1", name = "explore", start = 4, end = 12), result.mentions.single())
     }
@@ -107,13 +107,13 @@ class ComposerMentionRoutingTest {
             )
         val second =
             ComposerMentionRouting.insertMention(
-                text = first.text + " and @",
-                cursor = (first.text + " and @").length,
+                text = first.text + "and @",
+                cursor = (first.text + "and @").length,
                 agentName = "general",
                 mentionId = "m2",
                 existingMentions = first.mentions,
             )
-        assertEquals("@explore and @general", second.text)
+        assertEquals("@explore and @general ", second.text)
         assertEquals(2, second.mentions.size)
         assertEquals("explore", second.mentions[0].name)
         assertEquals("general", second.mentions[1].name)
