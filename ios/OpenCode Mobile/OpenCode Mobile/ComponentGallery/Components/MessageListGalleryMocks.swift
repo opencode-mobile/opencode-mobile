@@ -1,11 +1,11 @@
 import Foundation
 
-enum MessageListGalleryRole {
+enum MessageListGalleryRole: Equatable {
     case user
     case assistant
 }
 
-struct MessageListGalleryMessage: Identifiable {
+struct MessageListGalleryMessage: Identifiable, Equatable {
     let id: String
     let role: MessageListGalleryRole
     let text: String
@@ -81,7 +81,7 @@ enum MessageListGalleryMocks {
             role: .assistant,
             text: """
             On Android we rely on LazyColumn visibility of a bottom anchor item.
-            On iOS we track scroll distance from the bottom on iOS 18 and fall back to scroll position on iOS 17.
+            On iOS the UIKit timeline host tracks distance from the bottom for pin and pill visibility on the deployment target.
             This gallery page exists so we can tune that behavior without loading a live session.
             """,
             metadataLabel: nil

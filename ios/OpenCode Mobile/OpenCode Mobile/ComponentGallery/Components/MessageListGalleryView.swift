@@ -1,7 +1,5 @@
 import SwiftUI
 
-private let messageListGalleryBottomAnchorID = "message-list-gallery-bottom-anchor"
-
 struct MessageListGalleryView: View {
     @Bindable var model: MessageListGalleryModel
 
@@ -24,66 +22,38 @@ private struct MessageListGalleryPreview: View {
     let onRemoveLastMessage: () -> Void
     let onResizeLastMessage: () -> Void
 
-    @State private var timeline = MessageListTimelineState(
-        bottomAnchorID: messageListGalleryBottomAnchorID
-    )
-
-    private var messageCount: Int { messages.count }
+    @State private var scrollController = TimelineScrollController()
 
     private var showScrollToEnd: Bool {
-        timeline.shouldShowScrollToEnd(messageCount: messageCount)
+        scrollController.shouldShowScrollToEnd
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                MessageListReversedTimelineStack(
-                    items: messages,
-                    bottomAnchorID: messageListGalleryBottomAnchorID,
-                    itemID: \.id,
-                    onLastMessageContentSizeSettled: {
-                        timeline.followLayoutChangeIfNeededAfterLayoutSettles(
-                            messageCount: messageCount,
-                            autoFollowEnabled: autoFollowEnabled,
-                            scrollTargetID: messages.last?.id
-                        )
-                    }
-                ) { message, isNewestMessage, onContentSizeSettled in
-                    HStack {
-                        if message.role == .assistant {
-                            MessageListGalleryMessageRow(
-                                message: message,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
-                            )
-                            Spacer(minLength: 0)
-                        } else {
-                            Spacer(minLength: 0)
-                            MessageListGalleryMessageRow(
-                                message: message,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
-                            )
-                        }
+            MessageListTimelineHost(
+                items: messages,
+                scrollController: scrollController
+            ) { message in
+                HStack {
+                    if message.role == .assistant {
+                        MessageListGalleryMessageRow(message: message)
+                        Spacer(minLength: 0)
+                    } else {
+                        Spacer(minLength: 0)
+                        MessageListGalleryMessageRow(message: message)
                     }
                 }
-                .scrollTargetLayout()
-                .messageListTimelineContentHeight(timeline: timeline)
             }
-            .defaultScrollAnchor(.bottom)
-            .messageListTimelineScrollChrome(timeline: timeline)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             MessageListScrollToEndOverlay(
                 visible: showScrollToEnd
             ) {
-                timeline.animateToEnd(
-                    messageCount: messageCount,
-                    scrollTargetID: messages.last?.id
-                )
+                scrollController.scrollToEndAnimated()
             }
 
             MessageListAutoFollowIndicator(
-                thresholdMet: timeline.isPinnedToEnd(messageCount: messageCount),
+                thresholdMet: scrollController.isPinnedToEnd,
                 autoFollowEnabled: autoFollowEnabled
             )
             .padding(.top, 64)
@@ -100,27 +70,10 @@ private struct MessageListGalleryPreview: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
-        .messageListTimelineBehavior(
-            timeline: timeline,
-            messageCount: messageCount,
-            firstMessageID: messages.first?.id,
-            lastMessageID: messages.last?.id,
-            autoFollowEnabled: autoFollowEnabled,
-            layoutSignature: messages.layoutSignature
-        )
-        .background(OpenCodeColors.backgroundBase)
-    }
-}
-
-private extension Array where Element == MessageListGalleryMessage {
-    var layoutSignature: Int {
-        reduce(count) { result, message in
-            var hasher = Hasher()
-            hasher.combine(result)
-            hasher.combine(message.id)
-            hasher.combine(message.text.count)
-            return hasher.finalize()
+        .onChange(of: autoFollowEnabled, initial: true) { _, enabled in
+            scrollController.autoFollowEnabled = enabled
         }
+        .background(OpenCodeColors.backgroundBase)
     }
 }
 
@@ -188,8 +141,6 @@ private struct MessageListAutoFollowIndicator: View {
 
 private struct MessageListGalleryMessageRow: View {
     let message: MessageListGalleryMessage
-    let animateSizeChanges: Bool
-    let onContentSizeAnimationFinished: (() -> Void)?
 
     var body: some View {
         Group {
@@ -212,10 +163,6 @@ private struct MessageListGalleryMessageRow: View {
                     )
             }
         }
-        .messageListAnimateLastMessageSize(
-            animateSizeChanges: animateSizeChanges,
-            onContentSizeAnimationFinished: onContentSizeAnimationFinished
-        )
     }
 }
 

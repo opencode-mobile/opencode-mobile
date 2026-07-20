@@ -114,18 +114,21 @@ implementation belong in the feature's `parity-gaps.md`.
 - Status: intentional
 - Area: component | motion
 - Shared intent: show the scroll-to-end action pill when the timeline is not
-  pinned to the bottom; scroll to the latest messages on tap.
-- iOS behavior: Session Chat temporarily uses eager SwiftUI `VStack` timeline
-  layout and `ScrollViewReader.scrollTo(lastMessage, anchor: .bottom)`.
+  pinned to the bottom; scroll to the latest messages on tap. Keep Follow
+  Latest armed only while the viewport is pinned near the bottom.
+- iOS behavior: Session Chat uses a UIKit `UICollectionView` timeline host with
+  SwiftUI-hosted cells. `TimelineScrollController` scrolls to the absolute
+  bottom via `setContentOffset` and measures pin state from
+  distance-from-bottom.
 - Android behavior: Session Chat uses lazy Compose list state and scrolls to the
   bottom anchor item.
-- Reason: SwiftUI `LazyVStack` programmatic scrolling is unreliable for
-  variable-height markdown chat rows; it can miss the target or land in blank
-  estimated space. Eager layout trades long-history performance for correct
-  scroll-to-end behavior while the durable iOS timeline is rebuilt.
-- Review trigger: replace the iOS SwiftUI scroll view with a UIKit-backed
-  `UICollectionView`/`UITableView` timeline using hosted SwiftUI cells before
-  treating long-history chat performance as production-ready.
+- Reason: SwiftUI `LazyVStack` / `scrollPosition` programmatic scrolling is
+  unreliable for variable-height markdown chat rows and produced overlapping
+  auto-follow snaps during streaming. UIKit virtualization keeps long-history
+  performance and stable end anchoring while preserving Android follow
+  semantics.
+- Review trigger: revisit if hosted SwiftUI cells hitch on Big Session and need
+  further cell or block virtualization.
 
 ## Overflow menu presentation
 

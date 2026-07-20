@@ -1,8 +1,32 @@
 # Session Chat Decisions
 
+## Use UIKit-backed virtualized iOS timeline
+
+- Date: 2026-07-20
+- Ticket: OPE-67
+- Decision: iOS Session Chat renders the message timeline with a UIKit
+  `UICollectionView` host (`MessageListTimelineHost`) and SwiftUI-hosted cells.
+  Programmatic scroll and pin detection live in `TimelineScrollController`: one
+  cancellable in-flight scroll-to-end job, coalesced follow on content growth /
+  append while armed, and distance-from-bottom pin math from `UIScrollView`.
+  Do not use SwiftUI `ScrollView` + `LazyVStack` + `scrollPosition(id:)` for
+  Session Chat auto-follow.
+- Reason: SwiftUI `LazyVStack` estimates off-screen variable-height rows, so
+  programmatic scrolling can miss the last message or land in blank estimated
+  space. The previous `scrollPosition` two-step (nil → last message → bottom
+  anchor) with overlapping `Task` yields caused clanky auto-follow during
+  streaming. UIKit virtualization plus absolute bottom `setContentOffset`
+  gives reliable end anchoring and cancels overlapping follow settle work.
+- Supersedes: **Use eager SwiftUI timeline before UIKit-backed iOS timeline**
+  (2026-06-29) and the interim LazyVStack + `scrollPosition` production path.
+- Revisit when: Instruments shows hosted SwiftUI cells still hitch on Big
+  Session and block-level virtualization is warranted.
+
 ## Use eager SwiftUI timeline before UIKit-backed iOS timeline
 
 - Date: 2026-06-29
+- Status: superseded (2026-07-20) by **Use UIKit-backed virtualized iOS timeline**
+  (OPE-67).
 - Decision: iOS Session Chat temporarily renders the message timeline with
   eager SwiftUI `VStack` layout and `ScrollViewReader.scrollTo(lastMessage,
   anchor: .bottom)` for the scroll-to-end action pill. Do not reintroduce
@@ -128,7 +152,9 @@
 ## iOS scroll-to-end detection is degraded below iOS 18
 
 - Date: 2026-07-03
-- Status: known limitation, documented (no fix planned in this slice).
+- Status: superseded (2026-07-20) by **Use UIKit-backed virtualized iOS timeline**
+  (OPE-67). Pin and pill visibility now use `UIScrollView` distance-from-bottom
+  on the deployment target (17.6+).
 - Detail: the iOS deployment target is 17.6, but distance-from-bottom and
   user-scroll detection (`ScrollToEndVisibility.shouldShow`, the
   `onScrollGeometryChange` observer) only run on iOS 18+. On iOS 17 the

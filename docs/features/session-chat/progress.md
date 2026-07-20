@@ -103,6 +103,11 @@
 - **2026-07-13:** Native composer permission state observes pending requests,
   prioritizes the root session before descendants, and resolves allow-once or
   deny decisions with stale-request reconciliation.
+- **2026-07-20 / OPE-67:** Session Chat and Message List gallery use
+  `MessageListTimelineHost` (`UICollectionView` + SwiftUI-hosted cells) with
+  `TimelineScrollController` for cancellable coalesced follow and
+  distance-from-bottom pin detection. Removed the SwiftUI `LazyVStack` +
+  `scrollPosition` two-step snap path.
 
 ## Architecture guardrails
 
@@ -115,12 +120,14 @@
 - Production sticky-bottom follow handles markdown/render growth, streaming row
   height changes, composer/keyboard viewport changes, and status/notice rows
   while follow is armed.
-- Message layout-signature changes, including `renderedMarkdown` becoming
-  available after the raw row appears, trigger a post-layout follow recheck.
+- **2026-07-20 / OPE-67 (iOS):** Follow is driven by `UIScrollView` content-size
+  growth and message appends through one cancellable scroll-to-end job. iOS no
+  longer uses `layoutSignature` or `scrollPosition(id:)` for auto-follow.
 - Android scroll math includes bottom content padding and performs the same
   one-time initial scroll-to-latest as iOS.
-- Production Session Chat uses non-animated exact end correction for layout and
-  viewport growth; append and manual scroll-to-end actions remain animated.
+- Production Session Chat uses non-animated exact end correction for layout
+  growth, viewport shrink while armed, and message appends; only the manual
+  scroll-to-end pill animates.
 - Android observes IME-driven viewport height changes and re-anchors while
   follow is armed.
 - `OpenCodeOutgoingMessage` always renders outgoing prompts at full height so
@@ -134,7 +141,6 @@
 
 ## Remaining Work
 
-- No remaining implementation work in the current Session Chat slice.
 - Dedicated diff viewing remains separate feature work. Real attachment handling
   is delivered under [File Attachments](../file-attachments/progress.md).
 

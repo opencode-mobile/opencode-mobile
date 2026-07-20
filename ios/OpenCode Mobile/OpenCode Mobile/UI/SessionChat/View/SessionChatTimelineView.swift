@@ -1,8 +1,6 @@
 import os
 import SwiftUI
 
-private let sessionChatTimelineBottomAnchorID = "session-chat-timeline-bottom-anchor"
-
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
     let messages: [SessionChatRow]
@@ -89,74 +87,36 @@ struct SessionChatTimelineView: View {
 private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
-    @State private var timeline = MessageListTimelineState(
-        bottomAnchorID: sessionChatTimelineBottomAnchorID
-    )
-
-    private var messageCount: Int { props.messages.count }
+    @State private var scrollController = TimelineScrollController()
 
     private var showScrollToEnd: Bool {
-        timeline.shouldShowScrollToEnd(messageCount: messageCount)
+        scrollController.shouldShowScrollToEnd
     }
 
     private var showReviewChanges: Bool {
         ReviewChangesPillVisibility.shouldShow(
             summary: props.reviewChangesSummary,
-            isPinnedToEnd: timeline.isPinnedToEnd(messageCount: messageCount),
+            isPinnedToEnd: scrollController.isPinnedToEnd,
             showScrollToEnd: showScrollToEnd
         )
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                MessageListReversedTimelineStack(
-                    items: props.messages,
-                    bottomAnchorID: sessionChatTimelineBottomAnchorID,
-                    itemID: \.id,
-                    onLastMessageContentSizeSettled: {
-                        timeline.followLayoutChangeIfNeededAfterLayoutSettles(
-                            messageCount: messageCount,
-                            autoFollowEnabled: true,
-                            scrollTargetID: props.messages.last?.id,
-                            onLog: logScroll
-                        )
-                    }
-                ) { message, isNewestMessage, onContentSizeSettled in
-                    HStack {
-                        if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                            SessionChatMessageRow(
-                                message: message,
-                                onMessageActionsTap: props.onMessageActionsTap,
-                                onToolDetailTap: props.onToolDetailTap,
-                                onChildSessionTap: props.onChildSessionTap,
-                                onChangesReviewTap: props.onChangesReviewTap,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
-                            )
-                            Spacer(minLength: 0)
-                        } else {
-                            Spacer(minLength: 0)
-                            SessionChatMessageRow(
-                                message: message,
-                                onMessageActionsTap: props.onMessageActionsTap,
-                                onToolDetailTap: props.onToolDetailTap,
-                                onChildSessionTap: props.onChildSessionTap,
-                                onChangesReviewTap: props.onChangesReviewTap,
-                                animateSizeChanges: isNewestMessage,
-                                onContentSizeAnimationFinished: onContentSizeSettled
-                            )
-                        }
-                    }
-                }
-                .scrollTargetLayout()
-                .messageListTimelineContentHeight(timeline: timeline)
+            MessageListTimelineHost(
+                items: props.messages,
+                scrollController: scrollController,
+                onRefresh: props.onRefresh
+            ) { message in
+                SessionChatTimelineHostRow(
+                    message: message,
+                    onMessageActionsTap: props.onMessageActionsTap,
+                    onToolDetailTap: props.onToolDetailTap,
+                    onChildSessionTap: props.onChildSessionTap,
+                    onChangesReviewTap: props.onChangesReviewTap
+                )
             }
-            .defaultScrollAnchor(.bottom)
-            .messageListTimelineScrollChrome(timeline: timeline)
-            .refreshable {
-                await props.onRefresh()
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 if props.isRefreshing {
                     ProgressView()
@@ -166,12 +126,8 @@ private struct SessionChatTimelineReadyView: View {
             MessageListScrollToEndOverlay(
                 visible: showScrollToEnd
             ) {
-                logScroll("pill-click count=\(messageCount)")
-                timeline.animateToEnd(
-                    messageCount: messageCount,
-                    scrollTargetID: props.messages.last?.id,
-                    onLog: logScroll
-                )
+                logScroll("pill-click count=\(props.messages.count)")
+                scrollController.scrollToEndAnimated()
             }
 
             if showReviewChanges, let summary = props.reviewChangesSummary {
@@ -188,15 +144,13 @@ private struct SessionChatTimelineReadyView: View {
         }
         .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .animation(.easeOut(duration: 0.2), value: showReviewChanges)
-        .messageListTimelineBehavior(
-            timeline: timeline,
-            messageCount: messageCount,
-            firstMessageID: props.messages.first?.id,
-            lastMessageID: props.messages.last?.id,
-            autoFollowEnabled: true,
-            layoutSignature: props.messages.layoutSignature,
-            onLog: logScroll
-        )
+        .onAppear {
+            scrollController.autoFollowEnabled = true
+            logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
+        }
+        .onChange(of: props.messages.count) { _, newCount in
+            logScroll("message-count changed count=\(newCount)")
+        }
     }
 
     private func logScroll(_ message: String) {
@@ -204,18 +158,34 @@ private struct SessionChatTimelineReadyView: View {
     }
 }
 
-private extension Array where Element == SessionChatRow {
-    var layoutSignature: Int {
-        reduce(count) { result, message in
-            var hasher = Hasher()
-            hasher.combine(result)
-            hasher.combine(message.id)
-            hasher.combine(message.text.count)
-            hasher.combine(message.blocks.count)
-            hasher.combine(message.isStreaming)
-            hasher.combine(message.renderedMarkdown?.sourceHash ?? 0)
-            hasher.combine(message.renderedMarkdown?.blocks.count ?? 0)
-            return hasher.finalize()
+private struct SessionChatTimelineHostRow: View {
+    let message: SessionChatRow
+    let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onChildSessionTap: (String, String) -> Void
+    let onChangesReviewTap: (String, String?) -> Void
+
+    var body: some View {
+        HStack {
+            if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                SessionChatMessageRow(
+                    message: message,
+                    onMessageActionsTap: onMessageActionsTap,
+                    onToolDetailTap: onToolDetailTap,
+                    onChildSessionTap: onChildSessionTap,
+                    onChangesReviewTap: onChangesReviewTap
+                )
+                Spacer(minLength: 0)
+            } else {
+                Spacer(minLength: 0)
+                SessionChatMessageRow(
+                    message: message,
+                    onMessageActionsTap: onMessageActionsTap,
+                    onToolDetailTap: onToolDetailTap,
+                    onChildSessionTap: onChildSessionTap,
+                    onChangesReviewTap: onChangesReviewTap
+                )
+            }
         }
     }
 }
@@ -226,8 +196,6 @@ private struct SessionChatMessageRow: View {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
-    let animateSizeChanges: Bool
-    let onContentSizeAnimationFinished: (() -> Void)?
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -270,10 +238,6 @@ private struct SessionChatMessageRow: View {
                 )
             }
         }
-        .messageListAnimateLastMessageSize(
-            animateSizeChanges: animateSizeChanges,
-            onContentSizeAnimationFinished: onContentSizeAnimationFinished
-        )
     }
 }
 
