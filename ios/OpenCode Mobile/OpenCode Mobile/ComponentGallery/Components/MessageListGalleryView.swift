@@ -90,18 +90,24 @@ private struct MessageListGalleryFloatingControls: View {
                 contrast: .low,
                 action: onAddMessage
             )
+            .accessibilityLabel("Add message")
+            .accessibilityIdentifier("messageListAddMessage")
             OpenCodeButton(
                 variant: .compactText(title: "-"),
                 enabled: canRemove,
                 contrast: .low,
                 action: onRemoveLastMessage
             )
+            .accessibilityLabel("Remove message")
+            .accessibilityIdentifier("messageListRemoveMessage")
             OpenCodeButton(
                 variant: .compactText(title: "/"),
                 enabled: canRemove,
                 contrast: .low,
                 action: onResizeLastMessage
             )
+            .accessibilityLabel("Resize message")
+            .accessibilityIdentifier("messageListResizeMessage")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 6)
@@ -136,6 +142,8 @@ private struct MessageListAutoFollowIndicator: View {
                 Capsule()
                     .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
             )
+            .accessibilityIdentifier("messageListAutoFollowIndicator")
+            .accessibilityLabel(label)
     }
 }
 

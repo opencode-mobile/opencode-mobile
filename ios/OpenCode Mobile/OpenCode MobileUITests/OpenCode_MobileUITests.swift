@@ -102,6 +102,63 @@ final class OpenCode_MobileUITests: XCTestCase {
     }
 
     @MainActor
+    func testMessageListGalleryTimelineHostFollowsAppends() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["OPENCODE_UI_TEST_MESSAGE_LIST"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.otherElements["messageListGalleryUITest"].waitForExistence(timeout: 15),
+            "Message List gallery UITest harness did not appear."
+        )
+
+        let add = app.buttons["Add message"]
+        XCTAssertTrue(
+            add.waitForExistence(timeout: 10),
+            "UIKit MessageListTimelineHost gallery controls did not appear."
+        )
+
+        // UICollectionView only exposes on-screen hosted cells to XCTest; assert against
+        // a near-end fixture message that the initial scroll-to-end leaves visible.
+        let visibleMessage = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Tap the pill to return here")
+        ).firstMatch
+        XCTAssertTrue(
+            visibleMessage.waitForExistence(timeout: 5),
+            "Expected hosted gallery message content."
+        )
+
+        add.tap()
+        add.tap()
+        add.tap()
+        Thread.sleep(forTimeInterval: 0.6)
+
+        let scrollToEnd = app.buttons["Scroll to end"]
+        if scrollToEnd.waitForExistence(timeout: 2) {
+            scrollToEnd.tap()
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+
+        let resize = app.buttons["Resize message"]
+        XCTAssertTrue(resize.waitForExistence(timeout: 5))
+        resize.tap()
+        Thread.sleep(forTimeInterval: 0.4)
+        resize.tap()
+        Thread.sleep(forTimeInterval: 0.4)
+
+        let appended = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Live message")
+        ).firstMatch
+        XCTAssertTrue(
+            appended.waitForExistence(timeout: 5),
+            "Expected appended live gallery message after Add taps."
+        )
+
+        XCTAssertTrue(add.exists, "Timeline host disappeared after append/resize.")
+        XCTAssertFalse(app.staticTexts["Unable to load messages"].exists)
+    }
+
+    @MainActor
     func testReviewChangesPillAccessibilityAndDisabledBehavior() throws {
         let app = XCUIApplication()
         app.launchEnvironment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] = "1"

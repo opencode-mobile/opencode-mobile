@@ -10,13 +10,16 @@ final class MessageListGalleryModel {
         }
     }
 
-    var autoFollowEnabled = false
+    var autoFollowEnabled: Bool
 
     var messages = MessageListGalleryMocks.messages
 
     private var liveSequence = 0
     private var liveTask: Task<Void, Never>?
 
+    init(autoFollowEnabled: Bool = false) {
+        self.autoFollowEnabled = autoFollowEnabled
+    }
     func addMessage() {
         appendLiveMessage()
     }

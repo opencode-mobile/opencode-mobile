@@ -19,6 +19,7 @@ final class TimelineScrollController {
     private var autoFollowState: MessageListAutoFollowState
     private weak var performer: TimelineScrollPerforming?
     private var scrollGeneration = 0
+    private var programmaticPinRetryCount = 0
     private var distanceFromBottom = CGFloat.greatestFiniteMagnitude
     private var viewportHeight: CGFloat = 0
     private var contentHeight: CGFloat = 0
@@ -89,6 +90,10 @@ final class TimelineScrollController {
         scrollGeneration += 1
         let generation = scrollGeneration
         isProgrammaticScrolling = true
+        // Arm immediately so appends/layout growth during the settle window still follow.
+        if autoFollowEnabled {
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: true)
+        }
         refreshDerivedState()
         performer?.performScrollToEnd(animated: animated)
 
@@ -101,7 +106,24 @@ final class TimelineScrollController {
 
             isProgrammaticScrolling = false
             refreshDerivedState()
-            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
+
+            // Estimated UICollectionView cell heights often grow after the first
+            // scroll-to-end, leaving us short of the true bottom. Keep follow armed
+            // (we intentionally scrolled to end) and retry while still unpinned.
+            if autoFollowEnabled,
+               !isPinnedToEnd,
+               programmaticPinRetryCount < MessageListTimelineDefaults.programmaticPinRetryLimit
+            {
+                programmaticPinRetryCount += 1
+                autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: true)
+                requestScrollToEnd(animated: false)
+                return
+            }
+
+            programmaticPinRetryCount = 0
+            autoFollowState.markProgrammaticScrollSettled(
+                isPinnedToEnd: isPinnedToEnd || autoFollowEnabled
+            )
         }
     }
 
@@ -109,10 +131,8 @@ final class TimelineScrollController {
         guard !isProgrammaticScrolling else { return }
         isUserScrolling = true
         refreshDerivedState()
-        autoFollowState.updatePinnedState(
-            isPinnedToEnd: isPinnedToEnd,
-            messageCount: messageCount
-        )
+        // User drag is the only path that should disarm follow from an unpinned offset.
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
     }
 
     func endUserScrolling() {

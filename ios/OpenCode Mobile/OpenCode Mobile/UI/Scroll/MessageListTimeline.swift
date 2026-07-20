@@ -11,6 +11,7 @@ enum MessageListTimelineDefaults {
     static let bottomContentPadding: CGFloat = 12
     static let programmaticAnimatedSettleMilliseconds = 250
     static let programmaticImmediateSettleMilliseconds = 50
+    static let programmaticPinRetryLimit = 3
 }
 
 struct MessageListScrollToEndOverlay: View {

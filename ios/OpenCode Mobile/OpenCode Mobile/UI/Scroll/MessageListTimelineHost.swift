@@ -23,6 +23,8 @@ where Item.ID == String {
         viewController.scrollController = scrollController
         viewController.onRefresh = onRefresh
         scrollController.attach(viewController)
+        viewController.loadViewIfNeeded()
+        viewController.updateRefreshControlAvailability()
         viewController.apply(items: items, animatingDifferences: false)
         return viewController
     }
@@ -35,6 +37,7 @@ where Item.ID == String {
         viewController.onRefresh = onRefresh
         viewController.itemContent = itemContent
         scrollController.attach(viewController)
+        viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
         viewController.apply(items: items, animatingDifferences: true)
     }
@@ -106,12 +109,13 @@ where Item.ID == String {
     }
 
     func apply(items: [Item], animatingDifferences: Bool) {
+        guard isViewLoaded, dataSource != nil else { return }
         guard items != currentItems else { return }
 
         let previousItems = itemsByID
         let previousCount = orderedIDs.count
         currentItems = items
-        itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        itemsByID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         orderedIDs = items.map(\.id)
 
         var snapshot = NSDiffableDataSourceSnapshot<String, String>()
@@ -162,6 +166,25 @@ where Item.ID == String {
         if !animated {
             collectionView.layoutIfNeeded()
             reportGeometry()
+            // Estimated cell heights often resolve on the next turn; re-pin then.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.collectionView.layoutIfNeeded()
+                let refinedOffset = max(
+                    -self.collectionView.adjustedContentInset.top,
+                    self.collectionView.contentSize.height
+                        - self.collectionView.bounds.height
+                        + self.collectionView.adjustedContentInset.bottom
+                )
+                if abs(self.collectionView.contentOffset.y - refinedOffset) > 0.5 {
+                    self.collectionView.setContentOffset(
+                        CGPoint(x: 0, y: refinedOffset),
+                        animated: false
+                    )
+                    self.collectionView.layoutIfNeeded()
+                }
+                self.reportGeometry()
+            }
         }
     }
 

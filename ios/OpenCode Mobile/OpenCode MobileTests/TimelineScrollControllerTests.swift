@@ -65,7 +65,7 @@ struct TimelineScrollControllerTests {
         ])
         #expect(controller.isProgrammaticScrolling)
 
-        try? await Task.sleep(for: .milliseconds(250))
+        try? await Task.sleep(for: .milliseconds(400))
 
         #expect(!controller.isProgrammaticScrolling)
         #expect(performer.calls.count == 2)
@@ -149,5 +149,61 @@ struct TimelineScrollControllerTests {
         )
         #expect(controller.isPinnedToEnd)
         #expect(!controller.shouldShowScrollToEnd)
+    }
+
+    @Test func messageAppendDuringProgrammaticScrollStillFollows() async {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 2)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 200,
+            viewportHeight: 400,
+            contentHeight: 1_000
+        )
+
+        controller.requestScrollToEnd(animated: false)
+        #expect(performer.calls.count == 1)
+
+        // Append before settle — must still request follow.
+        controller.updateMessageCount(3)
+        #expect(performer.calls.count == 2)
+        #expect(performer.calls.last == .init(animated: false))
+    }
+
+    @Test func settleWhileUnpinnedRetriesAndKeepsFollowArmed() async {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 2)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 200,
+            viewportHeight: 400,
+            contentHeight: 1_000
+        )
+
+        controller.requestScrollToEnd(animated: false)
+        #expect(performer.calls.count == 1)
+
+        // Still short of the true bottom after estimated heights grow.
+        controller.updateGeometry(
+            distanceFromBottom: 120,
+            viewportHeight: 400,
+            contentHeight: 1_200
+        )
+
+        try? await Task.sleep(for: .milliseconds(80))
+
+        #expect(performer.calls.count == 2)
+        #expect(performer.calls.last == .init(animated: false))
+
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 400,
+            contentHeight: 1_200
+        )
+        try? await Task.sleep(for: .milliseconds(80))
+
+        controller.updateMessageCount(3)
+        #expect(performer.calls.last == .init(animated: false))
+        #expect(performer.calls.count == 3)
     }
 }
