@@ -13,6 +13,8 @@ Branch: `feature/ope-68-pr-ci-gating`
 - [x] Document `main` ruleset steps in `ruleset.md`
 - [x] Fix Android unit tests blocking PR Checks (part-order assertion +
   benchmark test dispatcher)
+- [x] Align iOS MessageSync tests with OPE-49 TextPart-only `Message.text`
+- [x] Quarantine Android/iOS markdown load benchmarks from CI gates
 
 ## Remaining
 
