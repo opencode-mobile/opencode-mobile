@@ -650,7 +650,7 @@ class SessionChatViewModelTest {
                         }
                     }
                 }
-            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = Dispatchers.Default }
+            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = testDispatcher }
             val preparerMs =
                 measureMs {
                     preparer.prepareMessages(messages)

@@ -11,9 +11,11 @@ Branch: `feature/ope-68-pr-ci-gating`
 - [x] Soft-fail Android lint/ktlint; hard-fail unit tests
 - [x] Update README and AGENTS CI notes
 - [x] Document `main` ruleset steps in `ruleset.md`
+- [x] Fix Android unit tests blocking PR Checks (part-order assertion +
+  benchmark test dispatcher)
 
 ## Remaining
 
 - [ ] After merge: add repository ruleset requiring `android-checks` and
-  `ios-checks` (see `ruleset.md`)
+  `ios-checks` (see `ruleset.md`) — needs GitHub Team on private repos
 - [ ] Follow-up: make `ktlintCheck` / `lintDebug` hard-fail once green on main
