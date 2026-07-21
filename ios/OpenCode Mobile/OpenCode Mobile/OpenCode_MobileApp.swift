@@ -41,6 +41,8 @@ struct OpenCode_MobileApp: App {
             }
         } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_REVIEW_CHANGES_PILL"] == "1" {
             ReviewChangesPillUITestView()
+        } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_MESSAGE_LIST"] == "1" {
+            MessageListGalleryUITestView()
         } else {
             AppRootView()
         }
@@ -94,6 +96,17 @@ private struct ReviewChangesPillUITestView: View {
             OpenCodeReviewChangesPill(variant: .latestTurn, changedFileCount: 4, additions: 0, deletions: 0, enabled: false, action: {})
             Text(tapped ? "Review changes tapped" : "Waiting for review")
         }
+    }
+}
+
+private struct MessageListGalleryUITestView: View {
+    @State private var model = MessageListGalleryModel(autoFollowEnabled: true)
+
+    var body: some View {
+        MessageListGalleryView(model: model)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(OpenCodeColors.backgroundBase)
+            .accessibilityIdentifier("messageListGalleryUITest")
     }
 }
 #endif

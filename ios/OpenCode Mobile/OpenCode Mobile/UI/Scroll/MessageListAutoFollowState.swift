@@ -9,7 +9,12 @@ struct MessageListAutoFollowState {
     mutating func updatePinnedState(isPinnedToEnd: Bool, messageCount: Int) {
         guard messageCount == observedMessageCount else { return }
 
-        shouldFollowNextAppend = isPinnedToEnd
+        // Geometry can report "unpinned" while estimated heights are still resolving
+        // after a programmatic scroll-to-end. Only arm from geometry here; disarming
+        // happens from user-scroll callbacks (or explicit markProgrammaticScrollSettled).
+        if isPinnedToEnd {
+            shouldFollowNextAppend = true
+        }
     }
 
     mutating func markProgrammaticScrollSettled(isPinnedToEnd: Bool) {

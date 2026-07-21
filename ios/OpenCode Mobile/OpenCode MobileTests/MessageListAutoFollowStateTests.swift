@@ -77,9 +77,19 @@ struct MessageListAutoFollowStateTests {
         var state = MessageListAutoFollowState(initialMessageCount: 8)
 
         state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
-        state.updatePinnedState(isPinnedToEnd: false, messageCount: 8)
+        state.markProgrammaticScrollSettled(isPinnedToEnd: false)
 
         let shouldFollow = state.onMessageCountChanged(messageCount: 9, autoFollowEnabled: true)
         #expect(!shouldFollow)
+    }
+
+    @Test func geometryUnpinnedDoesNotDisarmFollow() {
+        var state = MessageListAutoFollowState(initialMessageCount: 8)
+
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+        state.updatePinnedState(isPinnedToEnd: false, messageCount: 8)
+
+        let shouldFollow = state.onMessageCountChanged(messageCount: 9, autoFollowEnabled: true)
+        #expect(shouldFollow)
     }
 }
