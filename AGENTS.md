@@ -256,8 +256,8 @@ section only adds caveats.
 - **Pre-existing check failures (not environment issues).** On the current
   committed tree, `./gradlew ktlintCheck` and `./gradlew lintDebug` report
   violations (ktlint style nits plus `NewApi` lint errors with no lint baseline).
-  CI is `workflow_dispatch`-only, so these were never gated; they reproduce
-  identically in CI. Do not treat them as a broken environment.
+  Android Checks soft-fails those steps and hard-fails on unit tests until a
+  follow-up makes lint green. Do not treat the soft-fail as a broken environment.
 - **Flaky unit tests.** A few coroutine-timing tests are non-deterministic across
   runs (e.g. some `SessionChatViewModelTest` and `ConnectionProfileStoreTest`
   cases) because background work runs off the test scheduler. Re-run the task or
