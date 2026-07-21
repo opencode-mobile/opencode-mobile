@@ -12,6 +12,8 @@ enum MessageListTimelineDefaults {
     static let programmaticAnimatedSettleMilliseconds = 250
     static let programmaticImmediateSettleMilliseconds = 50
     static let programmaticPinRetryLimit = 3
+    /// Hold unanimated layout after the first pin while estimated heights settle.
+    static let initialLoadSettlingMilliseconds = 400
 }
 
 struct MessageListScrollToEndOverlay: View {

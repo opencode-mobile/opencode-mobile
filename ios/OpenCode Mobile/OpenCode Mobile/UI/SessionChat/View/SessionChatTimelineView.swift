@@ -117,6 +117,8 @@ private struct SessionChatTimelineReadyView: View {
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Keep pill/pin animation state from animating hosted cells on open.
+            .transaction { $0.animation = nil }
             .overlay {
                 if props.isRefreshing {
                     ProgressView()
@@ -139,11 +141,8 @@ private struct SessionChatTimelineReadyView: View {
                     action: props.onReviewChangesTap
                 )
                     .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
-        .animation(.easeOut(duration: 0.2), value: showReviewChanges)
         .onAppear {
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
@@ -374,8 +373,7 @@ private struct AssistantMessageBubble: View {
             if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
-                    variant: .assistantMessage,
-                    measuresHeight: true
+                    variant: .assistantMessage
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)

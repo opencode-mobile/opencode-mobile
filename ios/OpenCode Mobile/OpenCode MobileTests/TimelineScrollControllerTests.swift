@@ -206,4 +206,56 @@ struct TimelineScrollControllerTests {
         #expect(performer.calls.last == .init(animated: false))
         #expect(performer.calls.count == 3)
     }
+
+    @Test func userScrollDuringProgrammaticCancelsSettleAndDisarms() async {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 2)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 400,
+            contentHeight: 1_000
+        )
+
+        controller.requestScrollToEnd(animated: false)
+        #expect(controller.isProgrammaticScrolling)
+        #expect(performer.calls.count == 1)
+
+        // User drags away while the settle window is open.
+        controller.updateGeometry(
+            distanceFromBottom: 300,
+            viewportHeight: 400,
+            contentHeight: 1_000
+        )
+        controller.beginUserScrolling()
+        #expect(!controller.isProgrammaticScrolling)
+        #expect(controller.isUserScrolling)
+
+        try? await Task.sleep(for: .milliseconds(80))
+
+        // Stale settle must not retry or re-arm follow.
+        #expect(performer.calls.count == 1)
+        controller.endUserScrolling()
+        controller.updateMessageCount(3)
+        controller.notifyContentGrew()
+        #expect(performer.calls.count == 1)
+    }
+
+    @Test func requestScrollToEndIgnoredWhileUserScrolling() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 2)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 300,
+            viewportHeight: 400,
+            contentHeight: 1_000
+        )
+
+        controller.beginUserScrolling()
+        controller.requestScrollToEnd(animated: false)
+        controller.scrollToEndAnimated()
+
+        #expect(performer.calls.isEmpty)
+        #expect(!controller.isProgrammaticScrolling)
+    }
 }

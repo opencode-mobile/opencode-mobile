@@ -86,6 +86,9 @@ final class TimelineScrollController {
 
     func requestScrollToEnd(animated: Bool) {
         guard messageCount > 0 || contentHeight > 0 else { return }
+        // Never fight an active user pan/deceleration; follow stays gated by
+        // shouldFollowNextAppend until the gesture ends.
+        guard !isUserScrolling else { return }
 
         scrollGeneration += 1
         let generation = scrollGeneration
@@ -107,10 +110,14 @@ final class TimelineScrollController {
             isProgrammaticScrolling = false
             refreshDerivedState()
 
+            let followStillArmed = autoFollowState.shouldEnsureLayoutEnd(
+                autoFollowEnabled: autoFollowEnabled
+            )
+
             // Estimated UICollectionView cell heights often grow after the first
-            // scroll-to-end, leaving us short of the true bottom. Keep follow armed
-            // (we intentionally scrolled to end) and retry while still unpinned.
-            if autoFollowEnabled,
+            // scroll-to-end, leaving us short of the true bottom. Retry only while
+            // follow is still armed — a user scroll away must cancel retries.
+            if followStillArmed,
                !isPinnedToEnd,
                programmaticPinRetryCount < MessageListTimelineDefaults.programmaticPinRetryLimit
             {
@@ -121,14 +128,22 @@ final class TimelineScrollController {
             }
 
             programmaticPinRetryCount = 0
+            // Keep armed after an intentional pin miss only if the user did not
+            // disarm during settle. Never re-arm from autoFollowEnabled alone.
             autoFollowState.markProgrammaticScrollSettled(
-                isPinnedToEnd: isPinnedToEnd || autoFollowEnabled
+                isPinnedToEnd: isPinnedToEnd || followStillArmed
             )
         }
     }
 
     func beginUserScrolling() {
-        guard !isProgrammaticScrolling else { return }
+        if isProgrammaticScrolling {
+            // Cancel in-flight settle/pin retries so follow corrections stop
+            // fighting the gesture immediately.
+            scrollGeneration += 1
+            isProgrammaticScrolling = false
+            programmaticPinRetryCount = 0
+        }
         isUserScrolling = true
         refreshDerivedState()
         // User drag is the only path that should disarm follow from an unpinned offset.

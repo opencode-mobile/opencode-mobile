@@ -470,14 +470,12 @@ private struct InlineMarkdownText: View {
     let font: Font
     let color: Color
 
-    @State private var styled: AttributedString?
-
     var body: some View {
-        Text(styled ?? AttributedString(inlines.plainText))
+        // Style synchronously on first paint. Deferring via `.task` showed plain
+        // text for a frame, then swapped in attributed markdown and resized the
+        // UICollectionView cell — visible as a late layout jump on open.
+        Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
             .fixedSize(horizontal: false, vertical: true)
-            .task(id: inlines.stableCacheKey) {
-                styled = NativeMarkdownAttributedString.inline(inlines, font: font, color: color)
-            }
     }
 }
 

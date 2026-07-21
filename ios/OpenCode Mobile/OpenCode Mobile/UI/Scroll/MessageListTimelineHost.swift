@@ -39,7 +39,9 @@ where Item.ID == String {
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
-        viewController.apply(items: items, animatingDifferences: true)
+        // Keep snapshot updates unanimated for now; open-settling still races
+        // estimated heights and looks like messages sliding in.
+        viewController.apply(items: items, animatingDifferences: false)
     }
 }
 
@@ -66,6 +68,11 @@ where Item.ID == String {
     private var lastContentHeight: CGFloat = 0
     private var lastViewportHeight: CGFloat = 0
     private var hasCompletedInitialScroll = false
+    private var isSettlingInitialLoad = true
+    private var initialLoadSettlingTask: Task<Void, Never>?
+    /// Extra top inset so short threads (new session, first message) sit on the
+    /// bottom edge instead of the top of the viewport.
+    private var bottomAlignmentTopInset: CGFloat = 0
     private var userScrollEndTask: Task<Void, Never>?
     private var contentSizeObservation: NSKeyValueObservation?
     private var refreshControl: UIRefreshControl?
@@ -105,6 +112,7 @@ where Item.ID == String {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        updateBottomAlignmentInset()
         reportGeometry()
     }
 
@@ -113,7 +121,8 @@ where Item.ID == String {
         guard items != currentItems else { return }
 
         let previousItems = itemsByID
-        let previousCount = orderedIDs.count
+        let previousOrderedIDs = orderedIDs
+        let previousCount = previousOrderedIDs.count
         currentItems = items
         itemsByID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         orderedIDs = items.map(\.id)
@@ -132,59 +141,77 @@ where Item.ID == String {
             snapshot.reconfigureItems(changedIDs)
         }
 
-        let shouldAnimate = animatingDifferences && previousCount > 0
-        dataSource.apply(snapshot, animatingDifferences: shouldAnimate) { [weak self] in
+        // Difference animations are off for now — initial load and short-thread
+        // bottom alignment still fight estimated heights when inserts animate.
+        _ = animatingDifferences
+        let applySnapshot = { [weak self] in
             guard let self else { return }
-            self.collectionView.layoutIfNeeded()
-            self.reportGeometry()
+            self.dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+                guard let self else { return }
+                let shouldStayPinned =
+                    !self.hasCompletedInitialScroll
+                    || self.isSettlingInitialLoad
+                    || self.scrollController?.isPinnedToEnd == true
+                    || self.scrollController?.isProgrammaticScrolling == true
+                if shouldStayPinned {
+                    self.pinToBottomWithoutAnimation()
+                } else {
+                    UIView.performWithoutAnimation {
+                        self.collectionView.layoutIfNeeded()
+                    }
+                    self.reportGeometry()
+                }
 
-            if !self.hasCompletedInitialScroll, !self.orderedIDs.isEmpty {
-                self.hasCompletedInitialScroll = true
-                self.scrollController?.reset(messageCount: self.orderedIDs.count)
-                self.scrollController?.requestScrollToEnd(animated: false)
-                return
-            }
+                if !self.hasCompletedInitialScroll, !self.orderedIDs.isEmpty {
+                    self.hasCompletedInitialScroll = true
+                    self.beginInitialLoadSettling()
+                    self.scrollController?.reset(messageCount: self.orderedIDs.count)
+                    self.scrollController?.requestScrollToEnd(animated: false)
+                    return
+                }
 
-            if self.orderedIDs.count != previousCount {
-                self.scrollController?.updateMessageCount(self.orderedIDs.count)
+                if self.orderedIDs.count != previousCount {
+                    self.scrollController?.updateMessageCount(self.orderedIDs.count)
+                }
             }
         }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation(applySnapshot)
+        CATransaction.commit()
     }
 
     func performScrollToEnd(animated: Bool) {
         collectionView.layoutIfNeeded()
         guard !orderedIDs.isEmpty else { return }
+        // Match content-growth anchoring: never yank the offset under an
+        // active user pan or residual deceleration.
+        guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
 
-        let bottomOffset = max(
-            -collectionView.adjustedContentInset.top,
-            collectionView.contentSize.height
-                - collectionView.bounds.height
-                + collectionView.adjustedContentInset.bottom
-        )
-        collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: animated)
+        // Never animate scroll during open settle; pill taps can animate after.
+        let allowAnimation = animated && !isSettlingInitialLoad && hasCompletedInitialScroll
+        let bottomOffset = bottomContentOffsetY()
+        if allowAnimation {
+            collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: true)
+            return
+        }
 
-        if !animated {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: false)
             collectionView.layoutIfNeeded()
-            reportGeometry()
-            // Estimated cell heights often resolve on the next turn; re-pin then.
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.collectionView.layoutIfNeeded()
-                let refinedOffset = max(
-                    -self.collectionView.adjustedContentInset.top,
-                    self.collectionView.contentSize.height
-                        - self.collectionView.bounds.height
-                        + self.collectionView.adjustedContentInset.bottom
-                )
-                if abs(self.collectionView.contentOffset.y - refinedOffset) > 0.5 {
-                    self.collectionView.setContentOffset(
-                        CGPoint(x: 0, y: refinedOffset),
-                        animated: false
-                    )
-                    self.collectionView.layoutIfNeeded()
-                }
-                self.reportGeometry()
+        }
+        CATransaction.commit()
+        reportGeometry()
+
+        // Estimated cell heights often resolve on the next turn; re-pin then.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard !self.collectionView.isDragging, !self.collectionView.isDecelerating else {
+                return
             }
+            self.pinToBottomWithoutAnimation()
         }
     }
 
@@ -242,6 +269,9 @@ where Item.ID == String {
         collectionView.contentInsetAdjustmentBehavior = .automatic
         collectionView.delegate = self
         collectionView.keyboardDismissMode = .interactive
+        // Prevent self-sizing invalidations from implicitly animating cell frames
+        // while estimated heights resolve on open.
+        collectionView.selfSizingInvalidation = .enabledIncludingConstraints
         view.addSubview(collectionView)
         self.collectionView = collectionView
     }
@@ -300,19 +330,43 @@ where Item.ID == String {
 
     private func observeContentSize() {
         contentSizeObservation = collectionView.observe(\.contentSize, options: [.old, .new]) {
-            _, change in
+            [weak self] _, change in
+            guard let self else { return }
             let newHeight = change.newValue?.height ?? 0
             let oldHeight = change.oldValue?.height ?? 0
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let previousHeight = self.lastContentHeight
-                self.lastContentHeight = newHeight
-                self.reportGeometry()
-                let grew = newHeight > max(previousHeight, oldHeight) + 0.5
-                guard grew, self.hasCompletedInitialScroll else { return }
-                self.scrollController?.notifyContentGrew()
+            // Must run synchronously on the main thread. Hopping through Task
+            // leaves a visible frame where the prior message slides in.
+            if Thread.isMainThread {
+                MainActor.assumeIsolated {
+                    self.handleContentSizeChange(newHeight: newHeight, oldHeight: oldHeight)
+                }
+            } else {
+                Task { @MainActor [weak self] in
+                    self?.handleContentSizeChange(newHeight: newHeight, oldHeight: oldHeight)
+                }
             }
         }
+    }
+
+    private func handleContentSizeChange(newHeight: CGFloat, oldHeight: CGFloat) {
+        let previousHeight = lastContentHeight
+        lastContentHeight = newHeight
+        let grewBy = newHeight - max(previousHeight, oldHeight)
+        updateBottomAlignmentInset()
+        if grewBy > 0.5 {
+            // Anchor as soon as we have items, including before the first
+            // scroll-to-end completion callback runs.
+            if hasCompletedInitialScroll
+                || (!orderedIDs.isEmpty && scrollController?.isProgrammaticScrolling == true)
+            {
+                anchorBottomForContentGrowth(delta: grewBy)
+            } else if !orderedIDs.isEmpty {
+                pinToBottomWithoutAnimation()
+            }
+        }
+        reportGeometry()
+        guard grewBy > 0.5, hasCompletedInitialScroll else { return }
+        scrollController?.notifyContentGrew()
     }
 
     private func reportGeometry() {
@@ -340,6 +394,87 @@ where Item.ID == String {
         }
     }
 
+    private func bottomContentOffsetY() -> CGFloat {
+        max(
+            -collectionView.adjustedContentInset.top,
+            collectionView.contentSize.height
+                - collectionView.bounds.height
+                + collectionView.adjustedContentInset.bottom
+        )
+    }
+
+    private func updateBottomAlignmentInset() {
+        guard collectionView.bounds.height > 0 else { return }
+        collectionView.layoutIfNeeded()
+
+        let systemTopInset = max(0, collectionView.adjustedContentInset.top - bottomAlignmentTopInset)
+        let bottomInset = collectionView.adjustedContentInset.bottom
+        let availableHeight = collectionView.bounds.height - systemTopInset - bottomInset
+        let targetInset = max(0, availableHeight - collectionView.contentSize.height)
+        guard abs(targetInset - bottomAlignmentTopInset) > 0.5 else { return }
+
+        let keepPinned =
+            !hasCompletedInitialScroll
+            || scrollController?.isPinnedToEnd == true
+            || scrollController?.isProgrammaticScrolling == true
+            || orderedIDs.count <= 1
+
+        bottomAlignmentTopInset = targetInset
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            collectionView.contentInset.top = targetInset
+            collectionView.verticalScrollIndicatorInsets.top = targetInset
+            if keepPinned,
+               !orderedIDs.isEmpty,
+               !collectionView.isDragging,
+               !collectionView.isDecelerating
+            {
+                collectionView.setContentOffset(
+                    CGPoint(x: 0, y: bottomContentOffsetY()),
+                    animated: false
+                )
+            }
+        }
+        CATransaction.commit()
+    }
+
+    private func pinToBottomWithoutAnimation() {
+        guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            collectionView.layoutIfNeeded()
+            updateBottomAlignmentInset()
+            let refinedOffset = bottomContentOffsetY()
+            if abs(collectionView.contentOffset.y - refinedOffset) > 0.5 {
+                collectionView.setContentOffset(CGPoint(x: 0, y: refinedOffset), animated: false)
+                collectionView.layoutIfNeeded()
+            }
+        }
+        CATransaction.commit()
+        reportGeometry()
+    }
+
+    private func anchorBottomForContentGrowth(delta: CGFloat) {
+        let shouldAnchor =
+            !hasCompletedInitialScroll
+            || scrollController?.isPinnedToEnd == true
+            || scrollController?.isProgrammaticScrolling == true
+        guard shouldAnchor, !collectionView.isDragging, !collectionView.isDecelerating else {
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            collectionView.contentOffset.y += delta
+            collectionView.layoutIfNeeded()
+        }
+        CATransaction.commit()
+    }
+
     private func scheduleUserScrollEnd() {
         userScrollEndTask?.cancel()
         userScrollEndTask = Task { @MainActor in
@@ -350,6 +485,18 @@ where Item.ID == String {
                   !collectionView.isDecelerating
             else { return }
             scrollController?.endUserScrolling()
+        }
+    }
+
+    private func beginInitialLoadSettling() {
+        isSettlingInitialLoad = true
+        initialLoadSettlingTask?.cancel()
+        initialLoadSettlingTask = Task { @MainActor in
+            try? await Task.sleep(
+                for: .milliseconds(MessageListTimelineDefaults.initialLoadSettlingMilliseconds)
+            )
+            guard !Task.isCancelled else { return }
+            self.isSettlingInitialLoad = false
         }
     }
 }

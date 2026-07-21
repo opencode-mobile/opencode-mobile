@@ -45,6 +45,7 @@ private struct MessageListGalleryPreview: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transaction { $0.animation = nil }
 
             MessageListScrollToEndOverlay(
                 visible: showScrollToEnd
@@ -69,7 +70,6 @@ private struct MessageListGalleryPreview: View {
             .padding(.top, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .animation(.easeOut(duration: 0.2), value: showScrollToEnd)
         .onChange(of: autoFollowEnabled, initial: true) { _, enabled in
             scrollController.autoFollowEnabled = enabled
         }
