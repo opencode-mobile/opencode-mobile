@@ -1,6 +1,6 @@
 # Theme System — Progress
 
-**Status:** Shipped (OPE-17) — [PR #15](https://github.com/ivanfenenko/opencode-mobile/pull/15)
+**Status:** Shipped (OPE-17) — [PR #15](https://github.com/opencode-mobile/opencode-mobile/pull/15)
 
 ## Shared Planning
 
