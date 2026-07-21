@@ -81,6 +81,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -636,6 +637,7 @@ class SessionChatViewModelTest {
             assertNotNull(state.messages.single().renderedMarkdown)
         }
 
+    @Ignore("Quarantined from CI: stress println benchmark, not a correctness gate")
     @Test
     fun benchmark_loadMessages_longMarkdownHistory() =
         runTest(testDispatcher) {
@@ -650,7 +652,7 @@ class SessionChatViewModelTest {
                         }
                     }
                 }
-            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = Dispatchers.Default }
+            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = testDispatcher }
             val preparerMs =
                 measureMs {
                     preparer.prepareMessages(messages)

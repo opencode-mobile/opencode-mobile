@@ -451,7 +451,10 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.reviewChangesSummary == nil)
     }
 
-    @Test func benchmark_loadMessages_longMarkdownHistory() async {
+    @Test(
+        .disabled("Quarantined from CI: stress println benchmark, not a correctness gate")
+    )
+    func benchmark_loadMessages_longMarkdownHistory() async {
         let messages = longMarkdownHistory()
         let detectorMs = milliseconds {
             _ = messages.filter { OpenCodeRenderedMarkdownDetector.shouldRender($0.text) }.count

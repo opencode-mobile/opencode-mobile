@@ -102,8 +102,11 @@ struct MessageSyncTests {
         let msg2 = last?.first(where: { $0.id == "msg-2" })
         let toolParts = msg2?.parts.compactMap { part -> ToolPart? in if case .tool(let t) = part { t } else { nil } }
         #expect(toolParts?.count == 1)
+        #expect(toolParts?.first?.toolName == "webfetch")
         #expect(toolParts?.first?.status == .completed)
-        #expect(msg2?.text.contains("\u{2713} webfetch") == true)
+        // Tool labels stay on structured parts; flattened text is TextPart-only (OPE-49).
+        #expect(msg2?.text.contains("webfetch") != true)
+        #expect(msg2?.text == "Hello from part")
     }
 
     @Test func messagePartUpdated_textDeltaAppendsToExistingPart() async {
@@ -151,16 +154,33 @@ struct MessageSyncTests {
         eventStream.emit(eventWithToolPart(partID: "prt-t1", messageID: "msg-2", tool: "bash", status: "pending", sessionID: "ses-1"))
         eventStream.emit(eventWithTextPart(partID: "prt-2", messageID: "msg-2", text: "Second", sessionID: "ses-1"))
         eventStream.emit(eventWithToolPart(partID: "prt-t1", messageID: "msg-2", tool: "bash", status: "completed", sessionID: "ses-1"))
-        let expected = "First\n\u{2713} bash\nSecond"
+        // Tool labels stay on structured parts; flattened text is TextPart-only (OPE-49).
+        let expectedText = "First\nSecond"
         let updated = await waitUntil {
-            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == expected
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == expectedText
         }
         task.cancel()
 
         let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
         #expect(updated)
-        #expect(msg2?.text == expected)
+        #expect(msg2?.text == expectedText)
         #expect(msg2?.parts.count == 3)
+        guard case .text(let first) = msg2?.parts[0] else {
+            Issue.record("Expected first text part")
+            return
+        }
+        guard case .tool(let tool) = msg2?.parts[1] else {
+            Issue.record("Expected middle tool part")
+            return
+        }
+        guard case .text(let second) = msg2?.parts[2] else {
+            Issue.record("Expected last text part")
+            return
+        }
+        #expect(first.text == "First")
+        #expect(tool.toolName == "bash")
+        #expect(tool.status == .completed)
+        #expect(second.text == "Second")
     }
 
     @Test func messagePartUpdated_forRestSeededMessageReloadsTimeline() async {

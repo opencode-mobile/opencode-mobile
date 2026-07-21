@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.Session
@@ -351,8 +352,16 @@ class MessageSyncTest {
 
             val msg2 = emissions.last().first { it.id == "msg-2" }
             assertEquals(listOf("msg-1", "msg-2"), emissions.last().map { it.id })
-            assertEquals("First\n\u2713 bash\nSecond", msg2.text)
+            // Tool labels stay on structured parts; flattened text is text-only.
+            assertEquals("First\nSecond", msg2.text)
             assertEquals(3, msg2.parts.size)
+            val first = msg2.parts[0] as MessagePart.Text
+            val tool = msg2.parts[1] as MessagePart.Tool
+            val second = msg2.parts[2] as MessagePart.Text
+            assertEquals("First", first.text)
+            assertEquals("bash", tool.toolName)
+            assertEquals(ToolStatus.Completed, tool.status)
+            assertEquals("Second", second.text)
         }
 
     @Test

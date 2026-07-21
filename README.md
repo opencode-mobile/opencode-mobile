@@ -59,16 +59,21 @@ npm run api:sync        # fetch OpenAPI spec and generate clients
 
 ## CI
 
-GitHub Actions workflows are manual only (`workflow_dispatch`):
+Checks run on Blacksmith for every **ready-for-review** pull request (drafts are
+skipped). Android Build and iOS Build stay manual.
 
-| Workflow | What it does |
-|---|---|
-| Android Build | Assemble debug APK |
-| Android Checks | ktlint, Android Lint, unit tests |
-| iOS Build | Simulator build |
-| iOS Checks | Build, static analyzer, unit tests |
+| Workflow | Trigger | What it does |
+|---|---|---|
+| Android Checks | PR (non-draft) + dispatch | ktlint/lint (soft-fail) + unit tests |
+| iOS Checks | PR (non-draft) + dispatch | Build, analyzer, unit tests |
+| Android Build | `workflow_dispatch` | Assemble debug APK |
+| iOS Build | `workflow_dispatch` | Simulator build |
 
-Trigger from **Actions** on GitHub, or with the GitHub CLI:
+To block merges, require status checks `android-checks` and `ios-checks` on
+`main` (repository ruleset or branch protection, strict up-to-date). See
+[`docs/features/ci-pr-gating/`](docs/features/ci-pr-gating/).
+
+Manual runs:
 
 ```bash
 gh workflow run "Android Checks" --ref main
