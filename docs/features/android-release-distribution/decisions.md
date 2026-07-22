@@ -1,0 +1,168 @@
+# Android Release Distribution — Decisions
+
+All decisions below were accepted during the OPE-70 refinement on 2026-07-22.
+
+## Google ownership is personal for the private phase
+
+**Status:** Accepted
+**Decision:** A personal Google account owns Play Console, Google Cloud, and
+Firebase for the private/internal phase. Add a second trusted account as an
+administrator where the service supports it, and use Google's formal transfer
+process if ownership later moves to an organization.
+**Why:** This is the fastest path for a solo private release while preserving a
+recovery route and an explicit future transfer boundary.
+
+## Package name stays `dev.opencode.mobile`
+
+**Status:** Accepted
+**Decision:** Keep `applicationId` and the Play package name
+`dev.opencode.mobile`.
+**Risk acceptance:** This namespace is not evidence of upstream authorization
+and could conflict with a future official OpenCode app. The risk is accepted
+for this project. The Play listing must identify the app as
+**OpenCode Mobile — Unofficial**, use the real developer identity, and state
+that the app is independent and not endorsed by the OpenCode maintainers. Do
+not claim official status or reuse upstream logos without permission.
+**Why:** The package is already used by the app and becomes effectively
+permanent after the first Play upload.
+
+## One Cloud project, separate service accounts
+
+**Status:** Accepted
+**Decision:** Use one GCP project linked to one Firebase project. Create one
+least-privilege service account for Firebase Test Lab and a separate
+least-privilege service account for Play publishing.
+**Why:** One project keeps billing and administration simple; separate
+identities keep Test Lab and publishing credentials isolated.
+
+## JSON service-account credentials first
+
+**Status:** Accepted
+**Decision:** Store each service account's JSON credential as a distinct GitHub
+Actions secret. Revisit Workload Identity Federation as a hardening follow-up
+after both distribution paths work.
+**Why:** JSON credentials are the simplest first integration for a private
+project. Least privilege, separate accounts, secret storage, and rotation limit
+the initial risk.
+
+## Upload key is generated and backed up outside CI
+
+**Status:** Accepted
+**Decision:** Generate the RSA upload keystore locally on a trusted machine,
+keep an encrypted offline backup outside GitHub, and store only its encoded
+contents and passwords in GitHub Actions secrets. CI consumes the key but never
+creates it or becomes its sole holder.
+**Why:** Losing the only copy would create avoidable recovery work; committing
+or publishing the key would expose the release identity.
+
+## Play App Signing uses Google-generated app-signing keys
+
+**Status:** Accepted
+**Decision:** CI signs AABs with the locally owned upload key. On the first
+manual AAB upload, accept Play App Signing with Google-generated app-signing
+keys. Google holds the app-signing key; this project retains the upload key.
+**Why:** It separates the replaceable upload credential from the durable key
+used for device-delivered builds.
+
+## OPE-70 uses a human → agent → human handoff
+
+**Status:** Accepted
+**Decision:** Keep account provisioning and CI release signing in one ticket
+with three checkpoints:
+
+1. Human setup creates the accounts, projects, app draft, upload key, service
+   accounts, and GitHub secrets.
+2. Agent implementation wires Gradle and the protected manual workflow and
+   produces verified signed AAB/APK artifacts.
+3. Human completion manually uploads the first AAB, accepts Play App Signing,
+   grants the publisher service account access, and leaves the release
+   unpublished.
+
+OPE-70 remains `ready-for-human` until the first checkpoint is complete, then
+becomes `ready-for-agent`. OPE-71 owns automated internal-track publication.
+**Why:** A new Play app cannot finish signing enrollment before an
+upload-key-signed bundle exists.
+
+## One canonical release workflow owns Play-bound versions
+
+**Status:** Accepted
+**Decision:** OPE-70 creates one manual Android Release workflow. OPE-71 extends
+that workflow with Play internal-track upload and creates a separate manual
+Firebase Test Lab workflow. The two OPE-71 paths remain independently
+triggerable and neither becomes a PR merge gate.
+**Why:** A single Play-bound workflow prevents competing `versionCode`
+sequences while Test Lab stays independent from publishing.
+
+## Signed workflows run from protected `main` only
+
+**Status:** Accepted
+**Decision:** Release-signing and Google credentials are scoped through a
+GitHub Environment such as `android-release` and are available only to manual
+runs from protected `main`. Pull requests and arbitrary branches do not receive
+release secrets.
+**Why:** Untrusted or unreviewed build logic must not access the upload key or
+Google credentials.
+
+## CI owns `versionCode`; the operator owns `versionName`
+
+**Status:** Accepted
+**Decision:** The canonical Android Release workflow derives a monotonically
+increasing `versionCode` from its GitHub workflow run number. Its required
+`versionName` input must match semantic-version form
+`MAJOR.MINOR.PATCH[-PRERELEASE]`, for example `0.1.0` or
+`0.1.0-internal.1`.
+**Why:** Play receives an increasing machine value while humans control the
+meaningful visible version. Keeping one Play-bound workflow makes its sequence
+authoritative.
+
+## Artifact split and retention
+
+**Status:** Accepted
+**Decision:** CI produces an upload-key-signed AAB for Play and an
+upload-key-signed APK for Test Lab. GitHub retains the artifacts for seven days.
+Signature verification is required before upload.
+**Why:** The AAB matches Play's release format, the APK matches the initial
+Test Lab path, and short retention limits stale internal artifacts and storage.
+
+## Firebase product scope is ticketed explicitly
+
+**Status:** Accepted
+**Decision:**
+
+- OPE-70 registers `dev.opencode.mobile` with Firebase but adds no
+  `google-services.json`, Google Services Gradle plugin, or Firebase SDK.
+- OPE-71 uses Test Lab and Play distribution without adding a Firebase SDK.
+- OPE-72 adds Crashlytics and deliberately minimal Analytics only to
+  release/Play-internal builds. Debug/local builds stay clean.
+- FCM and Remote Config remain out of scope.
+
+**Why:** Test Lab does not require an app-side Firebase SDK, while crash
+reporting is a later, separately verifiable release concern.
+
+## Play distribution starts with one internal tester
+
+**Status:** Accepted
+**Decision:** Use the Play internal testing track, initially limited to the
+owner's verified tester account. Internal App Sharing is only a manual escape
+hatch. Public, open, closed, and production tracks are follow-ups.
+**Why:** This proves Play-delivered installation and updates with the smallest
+possible audience.
+
+## Test Lab starts with a bounded Robo crawl
+
+**Status:** Accepted
+**Decision:** OPE-71 runs Robo manually on Android virtual devices only, with a
+maximum of two device/API combinations and a ten-minute timeout per device. It
+does not add Espresso/Compose instrumentation or become a merge gate.
+**Why:** This proves the cloud-device path with explicit cost controls before
+expanding coverage.
+
+## iOS remains a documented no-op
+
+**Status:** Accepted
+**Decision:** No Apple Developer, TestFlight, App Store Connect, or iOS signing
+work is included. Start a separate iOS release-distribution slice when an Apple
+Developer account exists.
+**Why:** Android distribution should not wait on unavailable Apple account
+infrastructure. The intentional difference remains recorded in
+[`parity-gaps.md`](parity-gaps.md).
