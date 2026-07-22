@@ -20,7 +20,7 @@ live inventory.
 | V1 Foundations | `server-connection`, `project-list-home`, `project-selection`, `session-repository`, `message-repository`, `foreground-event-stream` |
 | Session Chat & Control | `session-chat`, `model-selection`, `session-context`, `clear-data`, permission UI, session CRUD/fork, abort |
 | Rendered Markdown | `native-rendered-markdown`, `rendered-markdown` (superseded), `ios-oniguruma-backend`, session diff viewer |
-| Polish & Validation | `theme`, `sync-probe` |
+| Polish & Validation | `theme`, `sync-probe`, `android-release-distribution`, `ci-pr-gating` |
 
 Use the closest existing milestone. If none fits, leave the milestone unset and
 report the gap rather than inventing a durable category during a sync.

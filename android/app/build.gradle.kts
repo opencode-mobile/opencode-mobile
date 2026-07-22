@@ -8,6 +8,47 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+val releaseTaskRequested =
+    gradle.startParameter.taskNames.any { taskName ->
+        taskName.contains("Release", ignoreCase = true)
+    }
+val releaseEnvironmentNames =
+    listOf(
+        "ANDROID_UPLOAD_KEYSTORE_PATH",
+        "ANDROID_UPLOAD_STORE_PASSWORD",
+        "ANDROID_UPLOAD_KEY_ALIAS",
+        "ANDROID_UPLOAD_KEY_PASSWORD",
+        "ANDROID_VERSION_CODE",
+        "ANDROID_VERSION_NAME",
+    )
+val releaseEnvironment =
+    releaseEnvironmentNames.associateWith { name ->
+        providers.environmentVariable(name).orNull?.takeIf(String::isNotBlank)
+    }
+
+if (releaseTaskRequested) {
+    val missingEnvironment = releaseEnvironment.filterValues { it == null }.keys
+    if (missingEnvironment.isNotEmpty()) {
+        throw GradleException(
+            "Release builds require CI-provided environment variables: " +
+                missingEnvironment.sorted().joinToString(", "),
+        )
+    }
+}
+
+val releaseVersionCode = releaseEnvironment.getValue("ANDROID_VERSION_CODE")?.toIntOrNull()
+val releaseVersionName = releaseEnvironment.getValue("ANDROID_VERSION_NAME")
+val semanticVersionPattern = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$")
+
+if (releaseTaskRequested && (releaseVersionCode == null || releaseVersionCode <= 0)) {
+    throw GradleException("ANDROID_VERSION_CODE must be a positive integer for release builds.")
+}
+if (releaseTaskRequested && !semanticVersionPattern.matches(requireNotNull(releaseVersionName))) {
+    throw GradleException(
+        "ANDROID_VERSION_NAME must match MAJOR.MINOR.PATCH[-PRERELEASE], for example 0.1.0-internal.1.",
+    )
+}
+
 ktlint {
     android.set(true)
     ignoreFailures.set(false)
@@ -23,13 +64,25 @@ android {
         applicationId = "dev.opencode.mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersionCode ?: 1
+        versionName = releaseVersionName ?: "1.0"
+    }
+
+    signingConfigs {
+        if (releaseTaskRequested) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEYSTORE_PATH")))
+                storePassword = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_STORE_PASSWORD"))
+                keyAlias = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEY_ALIAS"))
+                keyPassword = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEY_PASSWORD"))
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

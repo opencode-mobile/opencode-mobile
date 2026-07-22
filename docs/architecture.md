@@ -12,9 +12,11 @@ progresses.
 
 Native app projects exist: [`android/`](../android/) (Compose, Material 3) and
 [`ios/OpenCode Mobile/`](../ios/OpenCode%20Mobile/) (SwiftUI; `.xcodeproj` at
-`ios/OpenCode Mobile/OpenCode Mobile.xcodeproj`). Do not run OpenAPI client
-generators or wire CI/release pipelines until a later decision explicitly starts
-that work.
+`ios/OpenCode Mobile/OpenCode Mobile.xcodeproj`). PR Checks and manual Build
+workflows already exist ([`ci-pr-gating`](features/ci-pr-gating/)). Android
+release distribution (Firebase Test Lab + Play internal track) is planned under
+[`android-release-distribution`](features/android-release-distribution/); iOS
+App Store / TestFlight remains deferred until an Apple Developer account exists.
 
 The v1 app remains a foreground session-control client for one reachable,
 password-protected opencode server's current project.

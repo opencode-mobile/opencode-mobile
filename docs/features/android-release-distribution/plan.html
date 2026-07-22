@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Android Release Distribution — Plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f5;
+      --fg: #1c1c1a;
+      --muted: #5c5c57;
+      --card: #ffffff;
+      --border: #d9d9d2;
+      --accent: #0b6e4f;
+      --warn: #8a5a00;
+      --ok: #0b6e4f;
+      --open: #8a2e0b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #141413;
+        --fg: #f2f2ee;
+        --muted: #a8a89f;
+        --card: #1e1e1c;
+        --border: #33332e;
+        --accent: #5dcaa6;
+        --warn: #e0b15a;
+        --ok: #5dcaa6;
+        --open: #f0a28a;
+      }
+    }
+    body {
+      margin: 0;
+      font: 15px/1.45 system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+    h1 { font-size: 1.6rem; margin: 0 0 0.35rem; }
+    h2 { font-size: 1.15rem; margin: 1.75rem 0 0.6rem; }
+    p { margin: 0.4rem 0 0.8rem; color: var(--muted); }
+    .lead { color: var(--fg); max-width: 42rem; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0 1.5rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+    }
+    .card strong { display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.92rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.7rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { background: color-mix(in srgb, var(--card) 80%, var(--border)); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .status-open { color: var(--open); font-weight: 600; }
+    .status-prov { color: var(--warn); font-weight: 600; }
+    .status-ok { color: var(--ok); font-weight: 600; }
+    ol.phases { padding-left: 1.2rem; }
+    ol.phases li { margin: 0.45rem 0; }
+    .note {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 0.75rem;
+      margin: 1rem 0;
+      background: color-mix(in srgb, var(--card) 70%, transparent);
+    }
+    code { font-size: 0.9em; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Android Release Distribution</h1>
+    <p class="lead">
+      High-level plan for Firebase Test Lab + Google Play internal track.
+      iOS App Store / TestFlight stays a no-op until an Apple Developer account exists.
+      Source of truth: <code>plan.md</code>.
+    </p>
+
+    <div class="cards">
+      <div class="card"><strong>Scope</strong>Android release + distribution + observability</div>
+      <div class="card"><strong>iOS</strong>Intentional no-op (parity gap)</div>
+      <div class="card"><strong>Package</strong><code>dev.opencode.mobile</code></div>
+      <div class="card"><strong>CI pattern</strong>Manual <code>workflow_dispatch</code> first</div>
+    </div>
+
+    <h2>Phases</h2>
+    <ol class="phases">
+      <li><strong>OPE-70 — Human setup</strong> Personal ownership, one Cloud/Firebase project, Play draft, local upload key, separate service accounts, protected secrets.</li>
+      <li><strong>OPE-70 — Agent implementation</strong> Protected main-only Android Release workflow, signed and verified AAB/APK, CI version code, human semantic version name.</li>
+      <li><strong>OPE-70 — Human enrollment</strong> First manual AAB upload, Google-generated Play App Signing keys, publisher access, release left unpublished.</li>
+      <li><strong>OPE-71 — Distribution</strong> Extend the release workflow for one-tester Play internal; run independent bounded Test Lab Robo.</li>
+      <li><strong>OPE-72 — Observability</strong> Release/internal Crashlytics plus deliberately minimal Analytics; debug clean; no FCM or Remote Config.</li>
+    </ol>
+
+    <div class="note">
+      Current OPE-70 branch: CI-only Gradle signing and the protected manual Android
+      Release workflow are implemented; protected main runs and Play App Signing remain.
+      PR Checks stay as-is; Test Lab is not a merge gate in this slice.
+    </div>
+
+    <h2>Decisions</h2>
+    <table>
+      <thead>
+        <tr><th>Topic</th><th>Status</th><th>Lean / choice</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Package name</td><td class="status-ok">Accepted</td><td>Keep <code>dev.opencode.mobile</code>; accept namespace risk; label app unofficial</td></tr>
+        <tr><td>Google ownership</td><td class="status-ok">Accepted</td><td>Personal owner; second administrator optional for private phase; formal transfer later</td></tr>
+        <tr><td>Cloud project shape</td><td class="status-ok">Accepted</td><td>One GCP/Firebase project; separate Test Lab and Play service accounts</td></tr>
+        <tr><td>Firebase product scope</td><td class="status-ok">Accepted</td><td>OPE-70/71 no SDK; OPE-72 release-only Crashlytics + minimal Analytics</td></tr>
+        <tr><td>Play track</td><td class="status-ok">Accepted</td><td>Internal testing only</td></tr>
+        <tr><td>Internal testing audience</td><td class="status-ok">Accepted</td><td>Internal track; owner is sole initial tester</td></tr>
+        <tr><td>Signing</td><td class="status-ok">Accepted</td><td>Local upload key + independently encrypted off-device backup; Google-generated app-signing keys</td></tr>
+        <tr><td>Artifacts</td><td class="status-ok">Accepted</td><td>Verified AAB → Play; verified APK → Test Lab; seven-day retention</td></tr>
+        <tr><td>CI boundary</td><td class="status-ok">Accepted</td><td>Manual protected <code>main</code>; separate Test Lab workflow; no PR gate</td></tr>
+        <tr><td>Versioning</td><td class="status-ok">Accepted</td><td>Canonical workflow run → code; validated semantic name input</td></tr>
+        <tr><td>Service account auth</td><td class="status-ok">Accepted</td><td>Separate JSON secrets first; WIF hardening later</td></tr>
+        <tr><td>Test Lab strategy</td><td class="status-ok">Accepted</td><td>Robo, virtual only, ≤2 combinations, ten minutes each</td></tr>
+        <tr><td>iOS release</td><td class="status-ok">Accepted</td><td>Documented intentional no-op</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Acceptance gates</h2>
+    <table>
+      <thead><tr><th>Gate</th><th>Done when</th></tr></thead>
+      <tbody>
+        <tr><td>Test Lab</td><td>CI-built APK runs on at least one FTL matrix</td></tr>
+        <tr><td>Play internal</td><td>CI-built AAB lands on internal track; installs on a device</td></tr>
+        <tr><td>Secrets</td><td>Upload key + publisher/GCP creds only in secret stores</td></tr>
+        <tr><td>OPE-70 handoff</td><td>Two signed runs prove versions/signatures; first manual AAB enrolls Play signing without publishing</td></tr>
+        <tr><td>Observability</td><td>Release Crashlytics receives data; debug/local telemetry stays clean; Analytics remains minimal</td></tr>
+        <tr><td>iOS</td><td>No TestFlight / App Store wiring added</td></tr>
+        <tr><td>Docs</td><td>Ownership, triggers, versioning, parity gap recorded</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:1.5rem">Docs: <a href="./plan.md">plan.md</a> · <a href="./decisions.md">decisions.md</a> · <a href="./progress.md">progress.md</a> · <a href="./parity-gaps.md">parity-gaps.md</a></p>
+  </main>
+</body>
+</html>
