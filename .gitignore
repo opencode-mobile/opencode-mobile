@@ -48,6 +48,8 @@ build/
 .env.*
 !.env.example
 *.pem
+*.jks
+*.keystore
 
 # Logs
 *.log

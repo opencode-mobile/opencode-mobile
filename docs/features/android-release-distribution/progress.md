@@ -13,10 +13,10 @@
       ownership, package-risk acceptance, signing/authentication, workflow
       boundaries, release observability, and Test Lab cost controls
 - [x] OPE-70 refined in `ope-70-plan.md`
-- [ ] Complete OPE-70 (frontier)
+- [ ] Complete OPE-70 (active frontier)
 - [ ] Complete OPE-71
 - [ ] Complete OPE-72
-- [ ] Update README CI table once workflows exist
+- [x] Update README CI table once workflows exist
 
 ## Design-system dependencies
 
@@ -28,18 +28,28 @@ Intentionally not started. See [`parity-gaps.md`](parity-gaps.md).
 
 ## Android implementation
 
-Not started. Frontier is OPE-70 checkpoint 1 (human account, console, key, and
-secret provisioning). OPE-70 then moves through agent CI implementation and a
-final human Play App Signing enrollment checkpoint.
+OPE-70 is active. Google Cloud/Firebase, the Play app draft, separate service
+accounts, the upload keystore, and the protected GitHub environment/secrets are
+provisioned. Gradle CI-only release signing and the manual `Android Release`
+workflow are implemented on the OPE-70 branch. A local signed AAB and APK build
+passed, both artifacts matched the expected upload certificate, and debug plus
+missing/invalid-input behavior was validated. Protected `main` workflow runs
+remain pending.
 
 ## Blockers
 
-- OPE-70 requires human Google / Play / Firebase console setup, local upload-key
-  generation, service-account provisioning, and GitHub secret configuration
-  before agent implementation can start.
+- The release workflow must merge to `main` before its two protected validation
+  runs and first Play App Signing upload can occur.
 
 ## Remaining work
 
-OPE-70 → OPE-71 → OPE-72. Slice done when signed release infrastructure is
-verified, one bounded Robo run succeeds, one internal-track install succeeds,
-and Crashlytics sees a release build while debug/local telemetry stays clean.
+1. Merge the workflow and run it twice from protected `main`.
+2. Upload the first verified AAB, accept Play App Signing, record the generated
+   app-signing fingerprints and recovery owner, and leave the release
+   unpublished.
+3. Continue OPE-71, then OPE-72.
+
+Deferred hardening before broader distribution: add a second trusted
+administrator and optionally place another encrypted credential copy on an
+offline device or removable drive. The controlled local credentials folder and
+an independently encrypted off-device cloud backup are in place.

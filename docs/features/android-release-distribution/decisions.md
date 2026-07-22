@@ -6,11 +6,14 @@ All decisions below were accepted during the OPE-70 refinement on 2026-07-22.
 
 **Status:** Accepted
 **Decision:** A personal Google account owns Play Console, Google Cloud, and
-Firebase for the private/internal phase. Add a second trusted account as an
-administrator where the service supports it, and use Google's formal transfer
-process if ownership later moves to an organization.
-**Why:** This is the fastest path for a solo private release while preserving a
-recovery route and an explicit future transfer boundary.
+Firebase for the private/internal phase. A second trusted administrator is
+optional and deferred while the project remains private. The solo-owner
+recovery risk is accepted for now; add another administrator before broader
+distribution or use Google's formal transfer process if ownership later moves
+to an organization.
+**Why:** This is the fastest path for a solo private release. Deferring a second
+administrator accepts an account-recovery risk, so the boundary is recorded
+rather than treated as completed redundancy.
 
 ## Package name stays `dev.opencode.mobile`
 
@@ -49,11 +52,16 @@ the initial risk.
 
 **Status:** Accepted
 **Decision:** Generate the RSA upload keystore locally on a trusted machine,
-keep an encrypted offline backup outside GitHub, and store only its encoded
-contents and passwords in GitHub Actions secrets. CI consumes the key but never
-creates it or becomes its sole holder.
-**Why:** Losing the only copy would create avoidable recovery work; committing
-or publishing the key would expose the release identity.
+keep the owner-only `opencode-mobile-release-credentials` folder as the
+controlled primary recovery copy, and keep an independently encrypted
+off-device cloud backup. Store only the encoded keystore and passwords in
+GitHub Actions secrets. A separate offline copy remains optional hardening
+before broader distribution. CI consumes the key but never creates it or
+becomes its sole holder.
+**Why:** The encrypted off-device copy protects against loss of the primary
+machine. It is not an offline backup, so a separately stored removable copy can
+still improve resilience. Committing or publishing the key would expose the
+release identity.
 
 ## Play App Signing uses Google-generated app-signing keys
 

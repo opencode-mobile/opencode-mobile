@@ -85,9 +85,9 @@ Not applicable — no app UI.
 | --- | --- |
 | Package / applicationId | `dev.opencode.mobile` |
 | versionCode / versionName | `1` / `1.0` (static in Gradle) |
-| Release signing | Not configured (debug-only CI assemble) |
+| Release signing | CI-only Gradle signing implemented on the OPE-70 branch; protected `main` validation pending |
 | Firebase / Play | No `google-services.json`, no Play publisher setup |
-| Android CI | Checks on ready PRs; Build is manual `workflow_dispatch` debug APK |
+| Android CI | Checks on ready PRs; Build remains manual debug; protected manual Android Release workflow implemented on the OPE-70 branch |
 | Emulator / instrumented tests in CI | Explicitly out of PR gating; Cloud VM has no KVM |
 
 This slice is the decision that starts Android release pipelines. See
@@ -99,9 +99,10 @@ This slice is the decision that starts Android release pipelines. See
 
 Follow the detailed [`ope-70-plan.md`](ope-70-plan.md) through three checkpoints:
 
-1. Human setup: personal account ownership with backup administrator, one
-   GCP/Firebase project, Play app draft, upload key, separate service accounts,
-   and protected GitHub secrets.
+1. Human setup: personal account ownership with an accepted private-phase
+   solo-owner posture, one GCP/Firebase project, Play app draft, upload key with
+   an encrypted off-device backup, separate service accounts, and protected
+   GitHub secrets.
 2. Agent implementation: Gradle release signing plus one protected,
    `workflow_dispatch` Android Release workflow producing verified signed AAB
    and APK artifacts from `main`.

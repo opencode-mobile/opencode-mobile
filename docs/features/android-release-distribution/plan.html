@@ -116,7 +116,8 @@
     </ol>
 
     <div class="note">
-      Baseline today: debug-only manual Android Build, no signing, no Firebase/Play wiring.
+      Current OPE-70 branch: CI-only Gradle signing and the protected manual Android
+      Release workflow are implemented; protected main runs and Play App Signing remain.
       PR Checks stay as-is; Test Lab is not a merge gate in this slice.
     </div>
 
@@ -127,12 +128,12 @@
       </thead>
       <tbody>
         <tr><td>Package name</td><td class="status-ok">Accepted</td><td>Keep <code>dev.opencode.mobile</code>; accept namespace risk; label app unofficial</td></tr>
-        <tr><td>Google ownership</td><td class="status-ok">Accepted</td><td>Personal owner + backup administrator; formal transfer later</td></tr>
+        <tr><td>Google ownership</td><td class="status-ok">Accepted</td><td>Personal owner; second administrator optional for private phase; formal transfer later</td></tr>
         <tr><td>Cloud project shape</td><td class="status-ok">Accepted</td><td>One GCP/Firebase project; separate Test Lab and Play service accounts</td></tr>
         <tr><td>Firebase product scope</td><td class="status-ok">Accepted</td><td>OPE-70/71 no SDK; OPE-72 release-only Crashlytics + minimal Analytics</td></tr>
         <tr><td>Play track</td><td class="status-ok">Accepted</td><td>Internal testing only</td></tr>
         <tr><td>Internal testing audience</td><td class="status-ok">Accepted</td><td>Internal track; owner is sole initial tester</td></tr>
-        <tr><td>Signing</td><td class="status-ok">Accepted</td><td>Local upload key + offline backup; Google-generated app-signing keys</td></tr>
+        <tr><td>Signing</td><td class="status-ok">Accepted</td><td>Local upload key + independently encrypted off-device backup; Google-generated app-signing keys</td></tr>
         <tr><td>Artifacts</td><td class="status-ok">Accepted</td><td>Verified AAB → Play; verified APK → Test Lab; seven-day retention</td></tr>
         <tr><td>CI boundary</td><td class="status-ok">Accepted</td><td>Manual protected <code>main</code>; separate Test Lab workflow; no PR gate</td></tr>
         <tr><td>Versioning</td><td class="status-ok">Accepted</td><td>Canonical workflow run → code; validated semantic name input</td></tr>
