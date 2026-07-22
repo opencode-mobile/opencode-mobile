@@ -85,9 +85,9 @@ Not applicable — no app UI.
 | --- | --- |
 | Package / applicationId | `dev.opencode.mobile` |
 | versionCode / versionName | `1` / `1.0` (static in Gradle) |
-| Release signing | CI-only Gradle signing implemented on the OPE-70 branch; protected `main` validation pending |
-| Firebase / Play | No `google-services.json`, no Play publisher setup |
-| Android CI | Checks on ready PRs; Build remains manual debug; protected manual Android Release workflow implemented on the OPE-70 branch |
+| Release signing | CI-only Gradle signing verified by two protected `main` release runs |
+| Firebase / Play | No `google-services.json`; Play App Signing is active and the initial internal-testing release remains a draft |
+| Android CI | Checks on ready PRs; Build remains manual debug; protected manual Android Release workflow is active on `main` |
 | Emulator / instrumented tests in CI | Explicitly out of PR gating; Cloud VM has no KVM |
 
 This slice is the decision that starts Android release pipelines. See

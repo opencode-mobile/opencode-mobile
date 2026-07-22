@@ -77,8 +77,10 @@ Checkpoint complete when every item above exists and the ticket can change from
       before upload and ensure verification
       output contains no secret material.
 - [x] Retain both artifacts for seven days.
-- [ ] Run the workflow twice and confirm the second `versionCode` is greater
-      than the first.
+- [x] Run the workflow twice from protected `main`: run 1 produced
+      `0.1.0-internal.1` / `versionCode` 1 and run 2 produced
+      `0.1.0-internal.2` / `versionCode` 2; both signed artifacts verified and
+      uploaded successfully.
 - [x] Document triggers, inputs, secret names, key recovery/rotation, artifact
       retrieval, and the OPE-71 extension point.
 
@@ -87,13 +89,24 @@ and produce usable signed artifacts.
 
 ## Checkpoint 3 — Human Play enrollment (`ready-for-human`)
 
-- [ ] Download the verified AAB from the successful workflow.
-- [ ] Manually upload it while preparing the first Play release.
-- [ ] Accept Play App Signing with Google-generated app-signing keys.
-- [ ] Grant the Play publishing service account access to the app.
-- [ ] Leave the release unpublished; OPE-71 owns internal-track publication.
-- [ ] Record the non-secret upload-key and app-signing certificate fingerprints
-      plus the account-recovery owner in the runbook.
+- [x] Download the verified AAB from the successful workflow.
+- [x] Manually upload `0.1.0-internal.2` / `versionCode` 2 while preparing the
+      first Play release.
+- [x] Accept Play App Signing with Google-generated app-signing keys.
+- [x] Grant the Play publishing service account access to the app.
+- [x] Leave the internal-testing release as a draft; OPE-71 owns publication.
+- [x] Record the non-secret upload-key and app-signing certificate fingerprints
+      plus the personal recovery owner in the runbook.
+
+## Completion evidence
+
+- [Android Release run 1](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29947801859)
+  succeeded for `0.1.0-internal.1` / `versionCode` 1.
+- [Android Release run 2](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29948002212)
+  succeeded for `0.1.0-internal.2` / `versionCode` 2.
+- Play Console accepted the version-2 AAB, activated Google Play App Signing,
+  and shows the internal-testing release as **Draft** and the bundle as
+  **Inactive**. No release was rolled out.
 
 ## Acceptance
 
