@@ -84,10 +84,10 @@ Not applicable — no app UI.
 | Area | Today |
 | --- | --- |
 | Package / applicationId | `dev.opencode.mobile` |
-| versionCode / versionName | `1` / `1.0` (static in Gradle) |
+| versionCode / versionName | Local defaults are `1` / `1.0`; release CI supplies both values |
 | Release signing | CI-only Gradle signing verified by two protected `main` release runs |
 | Firebase / Play | No `google-services.json`; Play App Signing is active and the initial internal-testing release remains a draft |
-| Android CI | Checks on ready PRs; Build remains manual debug; protected manual Android Release workflow is active on `main` |
+| Android CI | Checks on ready PRs; Build remains manual debug; protected manual Android Release and independent Test Lab workflows are implemented for `main` |
 | Emulator / instrumented tests in CI | Explicitly out of PR gating; Cloud VM has no KVM |
 
 This slice is the decision that starts Android release pipelines. See
@@ -114,6 +114,8 @@ OPE-70 keeps `ready-for-human` until checkpoint 1 is complete, then switches to
 `ready-for-agent` for checkpoint 2.
 
 ### OPE-71 — Play internal and Firebase Test Lab
+
+Follow the focused [`ope-71-plan.md`](ope-71-plan.md).
 
 1. Extend the canonical Android Release workflow to upload its signed AAB to
    the Play internal testing track for the owner's tester account.
@@ -149,10 +151,10 @@ Firebase, Test Lab, Play audience, and iOS boundaries are accepted in
       free-tier matrix against a CI-built APK.
 - [ ] Play Console app exists for the chosen applicationId and accepts an
       internal-track AAB from CI.
-- [ ] Upload key and publisher credentials live only in secret stores.
-- [ ] Two Android Release runs prove signature verification, increasing
+- [x] Upload key and publisher credentials live only in secret stores.
+- [x] Two Android Release runs prove signature verification, increasing
       `versionCode`, and validated semantic `versionName` input.
 - [ ] Crashlytics receives a release/internal-build event while debug/local
       builds and minimal Analytics stay clean.
-- [ ] iOS remains unchanged: no TestFlight / App Store wiring in this slice.
-- [ ] Docs record ownership, triggers, versioning, and intentional iOS gap.
+- [x] iOS remains unchanged: no TestFlight / App Store wiring in this slice.
+- [x] Docs record ownership, triggers, versioning, and intentional iOS gap.

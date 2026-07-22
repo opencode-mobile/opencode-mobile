@@ -1,8 +1,8 @@
 # Android Release — Operator Runbook
 
 This runbook records the non-secret ownership and operating contract for
-OPE-70. Never add a keystore, password, service-account JSON, or decoded secret
-to this repository, workflow artifacts, logs, or issue comments.
+OPE-70 and OPE-71. Never add a keystore, password, service-account JSON, or
+decoded secret to this repository, workflow artifacts, logs, or issue comments.
 
 ## Infrastructure inventory
 
@@ -16,8 +16,9 @@ to this repository, workflow artifacts, logs, or issue comments.
 | Play publisher service account | `opencode-play-publisher@opencode-mobile-release.iam.gserviceaccount.com` | App-scoped Play testing-track release access; no production permission |
 | GitHub environment | `android-release` | Restricted to the `main` branch |
 
-Google Analytics is disabled. OPE-70 does not add `google-services.json`, the
-Google Services Gradle plugin, a Firebase SDK, Crashlytics, or Analytics.
+Google Analytics is disabled. OPE-70 and OPE-71 do not add
+`google-services.json`, the Google Services Gradle plugin, a Firebase SDK,
+Crashlytics, or Analytics.
 
 ## GitHub environment secrets
 
@@ -91,10 +92,42 @@ only its corresponding GitHub secret. If the upload key is exposed, follow the
 Play Console upload-key reset process, replace all four upload-key secrets, and
 update the non-secret certificate fingerprints.
 
-## OPE-71 handoff
+## Publish to Play internal testing
 
-OPE-71 extends the canonical Android Release workflow to upload its AAB to the
-Play internal track using `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. It adds a separate
-manual Test Lab workflow that consumes the signed APK and
-`GCP_TEST_LAB_SERVICE_ACCOUNT_JSON`. Neither workflow becomes a pull-request
-merge gate, and OPE-71 must not create a second Play-bound version sequence.
+Android Release publishes its signature-verified AAB to the Play `internal`
+track using `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`. This is the only Play-bound
+workflow and therefore remains the sole owner of the monotonically increasing
+`versionCode` sequence.
+
+Before the first rollout, open Play Console and add the owner's Google account
+to the internal-testing tester list. After a successful Android Release run:
+
+1. Open the internal-test opt-in URL while signed in as that tester.
+2. Join the test and install **OpenCode Mobile — Unofficial** from Google Play
+   on a physical Android device.
+3. Confirm Play Console shows the new version on the internal track.
+
+The app may remain otherwise incomplete in Play Console during internal
+testing. Do not promote the release to closed, open, or production tracks.
+
+## Run Firebase Test Lab Robo
+
+Android Test Lab is an independent manual workflow. It accepts the numeric run
+ID of a successful Android Release dispatch from `main`, downloads that run's
+signed APK artifact, and rejects other workflow, branch, or conclusion states.
+
+```bash
+gh workflow run "Android Test Lab" \
+  --ref main \
+  -f release_run_id=<android-release-run-id>
+```
+
+The workflow authenticates with `GCP_TEST_LAB_SERVICE_ACCOUNT_JSON`, verifies
+that `MediumPhone.arm` is virtual, selects its two newest supported stable
+Android versions, and runs Robo for at most ten minutes on each configuration.
+It does not use physical devices, add instrumentation tests, or gate pull
+requests.
+
+The workflow output includes the Firebase result URL. Use it to inspect the
+matrix summary, logs, screenshots, and video. A Test Lab failure does not alter
+the independently published Play release.

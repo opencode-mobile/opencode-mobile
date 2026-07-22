@@ -13,6 +13,7 @@
       ownership, package-risk acceptance, signing/authentication, workflow
       boundaries, release observability, and Test Lab cost controls
 - [x] OPE-70 refined in `ope-70-plan.md`
+- [x] OPE-71 refined in `ope-71-plan.md`
 - [x] Complete OPE-70
 - [ ] Complete OPE-71
 - [ ] Complete OPE-72
@@ -36,13 +37,24 @@ signature-verified AAB/APK artifacts with increasing `versionCode` values 1 and
 2. Play accepted the version-2 AAB, activated App Signing, and retains the
 internal-testing release as a draft with no rollout.
 
+OPE-71 implementation is active. The canonical Android Release workflow now
+publishes its verified AAB to Play internal testing, and an independent manual
+Android Test Lab workflow consumes a successful release run's signed APK for a
+two-device, ten-minute-per-device virtual Robo matrix. Protected-main runs,
+Play opt-in/physical installation, and recorded run evidence remain open.
+
 ## Blockers
 
-None for OPE-70.
+No external implementation blocker. Protected-main publication is required
+before credentials can be exercised and the Play/Test Lab acceptance runs can
+start.
 
 ## Remaining work
 
-1. Continue OPE-71, then OPE-72.
+1. Merge OPE-71 to `main`, run Android Release, and verify the Play internal
+   rollout and physical-device installation.
+2. Run Android Test Lab against that release run and verify both Robo devices.
+3. Record OPE-71 completion evidence, then continue with OPE-72.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an
