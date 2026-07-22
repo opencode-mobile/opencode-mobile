@@ -13,7 +13,7 @@
       ownership, package-risk acceptance, signing/authentication, workflow
       boundaries, release observability, and Test Lab cost controls
 - [x] OPE-70 refined in `ope-70-plan.md`
-- [ ] Complete OPE-70 (active frontier)
+- [x] Complete OPE-70
 - [ ] Complete OPE-71
 - [ ] Complete OPE-72
 - [x] Update README CI table once workflows exist
@@ -28,26 +28,21 @@ Intentionally not started. See [`parity-gaps.md`](parity-gaps.md).
 
 ## Android implementation
 
-OPE-70 is active. Google Cloud/Firebase, the Play app draft, separate service
-accounts, the upload keystore, and the protected GitHub environment/secrets are
+OPE-70 is complete. Google Cloud/Firebase, the Play app draft, separate service
+accounts, upload-key custody, and protected GitHub environment/secrets are
 provisioned. Gradle CI-only release signing and the manual `Android Release`
-workflow are implemented on the OPE-70 branch. A local signed AAB and APK build
-passed, both artifacts matched the expected upload certificate, and debug plus
-missing/invalid-input behavior was validated. Protected `main` workflow runs
-remain pending.
+workflow are merged to `main`. Two protected `main` workflow runs produced
+signature-verified AAB/APK artifacts with increasing `versionCode` values 1 and
+2. Play accepted the version-2 AAB, activated App Signing, and retains the
+internal-testing release as a draft with no rollout.
 
 ## Blockers
 
-- The release workflow must merge to `main` before its two protected validation
-  runs and first Play App Signing upload can occur.
+None for OPE-70.
 
 ## Remaining work
 
-1. Merge the workflow and run it twice from protected `main`.
-2. Upload the first verified AAB, accept Play App Signing, record the generated
-   app-signing fingerprints and recovery owner, and leave the release
-   unpublished.
-3. Continue OPE-71, then OPE-72.
+1. Continue OPE-71, then OPE-72.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an

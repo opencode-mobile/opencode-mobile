@@ -63,8 +63,16 @@ verification failure stops the run.
 - SHA-1: `A2:65:2E:82:3D:44:25:E9:DD:A2:0C:DC:84:A0:32:B7:E7:DD:98:09`
 - SHA-256: `9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37`
 
-Record the Google-generated app-signing certificate fingerprints here after
-the first AAB enrolls Play App Signing.
+## Play app-signing certificate
+
+Play App Signing was activated by the first uploaded AAB:
+`0.1.0-internal.2` / `versionCode` 2. The internal-testing release remains a
+draft and the bundle is inactive; OPE-71 owns rollout/publication.
+
+- SHA-1: `B5:19:27:43:0D:2B:12:32:84:FF:52:B3:A6:7D:9D:EE:EA:88:DA:AD`
+- SHA-256: `B0:0C:45:26:2A:B6:27:47:B5:8E:51:A8:BA:10:E9:07:D8:D8:95:EF:E0:34:2E:E6:CD:93:B5:DF:B5:48:FF:A8`
+
+The personal Google owner is the recovery owner for the private phase.
 
 ## Recovery and rotation
 
