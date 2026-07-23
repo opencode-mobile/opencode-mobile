@@ -245,7 +245,9 @@
   `OutputStream.nullOutputStream()` call with an API-24-safe no-op stream after
   the incompatibility caused a startup crash in Play-internal
   `0.1.0-internal.5`. Module Android lint is the deterministic API-compatibility
-  regression gate.
+  regression gate. Replacement Play-internal `0.1.0-internal.6` launched
+  repeatedly on the affected Pixel 9, and Firebase showed the startup-crash
+  issue only for version 5.
 
 ## Remaining
 
