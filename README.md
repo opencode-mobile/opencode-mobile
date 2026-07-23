@@ -68,7 +68,7 @@ skipped). Android Build and iOS Build stay manual.
 | iOS Checks | PR (non-draft) + dispatch | Build, analyzer, unit tests |
 | Android Build | `workflow_dispatch` | Assemble debug APK |
 | Android Release | `workflow_dispatch` on `main` | Build and verify signed AAB + APK, then publish to Play internal |
-| Android App Distribution | `push` to `main` | Build and verify a signed AAB, then distribute it to the private Firebase tester group |
+| Android App Distribution | `push` to `main` | Build and verify a signed APK, then distribute it to the private Firebase tester group |
 | Android Test Lab | `workflow_dispatch` on `main` | Run bounded Robo tests against a signed release APK |
 | iOS Build | `workflow_dispatch` | Simulator build |
 

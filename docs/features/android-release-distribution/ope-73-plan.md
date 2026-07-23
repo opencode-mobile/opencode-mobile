@@ -6,7 +6,7 @@ Companion visual review: [`ope-73-plan.html`](ope-73-plan.html).
 
 ## Outcome
 
-Every successful merge to `main` automatically produces one Android App Bundle
+Every successful merge to `main` automatically produces one signed Android APK
 and distributes it to a private Firebase App Distribution tester group. The
 path is independent from the manually dispatched Play internal release and
 Firebase Test Lab workflows.
@@ -16,8 +16,8 @@ Firebase Test Lab workflows.
 OPE-73 includes:
 
 - a GitHub Actions workflow triggered by every `push` to `main`;
-- one AAB built from the exact merged commit;
-- Firebase App Distribution through Google Play internal app sharing;
+- one signed APK built from the exact merged commit;
+- direct Firebase App Distribution without a Play-track publication;
 - a private tester group, initially containing only the owner/tester;
 - merge-commit release notes and durable workflow links;
 - a dedicated least-privilege App Distribution service account and protected
@@ -28,29 +28,31 @@ OPE-73 does not include:
 
 - a second Play testing-track release or a change to the canonical manual
   Android Release workflow;
-- APK distribution, public invite links, or unrestricted tester enrollment;
+- AAB distribution, public invite links, or unrestricted tester enrollment;
 - an App Distribution runtime SDK, in-app update alerts, or feedback UI;
 - Crashlytics, Analytics, Test Lab, FCM, or Remote Config scope changes;
 - PR-triggered distribution or credentials exposed to pull requests; or
 - iOS App Distribution, TestFlight, or App Store work.
 
-## Why AAB
+## Why APK
 
-Firebase App Distribution integrates AAB delivery with Google Play internal app
-sharing. Google Play generates device-specific APKs and signs them with its
-internal-app-sharing certificate. That certificate is distinct from both the
-upload key and the normal Play app-signing key. The first Firebase tester
-install therefore requires uninstalling the Play-internal build; subsequent
-App Distribution builds share the internal-app-sharing certificate and can
-update within that tester channel.
+The first real AAB distribution run proved that Firebase rejects AAB delivery
+while the linked Play app remains an unreviewed draft. Making Play accept that
+path would require completing store-policy declarations and submitting the app
+for review, which is outside this private merge-distribution scope. Direct APK
+delivery avoids an unintended Play publication boundary.
 
-Internal app sharing permits reused version codes, but Android update behavior
-is clearer with monotonic values. This workflow reserves
+The APK is signed with the existing upload key. That certificate is distinct
+from the normal Play app-signing key, so the first Firebase tester install
+requires uninstalling the Play-internal build. Subsequent App Distribution
+APKs share the upload-key certificate and can update within that tester channel.
+
+This workflow reserves
 `1000000000 + github.run_number` for App Distribution, separate from the
 canonical Play release workflow's low run-number sequence. Moving between the
 Play-internal and App Distribution channels requires uninstall/reinstall
-because their final APK certificates differ. The AAB is not promoted to an
-internal, closed, open, or production Play track.
+because their APK certificates differ. The APK is not promoted to an internal,
+closed, open, or production Play track.
 
 ## Trigger And Failure Contract
 
@@ -77,8 +79,8 @@ Do not reuse the Test Lab or Play publisher identity. Do not commit or print
 the JSON key. Decode it into the runner temporary directory, expose its path
 through `GOOGLE_APPLICATION_CREDENTIALS`, and delete it in an `always()` step.
 
-The existing upload key may sign the AAB before upload, but Google Play internal
-app sharing re-signs generated APKs with its dedicated test certificate.
+The existing upload key signs the distributed APK. Firebase stores and serves
+that signed artifact without routing it through Google Play.
 
 ## Tester Contract
 
@@ -114,11 +116,11 @@ before execution.
 
 - [x] Add an `Android App Distribution` workflow triggered only by pushes to
       `main`.
-- [x] Build the AAB from the merged commit with CI-provided signing values.
-- [x] Verify the AAB signature before upload.
+- [x] Build the APK from the merged commit with CI-provided signing values.
+- [x] Verify the APK signature before upload.
 - [x] Authenticate with the dedicated service-account key from the protected
       environment.
-- [x] Upload the AAB to Firebase App Distribution for group
+- [x] Upload the APK to Firebase App Distribution for group
       `android-internal`.
 - [x] Use the merge commit subject and short SHA as content-safe release notes.
 - [x] Put the Firebase console and tester URLs in the workflow summary without
@@ -132,11 +134,11 @@ before execution.
 
 - [x] Workflow structure proves that PRs and non-`main` refs cannot access the
       protected secrets.
-- [x] Focused workflow syntax and release bundle/signature checks pass.
+- [x] Focused workflow syntax and release APK/signature checks pass.
 - [ ] A merged commit automatically starts exactly one App Distribution run.
 - [ ] Firebase shows the expected commit/version and `android-internal` group.
 - [ ] The owner receives or can open the tester release and installs the
-      Play-generated build on the physical Android device.
+      signed Firebase build on the physical Android device.
 - [ ] The App Distribution build does not publish a new Play testing-track
       release or trigger Test Lab.
 - [ ] Durable acceptance evidence is recorded without tester identifiers or
@@ -145,7 +147,7 @@ before execution.
 ## Acceptance
 
 OPE-73 is complete only when every merge to protected `main` automatically
-reaches the private Firebase tester group through an AAB, the workflow uses a
+reaches the private Firebase tester group through a signed APK, the workflow uses a
 dedicated protected identity, one real merged build is installed through the
 tester flow, and Play-track publication, Test Lab, runtime SDKs, PR credentials,
 iOS, and public tester access remain unchanged.
@@ -153,6 +155,5 @@ iOS, and public tester access remain unchanged.
 ## Primary References
 
 - [Firebase App Distribution](https://firebase.google.com/docs/app-distribution)
-- [Distribute Android apps using Gradle](https://firebase.google.com/docs/app-distribution/android/distribute-gradle)
+- [Distribute Android apps using the Firebase CLI](https://firebase.google.com/docs/app-distribution/android/distribute-cli)
 - [Firebase App Distribution service-account authentication](https://firebase.google.com/docs/app-distribution/authenticate-service-account)
-- [Google Play internal app sharing](https://support.google.com/googleplay/android-developer/answer/9844679)

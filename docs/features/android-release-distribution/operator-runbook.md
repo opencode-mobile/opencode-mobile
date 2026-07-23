@@ -158,8 +158,8 @@ passed `MediumPhone.arm-36-en-portrait` and
 ## Automatic Firebase App Distribution
 
 `Android App Distribution` triggers on every push to protected `main`. It builds
-one upload-key-signed AAB from the exact merged commit, verifies the upload
-certificate, and distributes the bundle to the private Firebase group alias
+one upload-key-signed APK from the exact merged commit, verifies the upload
+certificate, and distributes the APK to the private Firebase group alias
 `android-internal`. It does not publish a Play testing-track release, run Test
 Lab, or expose credentials to pull requests.
 
@@ -167,13 +167,13 @@ The workflow uses Firebase CLI `15.24.0` with Application Default Credentials
 from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the merge
 subject and short commit SHA as release notes, then places only the stable
 Firebase console and tester-experience links in the workflow summary. The
-signed AAB artifact is retained for seven days. Firebase App Distribution
+signed APK artifact is retained for seven days. Firebase App Distribution
 releases remain available for 150 days.
 
 App Distribution version codes use `1000000000 + github.run_number`, a
-monotonic range reserved for this workflow. Google Play internal app sharing
-re-signs generated APKs with its dedicated test certificate. That certificate
-differs from the normal Play app-signing certificate, so the first migration
+monotonic range reserved for this workflow. The APK uses the upload-key
+certificate, which differs from the normal Play app-signing certificate, so the
+first migration
 from a Play-internal installation requires:
 
 1. Confirm the desired Firebase release is assigned to `android-internal`.
@@ -181,10 +181,15 @@ from a Play-internal installation requires:
 3. Open the tester-experience link while signed in as the private tester.
 4. Install and launch the Firebase release.
 
-Later App Distribution builds use the same internal-app-sharing certificate and
+Later App Distribution builds use the same upload-key certificate and
 can update within the Firebase channel. Moving back to Play internal also
 requires uninstall/reinstall. Do not create a public invite link. Tester
 membership remains a Firebase console/operator action.
+
+The first merged AAB attempt failed because Firebase requires the linked Play
+app to be published rather than an unreviewed draft. The direct APK path keeps
+the app private and avoids completing Play store-policy declarations or
+submitting it for review solely to support merge distribution.
 
 If automatic distribution fails, inspect the workflow's build, signature,
 authentication, and Firebase upload steps. A failed run does not revert the
