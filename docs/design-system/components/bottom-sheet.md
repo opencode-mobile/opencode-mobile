@@ -90,7 +90,9 @@ accessibility label or description using the platform convention.
   detent stable while the keyboard resizes only the internal scroll region.
   Short entry lists use a measured compact height detent that includes the
   bottom safe-area inset and the visible system drag indicator so rows are not
-  clipped. Longer lists switch to
+  clipped. Measured content height is never shrunk after the intrinsic size is
+  known, because compact re-layout can otherwise report a clipped height and
+  collapse the sheet. Longer lists switch to
   a fixed 50% height detent with an internal `ScrollView` and do not fall back
   to compact when body content shrinks. Scrollable sheets disable interactive
   swipe-to-dismiss so list scrolling does not close the sheet; use the close

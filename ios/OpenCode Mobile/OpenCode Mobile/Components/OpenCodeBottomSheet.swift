@@ -11,7 +11,8 @@ private let bottomSheetEntryDecoratorSize: CGFloat = 24
 private let bottomSheetEntryIconSize: CGFloat = 20
 private let bottomSheetInitialHeight: CGFloat = 176
 private let bottomSheetScrollableDetentFraction: CGFloat = 0.50
-private let bottomSheetCompactMaxHeight: CGFloat = 360
+/// Tall enough for five Commands rows plus grabber and home-indicator inset.
+private let bottomSheetCompactMaxHeight: CGFloat = 420
 private let bottomSheetFormInitialHeight: CGFloat = 460
 private let bottomSheetFormMaxHeight: CGFloat = 560
 /// Compact sheets show the system drag indicator, which consumes space inside
@@ -129,7 +130,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 contentHeight: contentHeight,
                 pinnedContent: pinnedContent,
                 content: sheetContent,
-                onContentHeightChange: { contentHeight = $0 },
+                onContentHeightChange: { newHeight in
+                    // Compact layout can re-measure under a short parent proposal and
+                    // report a clipped height; never shrink below the intrinsic size.
+                    guard newHeight > contentHeight else { return }
+                    contentHeight = newHeight
+                },
                 onHeaderHeightChange: { headerHeight = $0 },
                 onPinnedContentHeightChange: { pinnedContentHeight = $0 }
             )
@@ -394,17 +400,20 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
     }
 
     private var measuredContent: some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onChange(of: geo.size.height, initial: true) { _, height in
-                            guard height > 0 else { return }
-                            onContentHeightChange(height)
-                        }
-                }
-            )
+        VStack(spacing: 0) {
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: geo.size.height, initial: true) { _, height in
+                        guard height > 0 else { return }
+                        onContentHeightChange(height)
+                    }
+            }
+        )
     }
 
     private var header: some View {
