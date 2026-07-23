@@ -16,6 +16,8 @@ Companion visual review: [`plan.html`](plan.html).
 - Sign release (or upload-key) Android App Bundles and APKs in CI.
 - Run device tests in Firebase Test Lab from GitHub Actions (Blacksmith).
 - Publish to the Play Console **internal testing** track.
+- Distribute every merged `main` build to a private Firebase App Distribution
+  tester group through AAB / Google Play internal app sharing.
 - Add Crashlytics and deliberately minimal Analytics to release/internal builds
   after distribution works.
 - Document secrets, versioning, and operator runbooks.
@@ -137,6 +139,18 @@ Follow the focused [`ope-72-plan.md`](ope-72-plan.md).
    custom events, app-assigned user IDs, and app-defined user properties.
 4. Do not add FCM, Remote Config, or another Firebase product.
 
+### OPE-73 — Firebase App Distribution on every merge
+
+Follow the focused [`ope-73-plan.md`](ope-73-plan.md).
+
+1. Link the Firebase Android app to its existing Google Play app for
+   internal-app-sharing AAB delivery.
+2. Create a dedicated App Distribution service account and private tester
+   group.
+3. Trigger an independent protected workflow on every push to `main`, serialize
+   without cancellation, and distribute the exact merged commit.
+4. Keep PRs credential-free and do not publish another Play track release.
+
 ### Operator hardening
 
 1. Document runbooks in this feature directory or README CI section.
@@ -160,5 +174,7 @@ Firebase, Test Lab, Play audience, and iOS boundaries are accepted in
       `versionCode`, and validated semantic `versionName` input.
 - [ ] Crashlytics receives a release/internal-build event while debug/local
       builds and minimal Analytics stay clean.
+- [ ] Every merge to `main` reaches the private Firebase App Distribution
+      tester group through an AAB without publishing another Play track release.
 - [x] iOS remains unchanged: no TestFlight / App Store wiring in this slice.
 - [x] Docs record ownership, triggers, versioning, and intentional iOS gap.

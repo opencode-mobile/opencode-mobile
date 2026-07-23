@@ -9,15 +9,18 @@
       [OPE-70](https://linear.app/opencode-mobile/issue/OPE-70/provision-google-projects-and-ci-release-signing)
       → [OPE-71](https://linear.app/opencode-mobile/issue/OPE-71/publish-to-play-internal-and-run-test-lab-robo)
       → [OPE-72](https://linear.app/opencode-mobile/issue/OPE-72/ship-crashlytics-and-minimal-analytics-on-release-builds)
+      → [OPE-73](https://linear.app/opencode-mobile/issue/OPE-73/distribute-every-merged-android-build-through-firebase-app)
 - [x] Grilled decisions accepted in `decisions.md`, including personal
       ownership, package-risk acceptance, signing/authentication, workflow
       boundaries, release observability, and Test Lab cost controls
 - [x] OPE-70 refined in `ope-70-plan.md`
 - [x] OPE-71 refined in `ope-71-plan.md`
 - [x] OPE-72 refined in `ope-72-plan.md`
+- [x] OPE-73 refined in `ope-73-plan.md`
 - [x] Complete OPE-70
 - [x] Complete OPE-71
 - [x] Complete OPE-72
+- [ ] Complete OPE-73
 - [x] Update README CI table once workflows exist
 
 ## Design-system dependencies

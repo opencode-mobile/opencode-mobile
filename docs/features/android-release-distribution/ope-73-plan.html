@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OPE-73 — Firebase App Distribution On Every Merge</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --text: #17202a;
+      --muted: #52606d;
+      --border: #d9e2ec;
+      --accent: #006b5f;
+      --pending: #9a6700;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111820;
+        --surface: #18222d;
+        --text: #edf2f7;
+        --muted: #b8c4cf;
+        --border: #344454;
+        --accent: #62d5c5;
+        --pending: #f2c66d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1040px, calc(100% - 32px)); margin: 40px auto; }
+    h1, h2 { line-height: 1.2; }
+    h1 { margin-bottom: 8px; }
+    h2 { margin-top: 32px; }
+    .lead { color: var(--muted); max-width: 760px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 24px 0;
+    }
+    .card, .flow-step, table {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .card { padding: 16px; }
+    .card strong { display: block; color: var(--accent); margin-bottom: 4px; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .flow-step { padding: 14px; }
+    .flow-step span { color: var(--muted); display: block; font-size: 0.9rem; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+    th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:last-child td { border-bottom: 0; }
+    .pending { color: var(--pending); font-weight: 700; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    a { color: var(--accent); }
+    @media (max-width: 760px) { .flow { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OPE-73 — Firebase App Distribution On Every Merge</h1>
+    <p class="lead">
+      Every successful merge to <code>main</code> produces one AAB and distributes
+      it to the private <code>android-internal</code> tester group without publishing
+      another Play testing-track release.
+    </p>
+
+    <section class="cards" aria-label="Plan summary">
+      <div class="card"><strong>Trigger</strong>Every push to protected <code>main</code></div>
+      <div class="card"><strong>Artifact</strong>Signed Android App Bundle</div>
+      <div class="card"><strong>Audience</strong>Private <code>android-internal</code> group</div>
+      <div class="card"><strong>Status</strong><span class="pending">Owner setup pending</span></div>
+    </section>
+
+    <h2>Delivery flow</h2>
+    <div class="flow">
+      <div class="flow-step"><strong>1. Merge</strong><span>Exact commit lands on main</span></div>
+      <div class="flow-step"><strong>2. Build</strong><span>Protected CI signs and verifies the AAB</span></div>
+      <div class="flow-step"><strong>3. Distribute</strong><span>Firebase uploads through Play internal app sharing</span></div>
+      <div class="flow-step"><strong>4. Install</strong><span>Private tester receives the Play-generated build</span></div>
+    </div>
+
+    <h2>Checkpoints</h2>
+    <table>
+      <thead><tr><th>Checkpoint</th><th>Required result</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Owner setup</td>
+          <td>Link Firebase to Play; create the private group, dedicated App Distribution service account, JSON key, and protected GitHub secret.</td>
+          <td class="pending">Pending approval</td>
+        </tr>
+        <tr>
+          <td>Agent implementation</td>
+          <td>Add the main-push workflow, signing and signature verification, AAB upload, release notes, summaries, serialization, and cleanup.</td>
+          <td class="pending">Not started</td>
+        </tr>
+        <tr>
+          <td>Acceptance</td>
+          <td>One merged build reaches Firebase, targets the private group, and installs through the tester flow without a Play-track release.</td>
+          <td class="pending">Not started</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Boundaries and risks</h2>
+    <table>
+      <thead><tr><th>Topic</th><th>Contract</th></tr></thead>
+      <tbody>
+        <tr><td>Signing</td><td>Upload-key-signed AAB; Google Play internal app sharing generates APKs with its dedicated test certificate.</td></tr>
+        <tr><td>Credentials</td><td>Dedicated Firebase App Distribution Admin identity in the protected environment; PRs receive no credentials.</td></tr>
+        <tr><td>Run ordering</td><td>Serialize without cancellation so a later merge cannot suppress an earlier distribution.</td></tr>
+        <tr><td>Failure</td><td>A failed distribution fails the workflow but does not revert the merge.</td></tr>
+        <tr><td>Excluded</td><td>No public invite, runtime SDK, in-app alert, feedback UI, extra Play-track release, Test Lab trigger, or iOS work.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Source of truth: <a href="./ope-73-plan.md">ope-73-plan.md</a> ·
+      Linear: <a href="https://linear.app/opencode-mobile/issue/OPE-73/distribute-every-merged-android-build-through-firebase-app">OPE-73</a>
+    </p>
+  </main>
+</body>
+</html>
