@@ -11,12 +11,14 @@ import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.agent.AgentRepository
+import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -24,6 +26,7 @@ import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
@@ -53,6 +56,7 @@ class SessionChatViewModel
         eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -60,6 +64,7 @@ class SessionChatViewModel
                 timeline.ioDispatcher = value
                 composer.ioDispatcher = value
                 reviewChanges.ioDispatcher = value
+                commands.ioDispatcher = value
             }
 
         private val timeline =
@@ -89,6 +94,13 @@ class SessionChatViewModel
         private val reviewChanges =
             SessionChatReviewChanges(
                 sessionRepository = sessionRepository,
+                scope = viewModelScope,
+            )
+        private val commands =
+            SessionChatCommands(
+                sessionRepository = sessionRepository,
+                newSessionModelSelectionResolver = newSessionModelSelectionResolver,
+                connectionSessionCoordinator = connectionSessionCoordinator,
                 scope = viewModelScope,
             )
 
@@ -124,9 +136,10 @@ class SessionChatViewModel
                     composer.state,
                     sessionInfo.state,
                     reviewChanges.state,
-                ) { timelineState, composerState, infoState, reviewChangesState ->
-                    SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState)
-                }.collect { (timelineState, composerState, infoState, reviewChangesState) ->
+                    commands.state,
+                ) { timelineState, composerState, infoState, reviewChangesState, commandsState ->
+                    SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState, commandsState)
+                }.collect { (timelineState, composerState, infoState, reviewChangesState, commandsState) ->
                     composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
                     reviewChanges.updateCandidate(
                         messages = timelineState.messages,
@@ -134,7 +147,11 @@ class SessionChatViewModel
                         isTurnActive = infoState.sessionStatusLabel != null,
                         isSending = composerState.isSending,
                     )
-                    publishUiState(timelineState, composerState, infoState, reviewChangesState)
+                    commands.updateVisibility(
+                        messages = timelineState.messages,
+                        hasSelectedComposerModel = composerState.composer.selectedModel != null,
+                    )
+                    publishUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
                 }
             }
         }
@@ -158,6 +175,7 @@ class SessionChatViewModel
             composer.bind(sessionId, worktree)
             sessionInfo.bind(sessionId, sessionTitle, worktree)
             reviewChanges.bind(sessionId, worktree)
+            commands.bind(sessionId, worktree)
             observePermissions(sessionId, worktree)
             observeQuestions(sessionId, worktree)
             viewModelScope.launch {
@@ -236,6 +254,67 @@ class SessionChatViewModel
 
         fun restoreComposerText(text: String) {
             composer.restoreComposerText(text)
+        }
+
+        fun openCommands() {
+            commands.openCommands()
+            composer.dismissSuggestions()
+        }
+
+        fun dismissCommands() {
+            commands.dismissCommands()
+        }
+
+        fun runClientSlashAction(action: ClientSlashAction) {
+            when (action) {
+                ClientSlashAction.New -> commands.runNew()
+                ClientSlashAction.Fork -> commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
+                ClientSlashAction.Undo ->
+                    commands.runUndo(
+                        isBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                        restoreComposerText = composer::restoreComposerText,
+                    )
+                ClientSlashAction.Redo ->
+                    commands.runRedo(
+                        isBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                        clearComposerRestore = { composer.restoreComposerText("") },
+                    )
+                ClientSlashAction.Compact -> {
+                    val model = composer.state.value.composer.selectedModel ?: return
+                    commands.runCompact(
+                        providerId = model.option.providerId,
+                        modelId = model.option.modelId,
+                        onSuccess = {
+                            timeline.refreshMessages()
+                            sessionInfo.refreshStatus()
+                        },
+                    )
+                }
+            }
+        }
+
+        fun updateForkDraft(text: String) {
+            commands.updateForkDraft(text)
+        }
+
+        fun cancelForkDialog() {
+            commands.cancelForkDialog()
+        }
+
+        fun confirmFork() {
+            commands.confirmFork()
+        }
+
+        fun chooseForkOpen() {
+            commands.chooseForkOpen()
+        }
+
+        fun chooseForkStay() {
+            commands.chooseForkStay()
+        }
+
+        fun consumePendingSessionReplace() {
+            commands.consumePendingSessionReplace()
         }
 
         fun openRenameSession() {
@@ -609,6 +688,7 @@ class SessionChatViewModel
                 composer.state.value,
                 sessionInfo.state.value,
                 reviewChanges.state.value,
+                commands.state.value,
             )
         }
 
@@ -617,8 +697,9 @@ class SessionChatViewModel
             composerState: SessionChatComposerRegionState,
             infoState: SessionInfoRegionState,
             reviewChangesState: SessionChatReviewChangesRegionState,
+            commandsState: SessionChatCommandsRegionState,
         ) {
-            _uiState.value = mergeUiState(timelineState, composerState, infoState, reviewChangesState)
+            _uiState.value = mergeUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
         }
 
         private fun mergeUiState(
@@ -626,6 +707,7 @@ class SessionChatViewModel
             composerState: SessionChatComposerRegionState,
             infoState: SessionInfoRegionState,
             reviewChangesState: SessionChatReviewChangesRegionState,
+            commandsState: SessionChatCommandsRegionState,
         ): SessionChatUiState {
             refilterQuestionOrphans()
             val visibleQuestion = visibleQuestionRequest()
@@ -636,6 +718,7 @@ class SessionChatViewModel
                     timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
                     composerState.errorMessage != null -> composerState.errorMessage
                     composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                    commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
                     infoState.errorMessage != null -> infoState.errorMessage
                     permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
                     questionRequests.isEmpty() && questionTopologyError != null -> questionTopologyError
@@ -684,6 +767,16 @@ class SessionChatViewModel
                 slashSuggestions = composerState.slashSuggestions,
                 atSuggestionsVisible = composerState.atSuggestionsVisible,
                 atSuggestions = composerState.atSuggestions,
+                commandsSheetVisible = commandsState.commandsSheetVisible,
+                visibleClientSlashActions = commandsState.visibleActions,
+                forkDialogVisible = commandsState.forkDialogVisible,
+                forkDraftTitle = commandsState.forkDraftTitle,
+                forkSubmitting = commandsState.forkSubmitting,
+                forkErrorMessage = commandsState.forkErrorMessage,
+                forkResultVisible = commandsState.forkResultVisible,
+                forkedSessionTitle = commandsState.forkedSessionTitle,
+                clientActionNotice = commandsState.actionSuccessMessage,
+                pendingSessionReplace = commandsState.pendingSessionReplace,
             )
         }
 
@@ -715,6 +808,7 @@ private data class SessionChatCombinedState(
     val composer: SessionChatComposerRegionState,
     val info: SessionInfoRegionState,
     val reviewChanges: SessionChatReviewChangesRegionState,
+    val commands: SessionChatCommandsRegionState,
 )
 
 internal fun orderedPermissionRequests(

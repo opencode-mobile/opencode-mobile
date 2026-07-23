@@ -338,6 +338,7 @@ private extension OpenCodeSessionComposerAction {
         case .selectMode: "Select mode"
         case .selectVariant: "Select variant"
         case .attach: "Attach"
+        case .openCommands: "Open commands"
         case .removeAttachment: "Remove attachment"
         case .send: "Send"
         case .stop: "Stop"

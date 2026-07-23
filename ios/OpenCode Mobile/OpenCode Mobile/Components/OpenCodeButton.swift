@@ -5,6 +5,7 @@ enum OpenCodeButtonVariant {
     case compactText(title: String)
     case iconSquare(OpenCodeIcon, accessibilityLabel: String?)
     case iconCircle(OpenCodeIcon, accessibilityLabel: String?)
+    case iconCircleText(String, accessibilityLabel: String?)
 }
 
 enum OpenCodeButtonContrast {
@@ -62,6 +63,11 @@ struct OpenCodeButton: View {
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircle(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityHidden(accessibilityLabel == nil)
+        case let .iconCircleText(text, accessibilityLabel):
+            Text(text)
                 .font(.system(size: 18, weight: .semibold))
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
@@ -147,7 +153,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     private var horizontalPadding: CGFloat {
         switch variant {
-        case .iconSquare, .iconCircle:
+        case .iconSquare, .iconCircle, .iconCircleText:
             return 0
         default:
             return 14
@@ -156,7 +162,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     private var verticalPadding: CGFloat {
         switch variant {
-        case .iconSquare, .iconCircle:
+        case .iconSquare, .iconCircle, .iconCircleText:
             return 0
         default:
             return 10
@@ -193,13 +199,17 @@ private extension OpenCodeButtonVariant {
     }
 
     var isIconCircle: Bool {
-        if case .iconCircle = self { return true }
-        return false
+        switch self {
+        case .iconCircle, .iconCircleText:
+            return true
+        default:
+            return false
+        }
     }
 
     var isIconOnly: Bool {
         switch self {
-        case .iconSquare, .iconCircle:
+        case .iconSquare, .iconCircle, .iconCircleText:
             return true
         default:
             return false
@@ -227,6 +237,12 @@ private extension OpenCodeButtonVariant {
 
 #Preview("Icon Circle") {
     OpenCodeButton(variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send"), action: {})
+        .padding()
+        .openCodeTheme()
+}
+
+#Preview("Icon Circle Text") {
+    OpenCodeButton(variant: .iconCircleText("/", accessibilityLabel: "Open commands"), action: {})
         .padding()
         .openCodeTheme()
 }

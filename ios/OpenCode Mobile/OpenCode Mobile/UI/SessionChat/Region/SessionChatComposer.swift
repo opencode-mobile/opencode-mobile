@@ -310,6 +310,14 @@ final class SessionChatComposer {
         notifyChange()
     }
 
+    func dismissSuggestions() {
+        state.slashSuggestionsVisible = false
+        state.slashSuggestions = []
+        state.atSuggestionsVisible = false
+        state.atSuggestions = []
+        notifyChange()
+    }
+
     private func ensureSuggestionCatalogLoaded(for mode: ComposerSuggestionMode) {
         switch mode {
         case .at:

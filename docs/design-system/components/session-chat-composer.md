@@ -28,11 +28,12 @@ request have identical width, shape, inset, background, and border behavior.
 
 The public native API accepts one semantic state value and one action callback.
 Prompt actions are text changed (text plus selection), select model, select mode,
-select variant, attach, remove attachment, send, and stop. Prompt content
-includes `attachEnabled` so the feature can disable Attach when the selected
-model lacks image and PDF input. Prompt text may include mention ranges that
-render with the `syntax-type` token (inline `@name` agent mentions). Pending
-attachment content uses presentation-safe `OpenCodeAttachmentChip` state.
+select variant, attach, open commands, remove attachment, send, and stop.
+Prompt content includes `attachEnabled` so the feature can disable Attach when
+the selected model lacks image and PDF input. Prompt text may include mention
+ranges that render with the `syntax-type` token (inline `@name` agent
+mentions). Pending attachment content uses presentation-safe
+`OpenCodeAttachmentChip` state.
 Permission actions are allow once and deny, and return the opaque request and
 session identifiers rendered with the decision. Question actions are toggle
 option, toggle custom, custom text changed, back, next, submit, and dismiss;
@@ -65,6 +66,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   chips above the prompt input at 6–8 logical-pixel spacing. Attach is disabled
   when the selected model cannot accept image or PDF input; the feature owns
   that gate and passes `attachEnabled` into the composer.
+- The prompt action row is `[+] [/] … [send]`: Attach `IconCircle`, then a
+  Commands `IconCircleText("/")` action at 8 logical-pixel spacing, a flexible
+  gap, then stop (when active) and send. Commands opens a feature-owned
+  Commands sheet; the composer only reports the tap as `openCommands`.
 - With a pending permission or question request, the shell replaces its inner
   content with that decision UI. Draft prompt text and selection state remain in
   the Screen Model and return after the request resolves.
@@ -124,12 +129,15 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 ## Review Surfaces
 
 Both platform component files include permission-state, question-state, and
-mention-styled prompt previews for light and dark theme review. Both Component
-Galleries expose one live, edge-to-edge composer with interactive controls for
-empty prompt, populated prompt, mention-styled prompt, active work, pending
-attachments, pending permission, queued permission, permission submitting,
-permission error, single-question, multi-question, multi-select, custom answer,
-question submitting, and question error states. The Mentions scenario seeds an
+mention-styled prompt previews for light and dark theme review, plus an
+`iconCircleText` button preview. Both Component Galleries expose one live,
+edge-to-edge composer with interactive controls for empty prompt, populated
+prompt, mention-styled prompt, active work, pending attachments, pending
+permission, queued permission, permission submitting, permission error,
+single-question, multi-question, multi-select, custom answer, question
+submitting, and question error states, and log `openCommands` in the action
+log like the other prompt actions (opening the Commands sheet itself is
+feature-owned, not shown in the gallery). The Mentions scenario seeds an
 inline `@name` range with `syntax-type` color. The pending attachments scenario
 shows at least two sample chips with empty draft text and send enabled. Question
 scenarios keep local selection drafts so option, custom, Back / Next, Submit,
@@ -140,17 +148,22 @@ resize motion can be reviewed in a realistic Session Chat placement.
 ## Completion Ledger
 
 - Public API and applicable states: complete (`prompt`, `permission`,
-  `question`).
+  `question`), including the `openCommands` prompt action (OPE-58).
 - Token and typography mapping: complete. Question selection hints use
-  `text-base` on both platforms; question shell outline stays neutral.
+  `text-base` on both platforms; question shell outline stays neutral. The
+  Commands action reuses `iconCircle` geometry via the new `iconCircleText`
+  button variant; no new tokens.
 - iOS and Android implementations: complete for the shared question-request
   composer state, including radio selection chrome and custom-answer field
-  visibility.
+  visibility. Complete for the `[+] [/] … [send]` prompt action row (OPE-58);
+  the Commands sheet itself is feature-local, not part of this component.
 - Gallery entries and previews: complete for question single, wizard,
   multi-select, custom, submitting, and error scenarios on both platforms.
+  Complete for logging `openCommands` in the action log.
 - Parity and divergences: complete; none known for this component update.
 - Automated checks: complete for compile on iOS simulator and Android
-  `compileDebugKotlin`. Session Chat wiring remains OPE-66.
+  `compileDebugKotlin`. Session Chat wiring remains OPE-66 (question/permission)
+  and OPE-58 (Commands sheet).
 
 ## Parity And Divergence
 

@@ -315,7 +315,11 @@ extension Container {
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                activeConnectionManager: self.activeConnectionManager()
+                activeConnectionManager: self.activeConnectionManager(),
+                newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
+                    store: self.sessionModelSelectionStore(),
+                    modelRepository: self.modelRepository()
+                )
             )
         }
     }

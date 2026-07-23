@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -47,6 +49,11 @@ sealed interface OpenCodeButtonVariant {
 
     data class IconCircle(
         val imageVector: ImageVector,
+        val contentDescription: String? = null,
+    ) : OpenCodeButtonVariant
+
+    data class IconCircleText(
+        val text: String,
         val contentDescription: String? = null,
     ) : OpenCodeButtonVariant
 }
@@ -105,10 +112,12 @@ fun OpenCodeButton(
             is OpenCodeButtonVariant.CompactText -> Modifier.defaultMinSize(minHeight = variantMinHeight)
             is OpenCodeButtonVariant.IconSquare -> Modifier.size(iconSize)
             is OpenCodeButtonVariant.IconCircle -> Modifier.size(iconSize)
+            is OpenCodeButtonVariant.IconCircleText -> Modifier.size(iconSize)
         }
     val shape =
         when (variant) {
             is OpenCodeButtonVariant.IconCircle -> CircleShape
+            is OpenCodeButtonVariant.IconCircleText -> CircleShape
             else -> OpenCodeButtonCornerRadius
         }
 
@@ -162,6 +171,20 @@ fun OpenCodeButton(
                         tint = contentColor,
                     )
                 }
+            is OpenCodeButtonVariant.IconCircleText ->
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        variant.contentDescription?.let {
+                            Modifier.semantics { contentDescription = it }
+                        } ?: Modifier,
+                ) {
+                    Text(
+                        text = variant.text,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = contentColor,
+                    )
+                }
         }
     }
 }
@@ -205,6 +228,17 @@ private fun OpenCodeButtonIconCirclePreview() {
     OpenCodeTheme(darkTheme = true) {
         OpenCodeButton(
             variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send"),
+            onClick = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeButtonIconCircleTextPreview() {
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircleText("/", "Open commands"),
             onClick = {},
         )
     }

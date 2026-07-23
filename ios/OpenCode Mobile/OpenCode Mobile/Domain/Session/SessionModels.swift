@@ -12,8 +12,23 @@ struct Session: Sendable, Equatable {
     var createdAtEpochMs: Int64? = nil
     let updatedAtEpochMs: Int64?
     var archivedAtEpochMs: Int64? = nil
+    var revert: SessionRevert? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
+}
+
+struct SessionRevert: Sendable, Equatable {
+    let messageID: String
+    let partID: String?
+    let snapshot: String?
+    let diff: String?
+
+    init(messageID: String, partID: String? = nil, snapshot: String? = nil, diff: String? = nil) {
+        self.messageID = messageID
+        self.partID = partID
+        self.snapshot = snapshot
+        self.diff = diff
+    }
 }
 
 extension Array where Element == Session {

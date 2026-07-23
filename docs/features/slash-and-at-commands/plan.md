@@ -1,13 +1,14 @@
 # Slash & @ Commands
 
 Linear: [OPE-56 — Slash & @ Commands](https://linear.app/opencode-mobile/issue/OPE-56/slash-and-commands)  
-Active ticket: [OPE-59 — Agent @ mentions](https://linear.app/opencode-mobile/issue/OPE-59/mention-action)
+Active ticket: [OPE-58 — Slash actions](https://linear.app/opencode-mobile/issue/OPE-58/slash-actions)
 
 ## User Goal
 
 Discover and run **server commands** from the Session Chat composer with `/`,
-then mention **mentionable agents** with `@`, matching opencode web/desktop
-contracts where mobile v1 allows. Client slash actions follow later.
+mention **mentionable agents** with `@`, and run curated **client slash
+actions** from a Commands sheet — matching opencode web/desktop contracts where
+mobile v1 allows.
 
 ## Shipped (OPE-57)
 
@@ -24,7 +25,7 @@ contracts where mobile v1 allows. Client slash actions follow later.
   empty if catalog fails.
 - iOS and Android parity with unit coverage for list/match/submit routing.
 
-## In Scope (OPE-59)
+## Shipped (OPE-59)
 
 See [ope-59-plan.md](./ope-59-plan.md). Summary:
 
@@ -33,16 +34,23 @@ See [ope-59-plan.md](./ope-59-plan.md). Summary:
   state; prompt send includes `agent` parts.
 - `/` and `@` mutually exclusive (`@` wins); file/MCP/reference `@` deferred.
 
-## Later (OPE-58)
+## In Scope (OPE-58)
 
-- Curated client slash actions alongside server commands under `/`.
+See [ope-58-plan.md](./ope-58-plan.md). Summary:
+
+- Composer Commands `/` button next to Attach opens a **Commands** bottom sheet.
+- Curated client actions: `new`, `fork`, `undo`, `redo`, `compact` (hide when
+  inapplicable; never mixed into typed `/` suggestions).
+- Select runs local session behavior immediately; not `POST …/command`.
 
 ## Out Of Scope (feature)
 
 - Project file, MCP resource, and reference `@` mentions.
 - Shell mode (`!`), separate skills dialog, desktop slash-menu-when-text-present.
 - Argument-hints UI from command `hints`.
-- Composer mode-picker sync to `GET /agent` (not required for OPE-59).
+- Composer mode-picker sync to `GET /agent`.
+- Client `share` / `unshare` slash actions.
+- Desktop-only client builtins (terminal, themes, exit, MCP admin, …).
 
 Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
 
@@ -53,18 +61,23 @@ Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
 - `GET /agent?directory=` — list agents for **mentionable agent** catalog
   (OPE-59).
 - Async prompt send — `agent` parts for selected **agent mentions** (OPE-59).
+- Session create / fork / revert / unrevert / abort / summarize — **client slash
+  actions** (OPE-58); see [ope-58-plan.md](./ope-58-plan.md).
 
 ## Domain Objects
 
 - **server command**, **Command Repository** — see `CONTEXT.md`.
 - **mentionable agent**, **agent mention**, **Agent Repository** — see
   `CONTEXT.md` (OPE-59).
+- **client slash action** — see `CONTEXT.md` (OPE-58).
 
 ## Screen Model
 
 - Catalogs loaded into Session Chat; `/` and `@` suggestion queries from
   composer text.
-- Actions: open/filter/dismiss suggestions, select insert, send (routed).
+- Commands sheet visibility and visible client-action rows (OPE-58).
+- Actions: open/filter/dismiss suggestions, select insert, send (routed), open
+  Commands and run client actions.
 
 ## Native Entry Points
 
@@ -75,10 +88,13 @@ Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
 - Catalog failure: quiet empty suggestions; retry on trigger / reconnect.
 - Command or prompt send failure: restore composer snapshot (text, attachments,
   mentions).
+- Client action failure: toast or dialog error; see [ope-58-plan.md](./ope-58-plan.md).
 
 ## Design-System Components
 
 - **Existing:** composer suggestion overlay; list/badge chrome for `/` rows;
-  `syntax-type` for inline `@` mention color.
+  `syntax-type` for inline `@` mention color; bottom sheet action list.
 - **OPE-59:** attributed composer spans for mention ranges (not attachment
   chips).
+- **OPE-58:** extend Session Chat composer with Commands `IconCircle` after
+  Attach.

@@ -239,6 +239,16 @@ fun MainNavigation() {
                                                         ),
                                                     )
                                                 },
+                                                onSessionReplaceRequested = { target ->
+                                                    backStack.removeLastOrNull()
+                                                    backStack.add(
+                                                        SessionChat(
+                                                            sessionId = target.sessionId,
+                                                            sessionTitle = target.sessionTitle,
+                                                            worktree = target.worktree,
+                                                        ),
+                                                    )
+                                                },
                                             )
                                         }
                                     }

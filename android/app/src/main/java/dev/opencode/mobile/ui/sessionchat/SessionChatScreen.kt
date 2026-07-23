@@ -26,6 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -72,6 +73,7 @@ fun SessionChatScreen(
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
+    onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
     viewModel: SessionChatViewModel = hiltViewModel(key = "$sessionId-$worktree"),
 ) {
     val context = LocalContext.current
@@ -121,6 +123,13 @@ fun SessionChatScreen(
     LaunchedEffect(uiState.shouldLeaveSession) {
         if (uiState.shouldLeaveSession) {
             onNavigateBack()
+        }
+    }
+
+    LaunchedEffect(uiState.pendingSessionReplace) {
+        uiState.pendingSessionReplace?.let { target ->
+            onSessionReplaceRequested(target)
+            viewModel.consumePendingSessionReplace()
         }
     }
 
@@ -233,6 +242,14 @@ fun SessionChatScreen(
                 onContextClick = onSessionContextClick,
             )
             uiState.composer.modelNotice?.let { notice ->
+                Text(
+                    text = notice,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            uiState.clientActionNotice?.let { notice ->
                 Text(
                     text = notice,
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
@@ -420,6 +437,7 @@ fun SessionChatScreen(
                         }
                         OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
                         OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
+                        OpenCodeSessionComposerAction.OpenCommands -> viewModel.openCommands()
                         OpenCodeSessionComposerAction.Attach -> {
                             val photos = uiState.composer.canAttachPhotos
                             val files = uiState.composer.canAttachFiles
@@ -556,6 +574,58 @@ fun SessionChatScreen(
                     viewModel.cancelRenameSession()
                 }
             },
+        )
+
+        OpenCodeBottomSheet(
+            visible = uiState.commandsSheetVisible,
+            title = "Commands",
+            onDismissRequest = viewModel::dismissCommands,
+        ) {
+            uiState.visibleClientSlashActions.forEach { action ->
+                OpenCodeBottomSheetEntry(
+                    title = action.rowTitle,
+                    onClick = { viewModel.runClientSlashAction(action) },
+                )
+            }
+        }
+
+        OpenCodeDialog(
+            visible = uiState.forkDialogVisible,
+            title = "Fork session",
+            primaryOption =
+                OpenCodeDialogOption(
+                    title = "Fork",
+                    enabled = !uiState.forkSubmitting,
+                    onClick = viewModel::confirmFork,
+                ),
+            secondaryOption =
+                OpenCodeDialogOption(
+                    title = "Cancel",
+                    enabled = !uiState.forkSubmitting,
+                    onClick = viewModel::cancelForkDialog,
+                ),
+            textField =
+                OpenCodeDialogTextField(
+                    value = uiState.forkDraftTitle,
+                    onValueChange = viewModel::updateForkDraft,
+                    hint = "Title",
+                    enabled = !uiState.forkSubmitting,
+                    errorMessage = uiState.forkErrorMessage,
+                ),
+            onDismissRequest = {
+                if (!uiState.forkSubmitting) {
+                    viewModel.cancelForkDialog()
+                }
+            },
+        )
+
+        OpenCodeDialog(
+            visible = uiState.forkResultVisible,
+            title = "Session forked",
+            subtitle = "“${uiState.forkedSessionTitle}” is ready.",
+            primaryOption = OpenCodeDialogOption(title = "Open", onClick = viewModel::chooseForkOpen),
+            secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = viewModel::chooseForkStay),
+            onDismissRequest = viewModel::chooseForkStay,
         )
     }
 }

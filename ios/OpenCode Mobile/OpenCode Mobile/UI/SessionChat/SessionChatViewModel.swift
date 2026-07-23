@@ -15,6 +15,7 @@ final class SessionChatViewModel {
     private let composer: SessionChatComposer
     private let sessionInfo: SessionInfo
     private let reviewChanges: SessionChatReviewChanges
+    private let commands: SessionChatCommands
     private let sessionRepository: any SessionRepository
     private let permissionLiveStore: any PermissionLiveStore
     private let questionLiveStore: any QuestionLiveStore
@@ -47,7 +48,8 @@ final class SessionChatViewModel {
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
-        activeConnectionManager: ActiveConnectionManager
+        activeConnectionManager: ActiveConnectionManager,
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -83,12 +85,20 @@ final class SessionChatViewModel {
             worktree: worktree,
             sessionRepository: sessionRepository
         )
+        self.commands = SessionChatCommands(
+            sessionID: sessionID,
+            worktree: worktree,
+            sessionRepository: sessionRepository,
+            newSessionModelSelectionResolver: newSessionModelSelectionResolver,
+            activeConnectionManager: activeConnectionManager
+        )
         OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
         composer.onChange = { [weak self] in self?.publishUiState() }
         sessionInfo.onChange = { [weak self] in self?.publishUiState() }
         reviewChanges.onChange = { [weak self] in self?.publishUiState() }
+        commands.onChange = { [weak self] in self?.publishUiState() }
         publishUiState()
     }
 
@@ -175,6 +185,71 @@ final class SessionChatViewModel {
 
     func restoreComposerText(_ text: String) {
         composer.restoreComposerText(text)
+    }
+
+    func openCommands() {
+        commands.openCommands()
+        composer.dismissSuggestions()
+    }
+
+    func dismissCommands() {
+        commands.dismissCommands()
+    }
+
+    func runClientSlashAction(_ action: ClientSlashAction) {
+        switch action {
+        case .new:
+            commands.runNew()
+        case .fork:
+            commands.openForkDialog(currentTitle: uiState.sessionTitle)
+        case .undo:
+            commands.runUndo(
+                isBusy: uiState.sessionStatusLabel != nil,
+                restoreComposerText: { [weak self] text in self?.composer.restoreComposerText(text) }
+            )
+        case .redo:
+            commands.runRedo(
+                isBusy: uiState.sessionStatusLabel != nil,
+                clearComposerRestore: { [weak self] in self?.composer.restoreComposerText("") }
+            )
+        case .compact:
+            guard let model = composer.state.composer.selectedModel else { return }
+            commands.runCompact(
+                providerID: model.option.providerID,
+                modelID: model.option.modelID,
+                onSuccess: { [weak self] in
+                    guard let self else { return }
+                    Task {
+                        await self.timeline.refreshMessages()
+                        await self.sessionInfo.refreshStatus()
+                    }
+                }
+            )
+        }
+    }
+
+    func updateForkDraft(_ text: String) {
+        commands.updateForkDraft(text)
+    }
+
+    func cancelForkDialog() {
+        commands.cancelForkDialog()
+    }
+
+    func confirmFork() {
+        commands.confirmFork()
+    }
+
+    func chooseForkOpen() {
+        commands.chooseForkOpen()
+    }
+
+    func chooseForkStay() {
+        commands.chooseForkStay()
+    }
+
+    func consumePendingSessionReplace() {
+        commands.consumePendingSessionReplace()
     }
 
     func openRenameSession() {
@@ -534,7 +609,12 @@ final class SessionChatViewModel {
             isTurnActive: infoState.sessionStatusLabel != nil,
             isSending: composerState.isSending
         )
+        commands.updateVisibility(
+            messages: timelineState.messages,
+            hasSelectedComposerModel: composerState.composer.selectedModel != nil
+        )
         let reviewChangesState = reviewChanges.state
+        let commandsState = commands.state
         let visibleQuestion = visibleQuestionRequest()
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
@@ -555,7 +635,8 @@ final class SessionChatViewModel {
             errorMessage: mergedErrorMessage(
                 timelineState: timelineState,
                 composerState: composerState,
-                infoState: infoState
+                infoState: infoState,
+                commandsState: commandsState
             ),
             isLifecycleActionInFlight: infoState.isLifecycleActionInFlight,
             shouldLeaveSession: infoState.shouldLeaveSession,
@@ -578,14 +659,25 @@ final class SessionChatViewModel {
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,
             atSuggestionsVisible: composerState.atSuggestionsVisible,
-            atSuggestions: composerState.atSuggestions
+            atSuggestions: composerState.atSuggestions,
+            commandsSheetVisible: commandsState.commandsSheetVisible,
+            visibleClientSlashActions: commandsState.visibleActions,
+            forkDialogVisible: commandsState.forkDialogVisible,
+            forkDraftTitle: commandsState.forkDraftTitle,
+            forkSubmitting: commandsState.forkSubmitting,
+            forkErrorMessage: commandsState.forkErrorMessage,
+            forkResultVisible: commandsState.forkResultVisible,
+            forkedSessionTitle: commandsState.forkedSessionTitle,
+            clientActionNotice: commandsState.actionSuccessMessage,
+            pendingSessionReplace: commandsState.pendingSessionReplace
         )
     }
 
     private func mergedErrorMessage(
         timelineState: SessionChatTimelineRegionState,
         composerState: SessionChatComposerRegionState,
-        infoState: SessionInfoRegionState
+        infoState: SessionInfoRegionState,
+        commandsState: SessionChatCommandsRegionState
     ) -> String? {
         if let error = infoState.lifecycleErrorMessage {
             return error
@@ -597,6 +689,9 @@ final class SessionChatViewModel {
             return error
         }
         if let error = composerState.abortErrorMessage {
+            return error
+        }
+        if let error = commandsState.actionErrorMessage {
             return error
         }
         if let error = infoState.errorMessage {

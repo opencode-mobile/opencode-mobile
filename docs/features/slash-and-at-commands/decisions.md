@@ -34,3 +34,27 @@
   quiet-empty match the command catalog posture. Mode-picker sync to the same
   catalog is a follow-up, not OPE-59.
 - Implementation order: OPE-59 before OPE-58 (both unblocked after OPE-57).
+
+## OPE-58
+
+- Product name is **client slash action**; entry is a composer **Commands**
+  button (`/`), not the typed `/` overlay.
+- Typed `/` stays **server commands** only (OPE-57, including skills/MCP).
+  Client actions do not appear in `/` suggestions.
+- Composer layout: `[+] [/] … [send]`; Commands is a design-system
+  `OpenCodeSessionComposer` action.
+- Sheet title **Commands**; rows are one line: `[command] optional description`.
+- Allowlist: `new`, `fork`, `undo`, `redo`, `compact`. Hide inapplicable rows;
+  `new` is always shown. No `share`/`unshare`; no desktop-only builtins; no
+  `model`/`agent` rows.
+- Select runs immediately after dismiss; do not clear the composer draft except
+  undo/redo restore semantics. Never `POST …/command`.
+- Opening Commands dismisses `/` and `@` suggestion overlays; draft text stays.
+- `new` creates in the current worktree, seeds model preference, navigates with
+  replace.
+- `fork` uses the OPE-81 whole-session flow (name dialog → Open/Stay). OPE-58
+  implements that path; OPE-81 wires overflow and message fork later.
+- `undo`/`redo` match web session revert/unrevert (abort if busy; restore
+  composer on undo). Message-sheet “Revert message” copy stays for a follow-up.
+- `compact` is a thin summarize call with the selected composer model; richer
+  compact UX remains OPE-80.

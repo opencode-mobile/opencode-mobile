@@ -11,6 +11,21 @@ struct SessionDTO: Codable, Sendable {
     let cost: Double?
     let tokens: MessageTokensDTO?
     let time: SessionTimeDTO?
+    let revert: SessionRevertDTO?
+}
+
+struct SessionRevertDTO: Codable, Sendable {
+    let messageID: String
+    let partID: String?
+    let snapshot: String?
+    let diff: String?
+
+    init(messageID: String, partID: String? = nil, snapshot: String? = nil, diff: String? = nil) {
+        self.messageID = messageID
+        self.partID = partID
+        self.snapshot = snapshot
+        self.diff = diff
+    }
 }
 
 struct SessionTimeDTO: Codable, Sendable {

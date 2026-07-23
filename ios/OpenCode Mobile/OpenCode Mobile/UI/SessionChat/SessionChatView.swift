@@ -68,6 +68,15 @@ struct SessionChatView: View {
                     .padding(.bottom, 8)
             }
 
+            if let notice = viewModel.uiState.clientActionNotice {
+                Text(notice)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             SessionChatTimelineView(
                 props: SessionChatTimelineViewProps(
                     timeline: viewModel.uiState.timeline,
@@ -175,6 +184,14 @@ struct SessionChatView: View {
                 )
             }
         }
+        .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
+            ForEach(viewModel.uiState.visibleClientSlashActions, id: \.rawValue) { action in
+                OpenCodeBottomSheetEntry(
+                    title: action.rowTitle,
+                    action: { viewModel.runClientSlashAction(action) }
+                )
+            }
+        }
         .photosPicker(
             isPresented: $showPhotosPicker,
             selection: $selectedPhotoItems,
@@ -274,6 +291,47 @@ struct SessionChatView: View {
                 errorMessage: viewModel.uiState.rename.errorMessage
             )
         )
+        .openCodeDialog(
+            isPresented: forkDialogBinding,
+            title: "Fork session",
+            primaryOption: OpenCodeDialogOption(
+                title: "Fork",
+                enabled: !viewModel.uiState.forkSubmitting
+            ) {
+                viewModel.confirmFork()
+            },
+            secondaryOption: OpenCodeDialogOption(
+                title: "Cancel",
+                enabled: !viewModel.uiState.forkSubmitting,
+                action: viewModel.cancelForkDialog
+            ),
+            textField: OpenCodeDialogTextField(
+                text: Binding(
+                    get: { viewModel.uiState.forkDraftTitle },
+                    set: viewModel.updateForkDraft
+                ),
+                hint: "Title",
+                enabled: !viewModel.uiState.forkSubmitting,
+                errorMessage: viewModel.uiState.forkErrorMessage
+            )
+        )
+        .openCodeDialog(
+            isPresented: forkResultDialogBinding,
+            title: "Session forked",
+            subtitle: "Forked as “\(viewModel.uiState.forkedSessionTitle)”.",
+            primaryOption: OpenCodeDialogOption(title: "Open") {
+                viewModel.chooseForkOpen()
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Stay") {
+                viewModel.chooseForkStay()
+            }
+        )
+        .onChange(of: viewModel.uiState.pendingSessionReplace?.sessionID) { _, _ in
+            if let target = viewModel.uiState.pendingSessionReplace {
+                childSessionTarget = target
+                viewModel.consumePendingSessionReplace()
+            }
+        }
     }
 
     private var deleteDialogBinding: Binding<Bool> {
@@ -293,6 +351,39 @@ struct SessionChatView: View {
             set: { visible in
                 if !visible, !viewModel.uiState.rename.isSubmitting {
                     viewModel.cancelRenameSession()
+                }
+            }
+        )
+    }
+
+    private var commandsSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.commandsSheetVisible },
+            set: { visible in
+                if !visible {
+                    viewModel.dismissCommands()
+                }
+            }
+        )
+    }
+
+    private var forkDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.forkDialogVisible },
+            set: { visible in
+                if !visible, !viewModel.uiState.forkSubmitting {
+                    viewModel.cancelForkDialog()
+                }
+            }
+        )
+    }
+
+    private var forkResultDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.forkResultVisible },
+            set: { visible in
+                if !visible {
+                    viewModel.chooseForkStay()
                 }
             }
         )
@@ -484,6 +575,8 @@ struct SessionChatView: View {
                     }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
+                case .openCommands:
+                    viewModel.openCommands()
                 case .send:
                     Task { await viewModel.sendPrompt() }
                 case .stop:

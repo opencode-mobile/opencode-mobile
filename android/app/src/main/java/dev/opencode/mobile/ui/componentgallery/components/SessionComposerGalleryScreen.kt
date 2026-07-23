@@ -355,6 +355,7 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.SelectMode -> "Select mode"
             OpenCodeSessionComposerAction.SelectVariant -> "Select variant"
             OpenCodeSessionComposerAction.Attach -> "Attach"
+            OpenCodeSessionComposerAction.OpenCommands -> "Open commands"
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.Stop -> "Stop"

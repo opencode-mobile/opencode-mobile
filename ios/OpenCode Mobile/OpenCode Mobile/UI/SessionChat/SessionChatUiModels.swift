@@ -149,6 +149,16 @@ struct SessionChatUiState: Equatable {
     var slashSuggestions: [SessionChatSlashSuggestion] = []
     var atSuggestionsVisible = false
     var atSuggestions: [SessionChatAtSuggestion] = []
+    var commandsSheetVisible = false
+    var visibleClientSlashActions: [ClientSlashAction] = []
+    var forkDialogVisible = false
+    var forkDraftTitle = ""
+    var forkSubmitting = false
+    var forkErrorMessage: String?
+    var forkResultVisible = false
+    var forkedSessionTitle = ""
+    var clientActionNotice: String?
+    var pendingSessionReplace: ChildSessionNavigationTarget?
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -371,6 +381,20 @@ struct SessionInfoRegionState: Equatable {
 struct SessionChatReviewChangesRegionState: Equatable {
     var messageID: String?
     var summary: ReviewChangesSummary?
+}
+
+struct SessionChatCommandsRegionState: Equatable {
+    var commandsSheetVisible = false
+    var visibleActions: [ClientSlashAction] = []
+    var forkDialogVisible = false
+    var forkDraftTitle = ""
+    var forkSubmitting = false
+    var forkErrorMessage: String?
+    var forkResultVisible = false
+    var forkedSessionTitle = ""
+    var actionErrorMessage: String?
+    var actionSuccessMessage: String?
+    var pendingSessionReplace: ChildSessionNavigationTarget?
 }
 
 struct LatestModelHint: Equatable {
