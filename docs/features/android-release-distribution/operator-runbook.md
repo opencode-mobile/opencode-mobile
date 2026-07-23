@@ -15,7 +15,7 @@ decoded secret to this repository, workflow artifacts, logs, or issue comments.
 | Play app draft | **OpenCode Mobile — Unofficial** (app ID `4974264711668360153`) | Draft only; independent-client disclaimer saved; not submitted for review |
 | Test Lab service account | `opencode-test-lab@opencode-mobile-release.iam.gserviceaccount.com` | Firebase Test Lab Admin, Firebase Analytics Viewer, Firebase Quality Admin, Storage Object Admin, and Editor in the Cloud project |
 | Play publisher service account | `opencode-play-publisher@opencode-mobile-release.iam.gserviceaccount.com` | App-scoped Play testing-track release access; no production permission |
-| App Distribution service account | `opencode-app-distribution@opencode-mobile-release.iam.gserviceaccount.com` | Firebase App Distribution Admin only; pending OPE-73 owner setup |
+| App Distribution service account | `opencode-app-distribution@opencode-mobile-release.iam.gserviceaccount.com` | Firebase App Distribution Admin only; JSON recovery copy is stored in the owner-only credentials folder and the protected GitHub environment |
 | GitHub environment | `android-release` | Restricted to the `main` branch |
 
 OPE-70 and OPE-71 added no app-side Firebase SDK. OPE-72 enables Google

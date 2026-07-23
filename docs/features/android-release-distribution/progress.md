@@ -80,7 +80,7 @@ on the affected Pixel 9; Firebase recognized version 6 as the latest active
 release while the startup-crash issue remained confined to version 5. OPE-72
 and OPE-74 are complete.
 
-OPE-73 planning and repository implementation are active. The
+OPE-73 planning, repository implementation, and owner setup are active. The
 `Android App Distribution` workflow triggers only on pushes to protected
 `main`, signs and verifies one AAB, authenticates with a dedicated protected
 secret, targets the private `android-internal` group, and summarizes only stable
@@ -89,20 +89,23 @@ separate high version-code range and Google Play's internal-app-sharing
 certificate, so the owner must uninstall the Play-internal build once before
 installing the first Firebase release.
 
+The owner approved and completed the external setup. Firebase is linked to the
+existing Play app with AAB delivery enabled, the Internal App Sharing terms are
+accepted, the private `android-internal` group contains the sole initial tester,
+and the dedicated App Distribution service account has only Firebase App
+Distribution Admin. Its JSON key is stored in the owner-only recovery folder
+and the protected GitHub environment secret.
+
 ## Blockers
 
-OPE-73 needs explicit owner approval before linking Firebase to Google Play,
-creating a dedicated service account/key, and enrolling the private tester
-group.
+None before the first merged workflow run.
 
 ## Remaining work
 
-1. Complete OPE-73 Firebase/Play linking, private group, dedicated service
-   account/key, and protected GitHub secret.
-2. Merge the workflow and complete one real automatic App Distribution run.
-3. Migrate the Pixel 9 once from the Play-internal certificate to the internal-
+1. Merge the workflow and complete one real automatic App Distribution run.
+2. Migrate the Pixel 9 once from the Play-internal certificate to the internal-
    app-sharing certificate, then install and open the Firebase release.
-4. Keep OPE-69 open until OPE-73 is complete.
+3. Keep OPE-69 open until OPE-73 is complete.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an

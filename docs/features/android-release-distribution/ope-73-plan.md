@@ -94,16 +94,16 @@ in-place update.
 
 ## Checkpoint 1 — Owner Setup
 
-- [ ] Link Firebase Android app `dev.opencode.mobile` to its existing Google
+- [x] Link Firebase Android app `dev.opencode.mobile` to its existing Google
       Play app and enable App Distribution AAB delivery.
-- [ ] Create the private `android-internal` tester group and add the initial
+- [x] Create the private `android-internal` tester group and add the initial
       owner/tester.
-- [ ] Create the dedicated App Distribution service account with only Firebase
+- [x] Create the dedicated App Distribution service account with only Firebase
       App Distribution Admin.
-- [ ] Create one JSON key for that service account, preserve the controlled
+- [x] Create one JSON key for that service account, preserve the controlled
       recovery copy, and add it to the protected GitHub environment as
       `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`.
-- [ ] Confirm no new public invite link, billing choice, or runtime SDK is
+- [x] Confirm no new public invite link, billing choice, or runtime SDK is
       introduced.
 
 Linking Firebase to Google Play and creating a new service identity/key are
