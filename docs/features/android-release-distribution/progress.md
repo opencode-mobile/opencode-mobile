@@ -9,15 +9,18 @@
       [OPE-70](https://linear.app/opencode-mobile/issue/OPE-70/provision-google-projects-and-ci-release-signing)
       → [OPE-71](https://linear.app/opencode-mobile/issue/OPE-71/publish-to-play-internal-and-run-test-lab-robo)
       → [OPE-72](https://linear.app/opencode-mobile/issue/OPE-72/ship-crashlytics-and-minimal-analytics-on-release-builds)
+      → [OPE-73](https://linear.app/opencode-mobile/issue/OPE-73/distribute-every-merged-android-build-through-firebase-app)
 - [x] Grilled decisions accepted in `decisions.md`, including personal
       ownership, package-risk acceptance, signing/authentication, workflow
       boundaries, release observability, and Test Lab cost controls
 - [x] OPE-70 refined in `ope-70-plan.md`
 - [x] OPE-71 refined in `ope-71-plan.md`
 - [x] OPE-72 refined in `ope-72-plan.md`
+- [x] OPE-73 refined in `ope-73-plan.md`
 - [x] Complete OPE-70
 - [x] Complete OPE-71
 - [x] Complete OPE-72
+- [ ] Complete OPE-73
 - [x] Update README CI table once workflows exist
 
 ## Design-system dependencies
@@ -77,17 +80,32 @@ on the affected Pixel 9; Firebase recognized version 6 as the latest active
 release while the startup-crash issue remained confined to version 5. OPE-72
 and OPE-74 are complete.
 
+OPE-73 planning, repository implementation, and owner setup are active. The
+`Android App Distribution` workflow triggers only on pushes to protected
+`main`, signs and verifies one AAB, authenticates with a dedicated protected
+secret, targets the private `android-internal` group, and summarizes only stable
+Firebase links. Runs serialize without cancellation. App Distribution uses a
+separate high version-code range and Google Play's internal-app-sharing
+certificate, so the owner must uninstall the Play-internal build once before
+installing the first Firebase release.
+
+The owner approved and completed the external setup. Firebase is linked to the
+existing Play app with AAB delivery enabled, the Internal App Sharing terms are
+accepted, the private `android-internal` group contains the sole initial tester,
+and the dedicated App Distribution service account has only Firebase App
+Distribution Admin. Its JSON key is stored in the owner-only recovery folder
+and the protected GitHub environment secret.
+
 ## Blockers
 
-OPE-73 needs explicit owner approval before linking Firebase to Google Play,
-creating a dedicated service account/key, and enrolling the private tester
-group.
+None before the first merged workflow run.
 
 ## Remaining work
 
-1. Complete OPE-73 owner setup, automatic post-merge workflow, and one real
-   Firebase App Distribution acceptance run.
-2. Keep OPE-69 open until OPE-73 is complete.
+1. Merge the workflow and complete one real automatic App Distribution run.
+2. Migrate the Pixel 9 once from the Play-internal certificate to the internal-
+   app-sharing certificate, then install and open the Firebase release.
+3. Keep OPE-69 open until OPE-73 is complete.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an
