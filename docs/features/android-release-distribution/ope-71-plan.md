@@ -45,7 +45,7 @@ or Remote Config.
       signed AAB reaches Play internal testing.
 - [x] Add the owner's Google account to the internal tester list and follow the
       opt-in URL.
-- [ ] Confirm the remotely requested Play-delivered build installs and opens on
+- [x] Confirm the remotely requested Play-delivered build installs and opens on
       the owner's Pixel 9.
 - [x] Run Android Test Lab with the successful Android Release run ID and
       confirm both bounded Robo executions complete on virtual devices.
@@ -58,8 +58,8 @@ or Remote Config.
 - Android Release:
   [run 29991719142](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29991719142)
   published `0.1.0-internal.4` / `versionCode` 4 to Play internal testing.
-- Tester: `ivanfenenko@gmail.com` joined the internal test and a Pixel 9 remote
-  install was requested from Google Play.
+- Tester: `ivanfenenko@gmail.com` joined the internal test; the Play-delivered
+  build installed and opened successfully on the owner's Pixel 9.
 - Android Test Lab:
   [run 29993535229](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29993535229)
   passed Robo on `MediumPhone.arm` API 36 and API 35. The

@@ -111,6 +111,10 @@ to the internal-testing tester list. After a successful Android Release run:
 The app may remain otherwise incomplete in Play Console during internal
 testing. Do not promote the release to closed, open, or production tracks.
 
+The first physical acceptance used `ivanfenenko@gmail.com` and confirmed that
+`0.1.0-internal.4` / `versionCode` 4 installed and opened successfully on a
+Pixel 9.
+
 ## Run Firebase Test Lab Robo
 
 Android Test Lab is an independent manual workflow. It accepts the numeric run

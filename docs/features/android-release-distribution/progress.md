@@ -15,7 +15,7 @@
 - [x] OPE-70 refined in `ope-70-plan.md`
 - [x] OPE-71 refined in `ope-71-plan.md`
 - [x] Complete OPE-70
-- [ ] Complete OPE-71
+- [x] Complete OPE-71
 - [ ] Complete OPE-72
 - [x] Update README CI table once workflows exist
 
@@ -44,20 +44,16 @@ published `0.1.0-internal.4` / `versionCode` 4 to Play internal testing. Test La
 run
 [29993535229](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29993535229)
 passed the signed APK on `MediumPhone.arm` API 36 and API 35. The owner joined
-the internal test and requested installation on a Pixel 9; physical install and
-launch confirmation remains open.
+the internal test, then confirmed that the Play-delivered build installed and
+opened successfully on a Pixel 9. OPE-71 is complete.
 
 ## Blockers
 
-No implementation or cloud-infrastructure blocker. OPE-71 closure waits only
-for the owner to confirm that the Play-delivered build installed and opened on
-the Pixel 9.
+No OPE-71 blocker.
 
 ## Remaining work
 
-1. Confirm the Play-delivered internal release installs and opens on the Pixel
-   9.
-2. Mark OPE-71 complete, then continue with OPE-72.
+1. Continue with OPE-72 release-only Crashlytics and minimal Analytics.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an
