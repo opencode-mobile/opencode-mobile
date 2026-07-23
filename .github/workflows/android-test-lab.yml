@@ -1,0 +1,139 @@
+name: Android Test Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: "Successful Android Release workflow run ID"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: android-test-lab
+  cancel-in-progress: false
+
+jobs:
+  robo:
+    if: github.ref == 'refs/heads/main'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    environment: android-release
+    env:
+      GCP_PROJECT_ID: opencode-mobile-release
+      RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+
+    steps:
+      - name: Validate Android Release run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "release_run_id must be a positive GitHub Actions run ID." >&2
+            exit 1
+          fi
+
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+          if ! jq -e '
+            .name == "Android Release" and
+            .event == "workflow_dispatch" and
+            .head_branch == "main" and
+            .status == "completed" and
+            .conclusion == "success"
+          ' <<< "$run_json" >/dev/null; then
+            echo "The source must be a successful Android Release workflow_dispatch run from main." >&2
+            exit 1
+          fi
+
+          release_run_number="$(jq -r '.run_number' <<< "$run_json")"
+          echo "RELEASE_RUN_NUMBER=$release_run_number" >> "$GITHUB_ENV"
+
+      - name: Download signed release APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_directory="$RUNNER_TEMP/android-test-lab-artifact"
+          mkdir -p "$artifact_directory"
+          gh run download "$RELEASE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "android-apk-*-$RELEASE_RUN_NUMBER" \
+            --dir "$artifact_directory"
+
+          mapfile -t apk_paths < <(find "$artifact_directory" -type f -name '*.apk' -print)
+          if [[ "${#apk_paths[@]}" -ne 1 ]]; then
+            echo "Expected exactly one signed APK artifact; found ${#apk_paths[@]}." >&2
+            exit 1
+          fi
+          echo "APK_PATH=${apk_paths[0]}" >> "$GITHUB_ENV"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          credentials_json: ${{ secrets.GCP_TEST_LAB_SERVICE_ACCOUNT_JSON }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Select bounded virtual-device matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          model_json="$(
+            gcloud firebase test android models describe MediumPhone.arm \
+              --project "$GCP_PROJECT_ID" \
+              --format=json
+          )"
+          versions_json="$(
+            gcloud firebase test android versions list \
+              --project "$GCP_PROJECT_ID" \
+              --format=json
+          )"
+          if [[ "$(jq -r '.form' <<< "$model_json")" != "VIRTUAL" ]]; then
+            echo "MediumPhone.arm is not reported as a virtual Test Lab device." >&2
+            exit 1
+          fi
+
+          mapfile -t version_ids < <(
+            jq -nr \
+              --argjson model "$model_json" \
+              --argjson versions "$versions_json" '
+                $versions
+                | map(select(.id as $id | $model.supportedVersionIds | index($id)))
+                | map(select(((.tags // []) | index("preview")) | not))
+                | map(select(((.tags // []) | index("deprecated")) | not))
+                | sort_by(.apiLevel)
+                | reverse
+                | .[:2]
+                | .[].id
+              '
+          )
+          if [[ "${#version_ids[@]}" -ne 2 ]]; then
+            echo "Expected two supported Android versions for MediumPhone.arm." >&2
+            exit 1
+          fi
+
+          echo "TEST_DEVICE_1=model=MediumPhone.arm,version=${version_ids[0]},locale=en,orientation=portrait" >> "$GITHUB_ENV"
+          echo "TEST_DEVICE_2=model=MediumPhone.arm,version=${version_ids[1]},locale=en,orientation=portrait" >> "$GITHUB_ENV"
+
+      - name: Run bounded Robo test
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud firebase test android run \
+            --project "$GCP_PROJECT_ID" \
+            --type robo \
+            --app "$APK_PATH" \
+            --device "$TEST_DEVICE_1" \
+            --device "$TEST_DEVICE_2" \
+            --timeout 10m \
+            --no-auto-google-login \
+            --client-details "matrixLabel=opencode-release-$RELEASE_RUN_NUMBER"

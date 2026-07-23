@@ -67,7 +67,8 @@ skipped). Android Build and iOS Build stay manual.
 | Android Checks | PR (non-draft) + dispatch | ktlint/lint (soft-fail) + unit tests |
 | iOS Checks | PR (non-draft) + dispatch | Build, analyzer, unit tests |
 | Android Build | `workflow_dispatch` | Assemble debug APK |
-| Android Release | `workflow_dispatch` on `main` | Build and verify signed AAB + APK |
+| Android Release | `workflow_dispatch` on `main` | Build and verify signed AAB + APK, then publish to Play internal |
+| Android Test Lab | `workflow_dispatch` on `main` | Run bounded Robo tests against a signed release APK |
 | iOS Build | `workflow_dispatch` | Simulator build |
 
 To block merges, require status checks `android-checks` and `ios-checks` on
@@ -79,11 +80,14 @@ Manual runs:
 ```bash
 gh workflow run "Android Checks" --ref main
 gh workflow run "Android Release" --ref main -f version_name=0.1.0
+gh workflow run "Android Test Lab" --ref main -f release_run_id=<android-release-run-id>
 ```
 
-Android Release uses the protected `android-release` environment. See the
+Android Release and Android Test Lab use the protected `android-release`
+environment. See the
 [Android release operator runbook](docs/features/android-release-distribution/operator-runbook.md)
-for secrets, artifacts, recovery, and Play handoff instructions.
+for secrets, artifacts, Play internal testing, Test Lab, and recovery
+instructions.
 
 After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing.
 

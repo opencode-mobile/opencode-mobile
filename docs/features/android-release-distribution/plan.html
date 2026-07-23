@@ -111,7 +111,7 @@
       <li><strong>OPE-70 — Human setup</strong> Personal ownership, one Cloud/Firebase project, Play draft, local upload key, separate service accounts, protected secrets.</li>
       <li><strong>OPE-70 — Agent implementation</strong> Protected main-only Android Release workflow, signed and verified AAB/APK, CI version code, human semantic version name.</li>
       <li><strong>OPE-70 — Human enrollment</strong> First manual AAB upload, Google-generated Play App Signing keys, publisher access, release left unpublished.</li>
-      <li><strong>OPE-71 — Distribution</strong> Extend the release workflow for one-tester Play internal; run independent bounded Test Lab Robo.</li>
+      <li><strong><a href="./ope-71-plan.md">OPE-71 — Distribution</a></strong> Extend the release workflow for one-tester Play internal; run independent bounded Test Lab Robo.</li>
       <li><strong>OPE-72 — Observability</strong> Release/internal Crashlytics plus deliberately minimal Analytics; debug clean; no FCM or Remote Config.</li>
     </ol>
 
@@ -119,7 +119,10 @@
       OPE-70 is complete: CI-only Gradle signing and the protected manual Android
       Release workflow passed twice from main, and Play App Signing is active with
       the internal release left as a draft.
-      PR Checks stay as-is; Test Lab is not a merge gate in this slice.
+      OPE-71 automation is implemented: Android Release publishes to Play internal,
+      while a separate manual workflow runs a bounded two-device Test Lab Robo
+      matrix. Protected-main and physical-device acceptance remain open. PR Checks
+      stay as-is; Test Lab is not a merge gate in this slice.
     </div>
 
     <h2>Decisions</h2>
