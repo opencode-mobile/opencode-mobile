@@ -38,13 +38,19 @@ OPE-73 does not include:
 
 Firebase App Distribution integrates AAB delivery with Google Play internal app
 sharing. Google Play generates device-specific APKs and signs them with its
-internal-app-sharing certificate. This avoids distributing an APK signed with
-the upload key, which cannot update a Play-installed app signed with the Play
-app-signing key.
+internal-app-sharing certificate. That certificate is distinct from both the
+upload key and the normal Play app-signing key. The first Firebase tester
+install therefore requires uninstalling the Play-internal build; subsequent
+App Distribution builds share the internal-app-sharing certificate and can
+update within that tester channel.
 
-Internal app sharing permits reused version codes, so this workflow does not
-compete with the canonical Play release workflow's version sequence. The AAB is
-not promoted to an internal, closed, open, or production Play track.
+Internal app sharing permits reused version codes, but Android update behavior
+is clearer with monotonic values. This workflow reserves
+`1000000000 + github.run_number` for App Distribution, separate from the
+canonical Play release workflow's low run-number sequence. Moving between the
+Play-internal and App Distribution channels requires uninstall/reinstall
+because their final APK certificates differ. The AAB is not promoted to an
+internal, closed, open, or production Play track.
 
 ## Trigger And Failure Contract
 
@@ -82,6 +88,9 @@ create a public invite link.
 
 The workflow targets the group alias, never a tester email stored in the
 repository. Tester additions and removals remain console/operator actions.
+The owner must remove the Play-internal installation before installing the
+first App Distribution release. This is a one-time channel migration, not an
+in-place update.
 
 ## Checkpoint 1 — Owner Setup
 
@@ -103,27 +112,27 @@ before execution.
 
 ## Checkpoint 2 — Agent Implementation
 
-- [ ] Add an `Android App Distribution` workflow triggered only by pushes to
+- [x] Add an `Android App Distribution` workflow triggered only by pushes to
       `main`.
-- [ ] Build the AAB from the merged commit with CI-provided signing values.
-- [ ] Verify the AAB signature before upload.
-- [ ] Authenticate with the dedicated service-account key from the protected
+- [x] Build the AAB from the merged commit with CI-provided signing values.
+- [x] Verify the AAB signature before upload.
+- [x] Authenticate with the dedicated service-account key from the protected
       environment.
-- [ ] Upload the AAB to Firebase App Distribution for group
+- [x] Upload the AAB to Firebase App Distribution for group
       `android-internal`.
-- [ ] Use the merge commit subject and short SHA as content-safe release notes.
-- [ ] Put the Firebase console and tester URLs in the workflow summary without
+- [x] Use the merge commit subject and short SHA as content-safe release notes.
+- [x] Put the Firebase console and tester URLs in the workflow summary without
       printing credentials or expiring binary-download URLs.
-- [ ] Serialize without cancellation so a later merge cannot suppress an
+- [x] Serialize without cancellation so a later merge cannot suppress an
       earlier merge's distribution.
-- [ ] Delete decoded signing and Google credentials in `always()` cleanup.
-- [ ] Update the operator runbook, parent plan, progress, parity gap, and Linear.
+- [x] Delete decoded signing and Google credentials in `always()` cleanup.
+- [x] Update the operator runbook, parent plan, progress, parity gap, and Linear.
 
 ## Checkpoint 3 — Verification
 
-- [ ] Workflow structure proves that PRs and non-`main` refs cannot access the
+- [x] Workflow structure proves that PRs and non-`main` refs cannot access the
       protected secrets.
-- [ ] Focused workflow syntax and release bundle/signature checks pass.
+- [x] Focused workflow syntax and release bundle/signature checks pass.
 - [ ] A merged commit automatically starts exactly one App Distribution run.
 - [ ] Firebase shows the expected commit/version and `android-internal` group.
 - [ ] The owner receives or can open the tester release and installs the

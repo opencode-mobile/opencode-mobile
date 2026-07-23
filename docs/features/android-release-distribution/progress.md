@@ -80,6 +80,15 @@ on the affected Pixel 9; Firebase recognized version 6 as the latest active
 release while the startup-crash issue remained confined to version 5. OPE-72
 and OPE-74 are complete.
 
+OPE-73 planning and repository implementation are active. The
+`Android App Distribution` workflow triggers only on pushes to protected
+`main`, signs and verifies one AAB, authenticates with a dedicated protected
+secret, targets the private `android-internal` group, and summarizes only stable
+Firebase links. Runs serialize without cancellation. App Distribution uses a
+separate high version-code range and Google Play's internal-app-sharing
+certificate, so the owner must uninstall the Play-internal build once before
+installing the first Firebase release.
+
 ## Blockers
 
 OPE-73 needs explicit owner approval before linking Firebase to Google Play,
@@ -88,9 +97,12 @@ group.
 
 ## Remaining work
 
-1. Complete OPE-73 owner setup, automatic post-merge workflow, and one real
-   Firebase App Distribution acceptance run.
-2. Keep OPE-69 open until OPE-73 is complete.
+1. Complete OPE-73 Firebase/Play linking, private group, dedicated service
+   account/key, and protected GitHub secret.
+2. Merge the workflow and complete one real automatic App Distribution run.
+3. Migrate the Pixel 9 once from the Play-internal certificate to the internal-
+   app-sharing certificate, then install and open the Firebase release.
+4. Keep OPE-69 open until OPE-73 is complete.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an

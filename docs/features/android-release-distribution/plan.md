@@ -88,7 +88,7 @@ Not applicable — no app UI.
 | Package / applicationId | `dev.opencode.mobile` |
 | versionCode / versionName | Local defaults are `1` / `1.0`; release CI supplies both values |
 | Release signing | CI-only Gradle signing verified by two protected `main` release runs |
-| Firebase / Play | Play App Signing is active and `0.1.0-internal.4` / `versionCode` 4 is active on internal testing; OPE-72 adds the registered app configuration plus release-only Crashlytics and minimal Analytics on its feature branch |
+| Firebase / Play | Play internal distribution and OPE-72 release-only Crashlytics/minimal Analytics are complete; OPE-73 automatic App Distribution is active |
 | Android CI | Checks on ready PRs; Build remains manual debug; protected Android Release run 29991719142 published to Play and Test Lab run 29993535229 passed both bounded Robo devices |
 | Emulator / instrumented tests in CI | Explicitly out of PR gating; Cloud VM has no KVM |
 
@@ -149,7 +149,10 @@ Follow the focused [`ope-73-plan.md`](ope-73-plan.md).
    group.
 3. Trigger an independent protected workflow on every push to `main`, serialize
    without cancellation, and distribute the exact merged commit.
-4. Keep PRs credential-free and do not publish another Play track release.
+4. Reserve a monotonic high `versionCode` range for the App Distribution
+   channel and require a one-time uninstall of the differently signed
+   Play-internal build.
+5. Keep PRs credential-free and do not publish another Play track release.
 
 ### Operator hardening
 

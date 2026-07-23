@@ -68,6 +68,7 @@ skipped). Android Build and iOS Build stay manual.
 | iOS Checks | PR (non-draft) + dispatch | Build, analyzer, unit tests |
 | Android Build | `workflow_dispatch` | Assemble debug APK |
 | Android Release | `workflow_dispatch` on `main` | Build and verify signed AAB + APK, then publish to Play internal |
+| Android App Distribution | `push` to `main` | Build and verify a signed AAB, then distribute it to the private Firebase tester group |
 | Android Test Lab | `workflow_dispatch` on `main` | Run bounded Robo tests against a signed release APK |
 | iOS Build | `workflow_dispatch` | Simulator build |
 
@@ -83,8 +84,8 @@ gh workflow run "Android Release" --ref main -f version_name=0.1.0
 gh workflow run "Android Test Lab" --ref main -f release_run_id=<android-release-run-id>
 ```
 
-Android Release and Android Test Lab use the protected `android-release`
-environment. See the
+Android Release, Android App Distribution, and Android Test Lab use the
+protected `android-release` environment. See the
 [Android release operator runbook](docs/features/android-release-distribution/operator-runbook.md)
 for secrets, artifacts, Play internal testing, Test Lab, and recovery
 instructions.

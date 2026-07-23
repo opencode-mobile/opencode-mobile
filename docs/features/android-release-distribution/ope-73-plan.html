@@ -104,7 +104,7 @@
         <tr>
           <td>Agent implementation</td>
           <td>Add the main-push workflow, signing and signature verification, AAB upload, release notes, summaries, serialization, and cleanup.</td>
-          <td class="pending">Not started</td>
+          <td class="ok">Implemented</td>
         </tr>
         <tr>
           <td>Acceptance</td>
@@ -118,7 +118,8 @@
     <table>
       <thead><tr><th>Topic</th><th>Contract</th></tr></thead>
       <tbody>
-        <tr><td>Signing</td><td>Upload-key-signed AAB; Google Play internal app sharing generates APKs with its dedicated test certificate.</td></tr>
+        <tr><td>Signing</td><td>Upload-key-signed AAB; internal app sharing generates APKs with a separate test certificate. The first Firebase install requires uninstalling the Play-internal build.</td></tr>
+        <tr><td>Versioning</td><td>App Distribution reserves <code>1000000000 + run_number</code> for monotonic updates inside its separate tester channel.</td></tr>
         <tr><td>Credentials</td><td>Dedicated Firebase App Distribution Admin identity in the protected environment; PRs receive no credentials.</td></tr>
         <tr><td>Run ordering</td><td>Serialize without cancellation so a later merge cannot suppress an earlier distribution.</td></tr>
         <tr><td>Failure</td><td>A failed distribution fails the workflow but does not revert the merge.</td></tr>

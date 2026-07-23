@@ -1,7 +1,7 @@
 # Android Release — Operator Runbook
 
 This runbook records the non-secret ownership and operating contract for
-OPE-70 through OPE-72. Never add a keystore, password, service-account JSON, or
+OPE-70 through OPE-73. Never add a keystore, password, service-account JSON, or
 decoded secret to this repository, workflow artifacts, logs, or issue comments.
 
 ## Infrastructure inventory
@@ -15,6 +15,7 @@ decoded secret to this repository, workflow artifacts, logs, or issue comments.
 | Play app draft | **OpenCode Mobile — Unofficial** (app ID `4974264711668360153`) | Draft only; independent-client disclaimer saved; not submitted for review |
 | Test Lab service account | `opencode-test-lab@opencode-mobile-release.iam.gserviceaccount.com` | Firebase Test Lab Admin, Firebase Analytics Viewer, Firebase Quality Admin, Storage Object Admin, and Editor in the Cloud project |
 | Play publisher service account | `opencode-play-publisher@opencode-mobile-release.iam.gserviceaccount.com` | App-scoped Play testing-track release access; no production permission |
+| App Distribution service account | `opencode-app-distribution@opencode-mobile-release.iam.gserviceaccount.com` | Firebase App Distribution Admin only; pending OPE-73 owner setup |
 | GitHub environment | `android-release` | Restricted to the `main` branch |
 
 OPE-70 and OPE-71 added no app-side Firebase SDK. OPE-72 enables Google
@@ -35,6 +36,7 @@ The `android-release` environment contains these encrypted secrets:
 | `ANDROID_UPLOAD_KEY_PASSWORD` | Upload-key password |
 | `GCP_TEST_LAB_SERVICE_ACCOUNT_JSON` | Test Lab service-account JSON |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Play publisher service-account JSON |
+| `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON` | Dedicated App Distribution service-account JSON |
 
 GitHub does not expose existing secret values. Replace a secret to rotate it.
 The release workflow decodes the keystore into the runner temporary directory,
@@ -152,6 +154,42 @@ Its
 [Firebase matrix](https://console.firebase.google.com/project/opencode-mobile-release/testlab/histories/bh.e6f5a29142f5b482/matrices/5182549661464327850)
 passed `MediumPhone.arm-36-en-portrait` and
 `MediumPhone.arm-35-en-portrait`.
+
+## Automatic Firebase App Distribution
+
+`Android App Distribution` triggers on every push to protected `main`. It builds
+one upload-key-signed AAB from the exact merged commit, verifies the upload
+certificate, and distributes the bundle to the private Firebase group alias
+`android-internal`. It does not publish a Play testing-track release, run Test
+Lab, or expose credentials to pull requests.
+
+The workflow uses Firebase CLI `15.24.0` with Application Default Credentials
+from `FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON`. It records the merge
+subject and short commit SHA as release notes, then places only the stable
+Firebase console and tester-experience links in the workflow summary. The
+signed AAB artifact is retained for seven days. Firebase App Distribution
+releases remain available for 150 days.
+
+App Distribution version codes use `1000000000 + github.run_number`, a
+monotonic range reserved for this workflow. Google Play internal app sharing
+re-signs generated APKs with its dedicated test certificate. That certificate
+differs from the normal Play app-signing certificate, so the first migration
+from a Play-internal installation requires:
+
+1. Confirm the desired Firebase release is assigned to `android-internal`.
+2. Uninstall the Play-internal build from the physical device.
+3. Open the tester-experience link while signed in as the private tester.
+4. Install and launch the Firebase release.
+
+Later App Distribution builds use the same internal-app-sharing certificate and
+can update within the Firebase channel. Moving back to Play internal also
+requires uninstall/reinstall. Do not create a public invite link. Tester
+membership remains a Firebase console/operator action.
+
+If automatic distribution fails, inspect the workflow's build, signature,
+authentication, and Firebase upload steps. A failed run does not revert the
+merge. Rotate only the dedicated App Distribution key if that credential is
+exposed, and replace its protected GitHub secret.
 
 ## Verify release observability
 
