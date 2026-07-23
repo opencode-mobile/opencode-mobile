@@ -42,17 +42,19 @@ if (releaseArtifactTaskRequested) {
 val releaseVersionCode = releaseEnvironment.getValue("ANDROID_VERSION_CODE")?.toIntOrNull()
 val releaseVersionName = releaseEnvironment.getValue("ANDROID_VERSION_NAME")
 val semanticVersionPattern = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$")
-val verifyCrashlytics =
+val verifyCrashlyticsValue =
     providers
         .environmentVariable("ANDROID_VERIFY_CRASHLYTICS")
         .orNull
         ?.takeIf(String::isNotBlank)
         ?.lowercase()
-        ?: "false"
-
-if (verifyCrashlytics !in setOf("true", "false")) {
-    throw GradleException("ANDROID_VERIFY_CRASHLYTICS must be true or false.")
-}
+val verifyCrashlytics =
+    verifyCrashlyticsValue?.toBooleanStrictOrNull()
+        ?: if (verifyCrashlyticsValue == null) {
+            false
+        } else {
+            throw GradleException("ANDROID_VERIFY_CRASHLYTICS must be true or false.")
+        }
 if (releaseArtifactTaskRequested && (releaseVersionCode == null || releaseVersionCode <= 0)) {
     throw GradleException("ANDROID_VERSION_CODE must be a positive integer for release builds.")
 }
