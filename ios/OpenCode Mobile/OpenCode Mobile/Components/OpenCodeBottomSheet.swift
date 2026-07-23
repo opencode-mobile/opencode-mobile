@@ -14,6 +14,9 @@ private let bottomSheetScrollableDetentFraction: CGFloat = 0.50
 private let bottomSheetCompactMaxHeight: CGFloat = 360
 private let bottomSheetFormInitialHeight: CGFloat = 460
 private let bottomSheetFormMaxHeight: CGFloat = 560
+/// Compact sheets show the system drag indicator, which consumes space inside
+/// the detent height and is not part of our measured header/content.
+private let bottomSheetCompactDragIndicatorHeight: CGFloat = 16
 private let bottomSheetEstimatedHeaderHeight: CGFloat =
     bottomSheetHeaderTopPadding + bottomSheetHeaderBottomPadding + 40
 
@@ -80,6 +83,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     @State private var contentHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var pinnedContentHeight: CGFloat = 0
+    @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var selectedDetent: PresentationDetent = .fraction(bottomSheetScrollableDetentFraction)
 
     private var resolvedHeaderHeight: CGFloat {
@@ -112,6 +116,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                     - resolvedHeaderHeight
                     - pinnedContentHeight
                     - bottomSheetContentBottomPadding
+                    - geometry.safeAreaInsets.bottom
             )
 
             OpenCodeBottomSheetContainer(
@@ -129,6 +134,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 onPinnedContentHeightChange: { pinnedContentHeight = $0 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .onAppear {
+                bottomSafeAreaInset = geometry.safeAreaInsets.bottom
+            }
+            .onChange(of: geometry.safeAreaInsets.bottom) { _, inset in
+                bottomSafeAreaInset = inset
+            }
         }
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
@@ -137,6 +148,9 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             updatePresentationMode()
         }
         .onChange(of: pinnedContentHeight) { _, _ in
+            updatePresentationMode()
+        }
+        .onChange(of: bottomSafeAreaInset) { _, _ in
             updatePresentationMode()
         }
         .onChange(of: contentMode) { oldMode, newMode in
@@ -178,19 +192,23 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         }
         guard contentHeight > 0 else { return }
 
-        let totalHeight =
-            resolvedHeaderHeight + pinnedContentHeight + contentHeight + bottomSheetContentBottomPadding
+        let chromeHeight =
+            resolvedHeaderHeight
+                + pinnedContentHeight
+                + contentHeight
+                + bottomSheetContentBottomPadding
+                + bottomSafeAreaInset
 
         if contentMode == .form {
             // Match Android: short forms size to content; long forms lock to the
             // fixed 50% scrollable height and do not shrink when body content changes.
-            if hasLockedScrollable || totalHeight > bottomSheetCompactMaxHeight {
+            if hasLockedScrollable || chromeHeight > bottomSheetCompactMaxHeight {
                 hasLockedScrollable = true
-                compactHeight = max(compactHeight, min(totalHeight, bottomSheetFormMaxHeight))
+                compactHeight = max(compactHeight, min(chromeHeight, bottomSheetFormMaxHeight))
                 selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
                 return
             }
-            let measuredHeight = min(max(totalHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
+            let measuredHeight = min(max(chromeHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
             if !hasMeasuredFormHeight {
                 compactHeight = measuredHeight
                 hasMeasuredFormHeight = true
@@ -209,6 +227,8 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             return
         }
 
+        // Compact action lists also reserve space for the visible system grabber.
+        let totalHeight = chromeHeight + bottomSheetCompactDragIndicatorHeight
         if totalHeight <= bottomSheetCompactMaxHeight {
             let nextHeight = max(totalHeight, bottomSheetInitialHeight)
             compactHeight = nextHeight
