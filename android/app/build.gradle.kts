@@ -6,11 +6,14 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
-val releaseTaskRequested =
+val releaseArtifactTaskRequested =
     gradle.startParameter.taskNames.any { taskName ->
-        taskName.contains("Release", ignoreCase = true)
+        taskName.contains("assembleRelease", ignoreCase = true) ||
+            taskName.contains("bundleRelease", ignoreCase = true)
     }
 val releaseEnvironmentNames =
     listOf(
@@ -26,7 +29,7 @@ val releaseEnvironment =
         providers.environmentVariable(name).orNull?.takeIf(String::isNotBlank)
     }
 
-if (releaseTaskRequested) {
+if (releaseArtifactTaskRequested) {
     val missingEnvironment = releaseEnvironment.filterValues { it == null }.keys
     if (missingEnvironment.isNotEmpty()) {
         throw GradleException(
@@ -39,11 +42,21 @@ if (releaseTaskRequested) {
 val releaseVersionCode = releaseEnvironment.getValue("ANDROID_VERSION_CODE")?.toIntOrNull()
 val releaseVersionName = releaseEnvironment.getValue("ANDROID_VERSION_NAME")
 val semanticVersionPattern = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$")
+val verifyCrashlytics =
+    providers
+        .environmentVariable("ANDROID_VERIFY_CRASHLYTICS")
+        .orNull
+        ?.takeIf(String::isNotBlank)
+        ?.lowercase()
+        ?: "false"
 
-if (releaseTaskRequested && (releaseVersionCode == null || releaseVersionCode <= 0)) {
+if (verifyCrashlytics !in setOf("true", "false")) {
+    throw GradleException("ANDROID_VERIFY_CRASHLYTICS must be true or false.")
+}
+if (releaseArtifactTaskRequested && (releaseVersionCode == null || releaseVersionCode <= 0)) {
     throw GradleException("ANDROID_VERSION_CODE must be a positive integer for release builds.")
 }
-if (releaseTaskRequested && !semanticVersionPattern.matches(requireNotNull(releaseVersionName))) {
+if (releaseArtifactTaskRequested && !semanticVersionPattern.matches(requireNotNull(releaseVersionName))) {
     throw GradleException(
         "ANDROID_VERSION_NAME must match MAJOR.MINOR.PATCH[-PRERELEASE], for example 0.1.0-internal.1.",
     )
@@ -69,7 +82,7 @@ android {
     }
 
     signingConfigs {
-        if (releaseTaskRequested) {
+        if (releaseArtifactTaskRequested) {
             create("release") {
                 storeFile = file(requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEYSTORE_PATH")))
                 storePassword = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_STORE_PASSWORD"))
@@ -83,6 +96,7 @@ android {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("release")
+            manifestPlaceholders["crashlyticsVerificationEnabled"] = verifyCrashlytics
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -154,4 +168,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
+
+    releaseImplementation(platform(libs.firebase.bom))
+    releaseImplementation(libs.firebase.crashlytics)
+    releaseImplementation(libs.firebase.analytics)
 }

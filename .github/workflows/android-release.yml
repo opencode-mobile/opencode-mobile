@@ -7,6 +7,11 @@ on:
         description: "Semantic version: MAJOR.MINOR.PATCH[-PRERELEASE]"
         required: true
         type: string
+      verify_crashlytics:
+        description: "Record one Crashlytics verification non-fatal for this version"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ jobs:
     env:
       ANDROID_VERSION_CODE: ${{ github.run_number }}
       ANDROID_VERSION_NAME: ${{ inputs.version_name }}
+      ANDROID_VERIFY_CRASHLYTICS: ${{ inputs.verify_crashlytics }}
       EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
 
     steps:

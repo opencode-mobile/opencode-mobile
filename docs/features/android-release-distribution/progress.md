@@ -14,6 +14,7 @@
       boundaries, release observability, and Test Lab cost controls
 - [x] OPE-70 refined in `ope-70-plan.md`
 - [x] OPE-71 refined in `ope-71-plan.md`
+- [x] OPE-72 refined in `ope-72-plan.md`
 - [x] Complete OPE-70
 - [x] Complete OPE-71
 - [ ] Complete OPE-72
@@ -47,13 +48,31 @@ passed the signed APK on `MediumPhone.arm` API 36 and API 35. The owner joined
 the internal test, then confirmed that the Play-delivered build installed and
 opened successfully on a Pixel 9. OPE-71 is complete.
 
+OPE-72 console setup and branch implementation are complete. Google Analytics
+is linked through the dedicated `OpenCode Mobile` account with Germany as the
+reporting location and all optional account sharing disabled. The registered
+Firebase app configuration matches `dev.opencode.mobile` and contains no
+service-account credential or private key. The Android implementation adds
+release-only Crashlytics and minimal Analytics, removes advertising and install
+referrer permissions, keeps debug Firebase-free, and exposes a protected
+`verify_crashlytics` workflow input for a one-shot non-fatal per version.
+Focused JVM tests, debug assembly, release compilation, dependency inspection,
+and merged-manifest/package inspection pass locally.
+
 ## Blockers
 
-No OPE-71 blocker.
+OPE-72 still requires protected-main acceptance. The implementation must merge
+before the release workflow can publish a verification-enabled build with
+protected signing and Play credentials.
 
 ## Remaining work
 
-1. Continue with OPE-72 release-only Crashlytics and minimal Analytics.
+1. Merge the OPE-72 implementation after review and required checks.
+2. Run `Android Release` from protected `main` with
+   `verify_crashlytics=true`, install the Play-internal build, and confirm the
+   one-shot non-fatal plus the minimal Analytics boundary in Firebase.
+3. Record the workflow, Play version, and Firebase result; then close OPE-72
+   and parent OPE-69.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an

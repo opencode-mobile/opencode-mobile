@@ -13,6 +13,6 @@ class OpenCodeMobileApplication : Application() {
         ThemeManager.initialize(this)
         HomeDisplayPreferences.initialize(this)
         OpenCodeAndroidMarkdownAssets.init(this)
+        OpenCodeReleaseObservability.initialize(this)
     }
 }
-

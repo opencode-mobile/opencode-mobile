@@ -149,6 +149,20 @@ Test Lab path, and short retention limits stale internal artifacts and storage.
 **Why:** Test Lab does not require an app-side Firebase SDK, while crash
 reporting is a later, separately verifiable release concern.
 
+## Release Analytics uses a dedicated minimal account
+
+**Status:** Accepted on 2026-07-23
+**Decision:** Link the Firebase project to a new Google Analytics account named
+`OpenCode Mobile`, use Germany as its reporting location, and disable every
+optional account data-sharing setting. In app code, keep Analytics release-only
+and accept only remaining automatic lifecycle/technical events for Crashlytics
+breadcrumbs. Disable automatic screen reporting, Advertising ID collection,
+ad personalization, custom events, app-assigned user IDs, and app-defined user
+properties.
+**Why:** A dedicated account keeps this private release's data boundary
+separate and explicit. The narrow event contract supplies Crashlytics
+breadcrumbs without turning OPE-72 into product analytics.
+
 ## Play distribution starts with one internal tester
 
 **Status:** Accepted

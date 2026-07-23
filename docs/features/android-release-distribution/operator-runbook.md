@@ -1,7 +1,7 @@
 # Android Release — Operator Runbook
 
 This runbook records the non-secret ownership and operating contract for
-OPE-70 and OPE-71. Never add a keystore, password, service-account JSON, or
+OPE-70 through OPE-72. Never add a keystore, password, service-account JSON, or
 decoded secret to this repository, workflow artifacts, logs, or issue comments.
 
 ## Infrastructure inventory
@@ -9,16 +9,19 @@ decoded secret to this repository, workflow artifacts, logs, or issue comments.
 | Resource | Non-secret identifier | Owner / access |
 | --- | --- | --- |
 | Google Cloud / Firebase project | `opencode-mobile-release` (project number `569439646238`) | Personal Google owner; second administrator optional/deferred for the private phase; solo-owner recovery risk accepted |
-| Firebase Android app | `dev.opencode.mobile` | Same Firebase project; no app-side Firebase configuration in OPE-70 |
+| Firebase Android app | `dev.opencode.mobile` (`1:569439646238:android:593114316e11ddb48df40f`) | Same Firebase project; client routing configuration is tracked at `android/app/google-services.json` |
+| Google Analytics | Account `OpenCode Mobile`; reporting location Germany | Linked to the Firebase project for OPE-72; all optional account sharing disabled |
 | Play developer account | `RawPotato` (developer ID `5676612005420685527`) | Personal owner; legal identity, contact methods, and two-step verification confirmed |
 | Play app draft | **OpenCode Mobile — Unofficial** (app ID `4974264711668360153`) | Draft only; independent-client disclaimer saved; not submitted for review |
 | Test Lab service account | `opencode-test-lab@opencode-mobile-release.iam.gserviceaccount.com` | Firebase Test Lab Admin, Firebase Analytics Viewer, Firebase Quality Admin, Storage Object Admin, and Editor in the Cloud project |
 | Play publisher service account | `opencode-play-publisher@opencode-mobile-release.iam.gserviceaccount.com` | App-scoped Play testing-track release access; no production permission |
 | GitHub environment | `android-release` | Restricted to the `main` branch |
 
-Google Analytics is disabled. OPE-70 and OPE-71 do not add
-`google-services.json`, the Google Services Gradle plugin, a Firebase SDK,
-Crashlytics, or Analytics.
+OPE-70 and OPE-71 added no app-side Firebase SDK. OPE-72 enables Google
+Analytics and adds Crashlytics plus Analytics to release builds only. Debug
+builds contain no Firebase runtime. The tracked `google-services.json` is
+public client routing configuration; it is not a service-account credential
+and contains no private key.
 
 ## GitHub environment secrets
 
@@ -149,3 +152,45 @@ Its
 [Firebase matrix](https://console.firebase.google.com/project/opencode-mobile-release/testlab/histories/bh.e6f5a29142f5b482/matrices/5182549661464327850)
 passed `MediumPhone.arm-36-en-portrait` and
 `MediumPhone.arm-35-en-portrait`.
+
+## Verify release observability
+
+Normal releases leave the controlled verification path disabled:
+
+```bash
+gh workflow run "Android Release" \
+  --ref main \
+  -f version_name=<next-semantic-version>
+```
+
+After OPE-72 is merged, run exactly one protected verification release:
+
+```bash
+gh workflow run "Android Release" \
+  --ref main \
+  -f version_name=<next-semantic-version> \
+  -f verify_crashlytics=true
+```
+
+The workflow input compiles a content-free
+`OpenCodeMobileCrashlyticsVerification` non-fatal into that release. The app
+records it once per installed version code and stores the marker locally.
+Install the build from Play internal, launch it once, then relaunch so
+Crashlytics can upload the batched report. Confirm the expected version,
+version code, device, and exception in the Crashlytics dashboard. A third
+launch must not produce another verification event for that version.
+
+The release Analytics contract allows only Firebase's remaining automatic
+lifecycle/technical events used as Crashlytics breadcrumbs. The app sends no
+custom events, screen views, app-assigned user IDs, or app-defined user
+properties. Automatic screen reporting, Advertising ID collection, ad
+personalization, Android Privacy Sandbox ad identifiers, and the Play install
+referrer permission are disabled or removed. Inspect Analytics DebugView or
+event reporting after the verification launch and reject the release if that
+boundary is not satisfied.
+
+If the non-fatal does not appear, confirm the installed Play version, relaunch
+the app, enable Crashlytics debug logging through ADB, and check for a
+successful report upload before changing code. Do not paste raw dashboard
+exports, tester identifiers, app content, or credentials into the repository or
+Linear.
