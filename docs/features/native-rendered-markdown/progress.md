@@ -241,6 +241,11 @@
   namespace/object receivers, Java `System.out.println`, and C# smoke samples in
   existing semantic buckets. Added scope-mapper tests to lock those decisions and
   marked PA3 role expansion skipped for this pass.
+- 2026-07-23: OPE-74 replaced the Android Joni backend's API-33-only
+  `OutputStream.nullOutputStream()` call with an API-24-safe no-op stream after
+  the incompatibility caused a startup crash in Play-internal
+  `0.1.0-internal.5`. Module Android lint is the deterministic API-compatibility
+  regression gate.
 
 ## Remaining
 

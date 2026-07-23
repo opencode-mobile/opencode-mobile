@@ -155,10 +155,10 @@ unless the protected workflow input explicitly enables it.
       Analytics libraries and no out-of-scope Firebase product.
 - [x] The merged release manifest contains all three minimal-Analytics settings
       and no Advertising ID or FCM permission/service.
-- [ ] A CI-signed release AAB and APK build successfully, signature verification
+- [x] A CI-signed release AAB and APK build successfully, signature verification
       still passes, and the release workflow still owns the monotonic
       `versionCode`.
-- [ ] The workflow publishes the AAB to Play internal testing without exposing
+- [x] The workflow publishes the AAB to Play internal testing without exposing
       Firebase configuration, signing material, or service-account JSON in
       logs or artifacts.
 
@@ -189,6 +189,15 @@ unless the protected workflow input explicitly enables it.
 
 Firebase documents that non-fatals can be batched until the next app launch, so
 the two-launch acceptance sequence is intentional.
+
+The first acceptance build, `0.1.0-internal.5` / `versionCode` 5 from workflow
+[30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764),
+completed signing and Play publication. Physical-device launch then exposed
+[OPE-74](https://linear.app/opencode-mobile/issue/OPE-74/fix-android-startup-crash-on-api-below-33):
+the markdown Joni backend called an API-33-only `OutputStream` method before the
+controlled non-fatal could run. Firebase received that fatal for the expected
+release. Protected-main acceptance resumes with a replacement build after the
+compatibility fix merges.
 
 ## Failure Handling
 

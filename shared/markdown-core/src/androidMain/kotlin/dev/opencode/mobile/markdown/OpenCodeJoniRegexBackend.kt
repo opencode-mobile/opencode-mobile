@@ -2,12 +2,12 @@ package dev.opencode.mobile.markdown
 
 import java.io.OutputStream
 import java.io.PrintStream
+import java.util.concurrent.ConcurrentHashMap
 import org.jcodings.specific.UTF8Encoding
 import org.joni.Option
 import org.joni.Regex
 import org.joni.Syntax
 import org.joni.exception.JOniException
-import java.util.concurrent.ConcurrentHashMap
 
 object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "joni-oniguruma"
@@ -32,7 +32,12 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
     // patterns. Compilation is cached, but cold-start still emits thousands of lines
     // to logcat and pays stderr I/O per unique pattern.
     private val compileLock = Any()
-    private val silentErr = PrintStream(OutputStream.nullOutputStream())
+    private val silentErr =
+        PrintStream(
+            object : OutputStream() {
+                override fun write(value: Int) = Unit
+            },
+        )
 
     private fun resolvePattern(pattern: String): RegexCacheEntry {
         compilePattern(pattern)?.let { regex ->
