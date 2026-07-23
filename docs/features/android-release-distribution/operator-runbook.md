@@ -12,7 +12,7 @@ decoded secret to this repository, workflow artifacts, logs, or issue comments.
 | Firebase Android app | `dev.opencode.mobile` | Same Firebase project; no app-side Firebase configuration in OPE-70 |
 | Play developer account | `RawPotato` (developer ID `5676612005420685527`) | Personal owner; legal identity, contact methods, and two-step verification confirmed |
 | Play app draft | **OpenCode Mobile — Unofficial** (app ID `4974264711668360153`) | Draft only; independent-client disclaimer saved; not submitted for review |
-| Test Lab service account | `opencode-test-lab@opencode-mobile-release.iam.gserviceaccount.com` | Firebase Quality Admin in the Cloud project |
+| Test Lab service account | `opencode-test-lab@opencode-mobile-release.iam.gserviceaccount.com` | Firebase Test Lab Admin, Firebase Analytics Viewer, Firebase Quality Admin, Storage Object Admin, and Editor in the Cloud project |
 | Play publisher service account | `opencode-play-publisher@opencode-mobile-release.iam.gserviceaccount.com` | App-scoped Play testing-track release access; no production permission |
 | GitHub environment | `android-release` | Restricted to the `main` branch |
 
@@ -67,8 +67,9 @@ verification failure stops the run.
 ## Play app-signing certificate
 
 Play App Signing was activated by the first uploaded AAB:
-`0.1.0-internal.2` / `versionCode` 2. The internal-testing release remains a
-draft and the bundle is inactive; OPE-71 owns rollout/publication.
+`0.1.0-internal.2` / `versionCode` 2. Android Release
+[run 29991719142](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29991719142)
+published `0.1.0-internal.4` / `versionCode` 4 to the internal-testing track.
 
 - SHA-1: `B5:19:27:43:0D:2B:12:32:84:FF:52:B3:A6:7D:9D:EE:EA:88:DA:AD`
 - SHA-256: `B0:0C:45:26:2A:B6:27:47:B5:8E:51:A8:BA:10:E9:07:D8:D8:95:EF:E0:34:2E:E6:CD:93:B5:DF:B5:48:FF:A8`
@@ -131,3 +132,16 @@ requests.
 The workflow output includes the Firebase result URL. Use it to inspect the
 matrix summary, logs, screenshots, and video. A Test Lab failure does not alter
 the independently published Play release.
+
+The Firebase-provided default results bucket requires the Test Lab principal to
+have the project Editor role. The owner accepted that broader role for the
+private phase rather than create a separately billed custom results bucket.
+Keep the role limited to the Test Lab service account and revisit a custom
+bucket or narrower storage policy before broader distribution.
+
+The first successful protected-main acceptance was Android Test Lab
+[run 29993535229](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29993535229).
+Its
+[Firebase matrix](https://console.firebase.google.com/project/opencode-mobile-release/testlab/histories/bh.e6f5a29142f5b482/matrices/5182549661464327850)
+passed `MediumPhone.arm-36-en-portrait` and
+`MediumPhone.arm-35-en-portrait`.

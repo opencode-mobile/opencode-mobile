@@ -40,14 +40,31 @@ or Remote Config.
 
 ## Protected-main verification
 
-- [ ] Merge the workflow changes to `main`.
-- [ ] Run Android Release with the next semantic `version_name` and confirm the
+- [x] Merge the workflow changes to `main`.
+- [x] Run Android Release with the next semantic `version_name` and confirm the
       signed AAB reaches Play internal testing.
-- [ ] Add the owner's Google account to the internal tester list, follow the
-      opt-in URL, and install the Play-delivered build on a physical device.
-- [ ] Run Android Test Lab with the successful Android Release run ID and
+- [x] Add the owner's Google account to the internal tester list and follow the
+      opt-in URL.
+- [ ] Confirm the remotely requested Play-delivered build installs and opens on
+      the owner's Pixel 9.
+- [x] Run Android Test Lab with the successful Android Release run ID and
       confirm both bounded Robo executions complete on virtual devices.
-- [ ] Record the release and Test Lab run URLs before completing OPE-71.
+- [x] Record the release and Test Lab run URLs before completing OPE-71.
+
+## Protected-main evidence
+
+- Implementation: [PR #67](https://github.com/opencode-mobile/opencode-mobile/pull/67),
+  squash-merged to `main` as `4256c3778f89f6a6a3b088ca42c54ae9a66477ff`.
+- Android Release:
+  [run 29991719142](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29991719142)
+  published `0.1.0-internal.4` / `versionCode` 4 to Play internal testing.
+- Tester: `ivanfenenko@gmail.com` joined the internal test and a Pixel 9 remote
+  install was requested from Google Play.
+- Android Test Lab:
+  [run 29993535229](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29993535229)
+  passed Robo on `MediumPhone.arm` API 36 and API 35. The
+  [Firebase matrix](https://console.firebase.google.com/project/opencode-mobile-release/testlab/histories/bh.e6f5a29142f5b482/matrices/5182549661464327850)
+  contains the device logs, screenshots, and videos.
 
 ## Verification ledger
 

@@ -86,8 +86,8 @@ Not applicable — no app UI.
 | Package / applicationId | `dev.opencode.mobile` |
 | versionCode / versionName | Local defaults are `1` / `1.0`; release CI supplies both values |
 | Release signing | CI-only Gradle signing verified by two protected `main` release runs |
-| Firebase / Play | No `google-services.json`; Play App Signing is active and the initial internal-testing release remains a draft |
-| Android CI | Checks on ready PRs; Build remains manual debug; protected manual Android Release and independent Test Lab workflows are implemented for `main` |
+| Firebase / Play | No `google-services.json`; Play App Signing is active and `0.1.0-internal.4` / `versionCode` 4 is active on internal testing |
+| Android CI | Checks on ready PRs; Build remains manual debug; protected Android Release run 29991719142 published to Play and Test Lab run 29993535229 passed both bounded Robo devices |
 | Emulator / instrumented tests in CI | Explicitly out of PR gating; Cloud VM has no KVM |
 
 This slice is the decision that starts Android release pipelines. See
@@ -147,9 +147,9 @@ Firebase, Test Lab, Play audience, and iOS boundaries are accepted in
 
 ## Acceptance Gates
 
-- [ ] Firebase / GCP project exists and Test Lab can run at least one paid or
+- [x] Firebase / GCP project exists and Test Lab can run at least one paid or
       free-tier matrix against a CI-built APK.
-- [ ] Play Console app exists for the chosen applicationId and accepts an
+- [x] Play Console app exists for the chosen applicationId and accepts an
       internal-track AAB from CI.
 - [x] Upload key and publisher credentials live only in secret stores.
 - [x] Two Android Release runs prove signature verification, increasing
