@@ -118,11 +118,12 @@
     <div class="note">
       OPE-70 is complete: CI-only Gradle signing and the protected manual Android
       Release workflow passed twice from main, and Play App Signing is active with
-      the internal release left as a draft.
-      OPE-71 automation is implemented: Android Release publishes to Play internal,
-      while a separate manual workflow runs a bounded two-device Test Lab Robo
-      matrix. Protected-main and physical-device acceptance remain open. PR Checks
-      stay as-is; Test Lab is not a merge gate in this slice.
+      the first internal release left as a draft for the OPE-71 handoff.
+      OPE-71 protected-main cloud acceptance is complete: Android Release run
+      29991719142 published 0.1.0-internal.4 to Play internal, and Test Lab run
+      29993535229 passed its bounded two-device Robo matrix. The Play-delivered
+      build installed and opened successfully on a Pixel 9, completing OPE-71.
+      PR Checks stay as-is; Test Lab is not a merge gate in this slice.
     </div>
 
     <h2>Decisions</h2>

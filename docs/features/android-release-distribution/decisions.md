@@ -33,8 +33,10 @@ permanent after the first Play upload.
 
 **Status:** Accepted
 **Decision:** Use one GCP project linked to one Firebase project. Create one
-least-privilege service account for Firebase Test Lab and a separate
-least-privilege service account for Play publishing.
+dedicated service account for Firebase Test Lab and a separate least-privilege
+service account for Play publishing. The Test Lab account's initially narrow
+role set may be broadened only when the accepted results-bucket contract below
+requires it.
 **Why:** One project keeps billing and administration simple; separate
 identities keep Test Lab and publishing credentials isolated.
 
@@ -164,6 +166,22 @@ maximum of two device/API combinations and a ten-minute timeout per device. It
 does not add Espresso/Compose instrumentation or become a merge gate.
 **Why:** This proves the cloud-device path with explicit cost controls before
 expanding coverage.
+
+## Test Lab uses the Firebase-provided default results bucket
+
+**Status:** Accepted on 2026-07-23
+**Decision:** Grant the dedicated Test Lab service account the project Editor
+role, as required by the
+[Firebase Test Lab CLI contract](https://docs.cloud.google.com/sdk/gcloud/reference/firebase/test/android/run),
+so the protected workflow can write to Firebase Test Lab's generated default
+results bucket. Retain the narrower Test Lab, Analytics Viewer, Quality Admin,
+and Storage Object Admin roles for an explicit capability inventory. Revisit
+the broad Editor grant before distribution expands beyond the private phase.
+**Why:** The generated default bucket rejected object creation under the
+narrower project roles and is not exposed as a project-owned bucket with a
+directly editable bucket policy. A custom results bucket would provide a
+narrower storage boundary but introduces separately billed Cloud Storage. The
+owner explicitly accepted Editor for this private release slice.
 
 ## iOS remains a documented no-op
 

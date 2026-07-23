@@ -15,7 +15,7 @@
 - [x] OPE-70 refined in `ope-70-plan.md`
 - [x] OPE-71 refined in `ope-71-plan.md`
 - [x] Complete OPE-70
-- [ ] Complete OPE-71
+- [x] Complete OPE-71
 - [ ] Complete OPE-72
 - [x] Update README CI table once workflows exist
 
@@ -34,27 +34,26 @@ accounts, upload-key custody, and protected GitHub environment/secrets are
 provisioned. Gradle CI-only release signing and the manual `Android Release`
 workflow are merged to `main`. Two protected `main` workflow runs produced
 signature-verified AAB/APK artifacts with increasing `versionCode` values 1 and
-2. Play accepted the version-2 AAB, activated App Signing, and retains the
-internal-testing release as a draft with no rollout.
+2. Play accepted the version-2 AAB, activated App Signing, and left that
+internal-testing release as a draft for the OPE-71 handoff.
 
-OPE-71 implementation is active. The canonical Android Release workflow now
-publishes its verified AAB to Play internal testing, and an independent manual
-Android Test Lab workflow consumes a successful release run's signed APK for a
-two-device, ten-minute-per-device virtual Robo matrix. Protected-main runs,
-Play opt-in/physical installation, and recorded run evidence remain open.
+OPE-71 implementation and protected-main cloud acceptance are complete. Android
+Release run
+[29991719142](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29991719142)
+published `0.1.0-internal.4` / `versionCode` 4 to Play internal testing. Test Lab
+run
+[29993535229](https://github.com/opencode-mobile/opencode-mobile/actions/runs/29993535229)
+passed the signed APK on `MediumPhone.arm` API 36 and API 35. The owner joined
+the internal test, then confirmed that the Play-delivered build installed and
+opened successfully on a Pixel 9. OPE-71 is complete.
 
 ## Blockers
 
-No external implementation blocker. Protected-main publication is required
-before credentials can be exercised and the Play/Test Lab acceptance runs can
-start.
+No OPE-71 blocker.
 
 ## Remaining work
 
-1. Merge OPE-71 to `main`, run Android Release, and verify the Play internal
-   rollout and physical-device installation.
-2. Run Android Test Lab against that release run and verify both Robo devices.
-3. Record OPE-71 completion evidence, then continue with OPE-72.
+1. Continue with OPE-72 release-only Crashlytics and minimal Analytics.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an
