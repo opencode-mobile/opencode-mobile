@@ -112,7 +112,7 @@
       <li><strong>OPE-70 — Agent implementation</strong> Protected main-only Android Release workflow, signed and verified AAB/APK, CI version code, human semantic version name.</li>
       <li><strong>OPE-70 — Human enrollment</strong> First manual AAB upload, Google-generated Play App Signing keys, publisher access, release left unpublished.</li>
       <li><strong><a href="./ope-71-plan.md">OPE-71 — Distribution</a></strong> Extend the release workflow for one-tester Play internal; run independent bounded Test Lab Robo.</li>
-      <li><strong>OPE-72 — Observability</strong> Release/internal Crashlytics plus deliberately minimal Analytics; debug clean; no FCM or Remote Config.</li>
+      <li><strong><a href="./ope-72-plan.md">OPE-72 — Observability</a></strong> Release-only Crashlytics with a protected one-shot non-fatal; lifecycle/technical Analytics only; debug Firebase-free; no FCM or Remote Config.</li>
     </ol>
 
     <div class="note">
@@ -123,6 +123,8 @@
       29991719142 published 0.1.0-internal.4 to Play internal, and Test Lab run
       29993535229 passed its bounded two-device Robo matrix. The Play-delivered
       build installed and opened successfully on a Pixel 9, completing OPE-71.
+      OPE-72 console setup and branch implementation are complete; protected-main
+      Play delivery and Firebase dashboard acceptance remain.
       PR Checks stay as-is; Test Lab is not a merge gate in this slice.
     </div>
 
@@ -135,7 +137,7 @@
         <tr><td>Package name</td><td class="status-ok">Accepted</td><td>Keep <code>dev.opencode.mobile</code>; accept namespace risk; label app unofficial</td></tr>
         <tr><td>Google ownership</td><td class="status-ok">Accepted</td><td>Personal owner; second administrator optional for private phase; formal transfer later</td></tr>
         <tr><td>Cloud project shape</td><td class="status-ok">Accepted</td><td>One GCP/Firebase project; separate Test Lab and Play service accounts</td></tr>
-        <tr><td>Firebase product scope</td><td class="status-ok">Accepted</td><td>OPE-70/71 no SDK; OPE-72 release-only Crashlytics + minimal Analytics</td></tr>
+        <tr><td>Firebase product scope</td><td class="status-ok">Accepted</td><td>OPE-70/71 no SDK; OPE-72 release-only Crashlytics + lifecycle/technical Analytics, without screen, ad, identity, or custom-event collection</td></tr>
         <tr><td>Play track</td><td class="status-ok">Accepted</td><td>Internal testing only</td></tr>
         <tr><td>Internal testing audience</td><td class="status-ok">Accepted</td><td>Internal track; owner is sole initial tester</td></tr>
         <tr><td>Signing</td><td class="status-ok">Accepted</td><td>Local upload key + independently encrypted off-device backup; Google-generated app-signing keys</td></tr>
@@ -156,7 +158,7 @@
         <tr><td>Play internal</td><td>CI-built AAB lands on internal track; installs on a device</td></tr>
         <tr><td>Secrets</td><td>Upload key + publisher/GCP creds only in secret stores</td></tr>
         <tr><td>OPE-70 handoff</td><td>Two signed runs prove versions/signatures; first manual AAB enrolls Play signing without publishing</td></tr>
-        <tr><td>Observability</td><td>Release Crashlytics receives data; debug/local telemetry stays clean; Analytics remains minimal</td></tr>
+        <tr><td>Observability</td><td>A Play-internal release reports one controlled non-fatal; debug stays Firebase-free; Analytics has no screen, ad, app-assigned identity, or custom-event collection</td></tr>
         <tr><td>iOS</td><td>No TestFlight / App Store wiring added</td></tr>
         <tr><td>Docs</td><td>Ownership, triggers, versioning, parity gap recorded</td></tr>
       </tbody>

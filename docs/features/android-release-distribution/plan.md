@@ -86,7 +86,7 @@ Not applicable — no app UI.
 | Package / applicationId | `dev.opencode.mobile` |
 | versionCode / versionName | Local defaults are `1` / `1.0`; release CI supplies both values |
 | Release signing | CI-only Gradle signing verified by two protected `main` release runs |
-| Firebase / Play | No `google-services.json`; Play App Signing is active and `0.1.0-internal.4` / `versionCode` 4 is active on internal testing |
+| Firebase / Play | Play App Signing is active and `0.1.0-internal.4` / `versionCode` 4 is active on internal testing; OPE-72 adds the registered app configuration plus release-only Crashlytics and minimal Analytics on its feature branch |
 | Android CI | Checks on ready PRs; Build remains manual debug; protected Android Release run 29991719142 published to Play and Test Lab run 29993535229 passed both bounded Robo devices |
 | Emulator / instrumented tests in CI | Explicitly out of PR gating; Cloud VM has no KVM |
 
@@ -127,11 +127,15 @@ Follow the focused [`ope-71-plan.md`](ope-71-plan.md).
 
 ### OPE-72 — Release observability
 
-1. Add Firebase app configuration only when the app-side SDK is needed.
-2. Enable Crashlytics for release/Play-internal builds and verify a crash or
-   non-fatal from a real release.
-3. Keep Analytics deliberately minimal and debug/local collection clean.
-4. Do not add FCM or Remote Config.
+Follow the focused [`ope-72-plan.md`](ope-72-plan.md).
+
+1. Add Firebase app configuration and release-only Crashlytics/Analytics
+   dependencies without adding a Firebase runtime to debug/local builds.
+2. Verify a protected, one-shot non-fatal from a real Play-internal release.
+3. Keep Analytics limited to automatic lifecycle/technical breadcrumb events;
+   disable screen reporting, Advertising ID collection, ad personalization,
+   custom events, app-assigned user IDs, and app-defined user properties.
+4. Do not add FCM, Remote Config, or another Firebase product.
 
 ### Operator hardening
 
