@@ -72,14 +72,14 @@
   <main>
     <h1>OPE-73 — Firebase App Distribution On Every Merge</h1>
     <p class="lead">
-      Every successful merge to <code>main</code> produces one AAB and distributes
+      Every successful merge to <code>main</code> produces one signed APK and distributes
       it to the private <code>android-internal</code> tester group without publishing
       another Play testing-track release.
     </p>
 
     <section class="cards" aria-label="Plan summary">
       <div class="card"><strong>Trigger</strong>Every push to protected <code>main</code></div>
-      <div class="card"><strong>Artifact</strong>Signed Android App Bundle</div>
+      <div class="card"><strong>Artifact</strong>Signed Android APK</div>
       <div class="card"><strong>Audience</strong>Private <code>android-internal</code> group</div>
       <div class="card"><strong>Status</strong><span class="ok">Ready for first run</span></div>
     </section>
@@ -87,9 +87,9 @@
     <h2>Delivery flow</h2>
     <div class="flow">
       <div class="flow-step"><strong>1. Merge</strong><span>Exact commit lands on main</span></div>
-      <div class="flow-step"><strong>2. Build</strong><span>Protected CI signs and verifies the AAB</span></div>
-      <div class="flow-step"><strong>3. Distribute</strong><span>Firebase uploads through Play internal app sharing</span></div>
-      <div class="flow-step"><strong>4. Install</strong><span>Private tester receives the Play-generated build</span></div>
+      <div class="flow-step"><strong>2. Build</strong><span>Protected CI signs and verifies the APK</span></div>
+      <div class="flow-step"><strong>3. Distribute</strong><span>Firebase receives the signed APK directly</span></div>
+      <div class="flow-step"><strong>4. Install</strong><span>Private tester receives the Firebase build</span></div>
     </div>
 
     <h2>Checkpoints</h2>
@@ -103,7 +103,7 @@
         </tr>
         <tr>
           <td>Agent implementation</td>
-          <td>Add the main-push workflow, signing and signature verification, AAB upload, release notes, summaries, serialization, and cleanup.</td>
+          <td>Add the main-push workflow, signing and signature verification, APK upload, release notes, summaries, serialization, and cleanup.</td>
           <td class="ok">Implemented</td>
         </tr>
         <tr>
@@ -118,7 +118,7 @@
     <table>
       <thead><tr><th>Topic</th><th>Contract</th></tr></thead>
       <tbody>
-        <tr><td>Signing</td><td>Upload-key-signed AAB; internal app sharing generates APKs with a separate test certificate. The first Firebase install requires uninstalling the Play-internal build.</td></tr>
+        <tr><td>Signing</td><td>Upload-key-signed APK; its certificate differs from Play App Signing. The first Firebase install requires uninstalling the Play-internal build.</td></tr>
         <tr><td>Versioning</td><td>App Distribution reserves <code>1000000000 + run_number</code> for monotonic updates inside its separate tester channel.</td></tr>
         <tr><td>Credentials</td><td>Dedicated Firebase App Distribution Admin identity in the protected environment; PRs receive no credentials.</td></tr>
         <tr><td>Run ordering</td><td>Serialize without cancellation so a later merge cannot suppress an earlier distribution.</td></tr>

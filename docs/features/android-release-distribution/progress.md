@@ -82,12 +82,12 @@ and OPE-74 are complete.
 
 OPE-73 planning, repository implementation, and owner setup are active. The
 `Android App Distribution` workflow triggers only on pushes to protected
-`main`, signs and verifies one AAB, authenticates with a dedicated protected
+`main`, signs and verifies one APK, authenticates with a dedicated protected
 secret, targets the private `android-internal` group, and summarizes only stable
 Firebase links. Runs serialize without cancellation. App Distribution uses a
-separate high version-code range and Google Play's internal-app-sharing
-certificate, so the owner must uninstall the Play-internal build once before
-installing the first Firebase release.
+separate high version-code range and the upload-key certificate, so the owner
+must uninstall the differently signed Play-internal build once before installing
+the first Firebase release.
 
 The owner approved and completed the external setup. Firebase is linked to the
 existing Play app with AAB delivery enabled, the Internal App Sharing terms are
@@ -98,13 +98,15 @@ and the protected GitHub environment secret.
 
 ## Blockers
 
-None before the first merged workflow run.
+The first merged run built and verified its AAB but Firebase rejected bundle
+delivery because the Play app is still an unreviewed draft. The focused APK
+follow-up avoids an out-of-scope Play review.
 
 ## Remaining work
 
-1. Merge the workflow and complete one real automatic App Distribution run.
-2. Migrate the Pixel 9 once from the Play-internal certificate to the internal-
-   app-sharing certificate, then install and open the Firebase release.
+1. Merge the APK follow-up and complete one real automatic App Distribution run.
+2. Migrate the Pixel 9 once from the Play app-signing certificate to the upload-
+   key certificate, then install and open the Firebase release.
 3. Keep OPE-69 open until OPE-73 is complete.
 
 Deferred hardening before broader distribution: add a second trusted

@@ -211,22 +211,23 @@ infrastructure. The intentional difference remains recorded in
 
 **Status:** Accepted for OPE-73 implementation
 
-**Decision:** Distribute AABs through Firebase App Distribution and Google Play
-internal app sharing. Treat this as a separate install channel from the Play
+**Decision:** Distribute upload-key-signed APKs directly through Firebase App
+Distribution. Treat this as a separate install channel from the Play
 internal testing track. The owner uninstalls the Play-internal build once before
 installing the first Firebase build; later Firebase builds update within that
 channel.
 
-**Why:** Google Play re-signs internal-app-sharing APKs with a dedicated test
-certificate that differs from the normal Play app-signing certificate. An
-in-place update across those certificates is not possible. AAB delivery still
-provides device-specific APKs and a stable certificate for subsequent private
-tester updates.
+**Why:** The first real AAB attempt proved that Firebase rejects bundle delivery
+while the Play app remains an unreviewed draft. Publishing it would require
+store-policy declarations and review outside this private distribution scope.
+The upload-key certificate still differs from the normal Play app-signing
+certificate, so an in-place update across channels is not possible; direct APK
+delivery provides a stable certificate for subsequent private tester updates.
 
 **Versioning:** Use `1000000000 + github.run_number` for the App Distribution
 workflow. The reserved high range is monotonic inside this channel and remains
 separate from the canonical Play release workflow's version sequence.
 
-**Revisit when:** Firebase supports delivery with the normal Play app-signing
-certificate or the project replaces App Distribution with a Play testing-track
-release on every merge.
+**Revisit when:** The Play app is intentionally reviewed and published, Firebase
+supports delivery with the normal Play app-signing certificate, or the project
+replaces App Distribution with a Play testing-track release on every merge.

@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           version_code=$((1000000000 + GITHUB_RUN_NUMBER))
           if (( version_code > 2100000000 )); then
-            echo "App Distribution versionCode exceeds the Google Play limit." >&2
+            echo "App Distribution versionCode exceeds the Android limit." >&2
             exit 1
           fi
           echo "ANDROID_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
@@ -66,25 +66,25 @@ jobs:
           echo "ANDROID_UPLOAD_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$firebase_credentials_path" >> "$GITHUB_ENV"
 
-      - name: Build signed App Bundle
+      - name: Build signed APK
         env:
           ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleRelease --stacktrace
+        run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: Verify App Bundle signature
+      - name: Verify APK signature
         working-directory: .
         run: |
-          .github/scripts/verify-android-aab-signature.sh \
-            android/app/build/outputs/bundle/release/app-release.aab \
+          .github/scripts/verify-android-apk-signature.sh \
+            android/app/build/outputs/apk/release/app-release.apk \
             "$EXPECTED_UPLOAD_CERT_SHA256"
 
-      - name: Upload signed App Bundle artifact
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-app-distribution-${{ github.sha }}-${{ github.run_number }}
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
 
@@ -98,7 +98,7 @@ jobs:
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
               appdistribution:distribute \
-              app/build/outputs/bundle/release/app-release.aab \
+              app/build/outputs/apk/release/app-release.apk \
               --app "$FIREBASE_APP_ID" \
               --groups "$FIREBASE_TESTER_GROUP" \
               --release-notes "$release_notes" \
