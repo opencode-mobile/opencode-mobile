@@ -21,6 +21,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case overflowMenu
     case bottomSheet
     case dialog
+    case snackbar
     case listItem
     case listGroup
     case choiceBadge
@@ -111,6 +112,12 @@ let componentGalleryEntries = [
         id: .dialog,
         title: "Dialog",
         description: "Centered popup with title, optional subtitle, two options, and optional text field.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .snackbar,
+        title: "Snackbar",
+        description: "Auto-dismissing transient success or error feedback overlay.",
         category: .navigation
     ),
     ComponentGalleryEntry(

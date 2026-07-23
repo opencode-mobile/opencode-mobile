@@ -70,6 +70,14 @@ Linear: [OPE-56](https://linear.app/opencode-mobile/issue/OPE-56/slash-and-comma
       `NavDisplay` backstack)
 - [x] Unit tests for `openCommands`, visibility gating, and all five actions
 
+## Session Chat snackbar (follow-up)
+
+- [x] Design system: `OpenCodeSnackbar` (`default` / `error`), galleries on both
+      platforms
+- [x] Session Chat one-shot `snackbar` state + `consumeSnackbar()`; sticky
+      banner errors and `clientActionNotice` moved to auto-dismiss snackbars
+- [x] Timeline full-screen load-error empty state unchanged (page state)
+
 ## Remaining
 
 - [ ] None — OPE-58 is implemented on both platforms; see

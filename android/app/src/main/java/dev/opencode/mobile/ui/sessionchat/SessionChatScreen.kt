@@ -43,6 +43,9 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -249,25 +252,6 @@ fun SessionChatScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            uiState.clientActionNotice?.let { notice ->
-                Text(
-                    text = notice,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (uiState.timeline != SessionChatTimelineState.Error) {
-                uiState.errorMessage?.let { message ->
-                    Text(
-                        text = message,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
 
             Box(modifier = Modifier.weight(1f)) {
                 SessionChatTimelineView(
@@ -348,6 +332,11 @@ fun SessionChatScreen(
                             )
                     }
                 }
+                OpenCodeSnackbarHost(
+                    message = uiState.snackbar?.toOpenCodeSnackbarMessage(),
+                    onDismissed = viewModel::consumeSnackbar,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
 
             val composerState =
@@ -649,6 +638,17 @@ private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCod
         SessionConnectionStatus.Connecting -> OpenCodeSessionConnectionStatus.Connecting
         SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
     }
+
+private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMessage =
+    OpenCodeSnackbarMessage(
+        text = message,
+        variant =
+            when (tone) {
+                SessionChatSnackbarTone.Default -> OpenCodeSnackbarVariant.Default
+                SessionChatSnackbarTone.Error -> OpenCodeSnackbarVariant.Error
+            },
+        id = id,
+    )
 
 @Preview(showBackground = true)
 @Composable

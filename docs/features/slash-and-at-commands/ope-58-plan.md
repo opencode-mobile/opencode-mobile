@@ -41,8 +41,9 @@ behaviors). Typed `/` remains the path for **server commands** (OPE-57).
   `revert` / `unrevert`, restore composer from reverted user parts on undo.
   Do not rename message-sheet “Revert message” in this ticket.
 - **`compact`:** thin `POST …/summarize` with the selected composer model;
-  success/error toast; cheap message/session refresh if already cheap. Richer
-  compact UX stays [OPE-80](https://linear.app/opencode-mobile/issue/OPE-80/session-compact).
+  success/error snackbar (`OpenCodeSnackbar`); cheap message/session refresh
+  if already cheap. Richer compact UX stays
+  [OPE-80](https://linear.app/opencode-mobile/issue/OPE-80/session-compact).
 - iOS and Android unit coverage for allowlist visibility and action routing
   (client action vs server-command submit).
 
@@ -91,16 +92,21 @@ behaviors). Typed `/` remains the path for **server commands** (OPE-57).
 ## Error States
 
 - Create / fork / revert / summarize failure: stay on current session (except
-  successful `new`/`fork` navigation paths); show clear error toast or dialog
-  error (fork name dialog stays open on fork failure per OPE-81).
+  successful `new`/`fork` navigation paths); show clear error snackbar
+  (`OpenCodeSnackbar`) or dialog error (fork name dialog stays open on fork
+  failure per OPE-81).
 - Missing model for compact: row hidden (not toasted).
+- Transient Session Chat failures (Commands, send, abort, archive/delete, …)
+  use auto-dismissing snackbars; the timeline full-screen load-error empty
+  state remains a page state, not a snackbar.
 
 ## Design-System Components
 
 - **Extended:** `OpenCodeSessionComposer` — Commands circle after Attach with
   text `/` via `iconCircleText` / `IconCircleText`.
 - **Existing:** `OpenCodeBottomSheet` / `OpenCodeBottomSheetEntry` (title-only
-  one-line rows); `OpenCodeDialog` + text field for fork name (OPE-81 path).
+  one-line rows); `OpenCodeDialog` + text field for fork name (OPE-81 path);
+  `OpenCodeSnackbar` for transient success/error feedback.
 - **Button variant:** `iconCircleText` / `IconCircleText` for the `/` glyph.
 
 ## Expected Platform Logs

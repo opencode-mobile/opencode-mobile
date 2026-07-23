@@ -116,6 +116,17 @@ struct SessionRenameUiState: Equatable {
     var errorMessage: String?
 }
 
+enum SessionChatSnackbarTone: Equatable {
+    case `default`
+    case error
+}
+
+struct SessionChatSnackbar: Equatable, Identifiable {
+    let id: UInt64
+    let message: String
+    let tone: SessionChatSnackbarTone
+}
+
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
@@ -129,6 +140,7 @@ struct SessionChatUiState: Equatable {
     var connectionStatus: SessionConnectionStatus = .offline
     var contextUsageFraction: Double?
     var errorMessage: String?
+    var snackbar: SessionChatSnackbar?
     var isLifecycleActionInFlight: Bool = false
     var shouldLeaveSession: Bool = false
     var permissionRequest: PermissionRequest?
@@ -157,7 +169,6 @@ struct SessionChatUiState: Equatable {
     var forkErrorMessage: String?
     var forkResultVisible = false
     var forkedSessionTitle = ""
-    var clientActionNotice: String?
     var pendingSessionReplace: ChildSessionNavigationTarget?
 
     var latestCompletedUserMessageID: String? {

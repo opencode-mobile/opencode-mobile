@@ -84,6 +84,10 @@ class SessionChatCommands(
         _state.update { it.copy(commandsSheetVisible = false) }
     }
 
+    fun clearActionFeedback() {
+        _state.update { it.copy(actionErrorMessage = null, actionSuccessMessage = null) }
+    }
+
     fun consumePendingSessionReplace() {
         _state.update { it.copy(pendingSessionReplace = null) }
     }

@@ -126,6 +126,9 @@ class SessionChatViewModel
         private var questionDraftRequestId: String? = null
         private var questionWizardIndex: Int = 0
         private val questionDrafts = mutableMapOf<Int, QuestionAnswerDraft>()
+        private var lastSnackbarKey: String? = null
+        private var suppressedSnackbarKey: String? = null
+        private var snackbarSequence: Long = 0L
 
         init {
             timeline.ioDispatcher = ioDispatcher
@@ -169,6 +172,9 @@ class SessionChatViewModel
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
+            lastSnackbarKey = null
+            suppressedSnackbarKey = null
+            snackbarSequence = 0L
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             _uiState.value = SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle)
             timeline.bind(sessionId, worktree)
@@ -315,6 +321,23 @@ class SessionChatViewModel
 
         fun consumePendingSessionReplace() {
             commands.consumePendingSessionReplace()
+        }
+
+        fun consumeSnackbar() {
+            suppressedSnackbarKey = lastSnackbarKey
+            commands.clearActionFeedback()
+            composer.clearTransientErrors()
+            sessionInfo.clearTransientErrors()
+            timeline.clearReadyError()
+            permissionTopologyError = null
+            questionTopologyError = null
+            publishUiState(
+                timeline.state.value,
+                composer.state.value,
+                sessionInfo.state.value,
+                reviewChanges.state.value,
+                commands.state.value,
+            )
         }
 
         fun openRenameSession() {
@@ -712,18 +735,29 @@ class SessionChatViewModel
             refilterQuestionOrphans()
             val visibleQuestion = visibleQuestionRequest()
             val questionDraft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
-            val errorMessage =
-                when {
-                    infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
-                    timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
-                    composerState.errorMessage != null -> composerState.errorMessage
-                    composerState.abortErrorMessage != null -> composerState.abortErrorMessage
-                    commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
-                    infoState.errorMessage != null -> infoState.errorMessage
-                    permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
-                    questionRequests.isEmpty() && questionTopologyError != null -> questionTopologyError
-                    else -> timelineState.errorMessage
+            val timelineEmptyError =
+                if (timelineState.timeline == SessionChatTimelineState.Error) {
+                    timelineState.errorMessage
+                } else {
+                    null
                 }
+            val transientError =
+                if (timelineState.timeline == SessionChatTimelineState.Error) {
+                    null
+                } else {
+                    when {
+                        infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
+                        composerState.errorMessage != null -> composerState.errorMessage
+                        composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                        commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
+                        infoState.errorMessage != null -> infoState.errorMessage
+                        permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
+                        questionRequests.isEmpty() && questionTopologyError != null -> questionTopologyError
+                        timelineState.errorMessage != null -> timelineState.errorMessage
+                        else -> null
+                    }
+                }
+            val snackbar = resolveSnackbar(transientError, commandsState.actionSuccessMessage)
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -741,7 +775,8 @@ class SessionChatViewModel
                         composerState.composer.modelOptions,
                         composerState.composer.selectedModel,
                     ),
-                errorMessage = errorMessage,
+                errorMessage = timelineEmptyError,
+                snackbar = snackbar,
                 isLifecycleActionInFlight = infoState.isLifecycleActionInFlight,
                 shouldLeaveSession = infoState.shouldLeaveSession,
                 permissionRequest = permissionRequests.firstOrNull(),
@@ -775,8 +810,41 @@ class SessionChatViewModel
                 forkErrorMessage = commandsState.forkErrorMessage,
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
-                clientActionNotice = commandsState.actionSuccessMessage,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+            )
+        }
+
+        private fun resolveSnackbar(
+            transientError: String?,
+            successNotice: String?,
+        ): SessionChatSnackbar? {
+            val key =
+                when {
+                    transientError != null -> "error:$transientError"
+                    successNotice != null -> "success:$successNotice"
+                    else -> null
+                }
+            if (key == null) {
+                lastSnackbarKey = null
+                suppressedSnackbarKey = null
+                return null
+            }
+            if (key == suppressedSnackbarKey) {
+                return null
+            }
+            if (key != lastSnackbarKey) {
+                snackbarSequence += 1
+                lastSnackbarKey = key
+            }
+            return SessionChatSnackbar(
+                message = transientError ?: requireNotNull(successNotice),
+                tone =
+                    if (transientError != null) {
+                        SessionChatSnackbarTone.Error
+                    } else {
+                        SessionChatSnackbarTone.Default
+                    },
+                id = snackbarSequence,
             )
         }
 

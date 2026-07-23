@@ -68,15 +68,6 @@ struct SessionChatView: View {
                     .padding(.bottom, 8)
             }
 
-            if let notice = viewModel.uiState.clientActionNotice {
-                Text(notice)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
-
             SessionChatTimelineView(
                 props: SessionChatTimelineViewProps(
                     timeline: viewModel.uiState.timeline,
@@ -144,6 +135,10 @@ struct SessionChatView: View {
                         .padding(.vertical, 4)
                     }
                 }
+                OpenCodeSnackbarHost(
+                    message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
+                    onDismissed: { viewModel.consumeSnackbar() }
+                )
             }
             composer
         }
@@ -619,6 +614,22 @@ private extension SessionConnectionStatus {
         case .offline:
             .offline
         }
+    }
+}
+
+private extension SessionChatSnackbar {
+    func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage {
+        OpenCodeSnackbarMessage(
+            text: message,
+            variant: tone == .error ? .error : .default,
+            id: id
+        )
+    }
+}
+
+private extension Optional where Wrapped == SessionChatSnackbar {
+    func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage? {
+        self?.mapToOpenCodeSnackbarMessage()
     }
 }
 

@@ -465,6 +465,21 @@ entries.
 | `bottomSheet.drag.dismissThreshold` | 96 (logical px) |
 | `bottomSheet.formMaxHeight` | 560 (logical px; iOS form detent cap after first measure) |
 
+### Snackbar
+
+Short auto-dismissing feedback overlay for transient success or error copy.
+
+| Token | Value |
+| --- | --- |
+| `snackbar.cornerRadius` | 8 (logical px) |
+| `snackbar.paddingHorizontal` | 16 (logical px) |
+| `snackbar.paddingVertical` | 12 (logical px) |
+| `snackbar.maxWidth` | 560 (logical px) |
+| `snackbar.screenMarginHorizontal` | 16 (logical px) |
+| `snackbar.screenMarginBottom` | 16 (logical px) |
+| `snackbar.autoDismissDuration` | 4000 ms |
+| `snackbar.shadowElevation` | 4 (logical px / Material elevation) |
+
 ### Outgoing message
 
 Reusable outgoing prompt card for session conversations.

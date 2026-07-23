@@ -378,6 +378,10 @@ class SessionInfo(
         runCatching { Log.w(TAG, message) }
     }
 
+    fun clearTransientErrors() {
+        _state.update { it.copy(errorMessage = null, lifecycleErrorMessage = null) }
+    }
+
     companion object {
         private const val TAG = "SessionInfo"
         private const val EMPTY_TITLE_ERROR = "Enter a session title"

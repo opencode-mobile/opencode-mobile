@@ -585,6 +585,12 @@ final class SessionChatComposer {
         notifyChange()
     }
 
+    func clearTransientErrors() {
+        state.errorMessage = nil
+        state.abortErrorMessage = nil
+        notifyChange()
+    }
+
     func setSendError(_ error: String) {
         state.isSending = false
         state.errorMessage = error

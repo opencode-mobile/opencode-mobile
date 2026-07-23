@@ -139,7 +139,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't archive session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't archive session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -181,7 +183,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -200,7 +204,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -328,7 +334,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.permissionRequest)
-            assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.errorMessage)
+            assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1202,8 +1210,10 @@ class SessionChatViewModelTest {
             assertEquals(listOf("img", "txt"), viewModel.uiState.value.composer.attachments.map { it.id })
             assertEquals(
                 "This model does not support PDF attachments.",
-                viewModel.uiState.value.errorMessage,
+                viewModel.uiState.value.snackbar?.message,
             )
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
 
             viewModel.selectModel(textOnly)
             runCurrent()
@@ -1238,7 +1248,9 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.composer.attachments
                     .map { it.id },
             )
-            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+            assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1894,7 +1906,9 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.messages
                     .any { it.text == "Fail me" },
             )
-            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+            assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1941,7 +1955,9 @@ class SessionChatViewModelTest {
             )
             runCurrent()
 
-            assertEquals("Image exceeds the size limit", viewModel.uiState.value.errorMessage)
+            assertEquals("Image exceeds the size limit", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
             assertTrue(
                 viewModel.uiState.value.composer.attachments
                     .isEmpty(),
@@ -2365,7 +2381,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.pendingSessionReplace)
-            assertEquals("Couldn't start a new session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't start a new session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -2576,7 +2594,8 @@ class SessionChatViewModelTest {
                 ),
                 sessionRepository.summarizeRequest,
             )
-            assertEquals("Session compacted.", viewModel.uiState.value.clientActionNotice)
+            assertEquals("Session compacted.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Default, viewModel.uiState.value.snackbar?.tone)
             assertFalse(commandRepository.runCommandCalled)
         }
 

@@ -26,7 +26,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         viewModel.archiveSession()
-        await waitUntil { viewModel.uiState.errorMessage == "Couldn't archive session." }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't archive session." }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.shouldLeaveSession == false)
     }
@@ -50,7 +52,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         viewModel.deleteSession()
-        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't delete session." }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.shouldLeaveSession == false)
     }
@@ -61,7 +65,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         viewModel.deleteSession()
-        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't delete session." }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.shouldLeaveSession == false)
     }
@@ -157,7 +163,9 @@ struct SessionChatViewModelTests {
         )
         defer { viewModel.stopObserving() }
 
-        await waitUntil { viewModel.uiState.errorMessage == "Unable to refresh permission session tree" }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Unable to refresh permission session tree" }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.permissionRequest == nil)
     }
@@ -718,7 +726,9 @@ struct SessionChatViewModelTests {
         let text = testAttachment(id: "txt", filename: "notes.txt", kind: .text, mime: "text/plain")
         viewModel.addAttachments([image, pdf, text])
         #expect(viewModel.uiState.composer.attachments.map(\.id) == ["img", "txt"])
-        #expect(viewModel.uiState.errorMessage == "This model does not support PDF attachments.")
+        #expect(viewModel.uiState.snackbar?.message == "This model does not support PDF attachments.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         viewModel.selectModel(textOnly)
         #expect(viewModel.uiState.composer.canAttach == false)
@@ -756,7 +766,9 @@ struct SessionChatViewModelTests {
 
         #expect(viewModel.uiState.composer.attachments.isEmpty)
         #expect(viewModel.uiState.composer.text == "Keep this draft")
-        #expect(viewModel.uiState.errorMessage == "Only images, PDFs, or text files can be attached here.")
+        #expect(viewModel.uiState.snackbar?.message == "Only images, PDFs, or text files can be attached here.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
     }
 
     @Test func sendPrompt_attachmentOnly_sendsAndRendersOptimistically() async {
@@ -885,7 +897,9 @@ struct SessionChatViewModelTests {
                 ]
             )
         )
-        await waitUntil { viewModel.uiState.errorMessage == "Image exceeds the maximum size" }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Image exceeds the maximum size" }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.composer.attachments.isEmpty)
     }
@@ -1224,7 +1238,9 @@ struct SessionChatViewModelTests {
         let messages = viewModel.uiState.messages
         #expect(viewModel.uiState.isSending == false)
         #expect(!messages.contains { $0.text == "Fail me" })
-        #expect(viewModel.uiState.errorMessage != nil)
+        #expect(viewModel.uiState.snackbar?.message != nil)
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
     }
 
     @Test func sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() async {
@@ -1645,10 +1661,12 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
 
         viewModel.runClientSlashAction(.new)
-        await waitUntil { viewModel.uiState.errorMessage != nil }
+        await waitUntil { viewModel.uiState.snackbar?.message != nil }
 
         #expect(viewModel.uiState.pendingSessionReplace == nil)
-        #expect(viewModel.uiState.errorMessage == "Couldn't start a new session.")
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't start a new session.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
     }
 
     @Test func runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() async {
@@ -1814,7 +1832,8 @@ struct SessionChatViewModelTests {
         await waitUntil { sessionRepository.summarizeRequest != nil }
 
         #expect(sessionRepository.summarizeRequest == .init(id: "ses-1", providerID: "anthropic", modelID: "claude-sonnet"))
-        #expect(viewModel.uiState.clientActionNotice == "Session compacted.")
+        #expect(viewModel.uiState.snackbar?.message == "Session compacted.")
+        #expect(viewModel.uiState.snackbar?.tone == .default)
         #expect(commandRepository.runCommandCalled == false)
     }
 

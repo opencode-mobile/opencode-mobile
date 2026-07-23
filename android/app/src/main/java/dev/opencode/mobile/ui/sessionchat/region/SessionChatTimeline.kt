@@ -191,6 +191,16 @@ class SessionChatTimeline(
         pendingBaselineSignatures = emptyMap()
     }
 
+    fun clearReadyError() {
+        _state.update { current ->
+            if (current.timeline != SessionChatTimelineState.Ready) {
+                current
+            } else {
+                current.copy(errorMessage = null)
+            }
+        }
+    }
+
     fun latestModelHint(): LatestModelHint? = latestModelHintFromMessages(lastLoadedMessages)
 
     fun loadedMessages(): List<Message> = lastLoadedMessages

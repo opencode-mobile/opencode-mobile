@@ -693,6 +693,10 @@ class SessionChatComposer(
         _state.update { it.copy(isSending = false) }
     }
 
+    fun clearTransientErrors() {
+        _state.update { it.copy(errorMessage = null, abortErrorMessage = null) }
+    }
+
     fun abort() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return

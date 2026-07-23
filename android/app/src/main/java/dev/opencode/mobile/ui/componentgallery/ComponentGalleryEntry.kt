@@ -26,6 +26,7 @@ enum class ComponentGalleryEntryId {
     OverflowMenu,
     BottomSheet,
     Dialog,
+    Snackbar,
     ListItem,
     ListGroup,
     ChoiceBadge,
@@ -123,6 +124,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Dialog,
             title = "Dialog",
             description = "Centered popup with title, optional subtitle, two options, and optional text field.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Snackbar,
+            title = "Snackbar",
+            description = "Auto-dismissing transient success or error feedback overlay.",
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(

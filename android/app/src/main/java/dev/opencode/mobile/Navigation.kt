@@ -41,6 +41,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
@@ -182,6 +183,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                                                         ComponentGalleryEntryId.Dialog -> DialogGalleryScreen()
+                                                        ComponentGalleryEntryId.Snackbar -> SnackbarGalleryScreen()
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()

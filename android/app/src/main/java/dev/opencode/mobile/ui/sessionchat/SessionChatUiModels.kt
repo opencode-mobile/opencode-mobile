@@ -64,6 +64,17 @@ data class SessionRenameUiState(
     val errorMessage: String? = null,
 )
 
+enum class SessionChatSnackbarTone {
+    Default,
+    Error,
+}
+
+data class SessionChatSnackbar(
+    val message: String,
+    val tone: SessionChatSnackbarTone,
+    val id: Long,
+)
+
 data class SessionChatUiState(
     val sessionId: String,
     val sessionTitle: String,
@@ -77,6 +88,7 @@ data class SessionChatUiState(
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
+    val snackbar: SessionChatSnackbar? = null,
     val isLifecycleActionInFlight: Boolean = false,
     val shouldLeaveSession: Boolean = false,
     val permissionRequest: PermissionRequest? = null,
@@ -105,7 +117,6 @@ data class SessionChatUiState(
     val forkErrorMessage: String? = null,
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
-    val clientActionNotice: String? = null,
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
 ) {
     val latestCompletedUserMessageId: String?

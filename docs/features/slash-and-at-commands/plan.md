@@ -88,7 +88,7 @@ Research: [slash-and-at-commands.md](../../research/slash-and-at-commands.md).
 - Catalog failure: quiet empty suggestions; retry on trigger / reconnect.
 - Command or prompt send failure: restore composer snapshot (text, attachments,
   mentions).
-- Client action failure: toast or dialog error; see [ope-58-plan.md](./ope-58-plan.md).
+- Client action failure: snackbar or dialog error; see [ope-58-plan.md](./ope-58-plan.md).
 
 ## Design-System Components
 

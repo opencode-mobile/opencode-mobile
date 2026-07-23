@@ -71,6 +71,12 @@ final class SessionChatCommands {
         notifyChange()
     }
 
+    func clearActionFeedback() {
+        state.actionErrorMessage = nil
+        state.actionSuccessMessage = nil
+        notifyChange()
+    }
+
     func consumePendingSessionReplace() {
         state.pendingSessionReplace = nil
         notifyChange()

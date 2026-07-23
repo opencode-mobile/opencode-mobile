@@ -34,6 +34,10 @@ final class SessionChatViewModel {
     private var questionDraftRequestID: String?
     private var questionWizardIndex = 0
     private var questionDrafts: [Int: QuestionAnswerDraft] = [:]
+    private var lastSnackbarKey: String?
+    private var suppressedSnackbarKey: String?
+    private var snackbarSequence: UInt64 = 0
+
     init(
         sessionID: String,
         sessionTitle: String,
@@ -92,6 +96,9 @@ final class SessionChatViewModel {
             newSessionModelSelectionResolver: newSessionModelSelectionResolver,
             activeConnectionManager: activeConnectionManager
         )
+        lastSnackbarKey = nil
+        suppressedSnackbarKey = nil
+        snackbarSequence = 0
         OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
@@ -250,6 +257,17 @@ final class SessionChatViewModel {
 
     func consumePendingSessionReplace() {
         commands.consumePendingSessionReplace()
+    }
+
+    func consumeSnackbar() {
+        suppressedSnackbarKey = lastSnackbarKey
+        commands.clearActionFeedback()
+        composer.clearTransientErrors()
+        sessionInfo.clearTransientErrors()
+        timeline.clearReadyError()
+        permissionTopologyError = nil
+        questionTopologyError = nil
+        publishUiState()
     }
 
     func openRenameSession() {
@@ -616,6 +634,22 @@ final class SessionChatViewModel {
         let reviewChangesState = reviewChanges.state
         let commandsState = commands.state
         let visibleQuestion = visibleQuestionRequest()
+        let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
+        let transientError: String? = {
+            if timelineState.timeline == .error { return nil }
+            if let error = infoState.lifecycleErrorMessage { return error }
+            if let error = composerState.errorMessage { return error }
+            if let error = composerState.abortErrorMessage { return error }
+            if let error = commandsState.actionErrorMessage { return error }
+            if let error = infoState.errorMessage { return error }
+            if permissionRequests.isEmpty, let error = permissionTopologyError { return error }
+            if questionRequests.isEmpty, let error = questionTopologyError { return error }
+            return timelineState.errorMessage
+        }()
+        let snackbar = resolveSnackbar(
+            transientError: transientError,
+            successNotice: commandsState.actionSuccessMessage
+        )
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -632,12 +666,8 @@ final class SessionChatViewModel {
                 modelOptions: composerState.composer.modelOptions,
                 selectedModel: composerState.composer.selectedModel
             ),
-            errorMessage: mergedErrorMessage(
-                timelineState: timelineState,
-                composerState: composerState,
-                infoState: infoState,
-                commandsState: commandsState
-            ),
+            errorMessage: timelineEmptyError,
+            snackbar: snackbar,
             isLifecycleActionInFlight: infoState.isLifecycleActionInFlight,
             shouldLeaveSession: infoState.shouldLeaveSession,
             permissionRequest: permissionRequests.first,
@@ -668,42 +698,36 @@ final class SessionChatViewModel {
             forkErrorMessage: commandsState.forkErrorMessage,
             forkResultVisible: commandsState.forkResultVisible,
             forkedSessionTitle: commandsState.forkedSessionTitle,
-            clientActionNotice: commandsState.actionSuccessMessage,
             pendingSessionReplace: commandsState.pendingSessionReplace
         )
     }
 
-    private func mergedErrorMessage(
-        timelineState: SessionChatTimelineRegionState,
-        composerState: SessionChatComposerRegionState,
-        infoState: SessionInfoRegionState,
-        commandsState: SessionChatCommandsRegionState
-    ) -> String? {
-        if let error = infoState.lifecycleErrorMessage {
-            return error
+    private func resolveSnackbar(transientError: String?, successNotice: String?) -> SessionChatSnackbar? {
+        let key: String?
+        if let transientError {
+            key = "error:\(transientError)"
+        } else if let successNotice {
+            key = "success:\(successNotice)"
+        } else {
+            key = nil
         }
-        if timelineState.timeline == .error {
-            return timelineState.errorMessage
+        guard let key else {
+            lastSnackbarKey = nil
+            suppressedSnackbarKey = nil
+            return nil
         }
-        if let error = composerState.errorMessage {
-            return error
+        if key == suppressedSnackbarKey {
+            return nil
         }
-        if let error = composerState.abortErrorMessage {
-            return error
+        if key != lastSnackbarKey {
+            snackbarSequence += 1
+            lastSnackbarKey = key
         }
-        if let error = commandsState.actionErrorMessage {
-            return error
-        }
-        if let error = infoState.errorMessage {
-            return error
-        }
-        if permissionRequests.isEmpty, let error = permissionTopologyError {
-            return error
-        }
-        if questionRequests.isEmpty, let error = questionTopologyError {
-            return error
-        }
-        return timelineState.errorMessage
+        return SessionChatSnackbar(
+            id: snackbarSequence,
+            message: transientError ?? successNotice!,
+            tone: transientError != nil ? .error : .default
+        )
     }
 }
 
