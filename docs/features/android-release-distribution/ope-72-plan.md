@@ -194,10 +194,19 @@ The first acceptance build, `0.1.0-internal.5` / `versionCode` 5 from workflow
 [30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764),
 completed signing and Play publication. Physical-device launch then exposed
 [OPE-74](https://linear.app/opencode-mobile/issue/OPE-74/fix-android-startup-crash-on-api-below-33):
-the markdown Joni backend called an API-33-only `OutputStream` method before the
-controlled non-fatal could run. Firebase received that fatal for the expected
-release. Protected-main acceptance resumes with a replacement build after the
-compatibility fix merges.
+the markdown Joni backend called an API-33-only `OutputStream` method. Firebase
+received both that fatal and the controlled
+`OpenCodeMobileCrashlyticsVerification` non-fatal for version 5. The Analytics
+event report contained no custom events or screen views.
+
+Pull request [70](https://github.com/opencode-mobile/opencode-mobile/pull/70)
+replaced the incompatible call with an API-24-safe sink. Replacement workflow
+[30011576034](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30011576034)
+published `0.1.0-internal.6` / `versionCode` 6 to Play internal. The owner
+launched that build repeatedly on the affected Pixel 9. Firebase recognized
+version 6 as the latest active release and showed the startup-crash issue only
+for version 5, confirming the compatibility fix without a version-6 recurrence.
+Protected-main acceptance is complete.
 
 ## Failure Handling
 
@@ -228,8 +237,8 @@ OPE-72 is complete only when:
   or user content enters the implementation;
 - the operator runbook and feature status contain the durable verification
   result; and
-- OPE-72 and parent OPE-69 can move to Done with no remaining release-
-  observability acceptance gate.
+- OPE-72 can move to Done with no remaining release-observability acceptance
+  gate; parent OPE-69 remains open for OPE-73.
 
 ## Verification Ledger
 

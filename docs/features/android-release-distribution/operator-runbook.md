@@ -194,3 +194,19 @@ the app, enable Crashlytics debug logging through ADB, and check for a
 successful report upload before changing code. Do not paste raw dashboard
 exports, tester identifiers, app content, or credentials into the repository or
 Linear.
+
+OPE-72 protected-main acceptance used Android Release
+[run 30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764),
+which published `0.1.0-internal.5` / `versionCode` 5. Firebase received the
+content-free `OpenCodeMobileCrashlyticsVerification` non-fatal, and the
+Analytics event report showed no custom events or screen views. That release
+also exposed an API-33-only markdown startup call.
+
+OPE-74 fixed the compatibility defect in pull request
+[70](https://github.com/opencode-mobile/opencode-mobile/pull/70). Replacement
+Android Release
+[run 30011576034](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30011576034)
+published `0.1.0-internal.6` / `versionCode` 6. Repeated physical-device launches
+on the affected Pixel 9 succeeded. Firebase recognized version 6 as the latest
+active release while the prior startup-crash issue remained limited to version
+5.

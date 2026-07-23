@@ -17,7 +17,7 @@
 - [x] OPE-72 refined in `ope-72-plan.md`
 - [x] Complete OPE-70
 - [x] Complete OPE-71
-- [ ] Complete OPE-72
+- [x] Complete OPE-72
 - [x] Update README CI table once workflows exist
 
 ## Design-system dependencies
@@ -62,28 +62,32 @@ and merged-manifest/package inspection pass locally.
 The first protected-main acceptance run
 [30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764)
 successfully published `0.1.0-internal.5` / `versionCode` 5 to Play internal
-testing with Crashlytics verification enabled. Physical-device launch exposed
-an existing Android startup compatibility defect before the controlled
-non-fatal could run: `OutputStream.nullOutputStream()` requires API 33 while
-the app supports API 24+. Firebase received the fatal for the expected release,
-and Android lint reproduces the same `NewApi` failure. OPE-74 owns the fix and
-replacement release.
+testing with Crashlytics verification enabled. Firebase received the controlled
+`OpenCodeMobileCrashlyticsVerification` non-fatal for that Play release and the
+Analytics event report showed no custom events or screen views.
+
+The same launch also exposed an existing Android startup compatibility defect:
+`OutputStream.nullOutputStream()` requires API 33 while the app supports API
+24+. OPE-74 replaced that call with an API-24-safe sink, and pull request
+[70](https://github.com/opencode-mobile/opencode-mobile/pull/70) merged the fix
+to `main`. Replacement Android Release run
+[30011576034](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30011576034)
+published `0.1.0-internal.6` / `versionCode` 6. The owner launched it repeatedly
+on the affected Pixel 9; Firebase recognized version 6 as the latest active
+release while the startup-crash issue remained confined to version 5. OPE-72
+and OPE-74 are complete.
 
 ## Blockers
 
-OPE-72 is blocked by
-[OPE-74](https://linear.app/opencode-mobile/issue/OPE-74/fix-android-startup-crash-on-api-below-33).
-A replacement protected-main build must launch successfully before the
-controlled non-fatal and minimal Analytics boundary can be accepted.
+OPE-73 needs explicit owner approval before linking Firebase to Google Play,
+creating a dedicated service account/key, and enrolling the private tester
+group.
 
 ## Remaining work
 
-1. Complete OPE-74 and publish a replacement protected-main build with
-   `verify_crashlytics=true`.
-2. Install the Play-internal build and confirm the one-shot non-fatal plus the
-   minimal Analytics boundary in Firebase.
-3. Record the replacement workflow, Play version, and Firebase result; then
-   close OPE-72. OPE-69 remains open for OPE-73.
+1. Complete OPE-73 owner setup, automatic post-merge workflow, and one real
+   Firebase App Distribution acceptance run.
+2. Keep OPE-69 open until OPE-73 is complete.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an
