@@ -59,20 +59,31 @@ referrer permissions, keeps debug Firebase-free, and exposes a protected
 Focused JVM tests, debug assembly, release compilation, dependency inspection,
 and merged-manifest/package inspection pass locally.
 
+The first protected-main acceptance run
+[30009973764](https://github.com/opencode-mobile/opencode-mobile/actions/runs/30009973764)
+successfully published `0.1.0-internal.5` / `versionCode` 5 to Play internal
+testing with Crashlytics verification enabled. Physical-device launch exposed
+an existing Android startup compatibility defect before the controlled
+non-fatal could run: `OutputStream.nullOutputStream()` requires API 33 while
+the app supports API 24+. Firebase received the fatal for the expected release,
+and Android lint reproduces the same `NewApi` failure. OPE-74 owns the fix and
+replacement release.
+
 ## Blockers
 
-OPE-72 still requires protected-main acceptance. The implementation must merge
-before the release workflow can publish a verification-enabled build with
-protected signing and Play credentials.
+OPE-72 is blocked by
+[OPE-74](https://linear.app/opencode-mobile/issue/OPE-74/fix-android-startup-crash-on-api-below-33).
+A replacement protected-main build must launch successfully before the
+controlled non-fatal and minimal Analytics boundary can be accepted.
 
 ## Remaining work
 
-1. Merge the OPE-72 implementation after review and required checks.
-2. Run `Android Release` from protected `main` with
-   `verify_crashlytics=true`, install the Play-internal build, and confirm the
-   one-shot non-fatal plus the minimal Analytics boundary in Firebase.
-3. Record the workflow, Play version, and Firebase result; then close OPE-72
-   and parent OPE-69.
+1. Complete OPE-74 and publish a replacement protected-main build with
+   `verify_crashlytics=true`.
+2. Install the Play-internal build and confirm the one-shot non-fatal plus the
+   minimal Analytics boundary in Firebase.
+3. Record the replacement workflow, Play version, and Firebase result; then
+   close OPE-72. OPE-69 remains open for OPE-73.
 
 Deferred hardening before broader distribution: add a second trusted
 administrator and optionally place another encrypted credential copy on an
