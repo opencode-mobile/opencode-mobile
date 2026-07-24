@@ -100,6 +100,8 @@ struct ComponentGalleryDetailView: View {
             ListGroupGalleryView()
         case .choiceBadge:
             ChoiceBadgeGalleryView()
+        case .filterTabs:
+            FilterTabsGalleryView()
         case .actionPill:
             ActionPillGalleryView()
         case .reviewChangesPill:

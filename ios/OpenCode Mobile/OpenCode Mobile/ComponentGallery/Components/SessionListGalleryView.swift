@@ -1,10 +1,17 @@
 import SwiftUI
 
 struct SessionListGalleryView: View {
+    @State private var selectedFilterId = SessionListFilterTab.allId
+
     var body: some View {
         SessionList(
             sessions: sessionListGallerySamples,
-            onSessionSelected: { _ in }
+            filterTabs: sessionListGalleryFilterTabs,
+            selectedFilterId: selectedFilterId,
+            onFilterSelected: { selectedFilterId = $0 },
+            onSessionSelected: { _ in },
+            onAddProject: {},
+            onNewSession: {}
         )
     }
 }
@@ -52,8 +59,14 @@ private let sessionListGallerySamples: [SessionListSession] = [
     ),
 ]
 
+private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
+    SessionListFilterTab(id: SessionListFilterTab.allId, title: "All", count: 4),
+    SessionListFilterTab(id: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
+    SessionListFilterTab(id: "/Users/demo/playground", title: "playground", count: 1),
+    SessionListFilterTab(id: "/Users/demo/api-client", title: "api-client", count: 1),
+]
+
 #Preview {
     SessionListGalleryView()
-        .padding()
         .openCodeTheme()
 }

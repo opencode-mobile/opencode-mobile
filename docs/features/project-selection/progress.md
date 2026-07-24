@@ -37,3 +37,17 @@
 - [x] iOS home **Browse projects** and **See all sessions** use
   `OpenCodeBottomSheet` instead of native platform sheets (Android already used
   design-system bottom sheet)
+
+## Session List home mode (in progress)
+
+- [x] Settings toggle switches exclusively between Session List and Project
+  Session Selector (not stacked)
+- [x] Session List sticky footer: **Add project** + **New session** (project
+  picker sheet, then create in chosen worktree); create error under footer
+- [x] Shared **Filter Tabs** design-system component (horizontal single-select
+  with neutral count badges); gallery entry on both platforms
+- [x] Session List filter tabs: **All** + per-project tabs with counts; filters
+  visible sessions
+- [x] Android Filter Tabs capsule height parity with iOS
+- [ ] Manual QA of Session List mode on device/simulator (filter, add project,
+  new session, create error)

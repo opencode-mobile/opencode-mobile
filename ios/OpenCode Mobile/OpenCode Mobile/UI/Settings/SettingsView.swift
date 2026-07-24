@@ -60,7 +60,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Session List",
-                        subtitle: "Show recent sessions above project selector",
+                        subtitle: "Switch home between session list and project selector",
                         startDecorator: .icon(.list, accessibilityLabel: "Session List"),
                         trailing: {
                             Toggle(

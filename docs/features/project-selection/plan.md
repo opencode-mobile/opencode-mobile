@@ -34,6 +34,9 @@ with correct worktree scoping on a single opencode server.
 
 - Reuse `OpenCodeListItem` with letter start decorator for projects; title-only
   for Project Session Selector session previews.
-- **Session List** for the cross-project recent feed above the selector
-  (`docs/design-system/components/session-list.md`): letter, title, project
-  path subtitle, Idle/Running status, relative-time caption.
+- **Session List** as an alternate home mode (settings toggle) instead of the
+  project session selector (`docs/design-system/components/session-list.md`):
+  letter, title, project path subtitle, Idle/Running status, relative-time
+  caption; **Filter Tabs** for All + per-project scoping; sticky footer
+  **Add project** + **New session** (project picker sheet, then create in
+  chosen worktree).

@@ -25,6 +25,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case listItem
     case listGroup
     case choiceBadge
+    case filterTabs
     case actionPill
     case reviewChangesPill
     case hunkNavigationPill
@@ -82,6 +83,12 @@ let componentGalleryEntries = [
         id: .choiceBadge,
         title: "Choice Badge",
         description: "Selectable pill for compact single-choice controls.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .filterTabs,
+        title: "Filter Tabs",
+        description: "Horizontal single-select filters with optional count badges.",
         category: .controls
     ),
     ComponentGalleryEntry(

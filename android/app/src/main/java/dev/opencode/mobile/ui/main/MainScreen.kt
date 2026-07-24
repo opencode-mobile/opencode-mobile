@@ -13,6 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -41,6 +44,7 @@ import dev.opencode.mobile.ui.components.ProjectSessionSelector
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
 import dev.opencode.mobile.ui.components.SessionList
+import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
@@ -125,6 +129,12 @@ internal fun MainScreen(
             else -> null
         }
     val seeAllSheet = (uiState as? MainScreenUiState.Loaded)?.seeAllSessions
+    var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
+    val newSessionPickerProjects =
+        when (uiState) {
+            is MainScreenUiState.Loaded -> uiState.sections
+            else -> emptyList()
+        }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -194,6 +204,7 @@ internal fun MainScreen(
                         onSessionClick = onSessionClick,
                         onSeeAllSessions = onSeeAllSessions,
                         onNewSession = onNewSession,
+                        onRequestNewSessionProjectPicker = { showNewSessionProjectPicker = true },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -299,6 +310,33 @@ internal fun MainScreen(
             }
         }
     }
+
+    if (showNewSessionProjectPicker) {
+        OpenCodeBottomSheet(
+            visible = true,
+            title = "New session",
+            onDismissRequest = { showNewSessionProjectPicker = false },
+        ) {
+            if (newSessionPickerProjects.isEmpty()) {
+                OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
+            } else {
+                newSessionPickerProjects.forEach { project ->
+                    OpenCodeBottomSheetEntry(
+                        title = project.displayName,
+                        startDecorator =
+                            BottomSheetEntryDecorator.Icon(
+                                imageVector = OpenCodeIcons.Folder,
+                                contentDescription = null,
+                            ),
+                        onClick = {
+                            showNewSessionProjectPicker = false
+                            onNewSession(project.worktree)
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -341,62 +379,68 @@ private fun HomeProjectsContent(
     onSessionClick: (SessionOpenTarget) -> Unit,
     onSeeAllSessions: (String) -> Unit,
     onNewSession: (String) -> Unit,
+    onRequestNewSessionProjectPicker: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val showSessionList = HomeDisplayPreferences.showSessionListOnHome
-    val crossProjectSessions =
-        if (showSessionList) {
-            sections.toCrossProjectSessionListSessions()
-        } else {
-            emptyList()
+    if (showSessionList) {
+        val sessions = sections.toCrossProjectSessionListSessions()
+        val filterTabs = sections.toSessionListFilterTabs(sessionCount = sessions.size)
+        var selectedFilterId by rememberSaveable {
+            mutableStateOf(SessionListFilterTab.ALL_ID)
         }
-    val showsSessionListContent = crossProjectSessions.isNotEmpty()
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement =
-            if (showsSessionListContent) {
-                Arrangement.spacedBy(16.dp)
+        val resolvedFilterId =
+            if (filterTabs.any { it.id == selectedFilterId }) {
+                selectedFilterId
             } else {
-                Arrangement.Bottom
+                SessionListFilterTab.ALL_ID
+            }
+        SessionList(
+            sessions = sessions,
+            filterTabs = filterTabs,
+            selectedFilterId = resolvedFilterId,
+            createError = projectSessionCreateError,
+            onFilterSelected = { selectedFilterId = it },
+            onSessionSelected = { session ->
+                onSessionClick(
+                    SessionOpenTarget(
+                        sessionId = session.id,
+                        title = session.title,
+                        worktree = session.worktree,
+                    ),
+                )
             },
-    ) {
-        if (showsSessionListContent) {
-            item(key = "session-list") {
-                SessionList(
-                    sessions = crossProjectSessions,
-                    onSessionSelected = { session ->
+            onAddProject = onBrowseProjectsClick,
+            onNewSession = onRequestNewSessionProjectPicker,
+            modifier = modifier.fillMaxSize(),
+        )
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.Bottom,
+        ) {
+            item(key = "project-session-selector") {
+                ProjectSessionSelector(
+                    projects = sections.map(ProjectSectionUi::toProjectSessionSelectorProject),
+                    selectedWorktree = focusedWorktree,
+                    createError = projectSessionCreateError,
+                    onProjectSelected = onFocusProject,
+                    onBrowseProjects = onBrowseProjectsClick,
+                    onSessionSelected = { project, session ->
                         onSessionClick(
                             SessionOpenTarget(
                                 sessionId = session.id,
                                 title = session.title,
-                                worktree = session.worktree,
+                                worktree = project.worktree,
                             ),
                         )
                     },
+                    onShowAllSessions = onSeeAllSessions,
+                    onNewSession = onNewSession,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-        }
-        item(key = "project-session-selector") {
-            ProjectSessionSelector(
-                projects = sections.map(ProjectSectionUi::toProjectSessionSelectorProject),
-                selectedWorktree = focusedWorktree,
-                createError = projectSessionCreateError,
-                onProjectSelected = onFocusProject,
-                onBrowseProjects = onBrowseProjectsClick,
-                onSessionSelected = { project, session ->
-                    onSessionClick(
-                        SessionOpenTarget(
-                            sessionId = session.id,
-                            title = session.title,
-                            worktree = project.worktree,
-                        ),
-                    )
-                },
-                onShowAllSessions = onSeeAllSessions,
-                onNewSession = onNewSession,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
         }
     }
 }
@@ -436,6 +480,22 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
                 subtitle = section.pathSubtitle,
                 status = session.toSessionListStatus(),
                 caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+            )
+        }
+
+private fun List<ProjectSectionUi>.toSessionListFilterTabs(sessionCount: Int): List<SessionListFilterTab> =
+    listOf(
+        SessionListFilterTab(
+            id = SessionListFilterTab.ALL_ID,
+            title = "All",
+            count = sessionCount,
+        ),
+    ) +
+        map { section ->
+            SessionListFilterTab(
+                id = section.worktree,
+                title = section.displayName,
+                count = section.allSessions.size,
             )
         }
 

@@ -8,6 +8,8 @@ struct ProjectListHomeView: View {
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    @State private var showNewSessionProjectPicker = false
+    @State private var selectedSessionFilterId = SessionListFilterTab.allId
 
     init(viewModel: ProjectListHomeViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -110,6 +112,26 @@ struct ProjectListHomeView: View {
                 }
             }
             .openCodeBottomSheet(
+                isPresented: $showNewSessionProjectPicker,
+                title: "New session"
+            ) {
+                let projects = newSessionPickerProjects
+                if projects.isEmpty {
+                    OpenCodeBottomSheetEntry(title: "No projects", enabled: false, action: {})
+                } else {
+                    ForEach(projects, id: \.worktree) { project in
+                        OpenCodeBottomSheetEntry(
+                            title: project.displayName,
+                            startDecorator: .icon(.folder),
+                            action: {
+                                showNewSessionProjectPicker = false
+                                Task { await viewModel.createSession(in: project.worktree) }
+                            }
+                        )
+                    }
+                }
+            }
+            .openCodeBottomSheet(
                 item: $connectionSetupPresentation,
                 title: "Connect to server",
                 contentMode: .form
@@ -122,6 +144,15 @@ struct ProjectListHomeView: View {
                     }
                 )
             }
+        }
+    }
+
+    private var newSessionPickerProjects: [(worktree: String, displayName: String)] {
+        switch viewModel.state {
+        case let .loaded(sections, _, _, _, _, _):
+            sections.map { ($0.worktree, $0.displayName) }
+        default:
+            []
         }
     }
 
@@ -208,58 +239,68 @@ struct ProjectListHomeView: View {
         .padding(24)
     }
 
+    @ViewBuilder
     private func homeProjectsList(
         sections: [ProjectSectionItem],
         focusedWorktree: String?,
         createError: String?
     ) -> some View {
-        let showSessionList = homeDisplayPreferences.showSessionListOnHome
-        let crossProjectSessions =
-            showSessionList ? sections.crossProjectSessionListSessions() : []
-        let showsSessionListContent = !crossProjectSessions.isEmpty
-        return GeometryReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    if showsSessionListContent {
-                        SessionList(
-                            sessions: crossProjectSessions,
-                            onSessionSelected: { session in
-                                openSession(
-                                    SessionListItem(
-                                        id: session.id,
-                                        title: session.title,
-                                        worktree: session.worktree
-                                    )
-                                )
-                            }
+        if homeDisplayPreferences.showSessionListOnHome {
+            let sessions = sections.crossProjectSessionListSessions()
+            let filterTabs = sections.sessionListFilterTabs(sessionCount: sessions.count)
+            let selectedFilterId =
+                filterTabs.contains(where: { $0.id == selectedSessionFilterId })
+                    ? selectedSessionFilterId
+                    : SessionListFilterTab.allId
+            SessionList(
+                sessions: sessions,
+                filterTabs: filterTabs,
+                selectedFilterId: selectedFilterId,
+                createError: createError,
+                onFilterSelected: { selectedSessionFilterId = $0 },
+                onSessionSelected: { session in
+                    openSession(
+                        SessionListItem(
+                            id: session.id,
+                            title: session.title,
+                            worktree: session.worktree
                         )
-                    }
-
-                    ProjectSessionSelector(
-                        projects: sections.map(\.projectSessionSelectorProject),
-                        selectedWorktree: focusedWorktree,
-                        createError: createError,
-                        onProjectSelected: { viewModel.focusProject(worktree: $0) },
-                        onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                        onSessionSelected: { project, session in
-                            openSession(
-                                SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
-                            )
-                        },
-                        onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
-                        onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                },
+                onAddProject: { Task { await viewModel.showAddProjectSheet() } },
+                onNewSession: { showNewSessionProjectPicker = true }
+            )
+            .background(OpenCodeColors.backgroundBase)
+        } else {
+            GeometryReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ProjectSessionSelector(
+                            projects: sections.map(\.projectSessionSelectorProject),
+                            selectedWorktree: focusedWorktree,
+                            createError: createError,
+                            onProjectSelected: { viewModel.focusProject(worktree: $0) },
+                            onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                            onSessionSelected: { project, session in
+                                openSession(
+                                    SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                                )
+                            },
+                            onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
+                            onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: proxy.size.height,
+                        alignment: .bottom
+                    )
                 }
-                .frame(
-                    maxWidth: .infinity,
-                    minHeight: proxy.size.height,
-                    alignment: showsSessionListContent ? .topLeading : .bottom
-                )
             }
+            .background(OpenCodeColors.backgroundBase)
         }
-        .background(OpenCodeColors.backgroundBase)
     }
 }
 
@@ -351,6 +392,26 @@ private extension Array where Element == ProjectSectionItem {
         }
         .sorted { $0.0 > $1.0 }
         .map(\.1)
+    }
+
+    func sessionListFilterTabs(sessionCount: Int) -> [SessionListFilterTab] {
+        var tabs = [
+            SessionListFilterTab(
+                id: SessionListFilterTab.allId,
+                title: "All",
+                count: sessionCount
+            ),
+        ]
+        tabs.append(
+            contentsOf: map { section in
+                SessionListFilterTab(
+                    id: section.worktree,
+                    title: section.displayName,
+                    count: section.allSessions.count
+                )
+            }
+        )
+        return tabs
     }
 }
 

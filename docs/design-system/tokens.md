@@ -269,6 +269,25 @@ documented in `docs/design-system/components/choice-badge.md`.
 | `choiceBadge.paddingHorizontal` | 12 (logical px) |
 | `choiceBadge.paddingVertical` | 8 (logical px) |
 
+### Filter tabs
+
+Horizontal single-select filter row with optional count badges (for example
+Session List project filters). Geometry is shared across platforms; colors map
+to semantic surfaces as documented in
+`docs/design-system/components/filter-tabs.md`.
+
+| Token | Value |
+| --- | --- |
+| `filterTabs.tab.paddingHorizontal` | 12 (logical px) |
+| `filterTabs.tab.paddingVertical` | 8 (logical px) |
+| `filterTabs.tab.minHeight` | 36 (logical px) |
+| `filterTabs.tab.spacing` | 8 (logical px between tabs) |
+| `filterTabs.tab.contentSpacing` | 6 (logical px between label and count) |
+| `filterTabs.count.minSize` | 22 (logical px) |
+| `filterTabs.count.paddingHorizontal` | 6 (logical px) |
+| `filterTabs.row.paddingHorizontal` | 16 (logical px) |
+| `filterTabs.row.paddingVertical` | 8 (logical px) |
+
 ### Action pill
 
 Compact floating pill for contextual overlay actions such as scroll-to-end in
