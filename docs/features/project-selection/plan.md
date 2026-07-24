@@ -14,7 +14,7 @@ with correct worktree scoping on a single opencode server.
   [Add Project Directory Navigator](../add-project/plan.md).
 - Query param **`directory={worktree}`** on all Session and Message repository calls.
 - Inline **`GET /global/health`** probe with retry on home load.
-- First-launch seed: auto-add boot project worktree when list is empty.
+- Empty curated list after connect stays empty until manual **Add project**.
 - Pass **worktree** into Session Chat navigation.
 
 ## Out Of Scope

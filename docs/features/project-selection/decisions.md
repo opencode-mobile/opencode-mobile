@@ -23,9 +23,11 @@ Query parameter `directory` on scoped Session/Message calls (undocumented server
 
 Ship minimal probe in this slice; standalone sync-probe docs note overlap.
 
-## First-launch seed
+## No first-launch project seed
 
-Auto-add `GET /project/current` worktree when added list is empty after successful probe.
+Do **not** auto-add the server boot worktree when the curated list is empty.
+After connect/probe, home stays empty until the user adds a project via the
+filesystem **Add project** flow.
 
 ## Widgets icon for Component Gallery entry
 

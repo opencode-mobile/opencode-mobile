@@ -15,20 +15,18 @@ struct ProjectListHomeViewModelTests {
         }
     }
 
-    @Test func refresh_seedsBootWorktree() async {
+    @Test func refresh_staysEmpty_whenNoAddedProjects() async {
         let store = FakeConnectionProfileStore()
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(bootWorktree: "/boot"),
             connectionProfileStore: store
         )
         await viewModel.refresh()
-        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/boot"))
-        guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
-            Issue.record("Expected loaded")
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").isEmpty)
+        guard case .empty = viewModel.state else {
+            Issue.record("Expected empty without auto-seeded projects")
             return
         }
-        #expect(!sections.isEmpty)
-        #expect(focusedWorktree == "/boot")
     }
 
     @Test func refresh_limitsPreviewSessionsToThree() async {

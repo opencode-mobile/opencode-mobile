@@ -265,12 +265,7 @@ class MainScreenViewModel
 
             _uiState.value = MainScreenUiState.Loading
             try {
-                var worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
-                if (worktrees.isEmpty()) {
-                    val bootProject = projectRepository.getCurrentProject(directory = null)
-                    connectionProfileStore.addWorktree(serverBaseUrl, bootProject.worktree)
-                    worktrees = listOf(bootProject.worktree)
-                }
+                val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
 
                 if (worktrees.isEmpty()) {
                     stopLiveObservations()

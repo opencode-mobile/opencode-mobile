@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -72,14 +74,19 @@ fun SettingsScreen(
             showDivider = true,
         )
 
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             SectionHeader(title = "Server")
 
             OpenCodeListItem(
                 title = "Server Connection",
                 subtitle = "Configure server URL and credentials",
+                style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Cloud, "Server Connection"),
                 onClick = onConnectionSetup,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
 
             SectionHeader(title = "Appearance")
@@ -87,13 +94,16 @@ fun SettingsScreen(
             OpenCodeListItem(
                 title = "Theme",
                 subtitle = currentTheme.name,
+                style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
                 onClick = { showThemePicker = true },
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
 
             OpenCodeListItem(
                 title = "Session List",
                 subtitle = "Switch home between session list and project selector",
+                style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Session List"),
                 trailing = {
                     Switch(
@@ -101,15 +111,18 @@ fun SettingsScreen(
                         onCheckedChange = onShowSessionListOnHomeChange,
                     )
                 },
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
 
             OpenCodeListItem(
                 title = "Import Theme",
                 subtitle = "Custom OpenCode OC-2 JSON file",
+                style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Import Theme"),
                 onClick = {
                     themeImportLauncher.launch(arrayOf("application/json", "text/json", "*/*"))
                 },
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
 
             themeImportError?.let { error ->
@@ -126,15 +139,19 @@ fun SettingsScreen(
             OpenCodeListItem(
                 title = "Component Gallery",
                 subtitle = "Design-system foundations and reusable components",
+                style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
                 onClick = onComponentGalleryClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
 
             OpenCodeListItem(
                 title = "Clear All Data",
                 subtitle = "Remove connection, cache, and imported themes",
+                style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
                 onClick = { showClearConfirmation = true },
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
     }

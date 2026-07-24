@@ -20,13 +20,16 @@ struct OpenCodeFilterChip: View {
                     .font(OpenCodeTypography.button.weight(selected ? .semibold : .regular))
                     .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 if let count {
                     Text("\(count)")
                         .font(OpenCodeTypography.caption.weight(.semibold))
                         .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, count >= 10 ? 8 : 6)
-                        .frame(minWidth: count >= 100 ? 34 : (count >= 10 ? 28 : 22), minHeight: 22)
+                        .frame(minWidth: countBadgeMinWidth(count), minHeight: 22)
                         .background(
                             Color.primary.opacity(selected ? 0.16 : 0.06),
                             in: Capsule()
@@ -36,10 +39,12 @@ struct OpenCodeFilterChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(minHeight: 36)
+            .fixedSize(horizontal: true, vertical: false)
             .contentShape(Capsule())
         }
         .buttonStyle(OpenCodeFilterChipPressStyle())
         .modifier(OpenCodeFilterChipChrome(selected: selected))
+        .fixedSize(horizontal: true, vertical: false)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(accessibilityLabel)
     }
@@ -49,6 +54,15 @@ struct OpenCodeFilterChip: View {
             return "\(title), \(count)"
         }
         return title
+    }
+
+    private func countBadgeMinWidth(_ count: Int) -> CGFloat {
+        switch count {
+        case 0 ..< 10: 22
+        case 10 ..< 100: 28
+        case 100 ..< 1000: 36
+        default: 44
+        }
     }
 }
 

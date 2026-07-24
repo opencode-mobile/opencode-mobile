@@ -337,12 +337,7 @@ final class ProjectListHomeViewModel {
 
         state = .loading
         do {
-            var worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
-            if worktrees.isEmpty {
-                let boot = try await projectRepository.getCurrentProject(directory: nil)
-                await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: boot.worktree)
-                worktrees = [boot.worktree]
-            }
+            let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
 
             if worktrees.isEmpty {
                 stopLiveObservations()

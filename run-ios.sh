@@ -1,54 +1,86 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT="$ROOT_DIR/ios/OpenCode Mobile/OpenCode Mobile.xcodeproj"
 SCHEME="${IOS_SCHEME:-OpenCode Mobile}"
 BUNDLE_ID="${IOS_BUNDLE_ID:-dev.opencode.mobile}"
 DERIVED_DATA_PATH="${IOS_DERIVED_DATA_PATH:-$ROOT_DIR/build/ios}"
 
 CLEAN=0
+VERBOSE=0
+
+usage() {
+  cat <<EOF
+Usage: ./run-ios.sh [--clean] [-v|--v|--verbose]
+
+Build and launch $SCHEME on an iPhone simulator.
+
+Options:
+  --clean              Run xcodebuild clean, remove the app from the simulator, then build
+  -v, --v, --verbose   Print full command output
+EOF
+}
+
 for arg in "$@"; do
   case "$arg" in
     --clean)
       CLEAN=1
       ;;
+    -v|--v|--verbose)
+      VERBOSE=1
+      ;;
     -h|--help)
-      cat <<EOF
-Usage: ./run-ios.sh [--clean]
-
-Build and launch $SCHEME on an iPhone simulator.
-
-Options:
-  --clean   Run xcodebuild clean, remove the app from the simulator, then build
-EOF
+      usage
       exit 0
       ;;
     *)
       echo "Unknown option: $arg" >&2
-      echo "Run ./run-ios.sh --help for usage." >&2
+      usage >&2
       exit 1
       ;;
   esac
 done
 
-if [ ! -d "$PROJECT" ]; then
-  echo "Missing Xcode project at $PROJECT" >&2
+run_quiet() {
+  local label="$1"
+  shift
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    "$@"
+    return
+  fi
+
+  local log
+  log="$(mktemp -t "opencode-run-ios.${label}.XXXXXX")"
+  if "$@" >"$log" 2>&1; then
+    rm -f "$log"
+    return 0
+  fi
+
+  local status=$?
+  echo "error: $label failed (exit $status)" >&2
+  tail -n 50 "$log" >&2 || true
+  echo "Full log: $log (re-run with --v for live output)" >&2
+  exit "$status"
+}
+
+if [[ ! -d "$PROJECT" ]]; then
+  echo "error: Missing Xcode project at $PROJECT" >&2
   exit 1
 fi
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
-  echo "xcodebuild was not found. Install Xcode command line tools." >&2
+  echo "error: xcodebuild was not found. Install Xcode command line tools." >&2
   exit 1
 fi
 
 if ! command -v xcrun >/dev/null 2>&1; then
-  echo "xcrun was not found. Install Xcode command line tools." >&2
+  echo "error: xcrun was not found. Install Xcode command line tools." >&2
   exit 1
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 was not found. It is required to choose an iOS simulator." >&2
+  echo "error: python3 was not found. It is required to choose an iOS simulator." >&2
   exit 1
 fi
 
@@ -92,8 +124,8 @@ SIMULATOR_INFO="$(pick_simulator)"
 SIMULATOR_UDID="${SIMULATOR_INFO%%|*}"
 SIMULATOR_NAME="${SIMULATOR_INFO#*|}"
 
-if [ -z "${SIMULATOR_UDID:-}" ]; then
-  echo "Could not choose an iOS simulator." >&2
+if [[ -z "${SIMULATOR_UDID:-}" ]]; then
+  echo "error: Could not choose an iOS simulator." >&2
   exit 1
 fi
 
@@ -101,18 +133,25 @@ if ! BOOT_OUTPUT="$(xcrun simctl boot "$SIMULATOR_UDID" 2>&1)"; then
   case "$BOOT_OUTPUT" in
     *"current state: Booted"*) ;;
     *)
-      echo "$BOOT_OUTPUT" >&2
+      echo "error: Failed to boot simulator" >&2
+      if [[ "$VERBOSE" -eq 1 ]]; then
+        echo "$BOOT_OUTPUT" >&2
+      fi
       exit 1
       ;;
   esac
 fi
 
-open -a Simulator
-xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+if [[ "$VERBOSE" -eq 1 ]]; then
+  open -a Simulator
+  xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+else
+  open -a Simulator >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$SIMULATOR_UDID" -b >/dev/null 2>&1
+fi
 
-if [ "$CLEAN" -eq 1 ]; then
-  echo "Cleaning $SCHEME..."
-  xcodebuild \
+if [[ "$CLEAN" -eq 1 ]]; then
+  run_quiet clean xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -121,7 +160,7 @@ if [ "$CLEAN" -eq 1 ]; then
   xcrun simctl uninstall "$SIMULATOR_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
 fi
 
-xcodebuild \
+run_quiet build xcodebuild \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
@@ -130,12 +169,12 @@ xcodebuild \
 
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/$SCHEME.app"
 
-if [ ! -d "$APP_PATH" ]; then
-  echo "Built app not found at $APP_PATH" >&2
+if [[ ! -d "$APP_PATH" ]]; then
+  echo "error: Built app not found at $APP_PATH" >&2
   exit 1
 fi
 
-xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID"
+run_quiet install xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+run_quiet launch xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID"
 
-echo "Launched $SCHEME on $SIMULATOR_NAME."
+echo "success: Launched $SCHEME on $SIMULATOR_NAME."

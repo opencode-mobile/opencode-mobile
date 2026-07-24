@@ -43,6 +43,7 @@ struct OpenCodeSessionListDock: View {
                         Button(action: onAddProject) {
                             OpenCodeIconImage(icon: .createNewFolder)
                                 .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(OpenCodeColors.textStrong)
                                 .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.glass)

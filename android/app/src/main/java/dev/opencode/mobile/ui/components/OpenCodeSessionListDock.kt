@@ -48,7 +48,7 @@ fun OpenCodeSessionListDock(
     val textStrong = openCodeColor("text-strong")
     val borderWeak = openCodeColor("border-weak-base")
     val error = openCodeColor("error")
-    val iconBase = openCodeColor("icon-base")
+    val iconStrong = openCodeColor("icon-strong-base")
 
     OpenCodeFloatingDock(modifier = modifier) {
         Column(
@@ -96,7 +96,7 @@ fun OpenCodeSessionListDock(
                     Icon(
                         imageVector = OpenCodeIcons.CreateNewFolder,
                         contentDescription = "Add project",
-                        tint = iconBase,
+                        tint = iconStrong,
                         modifier = Modifier.size(22.dp),
                     )
                 }
