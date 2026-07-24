@@ -88,9 +88,15 @@ accessibility label or description using the platform convention.
 - iOS: presented with SwiftUI `.sheet` and native dismissal. Form sheets measure
   their natural header and body height once, capped at 560pt, then keep that
   detent stable while the keyboard resizes only the internal scroll region.
-  Short entry lists use a measured compact height detent. Longer lists switch to
-  a fixed 50% height detent with an internal `ScrollView` and do not fall back
-  to compact when body content shrinks. Scrollable sheets disable interactive
+  Short entry lists start at a content-height compact detent (not the 50%
+  scrollable detent) so the first measure is intrinsic row height. Compact
+  height is header + rows + tight bottom padding. Detents are applied without a
+  `selection` binding so a changing `.height` value cannot fall out of sync and
+  revert to a medium (~50%) sheet. Measured content height is never shrunk after
+  the intrinsic size is known, and updates stop once a presentation has locked
+  to the scrollable detent. Longer lists switch to a fixed 50% height detent
+  with an internal `ScrollView` and do not fall back to compact when body
+  content shrinks. Scrollable sheets disable interactive
   swipe-to-dismiss so list scrolling does not close the sheet; use the close
   button instead. Short compact sheets keep the default swipe-to-dismiss behavior.
 - Android: presented with a full-window Compose popup so the underlying activity

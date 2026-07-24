@@ -13,8 +13,13 @@ struct SessionDomainAdapter: Sendable {
             tokens: tokenUsage(from: dto.tokens),
             createdAtEpochMs: dto.time?.created,
             updatedAtEpochMs: dto.time?.updated,
-            archivedAtEpochMs: dto.time?.archived
+            archivedAtEpochMs: dto.time?.archived,
+            revert: dto.revert.map(sessionRevert)
         )
+    }
+
+    func sessionRevert(from dto: SessionRevertDTO) -> SessionRevert {
+        SessionRevert(messageID: dto.messageID, partID: dto.partID, snapshot: dto.snapshot, diff: dto.diff)
     }
 
     func listItem(from session: Session, worktree: String, statusLabel: String? = nil) -> SessionListItem {

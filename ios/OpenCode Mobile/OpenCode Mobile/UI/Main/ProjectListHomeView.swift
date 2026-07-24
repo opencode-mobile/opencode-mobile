@@ -4,7 +4,7 @@ import SwiftUI
 struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
     @State private var showSettings = false
-    @State private var selectedSession: SessionListItem?
+    @State private var navigationPath = NavigationPath()
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
@@ -14,115 +14,119 @@ struct ProjectListHomeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "OpenCode Mobile",
-                subtitleAccessory: showsLiveUpdatesStatus
-                    ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
-                    : nil,
-                actions: [
-                    .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
-                ],
-                showDivider: true
-            )
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(OpenCodeColors.backgroundBase)
-        .navigationDestination(isPresented: $showSettings) {
-            SettingsView(onConnectionSetup: presentConnectionSetup)
-        }
-        .navigationDestination(item: $selectedSession) { session in
-            SessionChatView(session: session)
-        }
-        .task {
-            await viewModel.refresh()
-        }
-        .onChange(of: viewModel.pendingSessionOpen?.id) { _, _ in
-            if let session = viewModel.pendingSessionOpen {
-                selectedSession = session
-                viewModel.consumePendingSessionOpen()
-            }
-        }
-        .openCodeBottomSheet(
-            isPresented: addProjectPresentedBinding,
-            title: "Add project",
-            alwaysFixedHeight: true,
-            pinnedContent: {
-                let navigator = viewModel.addProjectNavigator
-                OpenCodeBottomSheetEntry(
-                    title: "Go up",
-                    enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
-                    startDecorator: .icon(.arrowUpward),
-                    action: { Task { await viewModel.navigateAddProjectUp() } }
+        NavigationStack(path: $navigationPath) {
+            VStack(spacing: 0) {
+                OpenCodeTopBar(
+                    title: "OpenCode Mobile",
+                    subtitleAccessory: showsLiveUpdatesStatus
+                        ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
+                        : nil,
+                    actions: [
+                        .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
+                    ],
+                    showDivider: true
                 )
-                OpenCodeBottomSheetEntry(
-                    title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
-                    enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
-                    startDecorator: .icon(.folderCheck),
-                    action: { Task { await viewModel.selectCurrentDirectory() } }
-                )
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        ) {
-            let navigator = viewModel.addProjectNavigator
-            if navigator.isLoading || navigator.isValidating {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(24)
-            } else if let errorMessage = navigator.errorMessage {
-                VStack(spacing: 12) {
-                    Text(errorMessage)
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .multilineTextAlignment(.center)
-                    OpenCodeButton(
-                        variant: .fullWidthText(title: "Retry"),
-                        action: { Task { await viewModel.retryAddProjectNavigator() } }
-                    )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(OpenCodeColors.backgroundBase)
+            .navigationDestination(isPresented: $showSettings) {
+                SettingsView(onConnectionSetup: presentConnectionSetup)
+            }
+            .navigationDestination(for: SessionListItem.self) { session in
+                SessionChatView(session: session)
+            }
+            .task {
+                await viewModel.refresh()
+            }
+            .onChange(of: viewModel.pendingSessionOpen?.id) { _, _ in
+                if let session = viewModel.pendingSessionOpen {
+                    openSession(session)
+                    viewModel.consumePendingSessionOpen()
                 }
-                .padding(20)
-            } else if navigator.entries.isEmpty {
-                OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
-            } else {
-                ForEach(navigator.entries) { entry in
+            }
+            .openCodeBottomSheet(
+                isPresented: addProjectPresentedBinding,
+                title: "Add project",
+                alwaysFixedHeight: true,
+                pinnedContent: {
+                    let navigator = viewModel.addProjectNavigator
                     OpenCodeBottomSheetEntry(
-                        title: entry.name,
-                        startDecorator: .icon(.subdirectoryArrowRight),
-                        action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
+                        title: "Go up",
+                        enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
+                        startDecorator: .icon(.arrowUpward),
+                        action: { Task { await viewModel.navigateAddProjectUp() } }
+                    )
+                    OpenCodeBottomSheetEntry(
+                        title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
+                        enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
+                        startDecorator: .icon(.folderCheck),
+                        action: { Task { await viewModel.selectCurrentDirectory() } }
                     )
                 }
+            ) {
+                let navigator = viewModel.addProjectNavigator
+                if navigator.isLoading || navigator.isValidating {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(24)
+                } else if let errorMessage = navigator.errorMessage {
+                    VStack(spacing: 12) {
+                        Text(errorMessage)
+                            .font(OpenCodeTypography.body)
+                            .foregroundStyle(OpenCodeColors.textBase)
+                            .multilineTextAlignment(.center)
+                        OpenCodeButton(
+                            variant: .fullWidthText(title: "Retry"),
+                            action: { Task { await viewModel.retryAddProjectNavigator() } }
+                        )
+                    }
+                    .padding(20)
+                } else if navigator.entries.isEmpty {
+                    OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
+                } else {
+                    ForEach(navigator.entries) { entry in
+                        OpenCodeBottomSheetEntry(
+                            title: entry.name,
+                            startDecorator: .icon(.subdirectoryArrowRight),
+                            action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
+                        )
+                    }
+                }
             }
-        }
-        .openCodeBottomSheet(
-            isPresented: seeAllPresentedBinding,
-            title: viewModel.seeAllSessionsSheet?.projectName ?? "Sessions"
-        ) {
-            if let sheet = viewModel.seeAllSessionsSheet {
+            .openCodeBottomSheet(
+                item: seeAllSheetBinding,
+                title: viewModel.seeAllSessionsSheet?.projectName ?? "Sessions"
+            ) { sheet in
                 ForEach(sheet.sessions) { session in
                     OpenCodeBottomSheetEntry(
                         title: seeAllSessionEntryTitle(session),
                         action: {
                             viewModel.dismissSeeAllSessions()
-                            selectedSession = session
+                            openSession(session)
                         }
                     )
                 }
             }
+            .openCodeBottomSheet(
+                item: $connectionSetupPresentation,
+                title: "Connect to server",
+                contentMode: .form
+            ) { presentation in
+                ConnectionSetupSheetView(
+                    viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
+                    onDismiss: {
+                        connectionSetupPresentation = nil
+                        connectionSetupViewModel = nil
+                    }
+                )
+            }
         }
-        .openCodeBottomSheet(
-            item: $connectionSetupPresentation,
-            title: "Connect to server",
-            contentMode: .form
-        ) { presentation in
-            ConnectionSetupSheetView(
-                viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
-                onDismiss: {
-                    connectionSetupPresentation = nil
-                    connectionSetupViewModel = nil
-                }
-            )
-        }
+    }
+
+    private func openSession(_ session: SessionListItem) {
+        navigationPath.append(session)
     }
 
     private var addProjectPresentedBinding: Binding<Bool> {
@@ -134,11 +138,13 @@ struct ProjectListHomeView: View {
         )
     }
 
-    private var seeAllPresentedBinding: Binding<Bool> {
+    private var seeAllSheetBinding: Binding<SeeAllSessionsSheetState?> {
         Binding(
-            get: { viewModel.seeAllSessionsSheet != nil },
-            set: { presented in
-                if !presented { viewModel.dismissSeeAllSessions() }
+            get: { viewModel.seeAllSessionsSheet },
+            set: { value in
+                if value == nil {
+                    viewModel.dismissSeeAllSessions()
+                }
             }
         )
     }
@@ -218,10 +224,12 @@ struct ProjectListHomeView: View {
                         SessionList(
                             sessions: crossProjectSessions,
                             onSessionSelected: { session in
-                                selectedSession = SessionListItem(
-                                    id: session.id,
-                                    title: session.title,
-                                    worktree: session.worktree
+                                openSession(
+                                    SessionListItem(
+                                        id: session.id,
+                                        title: session.title,
+                                        worktree: session.worktree
+                                    )
                                 )
                             }
                         )
@@ -234,7 +242,9 @@ struct ProjectListHomeView: View {
                         onProjectSelected: { viewModel.focusProject(worktree: $0) },
                         onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
                         onSessionSelected: { project, session in
-                            selectedSession = SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                            openSession(
+                                SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                            )
                         },
                         onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
                         onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
@@ -358,10 +368,8 @@ private extension EventStreamConnectionState {
 }
 
 #Preview {
-    NavigationStack {
-        ProjectListHomeView(viewModel: previewProjectListHomeViewModel())
-    }
-    .openCodeTheme()
+    ProjectListHomeView(viewModel: previewProjectListHomeViewModel())
+        .openCodeTheme()
 }
 
 @MainActor

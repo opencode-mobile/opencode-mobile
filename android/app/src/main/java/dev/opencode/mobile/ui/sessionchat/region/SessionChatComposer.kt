@@ -401,6 +401,17 @@ class SessionChatComposer(
         }
     }
 
+    fun dismissSuggestions() {
+        _state.update {
+            it.copy(
+                slashSuggestionsVisible = false,
+                slashSuggestions = emptyList(),
+                atSuggestionsVisible = false,
+                atSuggestions = emptyList(),
+            )
+        }
+    }
+
     fun selectSlashSuggestion(commandName: String) {
         val inserted = ComposerSubmitRouting.insertSelection(commandName)
         updateComposerText(inserted, cursor = inserted.length)
@@ -680,6 +691,10 @@ class SessionChatComposer(
 
     fun clearSending() {
         _state.update { it.copy(isSending = false) }
+    }
+
+    fun clearTransientErrors() {
+        _state.update { it.copy(errorMessage = null, abortErrorMessage = null) }
     }
 
     fun abort() {

@@ -58,10 +58,8 @@ struct AppRootView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .home:
-                NavigationStack {
-                    ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .background(OpenCodeColors.backgroundBase)

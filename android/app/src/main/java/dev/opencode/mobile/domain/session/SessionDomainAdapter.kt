@@ -6,6 +6,7 @@ import dev.opencode.mobile.data.remote.dto.PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.QuestionInfoDto
 import dev.opencode.mobile.data.remote.dto.QuestionRequestDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
+import dev.opencode.mobile.data.remote.dto.SessionRevertDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
@@ -32,6 +33,15 @@ class SessionDomainAdapter {
             createdAtEpochMs = dto.time?.created,
             updatedAtEpochMs = dto.time?.updated,
             archivedAtEpochMs = dto.time?.archived,
+            revert = dto.revert?.let(::toSessionRevert),
+        )
+
+    private fun toSessionRevert(dto: SessionRevertDto): SessionRevert =
+        SessionRevert(
+            messageId = dto.messageId,
+            partId = dto.partId,
+            snapshot = dto.snapshot,
+            diff = dto.diff,
         )
 
     fun toSessionSummary(

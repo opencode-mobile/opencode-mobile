@@ -138,10 +138,22 @@ config commands, built-ins such as `init`/`review`, MCP prompts, and skills —
 that the client lists and runs against a session instead of sending as a normal
 prompt.
 
-Distinct from client slash actions (local UI under the same `/` trigger) and
-from a timeline message with role `command`.
+Distinct from **client slash actions** (Commands-sheet local actions) and from a
+timeline message with role `command`.
 _Avoid_: slash command (as the name for this concept); custom command (when
 meaning the whole server catalog).
+
+### client slash action
+
+A curated local Session Chat action shown in the composer **Commands** sheet
+(opened from the `/` circle button next to Attach). Selecting one runs client
+behavior immediately (for example new session, fork, undo/redo, compact). It is
+not listed from `GET /command` and is not submitted as `POST …/command`.
+
+Distinct from **server command** (typed `/` suggestions and command send) and
+from desktop/TUI builtins that mobile intentionally omits.
+_Avoid_: slash command (ambiguous); builtin command (when meaning the mobile
+allowlist).
 
 ### Agent Repository
 

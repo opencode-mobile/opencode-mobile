@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ServerCommand
@@ -41,6 +42,7 @@ import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
@@ -74,8 +76,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.After
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -139,7 +139,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't archive session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't archive session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -181,7 +183,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -200,7 +204,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't delete session.", viewModel.uiState.value.errorMessage)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -328,7 +334,9 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.permissionRequest)
-            assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.errorMessage)
+            assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1202,8 +1210,10 @@ class SessionChatViewModelTest {
             assertEquals(listOf("img", "txt"), viewModel.uiState.value.composer.attachments.map { it.id })
             assertEquals(
                 "This model does not support PDF attachments.",
-                viewModel.uiState.value.errorMessage,
+                viewModel.uiState.value.snackbar?.message,
             )
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
 
             viewModel.selectModel(textOnly)
             runCurrent()
@@ -1238,7 +1248,9 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.composer.attachments
                     .map { it.id },
             )
-            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+            assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1894,7 +1906,9 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.messages
                     .any { it.text == "Fail me" },
             )
-            assertEquals("send failed", viewModel.uiState.value.errorMessage)
+            assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
     @Test
@@ -1941,7 +1955,9 @@ class SessionChatViewModelTest {
             )
             runCurrent()
 
-            assertEquals("Image exceeds the size limit", viewModel.uiState.value.errorMessage)
+            assertEquals("Image exceeds the size limit", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
             assertTrue(
                 viewModel.uiState.value.composer.attachments
                     .isEmpty(),
@@ -2278,6 +2294,311 @@ class SessionChatViewModelTest {
         assertNotNull(item.renderedMarkdown)
     }
 
+    @Test
+    fun openCommands_showsSheetAndDismissesSuggestionsKeepingText() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/in")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
+
+            viewModel.openCommands()
+            runCurrent()
+
+            assertTrue(viewModel.uiState.value.commandsSheetVisible)
+            assertFalse(viewModel.uiState.value.slashSuggestionsVisible)
+            assertFalse(viewModel.uiState.value.atSuggestionsVisible)
+            assertEquals("/in", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun clientSlashActions_visibility_reflectsCatalogGates() =
+        runTest(testDispatcher) {
+            val emptyMessages = createViewModel(FakeMessageRepository(messages = emptyList()))
+            emptyMessages.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(listOf(ClientSlashAction.New), emptyMessages.uiState.value.visibleClientSlashActions)
+
+            val withMessages = createViewModel(FakeMessageRepository())
+            withMessages.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val visible = withMessages.uiState.value.visibleClientSlashActions
+            assertTrue(ClientSlashAction.New in visible)
+            assertTrue(ClientSlashAction.Fork in visible)
+            assertTrue(ClientSlashAction.Undo in visible)
+            assertTrue(ClientSlashAction.Compact in visible)
+            assertFalse(ClientSlashAction.Redo in visible)
+        }
+
+    @Test
+    fun runClientSlashAction_new_createsSessionKeepsDraftNeverRunsCommand() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult = Session(id = "ses-2", title = "New session", directory = "/repo"),
+                )
+            val commandRepository = FakeCommandRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    commandRepository = commandRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("draft that should survive")
+            viewModel.openCommands()
+
+            viewModel.runClientSlashAction(ClientSlashAction.New)
+            advanceUntilIdle()
+
+            assertEquals(FakeSessionRepository.LifecycleRequest(id = "", directory = "/repo"), sessionRepository.createSessionRequest)
+            assertFalse(viewModel.uiState.value.commandsSheetVisible)
+            assertEquals(
+                ChildSessionNavigationTarget(sessionId = "ses-2", sessionTitle = "New session", worktree = "/repo"),
+                viewModel.uiState.value.pendingSessionReplace,
+            )
+            assertEquals("draft that should survive", viewModel.uiState.value.composer.text)
+            assertFalse(commandRepository.runCommandCalled)
+
+            viewModel.consumePendingSessionReplace()
+            runCurrent()
+            assertEquals(null, viewModel.uiState.value.pendingSessionReplace)
+        }
+
+    @Test
+    fun runClientSlashAction_new_failure_setsActionErrorMessage() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(createSessionError = SessionError.Http(500, "boom"))
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.New)
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.pendingSessionReplace)
+            assertEquals("Couldn't start a new session.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    forkSessionResult = Session(id = "ses-3", title = "Original", directory = "/repo"),
+                )
+            val commandRepository = FakeCommandRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    commandRepository = commandRepository,
+                )
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Fork)
+            runCurrent()
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertEquals("Original", viewModel.uiState.value.forkDraftTitle)
+            assertFalse(viewModel.uiState.value.commandsSheetVisible)
+
+            viewModel.updateForkDraft("Forked copy")
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.ForkRequest(id = "ses-1", atMessageId = null, directory = "/repo"),
+                sessionRepository.forkSessionRequest,
+            )
+            assertEquals(
+                FakeSessionRepository.UpdateRequest(id = "ses-3", title = "Forked copy", directory = "/repo"),
+                sessionRepository.updateRequest,
+            )
+            assertFalse(viewModel.uiState.value.forkDialogVisible)
+            assertTrue(viewModel.uiState.value.forkResultVisible)
+            assertEquals("Forked copy", viewModel.uiState.value.forkedSessionTitle)
+            assertFalse(commandRepository.runCommandCalled)
+
+            viewModel.chooseForkOpen()
+            runCurrent()
+            assertFalse(viewModel.uiState.value.forkResultVisible)
+            assertEquals(
+                ChildSessionNavigationTarget(sessionId = "ses-3", sessionTitle = "Forked copy", worktree = "/repo"),
+                viewModel.uiState.value.pendingSessionReplace,
+            )
+        }
+
+    @Test
+    fun runClientSlashAction_fork_stay_dismissesWithoutNavigating() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    forkSessionResult = Session(id = "ses-3", title = "Original", directory = "/repo"),
+                )
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Fork)
+            viewModel.updateForkDraft("Forked copy")
+            viewModel.confirmFork()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.forkResultVisible)
+
+            viewModel.chooseForkStay()
+            runCurrent()
+            assertFalse(viewModel.uiState.value.forkResultVisible)
+            assertEquals(null, viewModel.uiState.value.pendingSessionReplace)
+        }
+
+    @Test
+    fun runClientSlashAction_fork_failure_keepsDialogOpenWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(forkSessionError = SessionError.Http(500, "boom"))
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Fork)
+            viewModel.updateForkDraft("Forked copy")
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertFalse(viewModel.uiState.value.forkSubmitting)
+            assertNotNull(viewModel.uiState.value.forkErrorMessage)
+        }
+
+    @Test
+    fun runClientSlashAction_undo_revertsLastUndoableMessageAndRestoresComposer() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                    Message(id = "msg-3", role = MessageRole.User, text = "Second"),
+                )
+            val sessionRepository = FakeSessionRepository()
+            val commandRepository = FakeCommandRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                    commandRepository = commandRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(ClientSlashAction.Undo in viewModel.uiState.value.visibleClientSlashActions)
+
+            viewModel.runClientSlashAction(ClientSlashAction.Undo)
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.RevertRequest(id = "ses-1", messageId = "msg-3", partId = null, directory = "/repo"),
+                sessionRepository.revertRequest,
+            )
+            assertEquals("Second", viewModel.uiState.value.composer.text)
+            assertEquals(0, sessionRepository.abortCallCount)
+            assertFalse(commandRepository.runCommandCalled)
+        }
+
+    @Test
+    fun runClientSlashAction_undo_whenBusy_abortsBeforeReverting() =
+        runTest(testDispatcher) {
+            val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "First"))
+            val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(messages = messages),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertNotNull(viewModel.uiState.value.sessionStatusLabel)
+
+            viewModel.runClientSlashAction(ClientSlashAction.Undo)
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.abortCallCount)
+            assertEquals("msg-1", sessionRepository.revertRequest?.messageId)
+        }
+
+    @Test
+    fun runClientSlashAction_redo_unrevertsAndClearsComposerRestore() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    getSessionResult = Session(id = "ses-1", title = "Title", revert = SessionRevert(messageId = "msg-1")),
+                )
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(ClientSlashAction.Redo in viewModel.uiState.value.visibleClientSlashActions)
+            viewModel.restoreComposerText("Second")
+
+            viewModel.runClientSlashAction(ClientSlashAction.Redo)
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo"),
+                sessionRepository.unrevertRequest,
+            )
+            assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun runClientSlashAction_redo_withoutActiveRevert_isNoop() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Redo)
+            advanceUntilIdle()
+
+            assertEquals(null, sessionRepository.unrevertRequest)
+        }
+
+    @Test
+    fun runClientSlashAction_compact_summarizesWithSelectedModelAndRefreshes() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val commandRepository = FakeCommandRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    commandRepository = commandRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(ClientSlashAction.Compact in viewModel.uiState.value.visibleClientSlashActions)
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.SummarizeRequest(
+                    id = "ses-1",
+                    providerId = "anthropic",
+                    modelId = "claude-sonnet",
+                    directory = "/repo",
+                ),
+                sessionRepository.summarizeRequest,
+            )
+            assertEquals("Session compacted.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Default, viewModel.uiState.value.snackbar?.tone)
+            assertFalse(commandRepository.runCommandCalled)
+        }
+
     private fun createViewModel(
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
@@ -2321,6 +2642,11 @@ class SessionChatViewModelTest {
             eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
+            newSessionModelSelectionResolver =
+                dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver(
+                    store = sessionModelSelectionStore,
+                    modelRepository = modelRepository,
+                ),
         ).apply { ioDispatcher = testDispatcher }
     }
 
@@ -2698,6 +3024,15 @@ private class FakeSessionRepository(
     private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
     private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
     private val questionHoldUntil: CompletableDeferred<Unit>? = null,
+    var getSessionResult: Session? = null,
+    private val getSessionError: Throwable? = null,
+    private val createSessionResult: Session? = null,
+    private val createSessionError: Throwable? = null,
+    private val forkSessionResult: Session? = null,
+    private val forkSessionError: Throwable? = null,
+    private val revertError: Throwable? = null,
+    private val unrevertError: Throwable? = null,
+    private val summarizeError: Throwable? = null,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
@@ -2713,6 +3048,26 @@ private class FakeSessionRepository(
 
     data class LifecycleRequest(
         val id: String,
+        val directory: String?,
+    )
+
+    data class ForkRequest(
+        val id: String,
+        val atMessageId: String?,
+        val directory: String?,
+    )
+
+    data class RevertRequest(
+        val id: String,
+        val messageId: String,
+        val partId: String?,
+        val directory: String?,
+    )
+
+    data class SummarizeRequest(
+        val id: String,
+        val providerId: String,
+        val modelId: String,
         val directory: String?,
     )
 
@@ -2740,6 +3095,20 @@ private class FakeSessionRepository(
         private set
     var deleteCallCount: Int = 0
         private set
+    var getSessionRequest: LifecycleRequest? = null
+        private set
+    var createSessionRequest: LifecycleRequest? = null
+        private set
+    var forkSessionRequest: ForkRequest? = null
+        private set
+    var revertRequest: RevertRequest? = null
+        private set
+    var unrevertRequest: LifecycleRequest? = null
+        private set
+    var summarizeRequest: SummarizeRequest? = null
+        private set
+    var abortCallCount: Int = 0
+        private set
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
         pendingPermissionLoads += 1
@@ -2760,7 +3129,11 @@ private class FakeSessionRepository(
         parentId: String?,
         title: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        createSessionRequest = LifecycleRequest(id = parentId.orEmpty(), directory = directory)
+        createSessionError?.let { throw it }
+        return createSessionResult ?: Session(id = "new-ses", title = title.orEmpty(), directory = directory)
+    }
 
     override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
         sessionStatusError?.let { throw it }
@@ -2770,7 +3143,11 @@ private class FakeSessionRepository(
     override suspend fun getSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        getSessionRequest = LifecycleRequest(id = id, directory = directory)
+        getSessionError?.let { throw it }
+        return getSessionResult ?: Session(id = id, title = "Title", directory = directory)
+    }
 
     override suspend fun updateSession(
         id: String,
@@ -2826,12 +3203,19 @@ private class FakeSessionRepository(
         id: String,
         atMessageId: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        forkSessionRequest = ForkRequest(id = id, atMessageId = atMessageId, directory = directory)
+        forkSessionError?.let { throw it }
+        return forkSessionResult ?: Session(id = "forked-ses", title = "Untitled", directory = directory)
+    }
 
     override suspend fun abortSession(
         id: String,
         directory: String?,
-    ) = true
+    ): Boolean {
+        abortCallCount += 1
+        return true
+    }
 
     override suspend fun shareSession(
         id: String,
@@ -2859,19 +3243,31 @@ private class FakeSessionRepository(
         providerId: String,
         modelId: String,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        summarizeRequest = SummarizeRequest(id = id, providerId = providerId, modelId = modelId, directory = directory)
+        summarizeError?.let { throw it }
+        return true
+    }
 
     override suspend fun revertSession(
         id: String,
         messageId: String,
         partId: String?,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        revertRequest = RevertRequest(id = id, messageId = messageId, partId = partId, directory = directory)
+        revertError?.let { throw it }
+        return true
+    }
 
     override suspend fun unrevertSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        unrevertRequest = LifecycleRequest(id = id, directory = directory)
+        unrevertError?.let { throw it }
+        return true
+    }
 
     override suspend fun respondToPermission(
         sessionId: String,

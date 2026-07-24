@@ -26,7 +26,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         viewModel.archiveSession()
-        await waitUntil { viewModel.uiState.errorMessage == "Couldn't archive session." }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't archive session." }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.shouldLeaveSession == false)
     }
@@ -50,7 +52,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         viewModel.deleteSession()
-        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't delete session." }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.shouldLeaveSession == false)
     }
@@ -61,7 +65,9 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         viewModel.deleteSession()
-        await waitUntil { viewModel.uiState.errorMessage == "Couldn't delete session." }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't delete session." }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.shouldLeaveSession == false)
     }
@@ -157,7 +163,9 @@ struct SessionChatViewModelTests {
         )
         defer { viewModel.stopObserving() }
 
-        await waitUntil { viewModel.uiState.errorMessage == "Unable to refresh permission session tree" }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Unable to refresh permission session tree" }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.permissionRequest == nil)
     }
@@ -718,7 +726,9 @@ struct SessionChatViewModelTests {
         let text = testAttachment(id: "txt", filename: "notes.txt", kind: .text, mime: "text/plain")
         viewModel.addAttachments([image, pdf, text])
         #expect(viewModel.uiState.composer.attachments.map(\.id) == ["img", "txt"])
-        #expect(viewModel.uiState.errorMessage == "This model does not support PDF attachments.")
+        #expect(viewModel.uiState.snackbar?.message == "This model does not support PDF attachments.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         viewModel.selectModel(textOnly)
         #expect(viewModel.uiState.composer.canAttach == false)
@@ -756,7 +766,9 @@ struct SessionChatViewModelTests {
 
         #expect(viewModel.uiState.composer.attachments.isEmpty)
         #expect(viewModel.uiState.composer.text == "Keep this draft")
-        #expect(viewModel.uiState.errorMessage == "Only images, PDFs, or text files can be attached here.")
+        #expect(viewModel.uiState.snackbar?.message == "Only images, PDFs, or text files can be attached here.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
     }
 
     @Test func sendPrompt_attachmentOnly_sendsAndRendersOptimistically() async {
@@ -885,7 +897,9 @@ struct SessionChatViewModelTests {
                 ]
             )
         )
-        await waitUntil { viewModel.uiState.errorMessage == "Image exceeds the maximum size" }
+        await waitUntil { viewModel.uiState.snackbar?.message == "Image exceeds the maximum size" }
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
 
         #expect(viewModel.uiState.composer.attachments.isEmpty)
     }
@@ -1224,7 +1238,9 @@ struct SessionChatViewModelTests {
         let messages = viewModel.uiState.messages
         #expect(viewModel.uiState.isSending == false)
         #expect(!messages.contains { $0.text == "Fail me" })
-        #expect(viewModel.uiState.errorMessage != nil)
+        #expect(viewModel.uiState.snackbar?.message != nil)
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
     }
 
     @Test func sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() async {
@@ -1574,6 +1590,253 @@ struct SessionChatViewModelTests {
         #expect(noLimit.uiState.contextUsageFraction == nil)
     }
 
+    @Test func openCommands_showsSheetAndDismissesSuggestionsKeepingText() async {
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("/in")
+        #expect(viewModel.uiState.slashSuggestionsVisible)
+
+        viewModel.openCommands()
+
+        #expect(viewModel.uiState.commandsSheetVisible)
+        #expect(viewModel.uiState.slashSuggestionsVisible == false)
+        #expect(viewModel.uiState.atSuggestionsVisible == false)
+        #expect(viewModel.uiState.composer.text == "/in")
+    }
+
+    @Test func clientSlashActions_visibility_reflectsCatalogGates() async {
+        let emptyMessages = makeViewModel(messageRepository: FakeMessageRepository(messages: []))
+        defer { emptyMessages.stopObserving() }
+        await emptyMessages.loadMessages()
+        #expect(emptyMessages.uiState.visibleClientSlashActions == [.new])
+
+        let withMessages = makeViewModel(messageRepository: FakeMessageRepository())
+        defer { withMessages.stopObserving() }
+        await withMessages.loadMessages()
+        let visible = withMessages.uiState.visibleClientSlashActions
+        #expect(visible.contains(.new))
+        #expect(visible.contains(.fork))
+        #expect(visible.contains(.undo))
+        #expect(visible.contains(.compact))
+        #expect(visible.contains(.redo) == false)
+    }
+
+    @Test func runClientSlashAction_new_createsSessionKeepsDraftNeverRunsCommand() async {
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionResult: Session(
+                id: "ses-2", title: "New session", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            commandRepository: commandRepository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("draft that should survive")
+        viewModel.openCommands()
+
+        viewModel.runClientSlashAction(.new)
+        await waitUntil { viewModel.uiState.pendingSessionReplace != nil }
+
+        #expect(sessionRepository.createSessionDirectory == "/repo")
+        #expect(viewModel.uiState.commandsSheetVisible == false)
+        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(sessionID: "ses-2", sessionTitle: "New session", worktree: "/repo"))
+        #expect(viewModel.uiState.composer.text == "draft that should survive")
+        #expect(commandRepository.runCommandCalled == false)
+
+        viewModel.consumePendingSessionReplace()
+        #expect(viewModel.uiState.pendingSessionReplace == nil)
+    }
+
+    @Test func runClientSlashAction_new_failure_setsActionErrorMessage() async {
+        let sessionRepository = FakeChatSessionRepository(createSessionError: .http(statusCode: 500, message: "boom"))
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.new)
+        await waitUntil { viewModel.uiState.snackbar?.message != nil }
+
+        #expect(viewModel.uiState.pendingSessionReplace == nil)
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't start a new session.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    @Test func runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() async {
+        let sessionRepository = FakeChatSessionRepository(
+            forkSessionResult: Session(
+                id: "ses-3", title: "Original", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            commandRepository: commandRepository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.fork)
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.forkDraftTitle == "Title")
+        #expect(viewModel.uiState.commandsSheetVisible == false)
+
+        viewModel.updateForkDraft("Forked copy")
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+
+        #expect(sessionRepository.forkSessionRequest == .init(id: "ses-1", atMessageID: nil))
+        #expect(sessionRepository.updateRequest == .init(id: "ses-3", title: "Forked copy", directory: "/repo"))
+        #expect(viewModel.uiState.forkDialogVisible == false)
+        #expect(viewModel.uiState.forkedSessionTitle == "Forked copy")
+        #expect(commandRepository.runCommandCalled == false)
+
+        viewModel.chooseForkOpen()
+        #expect(viewModel.uiState.forkResultVisible == false)
+        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(sessionID: "ses-3", sessionTitle: "Forked copy", worktree: "/repo"))
+    }
+
+    @Test func runClientSlashAction_fork_stay_dismissesWithoutNavigating() async {
+        let sessionRepository = FakeChatSessionRepository(
+            forkSessionResult: Session(
+                id: "ses-3", title: "Original", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.fork)
+        viewModel.updateForkDraft("Forked copy")
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+
+        viewModel.chooseForkStay()
+        #expect(viewModel.uiState.forkResultVisible == false)
+        #expect(viewModel.uiState.pendingSessionReplace == nil)
+    }
+
+    @Test func runClientSlashAction_fork_failure_keepsDialogOpenWithError() async {
+        let sessionRepository = FakeChatSessionRepository(forkSessionError: .http(statusCode: 500, message: "boom"))
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.fork)
+        viewModel.updateForkDraft("Forked copy")
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkErrorMessage != nil }
+
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.forkSubmitting == false)
+        #expect(viewModel.uiState.forkErrorMessage != nil)
+    }
+
+    @Test func runClientSlashAction_undo_revertsLastUndoableMessageAndRestoresComposer() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+            Message(id: "msg-3", role: .user, text: "Second", model: nil, mode: nil, sentAtEpochMs: 3),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            commandRepository: commandRepository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.visibleClientSlashActions.contains(.undo))
+
+        viewModel.runClientSlashAction(.undo)
+        await waitUntil { viewModel.uiState.composer.text == "Second" }
+
+        #expect(sessionRepository.revertRequest == .init(id: "ses-1", messageID: "msg-3", partID: nil))
+        #expect(sessionRepository.abortCallCount == 0)
+        #expect(commandRepository.runCommandCalled == false)
+    }
+
+    @Test func runClientSlashAction_undo_whenBusy_abortsBeforeReverting() async {
+        let messages = [Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1)]
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.sessionStatusLabel != nil)
+
+        viewModel.runClientSlashAction(.undo)
+        await waitUntil { sessionRepository.revertRequest != nil }
+
+        #expect(sessionRepository.abortCallCount == 1)
+        #expect(sessionRepository.revertRequest?.messageID == "msg-1")
+    }
+
+    @Test func runClientSlashAction_redo_unrevertsAndClearsComposerRestore() async {
+        let sessionRepository = FakeChatSessionRepository(
+            getSessionResult: Session(
+                id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil,
+                updatedAtEpochMs: nil, revert: SessionRevert(messageID: "msg-1")
+            )
+        )
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.redo) }
+        viewModel.restoreComposerText("Second")
+
+        viewModel.runClientSlashAction(.redo)
+        await waitUntil { viewModel.uiState.composer.text == "" }
+
+        #expect(sessionRepository.unrevertRequest == "ses-1")
+    }
+
+    @Test func runClientSlashAction_redo_withoutActiveRevert_isNoop() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.redo)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(sessionRepository.unrevertRequest == nil)
+    }
+
+    @Test func runClientSlashAction_compact_summarizesWithSelectedModelAndRefreshes() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let commandRepository = FakeCommandRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            commandRepository: commandRepository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.visibleClientSlashActions.contains(.compact))
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+
+        #expect(sessionRepository.summarizeRequest == .init(id: "ses-1", providerID: "anthropic", modelID: "claude-sonnet"))
+        #expect(viewModel.uiState.snackbar?.message == "Session compacted.")
+        #expect(viewModel.uiState.snackbar?.tone == .default)
+        #expect(commandRepository.runCommandCalled == false)
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
@@ -1621,7 +1884,11 @@ struct SessionChatViewModelTests {
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
-            activeConnectionManager: activeConnectionManager
+            activeConnectionManager: activeConnectionManager,
+            newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
+                store: selectionStore,
+                modelRepository: modelRepository
+            )
         )
         viewModel.startObserving()
         return viewModel
@@ -2112,6 +2379,23 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         let directory: String?
     }
 
+    struct ForkRequest: Equatable {
+        let id: String
+        let atMessageID: String?
+    }
+
+    struct RevertRequest: Equatable {
+        let id: String
+        let messageID: String
+        let partID: String?
+    }
+
+    struct SummarizeRequest: Equatable {
+        let id: String
+        let providerID: String
+        let modelID: String
+    }
+
     private let sessions: [Session]
     private let pendingPermissions: [PermissionRequest]
     private let pendingQuestions: [QuestionRequest]
@@ -2142,6 +2426,23 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var archiveCallCount = 0
     private(set) var deleteRequest: LifecycleRequest?
     private(set) var deleteCallCount = 0
+    var getSessionResult: Session?
+    private(set) var getSessionRequest: LifecycleRequest?
+    var createSessionResult: Session?
+    private(set) var createSessionDirectory: String?
+    private(set) var createSessionCallCount = 0
+    var forkSessionResult: Session?
+    private(set) var forkSessionRequest: ForkRequest?
+    private(set) var abortCallCount = 0
+    private(set) var revertRequest: RevertRequest?
+    private(set) var unrevertRequest: String?
+    private(set) var summarizeRequest: SummarizeRequest?
+    private let getSessionError: SessionError?
+    private let createSessionError: SessionError?
+    private let forkSessionError: SessionError?
+    private let revertError: SessionError?
+    private let unrevertError: SessionError?
+    private let summarizeError: SessionError?
 
     init(
         sessions: [Session] = [],
@@ -2160,7 +2461,16 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         deleteResult: Bool = true,
         archiveHold: AsyncGate? = nil,
         deleteHold: AsyncGate? = nil,
-        questionHold: AsyncGate? = nil
+        questionHold: AsyncGate? = nil,
+        getSessionResult: Session? = nil,
+        getSessionError: SessionError? = nil,
+        createSessionResult: Session? = nil,
+        createSessionError: SessionError? = nil,
+        forkSessionResult: Session? = nil,
+        forkSessionError: SessionError? = nil,
+        revertError: SessionError? = nil,
+        unrevertError: SessionError? = nil,
+        summarizeError: SessionError? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -2174,6 +2484,15 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.sessionDiffProvider = sessionDiffProvider
         self.updateSessionError = updateSessionError
         self.archiveError = archiveError
+        self.getSessionResult = getSessionResult
+        self.getSessionError = getSessionError
+        self.createSessionResult = createSessionResult
+        self.createSessionError = createSessionError
+        self.forkSessionResult = forkSessionResult
+        self.forkSessionError = forkSessionError
+        self.revertError = revertError
+        self.unrevertError = unrevertError
+        self.summarizeError = summarizeError
         self.deleteError = deleteError
         self.deleteResult = deleteResult
         self.archiveHold = archiveHold
@@ -2195,11 +2514,36 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let listSessionsError { throw listSessionsError }
         return sessions
     }
-    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
+        createSessionCallCount += 1
+        createSessionDirectory = directory
+        if let createSessionError { throw createSessionError }
+        return createSessionResult ?? Session(
+            id: "new-ses",
+            title: title ?? "",
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: nil
+        )
+    }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         [SessionStatus(sessionID: "ses-1", raw: ["type": sessionStatusType])]
     }
-    func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
+    func getSession(id: String, directory: String?) async throws -> Session {
+        getSessionRequest = LifecycleRequest(id: id, directory: directory)
+        if let getSessionError { throw getSessionError }
+        return getSessionResult ?? Session(
+            id: id,
+            title: "Title",
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: nil
+        )
+    }
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
         updateRequest = UpdateRequest(id: id, title: title, directory: directory)
         if let updateSessionError { throw updateSessionError }
@@ -2239,8 +2583,23 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
     func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
-    func forkSession(id: String, atMessageID: String?) async throws -> Session { fatalError() }
-    func abortSession(id: String, directory: String?) async throws -> Bool { fatalError() }
+    func forkSession(id: String, atMessageID: String?) async throws -> Session {
+        forkSessionRequest = ForkRequest(id: id, atMessageID: atMessageID)
+        if let forkSessionError { throw forkSessionError }
+        return forkSessionResult ?? Session(
+            id: "forked-ses",
+            title: "Untitled",
+            slug: nil,
+            projectID: nil,
+            directory: nil,
+            parentID: nil,
+            updatedAtEpochMs: nil
+        )
+    }
+    func abortSession(id: String, directory: String?) async throws -> Bool {
+        abortCallCount += 1
+        return true
+    }
     func shareSession(id: String) async throws -> Session { fatalError() }
     func unshareSession(id: String) async throws -> Session { fatalError() }
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
@@ -2249,9 +2608,21 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let sessionDiffError { throw sessionDiffError }
         return sessionDiffs
     }
-    func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
-    func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { fatalError() }
-    func unrevertSession(id: String) async throws -> Bool { fatalError() }
+    func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {
+        summarizeRequest = SummarizeRequest(id: id, providerID: providerID, modelID: modelID)
+        if let summarizeError { throw summarizeError }
+        return true
+    }
+    func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
+        revertRequest = RevertRequest(id: id, messageID: messageID, partID: partID)
+        if let revertError { throw revertError }
+        return true
+    }
+    func unrevertSession(id: String) async throws -> Bool {
+        unrevertRequest = id
+        if let unrevertError { throw unrevertError }
+        return true
+    }
     func respondToPermission(
         sessionID: String,
         permissionID: String,

@@ -157,6 +157,7 @@ enum OpenCodeSessionComposerAction {
     case selectMode
     case selectVariant
     case attach
+    case openCommands
     case removeAttachment(String)
     case send
     case stop
@@ -235,12 +236,20 @@ struct OpenCodeSessionComposer: View {
             }
 
             HStack {
-                OpenCodeButton(
-                    variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
-                    enabled: prompt.attachEnabled,
-                    contrast: .low,
-                    action: { onAction(.attach) }
-                )
+                HStack(spacing: 8) {
+                    OpenCodeButton(
+                        variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                        enabled: prompt.attachEnabled,
+                        contrast: .low,
+                        action: { onAction(.attach) }
+                    )
+
+                    OpenCodeButton(
+                        variant: .iconCircleText("/", accessibilityLabel: "Open commands"),
+                        contrast: .low,
+                        action: { onAction(.openCommands) }
+                    )
+                }
 
                 Spacer(minLength: 0)
 

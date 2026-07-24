@@ -18,6 +18,15 @@ data class SessionDto(
     val cost: Double? = null,
     val tokens: MessageTokensDto? = null,
     val time: SessionTimeDto? = null,
+    val revert: SessionRevertDto? = null,
+)
+
+@Serializable
+data class SessionRevertDto(
+    @SerialName("messageID") val messageId: String,
+    @SerialName("partID") val partId: String? = null,
+    val snapshot: String? = null,
+    val diff: String? = null,
 )
 
 @Serializable

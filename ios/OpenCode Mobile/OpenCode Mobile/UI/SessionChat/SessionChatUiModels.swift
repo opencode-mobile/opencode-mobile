@@ -116,6 +116,17 @@ struct SessionRenameUiState: Equatable {
     var errorMessage: String?
 }
 
+enum SessionChatSnackbarTone: Equatable {
+    case `default`
+    case error
+}
+
+struct SessionChatSnackbar: Equatable, Identifiable {
+    let id: UInt64
+    let message: String
+    let tone: SessionChatSnackbarTone
+}
+
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
@@ -129,6 +140,7 @@ struct SessionChatUiState: Equatable {
     var connectionStatus: SessionConnectionStatus = .offline
     var contextUsageFraction: Double?
     var errorMessage: String?
+    var snackbar: SessionChatSnackbar?
     var isLifecycleActionInFlight: Bool = false
     var shouldLeaveSession: Bool = false
     var permissionRequest: PermissionRequest?
@@ -149,6 +161,15 @@ struct SessionChatUiState: Equatable {
     var slashSuggestions: [SessionChatSlashSuggestion] = []
     var atSuggestionsVisible = false
     var atSuggestions: [SessionChatAtSuggestion] = []
+    var commandsSheetVisible = false
+    var visibleClientSlashActions: [ClientSlashAction] = []
+    var forkDialogVisible = false
+    var forkDraftTitle = ""
+    var forkSubmitting = false
+    var forkErrorMessage: String?
+    var forkResultVisible = false
+    var forkedSessionTitle = ""
+    var pendingSessionReplace: ChildSessionNavigationTarget?
 
     var latestCompletedUserMessageID: String? {
         var latest: String?
@@ -371,6 +392,20 @@ struct SessionInfoRegionState: Equatable {
 struct SessionChatReviewChangesRegionState: Equatable {
     var messageID: String?
     var summary: ReviewChangesSummary?
+}
+
+struct SessionChatCommandsRegionState: Equatable {
+    var commandsSheetVisible = false
+    var visibleActions: [ClientSlashAction] = []
+    var forkDialogVisible = false
+    var forkDraftTitle = ""
+    var forkSubmitting = false
+    var forkErrorMessage: String?
+    var forkResultVisible = false
+    var forkedSessionTitle = ""
+    var actionErrorMessage: String?
+    var actionSuccessMessage: String?
+    var pendingSessionReplace: ChildSessionNavigationTarget?
 }
 
 struct LatestModelHint: Equatable {

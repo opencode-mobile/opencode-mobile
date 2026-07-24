@@ -125,6 +125,12 @@ final class SessionChatTimeline {
         pendingBaselineSignatureCounts = [:]
     }
 
+    func clearReadyError() {
+        guard state.timeline == .ready else { return }
+        state.errorMessage = nil
+        notifyChange()
+    }
+
     func reloadAfterSend(onComplete: @escaping () -> Void, onReloadFailed: @escaping () -> Void) async {
         do {
             let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)

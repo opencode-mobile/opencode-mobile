@@ -13,14 +13,18 @@ icon-only button needs.
   - `compactText(title)` - sizes to content width.
   - `iconSquare(icon)` - fixed **40x40** square action.
   - `iconCircle(icon)` - fixed **40x40** circular action.
+  - `iconCircleText(text)` - fixed **40x40** circular action with a short text
+    glyph (e.g. `/`) instead of a catalog icon, for actions with no suitable
+    icon.
 - Contrast: `high` (default) or `low`.
 - States: `enabled`, `disabled`.
 - Required content:
   - text title for text variants;
   - catalog icon for icon variants (Android `ImageVector` via `OpenCodeIcons`, iOS
-    `OpenCodeIcon`).
+    `OpenCodeIcon`);
+  - short text glyph for `iconCircleText`.
 - Optional content:
-  - icon accessibility label for icon variants.
+  - icon accessibility label for icon variants and `iconCircleText`.
 
 ## Token Usage
 
@@ -54,7 +58,10 @@ Disabled state stays muted, blocks interaction, and overrides contrast.
 height. `compactText` keeps the same visual language but sizes to content.
 `iconSquare` and `iconCircle` enforce a 1:1 fixed frame with centered icon
 content. `iconCircle` differs from `iconSquare` by geometry only; contrast
-behavior is shared across all variants.
+behavior is shared across all variants. `iconCircleText` shares `iconCircle`
+geometry and contrast behavior, swapping the centered catalog icon for a
+short text glyph (button-role typography) for actions the icon catalog does
+not cover.
 
 Pressed feedback is provided through native button interaction behavior with
 shared token mapping (secondary surface emphasis on iOS; equivalent mapping on

@@ -92,6 +92,8 @@ struct ComponentGalleryDetailView: View {
             BottomSheetGalleryView()
         case .dialog:
             DialogGalleryView()
+        case .snackbar:
+            SnackbarGalleryView()
         case .listItem:
             ListItemGalleryView()
         case .listGroup:

@@ -4,6 +4,9 @@ private let bottomSheetHeaderHorizontalPadding: CGFloat = 20
 private let bottomSheetHeaderTopPadding: CGFloat = 12
 private let bottomSheetHeaderBottomPadding: CGFloat = 8
 private let bottomSheetContentBottomPadding: CGFloat = 20
+/// Compact action lists sit above the home indicator inside the sheet; keep this
+/// tighter than scrollable/form padding so Commands does not show a tall empty band.
+private let bottomSheetCompactContentBottomPadding: CGFloat = 8
 private let bottomSheetEntryMinHeight: CGFloat = 48
 private let bottomSheetEntryHorizontalPadding: CGFloat = 20
 private let bottomSheetEntryVerticalPadding: CGFloat = 12
@@ -11,9 +14,12 @@ private let bottomSheetEntryDecoratorSize: CGFloat = 24
 private let bottomSheetEntryIconSize: CGFloat = 20
 private let bottomSheetInitialHeight: CGFloat = 176
 private let bottomSheetScrollableDetentFraction: CGFloat = 0.50
-private let bottomSheetCompactMaxHeight: CGFloat = 360
+/// Tall enough for five Commands rows plus grabber and home-indicator inset.
+private let bottomSheetCompactMaxHeight: CGFloat = 420
 private let bottomSheetFormInitialHeight: CGFloat = 460
 private let bottomSheetFormMaxHeight: CGFloat = 560
+/// Header top padding already clears the system grabber for compact sheets.
+private let bottomSheetCompactDragIndicatorHeight: CGFloat = 0
 private let bottomSheetEstimatedHeaderHeight: CGFloat =
     bottomSheetHeaderTopPadding + bottomSheetHeaderBottomPadding + 40
 
@@ -64,6 +70,14 @@ private enum BottomSheetPresentationMode: Equatable {
     case compact
 }
 
+private struct BottomSheetContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: View>: View {
     let title: String
     let leadingAction: OpenCodeBottomSheetHeaderAction?
@@ -73,14 +87,50 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
-    @State private var mode: BottomSheetPresentationMode = .scrollable
-    @State private var compactHeight: CGFloat = bottomSheetFormInitialHeight
+    @State private var mode: BottomSheetPresentationMode
+    @State private var compactHeight: CGFloat
     @State private var hasMeasuredFormHeight = false
-    @State private var hasLockedScrollable = false
+    @State private var hasLockedScrollable: Bool
     @State private var contentHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var pinnedContentHeight: CGFloat = 0
-    @State private var selectedDetent: PresentationDetent = .fraction(bottomSheetScrollableDetentFraction)
+    @State private var bottomSafeAreaInset: CGFloat = 0
+
+    init(
+        title: String,
+        leadingAction: OpenCodeBottomSheetHeaderAction?,
+        scrollTargetID: String?,
+        contentMode: OpenCodeBottomSheetContentMode,
+        alwaysFixedHeight: Bool,
+        onDismiss: @escaping () -> Void,
+        @ViewBuilder pinnedContent: @escaping () -> PinnedContent,
+        @ViewBuilder sheetContent: @escaping () -> SheetContent
+    ) {
+        self.title = title
+        self.leadingAction = leadingAction
+        self.scrollTargetID = scrollTargetID
+        self.contentMode = contentMode
+        self.alwaysFixedHeight = alwaysFixedHeight
+        self.onDismiss = onDismiss
+        self.pinnedContent = pinnedContent
+        self.sheetContent = sheetContent
+        // Short action lists must start compact. Starting at the 50% scrollable
+        // detent makes the first content measure pick up the viewport height, and
+        // with never-shrink logic that permanently oversizes the sheet.
+        if alwaysFixedHeight {
+            _mode = State(initialValue: .scrollable)
+            _hasLockedScrollable = State(initialValue: true)
+            _compactHeight = State(initialValue: bottomSheetFormInitialHeight)
+        } else if contentMode == .form {
+            _mode = State(initialValue: .scrollable)
+            _hasLockedScrollable = State(initialValue: false)
+            _compactHeight = State(initialValue: bottomSheetFormInitialHeight)
+        } else {
+            _mode = State(initialValue: .compact)
+            _hasLockedScrollable = State(initialValue: false)
+            _compactHeight = State(initialValue: bottomSheetInitialHeight)
+        }
+    }
 
     private var resolvedHeaderHeight: CGFloat {
         headerHeight > 0 ? headerHeight : bottomSheetEstimatedHeaderHeight
@@ -106,12 +156,20 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
 
     var body: some View {
         GeometryReader { geometry in
+            // Action lists use tight bottom chrome (same as Commands compact).
+            // Forms keep the larger clearance so fields clear the home indicator /
+            // keyboard. Do not stack safe-area + padding for action lists — that
+            // left a tall empty band under Show all sessions.
+            let bottomClearance =
+                contentMode == .form
+                    ? max(bottomSheetContentBottomPadding, geometry.safeAreaInsets.bottom)
+                    : bottomSheetCompactContentBottomPadding
             let scrollAreaHeight = max(
                 bottomSheetEntryMinHeight,
                 geometry.size.height
                     - resolvedHeaderHeight
                     - pinnedContentHeight
-                    - bottomSheetContentBottomPadding
+                    - bottomClearance
             )
 
             OpenCodeBottomSheetContainer(
@@ -119,16 +177,29 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 leadingAction: leadingAction,
                 onDismiss: onDismiss,
                 mode: resolvedMode,
+                contentMode: contentMode,
                 scrollAreaHeight: scrollAreaHeight,
                 scrollTargetID: scrollTargetID,
                 contentHeight: contentHeight,
                 pinnedContent: pinnedContent,
                 content: sheetContent,
-                onContentHeightChange: { contentHeight = $0 },
+                onContentHeightChange: { newHeight in
+                    guard !hasLockedScrollable else { return }
+                    // Compact re-layout can report a clipped height; keep the
+                    // largest intrinsic size seen for this presentation.
+                    guard newHeight > contentHeight else { return }
+                    contentHeight = newHeight
+                },
                 onHeaderHeightChange: { headerHeight = $0 },
                 onPinnedContentHeightChange: { pinnedContentHeight = $0 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .onAppear {
+                bottomSafeAreaInset = geometry.safeAreaInsets.bottom
+            }
+            .onChange(of: geometry.safeAreaInsets.bottom) { _, inset in
+                bottomSafeAreaInset = inset
+            }
         }
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
@@ -139,6 +210,9 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         .onChange(of: pinnedContentHeight) { _, _ in
             updatePresentationMode()
         }
+        .onChange(of: bottomSafeAreaInset) { _, _ in
+            updatePresentationMode()
+        }
         .onChange(of: contentMode) { oldMode, newMode in
             contentHeight = 0
             if oldMode == .actionList && newMode == .form {
@@ -146,15 +220,21 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 hasLockedScrollable = true
                 hasMeasuredFormHeight = false
                 mode = .scrollable
-                selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
+            } else if newMode == .actionList {
+                hasLockedScrollable = false
+                hasMeasuredFormHeight = false
+                mode = .compact
+                compactHeight = bottomSheetInitialHeight
             } else {
                 hasLockedScrollable = false
                 hasMeasuredFormHeight = false
                 mode = .scrollable
-                selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
             }
         }
-        .presentationDetents(presentationDetents, selection: $selectedDetent)
+        // Avoid `selection:` — when compact height changes, a stale selected
+        // `.height` value falls out of the detent set and UIKit falls back to a
+        // medium (~50%) sheet, which looks like a tall empty Commands band.
+        .presentationDetents(presentationDetents)
         .presentationContentInteraction(resolvedMode == .scrollable ? .scrolls : .automatic)
         .interactiveDismissDisabled(resolvedMode == .scrollable)
         .presentationCornerRadius(24)
@@ -173,33 +253,33 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         if alwaysFixedHeight {
             hasLockedScrollable = true
             mode = .scrollable
-            selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
             return
         }
         guard contentHeight > 0 else { return }
 
-        let totalHeight =
-            resolvedHeaderHeight + pinnedContentHeight + contentHeight + bottomSheetContentBottomPadding
-
         if contentMode == .form {
+            // Forms keep keyboard-safe clearance: padding or home-indicator inset.
+            let bottomClearance = max(bottomSheetContentBottomPadding, bottomSafeAreaInset)
+            let chromeHeight =
+                resolvedHeaderHeight
+                    + pinnedContentHeight
+                    + contentHeight
+                    + bottomClearance
             // Match Android: short forms size to content; long forms lock to the
             // fixed 50% scrollable height and do not shrink when body content changes.
-            if hasLockedScrollable || totalHeight > bottomSheetCompactMaxHeight {
+            if hasLockedScrollable || chromeHeight > bottomSheetCompactMaxHeight {
                 hasLockedScrollable = true
-                compactHeight = max(compactHeight, min(totalHeight, bottomSheetFormMaxHeight))
-                selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
+                compactHeight = max(compactHeight, min(chromeHeight, bottomSheetFormMaxHeight))
                 return
             }
-            let measuredHeight = min(max(totalHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
+            let measuredHeight = min(max(chromeHeight, bottomSheetInitialHeight), bottomSheetFormMaxHeight)
             if !hasMeasuredFormHeight {
                 compactHeight = measuredHeight
                 hasMeasuredFormHeight = true
-                selectedDetent = .height(measuredHeight)
                 return
             }
             guard measuredHeight > compactHeight + 1 else { return }
             compactHeight = measuredHeight
-            selectedDetent = .height(measuredHeight)
             return
         }
 
@@ -209,15 +289,22 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             return
         }
 
+        // Action lists: size to content + tight bottom padding. The sheet draws
+        // edge-to-edge under the home indicator; extra inset + grabber allowance
+        // stacked into a tall empty band under Commands.
+        let totalHeight =
+            resolvedHeaderHeight
+                + pinnedContentHeight
+                + contentHeight
+                + bottomSheetCompactContentBottomPadding
+                + bottomSheetCompactDragIndicatorHeight
         if totalHeight <= bottomSheetCompactMaxHeight {
             let nextHeight = max(totalHeight, bottomSheetInitialHeight)
             compactHeight = nextHeight
             mode = .compact
-            selectedDetent = .height(nextHeight)
         } else {
             hasLockedScrollable = true
             mode = .scrollable
-            selectedDetent = .fraction(bottomSheetScrollableDetentFraction)
         }
     }
 }
@@ -234,10 +321,10 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 
     func body(content: Content) -> some View {
         content
-            // Keep the host keyboard safe-area policy stable for the whole
-            // presentation. Toggling it when contentMode flips (provider list →
-            // filtered models) resizes the screen behind the sheet.
-            .modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: isPresented))
+            // Always apply the same modifier shape. Branching on isPresented used to
+            // swap the host view type when the sheet opened, which could tear down
+            // NavigationStack state and crash on present (e.g. home "Show all").
+            .modifier(BottomSheetKeyboardHostPolicy())
             .sheet(isPresented: $isPresented) {
                 OpenCodeBottomSheetSheetBody(
                     title: title,
@@ -254,15 +341,8 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 }
 
 private struct BottomSheetKeyboardHostPolicy: ViewModifier {
-    let ignoreKeyboardSafeArea: Bool
-
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if ignoreKeyboardSafeArea {
-            content.ignoresSafeArea(.keyboard)
-        } else {
-            content
-        }
+        content.ignoresSafeArea(.keyboard)
     }
 }
 
@@ -316,6 +396,7 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
     let mode: BottomSheetPresentationMode
+    let contentMode: OpenCodeBottomSheetContentMode
     let scrollAreaHeight: CGFloat
     let scrollTargetID: String?
     let contentHeight: CGFloat
@@ -324,6 +405,10 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
     let onContentHeightChange: (CGFloat) -> Void
     let onHeaderHeightChange: (CGFloat) -> Void
     let onPinnedContentHeightChange: (CGFloat) -> Void
+
+    private var bottomPadding: CGFloat {
+        contentMode == .form ? bottomSheetContentBottomPadding : bottomSheetCompactContentBottomPadding
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -368,23 +453,26 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
             }
         }
         .frame(maxWidth: .infinity, alignment: .top)
-        .padding(.bottom, bottomSheetContentBottomPadding)
+        .padding(.bottom, bottomPadding)
         .background(OpenCodeColors.surfaceBase)
         .fixedSize(horizontal: false, vertical: mode == .compact)
     }
 
     private var measuredContent: some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onChange(of: geo.size.height, initial: true) { _, height in
-                            guard height > 0 else { return }
-                            onContentHeightChange(height)
-                        }
-                }
-            )
+        VStack(spacing: 0) {
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: BottomSheetContentHeightKey.self, value: geo.size.height)
+            }
+        )
+        .onPreferenceChange(BottomSheetContentHeightKey.self) { height in
+            guard height > 0 else { return }
+            onContentHeightChange(height)
+        }
     }
 
     private var header: some View {
@@ -509,19 +597,19 @@ extension View {
         alwaysFixedHeight: Bool = false,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: item.wrappedValue != nil))
+        modifier(BottomSheetKeyboardHostPolicy())
             .sheet(item: item) { value in
-            OpenCodeBottomSheetSheetBody(
-                title: title,
-                leadingAction: leadingAction,
-                scrollTargetID: scrollTargetID,
-                contentMode: contentMode,
-                alwaysFixedHeight: alwaysFixedHeight,
-                onDismiss: { item.wrappedValue = nil },
-                pinnedContent: { EmptyView() },
-                sheetContent: { content(value) }
-            )
-        }
+                OpenCodeBottomSheetSheetBody(
+                    title: title,
+                    leadingAction: leadingAction,
+                    scrollTargetID: scrollTargetID,
+                    contentMode: contentMode,
+                    alwaysFixedHeight: alwaysFixedHeight,
+                    onDismiss: { item.wrappedValue = nil },
+                    pinnedContent: { EmptyView() },
+                    sheetContent: { content(value) }
+                )
+            }
     }
 
     func openCodeBottomSheet<Item: Identifiable, PinnedContent: View, SheetContent: View>(
@@ -534,19 +622,19 @@ extension View {
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: item.wrappedValue != nil))
+        modifier(BottomSheetKeyboardHostPolicy())
             .sheet(item: item) { value in
-            OpenCodeBottomSheetSheetBody(
-                title: title,
-                leadingAction: leadingAction,
-                scrollTargetID: scrollTargetID,
-                contentMode: contentMode,
-                alwaysFixedHeight: alwaysFixedHeight,
-                onDismiss: { item.wrappedValue = nil },
-                pinnedContent: { pinnedContent(value) },
-                sheetContent: { content(value) }
-            )
-        }
+                OpenCodeBottomSheetSheetBody(
+                    title: title,
+                    leadingAction: leadingAction,
+                    scrollTargetID: scrollTargetID,
+                    contentMode: contentMode,
+                    alwaysFixedHeight: alwaysFixedHeight,
+                    onDismiss: { item.wrappedValue = nil },
+                    pinnedContent: { pinnedContent(value) },
+                    sheetContent: { content(value) }
+                )
+            }
     }
 }
 

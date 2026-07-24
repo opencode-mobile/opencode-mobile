@@ -11,12 +11,14 @@ import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.agent.AgentRepository
+import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -24,6 +26,7 @@ import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
@@ -53,6 +56,7 @@ class SessionChatViewModel
         eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -60,6 +64,7 @@ class SessionChatViewModel
                 timeline.ioDispatcher = value
                 composer.ioDispatcher = value
                 reviewChanges.ioDispatcher = value
+                commands.ioDispatcher = value
             }
 
         private val timeline =
@@ -91,6 +96,13 @@ class SessionChatViewModel
                 sessionRepository = sessionRepository,
                 scope = viewModelScope,
             )
+        private val commands =
+            SessionChatCommands(
+                sessionRepository = sessionRepository,
+                newSessionModelSelectionResolver = newSessionModelSelectionResolver,
+                connectionSessionCoordinator = connectionSessionCoordinator,
+                scope = viewModelScope,
+            )
 
         private val _uiState =
             MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
@@ -114,6 +126,9 @@ class SessionChatViewModel
         private var questionDraftRequestId: String? = null
         private var questionWizardIndex: Int = 0
         private val questionDrafts = mutableMapOf<Int, QuestionAnswerDraft>()
+        private var lastSnackbarKey: String? = null
+        private var suppressedSnackbarKey: String? = null
+        private var snackbarSequence: Long = 0L
 
         init {
             timeline.ioDispatcher = ioDispatcher
@@ -124,9 +139,10 @@ class SessionChatViewModel
                     composer.state,
                     sessionInfo.state,
                     reviewChanges.state,
-                ) { timelineState, composerState, infoState, reviewChangesState ->
-                    SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState)
-                }.collect { (timelineState, composerState, infoState, reviewChangesState) ->
+                    commands.state,
+                ) { timelineState, composerState, infoState, reviewChangesState, commandsState ->
+                    SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState, commandsState)
+                }.collect { (timelineState, composerState, infoState, reviewChangesState, commandsState) ->
                     composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
                     reviewChanges.updateCandidate(
                         messages = timelineState.messages,
@@ -134,7 +150,11 @@ class SessionChatViewModel
                         isTurnActive = infoState.sessionStatusLabel != null,
                         isSending = composerState.isSending,
                     )
-                    publishUiState(timelineState, composerState, infoState, reviewChangesState)
+                    commands.updateVisibility(
+                        messages = timelineState.messages,
+                        hasSelectedComposerModel = composerState.composer.selectedModel != null,
+                    )
+                    publishUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
                 }
             }
         }
@@ -152,12 +172,16 @@ class SessionChatViewModel
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
+            lastSnackbarKey = null
+            suppressedSnackbarKey = null
+            snackbarSequence = 0L
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             _uiState.value = SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             sessionInfo.bind(sessionId, sessionTitle, worktree)
             reviewChanges.bind(sessionId, worktree)
+            commands.bind(sessionId, worktree)
             observePermissions(sessionId, worktree)
             observeQuestions(sessionId, worktree)
             viewModelScope.launch {
@@ -236,6 +260,84 @@ class SessionChatViewModel
 
         fun restoreComposerText(text: String) {
             composer.restoreComposerText(text)
+        }
+
+        fun openCommands() {
+            commands.openCommands()
+            composer.dismissSuggestions()
+        }
+
+        fun dismissCommands() {
+            commands.dismissCommands()
+        }
+
+        fun runClientSlashAction(action: ClientSlashAction) {
+            when (action) {
+                ClientSlashAction.New -> commands.runNew()
+                ClientSlashAction.Fork -> commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
+                ClientSlashAction.Undo ->
+                    commands.runUndo(
+                        isBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                        restoreComposerText = composer::restoreComposerText,
+                    )
+                ClientSlashAction.Redo ->
+                    commands.runRedo(
+                        isBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                        clearComposerRestore = { composer.restoreComposerText("") },
+                    )
+                ClientSlashAction.Compact -> {
+                    val model = composer.state.value.composer.selectedModel ?: return
+                    commands.runCompact(
+                        providerId = model.option.providerId,
+                        modelId = model.option.modelId,
+                        onSuccess = {
+                            timeline.refreshMessages()
+                            sessionInfo.refreshStatus()
+                        },
+                    )
+                }
+            }
+        }
+
+        fun updateForkDraft(text: String) {
+            commands.updateForkDraft(text)
+        }
+
+        fun cancelForkDialog() {
+            commands.cancelForkDialog()
+        }
+
+        fun confirmFork() {
+            commands.confirmFork()
+        }
+
+        fun chooseForkOpen() {
+            commands.chooseForkOpen()
+        }
+
+        fun chooseForkStay() {
+            commands.chooseForkStay()
+        }
+
+        fun consumePendingSessionReplace() {
+            commands.consumePendingSessionReplace()
+        }
+
+        fun consumeSnackbar() {
+            suppressedSnackbarKey = lastSnackbarKey
+            commands.clearActionFeedback()
+            composer.clearTransientErrors()
+            sessionInfo.clearTransientErrors()
+            timeline.clearReadyError()
+            permissionTopologyError = null
+            questionTopologyError = null
+            publishUiState(
+                timeline.state.value,
+                composer.state.value,
+                sessionInfo.state.value,
+                reviewChanges.state.value,
+                commands.state.value,
+            )
         }
 
         fun openRenameSession() {
@@ -609,6 +711,7 @@ class SessionChatViewModel
                 composer.state.value,
                 sessionInfo.state.value,
                 reviewChanges.state.value,
+                commands.state.value,
             )
         }
 
@@ -617,8 +720,9 @@ class SessionChatViewModel
             composerState: SessionChatComposerRegionState,
             infoState: SessionInfoRegionState,
             reviewChangesState: SessionChatReviewChangesRegionState,
+            commandsState: SessionChatCommandsRegionState,
         ) {
-            _uiState.value = mergeUiState(timelineState, composerState, infoState, reviewChangesState)
+            _uiState.value = mergeUiState(timelineState, composerState, infoState, reviewChangesState, commandsState)
         }
 
         private fun mergeUiState(
@@ -626,21 +730,34 @@ class SessionChatViewModel
             composerState: SessionChatComposerRegionState,
             infoState: SessionInfoRegionState,
             reviewChangesState: SessionChatReviewChangesRegionState,
+            commandsState: SessionChatCommandsRegionState,
         ): SessionChatUiState {
             refilterQuestionOrphans()
             val visibleQuestion = visibleQuestionRequest()
             val questionDraft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
-            val errorMessage =
-                when {
-                    infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
-                    timelineState.timeline == SessionChatTimelineState.Error -> timelineState.errorMessage
-                    composerState.errorMessage != null -> composerState.errorMessage
-                    composerState.abortErrorMessage != null -> composerState.abortErrorMessage
-                    infoState.errorMessage != null -> infoState.errorMessage
-                    permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
-                    questionRequests.isEmpty() && questionTopologyError != null -> questionTopologyError
-                    else -> timelineState.errorMessage
+            val timelineEmptyError =
+                if (timelineState.timeline == SessionChatTimelineState.Error) {
+                    timelineState.errorMessage
+                } else {
+                    null
                 }
+            val transientError =
+                if (timelineState.timeline == SessionChatTimelineState.Error) {
+                    null
+                } else {
+                    when {
+                        infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
+                        composerState.errorMessage != null -> composerState.errorMessage
+                        composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                        commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
+                        infoState.errorMessage != null -> infoState.errorMessage
+                        permissionRequests.isEmpty() && permissionTopologyError != null -> permissionTopologyError
+                        questionRequests.isEmpty() && questionTopologyError != null -> questionTopologyError
+                        timelineState.errorMessage != null -> timelineState.errorMessage
+                        else -> null
+                    }
+                }
+            val snackbar = resolveSnackbar(transientError, commandsState.actionSuccessMessage)
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -658,7 +775,8 @@ class SessionChatViewModel
                         composerState.composer.modelOptions,
                         composerState.composer.selectedModel,
                     ),
-                errorMessage = errorMessage,
+                errorMessage = timelineEmptyError,
+                snackbar = snackbar,
                 isLifecycleActionInFlight = infoState.isLifecycleActionInFlight,
                 shouldLeaveSession = infoState.shouldLeaveSession,
                 permissionRequest = permissionRequests.firstOrNull(),
@@ -684,6 +802,49 @@ class SessionChatViewModel
                 slashSuggestions = composerState.slashSuggestions,
                 atSuggestionsVisible = composerState.atSuggestionsVisible,
                 atSuggestions = composerState.atSuggestions,
+                commandsSheetVisible = commandsState.commandsSheetVisible,
+                visibleClientSlashActions = commandsState.visibleActions,
+                forkDialogVisible = commandsState.forkDialogVisible,
+                forkDraftTitle = commandsState.forkDraftTitle,
+                forkSubmitting = commandsState.forkSubmitting,
+                forkErrorMessage = commandsState.forkErrorMessage,
+                forkResultVisible = commandsState.forkResultVisible,
+                forkedSessionTitle = commandsState.forkedSessionTitle,
+                pendingSessionReplace = commandsState.pendingSessionReplace,
+            )
+        }
+
+        private fun resolveSnackbar(
+            transientError: String?,
+            successNotice: String?,
+        ): SessionChatSnackbar? {
+            val key =
+                when {
+                    transientError != null -> "error:$transientError"
+                    successNotice != null -> "success:$successNotice"
+                    else -> null
+                }
+            if (key == null) {
+                lastSnackbarKey = null
+                suppressedSnackbarKey = null
+                return null
+            }
+            if (key == suppressedSnackbarKey) {
+                return null
+            }
+            if (key != lastSnackbarKey) {
+                snackbarSequence += 1
+                lastSnackbarKey = key
+            }
+            return SessionChatSnackbar(
+                message = transientError ?: requireNotNull(successNotice),
+                tone =
+                    if (transientError != null) {
+                        SessionChatSnackbarTone.Error
+                    } else {
+                        SessionChatSnackbarTone.Default
+                    },
+                id = snackbarSequence,
             )
         }
 
@@ -715,6 +876,7 @@ private data class SessionChatCombinedState(
     val composer: SessionChatComposerRegionState,
     val info: SessionInfoRegionState,
     val reviewChanges: SessionChatReviewChangesRegionState,
+    val commands: SessionChatCommandsRegionState,
 )
 
 internal fun orderedPermissionRequests(

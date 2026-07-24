@@ -46,15 +46,6 @@ struct SessionChatTimelineView: View {
 
     var body: some View {
         Group {
-            if let errorMessage = props.errorMessage, props.timeline == .ready {
-                Text(errorMessage)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 4)
-            }
-
             switch props.timeline {
             case .loading:
                 Spacer()

@@ -278,6 +278,12 @@ final class SessionInfo {
         return error.localizedDescription
     }
 
+    func clearTransientErrors() {
+        state.errorMessage = nil
+        state.lifecycleErrorMessage = nil
+        notifyChange()
+    }
+
     private func notifyChange() {
         onChange?()
     }

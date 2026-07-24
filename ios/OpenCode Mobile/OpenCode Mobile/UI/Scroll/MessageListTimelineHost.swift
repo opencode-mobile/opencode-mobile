@@ -123,18 +123,30 @@ where Item.ID == String {
         let previousItems = itemsByID
         let previousOrderedIDs = orderedIDs
         let previousCount = previousOrderedIDs.count
-        currentItems = items
-        itemsByID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
-        orderedIDs = items.map(\.id)
+        // Diffable data source asserts on duplicate identifiers. Keep last-wins
+        // content and a de-duplicated id list for the snapshot.
+        var uniqueItems: [Item] = []
+        var seenIDs = Set<String>()
+        for item in items.reversed() {
+            if seenIDs.insert(item.id).inserted {
+                uniqueItems.append(item)
+            }
+        }
+        uniqueItems.reverse()
+        currentItems = uniqueItems
+        itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
+        orderedIDs = uniqueItems.map(\.id)
 
         var snapshot = NSDiffableDataSourceSnapshot<String, String>()
         snapshot.appendSections(["main"])
         snapshot.appendItems(orderedIDs, toSection: "main")
 
+        let existingIDs = Set(dataSource.snapshot().itemIdentifiers)
         let changedIDs = orderedIDs.filter { id in
-            guard let previous = previousItems[id], let current = itemsByID[id] else {
-                return false
-            }
+            guard existingIDs.contains(id),
+                  let previous = previousItems[id],
+                  let current = itemsByID[id]
+            else { return false }
             return previous != current
         }
         if !changedIDs.isEmpty {

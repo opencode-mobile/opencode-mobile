@@ -121,6 +121,8 @@ sealed interface OpenCodeSessionComposerAction {
 
     data object Attach : OpenCodeSessionComposerAction
 
+    data object OpenCommands : OpenCodeSessionComposerAction
+
     data class RemoveAttachment(
         val id: String,
     ) : OpenCodeSessionComposerAction
@@ -360,12 +362,22 @@ private fun PromptEntryContent(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
-            enabled = state.attachEnabled,
-            contrast = OpenCodeButtonContrast.Low,
-            onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
+                enabled = state.attachEnabled,
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircleText("/", "Open commands"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = { onAction(OpenCodeSessionComposerAction.OpenCommands) },
+            )
+        }
         Spacer(Modifier.weight(1f))
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),

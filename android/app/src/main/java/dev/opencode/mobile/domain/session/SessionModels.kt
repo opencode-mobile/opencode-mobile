@@ -14,10 +14,18 @@ data class Session(
     val createdAtEpochMs: Long? = null,
     val updatedAtEpochMs: Long? = null,
     val archivedAtEpochMs: Long? = null,
+    val revert: SessionRevert? = null,
 ) {
     val isArchived: Boolean
         get() = archivedAtEpochMs != null
 }
+
+data class SessionRevert(
+    val messageId: String,
+    val partId: String? = null,
+    val snapshot: String? = null,
+    val diff: String? = null,
+)
 
 fun List<Session>.activeSessions(): List<Session> = filterNot { it.isArchived }
 

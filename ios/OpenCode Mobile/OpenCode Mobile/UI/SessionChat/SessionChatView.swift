@@ -135,6 +135,10 @@ struct SessionChatView: View {
                         .padding(.vertical, 4)
                     }
                 }
+                OpenCodeSnackbarHost(
+                    message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
+                    onDismissed: { viewModel.consumeSnackbar() }
+                )
             }
             composer
         }
@@ -172,6 +176,14 @@ struct SessionChatView: View {
                         showAttachmentSources = false
                         showFilesPicker = true
                     }
+                )
+            }
+        }
+        .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
+            ForEach(viewModel.uiState.visibleClientSlashActions, id: \.rawValue) { action in
+                OpenCodeBottomSheetEntry(
+                    title: action.rowTitle,
+                    action: { viewModel.runClientSlashAction(action) }
                 )
             }
         }
@@ -274,6 +286,47 @@ struct SessionChatView: View {
                 errorMessage: viewModel.uiState.rename.errorMessage
             )
         )
+        .openCodeDialog(
+            isPresented: forkDialogBinding,
+            title: "Fork session",
+            primaryOption: OpenCodeDialogOption(
+                title: "Fork",
+                enabled: !viewModel.uiState.forkSubmitting
+            ) {
+                viewModel.confirmFork()
+            },
+            secondaryOption: OpenCodeDialogOption(
+                title: "Cancel",
+                enabled: !viewModel.uiState.forkSubmitting,
+                action: viewModel.cancelForkDialog
+            ),
+            textField: OpenCodeDialogTextField(
+                text: Binding(
+                    get: { viewModel.uiState.forkDraftTitle },
+                    set: viewModel.updateForkDraft
+                ),
+                hint: "Title",
+                enabled: !viewModel.uiState.forkSubmitting,
+                errorMessage: viewModel.uiState.forkErrorMessage
+            )
+        )
+        .openCodeDialog(
+            isPresented: forkResultDialogBinding,
+            title: "Session forked",
+            subtitle: "Forked as “\(viewModel.uiState.forkedSessionTitle)”.",
+            primaryOption: OpenCodeDialogOption(title: "Open") {
+                viewModel.chooseForkOpen()
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Stay") {
+                viewModel.chooseForkStay()
+            }
+        )
+        .onChange(of: viewModel.uiState.pendingSessionReplace?.sessionID) { _, _ in
+            if let target = viewModel.uiState.pendingSessionReplace {
+                childSessionTarget = target
+                viewModel.consumePendingSessionReplace()
+            }
+        }
     }
 
     private var deleteDialogBinding: Binding<Bool> {
@@ -293,6 +346,39 @@ struct SessionChatView: View {
             set: { visible in
                 if !visible, !viewModel.uiState.rename.isSubmitting {
                     viewModel.cancelRenameSession()
+                }
+            }
+        )
+    }
+
+    private var commandsSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.commandsSheetVisible },
+            set: { visible in
+                if !visible {
+                    viewModel.dismissCommands()
+                }
+            }
+        )
+    }
+
+    private var forkDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.forkDialogVisible },
+            set: { visible in
+                if !visible, !viewModel.uiState.forkSubmitting {
+                    viewModel.cancelForkDialog()
+                }
+            }
+        )
+    }
+
+    private var forkResultDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.forkResultVisible },
+            set: { visible in
+                if !visible {
+                    viewModel.chooseForkStay()
                 }
             }
         )
@@ -484,6 +570,8 @@ struct SessionChatView: View {
                     }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
+                case .openCommands:
+                    viewModel.openCommands()
                 case .send:
                     Task { await viewModel.sendPrompt() }
                 case .stop:
@@ -526,6 +614,22 @@ private extension SessionConnectionStatus {
         case .offline:
             .offline
         }
+    }
+}
+
+private extension SessionChatSnackbar {
+    func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage {
+        OpenCodeSnackbarMessage(
+            text: message,
+            variant: tone == .error ? .error : .default,
+            id: id
+        )
+    }
+}
+
+private extension Optional where Wrapped == SessionChatSnackbar {
+    func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage? {
+        self?.mapToOpenCodeSnackbarMessage()
     }
 }
 

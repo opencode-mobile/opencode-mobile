@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
+import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
@@ -63,6 +64,17 @@ data class SessionRenameUiState(
     val errorMessage: String? = null,
 )
 
+enum class SessionChatSnackbarTone {
+    Default,
+    Error,
+}
+
+data class SessionChatSnackbar(
+    val message: String,
+    val tone: SessionChatSnackbarTone,
+    val id: Long,
+)
+
 data class SessionChatUiState(
     val sessionId: String,
     val sessionTitle: String,
@@ -76,6 +88,7 @@ data class SessionChatUiState(
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
+    val snackbar: SessionChatSnackbar? = null,
     val isLifecycleActionInFlight: Boolean = false,
     val shouldLeaveSession: Boolean = false,
     val permissionRequest: PermissionRequest? = null,
@@ -96,6 +109,15 @@ data class SessionChatUiState(
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
     val atSuggestionsVisible: Boolean = false,
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
+    val commandsSheetVisible: Boolean = false,
+    val visibleClientSlashActions: List<ClientSlashAction> = listOf(ClientSlashAction.New),
+    val forkDialogVisible: Boolean = false,
+    val forkDraftTitle: String = "",
+    val forkSubmitting: Boolean = false,
+    val forkErrorMessage: String? = null,
+    val forkResultVisible: Boolean = false,
+    val forkedSessionTitle: String = "",
+    val pendingSessionReplace: ChildSessionNavigationTarget? = null,
 ) {
     val latestCompletedUserMessageId: String?
         get() {
@@ -284,6 +306,20 @@ data class SessionInfoRegionState(
 data class SessionChatReviewChangesRegionState(
     val messageId: String? = null,
     val summary: ReviewChangesSummary? = null,
+)
+
+data class SessionChatCommandsRegionState(
+    val commandsSheetVisible: Boolean = false,
+    val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New),
+    val forkDialogVisible: Boolean = false,
+    val forkDraftTitle: String = "",
+    val forkSubmitting: Boolean = false,
+    val forkErrorMessage: String? = null,
+    val forkResultVisible: Boolean = false,
+    val forkedSessionTitle: String = "",
+    val actionErrorMessage: String? = null,
+    val actionSuccessMessage: String? = null,
+    val pendingSessionReplace: ChildSessionNavigationTarget? = null,
 )
 
 data class LatestModelHint(
