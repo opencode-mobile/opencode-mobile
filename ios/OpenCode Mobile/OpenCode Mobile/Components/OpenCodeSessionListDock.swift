@@ -39,43 +39,21 @@ struct OpenCodeSessionListDock: View {
                 }
 
                 HStack(spacing: 8) {
-                    if #available(iOS 26, *) {
-                        Button(action: onAddProject) {
-                            OpenCodeIconImage(icon: .createNewFolder)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.glass)
-                        .accessibilityLabel("Add project")
-
-                        Button(action: onNewSession) {
-                            Text("New session")
-                                .font(OpenCodeTypography.caption.weight(.medium))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.glass)
-                        .clipShape(Capsule())
-                    } else {
-                        OpenCodeButton(
-                            variant: .iconCircle(.createNewFolder, accessibilityLabel: "Add project"),
-                            size: .medium,
-                            action: onAddProject
-                        )
-                        Button(action: onNewSession) {
-                            Text("New session")
-                                .font(OpenCodeTypography.caption.weight(.medium))
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
-                                .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
+                    OpenCodeButton(
+                        variant: .iconCircle(.createNewFolder, accessibilityLabel: "Add project"),
+                        size: .medium,
+                        action: onAddProject
+                    )
+                    Button(action: onNewSession) {
+                        Text("New session")
+                            .font(OpenCodeTypography.caption.weight(.medium))
+                            .foregroundStyle(OpenCodeColors.textStrong)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 36)
+                            .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
+                            .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1.5))
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -93,13 +71,7 @@ struct OpenCodeSessionListDock: View {
                 )
             }
         }
-        if #available(iOS 26, *) {
-            GlassEffectContainer(spacing: 8) {
-                chips
-            }
-        } else {
-            chips
-        }
+        chips
     }
 }
 
