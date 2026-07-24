@@ -1,17 +1,28 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.SessionList
+import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 
 @Composable
 fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
+    var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     SessionList(
         sessions = sessionListGallerySamples,
+        filterTabs = sessionListGalleryFilterTabs,
+        selectedFilterId = selectedFilterId,
+        onFilterSelected = { selectedFilterId = it },
         onSessionSelected = {},
+        onAddProject = {},
+        onNewSession = {},
         modifier = modifier,
     )
 }
@@ -58,4 +69,16 @@ private val sessionListGallerySamples =
             status = SessionListStatus.Running,
             caption = "2d ago",
         ),
+    )
+
+private val sessionListGalleryFilterTabs =
+    listOf(
+        SessionListFilterTab(id = SessionListFilterTab.ALL_ID, title = "All", count = 4),
+        SessionListFilterTab(
+            id = "/Users/demo/opencode-mobile",
+            title = "opencode-mobile",
+            count = 2,
+        ),
+        SessionListFilterTab(id = "/Users/demo/playground", title = "playground", count = 1),
+        SessionListFilterTab(id = "/Users/demo/api-client", title = "api-client", count = 1),
     )

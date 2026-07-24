@@ -105,6 +105,7 @@ applicable item is complete.
 - `bottom-sheet.md`
 - `dialog.md`
 - `choice-badge.md`
+- `filter-tabs.md`
 - `list-item.md`
 - `list-group.md`
 - `button.md`

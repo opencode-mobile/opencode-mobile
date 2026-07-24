@@ -30,6 +30,7 @@ enum class ComponentGalleryEntryId {
     ListItem,
     ListGroup,
     ChoiceBadge,
+    FilterTabs,
     ActionPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
@@ -94,6 +95,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ChoiceBadge,
             title = "Choice Badge",
             description = "Selectable pill for compact single-choice controls.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.FilterTabs,
+            title = "Filter Tabs",
+            description = "Horizontal single-select filters with optional count badges.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(

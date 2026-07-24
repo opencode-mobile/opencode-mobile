@@ -26,14 +26,27 @@
 - [x] Shared **Project Session Selector** on home on iOS and Android, fully
   wired to existing added-project/session data and actions and available in
   the Component Gallery
-- [x] Shared **Session List** above Project Session Selector on home: sessions
-  from all added projects sorted by recency, with project letter, path
-  subtitle, Idle/Running status, and relative-time caption; gallery entry on
-  both platforms
-- [x] Settings **Appearance** toggle to show/hide Session List on home
-  (default off; persisted via `HomeDisplayPreferences`)
+- [x] Shared **Session List** component: sessions from all added projects sorted
+  by recency, with project letter, path subtitle, Idle/Running status, and
+  relative-time caption; gallery entry on both platforms
+- [x] Settings **Appearance** toggle for Session List vs Project Session
+  Selector home mode (default selector; persisted via `HomeDisplayPreferences`)
 - [x] `OpenCodeListItem` full-row tap target on iOS and Android (session rows
   and other list items)
 - [x] iOS home **Browse projects** and **See all sessions** use
   `OpenCodeBottomSheet` instead of native platform sheets (Android already used
   design-system bottom sheet)
+
+## Session List home mode (in progress)
+
+- [x] Settings toggle switches exclusively between Session List and Project
+  Session Selector (not stacked)
+- [x] Session List sticky footer: **Add project** + **New session** (project
+  picker sheet, then create in chosen worktree); create error under footer
+- [x] Shared **Filter Tabs** design-system component (horizontal single-select
+  with neutral count badges); gallery entry on both platforms
+- [x] Session List filter tabs: **All** + per-project tabs with counts; filters
+  visible sessions
+- [x] Android Filter Tabs capsule height parity with iOS
+- [ ] Manual QA of Session List mode on device/simulator (filter, add project,
+  new session, create error)
