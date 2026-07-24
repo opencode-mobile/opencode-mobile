@@ -27,7 +27,7 @@ private struct OpenCodeFloatingDockChrome: ViewModifier {
         if #available(iOS 26, *) {
             content
                 .background(OpenCodeColors.surfaceRaisedBase.opacity(0.92), in: shape)
-                .glassEffect(.regular, in: .rect(cornerRadius: openCodeFloatingDockCornerRadius))
+                .glassEffect(.regular, in: .rect(cornerRadius: openCodeFloatingDockCornerRadius, style: .continuous))
         } else {
             content.background(.regularMaterial, in: shape)
         }

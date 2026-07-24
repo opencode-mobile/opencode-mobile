@@ -45,12 +45,12 @@ run_quiet() {
 
   local log
   log="$(mktemp -t "opencode-run-android.${label}.XXXXXX")"
-  if "$@" >"$log" 2>&1; then
+  local status=0
+  "$@" >"$log" 2>&1 || status=$?
+  if [[ "$status" -eq 0 ]]; then
     rm -f "$log"
     return 0
   fi
-
-  local status=$?
   echo "error: $label failed (exit $status)" >&2
   tail -n 50 "$log" >&2 || true
   echo "Full log: $log (re-run with --v for live output)" >&2

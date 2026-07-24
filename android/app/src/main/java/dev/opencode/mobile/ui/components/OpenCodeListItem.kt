@@ -28,12 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -246,16 +243,8 @@ private fun ListItemMetaColumn(
                 color = foreground,
                 textAlign = TextAlign.Center,
                 style =
-                    TextStyle(
-                        fontSize = 11.sp,
+                    MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.SemiBold,
-                        lineHeight = 11.sp,
-                        platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle =
-                            LineHeightStyle(
-                                alignment = LineHeightStyle.Alignment.Center,
-                                trim = LineHeightStyle.Trim.Both,
-                            ),
                     ),
                 maxLines = 1,
                 modifier =

@@ -153,7 +153,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             }
             if let status {
                 Text(status.text)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(OpenCodeTypography.caption.weight(.semibold))
                     .foregroundStyle(statusForeground(status.tone))
                     .lineLimit(1)
                     .padding(.horizontal, 8)

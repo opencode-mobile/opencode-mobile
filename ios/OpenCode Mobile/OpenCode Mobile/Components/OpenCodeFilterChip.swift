@@ -31,7 +31,7 @@ struct OpenCodeFilterChip: View {
                         .padding(.horizontal, count >= 10 ? 8 : 6)
                         .frame(minWidth: countBadgeMinWidth(count), minHeight: 22)
                         .background(
-                            Color.primary.opacity(selected ? 0.16 : 0.06),
+                            OpenCodeColors.textStrong.opacity(selected ? 0.16 : 0.06),
                             in: Capsule()
                         )
                 }
@@ -82,7 +82,7 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
         if #available(iOS 26, *) {
             if selected {
                 content
-                    .background(Color.primary.opacity(0.12), in: Capsule())
+                    .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
                     .glassEffect(.regular, in: .capsule)
             } else {
                 content

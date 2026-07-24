@@ -26,6 +26,8 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
+private val SessionListFallbackBottomSpacer = 168.dp
+
 enum class SessionListStatus {
     Idle,
     Running,
@@ -78,7 +80,7 @@ fun SessionList(
         if (dockBlockHeight > 0.dp) {
             dockBlockHeight + OpenCodeBottomFadeOverhang
         } else {
-            168.dp
+            SessionListFallbackBottomSpacer
         }
 
     Box(

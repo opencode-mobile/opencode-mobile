@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let sessionListFallbackBottomSpacer: CGFloat = 168
+
 enum SessionListStatus: Hashable {
     case idle
     case running
@@ -47,10 +49,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.id = id
         self.title = title
         self.count = count
-    }
-
-    var filterTab: OpenCodeFilterTab {
-        OpenCodeFilterTab(id: id, title: title, count: count)
     }
 }
 
@@ -109,7 +107,7 @@ struct SessionList: View {
                             .padding(.leading, 60)
                     }
                 }
-                Color.clear.frame(height: 168)
+                Color.clear.frame(height: sessionListFallbackBottomSpacer)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
@@ -146,7 +144,7 @@ struct SessionList: View {
                 Color.clear
                     .onAppear { bottomSafeAreaInset = geometry.safeAreaInsets.bottom }
                     .onChange(of: geometry.safeAreaInsets.bottom) { _, inset in
-                        if inset > 0 { bottomSafeAreaInset = inset }
+                        bottomSafeAreaInset = inset
                     }
             }
         }
