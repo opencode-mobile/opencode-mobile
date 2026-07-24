@@ -2,7 +2,6 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,19 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.PlatformTextStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.OpenCodeTheme
 
 private val FilterTabsTabShape = RoundedCornerShape(percent = 50)
@@ -108,16 +103,14 @@ private fun FilterTabItem(
         tab.count?.let { "${tab.title}, $it" } ?: tab.title
 
     Surface(
+        onClick = onClick,
         modifier =
             Modifier
                 .heightIn(min = FilterTabsTabMinHeight)
-                .clip(FilterTabsTabShape)
                 .semantics {
                     this.selected = selected
-                    role = Role.Button
                     contentDescription = accessibilityLabel
-                }
-                .clickable(onClick = onClick),
+                },
         shape = FilterTabsTabShape,
         color = Color.Transparent,
         border = border,
@@ -153,8 +146,7 @@ private fun FilterTabItem(
                         text = count.toString(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style =
-                            TextStyle(
-                                fontSize = 12.sp,
+                            MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                                 lineHeightStyle =

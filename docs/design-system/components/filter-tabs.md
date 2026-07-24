@@ -6,8 +6,7 @@ Provide a horizontal, single-select filter row with optional count badges for
 scoping a list (for example home Session List by project, or **All**).
 
 Use this when a screen needs compact filter chips inspired by messaging-style
-tab rows: label plus count, selected capsule outline, interactive selected
-count badge.
+tab rows: label plus count, selected capsule outline, and neutral count badges.
 
 ## Public API
 

@@ -45,7 +45,7 @@ struct OpenCodeFilterTabs: View {
                     .lineLimit(1)
                 if let count = tab.count {
                     Text("\(count)")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(OpenCodeTypography.caption.weight(.semibold))
                         .foregroundStyle(OpenCodeColors.textBase)
                         .padding(.horizontal, 6)
                         .frame(minWidth: 22, minHeight: 22)

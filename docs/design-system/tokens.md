@@ -287,6 +287,7 @@ to semantic surfaces as documented in
 | `filterTabs.count.paddingHorizontal` | 6 (logical px) |
 | `filterTabs.row.paddingHorizontal` | 16 (logical px) |
 | `filterTabs.row.paddingVertical` | 8 (logical px) |
+| `filterTabs.tab.borderWidth` | 1.5 (logical px; selected capsule stroke) |
 
 ### Action pill
 
