@@ -19,14 +19,13 @@ struct ProjectListHomeView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
-                    title: "OpenCode Mobile",
+                    title: homeTopBarTitle,
                     subtitleAccessory: showsLiveUpdatesStatus
                         ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
                         : nil,
                     actions: [
                         .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
-                    ],
-                    showDivider: true
+                    ]
                 )
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -202,6 +201,10 @@ struct ProjectListHomeView: View {
         }
     }
 
+    private var homeTopBarTitle: String {
+        homeDisplayPreferences.showSessionListOnHome ? "Sessions" : "OpenCode Mobile"
+    }
+
     @ViewBuilder
     private var content: some View {
         switch viewModel.state {
@@ -270,7 +273,6 @@ struct ProjectListHomeView: View {
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
                 onNewSession: { showNewSessionProjectPicker = true }
             )
-            .background(OpenCodeColors.backgroundBase)
         } else {
             GeometryReader { proxy in
                 ScrollView {

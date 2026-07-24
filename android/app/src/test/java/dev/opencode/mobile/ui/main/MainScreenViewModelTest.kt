@@ -74,15 +74,14 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun uiState_seedsBootWorktree_whenProfileEmpty() =
+    fun uiState_staysEmpty_whenNoAddedProjects() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore()
             val viewModel =
                 createViewModel(connectionProfileStore = store, bootWorktree = "/boot/project")
             advanceUntilIdle()
-            assertEquals(listOf("/boot/project"), store.added(serverUrl))
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/boot/project", loaded.focusedWorktree)
+            assertEquals(emptyList<String>(), store.added(serverUrl))
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Empty)
         }
 
     @Test

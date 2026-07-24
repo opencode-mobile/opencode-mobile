@@ -5,9 +5,60 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANDROID_DIR="$ROOT_DIR/android"
 APP_ID="${ANDROID_APP_ID:-dev.opencode.mobile}"
 ADB="${ADB:-adb}"
+VERBOSE=0
+
+usage() {
+  cat <<EOF
+Usage: ./run-android.sh [-v|--v|--verbose]
+
+Build, install, and launch $APP_ID on a connected device or emulator.
+
+Options:
+  -v, --v, --verbose   Print full command output
+EOF
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    -v|--v|--verbose)
+      VERBOSE=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+run_quiet() {
+  local label="$1"
+  shift
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    "$@"
+    return
+  fi
+
+  local log
+  log="$(mktemp -t "opencode-run-android.${label}.XXXXXX")"
+  local status=0
+  "$@" >"$log" 2>&1 || status=$?
+  if [[ "$status" -eq 0 ]]; then
+    rm -f "$log"
+    return 0
+  fi
+  echo "error: $label failed (exit $status)" >&2
+  tail -n 50 "$log" >&2 || true
+  echo "Full log: $log (re-run with --v for live output)" >&2
+  exit "$status"
+}
 
 if [[ ! -x "$ANDROID_DIR/gradlew" ]]; then
-  echo "Missing Android Gradle wrapper at $ANDROID_DIR/gradlew" >&2
+  echo "error: Missing Android Gradle wrapper at $ANDROID_DIR/gradlew" >&2
   exit 1
 fi
 
@@ -27,7 +78,7 @@ if ! command -v "$ADB" >/dev/null 2>&1; then
   if [[ -n "$SDK" && -x "$SDK/platform-tools/adb" ]]; then
     ADB="$SDK/platform-tools/adb"
   else
-    echo "adb was not found. Install Android platform-tools or set ADB." >&2
+    echo "error: adb was not found. Install Android platform-tools or set ADB." >&2
     exit 1
   fi
 fi
@@ -47,7 +98,9 @@ find_running_emulator() {
 
 wait_for_emulator_boot() {
   local device="$1"
-  echo "Waiting for $device to finish booting..."
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    echo "Waiting for $device to finish booting..."
+  fi
   "$ADB" -s "$device" wait-for-device
   until [[ "$("$ADB" -s "$device" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do
     sleep 1
@@ -56,14 +109,14 @@ wait_for_emulator_boot() {
 
 pick_avd() {
   if [[ -z "$EMULATOR" ]]; then
-    echo "emulator was not found. Install the Android Emulator or set EMULATOR." >&2
+    echo "error: emulator was not found. Install the Android Emulator or set EMULATOR." >&2
     exit 1
   fi
 
   local avds
   avds="$("$EMULATOR" -list-avds)"
   if [[ -z "$avds" ]]; then
-    echo "No Android Virtual Devices found. Create one in Android Studio." >&2
+    echo "error: No Android Virtual Devices found. Create one in Android Studio." >&2
     exit 1
   fi
 
@@ -72,7 +125,7 @@ pick_avd() {
       echo "$ANDROID_AVD"
       return
     fi
-    echo "No AVD named '${ANDROID_AVD}'." >&2
+    echo "error: No AVD named '${ANDROID_AVD}'." >&2
     exit 1
   fi
 
@@ -81,7 +134,9 @@ pick_avd() {
 
 start_emulator() {
   local avd="$1"
-  echo "Starting Android emulator: $avd"
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    echo "Starting Android emulator: $avd"
+  fi
   "$EMULATOR" -avd "$avd" -no-boot-anim >/dev/null 2>&1 &
 }
 
@@ -100,13 +155,13 @@ if [[ -z "${DEVICE:-}" ]]; then
   "$ADB" wait-for-device
   DEVICE="$(find_running_emulator)"
   if [[ -z "${DEVICE:-}" ]]; then
-    echo "Emulator started but no device serial was detected." >&2
+    echo "error: Emulator started but no device serial was detected." >&2
     exit 1
   fi
   wait_for_emulator_boot "$DEVICE"
 fi
 
-"$ANDROID_DIR/gradlew" -p "$ANDROID_DIR" :app:installDebug
-"$ADB" -s "$DEVICE" shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1
+run_quiet install "$ANDROID_DIR/gradlew" -p "$ANDROID_DIR" :app:installDebug
+run_quiet launch "$ADB" -s "$DEVICE" shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1
 
-echo "Launched $APP_ID on $DEVICE."
+echo "success: Launched $APP_ID on $DEVICE."

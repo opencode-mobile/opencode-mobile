@@ -33,7 +33,12 @@ fun ComponentGalleryDetailScreen(
             showDivider = true,
         )
 
-        if (entry.id == ComponentGalleryEntryId.SessionComposer) {
+        if (
+            entry.id == ComponentGalleryEntryId.SessionComposer ||
+            entry.id == ComponentGalleryEntryId.SessionList ||
+            entry.id == ComponentGalleryEntryId.SessionListDock
+        ) {
+            // Full-height scroll hosts (LazyColumn / composer) need a bounded height slot.
             Column(
                 modifier = Modifier.fillMaxSize().padding(top = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),

@@ -39,28 +39,33 @@ struct SettingsView: View {
             )
 
             ScrollView {
-                VStack(spacing: 0) {
+                VStack(spacing: 8) {
                     SectionHeader(title: "Server")
 
                     OpenCodeListItem(
                         title: "Server Connection",
                         subtitle: "Configure server URL and credentials",
+                        style: .card,
                         startDecorator: .icon(.cloud, accessibilityLabel: "Server Connection"),
                         action: onConnectionSetup
                     )
+                    .padding(.horizontal, 16)
 
                     SectionHeader(title: "Appearance")
 
                     OpenCodeListItem(
                         title: "Theme",
                         subtitle: themeManager.currentTheme.name,
+                        style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
                         action: { showThemePicker = true }
                     )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Session List",
                         subtitle: "Switch home between session list and project selector",
+                        style: .card,
                         startDecorator: .icon(.list, accessibilityLabel: "Session List"),
                         trailing: {
                             Toggle(
@@ -74,16 +79,19 @@ struct SettingsView: View {
                             .tint(OpenCodeColors.interactive)
                         }
                     )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Import Theme",
                         subtitle: "Custom OpenCode OC-2 JSON file",
+                        style: .card,
                         startDecorator: .icon(.folder, accessibilityLabel: "Import Theme"),
                         action: {
                             importError = nil
                             showThemeImporter = true
                         }
                     )
+                    .padding(.horizontal, 16)
 
                     if let importError {
                         Text(importError)
@@ -106,16 +114,20 @@ struct SettingsView: View {
                     OpenCodeListItem(
                         title: "Component Gallery",
                         subtitle: "Design-system foundations and reusable components",
+                        style: .card,
                         startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
                         action: { showComponentGallery = true }
                     )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Clear All Data",
                         subtitle: "Remove connection, cache, and imported themes",
+                        style: .card,
                         startDecorator: .icon(.close, accessibilityLabel: "Clear All Data"),
                         action: { showClearConfirmation = true }
                     )
+                    .padding(.horizontal, 16)
                 }
             }
         }

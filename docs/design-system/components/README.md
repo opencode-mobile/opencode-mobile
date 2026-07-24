@@ -106,6 +106,10 @@ applicable item is complete.
 - `dialog.md`
 - `choice-badge.md`
 - `filter-tabs.md`
+- `filter-chip.md`
+- `floating-dock.md`
+- `session-list-dock.md`
+- `bottom-fade.md`
 - `list-item.md`
 - `list-group.md`
 - `button.md`

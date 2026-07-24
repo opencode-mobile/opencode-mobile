@@ -118,6 +118,8 @@ struct ComponentGalleryDetailView: View {
             ProjectSessionSelectorGalleryView()
         case .sessionList:
             SessionListGalleryView()
+        case .sessionListDock:
+            SessionListDockGalleryView()
         case .sessionStatusBar:
             SessionStatusBarGalleryView()
         case .sessionComposer:

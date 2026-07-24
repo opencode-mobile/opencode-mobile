@@ -40,6 +40,7 @@ enum class ComponentGalleryEntryId {
     TextInput,
     ProjectSessionSelector,
     SessionList,
+    SessionListDock,
     SessionStatusBar,
     SessionComposer,
     RenderedMarkdown,
@@ -191,6 +192,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionList,
             title = "Session List",
             description = "Cross-project recent sessions with status and relative time.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionListDock,
+            title = "Session List Dock",
+            description = "Floating filter chips and Add project / New session actions.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

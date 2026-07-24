@@ -50,6 +50,7 @@ import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
+
 @Composable
 fun MainScreen(
     onSettingsClick: () -> Unit,
@@ -136,10 +137,13 @@ internal fun MainScreen(
             else -> emptyList()
         }
 
+    val homeTopBarTitle =
+        if (HomeDisplayPreferences.showSessionListOnHome) "Sessions" else appName
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = appName,
+                title = homeTopBarTitle,
                 subtitleAccessory =
                     if (showsLiveUpdatesStatus(uiState)) {
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
@@ -148,7 +152,6 @@ internal fun MainScreen(
                     } else {
                         null
                     },
-                showDivider = true,
                 actions =
                     listOf(
                         OpenCodeTopBarAction.Icon(

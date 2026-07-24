@@ -9,7 +9,7 @@ object HomeDisplayPreferences {
     private const val PREFS_NAME = "opencode_home_display"
     private const val KEY_SHOW_SESSION_LIST_ON_HOME = "show_session_list_on_home"
 
-    var showSessionListOnHome: Boolean by mutableStateOf(false)
+    var showSessionListOnHome: Boolean by mutableStateOf(true)
         private set
 
     private var appContext: Context? = null
@@ -19,9 +19,9 @@ object HomeDisplayPreferences {
         val prefs = prefs() ?: return
         showSessionListOnHome =
             if (prefs.contains(KEY_SHOW_SESSION_LIST_ON_HOME)) {
-                prefs.getBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, false)
+                prefs.getBoolean(KEY_SHOW_SESSION_LIST_ON_HOME, true)
             } else {
-                false
+                true
             }
     }
 
@@ -32,7 +32,7 @@ object HomeDisplayPreferences {
 
     fun clear() {
         prefs()?.edit()?.remove(KEY_SHOW_SESSION_LIST_ON_HOME)?.apply()
-        showSessionListOnHome = false
+        showSessionListOnHome = true
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

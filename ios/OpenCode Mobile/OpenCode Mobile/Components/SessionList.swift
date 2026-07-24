@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let sessionListFallbackBottomSpacer: CGFloat = 168
+
 enum SessionListStatus: Hashable {
     case idle
     case running
@@ -48,10 +50,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.title = title
         self.count = count
     }
-
-    var filterTab: OpenCodeFilterTab {
-        OpenCodeFilterTab(id: id, title: title, count: count)
-    }
 }
 
 struct SessionList: View {
@@ -63,6 +61,9 @@ struct SessionList: View {
     let onSessionSelected: (SessionListSession) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+
+    @State private var bottomSafeAreaInset: CGFloat = 0
+    @State private var dockHeight: CGFloat = 0
 
     init(
         sessions: [SessionListSession],
@@ -85,68 +86,71 @@ struct SessionList: View {
     }
 
     private var visibleSessions: [SessionListSession] {
-        if selectedFilterId == SessionListFilterTab.allId {
-            return sessions
-        }
-        return sessions.filter { $0.worktree == selectedFilterId }
+        sessions.visibleForFilter(selectedFilterId)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            OpenCodeFilterTabs(
-                tabs: filterTabs.map(\.filterTab),
-                selectedTabId: selectedFilterId,
-                onTabSelected: onFilterSelected
-            )
-
+        ZStack(alignment: .bottom) {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(visibleSessions) { session in
                         OpenCodeListItem(
                             title: session.title,
                             subtitle: compactHomePath(session.subtitle),
-                            status: listItemStatus(for: session.status),
+                            status: listItemStatus(session.status),
                             caption: session.caption.isEmpty ? nil : session.caption,
-                            style: .plain,
                             startDecorator: .letter(session.letter, session.letterAccent),
                             action: { onSessionSelected(session) }
                         )
+                        Divider()
+                            .overlay(OpenCodeColors.borderWeakerBase)
+                            .padding(.leading, 60)
                     }
                 }
+                Color.clear.frame(height: sessionListFallbackBottomSpacer)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(OpenCodeColors.backgroundBase)
 
-            footer
+            OpenCodeBottomFade(
+                height: max(dockHeight + OpenCodeBottomFade.overhang, OpenCodeBottomFade.overhang)
+                    + bottomSafeAreaInset
+            )
+            .offset(y: bottomSafeAreaInset)
+            .ignoresSafeArea(edges: .bottom)
+
+            OpenCodeSessionListDock(
+                filterTabs: filterTabs,
+                selectedFilterId: selectedFilterId,
+                createError: createError,
+                onFilterSelected: onFilterSelected,
+                onAddProject: onAddProject,
+                onNewSession: onNewSession
+            )
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { dockHeight = geometry.size.height }
+                        .onChange(of: geometry.size.height) { _, height in
+                            dockHeight = height
+                        }
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var footer: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 8) {
-                OpenCodeButton(
-                    variant: .iconSquare(.add, accessibilityLabel: "Add project"),
-                    action: onAddProject
-                )
-                OpenCodeButton(
-                    variant: .fullWidthText(title: "New session"),
-                    action: onNewSession
-                )
-            }
-            if let createError {
-                Text(createError)
-                    .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.error)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OpenCodeColors.backgroundBase)
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { bottomSafeAreaInset = geometry.safeAreaInsets.bottom }
+                    .onChange(of: geometry.safeAreaInsets.bottom) { _, inset in
+                        bottomSafeAreaInset = inset
+                    }
             }
         }
-        .padding(.top, 12)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
     }
 
-    private func listItemStatus(for status: SessionListStatus) -> OpenCodeListItemStatus {
+    private func listItemStatus(_ status: SessionListStatus) -> OpenCodeListItemStatus {
         switch status {
         case .idle:
             OpenCodeListItemStatus(text: "Idle", tone: .info)
@@ -154,6 +158,7 @@ struct SessionList: View {
             OpenCodeListItemStatus(text: "Running", tone: .interactive)
         }
     }
+
 }
 
 private func compactHomePath(_ path: String) -> String {
@@ -163,6 +168,15 @@ private func compactHomePath(_ path: String) -> String {
         return "~" + path.dropFirst(home.count)
     }
     return path
+}
+
+extension Array where Element == SessionListSession {
+    func visibleForFilter(_ selectedFilterId: String) -> [SessionListSession] {
+        if selectedFilterId == SessionListFilterTab.allId {
+            return self
+        }
+        return filter { $0.worktree == selectedFilterId }
+    }
 }
 
 #if DEBUG

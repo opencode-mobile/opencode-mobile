@@ -56,21 +56,20 @@ implementation belong in the feature's `parity-gaps.md`.
   symbols at component boundaries, revisit whether both platforms should expose
   only that kind.
 
-## Top bar title alignment
+## Top bar icon circle materials
 
 - Status: intentional
 - Area: component
-- Shared intent: `OpenCodeTopBar` should read as one shared page-level
-  navigation component with the same leading semantics, title contract, and
-  trailing action model on both platforms.
-- iOS behavior: title remains visually centered within the bar.
-- Android behavior: title is aligned to the start edge after the leading action.
-- Reason: centered iOS navigation titles and start-aligned Android app-bar
-  titles both match established platform expectations better than forcing one
-  cross-platform alignment rule.
-- Review trigger: If product design later calls for a distinct branded app
-  chrome that intentionally overrides native alignment expectations on both
-  platforms, revisit this divergence.
+- Shared intent: `OpenCodeTopBar` icon actions read as compact circular controls
+  with the same size, placement, and accessibility labels on both platforms.
+- iOS behavior: iOS 26+ uses interactive Liquid Glass circles for leading and
+  trailing icon actions; below iOS 26 uses `OpenCodeButton` `iconCircle`.
+- Android behavior: Material `OpenCodeButton` `IconCircle` (raised surface +
+  border); no system Liquid Glass.
+- Reason: Android has no Liquid Glass equivalent; product keeps shared layout
+  while materials stay platform-native.
+- Review trigger: if Android gains a system glass control API or product asks
+  for a shared custom blur stack on top-bar icons.
 
 ## Top bar native Back input
 
@@ -184,3 +183,21 @@ implementation belong in the feature's `parity-gaps.md`.
   surface, radius, typography, button, and text-input composition.
 - Review trigger: revisit if product design requires identical enter/exit motion
   or a shared modal host abstraction.
+
+## Floating dock materials (Liquid Glass vs raised Surface)
+
+- Status: intentional
+- Area: component
+- Shared intent: Session List home chrome uses a floating bottom dock, dense
+  rows, and the same bottom-fade geometry (`background.base` `0 → 0.7 → 0.7`,
+  top = dock top + 16, solid to screen edge) with equivalent filter and action
+  affordances.
+- iOS behavior: iOS 26+ `glassEffect` / glass button styles on dock, chips, and
+  key controls with `surface-raised-base` underlay at 0.92 opacity; material
+  fallbacks below iOS 26.
+- Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light elevation)
+  and bordered CTAs as a glass-like stand-in; no system Liquid Glass API.
+- Reason: Android has no Liquid Glass equivalent; layout and product actions stay
+  aligned while materials remain platform-native.
+- Review trigger: if Android gains a system glass material API or product asks
+  for a shared custom blur stack, revisit the Android mapping.

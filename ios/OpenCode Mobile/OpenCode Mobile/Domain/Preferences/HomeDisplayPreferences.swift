@@ -16,7 +16,7 @@ final class HomeDisplayPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if defaults.object(forKey: StorageKeys.showSessionListOnHome) == nil {
-            showSessionListOnHome = false
+            showSessionListOnHome = true
         } else {
             showSessionListOnHome = defaults.bool(forKey: StorageKeys.showSessionListOnHome)
         }
@@ -29,6 +29,6 @@ final class HomeDisplayPreferences {
 
     func clear() {
         defaults.removeObject(forKey: StorageKeys.showSessionListOnHome)
-        showSessionListOnHome = false
+        showSessionListOnHome = true
     }
 }

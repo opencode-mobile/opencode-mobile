@@ -40,6 +40,9 @@ icons:
   - name: folder
     style: filled
     notes: SF Symbol folder.fill
+  - name: create_new_folder
+    style: filled
+    notes: Add project — folder with plus (Session List Dock)
   - name: folder_check
     source: material_symbols
     style: filled
