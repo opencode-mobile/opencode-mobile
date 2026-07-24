@@ -17,19 +17,27 @@ struct ProjectListHomeView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            VStack(spacing: 0) {
-                OpenCodeTopBar(
-                    title: "OpenCode Mobile",
-                    subtitleAccessory: showsLiveUpdatesStatus
-                        ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
-                        : nil,
-                    actions: [
-                        .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
-                    ],
-                    showDivider: true
-                )
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                // PROTOTYPE liquid-glass: list mode owns its own chrome (no OpenCodeTopBar).
+                if usesLiquidGlassListPrototype {
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 0) {
+                        OpenCodeTopBar(
+                            title: "OpenCode Mobile",
+                            subtitleAccessory: showsLiveUpdatesStatus
+                                ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
+                                : nil,
+                            actions: [
+                                .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
+                            ],
+                            showDivider: true
+                        )
+                        content
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
@@ -202,6 +210,18 @@ struct ProjectListHomeView: View {
         }
     }
 
+    /// PROTOTYPE liquid-glass — home list mode renders throwaway chrome variants.
+    private var usesLiquidGlassListPrototype: Bool {
+        homeDisplayPreferences.showSessionListOnHome && {
+            switch viewModel.state {
+            case .empty, .loaded:
+                true
+            default:
+                false
+            }
+        }()
+    }
+
     @ViewBuilder
     private var content: some View {
         switch viewModel.state {
@@ -252,11 +272,15 @@ struct ProjectListHomeView: View {
                 filterTabs.contains(where: { $0.id == selectedSessionFilterId })
                     ? selectedSessionFilterId
                     : SessionListFilterTab.allId
-            SessionList(
+            // PROTOTYPE liquid-glass: list mode uses throwaway variants instead of SessionList.
+            LiquidGlassHomeListPrototype(
                 sessions: sessions,
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: createError,
+                liveStatus: showsLiveUpdatesStatus
+                    ? viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus
+                    : nil,
                 onFilterSelected: { selectedSessionFilterId = $0 },
                 onSessionSelected: { session in
                     openSession(
@@ -268,9 +292,9 @@ struct ProjectListHomeView: View {
                     )
                 },
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
-                onNewSession: { showNewSessionProjectPicker = true }
+                onNewSession: { showNewSessionProjectPicker = true },
+                onSettings: { showSettings = true }
             )
-            .background(OpenCodeColors.backgroundBase)
         } else {
             GeometryReader { proxy in
                 ScrollView {
