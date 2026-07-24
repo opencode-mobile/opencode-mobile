@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Canonical OpenCode Mobile app launcher icon source.
+
+  This single SVG feeds scripts/sync-app-icon.mjs, which emits the Android
+  adaptive-icon vector drawables and the iOS app-icon set PNGs from it.
+  See docs/design-system/app-icon.md for the contract.
+
+  Coordinate space mirrors the Android adaptive-icon foreground vector:
+  - viewBox 0 0 240 300 (Android viewport, non-uniformly squashed to a square)
+  - background rect is the launcher background color
+  - glyph group carries the same scale/translate as ic_launcher_foreground.xml
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 240 300">
+  <!-- @opencode/background -->
+  <rect x="0" y="0" width="240" height="300" fill="#070707"/>
+  <!-- @opencode/glyph -->
+  <g transform="translate(81.86667,90.416664) scale(0.31777778,0.39722222)">
+    <path d="M180,240H60V120H180V240Z" fill="#4B4646"/>
+    <path d="M180,60H60V240H180V60ZM240,300H0V0H240V300Z" fill="#F1ECEC"/>
+  </g>
+</svg>
