@@ -156,7 +156,14 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
 
     var body: some View {
         GeometryReader { geometry in
-            let bottomClearance = max(bottomSheetContentBottomPadding, geometry.safeAreaInsets.bottom)
+            // Action lists use tight bottom chrome (same as Commands compact).
+            // Forms keep the larger clearance so fields clear the home indicator /
+            // keyboard. Do not stack safe-area + padding for action lists — that
+            // left a tall empty band under Show all sessions.
+            let bottomClearance =
+                contentMode == .form
+                    ? max(bottomSheetContentBottomPadding, geometry.safeAreaInsets.bottom)
+                    : bottomSheetCompactContentBottomPadding
             let scrollAreaHeight = max(
                 bottomSheetEntryMinHeight,
                 geometry.size.height
@@ -170,6 +177,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
                 leadingAction: leadingAction,
                 onDismiss: onDismiss,
                 mode: resolvedMode,
+                contentMode: contentMode,
                 scrollAreaHeight: scrollAreaHeight,
                 scrollTargetID: scrollTargetID,
                 contentHeight: contentHeight,
@@ -313,10 +321,10 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 
     func body(content: Content) -> some View {
         content
-            // Keep the host keyboard safe-area policy stable for the whole
-            // presentation. Toggling it when contentMode flips (provider list →
-            // filtered models) resizes the screen behind the sheet.
-            .modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: isPresented))
+            // Always apply the same modifier shape. Branching on isPresented used to
+            // swap the host view type when the sheet opened, which could tear down
+            // NavigationStack state and crash on present (e.g. home "Show all").
+            .modifier(BottomSheetKeyboardHostPolicy())
             .sheet(isPresented: $isPresented) {
                 OpenCodeBottomSheetSheetBody(
                     title: title,
@@ -333,15 +341,8 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
 }
 
 private struct BottomSheetKeyboardHostPolicy: ViewModifier {
-    let ignoreKeyboardSafeArea: Bool
-
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if ignoreKeyboardSafeArea {
-            content.ignoresSafeArea(.keyboard)
-        } else {
-            content
-        }
+        content.ignoresSafeArea(.keyboard)
     }
 }
 
@@ -395,6 +396,7 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
     let mode: BottomSheetPresentationMode
+    let contentMode: OpenCodeBottomSheetContentMode
     let scrollAreaHeight: CGFloat
     let scrollTargetID: String?
     let contentHeight: CGFloat
@@ -403,6 +405,10 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
     let onContentHeightChange: (CGFloat) -> Void
     let onHeaderHeightChange: (CGFloat) -> Void
     let onPinnedContentHeightChange: (CGFloat) -> Void
+
+    private var bottomPadding: CGFloat {
+        contentMode == .form ? bottomSheetContentBottomPadding : bottomSheetCompactContentBottomPadding
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -447,10 +453,7 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
             }
         }
         .frame(maxWidth: .infinity, alignment: .top)
-        .padding(
-            .bottom,
-            mode == .compact ? bottomSheetCompactContentBottomPadding : bottomSheetContentBottomPadding
-        )
+        .padding(.bottom, bottomPadding)
         .background(OpenCodeColors.surfaceBase)
         .fixedSize(horizontal: false, vertical: mode == .compact)
     }
@@ -594,19 +597,19 @@ extension View {
         alwaysFixedHeight: Bool = false,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: item.wrappedValue != nil))
+        modifier(BottomSheetKeyboardHostPolicy())
             .sheet(item: item) { value in
-            OpenCodeBottomSheetSheetBody(
-                title: title,
-                leadingAction: leadingAction,
-                scrollTargetID: scrollTargetID,
-                contentMode: contentMode,
-                alwaysFixedHeight: alwaysFixedHeight,
-                onDismiss: { item.wrappedValue = nil },
-                pinnedContent: { EmptyView() },
-                sheetContent: { content(value) }
-            )
-        }
+                OpenCodeBottomSheetSheetBody(
+                    title: title,
+                    leadingAction: leadingAction,
+                    scrollTargetID: scrollTargetID,
+                    contentMode: contentMode,
+                    alwaysFixedHeight: alwaysFixedHeight,
+                    onDismiss: { item.wrappedValue = nil },
+                    pinnedContent: { EmptyView() },
+                    sheetContent: { content(value) }
+                )
+            }
     }
 
     func openCodeBottomSheet<Item: Identifiable, PinnedContent: View, SheetContent: View>(
@@ -619,19 +622,19 @@ extension View {
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy(ignoreKeyboardSafeArea: item.wrappedValue != nil))
+        modifier(BottomSheetKeyboardHostPolicy())
             .sheet(item: item) { value in
-            OpenCodeBottomSheetSheetBody(
-                title: title,
-                leadingAction: leadingAction,
-                scrollTargetID: scrollTargetID,
-                contentMode: contentMode,
-                alwaysFixedHeight: alwaysFixedHeight,
-                onDismiss: { item.wrappedValue = nil },
-                pinnedContent: { pinnedContent(value) },
-                sheetContent: { content(value) }
-            )
-        }
+                OpenCodeBottomSheetSheetBody(
+                    title: title,
+                    leadingAction: leadingAction,
+                    scrollTargetID: scrollTargetID,
+                    contentMode: contentMode,
+                    alwaysFixedHeight: alwaysFixedHeight,
+                    onDismiss: { item.wrappedValue = nil },
+                    pinnedContent: { pinnedContent(value) },
+                    sheetContent: { content(value) }
+                )
+            }
     }
 }
 

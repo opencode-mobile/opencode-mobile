@@ -38,7 +38,8 @@ struct AddProjectNavigatorState: Equatable {
     )
 }
 
-struct SeeAllSessionsSheetState: Equatable {
+struct SeeAllSessionsSheetState: Equatable, Identifiable {
+    var id: String { worktree }
     let worktree: String
     let projectName: String
     let sessions: [SessionListItem]
@@ -253,7 +254,8 @@ final class ProjectListHomeViewModel {
             projectName: section.displayName,
             sessions: section.allSessions
         )
-        seeAllSessionsSheet = sheet
+        // Keep enum state and presentation flag in the same turn, state first, so a
+        // concurrent live update cannot clear the sheet using a stale nil seeAll.
         state = .loaded(
             sections: sections,
             showAddProjectSheet: showAdd,
@@ -262,11 +264,14 @@ final class ProjectListHomeViewModel {
             focusedWorktree: focused,
             projectSessionCreateError: createError
         )
+        seeAllSessionsSheet = sheet
     }
 
     func dismissSeeAllSessions() {
-        seeAllSessionsSheet = nil
-        guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, navigator, _, focused, createError) = state else {
+            seeAllSessionsSheet = nil
+            return
+        }
         state = .loaded(
             sections: sections,
             showAddProjectSheet: showAdd,
@@ -275,6 +280,7 @@ final class ProjectListHomeViewModel {
             focusedWorktree: focused,
             projectSessionCreateError: createError
         )
+        seeAllSessionsSheet = nil
     }
 
     func createSession(in worktree: String) async {
@@ -615,9 +621,6 @@ final class ProjectListHomeViewModel {
             } else {
                 seeAll
             }
-        if seeAllSessionsSheet?.worktree == worktree {
-            seeAllSessionsSheet = updatedSeeAll
-        }
         state = .loaded(
             sections: updatedSections,
             showAddProjectSheet: showAdd,
@@ -626,6 +629,10 @@ final class ProjectListHomeViewModel {
             focusedWorktree: focused,
             projectSessionCreateError: createError
         )
+        // Keep presentation flag aligned with state for the focused sheet only.
+        if seeAllSessionsSheet?.worktree == worktree {
+            seeAllSessionsSheet = updatedSeeAll
+        }
     }
 
     private func resolvedFocusedWorktree(in sections: [ProjectSectionItem]) -> String? {
