@@ -23,6 +23,7 @@ private var _description: ImageVector? = null
 private var _edit: ImageVector? = null
 private var _expand_content: ImageVector? = null
 private var _folder: ImageVector? = null
+private var _create_new_folder: ImageVector? = null
 private var _folder_check: ImageVector? = null
 private var _list: ImageVector? = null
 private var _more_vert: ImageVector? = null
@@ -294,6 +295,25 @@ private var _widgets: ImageVector? = null
     )
       }.build()
       return _folder!!
+    }
+
+  val CreateNewFolder: ImageVector
+    get() {
+      if (_create_new_folder != null) return _create_new_folder!!
+      _create_new_folder = ImageVector.Builder(
+        name = "CreateNewFolder",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z").toNodes(),
+      fill = SolidColor(Color.Black),
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _create_new_folder!!
     }
 
   val FolderCheck: ImageVector

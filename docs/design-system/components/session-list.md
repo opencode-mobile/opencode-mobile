@@ -2,12 +2,11 @@
 
 ## Intent
 
-Provide the reusable home-scale list of sessions across added projects, sorted by
-recency, for opening a session quickly, with sticky footer actions to add a
-project or start a new session.
+Provide the home-scale cross-project session feed: dense rows and a floating
+bottom dock with project filter chips plus Add project / New session.
 
-Use this component when a screen needs a cross-project session feed without
-owning the visual treatment for session rows or the home action bar.
+Use when Session List home mode is on. Page chrome (`OpenCodeTopBar` title,
+live status, settings) is owned by the home shell, not this component.
 
 ## Public API
 
@@ -15,95 +14,75 @@ owning the visual treatment for session rows or the home action bar.
   - `SessionListSession`: `id`, `title`, `worktree`, `letter`, `letterAccent`,
     `subtitle`, `status`, `caption`.
   - `SessionListStatus`: `idle` | `running`.
-- Models (filters):
   - `SessionListFilterTab`: `id`, `title`, `count`. Use id `all` for the
     cross-project tab; other ids match `SessionListSession.worktree`.
-- Required content: ordered `sessions` collection (may be empty) and ordered
-  `filterTabs` (at least **All** when filters are shown).
+- Required content: ordered `sessions` (may be empty) and ordered `filterTabs`
+  (at least **All** when filters are shown).
 - Required filter state: `selectedFilterId` plus `onFilterSelected(id)`.
 - Optional content:
-  - `createError` string shown under the footer actions when session create fails.
+  - `createError` string shown at the top of the dock when session create fails.
 - Required callbacks:
   - `onSessionSelected(session)`.
-  - `onAddProject()` (small add control; opens add-project flow).
-  - `onNewSession()` (full-width **New session** control; opens project picker).
+  - `onAddProject()`.
+  - `onNewSession()`.
   - `onFilterSelected(id)`.
-- States: default and empty. Pressed, focused, disabled, loading, and selected
-  states are not applicable because rows and owning features expose those
-  states. An empty filtered `sessions` collection shows filter tabs and sticky
-  footer with no rows.
+- States: default and empty filtered list (dock and filters remain). Loading and
+  load-error remain owned by the home screen shell. Page chrome is not part of
+  this component.
 
 ## Token Usage
 
-- Semantic tokens: list-item surface, text, status (`info`, `interactive`), and
-  letter-accent pairs via `OpenCodeListItem`; footer uses button tokens and
-  optional error text.
-- Component dependencies: `OpenCodeFilterTabs` for project filters;
-  `OpenCodeListItem` with letter start decorator, status footer, and caption;
-  `OpenCodeButton` `iconSquare` (add) and `fullWidthText` (**New session**).
-- Typography roles: list-item typography (`type.heading` title, `type.caption`
-  subtitle/status/caption); body-secondary for create error; filter-tab label
-  roles via Filter Tabs.
+- Semantic tokens: background base page fill; list text/status; letter-accent
+  badges; dock and chip tokens via Floating Dock and Filter Chip; bottom fade
+  via Bottom Fade.
+- Component dependencies: `OpenCodeListItem` for rows; `OpenCodeSessionListDock`
+  for filters + actions; `OpenCodeBottomFade`. Home shell supplies
+  `OpenCodeTopBar`.
+- Typography roles: list-item body/caption; dock chip/button roles via Session
+  List Dock.
 
 ## Behavior
 
-The component is stateless. Callers own sorting, relative-time caption
-formatting, Idle/Running mapping, filter tab models and selection, then pass
-display-ready `SessionListSession` models. Callers also own the add-project
-navigator and the new-session project-picker bottom sheet; this component only
-fires filter and footer callbacks.
+The component is stateless for data. Callers own sorting, captions, Idle/Running
+mapping, filter models/selection, add-project and new-session flows, and page
+chrome.
 
-Layout fills the available height: sticky **Filter Tabs** under the top edge,
-session rows scroll in the middle, sticky footer aligned like Project Session
-Selector actions (small square control + full-width primary).
+Layout:
+
+1. Scrolling `OpenCodeListItem` rows (letter badge, title, compact path, trailing
+   caption + status pill) with leading-inset dividers.
+2. Bottom fade under the dock (`background.base` `0 → 0.7 → 0.7`; top = dock top
+   + 16; bottom = physical screen edge).
+3. `OpenCodeSessionListDock`: optional create error, horizontal filter chips, Add
+   project + New session.
 
 When `selectedFilterId` is `all`, all sessions are shown. Otherwise only
 sessions whose `worktree` equals the selected filter id are shown.
 
-Each row maps to `OpenCodeListItem` with:
-
-- start decorator: project letter + accent
-- title: session name
-- subtitle: project root directory
-- status: `Idle` with tone `info`, or `Running` with tone `interactive`
-- caption: relative time string
-- style: `plain`
-
-Selecting a row calls `onSessionSelected` with the full session model so feature
-screens can navigate with the correct worktree.
-
-Footer:
-
-- small `iconSquare` add control → `onAddProject`
-- full-width **New session** → `onNewSession`
-- optional `createError` below the row
-
 ## Platform Notes
 
-- iOS: `SessionList` lives under `Components` and uses SwiftUI `ScrollView` +
-  sticky footer `HStack` with `OpenCodeButton`.
-- Android: `SessionList` lives under `ui/components` and uses Compose
-  `LazyColumn` (or scrollable column) with a sticky footer `Row` and
-  `OpenCodeButton`.
+- iOS: dense list + Liquid Glass dock/chips/key controls on iOS 26+ with material
+  fallbacks below iOS 26.
+- Android: same hierarchy with Material raised glass-like dock; no system Liquid
+  Glass.
 
 ## Review Surfaces
 
 Both Component Galleries include a realistic mixed Idle/Running sample with
-multiple project letters, relative-time captions, and the sticky footer. Light
-and dark appearances use the shared gallery theme control.
+filters and dock actions. Light and dark use the shared gallery theme control.
+Edge-to-edge fade is judged full-bleed in the gallery detail. Top bar chrome is
+reviewed via Top Bar gallery / home shell, not this entry.
 
 ## Parity And Divergence
 
-iOS and Android expose the same conceptual models and callbacks. Platform type
-names differ only where native language conventions require it, such as Swift
-closures and Kotlin function types.
+Shared layout and callbacks. Intentional material difference for glass vs raised
+surface is recorded in `../divergences.md`.
 
 ## Completion Ledger
 
 - Public API and states: complete.
-- Token and typography mapping: complete; row-owned via list item; footer via
-  button.
+- Token and typography mapping: complete via dock, chip, fade, and row tokens.
 - iOS and Android implementations: complete.
-- Gallery and previews: complete.
-- Parity and divergences: complete; none known.
+- Gallery and previews: complete for list + dock (no embedded top bar).
+- Parity and divergences: intentional glass materials documented.
 - Automated checks: covered by platform build/test for affected surfaces.

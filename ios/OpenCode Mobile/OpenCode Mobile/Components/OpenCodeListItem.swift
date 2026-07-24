@@ -1,9 +1,12 @@
 import SwiftUI
 
 private let listItemCornerRadius: CGFloat = 8
-private let listItemStatusDotSize: CGFloat = 6
-private let listItemStatusDotSpacing: CGFloat = 4
-private let listItemFooterCaptionSpacing: CGFloat = 8
+private let listItemLetterBadgeSize: CGFloat = 32
+private let listItemLetterGlyphSize: CGFloat = 14
+private let listItemIconDecoratorSize: CGFloat = 24
+private let listItemVerticalPadding: CGFloat = 12
+private let listItemTitleSubtitleSpacing: CGFloat = 2
+private let listItemMetaSpacing: CGFloat = 4
 
 enum OpenCodeListItemStyle {
     case plain
@@ -88,13 +91,17 @@ struct OpenCodeListItem<Trailing: View>: View {
         }
     }
 
+    private var hasMeta: Bool {
+        status != nil || (caption?.isEmpty == false)
+    }
+
     private var content: some View {
-        HStack(alignment: rowAlignment, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             startDecoratorContent
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing) {
                 Text(title)
-                    .font(OpenCodeTypography.heading)
+                    .font(OpenCodeTypography.body.weight(.semibold))
                     .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                     .lineLimit(1)
 
@@ -108,13 +115,13 @@ struct OpenCodeListItem<Trailing: View>: View {
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                 }
-
-                if status != nil || caption != nil {
-                    footerRow
-                }
             }
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+
+            if hasMeta {
+                metaColumn
+            }
 
             trailing()
                 .foregroundStyle(OpenCodeColors.iconBase)
@@ -122,7 +129,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, listItemVerticalPadding)
         .background {
             containerBackground
         }
@@ -135,33 +142,27 @@ struct OpenCodeListItem<Trailing: View>: View {
         .opacity(enabled ? 1 : 0.7)
     }
 
-    private var rowAlignment: VerticalAlignment {
-        if case .letter = startDecorator { return .top }
-        return .center
-    }
-
-    private var footerRow: some View {
-        HStack(spacing: listItemFooterCaptionSpacing) {
-            if let status {
-                HStack(spacing: listItemStatusDotSpacing) {
-                    Circle()
-                        .fill(statusColor(status.tone))
-                        .frame(width: listItemStatusDotSize, height: listItemStatusDotSize)
-                    Text(status.text)
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(statusColor(status.tone))
-                        .lineLimit(1)
-                }
-            }
-
-            if let caption {
+    private var metaColumn: some View {
+        VStack(alignment: .trailing, spacing: listItemMetaSpacing) {
+            if let caption, !caption.isEmpty {
                 Text(caption)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            if let status {
+                Text(status.text)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(statusForeground(status.tone))
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(statusBackground(status.tone), in: Capsule())
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
-        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func semanticSubtitle(_ segments: [OpenCodeListItemSubtitleSegment]) -> Text {
@@ -183,7 +184,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         }
     }
 
-    private func statusColor(_ tone: OpenCodeListItemStatusTone) -> Color {
+    private func statusForeground(_ tone: OpenCodeListItemStatusTone) -> Color {
         guard enabled else { return OpenCodeColors.textWeaker }
         switch tone {
         case .interactive:
@@ -195,7 +196,23 @@ struct OpenCodeListItem<Trailing: View>: View {
         case .error:
             return OpenCodeColors.error
         case .info:
-            return OpenCodeColors.info
+            return OpenCodeColors.textWeaker
+        }
+    }
+
+    private func statusBackground(_ tone: OpenCodeListItemStatusTone) -> Color {
+        guard enabled else { return OpenCodeColors.surfaceRaisedBase }
+        switch tone {
+        case .interactive:
+            return OpenCodeColors.interactive.opacity(0.12)
+        case .success:
+            return OpenCodeColors.success.opacity(0.12)
+        case .warning:
+            return OpenCodeColors.warning.opacity(0.12)
+        case .error:
+            return OpenCodeColors.error.opacity(0.12)
+        case .info:
+            return OpenCodeColors.surfaceRaisedBase
         }
     }
 
@@ -220,16 +237,16 @@ struct OpenCodeListItem<Trailing: View>: View {
             EmptyView()
         case let .letter(character, accent):
             Text(normalizedBadgeLetter(character))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: listItemLetterGlyphSize, weight: .bold, design: .rounded))
                 .foregroundStyle(accent.badgeTint)
-                .frame(width: 36, height: 36)
-                .background(accent.badgeFill, in: RoundedRectangle(cornerRadius: 6))
+                .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
+                .background(accent.badgeFill, in: Circle())
                 .accessibilityHidden(true)
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon)
-                .font(.system(size: 24))
+                .font(.system(size: listItemIconDecoratorSize))
                 .foregroundStyle(OpenCodeColors.iconBase)
-                .frame(width: 24, height: 24)
+                .frame(width: listItemIconDecoratorSize, height: listItemIconDecoratorSize)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")
         }
@@ -242,11 +259,15 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
     return first.isLetter || first.isNumber ? String(first) : "?"
 }
 
+#if DEBUG
 #Preview {
-    VStack(spacing: 12) {
+    VStack(spacing: 0) {
         OpenCodeListItem(
             title: "Material Design Icons integration plan",
-            subtitle: "http://127.0.0.1:4096/"
+            subtitle: "http://127.0.0.1:4096/",
+            status: OpenCodeListItemStatus(text: "Working · 14m", tone: .interactive),
+            caption: "sidebar-v2-concepts",
+            startDecorator: .letter(Character("A"), .violet)
         )
         OpenCodeListItem(
             title: "contact.html",
@@ -259,27 +280,17 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
         )
         OpenCodeListItem(
             title: "Sidebar v2 UX Redesign",
-            subtitle: "There's a local SQLite state database — I can look at the real threads…",
-            status: OpenCodeListItemStatus(text: "Working · 14m", tone: .interactive),
-            caption: "sidebar-v2-concepts",
+            subtitle: "~/Projects/opencode-mobile",
+            status: OpenCodeListItemStatus(text: "Running", tone: .interactive),
+            caption: "now",
             startDecorator: .letter(Character("t"), .blue)
         )
         OpenCodeListItem(
-            title: "iOS color palette and typography screens",
-            subtitle: "http://127.0.0.1:4096/",
-            selected: true
-        )
-        OpenCodeListItem(
-            title: "Update agents.md with notes on screenshot",
-            subtitle: "Unavailable",
-            status: OpenCodeListItemStatus(text: "Working · 14m", tone: .interactive),
-            caption: "sidebar-v2-concepts",
-            enabled: false
-        )
-        OpenCodeListItem(
-            title: "Letter violet",
-            subtitle: "Badge",
-            startDecorator: .letter(Character("m"), .violet)
+            title: "Idle session",
+            subtitle: "~/Projects/playground",
+            status: OpenCodeListItemStatus(text: "Idle", tone: .info),
+            caption: "14m ago",
+            startDecorator: .letter(Character("P"), .teal)
         )
         OpenCodeListItem(
             title: "Card style with border",
@@ -287,6 +298,6 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
             style: .card
         )
     }
-    .padding(16)
     .openCodeTheme()
 }
+#endif

@@ -33,7 +33,8 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | Icon | Usage |
 | --- | --- |
 | `widgets` | Home top-bar action that opens the developer-only Component Gallery (`accessibilityLabel`: Developer components) |
-| `add` | **Add project** tile on home (start decorator) |
+| `add` | Generic add / plus affordances |
+| `create_new_folder` | **Add project** (Session List Dock and home add-project actions) |
 | `folder_check` | **Current directory** row in Add project sheet |
 | `subdirectory_arrow_right` | Subdirectory rows in Add project sheet |
 | `arrow_upward` | **Go up** row in Add project sheet |

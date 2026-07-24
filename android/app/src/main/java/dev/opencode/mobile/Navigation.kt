@@ -52,6 +52,7 @@ import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGallery
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
@@ -201,6 +202,8 @@ fun MainNavigation() {
                                                             ProjectSessionSelectorGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
                                                             SessionListGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionListDock ->
+                                                            SessionListDockGalleryScreen()
                                                         ComponentGalleryEntryId.SessionStatusBar ->
                                                             SessionStatusBarGalleryScreen()
                                                         ComponentGalleryEntryId.SessionComposer ->

@@ -43,12 +43,13 @@ import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.components.ProjectSessionSelector
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorProject
 import dev.opencode.mobile.ui.components.ProjectSessionSelectorSession
+import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import dev.opencode.mobile.ui.main.prototype.LiquidGlassHomeListPrototype
+
 
 @Composable
 fun MainScreen(
@@ -136,35 +137,30 @@ internal fun MainScreen(
             else -> emptyList()
         }
 
-    val usesLiquidGlassListPrototype =
-        HomeDisplayPreferences.showSessionListOnHome &&
-            (uiState is MainScreenUiState.Empty || uiState is MainScreenUiState.Loaded)
+    val homeTopBarTitle =
+        if (HomeDisplayPreferences.showSessionListOnHome) "Sessions" else appName
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // PROTOTYPE liquid-glass: list mode owns its own chrome (no OpenCodeTopBar).
-            if (!usesLiquidGlassListPrototype) {
-                OpenCodeTopBar(
-                    title = appName,
-                    subtitleAccessory =
-                        if (showsLiveUpdatesStatus(uiState)) {
-                            OpenCodeTopBarSubtitleAccessory.StatusDot(
-                                liveUpdatesConnectionState.toOpenCodeSessionConnectionStatus(),
-                            )
-                        } else {
-                            null
-                        },
-                    showDivider = true,
-                    actions =
-                        listOf(
-                            OpenCodeTopBarAction.Icon(
-                                imageVector = OpenCodeIcons.Settings,
-                                contentDescription = "Settings",
-                                onClick = onSettingsClick,
-                            ),
+            OpenCodeTopBar(
+                title = homeTopBarTitle,
+                subtitleAccessory =
+                    if (showsLiveUpdatesStatus(uiState)) {
+                        OpenCodeTopBarSubtitleAccessory.StatusDot(
+                            liveUpdatesConnectionState.toOpenCodeSessionConnectionStatus(),
+                        )
+                    } else {
+                        null
+                    },
+                actions =
+                    listOf(
+                        OpenCodeTopBarAction.Icon(
+                            imageVector = OpenCodeIcons.Settings,
+                            contentDescription = "Settings",
+                            onClick = onSettingsClick,
                         ),
-                )
-            }
+                    ),
+            )
 
             when (uiState) {
                 is MainScreenUiState.Disconnected -> {
@@ -206,19 +202,12 @@ internal fun MainScreen(
                         sections = sections,
                         focusedWorktree = focusedWorktree,
                         projectSessionCreateError = projectSessionCreateError,
-                        liveStatus =
-                            if (showsLiveUpdatesStatus(uiState)) {
-                                liveUpdatesConnectionState.toOpenCodeSessionConnectionStatus()
-                            } else {
-                                null
-                            },
                         onBrowseProjectsClick = onAddProjectClick,
                         onFocusProject = onFocusProject,
                         onSessionClick = onSessionClick,
                         onSeeAllSessions = onSeeAllSessions,
                         onNewSession = onNewSession,
                         onRequestNewSessionProjectPicker = { showNewSessionProjectPicker = true },
-                        onSettingsClick = onSettingsClick,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -388,14 +377,12 @@ private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
     focusedWorktree: String?,
     projectSessionCreateError: String?,
-    liveStatus: OpenCodeSessionConnectionStatus?,
     onBrowseProjectsClick: () -> Unit,
     onFocusProject: (String) -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onSeeAllSessions: (String) -> Unit,
     onNewSession: (String) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
-    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val showSessionList = HomeDisplayPreferences.showSessionListOnHome
@@ -411,13 +398,11 @@ private fun HomeProjectsContent(
             } else {
                 SessionListFilterTab.ALL_ID
             }
-        // PROTOTYPE liquid-glass: list mode uses throwaway C-style chrome.
-        LiquidGlassHomeListPrototype(
+        SessionList(
             sessions = sessions,
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
             createError = projectSessionCreateError,
-            liveStatus = liveStatus,
             onFilterSelected = { selectedFilterId = it },
             onSessionSelected = { session ->
                 onSessionClick(
@@ -430,7 +415,6 @@ private fun HomeProjectsContent(
             },
             onAddProject = onBrowseProjectsClick,
             onNewSession = onRequestNewSessionProjectPicker,
-            onSettings = onSettingsClick,
             modifier = modifier.fillMaxSize(),
         )
     } else {

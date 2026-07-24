@@ -2,28 +2,35 @@
 
 ## Shared Planning
 
-- Status: planned. Prototype on `prototype/liquid-glass` accepted visually;
-  production promotion not started.
+- Status: production promotion complete on branch; awaiting PR.
 - Linear: [OPE-84](https://linear.app/opencode-mobile/issue/OPE-84/liquid-glass-home-list)
 - Depends on Session List home mode (`OPE-83`) for data wiring and preference.
+- Branch: `feature/ope-84-liquid-glass-home-list`
 
 ## Design System
 
-- Not started. Dock, filter chip, dense row, and bottom fade still live only in
-  prototype sources.
+- Floating Dock, Filter Chip, and Bottom Fade documented and implemented on iOS
+  and Android; Session List contract updated for dense chrome + dock.
+- Gallery Session List entry uses production `SessionList` (settings + live
+  status).
+- Intentional glass vs raised-surface difference recorded in
+  `docs/design-system/divergences.md`.
 
 ## iOS
 
-- Prototype variant C wired behind Session List home mode on
-  `prototype/liquid-glass` (throwaway `Prototype/` sources).
-- Production path still uses pre-prototype Session List chrome on mainline.
+- Production `SessionList` owns header, dense rows, bottom fade, and floating
+  glass dock (iOS 26 glass + material fallback).
+- Home `ProjectListHomeView` wires production `SessionList` when Session List
+  mode is on (no stacked top bar).
+- Throwaway `Prototype/` sources removed.
+- Filter visibility unit tests added; simulator build green.
 
 ## Android
 
-- Prototype parity layout wired behind Session List home mode on
-  `prototype/liquid-glass` (throwaway `prototype/` sources).
-- Material raised surface stands in for Liquid Glass; fade and dock geometry
-  match the accepted iOS prototype.
+- Production `SessionList` matches layout hierarchy with Material raised dock.
+- Home `MainScreen` wires production `SessionList` when Session List mode is on.
+- Throwaway `prototype/` sources removed.
+- Filter visibility unit tests green; `compileDebugKotlin` green.
 
 ## Blockers
 
@@ -31,13 +38,4 @@
 
 ## Remaining Work
 
-- [ ] Extract design-system components (dock, filter chip, dense row, bottom fade)
-      and gallery entries
-- [ ] Promote layout to production home Session List on iOS (replace prototype
-      flag / paths; keep iOS 26 glass + material fallback)
-- [ ] Promote layout to production home Session List on Android (Material
-      glass-like surface + matching fade)
-- [ ] Restore loading / empty / error parity with current home list mode
-- [ ] Tests for filter/selection chrome wiring and critical layout behavior
-- [ ] Remove throwaway prototype sources and flags after promotion
-- [ ] Record intentional iOS vs Android material differences in parity-gaps
+- [ ] PR open + merge

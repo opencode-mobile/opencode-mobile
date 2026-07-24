@@ -3,9 +3,9 @@
 ## Intent
 
 Provide a reusable page-level navigation bar for screens that need an optional
-leading navigation affordance, a concise title, an optional single-line subtitle,
-and up to three compact trailing actions without introducing feature-specific
-chrome.
+leading navigation affordance, a concise start-aligned title, an optional
+single-line subtitle, and up to three compact trailing actions without
+introducing feature-specific chrome.
 
 Use it for screen-level navigation and high-priority page actions. Do not use it
 as a generic header row inside scroll content or as a container for filters,
@@ -23,7 +23,7 @@ search fields, or arbitrary custom content.
   - `customIcon`
 - States:
   - default
-  - divider shown / divider hidden
+  - divider shown / divider hidden (`showDivider` defaults to **false**)
   - action enabled / disabled
 - Required content:
   - action handler for any leading or trailing action that is shown
@@ -53,7 +53,10 @@ may use a text label in this version.
 ## Behavior
 
 The top bar sits on the screen background by default. An optional bottom divider
-adds separation when the screen needs stronger chrome.
+adds separation when the screen needs stronger chrome; **divider is off by
+default**.
+
+The title is **start-aligned** on both platforms (after any leading control).
 
 The title block always reserves `topBar.titleBlockHeight`, whether the second
 line uses plain `subtitle` text, a `subtitleAccessory`, or both. A one-line title
@@ -88,14 +91,13 @@ one label.
 
 ## Platform Notes
 
-- iOS: implemented as a custom SwiftUI component that keeps the title centered
-  while reusing **`OpenCodeButton`** (`iconCircle` / `compactText`) for leading
-  icon actions and trailing actions. The `back` variant internally restores
-  UIKit's standard leading-edge interactive pop for pushed screens without
-  exposing gesture configuration or replacing the custom bar.
-- Android: implemented as a custom Compose component with start-aligned title.
-  Leading and trailing affordances reuse **`OpenCodeButton`** (`IconCircle` /
-  `CompactText`) so ripple and shape match the shared button component. System
+- iOS: custom SwiftUI bar with start-aligned title. Icon leading/trailing actions
+  use iOS 26+ Liquid Glass circles (`.glassEffect` interactive circle) with
+  `OpenCodeButton` `iconCircle` material fallback below iOS 26. Labeled trailing
+  actions still use `OpenCodeButton` `compactText`. The `back` variant restores
+  UIKit's standard leading-edge interactive pop for pushed screens.
+- Android: custom Compose bar with start-aligned title. Leading and trailing
+  affordances reuse **`OpenCodeButton`** (`IconCircle` / `CompactText`). System
   and predictive Back remain owned by the Navigation 3 host.
 
 Leading **back** / **close** use fixed catalog icons; **customIcon** remains
@@ -115,11 +117,12 @@ caller-provided per platform catalog types (`OpenCodeIcon` / `OpenCodeIcons`) in
   example matrix.
 - Loading: not applicable for this component version.
 - Error: not applicable for this component version.
-- Divider: shown and hidden variants are included.
+- Divider: shown and hidden variants are included; default is hidden.
 
 ## Parity And Divergence
 
-Shared semantics for leading variants, title scope, subtitle scope, action
-composition, fixed title-block height, divider behavior, and Back navigation are
-aligned across iOS and Android. Intentional platform mappings for title
-alignment and native Back input are documented in `../divergences.md`.
+Shared semantics for leading variants, start-aligned title, subtitle scope,
+action composition, fixed title-block height, default-off divider, and Back
+navigation are aligned across iOS and Android. Intentional platform mapping for
+native Back input and iOS glass icon circles vs Android Material icon circles is
+documented in `../divergences.md`.

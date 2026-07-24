@@ -1,25 +1,30 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.theme.openCodeColor
 
 enum class SessionListStatus {
     Idle,
@@ -61,95 +66,86 @@ fun SessionList(
 ) {
     val visibleSessions =
         remember(sessions, selectedFilterId) {
-            if (selectedFilterId == SessionListFilterTab.ALL_ID) {
-                sessions
-            } else {
-                sessions.filter { it.worktree == selectedFilterId }
-            }
+            sessions.visibleForFilter(selectedFilterId)
         }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        OpenCodeFilterTabs(
-            tabs =
-                filterTabs.map { tab ->
-                    OpenCodeFilterTab(id = tab.id, title = tab.title, count = tab.count)
-                },
-            selectedTabId = selectedFilterId,
-            onTabSelected = onFilterSelected,
-        )
+    val background = openCodeColor("background-base")
+    val borderWeaker = openCodeColor("border-weaker-base")
+    val density = LocalDensity.current
 
+    var dockBlockHeight by remember { mutableStateOf(0.dp) }
+    val listBottomFadeHeight =
+        if (dockBlockHeight > 0.dp) {
+            dockBlockHeight + OpenCodeBottomFadeOverhang
+        } else {
+            168.dp
+        }
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(background),
+    ) {
         LazyColumn(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+            modifier = Modifier.matchParentSize(),
+            contentPadding = PaddingValues(bottom = listBottomFadeHeight),
         ) {
-            items(visibleSessions, key = { it.id }) { session ->
+            itemsIndexed(visibleSessions, key = { _, session -> session.id }) { index, session ->
                 OpenCodeListItem(
                     title = session.title,
                     subtitle = compactHomePath(session.subtitle),
-                    status = listItemStatus(session.status),
+                    status = session.status.toListItemStatus(),
                     caption = session.caption.takeIf { it.isNotEmpty() },
-                    style = OpenCodeListItemStyle.Plain,
                     startDecorator = StartDecorator.Letter(session.letter, session.letterAccent),
                     onClick = { onSessionSelected(session) },
                 )
+                if (index < visibleSessions.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 60.dp),
+                        color = borderWeaker,
+                    )
+                }
             }
         }
 
-        SessionListFooter(
+        OpenCodeBottomFade(
+            height = listBottomFadeHeight,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+
+        OpenCodeSessionListDock(
+            filterTabs = filterTabs,
+            selectedFilterId = selectedFilterId,
             createError = createError,
+            onFilterSelected = onFilterSelected,
             onAddProject = onAddProject,
             onNewSession = onNewSession,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        val height: Dp = with(density) { coordinates.size.height.toDp() }
+                        if (height != dockBlockHeight) {
+                            dockBlockHeight = height
+                        }
+                    }
+                    .navigationBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
 
-@Composable
-private fun SessionListFooter(
-    createError: String?,
-    onAddProject: () -> Unit,
-    onNewSession: () -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 16.dp)
-                .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.Add, "Add project"),
-                onClick = onAddProject,
-            )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("New session"),
-                size = OpenCodeButtonSize.Medium,
-                onClick = onNewSession,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        createError?.let { error ->
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<SessionListSession> =
+    if (selectedFilterId == SessionListFilterTab.ALL_ID) {
+        this
+    } else {
+        filter { it.worktree == selectedFilterId }
     }
-}
 
-private fun listItemStatus(status: SessionListStatus): OpenCodeListItemStatus =
-    when (status) {
+private fun SessionListStatus.toListItemStatus(): OpenCodeListItemStatus =
+    when (this) {
         SessionListStatus.Idle ->
             OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info)
         SessionListStatus.Running ->

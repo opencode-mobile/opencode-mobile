@@ -4,8 +4,10 @@ private let topBarMinHeight: CGFloat = 56
 private let topBarHorizontalPadding: CGFloat = 12
 private let topBarVerticalPadding: CGFloat = 12
 private let topBarItemSpacing: CGFloat = 8
+private let topBarTitleSpacing: CGFloat = 12
 private let topBarSubtitleSpacing: CGFloat = 0
 private let topBarTitleBlockHeight: CGFloat = 48
+private let topBarIconButtonSize: CGFloat = 40
 
 enum OpenCodeTopBarSubtitleAccessory {
     case statusDot(OpenCodeSessionConnectionStatus)
@@ -23,14 +25,6 @@ enum OpenCodeTopBarAction {
     case label(title: String, enabled: Bool = true, action: () -> Void)
 }
 
-private struct TopBarSideWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 struct OpenCodeTopBar: View {
     let title: String?
     let subtitle: String?
@@ -38,8 +32,6 @@ struct OpenCodeTopBar: View {
     let leading: OpenCodeTopBarLeading
     let actions: [OpenCodeTopBarAction]
     let showDivider: Bool
-    @State private var leadingWidth: CGFloat = 0
-    @State private var trailingWidth: CGFloat = 0
 
     init(
         title: String? = nil,
@@ -68,19 +60,14 @@ struct OpenCodeTopBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                HStack(spacing: topBarItemSpacing) {
-                    leadingContent
-                        .measureWidth { leadingWidth = $0 }
-
-                    Spacer(minLength: 0)
-
-                    trailingContent
-                        .measureWidth { trailingWidth = $0 }
-                }
+            HStack(spacing: topBarItemSpacing) {
+                leadingContent
 
                 titleContent
-                    .padding(.horizontal, max(leadingWidth, trailingWidth) + topBarItemSpacing)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, hasLeadingControl ? topBarTitleSpacing : 0)
+
+                trailingContent
             }
             .frame(maxWidth: .infinity, minHeight: topBarMinHeight)
             .padding(.horizontal, topBarHorizontalPadding)
@@ -101,29 +88,35 @@ struct OpenCodeTopBar: View {
         }
     }
 
+    private var hasLeadingControl: Bool {
+        if case .none = leading { return false }
+        return true
+    }
+
     @ViewBuilder
     private var leadingContent: some View {
         switch leading {
         case .none:
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
+            EmptyView()
         case let .back(accessibilityLabel, action):
-            OpenCodeButton(
-                variant: .iconCircle(.arrowBack, accessibilityLabel: accessibilityLabel),
-                contrast: .low,
+            topBarIconButton(
+                icon: .arrowBack,
+                accessibilityLabel: accessibilityLabel,
+                enabled: true,
                 action: action
             )
         case let .close(accessibilityLabel, action):
-            OpenCodeButton(
-                variant: .iconCircle(.close, accessibilityLabel: accessibilityLabel),
-                contrast: .low,
+            topBarIconButton(
+                icon: .close,
+                accessibilityLabel: accessibilityLabel,
+                enabled: true,
                 action: action
             )
         case let .customIcon(icon, accessibilityLabel, action):
-            OpenCodeButton(
-                variant: .iconCircle(icon, accessibilityLabel: accessibilityLabel),
-                contrast: .low,
+            topBarIconButton(
+                icon: icon,
+                accessibilityLabel: accessibilityLabel,
+                enabled: true,
                 action: action
             )
         }
@@ -134,7 +127,7 @@ struct OpenCodeTopBar: View {
         if let title {
             Group {
                 if subtitle != nil || subtitleAccessory != nil {
-                    VStack(spacing: topBarSubtitleSpacing) {
+                    VStack(alignment: .leading, spacing: topBarSubtitleSpacing) {
                         titleLabel(title)
                         subtitleLine
                     }
@@ -143,7 +136,7 @@ struct OpenCodeTopBar: View {
                 }
             }
             .frame(height: topBarTitleBlockHeight, alignment: .center)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(titleBlockAccessibilityLabel(title: title))
         } else {
@@ -185,7 +178,8 @@ struct OpenCodeTopBar: View {
             .foregroundStyle(OpenCodeColors.textStrong)
             .lineLimit(1)
             .truncationMode(.tail)
-            .multilineTextAlignment(.center)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func subtitleLabel(_ subtitle: String) -> some View {
@@ -194,15 +188,14 @@ struct OpenCodeTopBar: View {
             .foregroundStyle(OpenCodeColors.textBase)
             .lineLimit(1)
             .truncationMode(.tail)
-            .multilineTextAlignment(.center)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private var trailingContent: some View {
         if actions.isEmpty {
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
+            EmptyView()
         } else {
             HStack(spacing: topBarItemSpacing) {
                 ForEach(Array(actions.enumerated()), id: \.offset) { entry in
@@ -216,10 +209,10 @@ struct OpenCodeTopBar: View {
     private func trailingButton(for action: OpenCodeTopBarAction) -> some View {
         switch action {
         case let .icon(icon, accessibilityLabel, enabled, action):
-            OpenCodeButton(
-                variant: .iconCircle(icon, accessibilityLabel: accessibilityLabel),
+            topBarIconButton(
+                icon: icon,
+                accessibilityLabel: accessibilityLabel,
                 enabled: enabled,
-                contrast: .low,
                 action: action
             )
         case let .label(title, enabled, action):
@@ -231,17 +224,35 @@ struct OpenCodeTopBar: View {
             )
         }
     }
-}
 
-private extension View {
-    func measureWidth(onChange: @escaping (CGFloat) -> Void) -> some View {
-        background(
-            GeometryReader { geo in
-                Color.clear
-                    .preference(key: TopBarSideWidthKey.self, value: geo.size.width)
+    @ViewBuilder
+    private func topBarIconButton(
+        icon: OpenCodeIcon,
+        accessibilityLabel: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 26, *) {
+            Button(action: action) {
+                OpenCodeIconImage(icon: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
+                    .frame(width: topBarIconButtonSize, height: topBarIconButtonSize)
+                    .contentShape(Circle())
             }
-        )
-        .onPreferenceChange(TopBarSideWidthKey.self, perform: onChange)
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .opacity(enabled ? 1 : 0.5)
+            .disabled(!enabled)
+            .accessibilityLabel(accessibilityLabel)
+        } else {
+            OpenCodeButton(
+                variant: .iconCircle(icon, accessibilityLabel: accessibilityLabel),
+                enabled: enabled,
+                contrast: .low,
+                action: action
+            )
+        }
     }
 }
 

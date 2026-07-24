@@ -7,10 +7,12 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -26,9 +28,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -40,14 +45,14 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
 
-private val ListItemLetterBadgeSize = 36.dp
-private val ListItemLetterBadgeCornerRadius = 6.dp
-private val ListItemLetterGlyphSize = 18.sp
+private val ListItemLetterBadgeSize = 32.dp
+private val ListItemLetterGlyphSize = 14.sp
 private val ListItemIconDecoratorSize = 24.dp
 private val ListItemCornerRadius = 8.dp
-private val ListItemStatusDotSize = 6.dp
-private val ListItemStatusDotSpacing = 4.dp
-private val ListItemFooterCaptionSpacing = 8.dp
+private val ListItemVerticalPadding = 12.dp
+private val ListItemTitleSubtitleSpacing = 2.dp
+private val ListItemMetaSpacing = 4.dp
+private val StatusChipShape = RoundedCornerShape(999.dp)
 
 enum class OpenCodeListItemStyle {
     Plain,
@@ -111,6 +116,11 @@ fun OpenCodeListItem(
         }
     val contentColor =
         if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    val textStrong = openCodeColor("text-strong")
+    val textBase = openCodeColor("text-base")
+    val textWeaker = openCodeColor("text-weaker")
+    val surfaceRaised = openCodeColor("surface-raised-base")
+    val hasMeta = status != null || !caption.isNullOrEmpty()
 
     Surface(
         modifier =
@@ -134,26 +144,28 @@ fun OpenCodeListItem(
             },
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment =
-                if (startDecorator is StartDecorator.Letter) {
-                    Alignment.Top
-                } else {
-                    Alignment.CenterVertically
-                },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
 
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+            ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    color = if (enabled) textStrong else textWeaker,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (subtitleSegments != null) {
-                    val disabledColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    val disabledColor = textWeaker
                     Text(
                         text =
                             buildAnnotatedString {
@@ -163,7 +175,7 @@ fun OpenCodeListItem(
                                             disabledColor
                                         } else {
                                             when (segment.tone) {
-                                                OpenCodeListItemSubtitleTone.Secondary -> disabledColor
+                                                OpenCodeListItemSubtitleTone.Secondary -> textBase
                                                 OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
                                                 OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
                                             }
@@ -171,24 +183,31 @@ fun OpenCodeListItem(
                                     withStyle(SpanStyle(color = color)) { append(segment.text) }
                                 }
                             },
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 } else if (subtitle != null) {
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (enabled) textBase else textWeaker,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-
-                if (status != null || caption != null) {
-                    ListItemFooterRow(status = status, caption = caption, enabled = enabled)
-                }
             }
+
+            if (hasMeta) {
+                ListItemMetaColumn(
+                    status = status,
+                    caption = caption,
+                    enabled = enabled,
+                    textWeaker = textWeaker,
+                    surfaceRaised = surfaceRaised,
+                )
+            }
+
             if (trailing != null) {
                 Box(contentAlignment = Alignment.Center) { trailing() }
             }
@@ -197,58 +216,76 @@ fun OpenCodeListItem(
 }
 
 @Composable
-private fun ListItemFooterRow(
+private fun ListItemMetaColumn(
     status: OpenCodeListItemStatus?,
     caption: String?,
     enabled: Boolean,
+    textWeaker: Color,
+    surfaceRaised: Color,
 ) {
-    val weakerColor = openCodeColor("text-weaker")
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(ListItemFooterCaptionSpacing),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier = Modifier.width(IntrinsicSize.Max),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(ListItemMetaSpacing),
     ) {
-        if (status != null) {
-            val statusColor = if (enabled) status.tone.color() else weakerColor
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(ListItemStatusDotSpacing),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(ListItemStatusDotSize)
-                            .clip(CircleShape)
-                            .background(statusColor),
-                )
-                Text(
-                    text = status.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = statusColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (caption != null) {
+        if (!caption.isNullOrEmpty()) {
             Text(
                 text = caption,
-                style = MaterialTheme.typography.bodySmall,
-                color = weakerColor,
+                color = textWeaker,
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.End,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (status != null) {
+            val foreground = if (enabled) status.tone.foreground() else textWeaker
+            val background = if (enabled) status.tone.background(surfaceRaised) else surfaceRaised
+            Text(
+                text = status.text,
+                color = foreground,
+                textAlign = TextAlign.Center,
+                style =
+                    TextStyle(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 11.sp,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle =
+                            LineHeightStyle(
+                                alignment = LineHeightStyle.Alignment.Center,
+                                trim = LineHeightStyle.Trim.Both,
+                            ),
+                    ),
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .clip(StatusChipShape)
+                        .background(background)
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
             )
         }
     }
 }
 
 @Composable
-private fun OpenCodeListItemStatusTone.color(): Color =
+private fun OpenCodeListItemStatusTone.foreground(): Color =
     when (this) {
         OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive")
         OpenCodeListItemStatusTone.Success -> openCodeColor("success")
         OpenCodeListItemStatusTone.Warning -> openCodeColor("warning")
         OpenCodeListItemStatusTone.Error -> openCodeColor("error")
-        OpenCodeListItemStatusTone.Info -> openCodeColor("info")
+        OpenCodeListItemStatusTone.Info -> openCodeColor("text-weaker")
+    }
+
+@Composable
+private fun OpenCodeListItemStatusTone.background(surfaceRaised: Color): Color =
+    when (this) {
+        OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive").copy(alpha = 0.12f)
+        OpenCodeListItemStatusTone.Success -> openCodeColor("success").copy(alpha = 0.12f)
+        OpenCodeListItemStatusTone.Warning -> openCodeColor("warning").copy(alpha = 0.12f)
+        OpenCodeListItemStatusTone.Error -> openCodeColor("error").copy(alpha = 0.12f)
+        OpenCodeListItemStatusTone.Info -> surfaceRaised
     }
 
 @Composable
@@ -269,7 +306,7 @@ private fun ListItemStartDecoration(
                 modifier =
                     Modifier
                         .size(ListItemLetterBadgeSize)
-                        .clip(RoundedCornerShape(ListItemLetterBadgeCornerRadius))
+                        .clip(CircleShape)
                         .background(fill)
                         .semantics { hideFromAccessibility() }
                         .then(emphasize),
@@ -277,8 +314,8 @@ private fun ListItemStartDecoration(
             ) {
                 Text(
                     text = normalizedBadgeLetter(decorator.character),
-                    style = MaterialTheme.typography.labelMedium.copy(fontSize = ListItemLetterGlyphSize),
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = ListItemLetterGlyphSize,
+                    fontWeight = FontWeight.Bold,
                     color = tint,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -306,92 +343,39 @@ private fun ListItemStartDecoration(
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemPreview() {
-    OpenCodeTheme(darkTheme = false) {
-        OpenCodeListItem(
-            title = "Material Design Icons integration plan",
-            subtitle = "http://127.0.0.1:4096/",
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeListItemSemanticSubtitlePreview() {
-    OpenCodeTheme(darkTheme = false) {
-        OpenCodeListItem(
-            title = "contact.html",
-            subtitleSegments =
-                listOf(
-                    OpenCodeListItemSubtitleSegment("Modified · ", OpenCodeListItemSubtitleTone.Secondary),
-                    OpenCodeListItemSubtitleSegment("+51", OpenCodeListItemSubtitleTone.Addition),
-                    OpenCodeListItemSubtitleSegment(" ", OpenCodeListItemSubtitleTone.Secondary),
-                    OpenCodeListItemSubtitleSegment("−7", OpenCodeListItemSubtitleTone.Deletion),
-                ),
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeListItemStatusCaptionPreview() {
     OpenCodeTheme(darkTheme = true) {
-        OpenCodeListItem(
-            title = "Sidebar v2 UX Redesign",
-            subtitle = "There's a local SQLite state database — I can look at the real threads…",
-            status = OpenCodeListItemStatus(text = "Working · 14m", tone = OpenCodeListItemStatusTone.Interactive),
-            caption = "sidebar-v2-concepts",
-            startDecorator = StartDecorator.Letter('t', LetterAccent.Blue),
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeListItemLetterPreview() {
-    OpenCodeTheme(darkTheme = false) {
-        OpenCodeListItem(
-            title = "Purple accent",
-            subtitle = "Letter badge",
-            startDecorator = StartDecorator.Letter('m', LetterAccent.Violet),
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeListItemSelectedPreview() {
-    OpenCodeTheme(darkTheme = true) {
-        OpenCodeListItem(
-            title = "iOS color palette and typography screens",
-            subtitle = "http://127.0.0.1:4096/",
-            selected = true,
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeListItemDisabledPreview() {
-    OpenCodeTheme(darkTheme = false) {
-        OpenCodeListItem(
-            title = "Update agents.md with notes on screenshot",
-            subtitle = "Unavailable",
-            status = OpenCodeListItemStatus(text = "Working · 14m", tone = OpenCodeListItemStatusTone.Interactive),
-            caption = "sidebar-v2-concepts",
-            enabled = false,
-            startDecorator = StartDecorator.Letter('x', LetterAccent.Teal),
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeListItemCardPreview() {
-    OpenCodeTheme(darkTheme = false) {
-        OpenCodeListItem(
-            title = "Card style with border",
-            subtitle = "http://127.0.0.1:4096/",
-            style = OpenCodeListItemStyle.Card,
-        )
+        Column {
+            OpenCodeListItem(
+                title = "Material Design Icons integration plan",
+                subtitle = "http://127.0.0.1:4096/",
+                status = OpenCodeListItemStatus(text = "Working · 14m", tone = OpenCodeListItemStatusTone.Interactive),
+                caption = "sidebar-v2-concepts",
+                startDecorator = StartDecorator.Letter('A', LetterAccent.Violet),
+            )
+            OpenCodeListItem(
+                title = "contact.html",
+                subtitleSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment("Modified · ", OpenCodeListItemSubtitleTone.Secondary),
+                        OpenCodeListItemSubtitleSegment("+51", OpenCodeListItemSubtitleTone.Addition),
+                        OpenCodeListItemSubtitleSegment(" ", OpenCodeListItemSubtitleTone.Secondary),
+                        OpenCodeListItemSubtitleSegment("−7", OpenCodeListItemSubtitleTone.Deletion),
+                    ),
+            )
+            OpenCodeListItem(
+                title = "Sidebar v2 UX Redesign",
+                subtitle = "~/Projects/opencode-mobile",
+                status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive),
+                caption = "now",
+                startDecorator = StartDecorator.Letter('t', LetterAccent.Blue),
+            )
+            OpenCodeListItem(
+                title = "Idle session",
+                subtitle = "~/Projects/playground",
+                status = OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info),
+                caption = "14m ago",
+                startDecorator = StartDecorator.Letter('P', LetterAccent.Teal),
+            )
+        }
     }
 }
