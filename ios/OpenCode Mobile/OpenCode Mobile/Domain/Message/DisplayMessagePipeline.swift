@@ -28,7 +28,8 @@ final class DisplayMessagePipeline {
                 func publishPrepared(
                     _ messages: [Message],
                     reason: String,
-                    reuseStreamingDocumentAsFinalPlaceholder: Bool = false
+                    reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
+                    skipMarkdown: Bool = false
                 ) async {
                     let streaming = messagesContainStreamingText(messages)
                     let streamingChars = messages.reduce(0) { partial, message in
@@ -42,14 +43,54 @@ final class DisplayMessagePipeline {
                     let prepared = await contentPreparer.prepareMessages(
                         messages,
                         previousByID: previousByID,
-                        reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder
+                        reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
+                        skipMarkdown: skipMarkdown
                     )
-                    previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
+                    // Keep previously prepared markdown when this frame intentionally
+                    // skipped parsing (plain-first open). Final enrich replaces previousByID.
+                    if !skipMarkdown {
+                        previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
+                    }
                     lastPublishedAt = ContinuousClock.now
                     OpenCodeLog.messageContent.info(
                         "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs)"
                     )
                     continuation.yield(.messages(prepared))
+                }
+
+                func enrichHistoryIncrementally(_ messages: [Message]) async {
+                    var byID = Dictionary(
+                        uniqueKeysWithValues: messages.map { message in
+                            (message.id, DisplayMessage(message: message, renderedMarkdown: nil))
+                        }
+                    )
+                    var enrichedCount = 0
+                    // Newest first: open settles near the bottom, so enrich what the
+                    // user is looking at before older off-screen history.
+                    for message in messages.reversed() {
+                        guard !Task.isCancelled else { return }
+                        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+
+                        // Parse off the hot path at utility QoS; publish one bubble at a time
+                        // so MainActor can keep scrolling instead of applying every TextMate
+                        // document in one giant frame after a 10–30s stall.
+                        let prepared = await contentPreparer.prepareMessage(message)
+                        byID[message.id] = prepared
+                        previousByID[message.id] = prepared
+                        enrichedCount += 1
+
+                        let snapshot = messages.map { byID[$0.id]! }
+                        lastPublishedAt = ContinuousClock.now
+                        OpenCodeLog.messageContent.info(
+                            "displayPublish reason=enrich index=\(enrichedCount) id=\(message.id, privacy: .public)"
+                        )
+                        continuation.yield(.messages(snapshot))
+                        await Task.yield()
+                        try? await Task.sleep(for: .milliseconds(24))
+                    }
+                    OpenCodeLog.messageContent.info(
+                        "historyEnrich finished count=\(enrichedCount)"
+                    )
                 }
 
                 func scheduleStreamingPublish() {
@@ -101,8 +142,20 @@ final class DisplayMessagePipeline {
                                     reason: "final-placeholder",
                                     reuseStreamingDocumentAsFinalPlaceholder: true
                                 )
+                                await publishPrepared(messages, reason: "final")
+                            } else if shouldPlainFirstHistoryPublish(
+                                messages: messages,
+                                previousByID: previousByID
+                            ) {
+                                // Open large histories as plain text first so the chat is
+                                // usable while TextMate runs; enrich one message at a time.
+                                await publishPrepared(messages, reason: "plain-first", skipMarkdown: true)
+                                await Task.yield()
+                                try? await Task.sleep(for: .milliseconds(48))
+                                await enrichHistoryIncrementally(messages)
+                            } else {
+                                await publishPrepared(messages, reason: "final")
                             }
-                            await publishPrepared(messages, reason: "final")
                         }
                     }
                 }
@@ -127,6 +180,22 @@ final class DisplayMessagePipeline {
 
 func streamingPrepareMaxBatch(forStreamingChars _: Int) -> Duration {
     streamingPrepareMaxBatchDuration
+}
+
+func shouldPlainFirstHistoryPublish(
+    messages: [Message],
+    previousByID: [String: DisplayMessage]
+) -> Bool {
+    guard previousByID.values.allSatisfy({ $0.renderedMarkdown == nil }) else { return false }
+    var markdownChars = 0
+    for message in messages {
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+        markdownChars += message.text.count
+        if markdownChars >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold {
+            return true
+        }
+    }
+    return false
 }
 
 private func messagesContainStreamingText(_ messages: [Message]) -> Bool {

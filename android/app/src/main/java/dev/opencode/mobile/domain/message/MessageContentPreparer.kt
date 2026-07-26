@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.system.measureTimeMillis
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @Singleton
 class MessageContentPreparer
@@ -19,7 +20,9 @@ class MessageContentPreparer
     constructor(
         private val codeHighlighter: OpenCodeCodeHighlighter,
     ) {
-        internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
+        @OptIn(ExperimentalCoroutinesApi::class)
+        internal var computationDispatcher: CoroutineDispatcher =
+            Dispatchers.Default.limitedParallelism(1)
 
         private val cacheLock = Any()
         private val cache =
@@ -32,6 +35,7 @@ class MessageContentPreparer
             messages: List<Message>,
             previousById: Map<String, DisplayMessage> = emptyMap(),
             reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
+            skipMarkdown: Boolean = false,
         ): List<DisplayMessage> =
             withContext(computationDispatcher) {
                 var parsedCount = 0
@@ -48,6 +52,7 @@ class MessageContentPreparer
                                             message,
                                             previous,
                                             reuseStreamingDocumentAsFinalPlaceholder,
+                                            skipMarkdown,
                                         )
                                     add(display)
                                     when {
@@ -61,7 +66,8 @@ class MessageContentPreparer
                     }
                 logI(
                     "prepareMessages count=${messages.size} parsed=$parsedCount reused=$reusedCount " +
-                        "markdown=${prepared.count { it.renderedMarkdown != null }} ms=$elapsedMs",
+                        "markdown=${prepared.count { it.renderedMarkdown != null }} " +
+                        "skipMarkdown=$skipMarkdown ms=$elapsedMs",
                 )
                 prepared
             }
@@ -98,16 +104,28 @@ class MessageContentPreparer
             message: Message,
             previous: DisplayMessage? = null,
             reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
+            skipMarkdown: Boolean = false,
         ): DisplayMessage =
             withContext(computationDispatcher) {
-                prepareMessageOnWorker(message, previous, reuseStreamingDocumentAsFinalPlaceholder)
+                prepareMessageOnWorker(message, previous, reuseStreamingDocumentAsFinalPlaceholder, skipMarkdown)
             }
 
         private fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
             reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
+            skipMarkdown: Boolean = false,
         ): DisplayMessage {
+            val isStreaming = messageIsStreaming(message)
+            if (isStreaming &&
+                !reuseStreamingDocumentAsFinalPlaceholder &&
+                message.text.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
+            ) {
+                return DisplayMessage(message = message, renderedMarkdown = null)
+            }
+            if (skipMarkdown) {
+                return DisplayMessage(message = message, renderedMarkdown = null)
+            }
             if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
                 return DisplayMessage(message = message, renderedMarkdown = null)
             }
@@ -116,7 +134,7 @@ class MessageContentPreparer
                     ?: if (reuseStreamingDocumentAsFinalPlaceholder) {
                         previous?.renderedMarkdown
                     } else {
-                        parseDocument(message.id, message.text, messageIsStreaming(message))
+                        parseDocument(message.id, message.text, isStreaming)
                     }
             return DisplayMessage(message = message, renderedMarkdown = document)
         }
@@ -191,6 +209,12 @@ class MessageContentPreparer
         companion object {
             private const val MAX_CACHE_ENTRIES = 32
             private const val TAG = "MessageContentPreparer"
+
+            /** While streaming, skip markdown above this size; full parse runs on the final frame. */
+            const val STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD = 8_000
+
+            /** Open histories above this markdown-candidate size as plain text first. */
+            const val HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD = 4_000
         }
 
         private data class CacheKey(

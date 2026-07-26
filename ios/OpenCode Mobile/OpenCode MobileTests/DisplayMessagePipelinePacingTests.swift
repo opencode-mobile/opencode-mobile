@@ -47,4 +47,29 @@ struct DisplayMessagePipelinePacingTests {
         #expect(finished.renderedMarkdown != nil)
         #expect(!finished.isStreaming)
     }
+
+    @Test fun largeHistoryTriggersPlainFirstPublishGate() {
+        let text = String(repeating: "# Heading\n\nSome prose with `code`. ", count: 200)
+        #expect(text.count >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold)
+        let messages = [
+            Message(
+                id: "msg-1",
+                role: .assistant,
+                text: text,
+                parts: [.text(TextPart(text: text, isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        #expect(shouldPlainFirstHistoryPublish(messages: messages, previousByID: [:]))
+        let alreadyPrepared = DisplayMessage(message: messages[0], renderedMarkdown: nil)
+        // Gate still allows plain-first when previous frames had no markdown docs.
+        #expect(
+            shouldPlainFirstHistoryPublish(
+                messages: messages,
+                previousByID: ["msg-1": alreadyPrepared]
+            )
+        )
+    }
 }

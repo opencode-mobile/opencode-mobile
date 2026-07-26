@@ -2,10 +2,13 @@ import Foundation
 import OpenCodeMarkdownCore
 
 enum OpenCodeRenderedMarkdownParser {
-    private static let encoder = JSONEncoder()
-    private static let decoder = JSONDecoder()
+    nonisolated private static let encoder = JSONEncoder()
+    nonisolated private static let decoder = JSONDecoder()
 
-    static func parse(
+    /// Must stay nonisolated: the app defaults to MainActor isolation, and history
+    /// enrich runs this inside `Task.detached`. If parse hops back to MainActor,
+    /// TextMate blocks scrolling for the entire prepare window.
+    nonisolated static func parse(
         _ markdown: String,
         variant: OpenCodeRenderedMarkdownVariant = .standalone,
         isStreaming: Bool = false
@@ -27,7 +30,7 @@ enum OpenCodeRenderedMarkdownParser {
         }
     }
 
-    private static func fallbackDocument(for markdown: String) -> NativeMarkdownDocument {
+    nonisolated private static func fallbackDocument(for markdown: String) -> NativeMarkdownDocument {
         NativeMarkdownDocument(
             sourceHash: markdown.hashValue,
             blocks: markdown.isEmpty ? [] : [.paragraph([.text(markdown)])],
@@ -41,7 +44,7 @@ enum OpenCodeRenderedMarkdownParser {
     }
 }
 
-private struct NativeMarkdownParseRequest: Encodable {
+private struct NativeMarkdownParseRequest: Encodable, Sendable {
     let markdown: String
     let variant: String
     let isStreaming: Bool

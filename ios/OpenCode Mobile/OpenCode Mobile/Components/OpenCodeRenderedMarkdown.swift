@@ -2,14 +2,14 @@ import OpenCodeMarkdownCore
 import SwiftUI
 import UIKit
 
-enum OpenCodeRenderedMarkdownVariant: String, CaseIterable {
+enum OpenCodeRenderedMarkdownVariant: String, CaseIterable, Sendable {
     case assistantMessage
     case outgoingMessage
     case standalone
 }
 
-enum OpenCodeRenderedMarkdownDetector {
-    static func shouldRender(_ text: String) -> Bool {
+enum OpenCodeRenderedMarkdownDetector: Sendable {
+    nonisolated static func shouldRender(_ text: String) -> Bool {
         OpenCodeMarkdownDetector.shared.shouldRender(text: text)
     }
 }
@@ -616,7 +616,7 @@ private extension NativeMarkdownInline {
     }
 }
 
-struct NativeMarkdownDocument: Decodable {
+nonisolated struct NativeMarkdownDocument: Decodable, Sendable {
     let renderTreeVersion: Int
     let sourceHash: Int
     let blocks: [NativeMarkdownBlock]
@@ -655,7 +655,7 @@ struct NativeMarkdownDocument: Decodable {
     }
 }
 
-enum NativeMarkdownBlock: Decodable {
+nonisolated enum NativeMarkdownBlock: Decodable, Sendable {
     case paragraph([NativeMarkdownInline])
     case heading(level: Int, inlines: [NativeMarkdownInline])
     case blockquote([NativeMarkdownInline])
@@ -728,19 +728,19 @@ enum NativeMarkdownBlock: Decodable {
     }
 }
 
-struct NativeMarkdownListItem: Decodable {
+struct NativeMarkdownListItem: Decodable, Sendable {
     let inlines: [NativeMarkdownInline]
 }
 
-struct NativeMarkdownTableRow: Decodable {
+struct NativeMarkdownTableRow: Decodable, Sendable {
     let cells: [NativeMarkdownTableCell]
 }
 
-struct NativeMarkdownTableCell: Decodable {
+struct NativeMarkdownTableCell: Decodable, Sendable {
     let inlines: [NativeMarkdownInline]
 }
 
-enum NativeMarkdownInline: Decodable {
+nonisolated enum NativeMarkdownInline: Decodable, Sendable {
     case text(String)
     case emphasis([NativeMarkdownInline])
     case strong([NativeMarkdownInline])
@@ -793,13 +793,13 @@ enum NativeMarkdownInline: Decodable {
     }
 }
 
-struct NativeCodeSpan: Decodable, Hashable {
+nonisolated struct NativeCodeSpan: Decodable, Hashable, Sendable {
     let start: Int
     let end: Int
     let role: NativeCodeTokenRole
 }
 
-enum NativeCodeTokenRole: String, Decodable, Hashable {
+nonisolated enum NativeCodeTokenRole: String, Decodable, Hashable, Sendable {
     case plain = "Plain"
     case comment = "Comment"
     case keyword = "Keyword"
@@ -820,20 +820,20 @@ enum NativeCodeTokenRole: String, Decodable, Hashable {
     case critical = "Critical"
 }
 
-struct NativeDiffLine: Decodable {
+nonisolated struct NativeDiffLine: Decodable, Sendable {
     let kind: NativeDiffLineKind
     let text: String
     let spans: [NativeCodeSpan]
 }
 
-enum NativeDiffLineKind: String, Decodable {
+nonisolated enum NativeDiffLineKind: String, Decodable, Sendable {
     case context = "Context"
     case added = "Added"
     case deleted = "Deleted"
     case header = "Header"
 }
 
-struct NativeMarkdownDiagnostic: Decodable {
+nonisolated struct NativeMarkdownDiagnostic: Decodable, Sendable {
     let kind: String
     let message: String
 }

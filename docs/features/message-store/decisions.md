@@ -47,12 +47,22 @@ updates over a short quiet window (~16ms) with a flat max batch age (48ms) so
 tiny SSE deltas batch into fewer UI publishes without intentionally slowing
 down as the reply grows. When streaming ends, the pipeline first emits a
 `final-placeholder` that reuses the last streaming markdown document, then runs
-the full TextMate parse so the UI does not stall 3–9s on the transition. Session
-Chat timelines coalesce-latest while apply is in flight (iOS uses a tracked,
-lifecycle-cancelled apply task with `Task.yield`; Android uses `conflate()`).
-Large streaming replies (≥8k chars) skip markdown preparation and render plain
-text until the message finishes; large streaming code fences (≥2k chars) also
-render as plain monospace until highlight runs on the final frame. See
+the full TextMate parse so the UI does not stall 3–9s on the transition. Opening
+a history whose markdown-candidate text is ≥4k chars first publishes a
+`plain-first` frame (no markdown parse) so the timeline becomes ready quickly,
+then enriches **one markdown message at a time, newest first** (utility QoS /
+single-thread worker, with a short yield between publishes) so the bottom of
+the timeline (where open settles) paints markdown before older off-screen
+history, and scrolling stays responsive instead of freezing through a
+multi-second batch TextMate pass. On iOS, markdown
+parse must stay `nonisolated`: the target sets `SWIFT_DEFAULT_ACTOR_ISOLATION =
+MainActor`, so an unmarked parser would hop TextMate back onto the main thread
+even inside `Task.detached`. Session Chat timelines coalesce-latest
+while apply is in flight (iOS uses a tracked, lifecycle-cancelled apply task
+with `Task.yield`; Android uses `conflate()`). Large streaming replies (≥8k
+chars) skip markdown preparation and render plain text until the message
+finishes; large streaming code fences (≥2k chars) also render as plain monospace
+until highlight runs on the final frame. See
 [plan.md](./plan.md#where-markdown-runs) for the full data flow.
 
 `RenderedMarkdownMapper` in the UI layer is removed.

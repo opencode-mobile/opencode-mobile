@@ -1,19 +1,26 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 
 /** Quiet window before publishing the latest streaming snapshot. */
 internal const val STREAMING_PREPARE_DEBOUNCE_MS = 16L
 
-/** Minimum max-batch interval while deltas keep arriving. */
+/** Cap how long dense SSE bursts can delay a UI publish. Keep flat so long replies
+ * do not intentionally slow down as they grow. */
 internal const val STREAMING_PREPARE_MAX_BATCH_MS = 48L
+
+/** Pause between history markdown enrich publishes so scrolling stays responsive. */
+internal const val HISTORY_ENRICH_YIELD_MS = 24L
 
 class DisplayMessagePipeline(
     private val messageSync: MessageSync,
@@ -33,16 +40,40 @@ class DisplayMessagePipeline(
             suspend fun publishPrepared(
                 messages: List<Message>,
                 reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
+                skipMarkdown: Boolean = false,
             ) {
                 val prepared =
                     contentPreparer.prepareMessages(
                         messages,
                         previousById,
                         reuseStreamingDocumentAsFinalPlaceholder,
+                        skipMarkdown,
                     )
-                previousById = prepared.associateBy { it.id }
+                if (!skipMarkdown) {
+                    previousById = prepared.associateBy { it.id }
+                }
                 lastPublishedAt = timeSource.markNow()
                 send(DisplayMessageListUpdate.Messages(prepared))
+            }
+
+            suspend fun enrichHistoryIncrementally(messages: List<Message>) {
+                val byId =
+                    messages.associate { message ->
+                        message.id to DisplayMessage(message = message, renderedMarkdown = null)
+                    }.toMutableMap()
+                // Newest first: open settles near the bottom, so enrich what the
+                // user is looking at before older off-screen history.
+                for (message in messages.asReversed()) {
+                    ensureActive()
+                    if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
+                    val prepared = contentPreparer.prepareMessage(message)
+                    byId[message.id] = prepared
+                    previousById = previousById + (message.id to prepared)
+                    lastPublishedAt = timeSource.markNow()
+                    send(DisplayMessageListUpdate.Messages(messages.map { byId.getValue(it.id) }))
+                    yield()
+                    delay(HISTORY_ENRICH_YIELD_MS.milliseconds)
+                }
             }
 
             fun scheduleStreamingPublish() {
@@ -72,20 +103,11 @@ class DisplayMessagePipeline(
                                 // but also flush when the max batch age is exceeded so dense
                                 // token bursts still stream instead of appearing only at the end.
                                 pendingMessages = update.messages
-                                val streamingChars =
-                                    update.messages.maxOfOrNull { message ->
-                                        if (message.parts.any { it is MessagePart.Text && it.isStreaming }) {
-                                            message.text.length
-                                        } else {
-                                            0
-                                        }
-                                    } ?: 0
-                                val maxBatchMs = streamingPrepareMaxBatchMs(streamingChars)
                                 val dueForMaxBatch =
                                     lastPublishedAt
                                         ?.elapsedNow()
                                         ?.inWholeMilliseconds
-                                        ?.let { it >= maxBatchMs }
+                                        ?.let { it >= STREAMING_PREPARE_MAX_BATCH_MS }
                                         ?: true
                                 if (dueForMaxBatch) {
                                     debounceJob?.cancel()
@@ -106,8 +128,14 @@ class DisplayMessagePipeline(
                                         update.messages,
                                         reuseStreamingDocumentAsFinalPlaceholder = true,
                                     )
+                                    publishPrepared(update.messages)
+                                } else if (shouldPlainFirstHistoryPublish(update.messages, previousById)) {
+                                    publishPrepared(update.messages, skipMarkdown = true)
+                                    delay(48.milliseconds)
+                                    enrichHistoryIncrementally(update.messages)
+                                } else {
+                                    publishPrepared(update.messages)
                                 }
-                                publishPrepared(update.messages)
                             }
                         }
                     }
@@ -132,11 +160,23 @@ class DisplayMessagePipeline(
         }
 }
 
-/** Widen the publish interval as the streaming message grows so UI can keep up. */
-internal fun streamingPrepareMaxBatchMs(streamingChars: Int): Long =
-    when {
-        streamingChars < 5_000 -> STREAMING_PREPARE_MAX_BATCH_MS
-        streamingChars < 15_000 -> 100L
-        streamingChars < 25_000 -> 150L
-        else -> 250L
+/** Flat max-batch interval; size argument retained for call-site compatibility. */
+internal fun streamingPrepareMaxBatchMs(
+    @Suppress("UNUSED_PARAMETER") streamingChars: Int,
+): Long = STREAMING_PREPARE_MAX_BATCH_MS
+
+internal fun shouldPlainFirstHistoryPublish(
+    messages: List<Message>,
+    previousById: Map<String, DisplayMessage>,
+): Boolean {
+    if (previousById.values.any { it.renderedMarkdown != null }) return false
+    var markdownChars = 0
+    for (message in messages) {
+        if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
+        markdownChars += message.text.length
+        if (markdownChars >= MessageContentPreparer.HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD) {
+            return true
+        }
     }
+    return false
+}

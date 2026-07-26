@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.scroll
 
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 
 private const val BOTTOM_ANCHOR_INDEX = 0
@@ -10,14 +11,25 @@ private const val VIEWPORT_REVEAL_FRACTION = 0.2f
 
 private fun newestMessageIndex(messageCount: Int): Int = if (messageCount > 0) 1 else -1
 
-fun LazyListState.shouldShowScrollToEnd(
+/**
+ * Visible item snapshot used by scroll-to-end math. Kept free of Compose types so
+ * unit tests can cover taller-than-viewport newest messages without a runtime.
+ */
+internal data class TimelineVisibleItem(
+    val index: Int,
+    val offset: Int,
+    val size: Int,
+)
+
+internal fun shouldShowScrollToEnd(
     messageCount: Int,
+    viewportHeightPx: Int,
+    viewportEndOffset: Int,
+    afterContentPadding: Int,
     revealThresholdMinPx: Int,
+    visibleItems: List<TimelineVisibleItem>,
 ): Boolean {
     if (messageCount == 0) return false
-
-    val layoutInfo = layoutInfo
-    val viewportHeightPx = layoutInfo.viewportSize.height
     if (viewportHeightPx <= 0) return false
 
     val revealThresholdPx =
@@ -26,31 +38,36 @@ fun LazyListState.shouldShowScrollToEnd(
             (viewportHeightPx * VIEWPORT_REVEAL_FRACTION).toInt(),
         )
 
-    val bottomAnchor =
-        layoutInfo.visibleItemsInfo.lastOrNull { it.index == BOTTOM_ANCHOR_INDEX }
+    val bottomAnchor = visibleItems.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
     if (bottomAnchor != null) {
         val trailingGap =
             bottomAnchor.offset +
                 bottomAnchor.size +
-                layoutInfo.afterContentPadding -
-                layoutInfo.viewportEndOffset
+                afterContentPadding -
+                viewportEndOffset
         return trailingGap > revealThresholdPx
     }
 
-    val newestMessageIndex = newestMessageIndex(messageCount)
-    val newestMessage =
-        layoutInfo.visibleItemsInfo.lastOrNull { it.index == newestMessageIndex }
-            ?: return true
+    // Bottom anchor left the viewport. On a reverse timeline that means the user
+    // scrolled away from end — including when a taller-than-viewport newest
+    // message still fills the screen (iOS uses content-offset distance; item
+    // bounds alone cannot express that case).
+    return true
+}
 
-    val lastVisible = layoutInfo.visibleItemsInfo.maxByOrNull { it.index } ?: return false
-    if (lastVisible.index < newestMessageIndex) {
-        return true
-    }
-
-    val visibleTailPx = layoutInfo.viewportEndOffset - (newestMessage.offset + newestMessage.size)
-    val belowViewportPx = layoutInfo.afterContentPadding + BOTTOM_ANCHOR_HEIGHT_PX
-    val distanceFromBottom = visibleTailPx + belowViewportPx
-    return distanceFromBottom > revealThresholdPx
+fun LazyListState.shouldShowScrollToEnd(
+    messageCount: Int,
+    revealThresholdMinPx: Int,
+): Boolean {
+    val layoutInfo = layoutInfo
+    return shouldShowScrollToEnd(
+        messageCount = messageCount,
+        viewportHeightPx = layoutInfo.viewportSize.height,
+        viewportEndOffset = layoutInfo.viewportEndOffset,
+        afterContentPadding = layoutInfo.afterContentPadding,
+        revealThresholdMinPx = revealThresholdMinPx,
+        visibleItems = layoutInfo.visibleItemsInfo.map { it.toTimelineVisibleItem() },
+    )
 }
 
 fun LazyListState.shouldShowScrollToEndPill(
@@ -143,3 +160,6 @@ suspend fun LazyListState.scrollToTimelineEndAfterLayoutChange(messageCount: Int
         scrollToTimelineEnd()
     }
 }
+
+private fun LazyListItemInfo.toTimelineVisibleItem(): TimelineVisibleItem =
+    TimelineVisibleItem(index = index, offset = offset, size = size)

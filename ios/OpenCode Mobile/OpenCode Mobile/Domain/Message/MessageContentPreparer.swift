@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-func stableMarkdownSourceHash(_ markdown: String) -> Int {
+nonisolated func stableMarkdownSourceHash(_ markdown: String) -> Int {
     var hash = 0x811c9dc5
     for byte in markdown.utf8 {
         hash = hash ^ Int(byte)
@@ -17,6 +17,10 @@ final class MessageContentPreparer: @unchecked Sendable {
     /// bubble render plain text. Full parse still runs on the final frame.
     static let streamingPlainTextCharacterThreshold = 8_000
 
+    /// When opening a history whose markdown-candidate text exceeds this size,
+    /// publish a plain-text frame first so the timeline is usable before TextMate.
+    static let historyPlainFirstMarkdownCharacterThreshold = 4_000
+
     private let cacheLock = NSLock()
     private var cache: [CacheKey: NativeMarkdownDocument] = [:]
     private var cacheOrder: [CacheKey] = []
@@ -27,7 +31,8 @@ final class MessageContentPreparer: @unchecked Sendable {
     func prepareMessages(
         _ messages: [Message],
         previousByID: [String: DisplayMessage] = [:],
-        reuseStreamingDocumentAsFinalPlaceholder: Bool = false
+        reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
+        skipMarkdown: Bool = false
     ) async -> [DisplayMessage] {
         let startedAt = Date()
         var prepared: [DisplayMessage] = []
@@ -40,7 +45,8 @@ final class MessageContentPreparer: @unchecked Sendable {
             let display = await prepareMessage(
                 message,
                 previous: previous,
-                reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder
+                reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
+                skipMarkdown: skipMarkdown
             )
             prepared.append(display)
             if messageIsStreaming(message) {
@@ -55,7 +61,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         }
         let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
         OpenCodeLog.messageContent.info(
-            "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) ms=\(elapsedMs)"
+            "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) skipMarkdown=\(skipMarkdown) ms=\(elapsedMs)"
         )
         return prepared
     }
@@ -76,7 +82,8 @@ final class MessageContentPreparer: @unchecked Sendable {
     func prepareMessage(
         _ message: Message,
         previous: DisplayMessage? = nil,
-        reuseStreamingDocumentAsFinalPlaceholder: Bool = false
+        reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
+        skipMarkdown: Bool = false
     ) async -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
         // Large live replies: print plain text until the message finishes so
@@ -85,6 +92,9 @@ final class MessageContentPreparer: @unchecked Sendable {
            !reuseStreamingDocumentAsFinalPlaceholder,
            message.text.count >= Self.streamingPlainTextCharacterThreshold
         {
+            return DisplayMessage(message: message, renderedMarkdown: nil)
+        }
+        if skipMarkdown {
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
         guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
@@ -119,7 +129,9 @@ final class MessageContentPreparer: @unchecked Sendable {
         }
     }
 
-    private func parseDocument(
+    /// Must stay off MainActor: default actor isolation is MainActor, and history
+    /// enrich depends on this running inside `Task.detached` without hopping back.
+    nonisolated private func parseDocument(
         messageID: String,
         text: String,
         isStreaming: Bool
@@ -141,7 +153,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         }
         cacheLock.unlock()
 
-        let parsed = await Task.detached(priority: .userInitiated) {
+        let parsed = await Task.detached(priority: .utility) {
             OpenCodeRenderedMarkdownParser.parse(text, isStreaming: isStreaming)
         }.value
 
@@ -196,12 +208,12 @@ final class MessageContentPreparer: @unchecked Sendable {
             && previous.isStreaming == display.isStreaming
     }
 
-    private func touch(_ key: CacheKey) {
+    nonisolated private func touch(_ key: CacheKey) {
         cacheOrder.removeAll { $0 == key }
         cacheOrder.append(key)
     }
 
-    private struct CacheKey: Hashable {
+    private struct CacheKey: Hashable, Sendable {
         let messageID: String
         let textHash: Int
         let textLength: Int
