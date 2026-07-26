@@ -44,32 +44,40 @@ Hand-written Ktor / URLSession clients aligned with `api/opencode-messages.opena
 
 ## Refresh without SSE
 
-Pull-to-refresh and reload when Session Chat appears. The foreground changed-message watchdog poll is owned by **MessageLiveStore** (see [Foreground Event Stream](../foreground-event-stream/decisions.md)), not Message Repository.
+Pull-to-refresh and reload when Session Chat appears. `MessageSync` owns the
+foreground changed-message watchdog poll (see
+[Foreground Event Stream](../foreground-event-stream/decisions.md)), not the
+repository transport adapter.
 
 ## SSE message part updates
 
-`MessageLiveStore` treats `message.part.updated` as an ordered replace-by-ID
-operation. The store keeps server part IDs privately, preserves first-seen part
-order for rendering, and replaces an existing part in place when the same part ID
-arrives again.
+`MessageSync` applies live patches through `InMemoryMessageStore`.
+`message.part.updated` is an ordered replace-by-ID operation. The store keeps
+server part IDs privately, preserves first-seen order for rendering, and
+replaces an existing part in place when the same part ID arrives again.
 
-Text `delta` updates append to the existing text part and mark that part as
-streaming. Tool updates replace the whole rendered tool part from the latest
-state object; tool state fields are not merged incrementally.
+`message.part.delta` with `field=text` appends to an existing text part and
+marks it streaming. Missing or non-text fields are ignored. Tool updates replace
+the whole rendered tool part from the latest state object; tool state fields are
+not merged incrementally.
 
 When a part update targets a message that only exists from the last REST
-snapshot, `MessageLiveStore` performs a full message reload instead of merging
+snapshot, `MessageSync` performs a full message reload instead of merging
 locally. The domain message model intentionally does not expose server part IDs,
 so this keeps REST-seeded rows correct without inventing unstable local part
 identity.
 
-`message.updated` can arrive before visible parts. The Live Store may record
+Polling pauses while text is streaming. A final part update clears the streaming
+flag; `session.idle` reloads the authoritative REST snapshot so a missed final
+part event cannot leave a message streaming indefinitely.
+
+`message.updated` can arrive before visible parts. The store may record
 that message slot internally, but Session Chat should not render a brand-new
 empty message row. The row becomes visible when a renderable text/tool part or
 error fallback exists. Existing visible rows may stay visible from the last REST
 snapshot while incremental parts catch up.
 
-Live Store streams should not emit an initial empty list while the first REST
+Message streams should not emit an initial empty list while the first REST
 load is still in flight. They should also suppress duplicate unchanged timeline
 emissions from SSE events, so placeholder-only events do not repaint or blank the
 chat.

@@ -31,6 +31,7 @@ class MessageContentPreparer
         suspend fun prepareMessages(
             messages: List<Message>,
             previousById: Map<String, DisplayMessage> = emptyMap(),
+            reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
         ): List<DisplayMessage> =
             withContext(computationDispatcher) {
                 var parsedCount = 0
@@ -42,7 +43,12 @@ class MessageContentPreparer
                             measureTimeMillis {
                                 for (message in messages) {
                                     val previous = previousById[message.id]
-                                    val display = prepareMessageOnWorker(message, previous)
+                                    val display =
+                                        prepareMessageOnWorker(
+                                            message,
+                                            previous,
+                                            reuseStreamingDocumentAsFinalPlaceholder,
+                                        )
                                     add(display)
                                     when {
                                         display.renderedMarkdown == null -> Unit
@@ -91,21 +97,27 @@ class MessageContentPreparer
         suspend fun prepareMessage(
             message: Message,
             previous: DisplayMessage? = null,
+            reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
         ): DisplayMessage =
             withContext(computationDispatcher) {
-                prepareMessageOnWorker(message, previous)
+                prepareMessageOnWorker(message, previous, reuseStreamingDocumentAsFinalPlaceholder)
             }
 
         private fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
+            reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
         ): DisplayMessage {
             if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
                 return DisplayMessage(message = message, renderedMarkdown = null)
             }
             val document =
-                reusableDocument(message, previous)
-                    ?: parseDocument(message.id, message.text, messageIsStreaming(message))
+                reusableDocument(message, previous, reuseStreamingDocumentAsFinalPlaceholder)
+                    ?: if (reuseStreamingDocumentAsFinalPlaceholder) {
+                        previous?.renderedMarkdown
+                    } else {
+                        parseDocument(message.id, message.text, messageIsStreaming(message))
+                    }
             return DisplayMessage(message = message, renderedMarkdown = document)
         }
 
@@ -144,6 +156,7 @@ class MessageContentPreparer
         private fun reusableDocument(
             message: Message,
             previous: DisplayMessage?,
+            reuseStreamingDocumentAsFinalPlaceholder: Boolean,
         ): MarkdownDocument? {
             val isStreaming = messageIsStreaming(message)
             val existing = previous?.renderedMarkdown
@@ -154,6 +167,14 @@ class MessageContentPreparer
                 return existing
             }
             if (isStreaming &&
+                previous != null &&
+                previous.isStreaming &&
+                previous.text == message.text
+            ) {
+                return previous.renderedMarkdown
+            }
+            if (reuseStreamingDocumentAsFinalPlaceholder &&
+                !isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
                 previous.text == message.text

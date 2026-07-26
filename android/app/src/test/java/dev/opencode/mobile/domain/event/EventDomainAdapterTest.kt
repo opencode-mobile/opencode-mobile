@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EventDomainAdapterTest {
@@ -40,6 +41,18 @@ class EventDomainAdapterTest {
 
         assertEquals("message.part.updated", event?.type)
         assertEquals("ses-1", event?.sessionId)
+    }
+
+    @Test
+    fun parseEvent_readsMessagePartDelta() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"message.part.delta","properties":{"sessionID":"ses-1","messageID":"msg-1","partID":"prt-1","field":"text","delta":"Hi"}}}""",
+            )
+
+        assertEquals("message.part.delta", event?.type)
+        assertEquals("ses-1", event?.sessionId)
+        assertTrue(event!!.triggersMessageRefresh)
     }
 
     @Test

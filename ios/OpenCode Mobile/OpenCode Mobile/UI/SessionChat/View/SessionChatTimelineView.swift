@@ -295,7 +295,8 @@ private struct AssistantMessageContent: View {
                 case .text(let text):
                     AssistantMessageBubble(
                         text: text,
-                        renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil
+                        renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil,
+                        isStreaming: message.isStreaming
                     )
                     .modifier(
                         SessionChatMessageActionsGestureModifier(
@@ -358,13 +359,15 @@ private extension FilePart {
 private struct AssistantMessageBubble: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
+    var isStreaming: Bool = false
 
     var body: some View {
         Group {
             if let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
-                    variant: .assistantMessage
+                    variant: .assistantMessage,
+                    isStreaming: isStreaming
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)

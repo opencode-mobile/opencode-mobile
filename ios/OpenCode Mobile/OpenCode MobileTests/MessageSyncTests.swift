@@ -109,7 +109,7 @@ struct MessageSyncTests {
         #expect(msg2?.text == "Hello from part")
     }
 
-    @Test func messagePartUpdated_textDeltaAppendsToExistingPart() async {
+    @Test func messagePartDelta_appendsStreamingText() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
         let sync = makeMessageSync(repo: repo, eventStream: eventStream)
@@ -120,9 +120,10 @@ struct MessageSyncTests {
 
         eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
         try? await Task.sleep(for: .milliseconds(50))
-
-        eventStream.emit(eventWithTextDelta(partID: "prt-1", messageID: "msg-2", delta: "Hel", sessionID: "ses-1"))
-        eventStream.emit(eventWithTextDelta(partID: "prt-1", messageID: "msg-2", delta: "lo", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hel", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "lo", sessionID: "ses-1"))
         let updated = await waitUntil {
             collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello"
         }
@@ -136,6 +137,213 @@ struct MessageSyncTests {
             return
         }
         #expect(textPart.isStreaming == true)
+    }
+
+    @Test func messagePartDelta_ignoresNonTextField() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "Hi", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "!", field: "reasoning", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+
+        let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(msg2?.text == "Hi")
+        guard case .text(let textPart) = msg2?.parts.first else {
+            Issue.record("Expected text part")
+            return
+        }
+        #expect(textPart.isStreaming == false)
+    }
+
+    @Test func messagePartDelta_ignoresMissingField() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "Hi", sessionID: "ses-1"))
+        eventStream.emit(
+            eventWithPartDelta(
+                partID: "prt-1",
+                messageID: "msg-2",
+                delta: "!",
+                field: nil,
+                sessionID: "ses-1"
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(100))
+        task.cancel()
+
+        let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(msg2?.text == "Hi")
+        guard case .text(let textPart) = msg2?.parts.first else {
+            Issue.record("Expected text part")
+            return
+        }
+        #expect(textPart.isStreaming == false)
+    }
+
+    @Test func messagePartDelta_ignoresReasoningPartDeltas() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithReasoningPart(partID: "prt-reason", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-reason", messageID: "msg-2", delta: "The user said hello.", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello!", sessionID: "ses-1"))
+        let updated = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello!"
+        }
+        task.cancel()
+
+        #expect(updated)
+        let msg2 = collector.latest()?.first(where: { $0.id == "msg-2" })
+        #expect(msg2?.text == "Hello!")
+        #expect(msg2?.parts.count == 1)
+    }
+
+    @Test func sessionIdle_reloadClearsStreaming() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello", sessionID: "ses-1"))
+        let streaming = await waitUntil {
+            guard case .text(let part) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return part.isStreaming
+        }
+        #expect(streaming)
+
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Hello",
+                parts: [.text(TextPart(text: "Hello", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        let finalized = await waitUntil {
+            guard case .text(let part) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return part.text == "Hello" && !part.isStreaming
+        }
+        task.cancel()
+
+        #expect(finalized)
+        #expect(repo.listMessagesCallCount == 2)
+    }
+
+    @Test func replaceAll_clearsStreamingAndMakesRestAuthoritative() async {
+        let store = InMemoryMessageStore()
+        store.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-2"),
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+            ])
+        )
+        store.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(part: [
+                "id": .string("prt-1"),
+                "messageID": .string("msg-2"),
+                "sessionID": .string("ses-1"),
+                "type": .string("text"),
+                "text": .string(""),
+            ], delta: nil)
+        )
+        store.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: "Hel")
+        )
+        store.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-2",
+                    role: .assistant,
+                    text: "Final",
+                    parts: [.text(TextPart(text: "Final", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        store.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: "lo")
+        )
+
+        let msg2 = store.messages(sessionID: "ses-1").first(where: { $0.id == "msg-2" })
+        #expect(msg2?.text == "Final")
+        guard case .text(let textPart) = msg2?.parts.first else {
+            Issue.record("Expected authoritative REST text part after replaceAll")
+            return
+        }
+        #expect(textPart.isStreaming == false)
+    }
+
+    @Test func messagePartDelta_finalPartUpdatedClearsStreaming() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(50))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "Hello", sessionID: "ses-1"))
+        let cleared = await waitUntil {
+            guard case .text(let part) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return part.text == "Hello" && part.isStreaming == false
+        }
+        task.cancel()
+
+        #expect(cleared)
     }
 
     @Test func messagePartUpdated_preservesPartOrderAcrossReplacement() async {
@@ -202,6 +410,7 @@ struct MessageSyncTests {
         let collector = MessageCollector()
         let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         try? await Task.sleep(for: .milliseconds(300))
+        let callsAfterInitial = repo.listMessagesCallCount
 
         repo.messages = [
             Message(
@@ -222,7 +431,7 @@ struct MessageSyncTests {
 
         #expect(updated)
         #expect(collector.latest()?.first?.text == "New")
-        #expect(repo.listMessagesCallCount == 2)
+        #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
     }
 
     @Test func messagePartUpdated_fileChangeEmitsWhenFlattenedTextIsUnchanged() async {
@@ -392,6 +601,13 @@ struct MessageSyncTests {
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }
 
+    private func eventWithReasoningPart(partID: String, messageID: String, text: String, sessionID: String) -> OpencodeEvent {
+        let json = """
+        {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"reasoning","text":"\(text)"}}}}
+        """
+        return EventDomainAdapter().parseEvent(dataLine: json)!
+    }
+
     private func eventWithFilePart(_ file: FilePart, messageID: String, sessionID: String) -> OpencodeEvent {
         let json = """
         {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(file.id)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"file","mime":"\(file.mime)","filename":"\(file.filename)","url":"\(file.dataURL)"}}}}
@@ -399,9 +615,16 @@ struct MessageSyncTests {
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }
 
-    private func eventWithTextDelta(partID: String, messageID: String, delta: String, sessionID: String) -> OpencodeEvent {
+    private func eventWithPartDelta(
+        partID: String,
+        messageID: String,
+        delta: String,
+        field: String? = "text",
+        sessionID: String
+    ) -> OpencodeEvent {
+        let fieldJSON = field.map { ",\"field\":\"\($0)\"" } ?? ""
         let json = """
-        {"payload":{"type":"message.part.updated","properties":{"part":{"id":"\(partID)","messageID":"\(messageID)","sessionID":"\(sessionID)","type":"text"},"delta":"\(delta)"}}}
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"\(sessionID)","messageID":"\(messageID)","partID":"\(partID)"\(fieldJSON),"delta":"\(delta)"}}}
         """
         return EventDomainAdapter().parseEvent(dataLine: json)!
     }

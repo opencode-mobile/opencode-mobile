@@ -10,16 +10,6 @@
 - **Next action:** Add components when message UX is defined.
 - **Status:** Temporary.
 
-## No live assistant streaming
-
-- **Intent:** Timeline updates as the assistant works.
-- **iOS:** Foreground SSE reloads messages on bus events (see [Foreground Event Stream](../foreground-event-stream/progress.md)).
-- **Android:** Foreground SSE reloads messages on bus events (see [Foreground Event Stream](../foreground-event-stream/progress.md)).
-- **Area:** Behavior.
-- **Reason:** Addressed by Foreground Event Stream slice; incremental part streaming still deferred.
-- **Next action:** Optional targeted updates from `message.part.updated` payloads.
-- **Status:** Temporary (full reload only).
-
 ## Assistant messages without text parts
 
 - **Intent:** Show meaningful assistant content when the server returns no text parts.

@@ -70,8 +70,7 @@ class MessageDomainAdapter {
     fun toMessagePart(dto: MessagePartDto): MessagePart? {
         return when (dto.type) {
             "text" -> {
-                val text = dto.text ?: return null
-                MessagePart.Text(text = text, isStreaming = false)
+                MessagePart.Text(text = dto.text ?: "", isStreaming = false)
             }
             "tool" -> {
                 val toolName = dto.tool ?: return null

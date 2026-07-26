@@ -157,6 +157,48 @@ class MessageContentPreparerTest {
         }
 
     @Test
+    fun prepareMessagesReusesStreamingDocumentAsFinalPlaceholder() =
+        runTest(testDispatcher) {
+            val preparer = createPreparer()
+            val previousDoc =
+                MarkdownDocument(
+                    sourceHash = "# Partial".hashCode(),
+                    blocks =
+                        listOf(
+                            MarkdownBlock.Heading(
+                                level = 1,
+                                inlines = listOf(MarkdownInline.Text("Partial")),
+                            ),
+                        ),
+                )
+            val previous =
+                DisplayMessage(
+                    message =
+                        Message(
+                            id = "m1",
+                            role = MessageRole.Assistant,
+                            text = "# Partial",
+                            parts = listOf(MessagePart.Text(text = "# Partial", isStreaming = true)),
+                        ),
+                    renderedMarkdown = previousDoc,
+                )
+            val finalMessage =
+                Message(
+                    id = "m1",
+                    role = MessageRole.Assistant,
+                    text = "# Partial",
+                    parts = listOf(MessagePart.Text(text = "# Partial", isStreaming = false)),
+                )
+            val placeholder =
+                preparer.prepareMessages(
+                    listOf(finalMessage),
+                    mapOf("m1" to previous),
+                    reuseStreamingDocumentAsFinalPlaceholder = true,
+                )
+            assertSame(previousDoc, placeholder.first().renderedMarkdown)
+        }
+
+    @Test
     fun prepareMessagesUsesCacheForRepeatedSnapshots() =
         runTest(testDispatcher) {
             val preparer = createPreparer()

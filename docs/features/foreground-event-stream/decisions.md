@@ -12,7 +12,12 @@ Server sends JSON SSE data as `{ "payload": { "type", "properties" } }`. Parser 
 
 Live Stores own refresh policy while the **foreground event stream** is active:
 
-- **MessageLiveStore:** debounced full `listMessages` reload (300 ms) on `message.updated`, `message.part.updated`, `message.part.removed`, `message.removed`, `session.status`, `session.idle`, `session.error` for the bound session; 10 s changed-message watchdog poll while the chat observes that session.
+- **MessageSync:** incrementally merges `message.updated`,
+  `message.part.updated`, `message.part.delta`, `message.part.removed`, and
+  `message.removed` for the bound session. It performs authoritative reloads on
+  reconnect, `session.idle`, and part mutations targeting REST-seeded rows, plus
+  a changed-message watchdog poll while the chat observes the session (paused
+  while text is actively streaming).
 - **SessionLiveStore:** debounced `listSessions` reload (500 ms) on `session.created`, `session.updated`, `session.deleted`, and reconnect.
 - **SessionStatusLiveStore:** debounced bulk `getAllSessionStatuses` (300 ms) on `session.status`, `session.idle`, and reconnect.
 - **Reconnect:** Live Stores refresh on synthetic `stream.reconnected`; home does not run a broad section reload per SSE event. Explicit project additions can reload with `skipProbe = true`; saved profile changes run the normal probe-backed refresh path.
@@ -29,7 +34,8 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 ## Heartbeats
 
-`server.connected` and `server.heartbeat` update connection state only; no UI refresh.
+`server.heartbeat` updates connection state only. `server.connected` may trigger
+an initial synchronization reload; synthetic `stream.reconnected` always does.
 
 ## Logging
 

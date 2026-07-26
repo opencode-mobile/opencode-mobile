@@ -15,6 +15,9 @@
 - [x] SessionChatViewModel + unit tests
 - [x] Session Chat wired to repository
 - [x] MessageLiveStore preserves SSE part order and appends text deltas
+- [x] OPE-82: handle SSE `message.part.delta` for live assistant text streaming
+- [x] OPE-82 finalization: authoritative REST reload and `session.idle` clear
+  streaming state; REST-seeded part updates retain the safe reload fallback
 
 ## iOS
 
@@ -22,6 +25,9 @@
 - [x] SessionChatViewModel + unit tests
 - [x] Session Chat wired to repository
 - [x] MessageLiveStore preserves SSE part order and appends text deltas
+- [x] OPE-82: handle SSE `message.part.delta` for live assistant text streaming
+- [x] OPE-82 finalization: authoritative REST reload and `session.idle` clear
+  streaming state; REST-seeded part updates retain the safe reload fallback
 
 ## Remaining
 

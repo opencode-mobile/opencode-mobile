@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,6 +42,7 @@ class SessionChatTimeline(
     private var boundWorktree: String? = null
     private var observeJob: Job? = null
     private var transformJob: Job? = null
+    private var pendingDisplayApply: PendingDisplayApply? = null
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
     private var pendingBaselineSignatures: Map<String, String> = emptyMap()
@@ -53,6 +55,7 @@ class SessionChatTimeline(
         if (boundSessionId == sessionId && boundWorktree == worktree) return
         observeJob?.cancel()
         transformJob?.cancel()
+        pendingDisplayApply = null
         boundSessionId = sessionId
         boundWorktree = worktree
         mergePendingWhileSending = false
@@ -293,7 +296,11 @@ class SessionChatTimeline(
     ) {
         observeJob =
             scope.launch {
-                messageRepository.observeDisplayMessages(sessionId, worktree).collect { update ->
+                messageRepository.observeDisplayMessages(sessionId, worktree)
+                    // Drop intermediate snapshots while apply/composition is busy so long
+                    // streams do not replay buffered frames after the server finishes.
+                    .conflate()
+                    .collect { update ->
                     if (!isCurrentBinding(sessionId, worktree)) return@collect
                     when (update) {
                         is DisplayMessageListUpdate.LoadFailed -> {
@@ -330,61 +337,101 @@ class SessionChatTimeline(
             "applyLoadedDisplayMessages start session=$sourceSessionId source=$source " +
                 "count=${displayMessages.size} quietRefresh=$fromQuietRefresh refreshing=$isRefreshing",
         )
-        transformJob?.cancel()
+        pendingDisplayApply =
+            PendingDisplayApply(
+                displayMessages = displayMessages,
+                sourceSessionId = sourceSessionId,
+                sourceWorktree = sourceWorktree,
+                isRefreshing = isRefreshing,
+                fromQuietRefresh = fromQuietRefresh,
+                source = source,
+                onPublished = onPublished,
+            )
+        if (transformJob?.isActive == true) return
         transformJob =
             scope.launch {
-                if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
-                val stateSnapshot = _state.value
-                val previousById = stateSnapshot.messages.associateBy { it.id }
-                val structuralStartedAt = System.nanoTime()
-                val structural = withContext(ioDispatcher) { timelineMessages(displayMessages, previousById) }
-                val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
-                val merged =
-                    if (fromQuietRefresh && mergePendingWhileSending) {
-                        mergeWithPending(structural, pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } })
-                    } else {
-                        structural
+                do {
+                    while (true) {
+                        val pending = pendingDisplayApply ?: break
+                        pendingDisplayApply = null
+                        publishDisplayMessages(pending)
                     }
-                if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return@launch
-                val timeline =
-                    when {
-                        merged.isEmpty() -> SessionChatTimelineState.Empty
-                        else -> SessionChatTimelineState.Ready
-                    }
-                val resolvedTimeline =
-                    if (fromQuietRefresh && stateSnapshot.timeline == SessionChatTimelineState.Error && merged.isEmpty()) {
-                        SessionChatTimelineState.Error
-                    } else {
-                        timeline
-                    }
-                logI(
-                    "applyLoadedDisplayMessages ready session=$sourceSessionId source=$source " +
-                        "timeline=$timeline messages=${merged.size} structuralMs=$structuralMs",
-                )
-                _state.update { state ->
-                    state.copy(
-                        timeline = resolvedTimeline,
-                        messages = merged,
-                        isRefreshing = isRefreshing,
-                        errorMessage =
-                            if (fromQuietRefresh) {
-                                if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
-                                    null
-                                } else {
-                                    state.errorMessage
-                                }
-                            } else {
-                                null
-                            },
-                    )
-                }
-                if (!fromQuietRefresh) {
-                    mergePendingWhileSending = false
-                    pendingOptimisticRows = emptyList()
-                    pendingBaselineSignatures = emptyMap()
-                }
-                onPublished?.invoke()
+                    // Cover the race where a newer snapshot arrives after the inner
+                    // loop observes null but before this job goes inactive.
+                } while (pendingDisplayApply != null)
             }
+    }
+
+    private data class PendingDisplayApply(
+        val displayMessages: List<DisplayMessage>,
+        val sourceSessionId: String,
+        val sourceWorktree: String,
+        val isRefreshing: Boolean,
+        val fromQuietRefresh: Boolean,
+        val source: String,
+        val onPublished: (() -> Unit)?,
+    )
+
+    private suspend fun publishDisplayMessages(pending: PendingDisplayApply) {
+        val displayMessages = pending.displayMessages
+        val sourceSessionId = pending.sourceSessionId
+        val sourceWorktree = pending.sourceWorktree
+        val isRefreshing = pending.isRefreshing
+        val fromQuietRefresh = pending.fromQuietRefresh
+        val source = pending.source
+        val onPublished = pending.onPublished
+
+        if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+        val stateSnapshot = _state.value
+        val previousById = stateSnapshot.messages.associateBy { it.id }
+        val structuralStartedAt = System.nanoTime()
+        val structural = withContext(ioDispatcher) { timelineMessages(displayMessages, previousById) }
+        val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
+        val merged =
+            if (fromQuietRefresh && mergePendingWhileSending) {
+                mergeWithPending(structural, pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } })
+            } else {
+                structural
+            }
+        if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+        val timeline =
+            when {
+                merged.isEmpty() -> SessionChatTimelineState.Empty
+                else -> SessionChatTimelineState.Ready
+            }
+        val resolvedTimeline =
+            if (fromQuietRefresh && stateSnapshot.timeline == SessionChatTimelineState.Error && merged.isEmpty()) {
+                SessionChatTimelineState.Error
+            } else {
+                timeline
+            }
+        logI(
+            "applyLoadedDisplayMessages ready session=$sourceSessionId source=$source " +
+                "timeline=$timeline messages=${merged.size} structuralMs=$structuralMs",
+        )
+        _state.update { state ->
+            state.copy(
+                timeline = resolvedTimeline,
+                messages = merged,
+                isRefreshing = isRefreshing,
+                errorMessage =
+                    if (fromQuietRefresh) {
+                        if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {
+                            null
+                        } else {
+                            state.errorMessage
+                        }
+                    } else {
+                        null
+                    },
+            )
+        }
+        if (!fromQuietRefresh) {
+            mergePendingWhileSending = false
+            pendingOptimisticRows = emptyList()
+            pendingBaselineSignatures = emptyMap()
+        }
+        onPublished?.invoke()
     }
 
     private fun applyLoadError(throwable: Throwable) {

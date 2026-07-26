@@ -12,6 +12,13 @@ sealed interface MessagePatch {
         val delta: String?,
     ) : MessagePatch
 
+    /** Append a text delta to an existing part by ID (SSE `message.part.delta`). */
+    data class PartDelta(
+        val messageId: String,
+        val partId: String,
+        val delta: String,
+    ) : MessagePatch
+
     data class Removed(
         val messageId: String,
     ) : MessagePatch

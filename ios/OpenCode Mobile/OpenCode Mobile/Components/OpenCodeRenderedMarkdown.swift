@@ -15,8 +15,12 @@ enum OpenCodeRenderedMarkdownDetector {
 }
 
 struct OpenCodeRenderedMarkdown: View {
+    /// Skip expensive span painting for large fences while the message is still streaming.
+    static let streamingPlainCodeCharacterThreshold = 2_000
+
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
+    let isStreaming: Bool
     let initialHeight: CGFloat
     let measuresHeight: Bool
     let onHeightChange: (CGFloat) -> Void
@@ -28,6 +32,7 @@ struct OpenCodeRenderedMarkdown: View {
     init(
         document: NativeMarkdownDocument,
         variant: OpenCodeRenderedMarkdownVariant,
+        isStreaming: Bool = false,
         initialHeight: CGFloat = 1,
         measuresHeight: Bool = false,
         onHeightChange: @escaping (CGFloat) -> Void = { _ in },
@@ -35,6 +40,7 @@ struct OpenCodeRenderedMarkdown: View {
     ) {
         self.document = document
         self.variant = variant
+        self.isStreaming = isStreaming
         self.initialHeight = max(1, initialHeight)
         self.measuresHeight = measuresHeight
         self.onHeightChange = onHeightChange
@@ -121,6 +127,7 @@ struct OpenCodeRenderedMarkdown: View {
         InlineMarkdownText(inlines: inlines, font: font, color: color)
     }
 
+    @ViewBuilder
     private func codeBlock(
         identity: String,
         code: String,
@@ -128,12 +135,22 @@ struct OpenCodeRenderedMarkdown: View {
     ) -> some View {
         let isExpanded = expandedCodeBlocks.contains(identity)
         let preview = codePreview(code: code, spans: spans, expanded: isExpanded)
-        return ScrollView(.horizontal, showsIndicators: true) {
-            Text(NativeMarkdownAttributedString.code(preview.code, spans: preview.spans))
-                .font(OpenCodeTypography.code)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+        let usePlainStreamingText =
+            isStreaming && preview.code.count >= Self.streamingPlainCodeCharacterThreshold
+        ScrollView(.horizontal, showsIndicators: true) {
+            Group {
+                if usePlainStreamingText {
+                    Text(preview.code)
+                        .font(OpenCodeTypography.code)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                } else {
+                    Text(NativeMarkdownAttributedString.code(preview.code, spans: preview.spans))
+                        .font(OpenCodeTypography.code)
+                }
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
@@ -158,11 +175,15 @@ struct OpenCodeRenderedMarkdown: View {
         }
     }
 
-    private func codePreview(code: String, spans: [NativeCodeSpan], expanded: Bool) -> (code: String, spans: [NativeCodeSpan], isTruncated: Bool) {
+    private func codePreview(
+        code: String,
+        spans: [NativeCodeSpan],
+        expanded: Bool
+    ) -> (code: String, spans: [NativeCodeSpan], isTruncated: Bool) {
         let maximumLines = 80
-        guard !expanded else { return (code, spans, false) }
         let lines = code.split(separator: "\n", omittingEmptySubsequences: false)
         guard lines.count > maximumLines else { return (code, spans, false) }
+        guard !expanded else { return (code, spans, true) }
         let previewCode = lines.prefix(maximumLines).joined(separator: "\n")
         let utf16Length = previewCode.utf16.count
         let previewSpans = spans.compactMap { span -> NativeCodeSpan? in
@@ -280,6 +301,14 @@ struct OpenCodeRenderedMarkdown: View {
 }
 
 enum NativeMarkdownAttributedString {
+    private struct CodeCacheKey: Hashable {
+        let code: String
+        let spans: [NativeCodeSpan]
+    }
+
+    private static var cachedCodeKey: CodeCacheKey?
+    private static var cachedCodeValue: AttributedString?
+
     static func inline(
         _ inlines: [NativeMarkdownInline],
         font: Font,
@@ -294,6 +323,11 @@ enum NativeMarkdownAttributedString {
         _ code: String,
         spans: [NativeCodeSpan]
     ) -> AttributedString {
+        let cacheKey = CodeCacheKey(code: code, spans: spans)
+        if cachedCodeKey == cacheKey, let cachedCodeValue {
+            return cachedCodeValue
+        }
+
         var output = AttributedString(code)
         output.font = OpenCodeTypography.code
         output.foregroundColor = OpenCodeColors.textStrong
@@ -329,6 +363,8 @@ enum NativeMarkdownAttributedString {
             output[startIndex..<endIndex].foregroundColor = color(for: span.role)
         }
 
+        cachedCodeKey = cacheKey
+        cachedCodeValue = output
         return output
     }
 
@@ -512,8 +548,9 @@ private extension NativeMarkdownBlock {
             return "ul-\(items.map(\.stableCacheKey).joined(separator: "|"))"
         case .orderedList(let start, let items):
             return "ol-\(start)-\(items.map(\.stableCacheKey).joined(separator: "|"))"
-        case .codeBlock(let language, let code, _):
-            return "code-\(language ?? "")-\(code.hashValue)"
+        case .codeBlock(let language, _, _):
+            // Do not key on full code content — streaming tokens would tear down the view every publish.
+            return "code-\(language ?? "")"
         case .diffBlock(let lines):
             return "diff-\(lines.map(\.text).joined().hashValue)"
         case .table(let header, let rows):
@@ -756,13 +793,13 @@ enum NativeMarkdownInline: Decodable {
     }
 }
 
-struct NativeCodeSpan: Decodable {
+struct NativeCodeSpan: Decodable, Hashable {
     let start: Int
     let end: Int
     let role: NativeCodeTokenRole
 }
 
-enum NativeCodeTokenRole: String, Decodable {
+enum NativeCodeTokenRole: String, Decodable, Hashable {
     case plain = "Plain"
     case comment = "Comment"
     case keyword = "Keyword"

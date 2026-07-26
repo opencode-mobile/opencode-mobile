@@ -12,7 +12,8 @@ final class SessionChatTimeline {
     private let messageRepository: any MessageRepository
     private let sentTimeFormatter: DateFormatter
     private var observationTask: Task<Void, Never>?
-    private var transformTask: Task<Void, Never>?
+    private var displayApplyTask: Task<Void, Never>?
+    private var observationGeneration = 0
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: [SessionChatRow] = []
     private var pendingBaselineSignatureCounts: [String: Int] = [:]
@@ -33,9 +34,7 @@ final class SessionChatTimeline {
     }
 
     func reset() {
-        observationTask?.cancel()
-        observationTask = nil
-        transformTask?.cancel()
+        cancelObservationTasks()
         mergePendingWhileSending = false
         pendingOptimisticRows = []
         pendingBaselineSignatureCounts = [:]
@@ -45,26 +44,63 @@ final class SessionChatTimeline {
     }
 
     func startObserving() {
-        observationTask?.cancel()
+        cancelObservationTasks()
+        let generation = observationGeneration
         state.timeline = .loading
         state.errorMessage = nil
         notifyChange()
         observationTask = Task {
-            for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
-                guard !Task.isCancelled else { return }
-                switch update {
-                case .loadFailed(let error):
-                    applyError(error)
-                case .messages(let displayMessages):
-                    applyLoadedDisplayMessages(displayMessages, isRefreshing: false, fromQuietRefresh: true)
+            var pendingUpdate: DisplayMessageListUpdate?
+
+            @MainActor
+            func kickApply() {
+                guard displayApplyTask == nil else { return }
+                displayApplyTask = Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    while let current = pendingUpdate {
+                        guard self.observationGeneration == generation, !Task.isCancelled else { return }
+                        pendingUpdate = nil
+                        switch current {
+                        case .loadFailed(let error):
+                            applyError(error)
+                        case .messages(let displayMessages):
+                            await applyLoadedDisplayMessagesTransform(
+                                displayMessages,
+                                isRefreshing: false,
+                                fromQuietRefresh: true
+                            )
+                        }
+                        // Yield so the observation task can land a newer snapshot while we apply;
+                        // without this, MainActor serialize makes coalesce-latest a no-op.
+                        await Task.yield()
+                    }
+                    guard self.observationGeneration == generation else { return }
+                    self.displayApplyTask = nil
+                    if pendingUpdate != nil, !Task.isCancelled {
+                        kickApply()
+                    }
                 }
+            }
+
+            for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
+                guard observationGeneration == generation, !Task.isCancelled else { return }
+                // Coalesce-latest while transform/SwiftUI apply is in flight.
+                pendingUpdate = update
+                kickApply()
             }
         }
     }
 
     func stopObserving() {
+        cancelObservationTasks()
+    }
+
+    private func cancelObservationTasks() {
+        observationGeneration &+= 1
         observationTask?.cancel()
         observationTask = nil
+        displayApplyTask?.cancel()
+        displayApplyTask = nil
     }
 
     func loadMessages() async {
@@ -73,7 +109,6 @@ final class SessionChatTimeline {
         notifyChange()
         do {
             let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)
-            transformTask?.cancel()
             await applyLoadedDisplayMessagesTransform(displayMessages, isRefreshing: false)
         } catch {
             applyError(error)
@@ -89,7 +124,6 @@ final class SessionChatTimeline {
 
         do {
             let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)
-            transformTask?.cancel()
             await applyLoadedDisplayMessagesTransform(displayMessages, isRefreshing: false)
         } catch {
             if state.timeline == .ready {
@@ -134,7 +168,6 @@ final class SessionChatTimeline {
     func reloadAfterSend(onComplete: @escaping () -> Void, onReloadFailed: @escaping () -> Void) async {
         do {
             let displayMessages = try await messageRepository.refreshDisplayMessages(sessionID: sessionID, directory: worktree)
-            transformTask?.cancel()
             await applyLoadedDisplayMessagesTransform(displayMessages, isRefreshing: false, onPublished: onComplete)
         } catch {
             onReloadFailed()
@@ -196,23 +229,6 @@ final class SessionChatTimeline {
             modelID: message.modelID,
             contextInputTokens: message.contextInputTokens
         )
-    }
-
-    private func applyLoadedDisplayMessages(
-        _ displayMessages: [DisplayMessage],
-        isRefreshing: Bool,
-        fromQuietRefresh: Bool = false,
-        onPublished: (() -> Void)? = nil
-    ) {
-        transformTask?.cancel()
-        transformTask = Task {
-            await applyLoadedDisplayMessagesTransform(
-                displayMessages,
-                isRefreshing: isRefreshing,
-                fromQuietRefresh: fromQuietRefresh,
-                onPublished: onPublished
-            )
-        }
     }
 
     private func applyLoadedDisplayMessagesTransform(

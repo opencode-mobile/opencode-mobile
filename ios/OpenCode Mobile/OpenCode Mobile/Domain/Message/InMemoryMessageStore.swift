@@ -8,6 +8,7 @@ final class InMemoryMessageStore: MessageStore {
     private var infoCache: [String: [String: AnySendable]] = [:]
     private var partsCache: [String: [String: [String: MessagePart]]] = [:]
     private var partOrder: [String: [String: [String]]] = [:]
+    private var ignoredPartIDs: [String: [String: Set<String>]] = [:]
     private var messageOrder: [String: [String]] = [:]
     private var baseMessages: [String: [Message]] = [:]
 
@@ -15,6 +16,7 @@ final class InMemoryMessageStore: MessageStore {
         infoCache[sessionID] = [:]
         partsCache[sessionID] = [:]
         partOrder[sessionID] = [:]
+        ignoredPartIDs[sessionID] = [:]
         messageOrder[sessionID] = messages.map(\.id)
         baseMessages[sessionID] = messages
     }
@@ -25,6 +27,8 @@ final class InMemoryMessageStore: MessageStore {
             applyInfoUpdated(sessionID: sessionID, infoDict: infoDict)
         case .partUpdated(let partDict, let delta):
             applyPartUpdated(sessionID: sessionID, partDict: partDict, delta: delta)
+        case .partDelta(let messageID, let partID, let delta):
+            applyPartDelta(sessionID: sessionID, messageID: messageID, partID: partID, delta: delta)
         case .removed(let messageID):
             applyMessageRemoved(sessionID: sessionID, messageID: messageID)
         case .partRemoved(let messageID, let partID):
@@ -57,10 +61,23 @@ final class InMemoryMessageStore: MessageStore {
         return isInRestSnapshot && !hasIncrementalInfo
     }
 
+    func hasStreamingText(sessionID: String) -> Bool {
+        guard let sessionParts = partsCache[sessionID] else { return false }
+        for messageParts in sessionParts.values {
+            for part in messageParts.values {
+                if case .text(let textPart) = part, textPart.isStreaming {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     func clear() {
         infoCache.removeAll()
         partsCache.removeAll()
         partOrder.removeAll()
+        ignoredPartIDs.removeAll()
         messageOrder.removeAll()
         baseMessages.removeAll()
     }
@@ -97,16 +114,30 @@ final class InMemoryMessageStore: MessageStore {
         if partsCache[sessionID]?[messageID] == nil { partsCache[sessionID]?[messageID] = [:] }
         if partOrder[sessionID] == nil { partOrder[sessionID] = [:] }
         if partOrder[sessionID]?[messageID] == nil { partOrder[sessionID]?[messageID] = [] }
+        if ignoredPartIDs[sessionID] == nil { ignoredPartIDs[sessionID] = [:] }
 
         let existingPart = partsCache[sessionID]?[messageID]?[partID]
         guard let resolvedPart = resolvePart(partDTO: partDTO, existingPart: existingPart, delta: delta) else {
+            // Reasoning/step/etc. — never promote their deltas into assistant text.
+            var ignored = ignoredPartIDs[sessionID]?[messageID] ?? []
+            ignored.insert(partID)
+            ignoredPartIDs[sessionID]?[messageID] = ignored
+            partsCache[sessionID]?[messageID]?.removeValue(forKey: partID)
+            partOrder[sessionID]?[messageID]?.removeAll { $0 == partID }
             return
         }
 
+        ignoredPartIDs[sessionID]?[messageID]?.remove(partID)
         if partOrder[sessionID]?[messageID]?.contains(partID) != true {
             partOrder[sessionID]?[messageID]?.append(partID)
         }
         partsCache[sessionID]?[messageID]?[partID] = resolvedPart
+    }
+
+    private func applyPartDelta(sessionID: String, messageID: String, partID: String, delta: String) {
+        if ignoredPartIDs[sessionID]?[messageID]?.contains(partID) == true { return }
+        guard case .text(let existing)? = partsCache[sessionID]?[messageID]?[partID] else { return }
+        partsCache[sessionID]?[messageID]?[partID] = .text(TextPart(text: existing.text + delta, isStreaming: true))
     }
 
     private func applyMessageRemoved(sessionID: String, messageID: String) {

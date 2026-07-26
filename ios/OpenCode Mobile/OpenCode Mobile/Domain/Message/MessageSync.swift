@@ -90,8 +90,9 @@ final class MessageSync {
         let messages = try await listMessages(sessionID, directory)
         SessionPerformanceProbe.emit("history_request_finished")
         store.replaceAll(sessionID: sessionID, messages: messages)
-        lastFingerprint[sessionID] = messageFingerprint(messages)
-        return messages
+        let merged = store.messages(sessionID: sessionID)
+        lastFingerprint[sessionID] = messageFingerprint(merged)
+        return merged
     }
 
     private func fullReloadResult(sessionID: String, directory: String?, reason: String) async -> ReloadResult {
@@ -99,8 +100,9 @@ final class MessageSync {
         do {
             let messages = try await listMessages(sessionID, directory)
             store.replaceAll(sessionID: sessionID, messages: messages)
-            lastFingerprint[sessionID] = messageFingerprint(messages)
-            return .success(messages)
+            let merged = store.messages(sessionID: sessionID)
+            lastFingerprint[sessionID] = messageFingerprint(merged)
+            return .success(merged)
         } catch {
             return .failure(error)
         }
@@ -172,6 +174,8 @@ final class MessageSync {
                     continue
                 }
                 handleMessagePartUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            case "message.part.delta":
+                handleMessagePartDelta(event: event, sessionID: sessionID, publishMessages: publishMessages)
             case "message.removed":
                 handleMessageRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
             case "message.part.removed":
@@ -185,6 +189,13 @@ final class MessageSync {
                     continue
                 }
                 handleMessagePartRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            case "session.idle":
+                await fullReloadSilent(
+                    sessionID: sessionID,
+                    directory: directory,
+                    reason: "session.idle",
+                    publishMessages: publishMessages
+                )
             default:
                 continue
             }
@@ -214,6 +225,22 @@ final class MessageSync {
         else { return }
 
         store.apply(sessionID: sessionID, patch: .partUpdated(part: partDict, delta: props["delta"]?.stringValue))
+        emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+    }
+
+    private func handleMessagePartDelta(
+        event: OpencodeEvent,
+        sessionID: String,
+        publishMessages: @escaping ([Message]) -> Void
+    ) {
+        guard let props = event.rawProperties else { return }
+        guard props["field"]?.stringValue == "text" else { return }
+        guard let messageID = props["messageID"]?.stringValue,
+              let partID = props["partID"]?.stringValue,
+              let delta = props["delta"]?.stringValue
+        else { return }
+
+        store.apply(sessionID: sessionID, patch: .partDelta(messageID: messageID, partID: partID, delta: delta))
         emitMessages(sessionID: sessionID, publishMessages: publishMessages)
     }
 
@@ -270,11 +297,15 @@ final class MessageSync {
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.workingPollIntervalMs))
             guard !Task.isCancelled else { return }
+            // Polling REST mid-stream publishes a behind snapshot and looks like the
+            // assistant message clearing then reprinting from the start.
+            if store.hasStreamingText(sessionID: sessionID) { continue }
             guard let messages = try? await listMessages(sessionID, directory) else { continue }
             let fp = messageFingerprint(messages)
             guard fp != lastFingerprint[sessionID] else { continue }
             store.replaceAll(sessionID: sessionID, messages: messages)
-            publishMessages(messages)
+            let merged = store.messages(sessionID: sessionID)
+            publishMessages(merged)
         }
     }
 

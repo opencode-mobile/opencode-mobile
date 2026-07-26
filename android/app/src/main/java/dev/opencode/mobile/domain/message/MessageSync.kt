@@ -116,6 +116,15 @@ class MessageSync(
                             val delta = event.rawProperties?.get("delta")?.jsonPrimitive?.contentOrNull
                             store.apply(sessionId, MessagePatch.PartUpdated(partJson, delta))
                         }
+                        "message.part.delta" -> {
+                            val props = event.rawProperties ?: return@collect
+                            val field = props["field"]?.jsonPrimitive?.contentOrNull
+                            if (field != "text") return@collect
+                            val messageId = props["messageID"]?.jsonPrimitive?.contentOrNull ?: return@collect
+                            val partId = props["partID"]?.jsonPrimitive?.contentOrNull ?: return@collect
+                            val delta = props["delta"]?.jsonPrimitive?.contentOrNull ?: return@collect
+                            store.apply(sessionId, MessagePatch.PartDelta(messageId, partId, delta))
+                        }
                         "message.removed" -> {
                             val messageId = event.rawProperties?.get("messageID")?.jsonPrimitive?.contentOrNull ?: return@collect
                             store.apply(sessionId, MessagePatch.Removed(messageId))
@@ -134,6 +143,13 @@ class MessageSync(
                             val messageId = event.rawProperties?.get("messageID")?.jsonPrimitive?.contentOrNull ?: return@collect
                             val partId = event.rawProperties?.get("partID")?.jsonPrimitive?.contentOrNull ?: return@collect
                             store.apply(sessionId, MessagePatch.PartRemoved(messageId, partId))
+                        }
+                        "session.idle" -> {
+                            fullReloadSilent(sessionId, directory, reason = "session.idle")?.let { reloaded ->
+                                logI("observeMessages emit session=$sessionId count=${reloaded.size} source=session.idle")
+                                send(MessageListUpdate.Messages(reloaded))
+                            }
+                            return@collect
                         }
                         else -> return@collect
                     }
@@ -156,13 +172,17 @@ class MessageSync(
             channelFlow {
                 while (true) {
                     delay(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS)
+                    // Polling REST mid-stream publishes a behind snapshot and looks like the
+                    // assistant message clearing then reprinting from the start.
+                    if (store.hasStreamingText(sessionId)) continue
                     val messages = runCatching { listMessages(sessionId, directory) }.getOrNull() ?: continue
                     val fp = messageFingerprint(messages)
                     if (fp != lastFingerprints[sessionId]) {
                         store.replaceAll(sessionId, messages)
-                        lastFingerprints[sessionId] = fp
-                        logD("observeMessages emit session=$sessionId count=${messages.size} source=poll fingerprint-changed")
-                        send(MessageListUpdate.Messages(messages))
+                        val merged = store.messages(sessionId)
+                        lastFingerprints[sessionId] = messageFingerprint(merged)
+                        logD("observeMessages emit session=$sessionId count=${merged.size} source=poll fingerprint-changed")
+                        send(MessageListUpdate.Messages(merged))
                     }
                 }
             }
@@ -188,12 +208,13 @@ class MessageSync(
                     messages = listMessages(sessionId, directory)
                 }
             store.replaceAll(sessionId, messages!!)
-            val fp = messageFingerprint(messages!!)
+            val merged = store.messages(sessionId)
+            val fp = messageFingerprint(merged)
             lastFingerprints[sessionId] = fp
             logI(
-                "fullReload session=$sessionId reason=$reason count=${messages!!.size} ms=$elapsedMs",
+                "fullReload session=$sessionId reason=$reason count=${merged.size} ms=$elapsedMs",
             )
-            return messages!!
+            return merged
         }
 
         private suspend fun fullReloadResult(
@@ -215,12 +236,13 @@ class MessageSync(
                 return ReloadResult.Failure(failure ?: IllegalStateException("Message load failed"))
             }
             store.replaceAll(sessionId, loaded)
-            val fp = messageFingerprint(loaded)
+            val merged = store.messages(sessionId)
+            val fp = messageFingerprint(merged)
             lastFingerprints[sessionId] = fp
             logI(
-                "fullReload session=$sessionId reason=$reason count=${loaded.size} ms=$elapsedMs",
+                "fullReload session=$sessionId reason=$reason count=${merged.size} ms=$elapsedMs",
             )
-            return ReloadResult.Success(loaded)
+            return ReloadResult.Success(merged)
         }
 
         private suspend fun fullReloadSilent(

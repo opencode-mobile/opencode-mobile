@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageListUpdate
+import dev.opencode.mobile.domain.message.MessagePatch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import dev.opencode.mobile.domain.message.MessagePart
@@ -33,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -294,7 +296,7 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_messagePartUpdatedWithTextDelta_appendsToExistingPart() =
+    fun observeMessages_pollDoesNotRegressStreamingText() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val eventStream = FakeForegroundEventStream()
@@ -310,18 +312,275 @@ class MessageSyncTest {
 
             eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
             advanceTimeBy(50)
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello"))
+            advanceTimeBy(50)
+            assertEquals("Hello", emissions.last().first { it.id == "msg-2" }.text)
 
-            eventStream.emit(textDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hel"))
-            eventStream.emit(textDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "lo"))
+            // Mid-stream REST snapshot is behind the live deltas (empty assistant text).
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts = listOf(MessagePart.Text(text = "", isStreaming = false)),
+                    ),
+                )
+            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 1)
+
+            assertEquals(
+                "Hello",
+                emissions.last().first { it.id == "msg-2" }.text,
+            )
+
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!"))
+            advanceTimeBy(50)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            assertEquals("Hello!", emissions.last().first { it.id == "msg-2" }.text)
+        }
+
+    @Test
+    fun observeMessages_messagePartDelta_ignoresReasoningPartDeltas() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+            eventStream.emit(reasoningPartEvent(partId = "prt-reason", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-reason", messageId = "msg-2", delta = "The user said hello."))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello!"))
             advanceTimeBy(350)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
             val msg2 = emissions.last().first { it.id == "msg-2" }
-            assertEquals(listOf("msg-1", "msg-2"), emissions.last().map { it.id })
+            assertEquals("Hello!", msg2.text)
+            assertEquals(1, msg2.parts.size)
+            assertTrue(msg2.parts.single() is MessagePart.Text)
+        }
+
+    @Test
+    fun observeMessages_sessionIdleReloadsAndClearsStreaming() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello"))
+            advanceTimeBy(50)
+            repository.messages =
+                listOf(
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Hello",
+                        parts = listOf(MessagePart.Text(text = "Hello", isStreaming = false)),
+                    ),
+                )
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceTimeBy(50)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val final = emissions.last().single()
+            assertEquals("Hello", final.text)
+            assertFalse((final.parts.single() as MessagePart.Text).isStreaming)
+            assertEquals(2, repository.listMessagesCallCount)
+        }
+
+    @Test
+    fun observeMessages_messagePartDelta_appendsStreamingText() =
+        runTest(testDispatcher) {
+            // OPE-82: server streams via dedicated message.part.delta, not delta on part.updated.
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+            // text-start: empty text part shell
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            advanceTimeBy(50)
+            // text-delta chunks
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hel"))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "lo"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val msg2 = emissions.last().first { it.id == "msg-2" }
             assertEquals("Hello", msg2.text)
             val textPart = msg2.parts.single() as MessagePart.Text
             assertTrue(textPart.isStreaming)
+        }
+
+    @Test
+    fun observeMessages_messagePartDelta_ignoresNonTextField() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hi"))
+            advanceTimeBy(50)
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!", field = "reasoning"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val msg2 = emissions.last().first { it.id == "msg-2" }
+            assertEquals("Hi", msg2.text)
+            val textPart = msg2.parts.single() as MessagePart.Text
+            assertFalse(textPart.isStreaming)
+        }
+
+    @Test
+    fun observeMessages_messagePartDelta_ignoresMissingField() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hi"))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "!", field = null))
+            advanceTimeBy(50)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val textPart = emissions.last().first { it.id == "msg-2" }.parts.single() as MessagePart.Text
+            assertEquals("Hi", textPart.text)
+            assertFalse(textPart.isStreaming)
+        }
+
+    @Test
+    fun replaceAllClearsStreamingAndMakesRestAuthoritative() {
+        val store = InMemoryMessageStore(MessageDomainAdapter())
+        store.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-2")
+                    put("role", "assistant")
+                    put("sessionID", "ses-1")
+                },
+            ),
+        )
+        store.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-1")
+                    put("messageID", "msg-2")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "")
+                },
+                delta = null,
+            ),
+        )
+        store.apply("ses-1", MessagePatch.PartDelta(messageId = "msg-2", partId = "prt-1", delta = "Hel"))
+        store.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-2",
+                    role = MessageRole.Assistant,
+                    text = "Final",
+                    parts = listOf(MessagePart.Text(text = "Final", isStreaming = false)),
+                ),
+            ),
+        )
+        store.apply("ses-1", MessagePatch.PartDelta(messageId = "msg-2", partId = "prt-1", delta = "lo"))
+
+        val msg2 = store.messages("ses-1").single { it.id == "msg-2" }
+        assertEquals("Final", msg2.text)
+        val textPart = msg2.parts.single() as MessagePart.Text
+        assertFalse(textPart.isStreaming)
+    }
+
+    @Test
+    fun observeMessages_messagePartDelta_finalPartUpdatedClearsStreaming() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val store = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    store.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            advanceTimeBy(50)
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello"))
+            advanceTimeBy(50)
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hello"))
+            advanceTimeBy(350)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val msg2 = emissions.last().first { it.id == "msg-2" }
+            assertEquals("Hello", msg2.text)
+            val textPart = msg2.parts.single() as MessagePart.Text
+            assertFalse(textPart.isStreaming)
         }
 
     @Test
@@ -389,6 +648,7 @@ class MessageSyncTest {
                     }
                 }
             advanceTimeBy(1)
+            val callsAfterInitial = repository.listMessagesCallCount
 
             repository.messages =
                 listOf(
@@ -405,7 +665,7 @@ class MessageSyncTest {
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
             assertEquals("New", emissions.last().single().text)
-            assertEquals(2, repository.listMessagesCallCount)
+            assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
         }
 
     private fun createMessageSync(
@@ -469,28 +729,44 @@ class MessageSyncTest {
         )
     }
 
-    private fun textDeltaEvent(
+    private fun reasoningPartEvent(
         partId: String,
         messageId: String,
-        delta: String,
+        text: String,
     ): OpencodeEvent {
         val partJson =
             buildJsonObject {
                 put("id", partId)
                 put("messageID", messageId)
                 put("sessionID", "ses-1")
-                put("type", "text")
+                put("type", "reasoning")
+                put("text", text)
             }
         return OpencodeEvent(
             type = "message.part.updated",
             sessionId = "ses-1",
+            rawProperties = buildJsonObject { put("part", partJson) },
+        )
+    }
+
+    private fun partDeltaEvent(
+        partId: String,
+        messageId: String,
+        delta: String,
+        field: String? = "text",
+    ): OpencodeEvent =
+        OpencodeEvent(
+            type = "message.part.delta",
+            sessionId = "ses-1",
             rawProperties =
                 buildJsonObject {
-                    put("part", partJson)
+                    put("sessionID", "ses-1")
+                    put("messageID", messageId)
+                    put("partID", partId)
+                    field?.let { put("field", it) }
                     put("delta", delta)
                 },
         )
-    }
 
     private fun toolPartEvent(
         partId: String,

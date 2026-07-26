@@ -24,6 +24,7 @@ data class OpencodeEvent(
             setOf(
                 "message.updated",
                 "message.part.updated",
+                "message.part.delta",
                 "message.part.removed",
                 "message.removed",
                 "session.status",

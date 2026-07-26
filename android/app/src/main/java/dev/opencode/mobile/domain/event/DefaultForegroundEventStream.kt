@@ -33,7 +33,7 @@ class DefaultForegroundEventStream
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
 
-        private val _events = MutableSharedFlow<OpencodeEvent>(extraBufferCapacity = 64)
+        private val _events = MutableSharedFlow<OpencodeEvent>(extraBufferCapacity = 4_096)
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
@@ -71,7 +71,9 @@ class DefaultForegroundEventStream
                                     "server.heartbeat" -> Unit
                                     else -> {
                                         markStreamConnected()
-                                        scope.launch { _events.emit(event) }
+                                        // Emit on the read coroutine so order is preserved and
+                                        // we do not spawn one job per delta under burst.
+                                        _events.emit(event)
                                     }
                                 }
                             }

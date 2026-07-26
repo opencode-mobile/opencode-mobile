@@ -20,6 +20,7 @@ class InMemoryMessageStore
         private val infoCaches = ConcurrentHashMap<String, MutableMap<String, JsonObject>>()
         private val partsCaches = ConcurrentHashMap<String, MutableMap<String, MutableMap<String, MessagePart>>>()
         private val partOrders = ConcurrentHashMap<String, MutableMap<String, MutableList<String>>>()
+        private val ignoredPartIds = ConcurrentHashMap<String, MutableMap<String, MutableSet<String>>>()
         private val messageOrders = ConcurrentHashMap<String, MutableList<String>>()
         private val baseMessages = ConcurrentHashMap<String, List<Message>>()
 
@@ -31,6 +32,7 @@ class InMemoryMessageStore
             infoCaches[sessionId]!!.clear()
             partsCaches[sessionId]!!.clear()
             partOrders[sessionId]!!.clear()
+            ignoredPartIds[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
         }
@@ -42,6 +44,7 @@ class InMemoryMessageStore
             when (patch) {
                 is MessagePatch.InfoUpdated -> applyInfoUpdated(sessionId, patch.infoJson)
                 is MessagePatch.PartUpdated -> applyPartUpdated(sessionId, patch.partJson, patch.delta)
+                is MessagePatch.PartDelta -> applyPartDelta(sessionId, patch.messageId, patch.partId, patch.delta)
                 is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
                 is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
             }
@@ -76,10 +79,18 @@ class InMemoryMessageStore
             return isInRestSnapshot && !hasIncrementalInfo
         }
 
+        override fun hasStreamingText(sessionId: String): Boolean {
+            val sessionParts = partsCaches[sessionId] ?: return false
+            return sessionParts.values.any { messageParts ->
+                messageParts.values.any { part -> part is MessagePart.Text && part.isStreaming }
+            }
+        }
+
         override fun clear() {
             infoCaches.clear()
             partsCaches.clear()
             partOrders.clear()
+            ignoredPartIds.clear()
             messageOrders.clear()
             baseMessages.clear()
         }
@@ -115,12 +126,32 @@ class InMemoryMessageStore
             val msgParts = partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             val msgPartOrder = partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
 
-            val resolvedPart = resolvePart(partDto, msgParts[partId], delta) ?: return
+            val resolvedPart = resolvePart(partDto, msgParts[partId], delta)
+            if (resolvedPart == null) {
+                // Reasoning/step/etc. — never promote their deltas into assistant text.
+                ignoredPartIds[sessionId]!!.getOrPut(messageId) { mutableSetOf() }.add(partId)
+                msgParts.remove(partId)
+                msgPartOrder.removeAll { it == partId }
+                return
+            }
 
+            ignoredPartIds[sessionId]?.get(messageId)?.remove(partId)
             if (partId !in msgPartOrder) {
                 msgPartOrder.add(partId)
             }
             msgParts[partId] = resolvedPart
+        }
+
+        private fun applyPartDelta(
+            sessionId: String,
+            messageId: String,
+            partId: String,
+            delta: String,
+        ) {
+            if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return
+            val msgParts = partsCaches[sessionId]?.get(messageId) ?: return
+            val existing = msgParts[partId] as? MessagePart.Text ?: return
+            msgParts[partId] = MessagePart.Text(text = existing.text + delta, isStreaming = true)
         }
 
         private fun applyMessageRemoved(
@@ -146,6 +177,7 @@ class InMemoryMessageStore
             infoCaches.getOrPut(sessionId) { mutableMapOf() }
             partsCaches.getOrPut(sessionId) { mutableMapOf() }
             partOrders.getOrPut(sessionId) { mutableMapOf() }
+            ignoredPartIds.getOrPut(sessionId) { mutableMapOf() }
             messageOrders.getOrPut(sessionId) { mutableListOf() }
         }
 

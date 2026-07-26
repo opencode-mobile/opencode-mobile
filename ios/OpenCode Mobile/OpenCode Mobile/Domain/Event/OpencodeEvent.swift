@@ -47,6 +47,7 @@ struct OpencodeEvent: Sendable, Equatable {
     private static let messageRefreshTypes: Set<String> = [
         "message.updated",
         "message.part.updated",
+        "message.part.delta",
         "message.part.removed",
         "message.removed",
         "session.status",

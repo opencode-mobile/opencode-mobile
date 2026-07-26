@@ -12,14 +12,18 @@ Prerequisites:
 3. Tap a session row → Session Chat opens.
 4. Confirm messages load from the server (or empty state with no seed message).
 5. Type a prompt and tap Send; confirm optimistic user bubble, then timeline reload.
-6. While a send is in flight, confirm the pending bubble stays visible if SSE or the changed-message watchdog poll refreshes the timeline before the server lists the new user message.
-7. Pull down to refresh; confirm new assistant messages appear when work completed.
-8. Navigate back and reopen the session; confirm history reloads on appear.
-9. On iOS, navigate back from Session Chat during an active reply; confirm no duplicate timeline polling for that session (leave and re-enter is enough to spot regressions).
+6. While the assistant replies, confirm its text grows incrementally rather than
+   appearing only after completion.
+7. When the session becomes idle, confirm the final text remains complete and
+   no longer shows streaming state.
+8. While a send is in flight, confirm the pending bubble stays visible if SSE or the changed-message watchdog poll refreshes the timeline before the server lists the new user message.
+9. Pull down to refresh; confirm new assistant messages appear when work completed.
+10. Navigate back and reopen the session; confirm history reloads on appear.
+11. On iOS, navigate back from Session Chat during an active reply; confirm no stale rows reappear and no duplicate timeline polling starts after re-entry.
 
 ## iOS
 
-Repeat steps 2–9 on the iOS app.
+Repeat steps 2–11 on the iOS app.
 
 ## Failure cases
 

@@ -350,6 +350,7 @@ private fun AssistantMessageContent(
                     AssistantMessageBubble(
                         text = block.text,
                         renderedMarkdown = message.renderedMarkdown.takeIf { singleTextBlock },
+                        isStreaming = message.isStreaming,
                         modifier =
                             messageActionsModifier(
                                 renderedMarkdown = message.renderedMarkdown.takeIf { singleTextBlock },
@@ -408,6 +409,7 @@ private fun AssistantMessageContent(
 private fun AssistantMessageBubble(
     text: String,
     renderedMarkdown: MarkdownDocument?,
+    isStreaming: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val bubbleModifier =
@@ -421,6 +423,7 @@ private fun AssistantMessageBubble(
             OpenCodeRenderedMarkdown(
                 document = renderedMarkdown,
                 variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
+                isStreaming = isStreaming,
                 modifier = bubbleModifier,
             )
 

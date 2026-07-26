@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 func stableMarkdownSourceHash(_ markdown: String) -> Int {
     var hash = 0x811c9dc5
@@ -12,6 +13,10 @@ func stableMarkdownSourceHash(_ markdown: String) -> Int {
 final class MessageContentPreparer: @unchecked Sendable {
     static let shared = MessageContentPreparer()
 
+    /// While streaming, skip markdown tokenization above this size and let the
+    /// bubble render plain text. Full parse still runs on the final frame.
+    static let streamingPlainTextCharacterThreshold = 8_000
+
     private let cacheLock = NSLock()
     private var cache: [CacheKey: NativeMarkdownDocument] = [:]
     private var cacheOrder: [CacheKey] = []
@@ -21,13 +26,37 @@ final class MessageContentPreparer: @unchecked Sendable {
 
     func prepareMessages(
         _ messages: [Message],
-        previousByID: [String: DisplayMessage] = [:]
+        previousByID: [String: DisplayMessage] = [:],
+        reuseStreamingDocumentAsFinalPlaceholder: Bool = false
     ) async -> [DisplayMessage] {
+        let startedAt = Date()
         var prepared: [DisplayMessage] = []
         prepared.reserveCapacity(messages.count)
+        var parsedCount = 0
+        var reusedCount = 0
+        var streamingChars = 0
         for message in messages {
-            prepared.append(await prepareMessage(message, previous: previousByID[message.id]))
+            let previous = previousByID[message.id]
+            let display = await prepareMessage(
+                message,
+                previous: previous,
+                reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder
+            )
+            prepared.append(display)
+            if messageIsStreaming(message) {
+                streamingChars = max(streamingChars, message.text.count)
+            }
+            guard display.renderedMarkdown != nil else { continue }
+            if wasReused(display: display, previous: previous) {
+                reusedCount += 1
+            } else {
+                parsedCount += 1
+            }
         }
+        let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
+        OpenCodeLog.messageContent.info(
+            "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) ms=\(elapsedMs)"
+        )
         return prepared
     }
 
@@ -44,18 +73,38 @@ final class MessageContentPreparer: @unchecked Sendable {
         )
     }
 
-    func prepareMessage(_ message: Message, previous: DisplayMessage? = nil) async -> DisplayMessage {
+    func prepareMessage(
+        _ message: Message,
+        previous: DisplayMessage? = nil,
+        reuseStreamingDocumentAsFinalPlaceholder: Bool = false
+    ) async -> DisplayMessage {
+        let isStreaming = messageIsStreaming(message)
+        // Large live replies: print plain text until the message finishes so
+        // SwiftUI is not rebuilding a growing markdown tree every publish.
+        if isStreaming,
+           !reuseStreamingDocumentAsFinalPlaceholder,
+           message.text.count >= Self.streamingPlainTextCharacterThreshold
+        {
+            return DisplayMessage(message: message, renderedMarkdown: nil)
+        }
         guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
         let document: NativeMarkdownDocument?
-        if let reusable = reusableDocument(for: message, previous: previous) {
+        if let reusable = reusableDocument(
+            for: message,
+            previous: previous,
+            reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder
+        ) {
             document = reusable
+        } else if reuseStreamingDocumentAsFinalPlaceholder {
+            // Keep the last streaming render for one frame; full TextMate runs on the follow-up.
+            document = previous?.renderedMarkdown
         } else {
             document = await parseDocument(
                 messageID: message.id,
                 text: message.text,
-                isStreaming: messageIsStreaming(message)
+                isStreaming: isStreaming
             )
         }
         return DisplayMessage(message: message, renderedMarkdown: document)
@@ -107,7 +156,11 @@ final class MessageContentPreparer: @unchecked Sendable {
         return parsed
     }
 
-    private func reusableDocument(for message: Message, previous: DisplayMessage?) -> NativeMarkdownDocument? {
+    private func reusableDocument(
+        for message: Message,
+        previous: DisplayMessage?,
+        reuseStreamingDocumentAsFinalPlaceholder: Bool
+    ) -> NativeMarkdownDocument? {
         let isStreaming = messageIsStreaming(message)
         if let existing = previous?.renderedMarkdown,
            !isStreaming,
@@ -120,7 +173,27 @@ final class MessageContentPreparer: @unchecked Sendable {
            previous.text == message.text {
             return previous.renderedMarkdown
         }
+        // Stream → final: keep the cheap streaming render until TextMate finishes.
+        if reuseStreamingDocumentAsFinalPlaceholder,
+           !isStreaming,
+           let previous,
+           previous.isStreaming,
+           previous.text == message.text {
+            return previous.renderedMarkdown
+        }
         return nil
+    }
+
+    private func wasReused(display: DisplayMessage, previous: DisplayMessage?) -> Bool {
+        guard let previous,
+              let previousDocument = previous.renderedMarkdown,
+              let document = display.renderedMarkdown
+        else {
+            return false
+        }
+        return previousDocument.sourceHash == document.sourceHash
+            && previous.text == display.text
+            && previous.isStreaming == display.isStreaming
     }
 
     private func touch(_ key: CacheKey) {

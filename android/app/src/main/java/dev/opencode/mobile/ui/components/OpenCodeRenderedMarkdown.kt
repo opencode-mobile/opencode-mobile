@@ -24,10 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
@@ -52,12 +49,9 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.isLikelyExpandable
-import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 enum class OpenCodeRenderedMarkdownVariant(
     val wireName: String,
@@ -71,11 +65,15 @@ object OpenCodeRenderedMarkdownDetector {
     fun shouldRender(text: String): Boolean = OpenCodeMarkdownDetector.shouldRender(text)
 }
 
+/** Skip expensive span painting for large fences while the message is still streaming. */
+private const val STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD = 2_000
+
 @Composable
 fun OpenCodeRenderedMarkdown(
     document: MarkdownDocument,
     variant: OpenCodeRenderedMarkdownVariant,
     modifier: Modifier = Modifier,
+    isStreaming: Boolean = false,
     initialHeight: Dp = 1.dp,
     collapsedMaxHeight: Dp? = null,
     expanded: Boolean = true,
@@ -110,6 +108,7 @@ fun OpenCodeRenderedMarkdown(
             MarkdownBlockView(
                 block = block,
                 variant = variant,
+                isStreaming = isStreaming,
                 onLinkTap = onLinkTap,
             )
         }
@@ -120,6 +119,7 @@ fun OpenCodeRenderedMarkdown(
 private fun MarkdownBlockView(
     block: MarkdownBlock,
     variant: OpenCodeRenderedMarkdownVariant,
+    isStreaming: Boolean,
     onLinkTap: ((String) -> Unit)?,
 ) {
     when (block) {
@@ -169,7 +169,7 @@ private fun MarkdownBlockView(
                     ListRow(marker = "${block.start + index}.", inlines = item.inlines, onLinkTap = onLinkTap)
                 }
             }
-        is MarkdownBlock.CodeBlock -> CodeBlockView(block)
+        is MarkdownBlock.CodeBlock -> CodeBlockView(block, isStreaming = isStreaming)
         is MarkdownBlock.DiffBlock -> DiffBlockView(block)
         is MarkdownBlock.Table -> TableView(block, onLinkTap)
         MarkdownBlock.ThematicBreak ->
@@ -209,10 +209,22 @@ private fun ListRow(
 }
 
 @Composable
-private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
+private fun CodeBlockView(
+    block: MarkdownBlock.CodeBlock,
+    isStreaming: Boolean,
+) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
-    val annotated = rememberCodeAnnotatedString(block.code, block.spans, colors)
+    val usePlainStreamingText =
+        isStreaming && block.code.length >= STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD
+    val annotated =
+        remember(block.code, block.spans, colors, usePlainStreamingText) {
+            if (usePlainStreamingText) {
+                AnnotatedString(block.code)
+            } else {
+                buildCodeAnnotatedString(block.code, block.spans, colors)
+            }
+        }
     Box(
         modifier =
             Modifier
@@ -557,37 +569,13 @@ private fun blockSpacingFor(variant: OpenCodeRenderedMarkdownVariant): Dp =
     }
 
 @Composable
-private fun rememberCodeAnnotatedString(
-    code: String,
-    spans: List<CodeSpan>,
-    colors: CodeColors,
-): AnnotatedString {
-    var annotated by remember(code, spans) { mutableStateOf<AnnotatedString?>(null) }
-    LaunchedEffect(code, spans, colors) {
-        annotated =
-            withContext(Dispatchers.Default) {
-                buildCodeAnnotatedString(code, spans, colors)
-            }
-    }
-    return annotated ?: remember(code) { AnnotatedString(code) }
-}
-
-@Composable
 private fun rememberDiffLineAnnotatedStrings(
     lines: List<dev.opencode.mobile.markdown.DiffLine>,
     colors: CodeColors,
 ): List<AnnotatedString> {
-    var annotatedLines by remember(lines) { mutableStateOf<List<AnnotatedString>?>(null) }
-    LaunchedEffect(lines, colors) {
-        annotatedLines =
-            withContext(Dispatchers.Default) {
-                lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
-            }
+    return remember(lines, colors) {
+        lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
     }
-    return annotatedLines
-        ?: remember(lines) {
-            lines.map { line -> AnnotatedString(line.text) }
-        }
 }
 
 @Composable
@@ -595,12 +583,7 @@ private fun rememberMarkdownAnnotatedString(
     inlines: List<MarkdownInline>,
     colors: MarkdownTextColors,
 ): AnnotatedString {
-    var annotated by remember(inlines) { mutableStateOf<AnnotatedString?>(null) }
-    LaunchedEffect(inlines, colors) {
-        annotated =
-            withContext(Dispatchers.Default) {
-                buildMarkdownAnnotatedString(inlines, colors)
-            }
+    return remember(inlines, colors) {
+        buildMarkdownAnnotatedString(inlines, colors)
     }
-    return annotated ?: remember(inlines) { AnnotatedString(plainTextFromMarkdownInlines(inlines)) }
 }

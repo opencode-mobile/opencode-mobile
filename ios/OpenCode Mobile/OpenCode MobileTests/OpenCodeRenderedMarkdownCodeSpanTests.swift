@@ -59,6 +59,38 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(prepared.renderedMarkdown?.sourceHash == 17)
     }
 
+    @Test func preparerReusesStreamingDocumentAsFinalPlaceholder() async {
+        let document = NativeMarkdownDocument(sourceHash: 99, blocks: [.paragraph([.text("Partial")])])
+        let previous =
+            DisplayMessage(
+                message: Message(
+                    id: "message-1",
+                    role: .assistant,
+                    text: "# Partial",
+                    parts: [.text(TextPart(text: "# Partial", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                renderedMarkdown: document
+            )
+        let prepared = await MessageContentPreparer.shared.prepareMessage(
+            Message(
+                id: "message-1",
+                role: .assistant,
+                text: "# Partial",
+                parts: [.text(TextPart(text: "# Partial", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            previous: previous,
+            reuseStreamingDocumentAsFinalPlaceholder: true
+        )
+
+        #expect(prepared.renderedMarkdown?.sourceHash == 99)
+    }
+
     @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() {
         let snippet = """
         // HTTP Client with interceptors, retry logic
