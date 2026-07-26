@@ -12,7 +12,16 @@ Ship repository **and** wire Session Chat (history + async send), matching Sessi
 
 Optimistic user bubble, then full `listMessages` reload after `prompt_async` succeeds. On failure, show error and remove the optimistic row.
 
-While `isSending`, Live Store-driven reloads in Session Chat use a **quiet refresh** path in the Screen Model: they merge server messages with any pending optimistic row (until the server returns matching user text) and do not clear `isSending` or the error banner. Explicit load, pull-to-refresh, and the post-send reload still replace the timeline and clear the sending flag.
+While `isSending`, `MessageSync`-driven reloads in Session Chat use a **quiet
+refresh** path in the Screen Model: they merge server messages with any pending
+optimistic row (until the server returns matching user text) and do not clear
+`isSending` or the error banner. Explicit load, pull-to-refresh, and the
+post-send reload still replace the timeline and clear the sending flag.
+
+Timeline application may coalesce callback-free live frames, but must not
+discard explicit refresh or post-send completion work. Android keeps those
+required applications in FIFO order while retaining only the newest
+callback-free live frame; iOS tracks and lifecycle-cancels its apply task.
 
 ## Provider errors on assistant messages
 
@@ -42,12 +51,16 @@ Hand-written Ktor / URLSession clients aligned with `api/opencode-messages.opena
 - Android: `MessageModule` (Hilt).
 - iOS: Factory registrations in `AppContainer`.
 
-## Refresh without SSE
+## REST refresh and watchdog
 
 Pull-to-refresh and reload when Session Chat appears. `MessageSync` owns the
 foreground changed-message watchdog poll (see
 [Foreground Event Stream](../foreground-event-stream/decisions.md)), not the
 repository transport adapter.
+
+Both platforms expose `server.connected` to the domain stream. `MessageSync`
+debounces the synchronization requested by that server event; a synthetic
+`stream.reconnected` cancels the pending debounce and reloads immediately.
 
 ## SSE message part updates
 
@@ -61,15 +74,19 @@ marks it streaming. Missing or non-text fields are ignored. Tool updates replace
 the whole rendered tool part from the latest state object; tool state fields are
 not merged incrementally.
 
-When a part update targets a message that only exists from the last REST
-snapshot, `MessageSync` performs a full message reload instead of merging
-locally. The domain message model intentionally does not expose server part IDs,
-so this keeps REST-seeded rows correct without inventing unstable local part
-identity.
+When a part update targets a message present in the last REST snapshot,
+`MessageSync` performs a full message reload instead of merging locally. This
+remains true if `message.updated` has already created incremental info for that
+row. The domain message model intentionally does not expose server part IDs, so
+this keeps every REST-seeded sibling part intact without inventing unstable
+local part identity.
 
 Polling pauses while text is streaming. A final part update clears the streaming
 flag; `session.idle` reloads the authoritative REST snapshot so a missed final
-part event cannot leave a message streaming indefinitely.
+part event cannot leave a message streaming indefinitely. A failed idle reload
+clears the local streaming flag and resumes watchdog polling. REST results are
+applied only when the store revision is unchanged since the request started, so
+an in-flight poll cannot overwrite a newer SSE delta.
 
 `message.updated` can arrive before visible parts. The store may record
 that message slot internally, but Session Chat should not render a brand-new
@@ -77,11 +94,26 @@ empty message row. The row becomes visible when a renderable text/tool part or
 error fallback exists. Existing visible rows may stay visible from the last REST
 snapshot while incremental parts catch up.
 
-Message streams should not emit an initial empty list while the first REST
-load is still in flight. They should also suppress duplicate unchanged timeline
-emissions from SSE events, so placeholder-only events do not repaint or blank the
-chat.
+Message streams subscribe and buffer foreground events before the first REST
+load. They should not emit an initial empty list while that load is still in
+flight, and deltas received during it are applied after the snapshot is seeded.
+They also suppress duplicate unchanged timeline emissions from SSE events, so
+placeholder-only events do not repaint or blank the chat.
 
 Reasoning parts are hidden from normal chat text for v1. A future collapsible
 reasoning component can surface them without changing the message repository
 contract.
+
+## Display preparation and pacing
+
+`DisplayMessagePipeline` is the only path from synchronized domain messages to
+timeline-ready display messages. Streaming snapshots use a short quiet window
+with a fixed maximum batch age, so dense token bursts reduce repaint pressure
+without progressively slowing long replies.
+
+Large histories publish a usable plain-first timeline before markdown
+enrichment. Enrichment proceeds newest-first as cancellable follow-up work; a
+new live snapshot cancels stale enrichment rather than waiting behind it.
+Large live markdown and code remain plain while streaming, and large finalized
+Android annotated strings are built off the UI thread. Final content is still
+enriched once the message stops streaming.

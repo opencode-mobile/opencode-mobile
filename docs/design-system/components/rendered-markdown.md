@@ -11,10 +11,11 @@ surfaces, not for general web content.
 
 - Variants: `assistantMessage`, `outgoingMessage`, `standalone`.
 - States: default, streaming, collapsed, expanded, empty.
-- Required content: raw markdown text and the variant.
+- Required content: a parsed native markdown document and the variant. Raw
+  markdown remains owned by the message/domain layer.
 - Optional content: link-tap callback, streaming flag, expanded/collapsed state
-  for outgoing messages. Legacy initial-height callbacks are compatibility
-  shims while chat height caches are removed.
+  for outgoing messages, and platform-specific height reporting used by
+  timeline layout.
 
 ## Token Usage
 
@@ -38,6 +39,15 @@ Chat callers should mount it whenever markdown markers exist, including simple
 inline code, emphasis, and links. Messages with no markdown markers stay on the
 plain native text path.
 
+Streaming callers pass the streaming state through the public API. Large live
+messages skip markdown preparation and remain native plain text until the final
+message snapshot. When a prepared streaming document already exists, large live
+code fences render as plain monospace text instead of painting all syntax spans.
+Finalization may briefly reuse the last streaming document while the complete
+TextMate document is prepared. Large finalized code, diff, and inline
+attributed-string construction must stay off the UI thread; a temporary plain
+representation is preferable to blocking scroll or input.
+
 Raw HTML is not interpreted. Remote images, arbitrary navigation, network loads,
 WebView runtime, and broad JavaScript bridges are not part of the component.
 Link taps are owned by native code and only `http`/`https` URLs may leave the
@@ -54,9 +64,12 @@ visible rather than losing content below the collapsed height.
 
 - iOS: implemented with SwiftUI text, stacks, scroll views, and attributed text.
   It consumes `OpenCodeMarkdownCore.parseMarkdownJson` and decodes the shared
-  render tree into Swift structs.
+  render tree into Swift structs. Message preparation and document caching run
+  outside the UI actor; rendering remains SwiftUI-owned.
 - Android: implemented with Compose text, stacks, scroll views, and attributed
-  strings consuming `shared/markdown-core` directly.
+  strings consuming `shared/markdown-core` directly. Large finalized
+  attributed strings are prepared on a background dispatcher before Compose
+  replaces the temporary plain representation.
 
 ## Previews
 

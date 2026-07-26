@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +35,7 @@ class DisplayMessagePipeline(
             var previousById = emptyMap<String, DisplayMessage>()
             var pendingMessages: List<Message>? = null
             var debounceJob: Job? = null
+            var enrichmentJob: Job? = null
             var lastPublishedAt: TimeSource.Monotonic.ValueTimeMark? = null
             val timeSource = TimeSource.Monotonic
 
@@ -58,9 +60,10 @@ class DisplayMessagePipeline(
 
             suspend fun enrichHistoryIncrementally(messages: List<Message>) {
                 val byId =
-                    messages.associate { message ->
-                        message.id to DisplayMessage(message = message, renderedMarkdown = null)
-                    }.toMutableMap()
+                    messages
+                        .associate { message ->
+                            message.id to DisplayMessage(message = message, renderedMarkdown = null)
+                        }.toMutableMap()
                 // Newest first: open settles near the bottom, so enrich what the
                 // user is looking at before older off-screen history.
                 for (message in messages.asReversed()) {
@@ -76,8 +79,8 @@ class DisplayMessagePipeline(
                 }
             }
 
-            fun scheduleStreamingPublish() {
-                debounceJob?.cancel()
+            suspend fun scheduleStreamingPublish() {
+                debounceJob?.cancelAndJoin()
                 debounceJob =
                     launch {
                         delay(STREAMING_PREPARE_DEBOUNCE_MS.milliseconds)
@@ -92,12 +95,16 @@ class DisplayMessagePipeline(
                 messageSync.observeMessages(sessionId, directory).collect { update ->
                     when (update) {
                         is MessageListUpdate.LoadFailed -> {
-                            debounceJob?.cancel()
+                            debounceJob?.cancelAndJoin()
                             debounceJob = null
+                            enrichmentJob?.cancelAndJoin()
+                            enrichmentJob = null
                             pendingMessages = null
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
                         is MessageListUpdate.Messages -> {
+                            enrichmentJob?.cancelAndJoin()
+                            enrichmentJob = null
                             if (hasStreamingDelta(update.messages)) {
                                 // Keep the latest snapshot. Publish after a short quiet window,
                                 // but also flush when the max batch age is exceeded so dense
@@ -110,7 +117,7 @@ class DisplayMessagePipeline(
                                         ?.let { it >= STREAMING_PREPARE_MAX_BATCH_MS }
                                         ?: true
                                 if (dueForMaxBatch) {
-                                    debounceJob?.cancel()
+                                    debounceJob?.cancelAndJoin()
                                     debounceJob = null
                                     val latest = pendingMessages ?: update.messages
                                     pendingMessages = null
@@ -119,7 +126,7 @@ class DisplayMessagePipeline(
                                     scheduleStreamingPublish()
                                 }
                             } else {
-                                debounceJob?.cancel()
+                                debounceJob?.cancelAndJoin()
                                 debounceJob = null
                                 pendingMessages = null
                                 val hadStreamingPrevious = previousById.values.any { it.isStreaming }
@@ -131,8 +138,11 @@ class DisplayMessagePipeline(
                                     publishPrepared(update.messages)
                                 } else if (shouldPlainFirstHistoryPublish(update.messages, previousById)) {
                                     publishPrepared(update.messages, skipMarkdown = true)
-                                    delay(48.milliseconds)
-                                    enrichHistoryIncrementally(update.messages)
+                                    enrichmentJob =
+                                        launch {
+                                            delay(48.milliseconds)
+                                            enrichHistoryIncrementally(update.messages)
+                                        }
                                 } else {
                                     publishPrepared(update.messages)
                                 }
@@ -142,6 +152,7 @@ class DisplayMessagePipeline(
                 }
             } finally {
                 debounceJob?.cancel()
+                enrichmentJob?.cancel()
                 pendingMessages?.let { publishPrepared(it) }
             }
         }
@@ -159,11 +170,6 @@ class DisplayMessagePipeline(
             message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
         }
 }
-
-/** Flat max-batch interval; size argument retained for call-site compatibility. */
-internal fun streamingPrepareMaxBatchMs(
-    @Suppress("UNUSED_PARAMETER") streamingChars: Int,
-): Long = STREAMING_PREPARE_MAX_BATCH_MS
 
 internal fun shouldPlainFirstHistoryPublish(
     messages: List<Message>,

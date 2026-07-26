@@ -48,11 +48,16 @@ internal fun shouldShowScrollToEnd(
         return trailingGap > revealThresholdPx
     }
 
-    // Bottom anchor left the viewport. On a reverse timeline that means the user
-    // scrolled away from end — including when a taller-than-viewport newest
-    // message still fills the screen (iOS uses content-offset distance; item
-    // bounds alone cannot express that case).
-    return true
+    val newestMessage =
+        visibleItems.firstOrNull { it.index == newestMessageIndex(messageCount) }
+            ?: return true
+    val distanceFromBottom =
+        newestMessage.offset +
+            newestMessage.size +
+            afterContentPadding +
+            BOTTOM_ANCHOR_HEIGHT_PX -
+            viewportEndOffset
+    return distanceFromBottom > revealThresholdPx
 }
 
 fun LazyListState.shouldShowScrollToEnd(
@@ -161,5 +166,4 @@ suspend fun LazyListState.scrollToTimelineEndAfterLayoutChange(messageCount: Int
     }
 }
 
-private fun LazyListItemInfo.toTimelineVisibleItem(): TimelineVisibleItem =
-    TimelineVisibleItem(index = index, offset = offset, size = size)
+private fun LazyListItemInfo.toTimelineVisibleItem(): TimelineVisibleItem = TimelineVisibleItem(index = index, offset = offset, size = size)

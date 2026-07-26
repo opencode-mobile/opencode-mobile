@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
@@ -24,7 +22,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
@@ -49,8 +51,11 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.isLikelyExpandable
+import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 enum class OpenCodeRenderedMarkdownVariant(
@@ -67,6 +72,7 @@ object OpenCodeRenderedMarkdownDetector {
 
 /** Skip expensive span painting for large fences while the message is still streaming. */
 private const val STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD = 2_000
+private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
 
 @Composable
 fun OpenCodeRenderedMarkdown(
@@ -218,13 +224,12 @@ private fun CodeBlockView(
     val usePlainStreamingText =
         isStreaming && block.code.length >= STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD
     val annotated =
-        remember(block.code, block.spans, colors, usePlainStreamingText) {
-            if (usePlainStreamingText) {
-                AnnotatedString(block.code)
-            } else {
-                buildCodeAnnotatedString(block.code, block.spans, colors)
-            }
-        }
+        rememberCodeAnnotatedString(
+            code = block.code,
+            spans = block.spans,
+            colors = colors,
+            forcePlain = usePlainStreamingText,
+        )
     Box(
         modifier =
             Modifier
@@ -324,7 +329,14 @@ private fun TableRowView(
             ) {
                 MarkdownInlineText(
                     inlines = cell.inlines,
-                    style = if (isHeader) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium) else MaterialTheme.typography.bodyMedium,
+                    style =
+                        if (isHeader) {
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Medium,
+                            )
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        },
                     onLinkTap = onLinkTap,
                 )
             }
@@ -450,8 +462,7 @@ internal fun buildCodeAnnotatedString(
                 compareBy<CodeSpan> { it.role.stylePriority() }
                     .thenByDescending { it.end - it.start }
                     .thenBy { it.start },
-            )
-            .forEach { span ->
+            ).forEach { span ->
                 val start = span.start.coerceIn(0, code.length)
                 val end = span.end.coerceIn(start, code.length)
                 if (start < end) {
@@ -569,13 +580,45 @@ private fun blockSpacingFor(variant: OpenCodeRenderedMarkdownVariant): Dp =
     }
 
 @Composable
+private fun rememberCodeAnnotatedString(
+    code: String,
+    spans: List<CodeSpan>,
+    colors: CodeColors,
+    forcePlain: Boolean,
+): AnnotatedString {
+    if (forcePlain) return remember(code) { AnnotatedString(code) }
+    if (code.length < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
+        return remember(code, spans, colors) { buildCodeAnnotatedString(code, spans, colors) }
+    }
+    var annotated by remember(code, spans, colors) { mutableStateOf<AnnotatedString?>(null) }
+    LaunchedEffect(code, spans, colors) {
+        annotated =
+            withContext(Dispatchers.Default) {
+                buildCodeAnnotatedString(code, spans, colors)
+            }
+    }
+    return annotated ?: remember(code) { AnnotatedString(code) }
+}
+
+@Composable
 private fun rememberDiffLineAnnotatedStrings(
     lines: List<dev.opencode.mobile.markdown.DiffLine>,
     colors: CodeColors,
 ): List<AnnotatedString> {
-    return remember(lines, colors) {
-        lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
+    val totalCharacters = remember(lines) { lines.sumOf { it.text.length } }
+    if (totalCharacters < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
+        return remember(lines, colors) {
+            lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
+        }
     }
+    var annotatedLines by remember(lines, colors) { mutableStateOf<List<AnnotatedString>?>(null) }
+    LaunchedEffect(lines, colors) {
+        annotatedLines =
+            withContext(Dispatchers.Default) {
+                lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
+            }
+    }
+    return annotatedLines ?: remember(lines) { lines.map { line -> AnnotatedString(line.text) } }
 }
 
 @Composable
@@ -583,7 +626,18 @@ private fun rememberMarkdownAnnotatedString(
     inlines: List<MarkdownInline>,
     colors: MarkdownTextColors,
 ): AnnotatedString {
-    return remember(inlines, colors) {
-        buildMarkdownAnnotatedString(inlines, colors)
+    val plainText = remember(inlines) { plainTextFromMarkdownInlines(inlines) }
+    if (plainText.length < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
+        return remember(inlines, colors) {
+            buildMarkdownAnnotatedString(inlines, colors)
+        }
     }
+    var annotated by remember(inlines, colors) { mutableStateOf<AnnotatedString?>(null) }
+    LaunchedEffect(inlines, colors) {
+        annotated =
+            withContext(Dispatchers.Default) {
+                buildMarkdownAnnotatedString(inlines, colors)
+            }
+    }
+    return annotated ?: remember(plainText) { AnnotatedString(plainText) }
 }

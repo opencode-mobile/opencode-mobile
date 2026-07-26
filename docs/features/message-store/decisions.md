@@ -30,11 +30,21 @@ reloads. The event stream does not call the repository directly.
 - Timeline polling pauses while a text part is streaming so a lagging REST
   snapshot cannot clear-and-reprint the live reply. A final full-part update
   clears streaming normally; `session.idle` performs an authoritative REST
-  reload as the fallback finalization path.
+  reload as the fallback finalization path. If that reload fails, the store
+  still clears its streaming flags so watchdog polling resumes and can recover
+  the authoritative result later.
+- Observation starts buffering foreground events before the initial REST load.
+  This closes the startup window where a non-replayed SSE delta could otherwise
+  arrive while history is loading and be lost.
+- Every initial, explicit, event-driven, and watchdog REST replacement is
+  revision-gated. If an SSE mutation lands while the request is in flight, the
+  stale response is discarded rather than overwriting newer incremental state.
 - `replaceAll` always clears incremental caches and streaming flags. Part IDs
   are private to the SSE cache and are not retained in REST domain messages, so
   an update or removal targeting a REST-seeded row uses one full reload rather
   than replacing an incomplete subset of the row's parts.
+- Android serializes store reads and mutations per store instance so nested
+  message/part collections are never read while another coroutine mutates them.
 
 Legacy `delta` on `message.part.updated` remains supported in the store for
 older fixtures, but production streaming uses `message.part.delta`.
@@ -54,15 +64,19 @@ then enriches **one markdown message at a time, newest first** (utility QoS /
 single-thread worker, with a short yield between publishes) so the bottom of
 the timeline (where open settles) paints markdown before older off-screen
 history, and scrolling stays responsive instead of freezing through a
-multi-second batch TextMate pass. On iOS, markdown
+multi-second batch TextMate pass. Enrichment runs as cancellable follow-up work:
+a newer live snapshot cancels it immediately instead of waiting behind the
+remaining history parse. On iOS, markdown
 parse must stay `nonisolated`: the target sets `SWIFT_DEFAULT_ACTOR_ISOLATION =
 MainActor`, so an unmarked parser would hop TextMate back onto the main thread
 even inside `Task.detached`. Session Chat timelines coalesce-latest
 while apply is in flight (iOS uses a tracked, lifecycle-cancelled apply task
-with `Task.yield`; Android uses `conflate()`). Large streaming replies (≥8k
+with `Task.yield`; Android preserves explicit/post-send applies in a FIFO queue
+while coalescing only callback-free live frames). Large streaming replies (≥8k
 chars) skip markdown preparation and render plain text until the message
 finishes; large streaming code fences (≥2k chars) also render as plain monospace
-until highlight runs on the final frame. See
+until highlight runs on the final frame. Android also constructs large
+finalized annotated strings off the UI thread. See
 [plan.md](./plan.md#where-markdown-runs) for the full data flow.
 
 `RenderedMarkdownMapper` in the UI layer is removed.
@@ -80,7 +94,7 @@ Android `SseDataLineParser` matches iOS: flush each complete JSON `data:`
 payload without requiring a blank event separator, ignore `:` comments, and
 request `Accept-Encoding: identity` so framing stays line-oriented.
 `DefaultForegroundEventStream` emits on the SSE read coroutine (ordered,
-no per-delta `launch`) with a larger SharedFlow buffer so dense
+no per-delta `launch`) with a 4,096-event SharedFlow buffer so dense
 `message.part.delta` bursts do not spawn thousands of emit jobs.
 
 ## Logging

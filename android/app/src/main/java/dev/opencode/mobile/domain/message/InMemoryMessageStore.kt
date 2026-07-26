@@ -23,8 +23,17 @@ class InMemoryMessageStore
         private val ignoredPartIds = ConcurrentHashMap<String, MutableMap<String, MutableSet<String>>>()
         private val messageOrders = ConcurrentHashMap<String, MutableList<String>>()
         private val baseMessages = ConcurrentHashMap<String, List<Message>>()
+        private val revisions = ConcurrentHashMap<String, Long>()
 
+        @Synchronized
         override fun replaceAll(
+            sessionId: String,
+            messages: List<Message>,
+        ) {
+            replaceAllLocked(sessionId, messages)
+        }
+
+        private fun replaceAllLocked(
             sessionId: String,
             messages: List<Message>,
         ) {
@@ -35,8 +44,10 @@ class InMemoryMessageStore
             ignoredPartIds[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
+            bumpRevision(sessionId)
         }
 
+        @Synchronized
         override fun apply(
             sessionId: String,
             patch: MessagePatch,
@@ -48,8 +59,10 @@ class InMemoryMessageStore
                 is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
                 is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
             }
+            bumpRevision(sessionId)
         }
 
+        @Synchronized
         override fun messages(sessionId: String): List<Message> {
             val infos = infoCaches[sessionId] ?: return emptyList()
             val parts = partsCaches[sessionId] ?: return emptyList()
@@ -70,15 +83,13 @@ class InMemoryMessageStore
             }
         }
 
-        override fun isBaseOnlyMessage(
+        @Synchronized
+        override fun isRestSeededMessage(
             sessionId: String,
             messageId: String,
-        ): Boolean {
-            val isInRestSnapshot = baseMessages[sessionId]?.any { it.id == messageId } == true
-            val hasIncrementalInfo = infoCaches[sessionId]?.containsKey(messageId) == true
-            return isInRestSnapshot && !hasIncrementalInfo
-        }
+        ): Boolean = baseMessages[sessionId]?.any { it.id == messageId } == true
 
+        @Synchronized
         override fun hasStreamingText(sessionId: String): Boolean {
             val sessionParts = partsCaches[sessionId] ?: return false
             return sessionParts.values.any { messageParts ->
@@ -86,6 +97,36 @@ class InMemoryMessageStore
             }
         }
 
+        @Synchronized
+        override fun revision(sessionId: String): Long = revisions[sessionId] ?: 0L
+
+        @Synchronized
+        override fun replaceAllIfRevision(
+            sessionId: String,
+            messages: List<Message>,
+            expectedRevision: Long,
+        ): Boolean {
+            if (revision(sessionId) != expectedRevision) return false
+            replaceAllLocked(sessionId, messages)
+            return true
+        }
+
+        @Synchronized
+        override fun finishStreamingText(sessionId: String) {
+            var changed = false
+            for (messageParts in partsCaches[sessionId]?.values.orEmpty()) {
+                for (entry in messageParts.entries) {
+                    val text = entry.value as? MessagePart.Text ?: continue
+                    if (text.isStreaming) {
+                        entry.setValue(text.copy(isStreaming = false))
+                        changed = true
+                    }
+                }
+            }
+            if (changed) bumpRevision(sessionId)
+        }
+
+        @Synchronized
         override fun clear() {
             infoCaches.clear()
             partsCaches.clear()
@@ -93,6 +134,7 @@ class InMemoryMessageStore
             ignoredPartIds.clear()
             messageOrders.clear()
             baseMessages.clear()
+            revisions.clear()
         }
 
         private fun applyInfoUpdated(
@@ -161,6 +203,7 @@ class InMemoryMessageStore
             infoCaches[sessionId]?.remove(messageId)
             partsCaches[sessionId]?.remove(messageId)
             partOrders[sessionId]?.remove(messageId)
+            ignoredPartIds[sessionId]?.remove(messageId)
             messageOrders[sessionId]?.removeAll { it == messageId }
         }
 
@@ -171,6 +214,10 @@ class InMemoryMessageStore
         ) {
             partsCaches[sessionId]?.get(messageId)?.remove(partId)
             partOrders[sessionId]?.get(messageId)?.removeAll { it == partId }
+            ignoredPartIds[sessionId]?.get(messageId)?.remove(partId)
+            if (ignoredPartIds[sessionId]?.get(messageId)?.isEmpty() == true) {
+                ignoredPartIds[sessionId]?.remove(messageId)
+            }
         }
 
         private fun ensureCaches(sessionId: String) {
@@ -179,6 +226,10 @@ class InMemoryMessageStore
             partOrders.getOrPut(sessionId) { mutableMapOf() }
             ignoredPartIds.getOrPut(sessionId) { mutableMapOf() }
             messageOrders.getOrPut(sessionId) { mutableListOf() }
+        }
+
+        private fun bumpRevision(sessionId: String) {
+            revisions[sessionId] = (revisions[sessionId] ?: 0L) + 1L
         }
 
         private fun resolvePart(

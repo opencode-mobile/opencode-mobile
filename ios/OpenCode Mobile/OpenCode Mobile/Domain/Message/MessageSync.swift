@@ -12,6 +12,7 @@ final class MessageSync {
     private let listMessages: MessageListFetcher
     private let store: InMemoryMessageStore
     private let eventStream: any ForegroundEventStream
+    private let pollIntervalMs: Int
 
     private var observationCache: [ObservationKey: SharedLiveObservation<MessageListUpdate>] = [:]
     private var lastFingerprint: [String: String] = [:]
@@ -19,11 +20,13 @@ final class MessageSync {
     init(
         listMessages: @escaping MessageListFetcher,
         store: InMemoryMessageStore,
-        eventStream: any ForegroundEventStream
+        eventStream: any ForegroundEventStream,
+        pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs
     ) {
         self.listMessages = listMessages
         self.store = store
         self.eventStream = eventStream
+        self.pollIntervalMs = pollIntervalMs
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -53,9 +56,14 @@ final class MessageSync {
         directory: String?,
         yield: @escaping (MessageListUpdate) -> Void
     ) async {
-        func publishMessages(_ messages: [Message]) {
+        // Register before the initial REST request. AsyncStream buffers events that
+        // arrive while history is loading, closing the part-shell/delta loss window.
+        let eventUpdates = eventStream.events()
+
+        let publishMessages: @MainActor @Sendable ([Message]) -> Void = { [weak self] messages in
+            guard let self else { return }
             yield(.messages(messages))
-            lastFingerprint[sessionID] = messageFingerprint(messages)
+            self.lastFingerprint[sessionID] = self.messageFingerprint(messages)
         }
 
         switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "initial-subscribe") {
@@ -70,6 +78,7 @@ final class MessageSync {
         async let eventLoop: Void = runEventRefreshLoop(
             sessionID: sessionID,
             directory: directory,
+            eventUpdates: eventUpdates,
             publishMessages: publishMessages
         )
         async let pollLoop: Void = runTimelinePollLoop(
@@ -87,9 +96,14 @@ final class MessageSync {
 
     private func fullReloadOrThrow(sessionID: String, directory: String?, reason: String) async throws -> [Message] {
         SessionPerformanceProbe.emit("history_request_started")
+        let expectedRevision = store.revision(sessionID: sessionID)
         let messages = try await listMessages(sessionID, directory)
         SessionPerformanceProbe.emit("history_request_finished")
-        store.replaceAll(sessionID: sessionID, messages: messages)
+        _ = store.replaceAllIfRevision(
+            sessionID: sessionID,
+            messages: messages,
+            expectedRevision: expectedRevision
+        )
         let merged = store.messages(sessionID: sessionID)
         lastFingerprint[sessionID] = messageFingerprint(merged)
         return merged
@@ -97,9 +111,14 @@ final class MessageSync {
 
     private func fullReloadResult(sessionID: String, directory: String?, reason: String) async -> ReloadResult {
         SessionPerformanceProbe.emit("history_request_started")
+        let expectedRevision = store.revision(sessionID: sessionID)
         do {
             let messages = try await listMessages(sessionID, directory)
-            store.replaceAll(sessionID: sessionID, messages: messages)
+            _ = store.replaceAllIfRevision(
+                sessionID: sessionID,
+                messages: messages,
+                expectedRevision: expectedRevision
+            )
             let merged = store.messages(sessionID: sessionID)
             lastFingerprint[sessionID] = messageFingerprint(merged)
             return .success(merged)
@@ -112,7 +131,7 @@ final class MessageSync {
         sessionID: String,
         directory: String?,
         reason: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) async {
         switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: reason) {
         case .success(let messages):
@@ -125,12 +144,13 @@ final class MessageSync {
     private func runEventRefreshLoop(
         sessionID: String,
         directory: String?,
-        publishMessages: @escaping ([Message]) -> Void
+        eventUpdates: AsyncStream<OpencodeEvent>,
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) async {
         var debounceTask: Task<Void, Never>?
         defer { debounceTask?.cancel() }
 
-        for await event in eventStream.events() {
+        for await event in eventUpdates {
             if event.type == "stream.reconnected" {
                 debounceTask?.cancel()
                 debounceTask = nil
@@ -164,11 +184,11 @@ final class MessageSync {
             case "message.updated":
                 handleMessageUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
             case "message.part.updated":
-                if requiresFullReloadForBaseOnlyPartUpdate(event: event, sessionID: sessionID) {
+                if requiresFullReloadForRestSeededPartUpdate(event: event, sessionID: sessionID) {
                     await fullReloadSilent(
                         sessionID: sessionID,
                         directory: directory,
-                        reason: "message.part.updated-base-only",
+                        reason: "message.part.updated-rest-seeded",
                         publishMessages: publishMessages
                     )
                     continue
@@ -179,23 +199,24 @@ final class MessageSync {
             case "message.removed":
                 handleMessageRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
             case "message.part.removed":
-                if requiresFullReloadForBaseOnlyPartRemoval(event: event, sessionID: sessionID) {
+                if requiresFullReloadForRestSeededPartRemoval(event: event, sessionID: sessionID) {
                     await fullReloadSilent(
                         sessionID: sessionID,
                         directory: directory,
-                        reason: "message.part.removed-base-only",
+                        reason: "message.part.removed-rest-seeded",
                         publishMessages: publishMessages
                     )
                     continue
                 }
                 handleMessagePartRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
             case "session.idle":
-                await fullReloadSilent(
-                    sessionID: sessionID,
-                    directory: directory,
-                    reason: "session.idle",
-                    publishMessages: publishMessages
-                )
+                switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "session.idle") {
+                case .success(let messages):
+                    publishMessages(messages)
+                case .failure:
+                    store.finishStreamingText(sessionID: sessionID)
+                    emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+                }
             default:
                 continue
             }
@@ -205,7 +226,7 @@ final class MessageSync {
     private func handleMessageUpdated(
         event: OpencodeEvent,
         sessionID: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties,
               let infoDict = props["info"]?.dictionaryValue
@@ -218,7 +239,7 @@ final class MessageSync {
     private func handleMessagePartUpdated(
         event: OpencodeEvent,
         sessionID: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties,
               let partDict = props["part"]?.dictionaryValue
@@ -231,7 +252,7 @@ final class MessageSync {
     private func handleMessagePartDelta(
         event: OpencodeEvent,
         sessionID: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties else { return }
         guard props["field"]?.stringValue == "text" else { return }
@@ -247,7 +268,7 @@ final class MessageSync {
     private func handleMessageRemoved(
         event: OpencodeEvent,
         sessionID: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) {
         guard let messageID = event.rawProperties?["messageID"]?.stringValue else { return }
         store.apply(sessionID: sessionID, patch: .removed(messageID: messageID))
@@ -257,7 +278,7 @@ final class MessageSync {
     private func handleMessagePartRemoved(
         event: OpencodeEvent,
         sessionID: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties,
               let messageID = props["messageID"]?.stringValue,
@@ -268,21 +289,21 @@ final class MessageSync {
         emitMessages(sessionID: sessionID, publishMessages: publishMessages)
     }
 
-    private func requiresFullReloadForBaseOnlyPartUpdate(event: OpencodeEvent, sessionID: String) -> Bool {
+    private func requiresFullReloadForRestSeededPartUpdate(event: OpencodeEvent, sessionID: String) -> Bool {
         guard let partDict = event.rawProperties?["part"]?.dictionaryValue,
               let messageID = partDict["messageID"]?.stringValue
         else { return false }
-        return store.isBaseOnlyMessage(sessionID: sessionID, messageID: messageID)
+        return store.isRestSeededMessage(sessionID: sessionID, messageID: messageID)
     }
 
-    private func requiresFullReloadForBaseOnlyPartRemoval(event: OpencodeEvent, sessionID: String) -> Bool {
+    private func requiresFullReloadForRestSeededPartRemoval(event: OpencodeEvent, sessionID: String) -> Bool {
         guard let messageID = event.rawProperties?["messageID"]?.stringValue else { return false }
-        return store.isBaseOnlyMessage(sessionID: sessionID, messageID: messageID)
+        return store.isRestSeededMessage(sessionID: sessionID, messageID: messageID)
     }
 
     private func emitMessages(
         sessionID: String,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) {
         let messages = store.messages(sessionID: sessionID)
         guard markChanged(sessionID: sessionID, messages: messages) else { return }
@@ -292,18 +313,23 @@ final class MessageSync {
     private func runTimelinePollLoop(
         sessionID: String,
         directory: String?,
-        publishMessages: @escaping ([Message]) -> Void
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.workingPollIntervalMs))
+            try? await Task.sleep(for: .milliseconds(pollIntervalMs))
             guard !Task.isCancelled else { return }
             // Polling REST mid-stream publishes a behind snapshot and looks like the
             // assistant message clearing then reprinting from the start.
             if store.hasStreamingText(sessionID: sessionID) { continue }
+            let expectedRevision = store.revision(sessionID: sessionID)
             guard let messages = try? await listMessages(sessionID, directory) else { continue }
             let fp = messageFingerprint(messages)
             guard fp != lastFingerprint[sessionID] else { continue }
-            store.replaceAll(sessionID: sessionID, messages: messages)
+            guard store.replaceAllIfRevision(
+                sessionID: sessionID,
+                messages: messages,
+                expectedRevision: expectedRevision
+            ) else { continue }
             let merged = store.messages(sessionID: sessionID)
             publishMessages(merged)
         }

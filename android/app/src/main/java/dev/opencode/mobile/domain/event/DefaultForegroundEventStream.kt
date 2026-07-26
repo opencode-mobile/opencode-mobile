@@ -67,6 +67,7 @@ class DefaultForegroundEventStream
                                     "server.connected" -> {
                                         markStreamConnected()
                                         retryAttempt = 0
+                                        _events.emit(event)
                                     }
                                     "server.heartbeat" -> Unit
                                     else -> {

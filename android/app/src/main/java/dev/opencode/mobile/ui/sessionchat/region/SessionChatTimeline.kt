@@ -7,7 +7,6 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
@@ -42,7 +41,8 @@ class SessionChatTimeline(
     private var boundWorktree: String? = null
     private var observeJob: Job? = null
     private var transformJob: Job? = null
-    private var pendingDisplayApply: PendingDisplayApply? = null
+    private val pendingRequiredDisplayApplies = ArrayDeque<PendingDisplayApply>()
+    private var pendingLiveDisplayApply: PendingDisplayApply? = null
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
     private var pendingBaselineSignatures: Map<String, String> = emptyMap()
@@ -55,7 +55,8 @@ class SessionChatTimeline(
         if (boundSessionId == sessionId && boundWorktree == worktree) return
         observeJob?.cancel()
         transformJob?.cancel()
-        pendingDisplayApply = null
+        pendingRequiredDisplayApplies.clear()
+        pendingLiveDisplayApply = null
         boundSessionId = sessionId
         boundWorktree = worktree
         mergePendingWhileSending = false
@@ -296,29 +297,30 @@ class SessionChatTimeline(
     ) {
         observeJob =
             scope.launch {
-                messageRepository.observeDisplayMessages(sessionId, worktree)
+                messageRepository
+                    .observeDisplayMessages(sessionId, worktree)
                     // Drop intermediate snapshots while apply/composition is busy so long
                     // streams do not replay buffered frames after the server finishes.
                     .conflate()
                     .collect { update ->
-                    if (!isCurrentBinding(sessionId, worktree)) return@collect
-                    when (update) {
-                        is DisplayMessageListUpdate.LoadFailed -> {
-                            logE("live display messages failed session=$sessionId", update.error)
-                            applyLoadError(update.error)
-                        }
-                        is DisplayMessageListUpdate.Messages -> {
-                            logD("live display messages session=$sessionId count=${update.messages.size}")
-                            applyLoadedDisplayMessages(
-                                displayMessages = update.messages,
-                                sourceSessionId = sessionId,
-                                sourceWorktree = worktree,
-                                fromQuietRefresh = true,
-                                source = "display-pipeline",
-                            )
+                        if (!isCurrentBinding(sessionId, worktree)) return@collect
+                        when (update) {
+                            is DisplayMessageListUpdate.LoadFailed -> {
+                                logE("live display messages failed session=$sessionId", update.error)
+                                applyLoadError(update.error)
+                            }
+                            is DisplayMessageListUpdate.Messages -> {
+                                logD("live display messages session=$sessionId count=${update.messages.size}")
+                                applyLoadedDisplayMessages(
+                                    displayMessages = update.messages,
+                                    sourceSessionId = sessionId,
+                                    sourceWorktree = worktree,
+                                    fromQuietRefresh = true,
+                                    source = "display-pipeline",
+                                )
+                            }
                         }
                     }
-                }
             }
     }
 
@@ -332,12 +334,11 @@ class SessionChatTimeline(
         onPublished: (() -> Unit)? = null,
     ) {
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
-        lastLoadedMessages = displayMessages.map { it.message }
         logI(
             "applyLoadedDisplayMessages start session=$sourceSessionId source=$source " +
                 "count=${displayMessages.size} quietRefresh=$fromQuietRefresh refreshing=$isRefreshing",
         )
-        pendingDisplayApply =
+        val pending =
             PendingDisplayApply(
                 displayMessages = displayMessages,
                 sourceSessionId = sourceSessionId,
@@ -347,18 +348,33 @@ class SessionChatTimeline(
                 source = source,
                 onPublished = onPublished,
             )
+        if (fromQuietRefresh && onPublished == null) {
+            // Live frames are visual snapshots: keep only the latest.
+            pendingLiveDisplayApply = pending
+        } else {
+            // Explicit loads/refreshes and post-send completion carry state
+            // transitions or callbacks that must never be discarded.
+            // A live snapshot already waiting here was submitted before this
+            // required apply and must not repaint older state afterward.
+            pendingLiveDisplayApply = null
+            pendingRequiredDisplayApplies.addLast(pending)
+        }
         if (transformJob?.isActive == true) return
         transformJob =
             scope.launch {
                 do {
                     while (true) {
-                        val pending = pendingDisplayApply ?: break
-                        pendingDisplayApply = null
+                        val pending =
+                            if (pendingRequiredDisplayApplies.isNotEmpty()) {
+                                pendingRequiredDisplayApplies.removeFirst()
+                            } else {
+                                pendingLiveDisplayApply?.also { pendingLiveDisplayApply = null }
+                            } ?: break
                         publishDisplayMessages(pending)
                     }
                     // Cover the race where a newer snapshot arrives after the inner
                     // loop observes null but before this job goes inactive.
-                } while (pendingDisplayApply != null)
+                } while (pendingRequiredDisplayApplies.isNotEmpty() || pendingLiveDisplayApply != null)
             }
     }
 
@@ -382,6 +398,7 @@ class SessionChatTimeline(
         val onPublished = pending.onPublished
 
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+        lastLoadedMessages = displayMessages.map { it.message }
         val stateSnapshot = _state.value
         val previousById = stateSnapshot.messages.associateBy { it.id }
         val structuralStartedAt = System.nanoTime()

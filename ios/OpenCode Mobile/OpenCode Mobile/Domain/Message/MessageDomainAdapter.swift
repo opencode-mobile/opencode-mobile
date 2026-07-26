@@ -49,7 +49,8 @@ struct MessageDomainAdapter: Sendable {
     func messagePart(from dto: MessagePartDTO) -> MessagePart? {
         switch dto.type {
         case "text":
-            return .text(TextPart(text: dto.text ?? "", isStreaming: false))
+            guard let text = dto.text else { return nil }
+            return .text(TextPart(text: text, isStreaming: false))
         case "file":
             guard let url = dto.url,
                   let mime = dto.mime?.lowercased(),

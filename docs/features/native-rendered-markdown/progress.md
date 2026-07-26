@@ -8,24 +8,31 @@
 - iOS runtime: native SwiftUI renderer implemented and WebView asset removed.
 - Shared KMP: render-tree parser module added and wired into Android and iOS.
 - Highlighter: Android runtime now has a Joni-backed TextMate path; iOS now uses
-  the shared tokenizer with a hybrid Apple regex backend that layers explicit
-  Oniguruma anchor handling on Kotlin `Regex`. Android/Joni JavaScript regression
-  fixtures and open-rule invariants are active. Full Shiki golden parity remains
-  open.
+  the shared tokenizer with the libonig-backed
+  `OpenCodeLibOnigRegexBackend`. The hybrid Kotlin `Regex` path is retained for
+  regression comparison only. Android/Joni JavaScript regression fixtures and
+  open-rule invariants are active. Full Shiki golden parity remains open.
 - Parse threading: Android and iOS now parse markdown off the UI thread,
-  keep the last rendered document visible while newer content parses, debounce
-  streaming updates, and defer TextMate highlighting until streaming completes.
-- Parse ownership: Session Chat Screen Models now produce
-  `renderedMarkdown` documents; `OpenCodeRenderedMarkdown` is render-only and
-  Component Gallery uses pre-parsed mock documents.
-- Transform-before-publish: Session Chat keeps the timeline in `Loading` until
-  the full message list is markdown-enriched, and live streaming updates use a
-  debounced enrich step before state is published (no post-publish parse jobs).
+  reuse the last rendered document where safe, batch streaming updates on a
+  16 ms quiet window with a flat 48 ms maximum age, and keep very large
+  streaming messages plain until finalization.
+- Parse ownership: the domain `DisplayMessagePipeline` and
+  `MessageContentPreparer` produce `renderedMarkdown` documents before Session
+  Chat applies display snapshots. Session Chat Screen Models consume those
+  documents, `OpenCodeRenderedMarkdown` is render-only, and Component Gallery
+  uses pre-parsed mock documents.
+- Staged publication: small histories are transformed before their first
+  publish. Histories with at least 4,000 markdown-candidate characters publish
+  the complete plain-text timeline first, then enrich markdown messages
+  newest-first with cancellable work and yields between snapshots. Live
+  streaming updates retain transform-before-publish semantics.
 - Outgoing overflow: structural markdown content retains collapse/expand;
   long wrapped inline markdown stays fully visible when no expand control can
   be offered.
-- Performance pass: preserves all-at-once chat loading and the JSON bridge
-  while removing avoidable native render allocations and span-list copies.
+- Performance pass: preserves the JSON bridge and final TextMate result while
+  staging expensive cold-history and large-stream work, removing avoidable
+  native render allocations, and building large finalized Android annotated
+  strings outside composition.
 - Performance measurement: Session Chat ViewModel benchmarks load 20 rendered
   markdown messages with 3,000 total TypeScript lines through the production
   highlighter path on each platform.
@@ -33,10 +40,14 @@
 ## Performance Profiling Synthesis
 
 - Date: 2026-06-26.
-- Call chain: native Screen Model → `RenderedMarkdownMapper.enrichRows()` →
+- Current orchestration call chain: `DisplayMessagePipeline` →
+  `MessageContentPreparer` →
   KMP `OpenCodeMarkdownParser.parse()` → fenced-code `parseFence()` →
   `OpenCodeSyntaxHighlighter.highlight()` →
   `OpenCodeTextMateNativeTokenizer.tokenize()`.
+- The 2026-06-23 fixture timings below used the earlier Screen Model /
+  `RenderedMarkdownMapper.enrichRows()` orchestration. The KMP parser and
+  tokenizer hot path measured by that fixture is unchanged.
 - Almost all cold-path CPU time lives in KMP. Native app code orchestrates
   when to parse and caches results; SwiftUI and Compose rendering are separate
   from the measured markdown-preparation gap.
@@ -57,7 +68,9 @@
      the full render-tree JSON; Android calls `OpenCodeMarkdownParser.parse()`
      directly.
   3. **Runtime (tertiary):** KMP on JVM/ART vs Kotlin/Native framework.
-- Enrichment scope: iOS and Android parse the full timeline on load.
+- Enrichment scope: iOS and Android expose the full timeline immediately and
+  eventually parse every markdown-bearing message. Large histories enrich
+  incrementally rather than blocking the initial usable frame.
   See `docs/features/native-rendered-markdown/parity-gaps.md`.
 
 ## Completed
@@ -179,14 +192,22 @@
 - Wired iOS SwiftUI renderer to `OpenCodeMarkdownCore.parseMarkdownJson` and
   removed the temporary Swift parser/highlighter mirror.
 - Moved markdown parsing off the UI thread on Android and iOS with
-  stale-while-revalidate rendering, 40ms streaming debounce, semantic fallback
-  highlighting while `isStreaming`, and Android Joni regex compile caching.
-- Moved markdown parse ownership into Session Chat Screen Models with
-  `RenderedMarkdownMapper`, a render-only `OpenCodeRenderedMarkdown`, and gallery
-  mock documents.
-- Moved Session Chat markdown enrichment into a transform-before-publish step
-  with `RenderedMarkdownMapper.enrichRows`, removing post-publish parse jobs and
-  the interim raw-markdown chat bubble fallback.
+  stale-while-revalidate rendering, streaming update batching, deferred
+  highlighting for large live content, and Android Joni regex compile caching.
+- Historical: moved markdown parse ownership out of the renderer and into
+  Session Chat Screen Models through `RenderedMarkdownMapper`, leaving
+  `OpenCodeRenderedMarkdown` render-only and gallery previews backed by mock
+  documents.
+- Historical: moved Session Chat markdown enrichment into a
+  transform-before-publish Screen Model step, removing renderer-owned
+  post-publish parse jobs and the interim raw-markdown chat bubble fallback.
+- 2026-07-26 / OPE-82: Replaced all-at-once preparation for large cold histories
+  with a complete plain-text first frame and cancellable newest-first
+  enrichment in the domain display pipeline, which now owns preparation instead
+  of Session Chat Screen Models. Added flat 16/48 ms streaming pacing, plain
+  rendering for very large live messages and code fences, final-document
+  handoff without a blank frame, and background construction of large Android
+  attributed strings.
 - Unified Android highlight entry points through
   `OpenCodeBundledJoniMarkdownHighlighter` for session chat, component gallery,
   and the KMP platform provider; `Application.onCreate` initializes grammar

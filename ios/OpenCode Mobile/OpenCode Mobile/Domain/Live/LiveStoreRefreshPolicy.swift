@@ -1,8 +1,8 @@
 import Foundation
 
 enum LiveStoreRefreshPolicy {
-    static let messageDebounceMs = 300
-    static let sessionDebounceMs = 500
-    static let statusDebounceMs = 300
-    static let workingPollIntervalMs = 10_000
+    nonisolated static let messageDebounceMs = 300
+    nonisolated static let sessionDebounceMs = 500
+    nonisolated static let statusDebounceMs = 300
+    nonisolated static let workingPollIntervalMs = 10_000
 }

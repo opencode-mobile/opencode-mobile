@@ -56,8 +56,10 @@
 - **2026-06-27:** Refactored Screen Model into `SessionChatTimeline`,
   `SessionChatComposer`, `SessionInfo`, and a thin `SessionChatViewModel`
   facade. All `SessionChatViewModelTest` cases pass.
-- **2026-06-27:** Timeline subscribes to `MessageLiveStore` only; pull-to-refresh,
-  post-send reload, and error retry use `refreshMessages`. No duplicate REST on bind.
+- **2026-06-27, amended 2026-07-26:** Timeline observation remains behind
+  `MessageRepository`; the current display path uses
+  `observeDisplayMessages` / `refreshDisplayMessages`, backed by `MessageSync`
+  and `DisplayMessagePipeline`. No duplicate REST on bind.
 - **2026-06-28:** Model-selection cache load/save and initial selection resolution
   live in `SessionChatComposer` on both platforms. See
   [Keep SessionChatViewModel as a thin facade](decisions.md#keep-sessionchatviewmodel-as-a-thin-facade).
@@ -89,8 +91,9 @@
 - **2026-06-27:** Refactored Screen Model into `SessionChatTimeline`,
   `SessionChatComposer`, `SessionInfo`, and a thin `SessionChatViewModel`
   facade (mirrors Android). All `SessionChatViewModelTests` pass.
-- **2026-06-27:** Message observation moved from ViewModel into Timeline via
-  `MessageLiveStore`; `loadMessages()` loads catalog only (matches screen `.task` flow).
+- **2026-06-27, amended 2026-07-26:** Message observation moved from ViewModel
+  into Timeline through `MessageRepository.observeDisplayMessages`;
+  `loadMessages()` loads catalog only (matches screen `.task` flow).
 - **2026-06-28:** Model-selection cache moved from `SessionChatViewModel` into
   `SessionChatComposer` (parity with Android).
 - **2026-07-06 / OPE-30:** Production `SessionChatTimelineView` uses the same
@@ -120,11 +123,19 @@
 - Production sticky-bottom follow handles markdown/render growth, streaming row
   height changes, composer/keyboard viewport changes, and status/notice rows
   while follow is armed.
+- **2026-07-26 / OPE-82:** Large markdown histories now publish the complete
+  plain-text history first and enrich markdown newest-first without blocking
+  live snapshots. Streaming display snapshots coalesce to the newest available
+  frame while explicit refresh and post-send completion publications remain
+  ordered and non-droppable.
 - **2026-07-20 / OPE-67 (iOS):** Follow is driven by `UIScrollView` content-size
   growth and message appends through one cancellable scroll-to-end job. iOS no
   longer uses `layoutSignature` or `scrollPosition(id:)` for auto-follow.
-- Android scroll math includes bottom content padding and performs the same
-  one-time initial scroll-to-latest as iOS.
+- Android scroll math includes the visible tail of the newest row, bottom
+  content padding, and the bottom anchor. The pill waits until the true
+  distance-from-end threshold is crossed even if the anchor has just left the
+  viewport, and the initial view still performs the same one-time
+  scroll-to-latest as iOS.
 - Production Session Chat uses non-animated exact end correction for layout
   growth, viewport shrink while armed, and message appends; only the manual
   scroll-to-end pill animates.
@@ -149,14 +160,22 @@
 - Fixture: the manually named **Big Session** on the local opencode server. It
   contains a large syntax-highlighted code response and is used only as a local
   performance repro, not as a deterministic CI fixture.
+- [`scripts/analyze-ios-stream-pacing.py`](../../../scripts/analyze-ios-stream-pacing.py)
+  scores `MessageContentPreparer` publish logs for long live replies. It requires
+  late-stream samples at or above 15,000 characters and fails when their p90
+  publish gap exceeds 120 ms.
 
-### Current (2026-06-27, libonig + full-history enrichment)
+### Last measured baseline (2026-06-27, libonig + full-history enrichment)
 
 - Manual device test: **~2.5 s** cold open to styled timeline on iOS, matching
   Android for the same session.
 - iOS and Android both enrich the full merged timeline on load.
 - Warm revisits remain fast because the in-memory render-document cache is keyed
   by message text.
+- OPE-82 changed large cold histories to plain-first, newest-first incremental
+  enrichment on 2026-07-26. No replacement cold-open measurement has been
+  recorded yet, so the ~2.5 s result above is retained as historical baseline,
+  not claimed for the new staged pipeline.
 
 ### Historical (2026-06-24, hybrid regex backend, staged window)
 
@@ -175,20 +194,26 @@
   visible window **24.221 s**. Bottleneck was KMP TextMate tokenization on the
   non-Oniguruma iOS regex shim.
 
-### Hot path (unchanged)
+### Markdown hot path
 
-`SessionChatViewModel` → `RenderedMarkdownMapper.enrichRows()` →
+`DisplayMessagePipeline` → `MessageContentPreparer` →
 `OpenCodeMarkdownParser.parse()` (Android) / JSON bridge (iOS) →
 `parseFence()` → `OpenCodeSyntaxHighlighter.highlight()` →
 `OpenCodeTextMateNativeTokenizer.tokenize()`.
+
+The parser/tokenizer portion is unchanged from the earlier Screen Model /
+`RenderedMarkdownMapper` benchmark path; OPE-82 moved orchestration and
+publication ownership into the domain display pipeline.
 
 ### Experiments tried
 
 - removing the duplicate foreground history fetch while the live store reloads;
 - cache-first history publication;
 - moving history DTO adaptation off the main actor;
-- publishing raw/unstyled rows before rich rendering (rejected: unresponsive and
-  degraded styling);
+- publishing raw/unstyled rows followed by one blocking full-history render
+  (rejected: unresponsive and degraded styling);
+- publishing the complete plain-text history followed by cancellable,
+  newest-first incremental enrichment (shipped in OPE-82);
 - preparing only a latest-message window (rejected 2026-06-27: Android parity);
 - **libonig backend** (shipped): restored acceptable Big Session cold open.
 
@@ -196,3 +221,5 @@
 
 - virtualize or collapse large code blocks for the first frame;
 - slim or bypass the iOS JSON bridge if it shows up on other profiles.
+- capture a deterministic cold-open measurement for the staged history
+  pipeline.

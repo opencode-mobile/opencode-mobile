@@ -25,6 +25,8 @@
 
 ## Performance Work Preserves the Current Display Pipeline
 
+- Status: superseded on 2026-07-26 by **Stage Expensive Display Preparation**
+  below.
 - Decision: optimize native renderer allocations and shared span processing
   without changing all-at-once Session Chat loading, full TextMate
   highlighting, or the iOS JSON boundary.
@@ -38,6 +40,28 @@
   identifies those as the primary iOS/Android gap, not block parsing or native
   UI layout. Reconsider preserving the JSON boundary and deferring an iOS
   Oniguruma backend once code-block virtualization has been benchmarked.
+
+## Stage Expensive Display Preparation
+
+- Decision: keep the shared parser and final native render tree, but stage work
+  that would block chat interaction. Streaming snapshots use a 16 ms quiet
+  window with a flat 48 ms maximum batch age; messages at or above 8,000
+  streaming characters stay plain until finalization. Initial histories with at
+  least 4,000 markdown-candidate characters publish all rows as plain text,
+  then enrich markdown-bearing messages newest-first with cancellation and
+  yields between publications.
+- Reason: parsing and publishing every token-sized snapshot wastes TextMate and
+  native annotation work, while one all-at-once cold-history parse delays
+  scrolling and live updates. Flat pacing prevents longer replies from becoming
+  progressively less responsive.
+- Consequence: source text and history scope are unchanged. Finalized messages
+  still converge on the complete TextMate-rendered document. Android constructs
+  large finalized annotated strings outside composition; the remaining iOS
+  synchronous attributed-string construction is tracked in
+  [parity gaps](parity-gaps.md#final-native-annotation-construction).
+- Date: 2026-07-26.
+- Revisit when: deterministic device benchmarks justify different thresholds or
+  incremental parser support eliminates the need for plain placeholders.
 
 ## Markdown Parse Hot Path Lives In KMP
 

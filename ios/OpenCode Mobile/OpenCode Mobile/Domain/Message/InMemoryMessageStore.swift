@@ -11,14 +11,20 @@ final class InMemoryMessageStore: MessageStore {
     private var ignoredPartIDs: [String: [String: Set<String>]] = [:]
     private var messageOrder: [String: [String]] = [:]
     private var baseMessages: [String: [Message]] = [:]
+    private var revisions: [String: UInt64] = [:]
 
     func replaceAll(sessionID: String, messages: [Message]) {
+        replaceAllLocked(sessionID: sessionID, messages: messages)
+    }
+
+    private func replaceAllLocked(sessionID: String, messages: [Message]) {
         infoCache[sessionID] = [:]
         partsCache[sessionID] = [:]
         partOrder[sessionID] = [:]
         ignoredPartIDs[sessionID] = [:]
         messageOrder[sessionID] = messages.map(\.id)
         baseMessages[sessionID] = messages
+        bumpRevision(sessionID: sessionID)
     }
 
     func apply(sessionID: String, patch: MessagePatch) {
@@ -34,6 +40,7 @@ final class InMemoryMessageStore: MessageStore {
         case .partRemoved(let messageID, let partID):
             applyPartRemoved(sessionID: sessionID, messageID: messageID, partID: partID)
         }
+        bumpRevision(sessionID: sessionID)
     }
 
     func messages(sessionID: String) -> [Message] {
@@ -55,10 +62,8 @@ final class InMemoryMessageStore: MessageStore {
         }
     }
 
-    func isBaseOnlyMessage(sessionID: String, messageID: String) -> Bool {
-        let isInRestSnapshot = baseMessages[sessionID]?.contains { $0.id == messageID } == true
-        let hasIncrementalInfo = infoCache[sessionID]?[messageID] != nil
-        return isInRestSnapshot && !hasIncrementalInfo
+    func isRestSeededMessage(sessionID: String, messageID: String) -> Bool {
+        baseMessages[sessionID]?.contains { $0.id == messageID } == true
     }
 
     func hasStreamingText(sessionID: String) -> Bool {
@@ -73,6 +78,36 @@ final class InMemoryMessageStore: MessageStore {
         return false
     }
 
+    func revision(sessionID: String) -> UInt64 {
+        revisions[sessionID] ?? 0
+    }
+
+    func replaceAllIfRevision(
+        sessionID: String,
+        messages: [Message],
+        expectedRevision: UInt64
+    ) -> Bool {
+        guard revision(sessionID: sessionID) == expectedRevision else { return false }
+        replaceAllLocked(sessionID: sessionID, messages: messages)
+        return true
+    }
+
+    func finishStreamingText(sessionID: String) {
+        var changed = false
+        guard var sessionParts = partsCache[sessionID] else { return }
+        for (messageID, var messageParts) in sessionParts {
+            for (partID, part) in messageParts {
+                guard case .text(let text) = part, text.isStreaming else { continue }
+                messageParts[partID] = .text(TextPart(text: text.text, isStreaming: false))
+                changed = true
+            }
+            sessionParts[messageID] = messageParts
+        }
+        guard changed else { return }
+        partsCache[sessionID] = sessionParts
+        bumpRevision(sessionID: sessionID)
+    }
+
     func clear() {
         infoCache.removeAll()
         partsCache.removeAll()
@@ -80,6 +115,7 @@ final class InMemoryMessageStore: MessageStore {
         ignoredPartIDs.removeAll()
         messageOrder.removeAll()
         baseMessages.removeAll()
+        revisions.removeAll()
     }
 
     private func applyInfoUpdated(sessionID: String, infoDict: [String: AnySendable]) {
@@ -144,12 +180,17 @@ final class InMemoryMessageStore: MessageStore {
         infoCache[sessionID]?.removeValue(forKey: messageID)
         partsCache[sessionID]?.removeValue(forKey: messageID)
         partOrder[sessionID]?.removeValue(forKey: messageID)
+        ignoredPartIDs[sessionID]?.removeValue(forKey: messageID)
         messageOrder[sessionID]?.removeAll { $0 == messageID }
     }
 
     private func applyPartRemoved(sessionID: String, messageID: String, partID: String) {
         partsCache[sessionID]?[messageID]?.removeValue(forKey: partID)
         partOrder[sessionID]?[messageID]?.removeAll { $0 == partID }
+        ignoredPartIDs[sessionID]?[messageID]?.remove(partID)
+        if ignoredPartIDs[sessionID]?[messageID]?.isEmpty == true {
+            ignoredPartIDs[sessionID]?.removeValue(forKey: messageID)
+        }
     }
 
     private func decodeInfo(from dict: [String: AnySendable]) -> MessageInfoDTO? {
@@ -192,6 +233,10 @@ final class InMemoryMessageStore: MessageStore {
 
     private func hasRenderableContent(_ message: Message) -> Bool {
         !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.parts.isEmpty
+    }
+
+    private func bumpRevision(sessionID: String) {
+        revisions[sessionID, default: 0] &+= 1
     }
 
     private func anySendableToJSON(_ value: AnySendable) -> Any {

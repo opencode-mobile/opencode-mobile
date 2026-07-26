@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted, amended by the Message Store refactor.
 
 ## Context
 
@@ -25,19 +25,23 @@ Plausible alternatives were:
 
 ## Decision
 
-Keep CRUD **Session Repository** and **Message Repository** as suspend-only HTTP
-integration. Add three Live Store types:
+Keep foreground refresh policy out of Screen Models. Session lists and status
+use dedicated Live Store types:
 
-- `MessageLiveStore` — scoped message timeline observation;
 - `SessionStatusLiveStore` — bulk status map per worktree (`directory`);
 - `SessionLiveStore` — session list observation per worktree.
 
-Live Stores inject `ForegroundEventStream`, own debounce/reconnect/watchdog poll
-policy, and expose scoped streams with subscriber-driven lifecycle
-(`WhileSubscribed(5000)` on Android). Screen Models must not depend on
-`ForegroundEventStream` directly for domain refresh after migration. The home
-Screen Model may still observe stream **connection state** for the live-updates
-banner because that state is UI chrome, not data refresh policy.
+Message observation now uses `MessageSync` and `DisplayMessagePipeline` behind
+the `MessageRepository` read API rather than a separate `MessageLiveStore`.
+`MessageSync` owns the SSE merge, reconnect/finalization reloads, and watchdog
+poll; `DisplayMessagePipeline` owns prepared display-message pacing.
+
+These domain synchronization components inject `ForegroundEventStream`, own
+their refresh policy, and expose scoped streams with subscriber-driven
+lifecycle (`WhileSubscribed(5000)` on Android). Screen Models must not depend
+on `ForegroundEventStream` directly for domain refresh. The home Screen Model
+may still observe stream **connection state** for the live-updates banner
+because that state is UI chrome, not data refresh policy.
 
 Optimistic send bubbles, `isSending`, composer state, and quiet refresh merge
 remain Screen Model responsibilities.
@@ -48,6 +52,9 @@ remain Screen Model responsibilities.
   Models simulating SSE.
 - New live features should add or extend Live Stores instead of wiring SSE in UI
   layer code.
-- Repositories stay aligned with OpenAPI routes and future codegen.
-- Cross-platform parity requires mirrored Live Store APIs on iOS and Android.
-- Live Stores add types and DI wiring beyond the original thin-repository model.
+- Transport adapters stay aligned with OpenAPI routes and future codegen;
+  `MessageRepository` additionally exposes the domain observation boundary.
+- Cross-platform parity requires mirrored Live Store and message-sync behavior
+  on iOS and Android.
+- Domain synchronization components add types and DI wiring beyond the original
+  thin-repository model.

@@ -2,17 +2,10 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
+@MainActor
 struct DisplayMessagePipelinePacingTests {
-    @Test func streamingMaxBatchStaysFlatAsMessageGrows() {
-        let small = streamingPrepareMaxBatch(forStreamingChars: 1_000)
-        let medium = streamingPrepareMaxBatch(forStreamingChars: 10_000)
-        let large = streamingPrepareMaxBatch(forStreamingChars: 30_000)
-        let huge = streamingPrepareMaxBatch(forStreamingChars: 80_000)
-
-        #expect(small == .milliseconds(48))
-        #expect(medium == small)
-        #expect(large == small)
-        #expect(huge == small)
+    @Test func streamingMaxBatchUsesConfiguredDuration() {
+        #expect(streamingPrepareMaxBatchDuration == .milliseconds(48))
     }
 
     @Test func largeStreamingMessagesSkipMarkdownPreparation() async {
@@ -48,7 +41,7 @@ struct DisplayMessagePipelinePacingTests {
         #expect(!finished.isStreaming)
     }
 
-    @Test fun largeHistoryTriggersPlainFirstPublishGate() {
+    @Test func largeHistoryTriggersPlainFirstPublishGate() {
         let text = String(repeating: "# Heading\n\nSome prose with `code`. ", count: 200)
         #expect(text.count >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold)
         let messages = [

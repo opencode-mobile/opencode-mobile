@@ -10,6 +10,55 @@ nonisolated func stableMarkdownSourceHash(_ markdown: String) -> Int {
     return hash
 }
 
+nonisolated private struct MessageMarkdownCacheKey: Hashable, Sendable {
+    let messageID: String
+    let textHash: Int
+    let textLength: Int
+    let isStreaming: Bool
+}
+
+nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private let maxEntries: Int
+    private var values: [MessageMarkdownCacheKey: NativeMarkdownDocument] = [:]
+    private var order: [MessageMarkdownCacheKey] = []
+
+    init(maxEntries: Int) {
+        self.maxEntries = maxEntries
+    }
+
+    func value(for key: MessageMarkdownCacheKey) -> NativeMarkdownDocument? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let value = values[key] else { return nil }
+        touch(key)
+        return value
+    }
+
+    func insertIfAbsent(
+        _ document: NativeMarkdownDocument,
+        for key: MessageMarkdownCacheKey
+    ) -> NativeMarkdownDocument {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = values[key] {
+            touch(key)
+            return existing
+        }
+        values[key] = document
+        touch(key)
+        while order.count > maxEntries {
+            values.removeValue(forKey: order.removeFirst())
+        }
+        return document
+    }
+
+    private func touch(_ key: MessageMarkdownCacheKey) {
+        order.removeAll { $0 == key }
+        order.append(key)
+    }
+}
+
 final class MessageContentPreparer: @unchecked Sendable {
     static let shared = MessageContentPreparer()
 
@@ -21,10 +70,7 @@ final class MessageContentPreparer: @unchecked Sendable {
     /// publish a plain-text frame first so the timeline is usable before TextMate.
     static let historyPlainFirstMarkdownCharacterThreshold = 4_000
 
-    private let cacheLock = NSLock()
-    private var cache: [CacheKey: NativeMarkdownDocument] = [:]
-    private var cacheOrder: [CacheKey] = []
-    private let maxCacheEntries = 32
+    nonisolated private let documentCache = MessageMarkdownDocumentCache(maxEntries: 32)
 
     init() {}
 
@@ -139,33 +185,19 @@ final class MessageContentPreparer: @unchecked Sendable {
         guard OpenCodeRenderedMarkdownDetector.shouldRender(text) else {
             return nil
         }
-        let cacheKey = CacheKey(
+        let cacheKey = MessageMarkdownCacheKey(
             messageID: messageID,
             textHash: stableMarkdownSourceHash(text),
             textLength: text.count,
             isStreaming: isStreaming
         )
-        cacheLock.lock()
-        if let cached = cache[cacheKey] {
-            touch(cacheKey)
-            cacheLock.unlock()
-            return cached
-        }
-        cacheLock.unlock()
+        if let cached = documentCache.value(for: cacheKey) { return cached }
 
         let parsed = await Task.detached(priority: .utility) {
             OpenCodeRenderedMarkdownParser.parse(text, isStreaming: isStreaming)
         }.value
 
-        cacheLock.lock()
-        cache[cacheKey] = parsed
-        touch(cacheKey)
-        while cacheOrder.count > maxCacheEntries {
-            let oldestKey = cacheOrder.removeFirst()
-            cache.removeValue(forKey: oldestKey)
-        }
-        cacheLock.unlock()
-        return parsed
+        return documentCache.insertIfAbsent(parsed, for: cacheKey)
     }
 
     private func reusableDocument(
@@ -208,15 +240,4 @@ final class MessageContentPreparer: @unchecked Sendable {
             && previous.isStreaming == display.isStreaming
     }
 
-    nonisolated private func touch(_ key: CacheKey) {
-        cacheOrder.removeAll { $0 == key }
-        cacheOrder.append(key)
-    }
-
-    private struct CacheKey: Hashable, Sendable {
-        let messageID: String
-        let textHash: Int
-        let textLength: Int
-        let isStreaming: Bool
-    }
 }

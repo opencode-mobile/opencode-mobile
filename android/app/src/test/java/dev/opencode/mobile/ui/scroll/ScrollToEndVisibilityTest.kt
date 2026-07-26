@@ -29,10 +29,27 @@ class ScrollToEndVisibilityTest {
         // revealThreshold = max(120, 0.2 * viewport) = 400 for a 2000px viewport.
         val visible =
             listOf(
-                TimelineVisibleItem(index = 0, offset = 2500, size = 1),
                 TimelineVisibleItem(index = 1, offset = -4400, size = 6900),
             )
         assertTrue(
+            shouldShowScrollToEnd(
+                messageCount = 3,
+                viewportHeightPx = 2000,
+                viewportEndOffset = 2000,
+                afterContentPadding = 0,
+                revealThresholdMinPx = 120,
+                visibleItems = visible,
+            ),
+        )
+    }
+
+    @Test
+    fun hideWhenBottomAnchorJustLeftViewportButThresholdNotReached() {
+        val visible =
+            listOf(
+                TimelineVisibleItem(index = 1, offset = -4800, size = 6900),
+            )
+        assertFalse(
             shouldShowScrollToEnd(
                 messageCount = 3,
                 viewportHeightPx = 2000,

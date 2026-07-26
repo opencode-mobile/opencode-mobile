@@ -59,17 +59,45 @@
 - Area: performance
 - Shared intent: cold Session Chat open should prepare styled markdown documents
   in roughly interactive time, including large syntax-highlighted code blocks.
-- Current state (2026-06-27): manual **Big Session** cold open is **~2.5 s** on
-  iOS and Android with libonig on iOS, full-history enrichment on both platforms,
-  and no `HighlighterBackendFallback` on the production regex path.
+- Last measured baseline (2026-06-27): manual **Big Session** cold open was
+  **~2.5 s** on iOS and Android with libonig on iOS, all-at-once full-history
+  enrichment on both platforms, and no `HighlighterBackendFallback` on the
+  production regex path.
+- Current implementation (2026-07-26 / OPE-82): both platforms expose every
+  history row immediately, but histories with at least 4,000
+  markdown-candidate characters render plain first and enrich newest-first in
+  cancellable increments. A newer live snapshot cancels stale history
+  enrichment. No replacement Big Session measurement has been recorded, so the
+  earlier ~2.5 s result is historical rather than a claim for the staged
+  pipeline.
 - iOS still round-trips through `OpenCodeMarkdownJson.parseMarkdownJson` before
   Swift decodes the render tree; Android calls `OpenCodeMarkdownParser.parse()`
   directly. The JSON bridge is a remaining optimization target, not a blocker
   for Big Session on current hardware.
 - Historical: hybrid regex backend + staged window reached **~27 s** styled
   timeline on the same fixture (2026-06-24 probes).
-- Owner or next action: optional JSON-bridge slimming; code-block virtualization
-  if larger sessions regress. See `docs/features/session-chat/progress.md`.
+- Owner or next action: measure the staged pipeline on a deterministic large
+  fixture; optional JSON-bridge slimming or code-block virtualization if larger
+  sessions still regress. See `docs/features/session-chat/progress.md`.
+
+## Final Native Annotation Construction
+
+- Status: temporary
+- Area: performance
+- Shared intent: applying syntax and inline style spans for a large finalized
+  document must not block scrolling or input after parsing has completed.
+- Current Android state: code, diff, and inline annotated strings at or above
+  2,000 characters are built on `Dispatchers.Default`; Compose shows a plain
+  attributed-string placeholder until the styled value is ready.
+- Current iOS state: large streaming code fences use plain monospace text and
+  the most recent finalized code attributed string is cached, but a cache miss
+  still constructs the Swift `AttributedString` synchronously from the SwiftUI
+  render path.
+- Reason: OPE-82 moved the Android construction hot path off composition while
+  the iOS renderer retained its existing synchronous attributed-string builder.
+- Owner or next action: profile a large finalized or expanded iOS code block and
+  move construction into the prepared display document if it causes a main-actor
+  hitch.
 
 ## Code Block Layout
 

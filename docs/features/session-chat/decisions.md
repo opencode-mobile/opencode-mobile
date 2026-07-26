@@ -181,6 +181,8 @@
 ## Treat cold rich-history loading as a staged performance problem
 
 - Date: 2026-06-24
+- Status: superseded on 2026-07-26 by **Stage large history enrichment without
+  changing history scope** below.
 - Decision: do not publish unstyled raw Markdown merely to shorten the loading
   indicator. Instead, retain native syntax styling and investigate staged
   rendering at the document/block level.
@@ -200,16 +202,71 @@
 - Revisit when: code-block virtualization has been benchmarked against Big
   Session and a representative deterministic fixture is available for CI.
 
+## Stage large history enrichment without changing history scope
+
+- Date: 2026-07-26
+- Ticket: OPE-82
+- Decision: when the initial history contains at least 4,000 markdown-candidate
+  characters, publish the complete message history immediately as native plain
+  text, then enrich markdown-bearing messages newest-first. Yield between
+  enriched snapshots and cancel stale enrichment as soon as a newer live
+  message snapshot arrives. Smaller histories remain an all-at-once prepared
+  publish.
+- Reason: the earlier raw-first experiment still performed one blocking
+  full-history parse before the UI became usable. The staged pipeline keeps
+  every message visible, prioritizes the rows near the initial bottom position,
+  and gives live deltas priority over cold-history decoration.
+- Consequence: this changes presentation readiness, not history scope. Both
+  platforms still expose the full merged history and converge on the same fully
+  rendered result without a manual hydration control.
+- Revisit when: representative device evidence supports changing the 4,000
+  character gate or removing staged enrichment after parser performance
+  improves.
+
 ## Enrich full session history on load (Android parity)
 
 - Date: 2026-06-27
-- Decision: iOS Session Chat enriches the full merged timeline on load, matching
-  Android. Do not gate older messages behind manual hydration.
+- Amended: 2026-07-26 by **Stage large history enrichment without changing
+  history scope** above.
+- Decision: iOS and Android expose the full merged timeline on load. Do not gate
+  older messages behind manual hydration. Large histories may stage markdown
+  presentation after every raw message row is visible.
 - Reason: staged hydration improved cold-open time but diverged product behavior
   and hid history behind an extra action. Optimize performance without splitting
   the visible timeline.
 - Revisit when: a shared virtualization or block-collapse strategy ships on both
   platforms with benchmark evidence.
+
+## Coalesce replaceable live timeline frames
+
+- Date: 2026-07-26
+- Ticket: OPE-82
+- Decision: while timeline transformation or UI publication is busy, live
+  display snapshots may coalesce to the newest available snapshot. Explicit
+  load, refresh, and post-send publications are not replaceable; their state
+  transitions and completion callbacks must run in order. Rebinding or stopping
+  observation cancels pending work from the previous binding.
+- Reason: replaying every token-sized visual snapshot after the server has
+  advanced wastes work and makes the UI lag behind, while dropping an explicit
+  post-send completion can leave the composer stuck in its sending state.
+- Revisit when: the display pipeline publishes structural patches instead of
+  complete snapshots.
+
+## Use distance from the true timeline end for pill visibility
+
+- Date: 2026-07-26
+- Ticket: OPE-82
+- Decision: the scroll-to-end pill appears only after the viewport is farther
+  than the shared near-bottom threshold from the true timeline end. Losing the
+  one-pixel bottom anchor is not sufficient by itself. Distance calculations
+  include the remaining visible portion of the newest row, bottom content
+  padding, and the bottom anchor, including when the newest message is taller
+  than the viewport.
+- Reason: treating an absent anchor as immediately away from the bottom made the
+  Android pill flash during small layout changes and produced incorrect results
+  inside very tall streaming messages. iOS already derives visibility from
+  `UIScrollView` distance from bottom.
+- Revisit when: unread-count semantics replace distance-only pill visibility.
 
 ## Split Timeline and Composer screen regions
 
@@ -311,17 +368,21 @@
 - Decision: Session status observation, SSE connection state, abort, and
   one-shot status refresh lived in `SessionChatStatusBar` on both platforms.
 
-## MessageLiveStore as sole timeline message source
+## Timeline observation stays behind Message Repository
 
 - Date: 2026-06-27
-- Decision: `SessionChatTimeline` subscribes to `MessageLiveStore.observeMessages`
-  on bind/start; it does not call `MessageRepository.listMessages` directly.
-  Pull-to-refresh, post-send reload, and error retry use
-  `MessageLiveStore.refreshMessages`. Initial subscribe failures propagate as
-  `MessageListUpdate.LoadFailed` so the timeline can enter the error state.
-  SSE-driven reconnect reloads keep the last good snapshot on silent failure.
+- Amended: 2026-07-26 by the Message Store refactor.
+- Decision: `SessionChatTimeline` subscribes to
+  `MessageRepository.observeDisplayMessages` on bind/start; it does not call a
+  transport adapter directly. Pull-to-refresh, post-send reload, and error retry
+  use `MessageRepository.refreshDisplayMessages`. `MessageSync` and
+  `DisplayMessagePipeline` remain behind that repository boundary. Initial
+  subscribe failures propagate as `DisplayMessageListUpdate.LoadFailed` so the
+  timeline can enter the error state. SSE-driven reconnect reloads keep the last
+  good snapshot on silent failure.
 - Reason: removes duplicate REST on screen open and the ViewModel-owned message
-  observation loop on iOS; one reactive path from SSE through the live store.
+  observation loop on iOS; one reactive path from SSE through domain
+  synchronization and display preparation.
 - Revisit when: the server exposes push-only history with no REST seed.
 
 ## Derive context usage from best available data

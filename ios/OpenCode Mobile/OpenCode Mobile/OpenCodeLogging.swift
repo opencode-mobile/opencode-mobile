@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-enum OpenCodeLog {
+nonisolated enum OpenCodeLog {
     static let api = Logger(subsystem: subsystem, category: "api")
     static let sse = Logger(subsystem: subsystem, category: "sse")
     static let sessionChat = Logger(subsystem: subsystem, category: "session-chat")

@@ -150,7 +150,7 @@ feature work. Before changing it:
 3. Do not add repository dependencies, caches, or store I/O to the facade.
 4. Document boundary changes in `docs/features/session-chat/decisions.md`.
 
-See [Session Chat decisions](../features/session-chat/decisions.md#keep-sessionchatviewmodel-as-a-thin-facade)
+See [Session Chat decisions](features/session-chat/decisions.md#keep-sessionchatviewmodel-as-a-thin-facade)
 for the full allow/deny list and region ownership table.
 
 ## Design System Dependency
@@ -236,6 +236,12 @@ Use server-sent events only while the app is foregrounded. After reconnect,
 refresh current project, session list, session status, messages, diffs, and
 permission requests from the server instead of relying on guaranteed background
 delivery.
+
+Message timelines are the exception to refresh-only handling while connected:
+`MessageSync` incrementally merges ordered message/part events into an in-memory
+store for responsive streaming text. REST remains authoritative for initial
+history, reconnect/finalization, and REST-seeded part mutations; an in-flight
+REST result must not replace a newer store revision.
 
 ## Operational Logging
 

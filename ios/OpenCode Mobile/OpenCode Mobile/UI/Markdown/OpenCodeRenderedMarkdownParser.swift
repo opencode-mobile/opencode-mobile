@@ -2,9 +2,6 @@ import Foundation
 import OpenCodeMarkdownCore
 
 enum OpenCodeRenderedMarkdownParser {
-    nonisolated private static let encoder = JSONEncoder()
-    nonisolated private static let decoder = JSONDecoder()
-
     /// Must stay nonisolated: the app defaults to MainActor isolation, and history
     /// enrich runs this inside `Task.detached`. If parse hops back to MainActor,
     /// TextMate blocks scrolling for the entire prepare window.
@@ -14,6 +11,8 @@ enum OpenCodeRenderedMarkdownParser {
         isStreaming: Bool = false
     ) -> NativeMarkdownDocument {
         do {
+            let encoder = JSONEncoder()
+            let decoder = JSONDecoder()
             let request = NativeMarkdownParseRequest(
                 markdown: markdown,
                 variant: variant.rawValue,
@@ -44,7 +43,7 @@ enum OpenCodeRenderedMarkdownParser {
     }
 }
 
-private struct NativeMarkdownParseRequest: Encodable, Sendable {
+nonisolated private struct NativeMarkdownParseRequest: Encodable, Sendable {
     let markdown: String
     let variant: String
     let isStreaming: Bool

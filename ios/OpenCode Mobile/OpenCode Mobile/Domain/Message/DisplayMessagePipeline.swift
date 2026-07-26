@@ -2,10 +2,10 @@ import Foundation
 import OSLog
 
 /// Quiet window before publishing the latest streaming snapshot.
-private let streamingPrepareDebounceNs: UInt64 = 16_000_000
+let streamingPrepareDebounceNs: UInt64 = 16_000_000
 /// Cap how long dense SSE bursts can delay a UI publish. Keep this flat so
 /// long replies do not intentionally slow down as they grow.
-private let streamingPrepareMaxBatchDuration: Duration = .milliseconds(48)
+let streamingPrepareMaxBatchDuration: Duration = .milliseconds(48)
 
 @MainActor
 final class DisplayMessagePipeline {
@@ -23,8 +23,10 @@ final class DisplayMessagePipeline {
                 var previousByID: [String: DisplayMessage] = [:]
                 var pendingMessages: [Message]?
                 var debounceTask: Task<Void, Never>?
+                var enrichmentTask: Task<Void, Never>?
                 var lastPublishedAt: ContinuousClock.Instant?
 
+                @MainActor
                 func publishPrepared(
                     _ messages: [Message],
                     reason: String,
@@ -58,6 +60,7 @@ final class DisplayMessagePipeline {
                     continuation.yield(.messages(prepared))
                 }
 
+                @MainActor
                 func enrichHistoryIncrementally(_ messages: [Message]) async {
                     var byID = Dictionary(
                         uniqueKeysWithValues: messages.map { message in
@@ -75,6 +78,7 @@ final class DisplayMessagePipeline {
                         // so MainActor can keep scrolling instead of applying every TextMate
                         // document in one giant frame after a 10–30s stall.
                         let prepared = await contentPreparer.prepareMessage(message)
+                        guard !Task.isCancelled else { return }
                         byID[message.id] = prepared
                         previousByID[message.id] = prepared
                         enrichedCount += 1
@@ -93,6 +97,7 @@ final class DisplayMessagePipeline {
                     )
                 }
 
+                @MainActor
                 func scheduleStreamingPublish() {
                     debounceTask?.cancel()
                     debounceTask = Task { @MainActor in
@@ -109,9 +114,13 @@ final class DisplayMessagePipeline {
                     case .loadFailed(let error):
                         debounceTask?.cancel()
                         debounceTask = nil
+                        enrichmentTask?.cancel()
+                        enrichmentTask = nil
                         pendingMessages = nil
                         continuation.yield(.loadFailed(error))
                     case .messages(let messages):
+                        enrichmentTask?.cancel()
+                        enrichmentTask = nil
                         if messagesContainStreamingText(messages) {
                             // Keep the latest snapshot. Publish after a short quiet window,
                             // but also flush when the max batch age is exceeded so dense
@@ -150,9 +159,12 @@ final class DisplayMessagePipeline {
                                 // Open large histories as plain text first so the chat is
                                 // usable while TextMate runs; enrich one message at a time.
                                 await publishPrepared(messages, reason: "plain-first", skipMarkdown: true)
-                                await Task.yield()
-                                try? await Task.sleep(for: .milliseconds(48))
-                                await enrichHistoryIncrementally(messages)
+                                enrichmentTask = Task { @MainActor in
+                                    await Task.yield()
+                                    try? await Task.sleep(for: .milliseconds(48))
+                                    guard !Task.isCancelled else { return }
+                                    await enrichHistoryIncrementally(messages)
+                                }
                             } else {
                                 await publishPrepared(messages, reason: "final")
                             }
@@ -161,6 +173,7 @@ final class DisplayMessagePipeline {
                 }
 
                 debounceTask?.cancel()
+                enrichmentTask?.cancel()
                 if let latest = pendingMessages {
                     await publishPrepared(latest, reason: "flush")
                 }
@@ -176,10 +189,6 @@ final class DisplayMessagePipeline {
         let messages = try await messageSync.refreshMessages(sessionID: sessionID, directory: directory)
         return await contentPreparer.prepareMessages(messages)
     }
-}
-
-func streamingPrepareMaxBatch(forStreamingChars _: Int) -> Duration {
-    streamingPrepareMaxBatchDuration
 }
 
 func shouldPlainFirstHistoryPublish(

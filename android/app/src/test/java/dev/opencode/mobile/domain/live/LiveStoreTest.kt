@@ -2,14 +2,15 @@ package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
+import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageListUpdate
-import dev.opencode.mobile.domain.message.MessagePatch
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
@@ -21,10 +22,13 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -35,7 +39,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -78,6 +81,32 @@ class MessageSyncTest {
 
             assertEquals(1, emissions.size)
             assertEquals("Hello", emissions.single().single().text)
+        }
+
+    @Test
+    fun observeMessages_buffersEventsWhileInitialRestLoadIsInFlight() =
+        runTest(testDispatcher) {
+            val initialLoadGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdLoadUntil = initialLoadGate)
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello"))
+            initialLoadGate.complete(Unit)
+            advanceTimeBy(1)
+
+            assertEquals("Hello", emissions.last().first { it.id == "msg-2" }.text)
+            collectJob.cancel()
         }
 
     @Test
@@ -344,6 +373,42 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_discardsPollResponseWhenStreamingStartsInFlight() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            advanceTimeBy(1)
+
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = ""),
+                )
+            val pollGate = CompletableDeferred<Unit>()
+            repository.nextLoadGate = pollGate
+            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS)
+
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Live"))
+            advanceTimeBy(1)
+            pollGate.complete(Unit)
+            advanceTimeBy(1)
+
+            assertEquals("Live", emissions.last().first { it.id == "msg-2" }.text)
+            collectJob.cancel()
+        }
+
+    @Test
     fun observeMessages_messagePartDelta_ignoresReasoningPartDeltas() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -412,6 +477,86 @@ class MessageSyncTest {
             assertEquals("Hello", final.text)
             assertFalse((final.parts.single() as MessagePart.Text).isStreaming)
             assertEquals(2, repository.listMessagesCallCount)
+        }
+
+    @Test
+    fun observeMessages_failedIdleReloadEndsStreamingAndPollingRecovers() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Partial"))
+            advanceTimeBy(1)
+
+            repository.shouldFailLoad = true
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceTimeBy(1)
+            val recoveredPart =
+                emissions
+                    .last()
+                    .first { it.id == "msg-2" }
+                    .parts
+                    .first() as MessagePart.Text
+            assertFalse(recoveredPart.isStreaming)
+
+            repository.shouldFailLoad = false
+            repository.messages =
+                listOf(
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Final",
+                        parts = listOf(MessagePart.Text("Final")),
+                    ),
+                )
+            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 1)
+            assertEquals("Final", emissions.last().single().text)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun displayPipelinePublishesStreamingAndFinalStatesFromRealDeltaEvents() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val preparer =
+                MessageContentPreparer(OpenCodeSyntaxHighlighter.default).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val pipeline = DisplayMessagePipeline(sync, preparer)
+            val emissions = mutableListOf<dev.opencode.mobile.domain.message.DisplayMessage>()
+            val collectJob =
+                launch {
+                    pipeline.observeDisplayMessages("ses-1", "/repo").collect { update ->
+                        if (update is DisplayMessageListUpdate.Messages) {
+                            update.messages.firstOrNull { it.id == "msg-2" }?.let(emissions::add)
+                        }
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Hello"))
+            advanceTimeBy(50)
+            assertTrue(emissions.last().isStreaming)
+            assertEquals("Hello", emissions.last().text)
+
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = "Hello"))
+            advanceTimeBy(50)
+            assertFalse(emissions.last().isStreaming)
+            collectJob.cancel()
         }
 
     @Test
@@ -501,7 +646,12 @@ class MessageSyncTest {
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
-            val textPart = emissions.last().first { it.id == "msg-2" }.parts.single() as MessagePart.Text
+            val textPart =
+                emissions
+                    .last()
+                    .first { it.id == "msg-2" }
+                    .parts
+                    .single() as MessagePart.Text
             assertEquals("Hi", textPart.text)
             assertFalse(textPart.isStreaming)
         }
@@ -633,8 +783,8 @@ class MessageSyncTest {
                             Message(
                                 id = "msg-1",
                                 role = MessageRole.Assistant,
-                                text = "Old",
-                                parts = listOf(MessagePart.Text("Old")),
+                                text = "Old\nSibling",
+                                parts = listOf(MessagePart.Text("Old"), MessagePart.Text("Sibling")),
                             ),
                         ),
                 )
@@ -655,16 +805,26 @@ class MessageSyncTest {
                     Message(
                         id = "msg-1",
                         role = MessageRole.Assistant,
-                        text = "New",
-                        parts = listOf(MessagePart.Text("New")),
+                        text = "New\nSibling",
+                        parts = listOf(MessagePart.Text("New"), MessagePart.Text("Sibling")),
                     ),
                 )
+            // Info commonly arrives before the part update. It must not make a
+            // REST-seeded row eligible for incomplete incremental replacement.
+            eventStream.emit(messageUpdatedEvent("msg-1", "assistant"))
             eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-1", text = "New"))
             advanceTimeBy(350)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
 
-            assertEquals("New", emissions.last().single().text)
+            assertEquals("New\nSibling", emissions.last().single().text)
+            assertEquals(
+                2,
+                emissions
+                    .last()
+                    .single()
+                    .parts.size,
+            )
             assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
         }
 
@@ -945,6 +1105,7 @@ private class FakeMessageRepository(
     private val holdLoadUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
     var listMessagesCallCount = 0
+    var nextLoadGate: CompletableDeferred<Unit>? = null
 
     override fun observeMessages(
         sessionId: String,
@@ -965,7 +1126,10 @@ private class FakeMessageRepository(
         sessionId: String,
         directory: String?,
     ): List<dev.opencode.mobile.domain.message.DisplayMessage> =
-        refreshMessages(sessionId, directory).map { dev.opencode.mobile.domain.message.DisplayMessage(it) }
+        refreshMessages(sessionId, directory).map {
+            dev.opencode.mobile.domain.message
+                .DisplayMessage(it)
+        }
 
     override suspend fun prepareOptimisticUserMessage(
         id: String,
@@ -982,6 +1146,10 @@ private class FakeMessageRepository(
         directory: String?,
     ): List<Message> {
         holdLoadUntil?.await()
+        nextLoadGate?.also {
+            nextLoadGate = null
+            it.await()
+        }
         listMessagesCallCount += 1
         if (shouldFailLoad) error("load failed")
         return messages

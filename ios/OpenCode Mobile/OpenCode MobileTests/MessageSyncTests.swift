@@ -22,6 +22,28 @@ struct MessageSyncTests {
         #expect(collector.emissions.count >= 1)
     }
 
+    @Test func initialLoad_buffersEventsThatArriveDuringRestRequest() async {
+        let repo = FakeLiveMessageRepository()
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let blocked = await waitUntil { repo.isListBlocked }
+        #expect(blocked)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello", sessionID: "ses-1"))
+        repo.resumeListMessages()
+
+        let streamed = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello"
+        }
+        task.cancel()
+        #expect(streamed)
+    }
+
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -137,6 +159,38 @@ struct MessageSyncTests {
             return
         }
         #expect(textPart.isStreaming == true)
+    }
+
+    @Test func displayPipelinePublishesStreamingAndFinalStatesFromRealDeltaEvents() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let pipeline = DisplayMessagePipeline(
+            messageSync: sync,
+            contentPreparer: MessageContentPreparer()
+        )
+        let collector = DisplayMessageCollector()
+        let task = Task {
+            await collector.collect(pipeline.observeDisplayMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let loaded = await waitUntil { collector.latest() != nil }
+        #expect(loaded)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Hello", sessionID: "ses-1"))
+        let streaming = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.isStreaming == true
+        }
+        #expect(streaming)
+
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "Hello", sessionID: "ses-1"))
+        let finalized = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.isStreaming == false
+                && collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Hello"
+        }
+        task.cancel()
+        #expect(finalized)
     }
 
     @Test func messagePartDelta_ignoresNonTextField() async {
@@ -268,6 +322,82 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == 2)
     }
 
+    @Test func failedIdleReloadEndsStreamingAndPollingRecovers() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest() != nil }
+        #expect(loaded)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Partial", sessionID: "ses-1"))
+        let streaming = await waitUntil {
+            guard case .text(let part) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return part.isStreaming
+        }
+        #expect(streaming)
+
+        repo.shouldFailList = true
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        let recovered = await waitUntil {
+            guard case .text(let part) = collector.latest()?.first(where: { $0.id == "msg-2" })?.parts.first else {
+                return false
+            }
+            return !part.isStreaming
+        }
+        #expect(recovered)
+
+        repo.shouldFailList = false
+        repo.messages = [
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "Final",
+                parts: [.text(TextPart(text: "Final", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let finalized = await waitUntil {
+            collector.latest()?.first?.text == "Final"
+        }
+        task.cancel()
+        #expect(finalized)
+    }
+
+    @Test func pollResponseIsDiscardedWhenStreamingStartsInFlight() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 25)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest() != nil }
+        #expect(loaded)
+
+        repo.holdNextListMessages()
+        let pollBlocked = await waitUntil { repo.isListBlocked }
+        #expect(pollBlocked)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-2", delta: "Live", sessionID: "ses-1"))
+        let streamed = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live"
+        }
+        repo.resumeListMessages()
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+
+        #expect(streamed)
+        #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live")
+    }
+
     @Test func replaceAll_clearsStreamingAndMakesRestAuthoritative() async {
         let store = InMemoryMessageStore()
         store.apply(
@@ -397,8 +527,11 @@ struct MessageSyncTests {
             Message(
                 id: "msg-1",
                 role: .assistant,
-                text: "Old",
-                parts: [.text(TextPart(text: "Old", isStreaming: false))],
+                text: "Old\nSibling",
+                parts: [
+                    .text(TextPart(text: "Old", isStreaming: false)),
+                    .text(TextPart(text: "Sibling", isStreaming: false)),
+                ],
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: nil
@@ -416,21 +549,26 @@ struct MessageSyncTests {
             Message(
                 id: "msg-1",
                 role: .assistant,
-                text: "New",
-                parts: [.text(TextPart(text: "New", isStreaming: false))],
+                text: "New\nSibling",
+                parts: [
+                    .text(TextPart(text: "New", isStreaming: false)),
+                    .text(TextPart(text: "Sibling", isStreaming: false)),
+                ],
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: nil
             ),
         ]
+        eventStream.emit(eventWithInfo(id: "msg-1", role: "assistant", sessionID: "ses-1"))
         eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-1", text: "New", sessionID: "ses-1"))
         let updated = await waitUntil {
-            collector.latest()?.first?.text == "New"
+            collector.latest()?.first?.text == "New\nSibling"
         }
         task.cancel()
 
         #expect(updated)
-        #expect(collector.latest()?.first?.text == "New")
+        #expect(collector.latest()?.first?.text == "New\nSibling")
+        #expect(collector.latest()?.first?.parts.count == 2)
         #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
     }
 
@@ -656,17 +794,35 @@ private final class MessageCollector: @unchecked Sendable {
     }
 }
 
+private final class DisplayMessageCollector: @unchecked Sendable {
+    private(set) var emissions: [[DisplayMessage]] = []
+
+    func collect(_ stream: AsyncStream<DisplayMessageListUpdate>) async {
+        for await update in stream {
+            if case .messages(let messages) = update {
+                emissions.append(messages)
+            }
+        }
+    }
+
+    func latest() -> [DisplayMessage]? {
+        emissions.last
+    }
+}
+
 @MainActor
 private func makeMessageSync(
     repo: FakeLiveMessageRepository,
-    eventStream: FakeForegroundEventStream
+    eventStream: FakeForegroundEventStream,
+    pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs
 ) -> MessageSync {
     MessageSync(
         listMessages: { sessionID, directory in
             try await repo.listMessages(sessionID: sessionID, directory: directory)
         },
         store: InMemoryMessageStore(),
-        eventStream: eventStream
+        eventStream: eventStream,
+        pollIntervalMs: pollIntervalMs
     )
 }
 
@@ -677,6 +833,22 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
         ], model: nil, mode: nil, sentAtEpochMs: nil),
     ]
     var listMessagesCallCount = 0
+    var shouldFailList = false
+    private var holdNextList = false
+    private var blockedListContinuation: CheckedContinuation<Void, Never>?
+
+    var isListBlocked: Bool {
+        blockedListContinuation != nil
+    }
+
+    func holdNextListMessages() {
+        holdNextList = true
+    }
+
+    func resumeListMessages() {
+        blockedListContinuation?.resume()
+        blockedListContinuation = nil
+    }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
         AsyncStream { _ in }
@@ -705,6 +877,15 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         listMessagesCallCount += 1
+        if holdNextList {
+            holdNextList = false
+            await withCheckedContinuation { continuation in
+                blockedListContinuation = continuation
+            }
+        }
+        if shouldFailList {
+            throw URLError(.cannotConnectToHost)
+        }
         return messages
     }
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
