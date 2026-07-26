@@ -828,6 +828,49 @@ class MessageSyncTest {
             assertEquals(callsAfterInitial + 1, repository.listMessagesCallCount)
         }
 
+    @Test
+    fun observeMessages_restSeededPartIdentityPreservesSiblingsAndStreamsFollowingDelta() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeMessageRepository(
+                    messages =
+                        listOf(
+                            Message(
+                                id = "msg-1",
+                                role = MessageRole.Assistant,
+                                text = "Old\nSibling",
+                                parts =
+                                    listOf(
+                                        MessagePart.Text(id = "prt-1", text = "Old"),
+                                        MessagePart.Text(id = "prt-2", text = "Sibling"),
+                                    ),
+                            ),
+                        ),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            val callsAfterInitial = repository.listMessagesCallCount
+
+            eventStream.emit(messageUpdatedEvent("msg-1", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-1", text = "New"))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-1", delta = " live"))
+            advanceTimeBy(1)
+
+            val latest = emissions.last().single()
+            assertEquals("New live\nSibling", latest.text)
+            assertEquals(2, latest.parts.size)
+            assertEquals(callsAfterInitial, repository.listMessagesCallCount)
+            collectJob.cancel()
+        }
+
     private fun createMessageSync(
         repository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream,

@@ -240,8 +240,9 @@ delivery.
 Message timelines are the exception to refresh-only handling while connected:
 `MessageSync` incrementally merges ordered message/part events into an in-memory
 store for responsive streaming text. REST remains authoritative for initial
-history, reconnect/finalization, and REST-seeded part mutations; an in-flight
-REST result must not replace a newer store revision.
+history and reconnect/finalization. Stable REST part identities let later
+mutations preserve sibling parts locally; an in-flight REST result must not
+replace a newer store revision.
 
 ## Operational Logging
 

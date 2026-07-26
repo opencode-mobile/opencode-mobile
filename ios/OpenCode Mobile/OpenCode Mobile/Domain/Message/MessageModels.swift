@@ -89,8 +89,15 @@ enum MessagePart: Equatable, Sendable {
 }
 
 struct TextPart: Equatable, Sendable {
+    let id: String?
     let text: String
     var isStreaming: Bool
+
+    init(id: String? = nil, text: String, isStreaming: Bool) {
+        self.id = id
+        self.text = text
+        self.isStreaming = isStreaming
+    }
 }
 
 enum AttachmentKind: String, Equatable, Sendable {
@@ -116,6 +123,7 @@ struct FilePart: Equatable, Sendable {
 }
 
 struct ToolPart: Equatable, Sendable {
+    let id: String?
     let toolName: String
     let status: ToolStatus
     let title: String?
@@ -126,6 +134,7 @@ struct ToolPart: Equatable, Sendable {
     let metadata: [String: AnyCodable]?
 
     init(
+        id: String? = nil,
         toolName: String,
         status: ToolStatus,
         title: String? = nil,
@@ -135,6 +144,7 @@ struct ToolPart: Equatable, Sendable {
         output: String? = nil,
         metadata: [String: AnyCodable]? = nil
     ) {
+        self.id = id
         self.toolName = toolName
         self.status = status
         self.title = title

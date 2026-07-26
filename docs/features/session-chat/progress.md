@@ -219,7 +219,7 @@ publication ownership into the domain display pipeline.
 
 ### Next optimization candidates
 
-- virtualize or collapse large code blocks for the first frame;
+- virtualize large code-block styling or layout without hiding source lines;
 - slim or bypass the iOS JSON bridge if it shows up on other profiles.
 - capture a deterministic cold-open measurement for the staged history
   pipeline.

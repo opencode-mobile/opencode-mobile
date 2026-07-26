@@ -13,7 +13,7 @@ interface MessageStore {
 
     fun messages(sessionId: String): List<Message>
 
-    /** True when the message came from REST and therefore has no stable SSE part identities. */
+    /** True when a REST-seeded message contains a part without a stable server identity. */
     fun isRestSeededMessage(
         sessionId: String,
         messageId: String,

@@ -7,14 +7,22 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.SyntaxHighlightResult
+import dev.opencode.mobile.markdown.stableMarkdownSourceHash
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class MessageContentPreparerTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -157,6 +165,30 @@ class MessageContentPreparerTest {
         }
 
     @Test
+    fun prepareMessagesDoesNotReuseFinalDocumentWhenTextChanges() =
+        runTest(testDispatcher) {
+            val preparer = createPreparer()
+            val previous =
+                DisplayMessage(
+                    message = Message(id = "m1", role = MessageRole.Assistant, text = "# Old"),
+                    renderedMarkdown =
+                        MarkdownDocument(
+                            sourceHash = 17,
+                            blocks = listOf(MarkdownBlock.Heading(1, listOf(MarkdownInline.Text("Old")))),
+                        ),
+                )
+
+            val prepared =
+                preparer.prepareMessages(
+                    messages = listOf(Message(id = "m1", role = MessageRole.Assistant, text = "# New")),
+                    previousById = mapOf("m1" to previous),
+                )
+
+            assertNotSame(previous.renderedMarkdown, prepared.single().renderedMarkdown)
+            assertEquals(stableMarkdownSourceHash("# New"), prepared.single().renderedMarkdown?.sourceHash)
+        }
+
+    @Test
     fun prepareMessagesReusesStreamingDocumentAsFinalPlaceholder() =
         runTest(testDispatcher) {
             val preparer = createPreparer()
@@ -209,6 +241,47 @@ class MessageContentPreparerTest {
             assertSame(first, second)
         }
 
+    @Test
+    fun prepareStreamingMessageDoesNotWaitForBlockedFinalHighlighter() =
+        runBlocking {
+            val highlighter = BlockingHighlighter()
+            val preparer =
+                MessageContentPreparer(highlighter).apply {
+                    computationDispatcher = Dispatchers.Default
+                }
+            val finalPreparation =
+                async(Dispatchers.Default) {
+                    preparer.prepareMessage(
+                        Message(
+                            id = "history",
+                            role = MessageRole.Assistant,
+                            text = "```kotlin\nval history = true\n```",
+                        ),
+                    )
+                }
+
+            assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
+            try {
+                val streamingMarkdown = "```kotlin\nval live = true\n```"
+                val streaming =
+                    withTimeout(2_000) {
+                        preparer.prepareMessage(
+                            Message(
+                                id = "live",
+                                role = MessageRole.Assistant,
+                                text = streamingMarkdown,
+                                parts = listOf(MessagePart.Text(streamingMarkdown, isStreaming = true)),
+                            ),
+                        )
+                    }
+                assertNotNull(streaming.renderedMarkdown)
+            } finally {
+                highlighter.release.countDown()
+            }
+            finalPreparation.await()
+            Unit
+        }
+
     private class RecordingHighlighter : OpenCodeCodeHighlighter {
         var calls: Int = 0
 
@@ -223,6 +296,22 @@ class MessageContentPreparerTest {
                 spans = listOf(CodeSpan(0, code.length, CodeTokenRole.Keyword)),
                 diagnostics = emptyList(),
             )
+        }
+    }
+
+    private class BlockingHighlighter : OpenCodeCodeHighlighter {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+
+        override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+        override fun highlight(
+            languageOrAlias: String?,
+            code: String,
+        ): SyntaxHighlightResult {
+            entered.countDown()
+            check(release.await(5, TimeUnit.SECONDS)) { "Timed out waiting to release highlighter" }
+            return SyntaxHighlightResult(spans = emptyList(), diagnostics = emptyList())
         }
     }
 }

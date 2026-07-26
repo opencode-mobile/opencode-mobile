@@ -208,7 +208,8 @@ final class MessageContentPreparer: @unchecked Sendable {
         let isStreaming = messageIsStreaming(message)
         if let existing = previous?.renderedMarkdown,
            !isStreaming,
-           previous?.isStreaming != true {
+           previous?.isStreaming != true,
+           previous?.text == message.text {
             return existing
         }
         if isStreaming,

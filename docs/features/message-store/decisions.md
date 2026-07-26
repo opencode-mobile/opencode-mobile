@@ -39,10 +39,11 @@ reloads. The event stream does not call the repository directly.
 - Every initial, explicit, event-driven, and watchdog REST replacement is
   revision-gated. If an SSE mutation lands while the request is in flight, the
   stale response is discarded rather than overwriting newer incremental state.
-- `replaceAll` always clears incremental caches and streaming flags. Part IDs
-  are private to the SSE cache and are not retained in REST domain messages, so
-  an update or removal targeting a REST-seeded row uses one full reload rather
-  than replacing an incomplete subset of the row's parts.
+- `replaceAll` always clears streaming flags, then seeds the incremental cache
+  from stable part IDs retained by REST domain messages. Later part updates and
+  deltas can therefore replace the targeted part while preserving its siblings.
+  A legacy REST row containing a part without a stable ID still falls back to a
+  full reload rather than replacing an incomplete subset of the row's parts.
 - Android serializes store reads and mutations per store instance so nested
   message/part collections are never read while another coroutine mutates them.
 

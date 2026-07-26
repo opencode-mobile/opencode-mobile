@@ -4,6 +4,7 @@ import Testing
 import UIKit
 @testable import OpenCode_Mobile
 
+@MainActor
 struct OpenCodeRenderedMarkdownCodeSpanTests {
     @Test func overlappingHttpClientSpansRenderFullSourceText() {
         let code = "HttpClient"
@@ -57,6 +58,45 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         )
 
         #expect(prepared.renderedMarkdown?.sourceHash == 17)
+    }
+
+    @Test func preparerDoesNotReuseFinalDocumentWhenTextChanges() async {
+        let document = NativeMarkdownDocument(sourceHash: 17, blocks: [.paragraph([.text("Old")])])
+        let previous =
+            DisplayMessage(
+                message: Message(
+                    id: "message-1",
+                    role: .assistant,
+                    text: "# Old",
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                renderedMarkdown: document
+            )
+
+        let prepared = await MessageContentPreparer.shared.prepareMessage(
+            Message(
+                id: "message-1",
+                role: .assistant,
+                text: "# New",
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            previous: previous
+        )
+
+        #expect(prepared.renderedMarkdown?.sourceHash != 17)
+        guard case .heading(_, let inlines)? = prepared.renderedMarkdown?.blocks.first else {
+            Issue.record("Expected changed markdown to be parsed as a heading")
+            return
+        }
+        guard case .text(let headingText)? = inlines.first else {
+            Issue.record("Expected changed heading text")
+            return
+        }
+        #expect(headingText == "New")
     }
 
     @Test func preparerReusesStreamingDocumentAsFinalPlaceholder() async {

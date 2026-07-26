@@ -44,6 +44,7 @@ class InMemoryMessageStore
             ignoredPartIds[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
+            seedPartIdentities(sessionId, messages)
             bumpRevision(sessionId)
         }
 
@@ -87,7 +88,11 @@ class InMemoryMessageStore
         override fun isRestSeededMessage(
             sessionId: String,
             messageId: String,
-        ): Boolean = baseMessages[sessionId]?.any { it.id == messageId } == true
+        ): Boolean =
+            baseMessages[sessionId]
+                ?.firstOrNull { it.id == messageId }
+                ?.parts
+                ?.any { it.stablePartId() == null } == true
 
         @Synchronized
         override fun hasStreamingText(sessionId: String): Boolean {
@@ -193,7 +198,7 @@ class InMemoryMessageStore
             if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return
             val msgParts = partsCaches[sessionId]?.get(messageId) ?: return
             val existing = msgParts[partId] as? MessagePart.Text ?: return
-            msgParts[partId] = MessagePart.Text(text = existing.text + delta, isStreaming = true)
+            msgParts[partId] = existing.copy(text = existing.text + delta, isStreaming = true)
         }
 
         private fun applyMessageRemoved(
@@ -244,7 +249,11 @@ class InMemoryMessageStore
                     } else {
                         partDto.text.orEmpty()
                     }
-                return MessagePart.Text(text = existingText + delta, isStreaming = true)
+                return MessagePart.Text(
+                    text = existingText + delta,
+                    isStreaming = true,
+                    id = partDto.id,
+                )
             }
             return adapter.toMessagePart(partDto)
         }
@@ -265,6 +274,34 @@ class InMemoryMessageStore
                     .toList()
             return ordered + leftovers
         }
+
+        private fun seedPartIdentities(
+            sessionId: String,
+            messages: List<Message>,
+        ) {
+            val sessionParts = partsCaches[sessionId]!!
+            val sessionOrders = partOrders[sessionId]!!
+            for (message in messages) {
+                val identifiedParts = mutableMapOf<String, MessagePart>()
+                val identifiedOrder = mutableListOf<String>()
+                for (part in message.parts) {
+                    val partId = part.stablePartId() ?: continue
+                    identifiedParts[partId] = part
+                    identifiedOrder.add(partId)
+                }
+                if (identifiedParts.isNotEmpty()) {
+                    sessionParts[message.id] = identifiedParts
+                    sessionOrders[message.id] = identifiedOrder
+                }
+            }
+        }
+
+        private fun MessagePart.stablePartId(): String? =
+            when (this) {
+                is MessagePart.Text -> id
+                is MessagePart.Tool -> id
+                is MessagePart.File -> id
+            }
 
         private fun tryParsePartDto(jsonObject: JsonObject): MessagePartDto? =
             runCatching {

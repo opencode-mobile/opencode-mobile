@@ -72,12 +72,12 @@ class MessageDomainAdapter {
         return when (dto.type) {
             "text" -> {
                 val text = dto.text ?: return null
-                MessagePart.Text(text = text, isStreaming = false)
+                MessagePart.Text(text = text, isStreaming = false, id = dto.id)
             }
             "tool" -> {
                 val toolName = dto.tool ?: return null
                 val stateDto = parseToolState(dto.state)
-                toToolPart(toolName = toolName, callId = dto.callId, state = stateDto)
+                toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }
             "file" -> toFilePart(dto)
             else -> null
@@ -93,6 +93,7 @@ class MessageDomainAdapter {
         toolName: String,
         callId: String? = null,
         state: MessageToolStateDto?,
+        id: String? = null,
     ): MessagePart.Tool {
         val status = toToolStatus(state?.status)
         return MessagePart.Tool(
@@ -104,6 +105,7 @@ class MessageDomainAdapter {
             input = state?.input,
             output = state?.output,
             metadata = state?.metadata,
+            id = id,
         )
     }
 

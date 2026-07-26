@@ -24,6 +24,7 @@ final class InMemoryMessageStore: MessageStore {
         ignoredPartIDs[sessionID] = [:]
         messageOrder[sessionID] = messages.map(\.id)
         baseMessages[sessionID] = messages
+        seedPartIdentities(sessionID: sessionID, messages: messages)
         bumpRevision(sessionID: sessionID)
     }
 
@@ -63,7 +64,10 @@ final class InMemoryMessageStore: MessageStore {
     }
 
     func isRestSeededMessage(sessionID: String, messageID: String) -> Bool {
-        baseMessages[sessionID]?.contains { $0.id == messageID } == true
+        baseMessages[sessionID]?
+            .first(where: { $0.id == messageID })?
+            .parts
+            .contains(where: { stablePartID($0) == nil }) == true
     }
 
     func hasStreamingText(sessionID: String) -> Bool {
@@ -98,7 +102,7 @@ final class InMemoryMessageStore: MessageStore {
         for (messageID, var messageParts) in sessionParts {
             for (partID, part) in messageParts {
                 guard case .text(let text) = part, text.isStreaming else { continue }
-                messageParts[partID] = .text(TextPart(text: text.text, isStreaming: false))
+                messageParts[partID] = .text(TextPart(id: text.id, text: text.text, isStreaming: false))
                 changed = true
             }
             sessionParts[messageID] = messageParts
@@ -173,7 +177,8 @@ final class InMemoryMessageStore: MessageStore {
     private func applyPartDelta(sessionID: String, messageID: String, partID: String, delta: String) {
         if ignoredPartIDs[sessionID]?[messageID]?.contains(partID) == true { return }
         guard case .text(let existing)? = partsCache[sessionID]?[messageID]?[partID] else { return }
-        partsCache[sessionID]?[messageID]?[partID] = .text(TextPart(text: existing.text + delta, isStreaming: true))
+        partsCache[sessionID]?[messageID]?[partID] =
+            .text(TextPart(id: existing.id, text: existing.text + delta, isStreaming: true))
     }
 
     private func applyMessageRemoved(sessionID: String, messageID: String) {
@@ -211,7 +216,7 @@ final class InMemoryMessageStore: MessageStore {
             } else {
                 existingText = partDTO.text ?? ""
             }
-            return .text(TextPart(text: existingText + delta, isStreaming: true))
+            return .text(TextPart(id: partDTO.id, text: existingText + delta, isStreaming: true))
         }
         return adapter.messagePart(from: partDTO)
     }
@@ -254,5 +259,32 @@ final class InMemoryMessageStore: MessageStore {
 
     private func anySendableToJSON(_ dict: [String: AnySendable]) -> [String: Any] {
         dict.mapValues { anySendableToJSON($0) }
+    }
+
+    private func seedPartIdentities(sessionID: String, messages: [Message]) {
+        for message in messages {
+            var identifiedParts: [String: MessagePart] = [:]
+            var identifiedOrder: [String] = []
+            for part in message.parts {
+                guard let partID = stablePartID(part) else { continue }
+                identifiedParts[partID] = part
+                identifiedOrder.append(partID)
+            }
+            if !identifiedParts.isEmpty {
+                partsCache[sessionID]?[message.id] = identifiedParts
+                partOrder[sessionID]?[message.id] = identifiedOrder
+            }
+        }
+    }
+
+    private func stablePartID(_ part: MessagePart) -> String? {
+        switch part {
+        case .text(let text):
+            text.id
+        case .tool(let tool):
+            tool.id
+        case .file(let file):
+            file.id
+        }
     }
 }

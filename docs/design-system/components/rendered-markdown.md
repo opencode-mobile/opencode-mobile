@@ -48,6 +48,10 @@ TextMate document is prepared. Large finalized code, diff, and inline
 attributed-string construction must stay off the UI thread; a temporary plain
 representation is preferable to blocking scroll or input.
 
+Fenced code blocks remain fully visible on both platforms. The renderer may
+defer styling work while content is streaming, but it must not truncate the
+source or require a platform-specific expand action to reveal later lines.
+
 Raw HTML is not interpreted. Remote images, arbitrary navigation, network loads,
 WebView runtime, and broad JavaScript bridges are not part of the component.
 Link taps are owned by native code and only `http`/`https` URLs may leave the
@@ -65,7 +69,8 @@ visible rather than losing content below the collapsed height.
 - iOS: implemented with SwiftUI text, stacks, scroll views, and attributed text.
   It consumes `OpenCodeMarkdownCore.parseMarkdownJson` and decodes the shared
   render tree into Swift structs. Message preparation and document caching run
-  outside the UI actor; rendering remains SwiftUI-owned.
+  outside the UI actor; rendering remains SwiftUI-owned. Code blocks render
+  their complete source, matching Android.
 - Android: implemented with Compose text, stacks, scroll views, and attributed
   strings consuming `shared/markdown-core` directly. Large finalized
   attributed strings are prepared on a background dispatcher before Compose

@@ -116,6 +116,11 @@ snapshot. REST responses replace the store only when its revision still matches
 the revision captured before the request; an intervening SSE patch makes that
 response stale and it is discarded.
 
+REST mapping retains stable part identities so selective updates do not consume
+the event loop with a reload or lose subsequent deltas. Legacy parts without a
+server ID use the safe full-reload fallback. A newer live snapshot must never
+wait for stale history enrichment to finish.
+
 **Not in scope for the store:** tokenizer, parser, or highlighter — those live
 in `MessageContentPreparer` (backed by KMP markdown on Android and the native
 bridge on iOS).

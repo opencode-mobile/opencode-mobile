@@ -572,6 +572,41 @@ struct MessageSyncTests {
         #expect(repo.listMessagesCallCount == callsAfterInitial + 1)
     }
 
+    @Test func restSeededPartIdentity_preservesSiblingsAndStreamsFollowingDelta() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = [
+            Message(
+                id: "msg-1",
+                role: .assistant,
+                text: "Old\nSibling",
+                parts: [
+                    .text(TextPart(id: "prt-1", text: "Old", isStreaming: false)),
+                    .text(TextPart(id: "prt-2", text: "Sibling", isStreaming: false)),
+                ],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Old\nSibling" }
+        #expect(loaded)
+        let callsAfterInitial = repo.listMessagesCallCount
+
+        eventStream.emit(eventWithInfo(id: "msg-1", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-1", text: "New", sessionID: "ses-1"))
+        eventStream.emit(eventWithPartDelta(partID: "prt-1", messageID: "msg-1", delta: " live", sessionID: "ses-1"))
+
+        let streamed = await waitUntil { collector.latest()?.first?.text == "New live\nSibling" }
+        task.cancel()
+        #expect(streamed)
+        #expect(collector.latest()?.first?.parts.count == 2)
+        #expect(repo.listMessagesCallCount == callsAfterInitial)
+    }
+
     @Test func messagePartUpdated_fileChangeEmitsWhenFlattenedTextIsUnchanged() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()

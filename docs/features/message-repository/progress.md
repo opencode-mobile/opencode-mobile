@@ -20,10 +20,12 @@
   text deltas
 - [x] OPE-82: handle SSE `message.part.delta` for live assistant text streaming
 - [x] OPE-82 finalization: authoritative REST reload and `session.idle` clear
-  streaming state; REST-seeded part updates retain the safe reload fallback
+  streaming state; REST part identities preserve sibling parts during updates
 - [x] OPE-82 hardening: pre-load event buffering, revision-gated REST writes,
   failed-finalization recovery, serialized store access, and callback-safe
   timeline coalescing
+- [x] OPE-82 parity follow-up: stable REST part IDs keep active replies
+  streaming without dropping siblings or waiting on a selective reload
 
 ## iOS
 
@@ -34,10 +36,12 @@
   text deltas
 - [x] OPE-82: handle SSE `message.part.delta` for live assistant text streaming
 - [x] OPE-82 finalization: authoritative REST reload and `session.idle` clear
-  streaming state; REST-seeded part updates retain the safe reload fallback
+  streaming state; REST part identities preserve sibling parts during updates
 - [x] OPE-82 hardening: pre-load event buffering, revision-gated REST writes,
   failed-finalization recovery, cancellable history enrichment, and strict
   concurrency-safe markdown preparation
+- [x] OPE-82 parity follow-up: stable REST part IDs keep active replies
+  streaming without dropping siblings or waiting on a selective reload
 
 ## Remaining
 

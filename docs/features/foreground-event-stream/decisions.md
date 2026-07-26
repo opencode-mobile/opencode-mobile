@@ -16,9 +16,9 @@ stream** is active:
 - **MessageSync:** incrementally merges `message.updated`,
   `message.part.updated`, `message.part.delta`, `message.part.removed`, and
   `message.removed` for the bound session. It performs authoritative reloads on
-  reconnect, `session.idle`, and part mutations targeting REST-seeded rows, plus
-  a changed-message watchdog poll while the chat observes the session (paused
-  while text is actively streaming).
+  reconnect, `session.idle`, and legacy part mutations whose REST row lacks a
+  stable part ID, plus a changed-message watchdog poll while the chat observes
+  the session (paused while text is actively streaming).
 - **SessionLiveStore:** debounced `listSessions` reload (500 ms) on `session.created`, `session.updated`, `session.deleted`, and reconnect.
 - **SessionStatusLiveStore:** debounced bulk `getAllSessionStatuses` (300 ms) on `session.status`, `session.idle`, and reconnect.
 - **Connect/reconnect:** Both platforms forward the server's

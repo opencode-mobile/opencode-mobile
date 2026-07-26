@@ -97,13 +97,13 @@ class DisplayMessagePipeline(
                         is MessageListUpdate.LoadFailed -> {
                             debounceJob?.cancelAndJoin()
                             debounceJob = null
-                            enrichmentJob?.cancelAndJoin()
+                            enrichmentJob?.cancel()
                             enrichmentJob = null
                             pendingMessages = null
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
                         is MessageListUpdate.Messages -> {
-                            enrichmentJob?.cancelAndJoin()
+                            enrichmentJob?.cancel()
                             enrichmentJob = null
                             if (hasStreamingDelta(update.messages)) {
                                 // Keep the latest snapshot. Publish after a short quiet window,

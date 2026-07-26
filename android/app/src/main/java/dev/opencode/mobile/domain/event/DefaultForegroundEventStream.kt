@@ -107,14 +107,14 @@ class DefaultForegroundEventStream
             setConnectionState(EventStreamConnectionState.Idle)
         }
 
-        private fun markStreamConnected() {
+        private suspend fun markStreamConnected() {
             val shouldPublishReconnect = wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
             if (_connectionState.value != EventStreamConnectionState.Connected) {
                 setConnectionState(EventStreamConnectionState.Connected)
             }
             if (shouldPublishReconnect) {
                 logI("foreground SSE stream reconnected")
-                _events.tryEmit(OpencodeEvent(type = "stream.reconnected"))
+                _events.emit(OpencodeEvent(type = "stream.reconnected"))
                 emittedReconnectForCurrentStream = true
             }
             currentStreamWasConnected = true

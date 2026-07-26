@@ -6,13 +6,12 @@ import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.system.measureTimeMillis
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @Singleton
 class MessageContentPreparer
@@ -20,9 +19,28 @@ class MessageContentPreparer
     constructor(
         private val codeHighlighter: OpenCodeCodeHighlighter,
     ) {
-        @OptIn(ExperimentalCoroutinesApi::class)
-        internal var computationDispatcher: CoroutineDispatcher =
-            Dispatchers.Default.limitedParallelism(1)
+        internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
+
+        // Final/history parses may run concurrently so a cancelled, synchronous
+        // history parse cannot hold up a live snapshot. The bundled TextMate
+        // tokenizer owns a mutable rule cache, though, so serialize only access
+        // to that highlighter. Streaming parses select the stateless semantic
+        // fallback before reaching this wrapper and remain unblocked.
+        private val highlighterLock = Any()
+        private val serializedCodeHighlighter =
+            object : OpenCodeCodeHighlighter {
+                override fun supportsLanguage(languageOrAlias: String?): Boolean =
+                    synchronized(highlighterLock) {
+                        codeHighlighter.supportsLanguage(languageOrAlias)
+                    }
+
+                override fun highlight(
+                    languageOrAlias: String?,
+                    code: String,
+                ) = synchronized(highlighterLock) {
+                    codeHighlighter.highlight(languageOrAlias, code)
+                }
+            }
 
         private val cacheLock = Any()
         private val cache =
@@ -163,7 +181,7 @@ class MessageContentPreparer
             val document =
                 OpenCodeMarkdownParser.parse(
                     markdown = text,
-                    codeHighlighter = codeHighlighter,
+                    codeHighlighter = serializedCodeHighlighter,
                     isStreaming = isStreaming,
                 )
             return synchronized(cacheLock) {
@@ -180,7 +198,8 @@ class MessageContentPreparer
             val existing = previous?.renderedMarkdown
             if (existing != null &&
                 !isStreaming &&
-                previous.isStreaming != true
+                previous.isStreaming != true &&
+                previous.text == message.text
             ) {
                 return existing
             }

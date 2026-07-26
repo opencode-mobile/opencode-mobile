@@ -27,7 +27,6 @@ struct OpenCodeRenderedMarkdown: View {
     let onLinkTap: (URL) -> Void
 
     @State private var measuredHeight: CGFloat
-    @State private var expandedCodeBlocks = Set<String>()
 
     init(
         document: NativeMarkdownDocument,
@@ -51,7 +50,7 @@ struct OpenCodeRenderedMarkdown: View {
     var body: some View {
         VStack(alignment: .leading, spacing: blockSpacing) {
             ForEach(document.blocksWithStableIdentities) { entry in
-                blockView(entry.block, identity: entry.identity)
+                blockView(entry.block)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -71,7 +70,7 @@ struct OpenCodeRenderedMarkdown: View {
     }
 
     @ViewBuilder
-    private func blockView(_ block: NativeMarkdownBlock, identity: String) -> some View {
+    private func blockView(_ block: NativeMarkdownBlock) -> some View {
         switch block {
         case .paragraph(let inlines):
             inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
@@ -97,7 +96,7 @@ struct OpenCodeRenderedMarkdown: View {
                 }
             }
         case .codeBlock(_, let code, let spans):
-            codeBlock(identity: identity, code: code, spans: spans)
+            codeBlock(code: code, spans: spans)
         case .diffBlock(let lines):
             diffBlock(lines: lines)
         case .table(let header, let rows):
@@ -129,22 +128,19 @@ struct OpenCodeRenderedMarkdown: View {
 
     @ViewBuilder
     private func codeBlock(
-        identity: String,
         code: String,
         spans: [NativeCodeSpan]
     ) -> some View {
-        let isExpanded = expandedCodeBlocks.contains(identity)
-        let preview = codePreview(code: code, spans: spans, expanded: isExpanded)
         let usePlainStreamingText =
-            isStreaming && preview.code.count >= Self.streamingPlainCodeCharacterThreshold
+            isStreaming && code.count >= Self.streamingPlainCodeCharacterThreshold
         ScrollView(.horizontal, showsIndicators: true) {
             Group {
                 if usePlainStreamingText {
-                    Text(preview.code)
+                    Text(code)
                         .font(OpenCodeTypography.code)
                         .foregroundStyle(OpenCodeColors.textStrong)
                 } else {
-                    Text(NativeMarkdownAttributedString.code(preview.code, spans: preview.spans))
+                    Text(NativeMarkdownAttributedString.code(code, spans: spans))
                         .font(OpenCodeTypography.code)
                 }
             }
@@ -158,39 +154,6 @@ struct OpenCodeRenderedMarkdown: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
-        .overlay(alignment: .bottomTrailing) {
-            if preview.isTruncated {
-                Button(isExpanded ? "Collapse code" : "Show full code") {
-                    if isExpanded {
-                        expandedCodeBlocks.remove(identity)
-                    } else {
-                        expandedCodeBlocks.insert(identity)
-                    }
-                }
-                .font(OpenCodeTypography.caption)
-                .padding(8)
-                .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 6))
-                .padding(6)
-            }
-        }
-    }
-
-    private func codePreview(
-        code: String,
-        spans: [NativeCodeSpan],
-        expanded: Bool
-    ) -> (code: String, spans: [NativeCodeSpan], isTruncated: Bool) {
-        let maximumLines = 80
-        let lines = code.split(separator: "\n", omittingEmptySubsequences: false)
-        guard lines.count > maximumLines else { return (code, spans, false) }
-        guard !expanded else { return (code, spans, true) }
-        let previewCode = lines.prefix(maximumLines).joined(separator: "\n")
-        let utf16Length = previewCode.utf16.count
-        let previewSpans = spans.compactMap { span -> NativeCodeSpan? in
-            guard span.start < utf16Length else { return nil }
-            return NativeCodeSpan(start: span.start, end: min(span.end, utf16Length), role: span.role)
-        }
-        return (previewCode, previewSpans, true)
     }
 
     private func diffBlock(lines: [NativeDiffLine]) -> some View {

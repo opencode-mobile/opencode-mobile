@@ -74,12 +74,10 @@ marks it streaming. Missing or non-text fields are ignored. Tool updates replace
 the whole rendered tool part from the latest state object; tool state fields are
 not merged incrementally.
 
-When a part update targets a message present in the last REST snapshot,
-`MessageSync` performs a full message reload instead of merging locally. This
-remains true if `message.updated` has already created incremental info for that
-row. The domain message model intentionally does not expose server part IDs, so
-this keeps every REST-seeded sibling part intact without inventing unstable
-local part identity.
+REST mapping retains stable server part IDs inside the domain part model, so a
+part update targeting a REST-seeded message can replace that part locally while
+preserving every sibling and following delta. Legacy decoded parts without an
+ID keep the full-reload fallback rather than inventing unstable local identity.
 
 Polling pauses while text is streaming. A final part update clears the streaming
 flag; `session.idle` reloads the authoritative REST snapshot so a missed final

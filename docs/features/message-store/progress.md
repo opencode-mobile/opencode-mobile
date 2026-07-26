@@ -15,10 +15,12 @@
 ## Android
 
 - [x] `MessageSync` subscribes before initial REST, merges ordered text deltas,
-  and revision-gates REST replacements.
+  revision-gates REST replacements, and retains REST part identities so live
+  updates preserve sibling parts.
 - [x] `InMemoryMessageStore` serializes nested store reads and mutations.
 - [x] Failed idle reconciliation clears streaming state so polling can recover.
-- [x] Large-history enrichment is cancellable; large finalized annotated
+- [x] Large-history enrichment cancellation does not join stale synchronous
+  parsing before processing a newer live snapshot; large finalized annotated
   strings are built off the UI thread.
 - [x] Timeline apply coalescing preserves explicit refresh and post-send
   completion callbacks.
@@ -28,7 +30,8 @@
 ## iOS
 
 - [x] `MessageSync` subscribes before initial REST, merges ordered text deltas,
-  and revision-gates REST replacements.
+  revision-gates REST replacements, and retains REST part identities so live
+  updates preserve sibling parts.
 - [x] Main-actor store mutations provide atomic revision checks.
 - [x] Failed idle reconciliation clears streaming state so polling can recover.
 - [x] Large-history enrichment is cancellable and markdown parsing remains off
