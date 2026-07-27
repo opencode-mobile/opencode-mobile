@@ -23,6 +23,25 @@
   architecture document describes the implemented pipeline; acceptance gates
   closed. Intentional parity gaps remain in
   [parity-gaps.md](./parity-gaps.md).
+- [x] The implemented message display and rendering architecture is documented
+  from `DisplayMessage` through timeline projection, Screen Model state, native
+  row rendering, markdown paint, and auto-follow on both platforms in
+  [message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md),
+  with a self-contained visual companion in
+  [message-display-rendering-pipeline.html](./message-display-rendering-pipeline.html).
+- [x] The follow-up reliability and responsiveness architecture is documented
+  as a seven-phase cross-platform plan in
+  [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md),
+  with a self-contained status board in
+  [message-display-rendering-hardening-plan.html](./message-display-rendering-hardening-plan.html).
+- [x] Hardening Phase 4: independent streaming text lane (always-plain 16/48)
+  plus disposable decoration lane with bounded backlog on both platforms.
+- [x] Hardening Phase 5: stable `blockID`s, internal DisplayFrame→TimelineFrame
+  projectors, and per-block Markdown via BlockDecorationCache on both platforms.
+- [x] Hardening Phase 6: Screen Model `timelineFrame` reuse, declared-ID host
+  apply, and unarmed visible-anchor restore on both platforms.
+- [x] Hardening Phase 7a: soak matrix mapped, unused probes deleted, architecture
+  docs flipped to implemented; Phase 7b deferred.
 
 ## Design-system
 
@@ -43,6 +62,10 @@
   completion callbacks.
 - [x] Focused sync, preparation, pipeline, scroll, and Session Chat tests cover
   the changed behavior.
+- [x] Phase 6: `timelineFrame` on UiState with composer reuse; Ready path uses
+  declared `inserted ∪ layoutChanged` layout follow (no history-wide
+  `layoutSignature`); unarmed visible-anchor ID+offset capture/restore on
+  layout-affecting applies (view-owned; separate from armed follow).
 
 ## iOS
 
@@ -56,12 +79,29 @@
 - [x] Timeline apply work is lifecycle-cancelled and coalesces live updates.
 - [x] Focused sync, preparation, pipeline, rendered-markdown, and Session Chat
   tests cover the changed behavior.
+- [x] Phase 6: `timelineFrame` on UiState with composer/session-info/review/
+  command reuse; `MessageListTimelineHost` applies declared IDs only (no
+  list-wide Equatable); unarmed visible-anchor ID+offset capture/restore on
+  layout-affecting applies; cell-apply coalesce during drag retained.
 
 ## Blockers
 
-None.
+None. The message-display-rendering-hardening plan is closed via Phase 7a.
 
 ## Remaining work
 
-None for the pipeline-hardening plan. Follow-up product work (if any) should
-open a new feature slice rather than reopen Phases 1–6.
+- Phases 1–7a of
+  [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md)
+  are complete. Soak matrix:
+  [phase-7a-soak-matrix.md](./phase-7a-soak-matrix.md).
+- Phase 7b plan locked:
+  [message-display-rendering-7b-plan.md](./message-display-rendering-7b-plan.md)
+  ([HTML](./message-display-rendering-7b-plan.html)).
+  Linear: [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b)
+  umbrella;
+  [OPE-87](https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps)
+  coverage ticket.
+  **Ship:** coverage ticket to move soak scenarios 4–7 from partial → full.
+  **Parked** (reopen triggers only): public `DisplayFrame`, Sync/Pipeline
+  absorption, fingerprint→revision, change-set hint, `syncHealth` UI, device
+  p95 CI, sole-text bridge deletion.

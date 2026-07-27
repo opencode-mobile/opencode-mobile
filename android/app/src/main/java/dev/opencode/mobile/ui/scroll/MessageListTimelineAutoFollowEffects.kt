@@ -184,8 +184,8 @@ internal fun MessageListAutoFollowAppendEffect(
 }
 
 @Composable
-internal fun MessageListAutoFollowLayoutSignatureEffect(
-    layoutSignature: Int,
+internal fun MessageListAutoFollowLayoutAffectingEffect(
+    layoutAffectingRevision: Long,
     messageCount: Int,
     autoFollowEnabled: Boolean,
     listState: LazyListState,
@@ -194,8 +194,9 @@ internal fun MessageListAutoFollowLayoutSignatureEffect(
     autoFollowState: MessageListAutoFollowState,
     scrollController: MessageListTimelineScrollController,
 ) {
-    LaunchedEffect(layoutSignature, autoFollowEnabled) {
-        if (messageCount > 0) {
+    LaunchedEffect(layoutAffectingRevision, autoFollowEnabled) {
+        // `0` means content-only / no layout-affecting declared IDs — skip follow.
+        if (layoutAffectingRevision != 0L && messageCount > 0) {
             followMessageListLayoutChangeIfNeeded(
                 listState = listState,
                 messageCount = messageCount,
@@ -208,6 +209,146 @@ internal fun MessageListAutoFollowLayoutSignatureEffect(
         }
     }
 }
+
+/**
+ * Unarmed visible-anchor ID+offset capture/restore for layout-affecting applies.
+ * Separate from armed [MessageListAutoFollowLayoutAffectingEffect] — no unified
+ * Screen scroll API. Skip when armed/pinned follow will settle to end, or while
+ * the user is dragging/decelerating.
+ *
+ * Continuously tracks the idle unarmed anchor so capture stays valid even when
+ * Compose has already swapped in the next frame's message IDs.
+ */
+@Composable
+internal fun MessageListUnarmedVisibleAnchorEffect(
+    layoutAffectingRevision: Long,
+    messageIdsChronological: List<String>,
+    autoFollowEnabled: Boolean,
+    listState: LazyListState,
+    autoFollowTolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+    autoFollowState: MessageListAutoFollowState,
+) {
+    val currentMessageIds by rememberUpdatedState(messageIdsChronological)
+    val currentAutoFollowEnabled by rememberUpdatedState(autoFollowEnabled)
+    val trackedAnchor = remember { mutableStateOf<MessageListVisibleAnchor?>(null) }
+
+    LaunchedEffect(
+        listState,
+        autoFollowState,
+        autoFollowTolerancePx,
+        bottomAnchorHeightPx,
+    ) {
+        snapshotFlow {
+            val messageCount = currentMessageIds.size
+            val armedOrPinned =
+                messageCount > 0 &&
+                    (
+                        autoFollowState.shouldEnsureLayoutEnd(
+                            autoFollowEnabled = currentAutoFollowEnabled,
+                        ) ||
+                            listState.isPinnedToTimelineEnd(
+                                messageCount = messageCount,
+                                tolerancePx = autoFollowTolerancePx,
+                                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                            )
+                    )
+            val firstVisibleKey =
+                listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == listState.firstVisibleItemIndex }
+                    ?.key as? String
+            UnarmedVisibleAnchorSnapshot(
+                isArmedOrPinned = armedOrPinned,
+                isScrollInProgress = listState.isScrollInProgress,
+                anchor =
+                    MessageListVisibleAnchorScroll.capture(
+                        firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                        firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                        firstVisibleMessageId = firstVisibleKey,
+                    ),
+            )
+        }.distinctUntilChanged()
+            .collect { snapshot ->
+                if (
+                    MessageListVisibleAnchorScroll.shouldTrack(
+                        isArmedOrPinned = snapshot.isArmedOrPinned,
+                        isScrollInProgress = snapshot.isScrollInProgress,
+                    )
+                ) {
+                    trackedAnchor.value = snapshot.anchor
+                }
+            }
+    }
+
+    LaunchedEffect(layoutAffectingRevision) {
+        // `0` means content-only / no layout-affecting declared IDs — skip.
+        if (layoutAffectingRevision == 0L || currentMessageIds.isEmpty()) {
+            return@LaunchedEffect
+        }
+
+        val messageCount = currentMessageIds.size
+        val armedOrPinnedBefore =
+            autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled) ||
+                listState.isPinnedToTimelineEnd(
+                    messageCount = messageCount,
+                    tolerancePx = autoFollowTolerancePx,
+                    bottomAnchorHeightPx = bottomAnchorHeightPx,
+                )
+
+        // Freeze the pre-apply unarmed anchor before awaiting layout.
+        val frozenAnchor =
+            if (
+                MessageListVisibleAnchorScroll.shouldCapture(
+                    hasLayoutAffectingChange = true,
+                    isArmedOrPinned = armedOrPinnedBefore,
+                    isScrollInProgress = listState.isScrollInProgress,
+                )
+            ) {
+                trackedAnchor.value
+            } else {
+                null
+            }
+
+        withFrameNanos { }
+        withFrameNanos { }
+
+        // Skip restore when armed follow will settle to end after layout.
+        val armedOrPinnedAfter =
+            autoFollowState.shouldEnsureLayoutEnd(autoFollowEnabled = currentAutoFollowEnabled) ||
+                listState.isPinnedToTimelineEnd(
+                    messageCount = messageCount,
+                    tolerancePx = autoFollowTolerancePx,
+                    bottomAnchorHeightPx = bottomAnchorHeightPx,
+                )
+
+        if (
+            !MessageListVisibleAnchorScroll.shouldRestore(
+                anchor = frozenAnchor,
+                isArmedOrPinned = armedOrPinnedAfter,
+                isScrollInProgress = listState.isScrollInProgress,
+            )
+        ) {
+            return@LaunchedEffect
+        }
+
+        val target =
+            MessageListVisibleAnchorScroll.restoreTarget(
+                anchor = checkNotNull(frozenAnchor),
+                messageIdsChronological = currentMessageIds,
+            ) ?: return@LaunchedEffect
+
+        listState.scrollToItem(
+            index = target.lazyIndex,
+            scrollOffset = target.scrollOffset,
+        )
+    }
+}
+
+private data class UnarmedVisibleAnchorSnapshot(
+    val isArmedOrPinned: Boolean,
+    val isScrollInProgress: Boolean,
+    val anchor: MessageListVisibleAnchor?,
+)
 
 @Composable
 internal fun MessageListViewportResizeFollowEffect(

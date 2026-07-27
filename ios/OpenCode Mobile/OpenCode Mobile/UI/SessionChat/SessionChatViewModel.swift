@@ -650,11 +650,19 @@ final class SessionChatViewModel {
             transientError: transientError,
             successNotice: commandsState.actionSuccessMessage
         )
+        // Reuse the current TimelineFrame when only composer / session-info /
+        // review / command republish (same revision → no O(n) remap).
+        let nextTimelineFrame = timeline.timelineFrame
+        let timelineFrame =
+            nextTimelineFrame.frameRevision == uiState.timelineFrame.frameRevision
+            ? uiState.timelineFrame
+            : nextTimelineFrame
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
             timeline: timelineState.timeline,
             messages: timelineState.messages,
+            timelineFrame: timelineFrame,
             composer: composer.state.composer,
             isSending: composerState.isSending,
             isRefreshing: timelineState.isRefreshing,

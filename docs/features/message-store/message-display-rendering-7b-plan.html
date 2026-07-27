@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Message Display Rendering — Phase 7b</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --text: #17202a;
+      --muted: #5f6b76;
+      --line: #d8dee4;
+      --accent: #1668dc;
+      --done: #16784a;
+      --done-bg: #e7f7ee;
+      --progress: #9a6700;
+      --progress-bg: #fff6e0;
+      --parked: #5f6b76;
+      --parked-bg: #eef1f4;
+      --out: #a33b20;
+      --out-bg: #fdeceb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101418;
+        --surface: #171c21;
+        --text: #edf2f7;
+        --muted: #aab4be;
+        --line: #303841;
+        --accent: #78aaff;
+        --done: #6ed5a3;
+        --done-bg: #143226;
+        --progress: #f2c66d;
+        --progress-bg: #2a2314;
+        --parked: #c0c8d0;
+        --parked-bg: #252c33;
+        --out: #ff9b80;
+        --out-bg: #2f1712;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(960px, calc(100% - 32px)); margin: 36px auto 72px; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 4vw, 1.9rem); line-height: 1.2; }
+    h2 { margin: 32px 0 12px; font-size: 1.2rem; }
+    p { margin: 6px 0; }
+    a { color: var(--accent); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
+    .lead { color: var(--muted); max-width: 720px; }
+    .meta {
+      display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+      margin: 14px 0 22px; color: var(--muted); font-size: 0.92rem;
+    }
+    .status {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 0.85rem; font-weight: 600;
+    }
+    .status-plan { color: var(--progress); background: var(--progress-bg); }
+    .cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px; margin: 18px 0;
+    }
+    .card, table {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    }
+    .card { padding: 14px 16px; }
+    .card strong { display: block; margin-bottom: 4px; color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    .tag {
+      display: inline-block; padding: 1px 7px; border-radius: 6px;
+      font-size: 0.8rem; font-weight: 600;
+    }
+    .tag-ship { color: var(--done); background: var(--done-bg); }
+    .tag-park { color: var(--parked); background: var(--parked-bg); }
+    .tag-out { color: var(--out); background: var(--out-bg); }
+    ul { margin: 8px 0; padding-left: 1.2rem; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Message display rendering — Phase 7b</h1>
+    <p class="lead">
+      Coverage-first follow-up after Phase 7a closed the hardening plan.
+      Ship soak partials; park architecture mega-migrations behind reopen triggers.
+    </p>
+    <div class="meta">
+      <span class="status status-plan">Status: Planning locked</span>
+      <span>Source: <a href="./message-display-rendering-7b-plan.md">canonical Markdown</a></span>
+      <span>Linear: <a href="https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b">OPE-86</a> · <a href="https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps">OPE-87</a></span>
+    </div>
+
+    <section class="cards" aria-label="Summary">
+      <div class="card">
+        <strong>Ship</strong>
+        Coverage ticket: scenarios 4–7 → full. No API shape change.
+      </div>
+      <div class="card">
+        <strong>Park</strong>
+        Public <code>DisplayFrame</code>, engine absorption, fingerprints,
+        change-set hint, <code>syncHealth</code> UI, p95 CI.
+      </div>
+      <div class="card">
+        <strong>Invariants</strong>
+        List-shaped observe · intentional 3-layer · view-owned scroll.
+      </div>
+    </section>
+
+    <h2>Locked choices</h2>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Question</th><th>Lock</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Q1</td><td>Public <code>DisplayFrame</code></td><td><span class="tag tag-out">B keep list-shaped</span></td></tr>
+        <tr><td>Q2</td><td>Engine absorption</td><td><span class="tag tag-park">C intentional 3-layer</span></td></tr>
+        <tr><td>Q3</td><td>Fingerprints</td><td><span class="tag tag-park">C won’t-do for 7b</span></td></tr>
+        <tr><td>Q4</td><td>Change-set hint</td><td><span class="tag tag-park">C skip</span></td></tr>
+        <tr><td>Q5</td><td><code>syncHealth</code> UI</td><td><span class="tag tag-park">C assert-only</span></td></tr>
+        <tr><td>Q6</td><td>p95 / soak CI</td><td><span class="tag tag-park">C out of 7b</span></td></tr>
+        <tr><td>Q7</td><td>Ticket shape</td><td><span class="tag tag-ship">B umbrella + slices</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2>Slice order</h2>
+    <table>
+      <thead>
+        <tr><th>Slice</th><th>Scope</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-ship">1 · Ship</span></td>
+          <td>
+            Repeated overflow (multi-cycle), parser failure → plain retained,
+            rapid A→B→A (zero cross-session publish), related pressure gaps
+            where cheap. Update soak matrix + parity-gaps.
+          </td>
+          <td>Scheduled</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-park">2+ · Parked</span></td>
+          <td>
+            Architecture reopen only if a documented trigger fires and a
+            <em>new</em> triage supersedes this lock.
+          </td>
+          <td>Not scheduled</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>OUT of 7b</h2>
+    <ul>
+      <li>Public observation flip to <code>DisplayFrame</code></li>
+      <li>Sync/Pipeline absorption / type deletion</li>
+      <li>Fingerprint retirement or measure-then-gate ticket</li>
+      <li>Wiring change-set → pipeline hint</li>
+      <li><code>syncHealth</code> banner/chip</li>
+      <li>Device p95 CI as a 7b deliverable</li>
+      <li>Sole-text <code>renderedMarkdown</code> bridge deletion</li>
+      <li>Screen Model scroll / viewport geometry</li>
+      <li>Forcing Android drag coalesce to match iOS</li>
+      <li>One epic bundling all six deferred architecture items</li>
+    </ul>
+
+    <h2>Phase gate</h2>
+    <ul>
+      <li>Plan + decisions agree with progress / parity-gaps</li>
+      <li>Slice 1 green on Android and iOS (scenarios 4–7 full)</li>
+      <li>No architecture mega-migration without a new triage lock</li>
+      <li>List-shaped observe, 3-layer engine, fingerprints retained, assert-only health, view-owned scroll</li>
+    </ul>
+  </main>
+</body>
+</html>

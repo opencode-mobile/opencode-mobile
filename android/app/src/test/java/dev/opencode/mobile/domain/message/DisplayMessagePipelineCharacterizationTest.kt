@@ -7,6 +7,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -17,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
@@ -25,6 +27,11 @@ import kotlin.time.TestTimeSource
 @OptIn(ExperimentalCoroutinesApi::class)
 class DisplayMessagePipelineCharacterizationTest {
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    @Before
+    fun clearDecorationCache() {
+        BlockDecorationCache.clear()
+    }
 
     @Test
     fun smallFinalHistoryPublishesSinglePreparedFrame() =
@@ -153,6 +160,35 @@ class DisplayMessagePipelineCharacterizationTest {
             assertEquals(2, harness.emissions.size)
             val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
             assertEquals("AB", latest.messages.single().text)
+        }
+
+    @Test
+    fun denseStreamingMaxBatchPublishesProgressively() =
+        runTest(testDispatcher) {
+            val harness = startHarness()
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            harness.emissions.clear()
+
+            harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
+            harness.preparer.minimumPrepareDelayMs = 40L
+
+            for (count in 1..8) {
+                val text = "x".repeat(count)
+                harness.source.emit(
+                    MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", text))),
+                )
+                delay(5)
+            }
+            advanceUntilIdle()
+            // Virtualized prepare delays (minimumPrepareDelayMs) need scheduler time.
+            testScheduler.advanceTimeBy(500)
+            advanceUntilIdle()
+
+            val frames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
+            assertTrue("expected progressive streaming publishes, got ${frames.size}", frames.size >= 2)
+            assertEquals("xxxxxxxx", frames.last().messages.single().text)
+            assertTrue(frames.last().messages.single().isStreaming)
         }
 
     @Test
@@ -308,6 +344,88 @@ class DisplayMessagePipelineCharacterizationTest {
             assertEquals(1, harness.emissions.size)
         }
 
+    @Test
+    fun blockedPreparerDoesNotDelayPlainStreamingTextLane() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            harness.emissions.clear()
+            harness.preparer.prepareMessagesInvocations.clear()
+
+            harness.preparer.holdNextPrepareMessages()
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Hello"))),
+            )
+            assertEquals(STREAMING_PREPARE_DEBOUNCE_MS, harness.delay.pendingMs())
+            assertTrue(harness.emissions.isEmpty())
+
+            harness.delay.release()
+            advanceUntilIdle()
+
+            assertEquals(1, harness.emissions.size)
+            val plain = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertEquals("# Hello", plain.messages.single().text)
+            assertTrue(plain.messages.single().isStreaming)
+            assertEquals(null, plain.messages.single().renderedMarkdown)
+            assertTrue(
+                "decoration prepare may be held, but must not block plain",
+                harness.preparer.hasPendingPrepareMessagesHold() ||
+                    harness.preparer.prepareMessagesInvocations.isNotEmpty() ||
+                    harness.preparer.prepareTextBlockInvocations.isNotEmpty(),
+            )
+
+            harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Hello world"))),
+            )
+            advanceUntilIdle()
+
+            assertEquals(2, harness.emissions.size)
+            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals("# Hello world", latest.messages.single().text)
+            assertEquals(null, latest.messages.single().renderedMarkdown)
+
+            harness.preparer.releaseNextPrepareMessages()
+            advanceUntilIdle()
+
+            // Stale decoration for "# Hello" must not erase newer plain text.
+            val afterRelease = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals("# Hello world", afterRelease.messages.single().text)
+        }
+
+    @Test
+    fun largeStreamingSkipsDecorationUntilFinalization() =
+        runTest(testDispatcher) {
+            val harness = startHarness()
+            val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
+            advanceUntilIdle()
+            testScheduler.advanceTimeBy(100)
+            advanceUntilIdle()
+
+            val streamingFrames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
+            assertTrue(streamingFrames.isNotEmpty())
+            assertTrue(streamingFrames.all { frame -> frame.messages.single().renderedMarkdown == null })
+            assertTrue(
+                harness.preparer.prepareMessagesInvocations.none {
+                    it.mode == MessagePreparationMode.Streaming
+                },
+            )
+            assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty())
+
+            harness.emissions.clear()
+            harness.preparer.prepareMessagesInvocations.clear()
+            harness.source.emit(MessageListUpdate.Messages(listOf(finalAssistant("msg-1", largeText))))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(MessagePreparationMode.FinalPlaceholder, MessagePreparationMode.Final),
+                harness.preparer.prepareMessagesInvocations.map { it.mode },
+            )
+        }
+
     private fun TestScope.startHarness(holdDelays: Boolean = false): Harness {
         val harness = Harness(holdDelays = holdDelays)
         harness.collectJob =
@@ -388,11 +506,21 @@ class DisplayMessagePipelineCharacterizationTest {
         )
 
         val prepareMessagesInvocations = mutableListOf<PrepareMessagesInvocation>()
+        val prepareTextBlockInvocations = mutableListOf<PrepareTextBlockInvocation>()
         private var prepareMessagesHold: CompletableDeferred<Unit>? = null
         private var activePrepareMessagesHold: CompletableDeferred<Unit>? = null
         private var prepareMessageHold: CompletableDeferred<Unit>? = null
         private var activePrepareMessageHold: CompletableDeferred<Unit>? = null
         private val documentSerial = AtomicInteger(1)
+        var minimumPrepareDelayMs: Long? = null
+
+        data class PrepareTextBlockInvocation(
+            val blockID: String,
+            val plain: String,
+            val isStreaming: Boolean,
+            val sessionKey: String,
+            val mode: MessagePreparationMode,
+        )
 
         fun holdNextPrepareMessages() {
             prepareMessagesHold = CompletableDeferred()
@@ -434,6 +562,7 @@ class DisplayMessagePipelineCharacterizationTest {
                 hold.await()
                 activePrepareMessagesHold = null
             }
+            minimumPrepareDelayMs?.let { delay(it) }
             return messages.map { message ->
                 prepareMessageOnWorker(
                     message = message,
@@ -459,6 +588,47 @@ class DisplayMessagePipelineCharacterizationTest {
                 message = message,
                 previous = previous,
                 mode = mode,
+            )
+        }
+
+        override suspend fun prepareTextBlock(
+            blockID: String,
+            plain: String,
+            isStreaming: Boolean,
+            sessionKey: String,
+            mode: MessagePreparationMode,
+        ): MarkdownDocument? {
+            prepareTextBlockInvocations +=
+                PrepareTextBlockInvocation(
+                    blockID = blockID,
+                    plain = plain,
+                    isStreaming = isStreaming,
+                    sessionKey = sessionKey,
+                    mode = mode,
+                )
+            // Share the prepareMessages hold so characterization can block decoration
+            // without delaying the plain text lane.
+            val hold = prepareMessagesHold
+            prepareMessagesHold = null
+            if (hold != null) {
+                activePrepareMessagesHold = hold
+                hold.await()
+                activePrepareMessagesHold = null
+            }
+            minimumPrepareDelayMs?.let { delay(it) }
+            if (mode == MessagePreparationMode.Streaming &&
+                plain.length >= MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
+            ) {
+                return null
+            }
+            return MarkdownDocument(
+                sourceHash = documentSerial.getAndIncrement(),
+                blocks =
+                    listOf(
+                        MarkdownBlock.Paragraph(
+                            inlines = listOf(MarkdownInline.Text(plain)),
+                        ),
+                    ),
             )
         }
 

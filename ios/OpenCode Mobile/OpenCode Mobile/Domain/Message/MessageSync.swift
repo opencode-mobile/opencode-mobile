@@ -3,115 +3,246 @@ import OSLog
 
 typealias MessageListFetcher = @Sendable (String, String?) async throws -> [Message]
 
-@MainActor
-final class MessageSync {
-    private struct ObservationKey: Hashable {
-        let sessionID: String
-        let directory: String
-    }
-
+final class MessageSync: @unchecked Sendable {
     private let listMessages: MessageListFetcher
-    private let store: InMemoryMessageStore
+    private let store: SessionMessageEngine
     private let eventStream: any ForegroundEventStream
     private let pollIntervalMs: Int
     private let eventStagingCapacity: Int
+    private let eventStagingByteCapacity: Int
+    private let connectionProfileIDProvider: @Sendable () -> String
+    private let recoveryDelay: @Sendable (Int) async -> Void
+    private let connectionEpoch: ConnectionEpoch
+    private let lock = NSLock()
 
-    private var observationCache: [ObservationKey: SharedLiveObservation<MessageListUpdate>] = [:]
+    private var observationCache: [MessageSessionKey: SharedLiveObservation<MessageListUpdate>] = [:]
     private var lastFingerprint: [String: String] = [:]
+    private var lastPublishedFrame: [String: [Message]] = [:]
+    private var lastPublishedRevision: [String: UInt64] = [:]
+    private var healthByKey: [MessageSessionKey: MessageSyncHealth] = [:]
 
     init(
         listMessages: @escaping MessageListFetcher,
-        store: InMemoryMessageStore,
+        store: SessionMessageEngine,
         eventStream: any ForegroundEventStream,
         pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
-        eventStagingCapacity: Int = messageEventStagingCapacity
+        eventStagingCapacity: Int = messageEventStagingCapacity,
+        eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
+        connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
+        recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
+            try? await Task.sleep(for: .milliseconds(ms))
+        },
+        connectionEpoch: ConnectionEpoch = .shared
     ) {
         self.listMessages = listMessages
         self.store = store
         self.eventStream = eventStream
         self.pollIntervalMs = pollIntervalMs
         self.eventStagingCapacity = eventStagingCapacity
+        self.eventStagingByteCapacity = eventStagingByteCapacity
+        self.connectionProfileIDProvider = connectionProfileIDProvider
+        self.recoveryDelay = recoveryDelay
+        self.connectionEpoch = connectionEpoch
+    }
+
+    /// Convenience for call sites that still construct an in-memory store.
+    convenience init(
+        listMessages: @escaping MessageListFetcher,
+        store: InMemoryMessageStore,
+        eventStream: any ForegroundEventStream,
+        pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
+        eventStagingCapacity: Int = messageEventStagingCapacity,
+        eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
+        connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
+        recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
+            try? await Task.sleep(for: .milliseconds(ms))
+        },
+        connectionEpoch: ConnectionEpoch = .shared
+    ) {
+        self.init(
+            listMessages: listMessages,
+            store: SessionMessageEngine(store: store),
+            eventStream: eventStream,
+            pollIntervalMs: pollIntervalMs,
+            eventStagingCapacity: eventStagingCapacity,
+            eventStagingByteCapacity: eventStagingByteCapacity,
+            connectionProfileIDProvider: connectionProfileIDProvider,
+            recoveryDelay: recoveryDelay,
+            connectionEpoch: connectionEpoch
+        )
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
-        let key = ObservationKey(sessionID: sessionID, directory: directory ?? "")
+        let key = sessionKey(sessionID: sessionID, directory: directory)
+        lock.lock()
         if observationCache[key] == nil {
             observationCache[key] = SharedLiveObservation { yield in
                 Task {
-                    await self.runMessageLoop(sessionID: sessionID, directory: directory, yield: yield)
+                    await self.runMessageLoop(key: key, yield: yield)
                 }
             }
         }
-        return observationCache[key]!.stream()
+        let observation = observationCache[key]!
+        lock.unlock()
+        return observation.stream()
     }
 
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        try await fullReloadOrThrow(sessionID: sessionID, directory: directory, reason: "refresh")
+        let key = sessionKey(sessionID: sessionID, directory: directory)
+        return try await fullReloadOrThrow(key: key, reason: "refresh")
     }
 
     func clearCache() {
+        lock.lock()
         observationCache.removeAll()
         lastFingerprint.removeAll()
+        lastPublishedFrame.removeAll()
+        lastPublishedRevision.removeAll()
+        healthByKey.removeAll()
+        lock.unlock()
         store.clear()
     }
 
-    func peekStoreMessages(sessionID: String) -> [Message] {
-        store.messages(sessionID: sessionID)
+    func peekStoreMessages(sessionID: String, directory: String? = nil) -> [Message] {
+        let key = sessionKey(sessionID: sessionID, directory: directory)
+        return store.messages(sessionID: key.storeSlot)
+    }
+
+    /// Test/observability seam for the recovery/fault matrix.
+    func syncHealth(sessionID: String, directory: String?) -> MessageSyncHealth {
+        let key = sessionKey(sessionID: sessionID, directory: directory)
+        lock.lock()
+        defer { lock.unlock() }
+        return healthByKey[key] ?? .healthy
+    }
+
+    private func setHealth(_ health: MessageSyncHealth, for key: MessageSessionKey) {
+        lock.lock()
+        healthByKey[key] = health
+        lock.unlock()
+    }
+
+    private func fingerprint(for storeSlot: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastFingerprint[storeSlot]
+    }
+
+    private func setFingerprint(_ value: String, for storeSlot: String) {
+        lock.lock()
+        lastFingerprint[storeSlot] = value
+        lock.unlock()
+    }
+
+    private func publishedFrame(for storeSlot: String) -> [Message]? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastPublishedFrame[storeSlot]
+    }
+
+    private func setPublishedFrame(_ messages: [Message], revision: UInt64, for storeSlot: String) {
+        lock.lock()
+        lastPublishedFrame[storeSlot] = messages
+        lastPublishedRevision[storeSlot] = revision
+        lock.unlock()
+    }
+
+    private func sessionKey(sessionID: String, directory: String?) -> MessageSessionKey {
+        MessageSessionKey(
+            connectionProfileID: connectionProfileIDProvider(),
+            directory: directory,
+            sessionID: sessionID
+        )
     }
 
     private func runMessageLoop(
-        sessionID: String,
-        directory: String?,
+        key: MessageSessionKey,
         yield: @escaping (MessageListUpdate) -> Void
     ) async {
+        let observationEpoch = connectionEpoch.current()
         // Register before the initial REST request. Bounded staging closes the
         // part-shell/delta loss window without an unbounded observation buffer.
-        let staging = MessageEventStaging(capacity: eventStagingCapacity)
-        let producer = Task { @MainActor [eventStream] in
-            for await event in eventStream.events() {
-                staging.enqueue(event)
+        let staging = MessageEventStaging(
+            capacity: eventStagingCapacity,
+            byteCapacity: eventStagingByteCapacity
+        )
+        let producer = Task { [eventStream] in
+            for await event in await eventStream.events() {
+                staging.enqueue(event, sessionID: key.sessionID, epoch: observationEpoch)
             }
             staging.finish()
         }
+        let connectionWatcher = Task { [eventStream, weak self] in
+            guard let self else { return }
+            var seenConnected = false
+            for await state in await eventStream.connectionStateUpdates() {
+                switch state {
+                case .connected:
+                    seenConnected = true
+                case .disconnected, .reconnecting, .idle:
+                    guard seenConnected else { continue }
+                    guard self.fingerprint(for: key.storeSlot) != nil else { continue }
+                    guard self.connectionEpoch.current() == observationEpoch else { return }
+                    let current = self.syncHealth(sessionID: key.sessionID, directory: key.directory.isEmpty ? nil : key.directory)
+                    guard current.isHealthy else { continue }
+                    staging.enterStale(.transportUnavailable)
+                    self.setHealth(.stale(.transportUnavailable), for: key)
+                case .connecting:
+                    continue
+                }
+            }
+        }
         defer {
             producer.cancel()
+            connectionWatcher.cancel()
             staging.finish()
         }
 
-        let publishMessages: @MainActor @Sendable ([Message]) -> Void = { [weak self] messages in
+        let publishMessages: @Sendable ([Message]) -> Void = { [weak self] messages in
             guard let self else { return }
+            guard self.connectionEpoch.current() == observationEpoch else { return }
+            self.setPublishedFrame(
+                messages,
+                revision: self.store.revision(sessionID: key.storeSlot),
+                for: key.storeSlot
+            )
             yield(.messages(messages))
-            self.lastFingerprint[sessionID] = self.messageFingerprint(messages)
+            // Fingerprint remains the poll / REST authority comparison only.
+            self.setFingerprint(self.messageFingerprint(messages), for: key.storeSlot)
+            MessagePipelineProbe.emit(.displayFramePublished)
         }
 
         // Warm reopen already replayed SharedLiveObservation.lastValue. Skip an
         // identical REST republish so DisplayMessagePipeline does not cancel
         // in-flight enrich / plain-first and start over on the MainActor.
-        let fingerprintBeforeReload = lastFingerprint[sessionID]
-        let expectedRevision = store.revision(sessionID: sessionID)
+        let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
+        let expectedRevision = store.revision(sessionID: key.storeSlot)
         do {
             SessionPerformanceProbe.emit("history_request_started")
-            let messages = try await listMessages(sessionID, directory)
+            let messages = try await listMessages(key.sessionID, key.directory.isEmpty ? nil : key.directory)
             SessionPerformanceProbe.emit("history_request_finished")
             if staging.needsAuthoritativeRecovery {
                 OpenCodeLog.messageContent.info(
-                    "eventStagingRejectStaleAuthority session=\(sessionID, privacy: .public) highWater=\(staging.highWater)"
+                    "eventStagingRejectStaleAuthority session=\(key.sessionID, privacy: .public) highWater=\(staging.highWater)"
                 )
-                await performOverflowRecovery(
-                    sessionID: sessionID,
-                    directory: directory,
+                await performClosedLoopRecovery(
+                    key: key,
                     staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: .overflow,
                     publishMessages: publishMessages
                 )
             } else {
                 _ = store.replaceAllIfRevision(
-                    sessionID: sessionID,
+                    sessionID: key.storeSlot,
                     messages: messages,
                     expectedRevision: expectedRevision
                 )
-                let merged = store.messages(sessionID: sessionID)
+                let merged = store.messages(sessionID: key.storeSlot)
                 let fingerprint = messageFingerprint(merged)
-                lastFingerprint[sessionID] = fingerprint
+                setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
+                setFingerprint(fingerprint, for: key.storeSlot)
+                setHealth(.healthy, for: key)
                 if fingerprintBeforeReload != fingerprint {
                     publishMessages(merged)
                 }
@@ -119,10 +250,20 @@ final class MessageSync {
         } catch {
             SessionPerformanceProbe.emit("history_request_finished")
             if staging.needsAuthoritativeRecovery {
-                await performOverflowRecovery(
-                    sessionID: sessionID,
-                    directory: directory,
+                await performClosedLoopRecovery(
+                    key: key,
                     staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: .overflow,
+                    publishMessages: publishMessages
+                )
+            } else if fingerprint(for: key.storeSlot) != nil {
+                setHealth(.recovering(.reloadFailed), for: key)
+                await performClosedLoopRecovery(
+                    key: key,
+                    staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: .reloadFailed,
                     publishMessages: publishMessages
                 )
             } else {
@@ -131,36 +272,60 @@ final class MessageSync {
         }
 
         async let eventLoop: Void = runEventRefreshLoop(
-            sessionID: sessionID,
-            directory: directory,
+            key: key,
             staging: staging,
+            observationEpoch: observationEpoch,
             publishMessages: publishMessages
         )
         async let pollLoop: Void = runTimelinePollLoop(
-            sessionID: sessionID,
-            directory: directory,
+            key: key,
+            staging: staging,
+            observationEpoch: observationEpoch,
             publishMessages: publishMessages
         )
         _ = await (eventLoop, pollLoop)
     }
 
-    private func performOverflowRecovery(
-        sessionID: String,
-        directory: String?,
+    private func performClosedLoopRecovery(
+        key: MessageSessionKey,
         staging: MessageEventStaging,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        observationEpoch: UInt64,
+        reason: MessageSyncRecoveryReason,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
-        staging.drain()
-        await fullReloadSilent(
-            sessionID: sessionID,
-            directory: directory,
-            reason: "overflow-recovery",
-            publishMessages: publishMessages
-        )
-        staging.clearRecoveryFlag()
-        OpenCodeLog.messageContent.info(
-            "eventStagingRecovery session=\(sessionID, privacy: .public) highWater=\(staging.highWater)"
-        )
+        guard connectionEpoch.current() == observationEpoch else { return }
+        if !staging.needsAuthoritativeRecovery {
+            staging.enterRecovering(reason)
+        }
+        setHealth(staging.currentHealth, for: key)
+        var backoffMs = MessageSyncRecoveryPolicy.initialBackoffMs
+
+        while !Task.isCancelled {
+            staging.drain()
+            staging.beginAuthorityWindow()
+            let result = await fullReloadResult(key: key, reason: "overflow-recovery")
+            switch result {
+            case .success(let messages):
+                let becameHealthy = staging.completeAuthorityWindow(reloadSucceeded: true)
+                setHealth(staging.currentHealth, for: key)
+                publishMessages(messages)
+                if becameHealthy {
+                    OpenCodeLog.messageContent.info(
+                        "eventStagingRecovery session=\(key.sessionID, privacy: .public) highWater=\(staging.highWater)"
+                    )
+                    return
+                }
+            case .failure:
+                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                setHealth(staging.currentHealth, for: key)
+                // Keep last published frame; do not emit LoadFailed.
+            }
+
+            MessagePipelineProbe.emit(.recoveryRetry)
+            await recoveryDelay(backoffMs)
+            if Task.isCancelled { return }
+            backoffMs = min(backoffMs * 2, MessageSyncRecoveryPolicy.maxBackoffMs)
+        }
     }
 
     private enum ReloadResult {
@@ -168,86 +333,136 @@ final class MessageSync {
         case failure(Error)
     }
 
-    private func fullReloadOrThrow(sessionID: String, directory: String?, reason: String) async throws -> [Message] {
+    private func fullReloadOrThrow(key: MessageSessionKey, reason: String) async throws -> [Message] {
         SessionPerformanceProbe.emit("history_request_started")
-        let expectedRevision = store.revision(sessionID: sessionID)
-        let messages = try await listMessages(sessionID, directory)
+        let expectedRevision = store.revision(sessionID: key.storeSlot)
+        let directory = key.directory.isEmpty ? nil : key.directory
+        let messages = try await listMessages(key.sessionID, directory)
         SessionPerformanceProbe.emit("history_request_finished")
         _ = store.replaceAllIfRevision(
-            sessionID: sessionID,
+            sessionID: key.storeSlot,
             messages: messages,
             expectedRevision: expectedRevision
         )
-        let merged = store.messages(sessionID: sessionID)
-        lastFingerprint[sessionID] = messageFingerprint(merged)
+        let merged = store.messages(sessionID: key.storeSlot)
+        setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
+        setFingerprint(messageFingerprint(merged), for: key.storeSlot)
         return merged
     }
 
-    private func fullReloadResult(sessionID: String, directory: String?, reason: String) async -> ReloadResult {
+    private func fullReloadResult(key: MessageSessionKey, reason: String) async -> ReloadResult {
         SessionPerformanceProbe.emit("history_request_started")
-        let expectedRevision = store.revision(sessionID: sessionID)
+        let expectedRevision = store.revision(sessionID: key.storeSlot)
+        let directory = key.directory.isEmpty ? nil : key.directory
         do {
-            let messages = try await listMessages(sessionID, directory)
+            let messages = try await listMessages(key.sessionID, directory)
             _ = store.replaceAllIfRevision(
-                sessionID: sessionID,
+                sessionID: key.storeSlot,
                 messages: messages,
                 expectedRevision: expectedRevision
             )
-            let merged = store.messages(sessionID: sessionID)
-            lastFingerprint[sessionID] = messageFingerprint(merged)
+            let merged = store.messages(sessionID: key.storeSlot)
+            setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
+            setFingerprint(messageFingerprint(merged), for: key.storeSlot)
+            SessionPerformanceProbe.emit("history_request_finished")
+            MessagePipelineProbe.emit(.reducerCommitted)
             return .success(merged)
         } catch {
+            SessionPerformanceProbe.emit("history_request_finished")
             return .failure(error)
         }
     }
 
     private func fullReloadSilent(
-        sessionID: String,
-        directory: String?,
+        key: MessageSessionKey,
         reason: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        staging: MessageEventStaging?,
+        observationEpoch: UInt64,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
-        switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: reason) {
+        guard connectionEpoch.current() == observationEpoch else { return }
+        if let staging {
+            staging.beginAuthorityWindow()
+        }
+        switch await fullReloadResult(key: key, reason: reason) {
         case .success(let messages):
-            publishMessages(messages)
+            if let staging {
+                let healthy = staging.completeAuthorityWindow(reloadSucceeded: true)
+                setHealth(staging.currentHealth, for: key)
+                publishMessages(messages)
+                if !healthy {
+                    await performClosedLoopRecovery(
+                        key: key,
+                        staging: staging,
+                        observationEpoch: observationEpoch,
+                        reason: .racedAuthority,
+                        publishMessages: publishMessages
+                    )
+                }
+            } else {
+                publishMessages(messages)
+                setHealth(.healthy, for: key)
+            }
         case .failure:
-            break
+            if let staging {
+                _ = staging.completeAuthorityWindow(reloadSucceeded: false)
+                setHealth(staging.currentHealth, for: key)
+                await performClosedLoopRecovery(
+                    key: key,
+                    staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: .reloadFailed,
+                    publishMessages: publishMessages
+                )
+            }
+            // else: retain last good; no LoadFailed
         }
     }
 
     private func runEventRefreshLoop(
-        sessionID: String,
-        directory: String?,
+        key: MessageSessionKey,
         staging: MessageEventStaging,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        observationEpoch: UInt64,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         var debounceTask: Task<Void, Never>?
         defer { debounceTask?.cancel() }
 
         while let item = await staging.dequeue() {
             switch item {
-            case .overflow:
-                await performOverflowRecovery(
-                    sessionID: sessionID,
-                    directory: directory,
+            case .overflow, .recoveryRequired:
+                await performClosedLoopRecovery(
+                    key: key,
                     staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: {
+                        if case .recovering(let reason) = staging.currentHealth { return reason }
+                        return .overflow
+                    }(),
                     publishMessages: publishMessages
                 )
                 continue
-            case .event(let event):
+            case .event(let event, let eventEpoch, _):
+                guard eventEpoch == observationEpoch else { continue }
                 if staging.needsAuthoritativeRecovery {
-                    await performOverflowRecovery(
-                        sessionID: sessionID,
-                        directory: directory,
+                    await performClosedLoopRecovery(
+                        key: key,
                         staging: staging,
+                        observationEpoch: observationEpoch,
+                        reason: {
+                            if case .recovering(let reason) = staging.currentHealth { return reason }
+                            return .overflow
+                        }(),
                         publishMessages: publishMessages
                     )
                     continue
                 }
+                MessagePipelineProbe.emit(.eventAccepted)
                 await handleStagedEvent(
                     event: event,
-                    sessionID: sessionID,
-                    directory: directory,
+                    key: key,
+                    staging: staging,
+                    observationEpoch: observationEpoch,
                     debounceTask: &debounceTask,
                     publishMessages: publishMessages
                 )
@@ -257,18 +472,23 @@ final class MessageSync {
 
     private func handleStagedEvent(
         event: OpencodeEvent,
-        sessionID: String,
-        directory: String?,
+        key: MessageSessionKey,
+        staging: MessageEventStaging,
+        observationEpoch: UInt64,
         debounceTask: inout Task<Void, Never>?,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
+        guard connectionEpoch.current() == observationEpoch else { return }
         if event.type == "stream.reconnected" {
             debounceTask?.cancel()
             debounceTask = nil
-            await fullReloadSilent(
-                sessionID: sessionID,
-                directory: directory,
-                reason: event.type,
+            staging.enterRecovering(.reconnect, wakeConsumer: false)
+            setHealth(staging.currentHealth, for: key)
+            await performClosedLoopRecovery(
+                key: key,
+                staging: staging,
+                observationEpoch: observationEpoch,
+                reason: .reconnect,
                 publishMessages: publishMessages
             )
             return
@@ -279,54 +499,62 @@ final class MessageSync {
             debounceTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
                 guard !Task.isCancelled, let self else { return }
-                await self.fullReloadSilent(
-                    sessionID: sessionID,
-                    directory: directory,
-                    reason: event.type,
+                staging.enterRecovering(.reconnect, wakeConsumer: false)
+                self.setHealth(staging.currentHealth, for: key)
+                await self.performClosedLoopRecovery(
+                    key: key,
+                    staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: .reconnect,
                     publishMessages: publishMessages
                 )
             }
             return
         }
 
-        guard event.sessionID == sessionID else { return }
+        guard event.sessionID == key.sessionID else { return }
 
         switch event.type {
         case "message.updated":
-            handleMessageUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            handleMessageUpdated(event: event, key: key, publishMessages: publishMessages)
         case "message.part.updated":
-            if requiresFullReloadForRestSeededPartUpdate(event: event, sessionID: sessionID) {
+            if requiresFullReloadForRestSeededPartUpdate(event: event, key: key) {
                 await fullReloadSilent(
-                    sessionID: sessionID,
-                    directory: directory,
+                    key: key,
                     reason: "message.part.updated-rest-seeded",
+                    staging: staging,
+                    observationEpoch: observationEpoch,
                     publishMessages: publishMessages
                 )
                 return
             }
-            handleMessagePartUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            handleMessagePartUpdated(event: event, key: key, publishMessages: publishMessages)
         case "message.part.delta":
-            handleMessagePartDelta(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            handleMessagePartDelta(event: event, key: key, publishMessages: publishMessages)
         case "message.removed":
-            handleMessageRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            handleMessageRemoved(event: event, key: key, publishMessages: publishMessages)
         case "message.part.removed":
-            if requiresFullReloadForRestSeededPartRemoval(event: event, sessionID: sessionID) {
+            if requiresFullReloadForRestSeededPartRemoval(event: event, key: key) {
                 await fullReloadSilent(
-                    sessionID: sessionID,
-                    directory: directory,
+                    key: key,
                     reason: "message.part.removed-rest-seeded",
+                    staging: staging,
+                    observationEpoch: observationEpoch,
                     publishMessages: publishMessages
                 )
                 return
             }
-            handleMessagePartRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
+            handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
         case "session.idle":
-            switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "session.idle") {
+            switch await fullReloadResult(key: key, reason: "session.idle") {
             case .success(let messages):
                 publishMessages(messages)
+                setHealth(.healthy, for: key)
             case .failure:
-                store.finishStreamingText(sessionID: sessionID)
-                emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+                store.finishStreamingText(sessionID: key.storeSlot)
+                let recovered = store.messages(sessionID: key.storeSlot)
+                guard markChanged(key: key, messages: recovered) else { return }
+                publishMessages(recovered)
             }
         default:
             return
@@ -335,34 +563,39 @@ final class MessageSync {
 
     private func handleMessageUpdated(
         event: OpencodeEvent,
-        sessionID: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties,
               let infoDict = props["info"]?.dictionaryValue
         else { return }
 
-        store.apply(sessionID: sessionID, patch: .infoUpdated(infoDict))
-        emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+        guard case .changed(let changeSet) = store.apply(sessionID: key.storeSlot, patch: .infoUpdated(infoDict)) else { return }
+        MessagePipelineProbe.emit(.reducerCommitted)
+        emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
     }
 
     private func handleMessagePartUpdated(
         event: OpencodeEvent,
-        sessionID: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties,
               let partDict = props["part"]?.dictionaryValue
         else { return }
 
-        store.apply(sessionID: sessionID, patch: .partUpdated(part: partDict, delta: props["delta"]?.stringValue))
-        emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+        guard case .changed(let changeSet) = store.apply(
+            sessionID: key.storeSlot,
+            patch: .partUpdated(part: partDict, delta: props["delta"]?.stringValue)
+        ) else { return }
+        MessagePipelineProbe.emit(.reducerCommitted)
+        emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
     }
 
     private func handleMessagePartDelta(
         event: OpencodeEvent,
-        sessionID: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties else { return }
         guard props["field"]?.stringValue == "text" else { return }
@@ -371,76 +604,97 @@ final class MessageSync {
               let delta = props["delta"]?.stringValue
         else { return }
 
-        store.apply(sessionID: sessionID, patch: .partDelta(messageID: messageID, partID: partID, delta: delta))
-        emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+        guard case .changed(let changeSet) = store.apply(
+            sessionID: key.storeSlot,
+            patch: .partDelta(messageID: messageID, partID: partID, delta: delta)
+        ) else { return }
+        MessagePipelineProbe.emit(.reducerCommitted)
+        emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
     }
 
     private func handleMessageRemoved(
         event: OpencodeEvent,
-        sessionID: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
         guard let messageID = event.rawProperties?["messageID"]?.stringValue else { return }
-        store.apply(sessionID: sessionID, patch: .removed(messageID: messageID))
-        emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+        guard case .changed(let changeSet) = store.apply(sessionID: key.storeSlot, patch: .removed(messageID: messageID)) else { return }
+        MessagePipelineProbe.emit(.reducerCommitted)
+        emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
     }
 
     private func handleMessagePartRemoved(
         event: OpencodeEvent,
-        sessionID: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
         guard let props = event.rawProperties,
               let messageID = props["messageID"]?.stringValue,
               let partID = props["partID"]?.stringValue
         else { return }
 
-        store.apply(sessionID: sessionID, patch: .partRemoved(messageID: messageID, partID: partID))
-        emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+        guard case .changed(let changeSet) = store.apply(
+            sessionID: key.storeSlot,
+            patch: .partRemoved(messageID: messageID, partID: partID)
+        ) else { return }
+        MessagePipelineProbe.emit(.reducerCommitted)
+        emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
     }
 
-    private func requiresFullReloadForRestSeededPartUpdate(event: OpencodeEvent, sessionID: String) -> Bool {
+    private func requiresFullReloadForRestSeededPartUpdate(event: OpencodeEvent, key: MessageSessionKey) -> Bool {
         guard let partDict = event.rawProperties?["part"]?.dictionaryValue,
               let messageID = partDict["messageID"]?.stringValue
         else { return false }
-        return store.isRestSeededMessage(sessionID: sessionID, messageID: messageID)
+        return store.isRestSeededMessage(sessionID: key.storeSlot, messageID: messageID)
     }
 
-    private func requiresFullReloadForRestSeededPartRemoval(event: OpencodeEvent, sessionID: String) -> Bool {
+    private func requiresFullReloadForRestSeededPartRemoval(event: OpencodeEvent, key: MessageSessionKey) -> Bool {
         guard let messageID = event.rawProperties?["messageID"]?.stringValue else { return false }
-        return store.isRestSeededMessage(sessionID: sessionID, messageID: messageID)
+        return store.isRestSeededMessage(sessionID: key.storeSlot, messageID: messageID)
     }
 
-    private func emitMessages(
-        sessionID: String,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+    private func emitLiveMessages(
+        key: MessageSessionKey,
+        changeSet: SessionChangeSet,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) {
-        let messages = store.messages(sessionID: sessionID)
-        guard markChanged(sessionID: sessionID, messages: messages) else { return }
-        publishMessages(messages)
+        // Info-only / empty-slot inserts carry no part, removal, or streaming signal.
+        guard store.shouldPublishLive(changeSet) else { return }
+        let previous = publishedFrame(for: key.storeSlot)
+        let frame = store.frameAfterChange(
+            sessionID: key.storeSlot,
+            changeSet: changeSet,
+            previous: previous
+        )
+        // No whole-history fingerprint gate on the live SSE path.
+        publishMessages(frame)
     }
 
     private func runTimelinePollLoop(
-        sessionID: String,
-        directory: String?,
-        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+        key: MessageSessionKey,
+        staging: MessageEventStaging,
+        observationEpoch: UInt64,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(pollIntervalMs))
             guard !Task.isCancelled else { return }
+            if staging.needsAuthoritativeRecovery { continue }
+            guard connectionEpoch.current() == observationEpoch else { return }
             // Polling REST mid-stream publishes a behind snapshot and looks like the
             // assistant message clearing then reprinting from the start.
-            if store.hasStreamingText(sessionID: sessionID) { continue }
-            let expectedRevision = store.revision(sessionID: sessionID)
-            guard let messages = try? await listMessages(sessionID, directory) else { continue }
+            if store.hasStreamingText(sessionID: key.storeSlot) { continue }
+            let expectedRevision = store.revision(sessionID: key.storeSlot)
+            let directory = key.directory.isEmpty ? nil : key.directory
+            guard let messages = try? await listMessages(key.sessionID, directory) else { continue }
             let fp = messageFingerprint(messages)
-            guard fp != lastFingerprint[sessionID] else { continue }
+            guard fp != fingerprint(for: key.storeSlot) else { continue }
             guard store.replaceAllIfRevision(
-                sessionID: sessionID,
+                sessionID: key.storeSlot,
                 messages: messages,
                 expectedRevision: expectedRevision
             ) else { continue }
-            let merged = store.messages(sessionID: sessionID)
+            let merged = store.messages(sessionID: key.storeSlot)
             publishMessages(merged)
         }
     }
@@ -463,10 +717,10 @@ final class MessageSync {
         }
     }
 
-    private func markChanged(sessionID: String, messages: [Message]) -> Bool {
+    private func markChanged(key: MessageSessionKey, messages: [Message]) -> Bool {
         let fp = messageFingerprint(messages)
-        if fp == lastFingerprint[sessionID] { return false }
-        lastFingerprint[sessionID] = fp
+        if fp == fingerprint(for: key.storeSlot) { return false }
+        setFingerprint(fp, for: key.storeSlot)
         return true
     }
 }

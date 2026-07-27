@@ -1,13 +1,15 @@
 package dev.opencode.mobile.domain.message
 
+import android.os.Looper
 import android.util.Log
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
-import dev.opencode.mobile.domain.event.OpencodeEvent
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +27,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.system.measureTimeMillis
 
 typealias MessageListFetcher = suspend (sessionId: String, directory: String?) -> List<Message>
@@ -32,22 +35,29 @@ typealias MessageListFetcher = suspend (sessionId: String, directory: String?) -
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class MessageSync(
     private val listMessages: MessageListFetcher,
-    private val store: InMemoryMessageStore,
+    private val engine: SessionMessageEngine,
     private val eventStream: ForegroundEventStream,
     private val liveStoreScope: LiveStoreScope,
     private val pollIntervalMs: Long = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
     private val eventStagingCapacity: Int = MESSAGE_EVENT_STAGING_CAPACITY,
+    private val eventStagingByteCapacity: Int = MESSAGE_EVENT_STAGING_BYTE_CAPACITY,
+    private val connectionProfileIdProvider: () -> String = { "local" },
+    private val recoveryDelay: suspend (Long) -> Unit = { ms -> delay(ms) },
+    private val connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared,
 ) {
-    private val observationCache = ConcurrentHashMap<ObservationKey, SharedFlow<MessageListUpdate>>()
+    private val observationCache = ConcurrentHashMap<MessageSessionKey, SharedFlow<MessageListUpdate>>()
     private val lastFingerprints = ConcurrentHashMap<String, String>()
+    private val lastPublishedFrames = ConcurrentHashMap<String, List<Message>>()
+    private val lastPublishedRevisions = ConcurrentHashMap<String, Long>()
+    private val healthByKey = ConcurrentHashMap<MessageSessionKey, MessageSyncHealth>()
 
     fun observeMessages(
         sessionId: String,
         directory: String?,
     ): Flow<MessageListUpdate> {
-        val key = ObservationKey(sessionId, directory.orEmpty())
+        val key = sessionKey(sessionId, directory)
         return observationCache.getOrPut(key) {
-            buildMessageFlow(sessionId, directory)
+            buildMessageFlow(key)
                 .shareIn(
                     scope = liveStoreScope.coroutineScope,
                     started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
@@ -59,98 +69,255 @@ class MessageSync(
     suspend fun refreshMessages(
         sessionId: String,
         directory: String?,
-    ): List<Message> = fullReloadOrThrow(sessionId, directory, reason = "refresh")
+    ): List<Message> = fullReloadOrThrow(sessionKey(sessionId, directory), reason = "refresh")
 
     fun clearCache() {
         observationCache.clear()
         lastFingerprints.clear()
-        store.clear()
+        lastPublishedFrames.clear()
+        lastPublishedRevisions.clear()
+        healthByKey.clear()
+        engine.clear()
     }
 
-    private fun buildMessageFlow(
+    /** Test/observability seam for the recovery/fault matrix. */
+    fun syncHealth(
         sessionId: String,
         directory: String?,
-    ): Flow<MessageListUpdate> =
-        merge(
-            incrementalMessageFlow(sessionId, directory),
-            timelinePollFlow(sessionId, directory),
+    ): MessageSyncHealth = healthByKey[sessionKey(sessionId, directory)] ?: MessageSyncHealth.Healthy
+
+    private fun sessionKey(
+        sessionId: String,
+        directory: String?,
+    ): MessageSessionKey =
+        MessageSessionKey.of(
+            connectionProfileId = connectionProfileIdProvider(),
+            directory = directory,
+            sessionId = sessionId,
         )
 
-    private fun incrementalMessageFlow(
-        sessionId: String,
-        directory: String?,
-    ): Flow<MessageListUpdate> =
-        channelFlow {
-            // Subscribe before the initial REST request. Bounded staging closes the
-            // part-shell/delta loss window without an unbounded pipeline-owned buffer.
-            // SharedFlow fan-out capacity is separate and left unchanged.
-            val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
-            val needsAuthoritativeRecovery = AtomicBoolean(false)
-            val queued = AtomicInteger(0)
-            val highWater = AtomicInteger(0)
-            var serverConnectedReloadJob: Job? = null
+    private fun buildMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
+        merge(
+            incrementalMessageFlow(key),
+            timelinePollFlow(key),
+        )
 
-            fun noteQueued() {
+    private fun incrementalMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
+        channelFlow {
+            val observationEpoch = connectionEpoch.current()
+            val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
+            val health = AtomicReference<MessageSyncHealth>(MessageSyncHealth.Healthy)
+            val authorityWindowOpen = AtomicBoolean(false)
+            val racedDuringAuthority = AtomicBoolean(false)
+            val pendingRecoveryWhileIdle = AtomicBoolean(false)
+            val queued = AtomicInteger(0)
+            val queuedBytes = AtomicInteger(0)
+            val highWater = AtomicInteger(0)
+            val highWaterBytes = AtomicInteger(0)
+            var serverConnectedReloadJob: Job? = null
+            val storeSlot = key.storeSlot
+            val directory = key.directory.ifEmpty { null }
+
+            fun noteQueued(cost: Int) {
                 val depth = queued.incrementAndGet()
+                val bytes = queuedBytes.addAndGet(cost)
                 highWater.updateAndGet { current -> maxOf(current, depth) }
+                highWaterBytes.updateAndGet { current -> maxOf(current, bytes) }
             }
 
-            fun noteDequeued() {
+            fun noteDequeued(cost: Int) {
                 queued.updateAndGet { current -> maxOf(0, current - 1) }
+                queuedBytes.updateAndGet { current -> maxOf(0, current - cost) }
             }
 
             fun drainStaging() {
-                while (staging.tryReceive().isSuccess) {
-                    noteDequeued()
+                while (true) {
+                    val item = staging.tryReceive().getOrNull() ?: break
+                    if (item is StagedItem.Event) {
+                        noteDequeued(item.byteCost)
+                    } else {
+                        noteDequeued(0)
+                    }
                 }
                 queued.set(0)
+                queuedBytes.set(0)
+            }
+
+            fun publishHealth(next: MessageSyncHealth) {
+                health.set(next)
+                healthByKey[key] = next
+            }
+
+            fun requiresRecovery(): Boolean = health.get().requiresAuthoritativeRecovery
+
+            fun isRelevant(event: OpencodeEvent): Boolean =
+                when (event.type) {
+                    "stream.reconnected", "server.connected" -> true
+                    else -> event.sessionId == key.sessionId
+                }
+
+            fun noteRelevantWhileRecovering() {
+                if (authorityWindowOpen.get()) {
+                    racedDuringAuthority.set(true)
+                } else {
+                    pendingRecoveryWhileIdle.set(true)
+                    if (health.get() !is MessageSyncHealth.Recovering) {
+                        publishHealth(MessageSyncHealth.Recovering(MessageSyncRecoveryReason.RacedAuthority))
+                    }
+                    staging.trySend(StagedItem.RecoveryRequired)
+                }
+            }
+
+            fun enterRecovering(
+                reason: MessageSyncRecoveryReason,
+                wakeConsumer: Boolean = true,
+            ) {
+                publishHealth(MessageSyncHealth.Recovering(reason))
+                drainStaging()
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.RecoveryStarted)
+                if (wakeConsumer) {
+                    staging.trySend(StagedItem.Overflow)
+                }
+            }
+
+            fun beginAuthorityWindow() {
+                authorityWindowOpen.set(true)
+                racedDuringAuthority.set(false)
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.AuthorityWindowOpened)
+            }
+
+            fun completeAuthorityWindow(reloadSucceeded: Boolean): Boolean {
+                authorityWindowOpen.set(false)
+                val raced = racedDuringAuthority.getAndSet(false)
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.AuthorityWindowClosed)
+                if (!reloadSucceeded) {
+                    publishHealth(MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed))
+                    MessagePipelineProbe.emit(MessagePipelineProbe.Marker.RecoveryRetry)
+                    return false
+                }
+                if (raced) {
+                    publishHealth(MessageSyncHealth.Recovering(MessageSyncRecoveryReason.RacedAuthority))
+                    MessagePipelineProbe.emit(MessagePipelineProbe.Marker.RecoveryRetry)
+                    return false
+                }
+                publishHealth(MessageSyncHealth.Healthy)
+                pendingRecoveryWhileIdle.set(false)
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.RecoveryHealthy)
+                return true
             }
 
             fun markOverflow() {
-                if (!needsAuthoritativeRecovery.compareAndSet(false, true)) return
+                if (requiresRecovery()) return
                 logW(
-                    "eventStagingOverflow session=$sessionId capacity=$eventStagingCapacity " +
-                        "highWater=${highWater.get()}",
+                    "eventStagingOverflow session=${key.sessionId} capacity=$eventStagingCapacity " +
+                        "byteCapacity=$eventStagingByteCapacity highWater=${highWater.get()} " +
+                        "highWaterBytes=${highWaterBytes.get()}",
                 )
-                drainStaging()
-                // Wake the consumer if it is blocked on receive.
-                staging.trySend(StagedItem.Overflow)
+                enterRecovering(MessageSyncRecoveryReason.Overflow)
             }
+
+            fun assertOffMainThread() {
+                val main = runCatching { Looper.getMainLooper() }.getOrNull() ?: return
+                check(Looper.myLooper() != main) {
+                    "MessageSync ingress/reduction must not run on the main thread"
+                }
+            }
+
+            fun isCurrentEpoch(): Boolean = connectionEpoch.current() == observationEpoch
 
             val producer =
                 launch {
                     eventStream.events.collect { event ->
+                        assertOffMainThread()
                         if (!isActive) return@collect
-                        if (needsAuthoritativeRecovery.get()) return@collect
-                        val result = staging.trySend(StagedItem.Event(event))
+                        if (!MessageEventRouter.shouldStageForMessageSync(event)) return@collect
+                        if (requiresRecovery()) {
+                            if (isRelevant(event)) noteRelevantWhileRecovering()
+                            return@collect
+                        }
+                        val cost = MessageEventRouter.estimatedByteCost(event)
+                        if (queued.get() >= eventStagingCapacity ||
+                            queuedBytes.get() + cost > eventStagingByteCapacity
+                        ) {
+                            markOverflow()
+                            return@collect
+                        }
+                        val result =
+                            staging.trySend(
+                                StagedItem.Event(event, observationEpoch, cost),
+                            )
                         if (result.isSuccess) {
-                            noteQueued()
+                            noteQueued(cost)
                         } else if (!result.isClosed) {
                             markOverflow()
                         }
                     }
                 }
 
-            suspend fun performOverflowRecovery() {
-                drainStaging()
-                fullReloadSilent(sessionId, directory, reason = "overflow-recovery")?.let { reloaded ->
-                    logI(
-                        "observeMessages emit session=$sessionId count=${reloaded.size} " +
-                            "source=overflow-recovery highWater=${highWater.get()}",
-                    )
-                    send(MessageListUpdate.Messages(reloaded))
+            val connectionWatcher =
+                launch {
+                    var seenConnected = false
+                    eventStream.connectionState.collect { state ->
+                        when (state) {
+                            EventStreamConnectionState.Connected -> seenConnected = true
+                            EventStreamConnectionState.Disconnected,
+                            EventStreamConnectionState.Reconnecting,
+                            EventStreamConnectionState.Idle,
+                            -> {
+                                if (!seenConnected) return@collect
+                                if (lastPublishedFrames[storeSlot] == null) return@collect
+                                if (!isCurrentEpoch()) return@collect
+                                if (!health.get().isHealthy) return@collect
+                                publishHealth(
+                                    MessageSyncHealth.Stale(MessageSyncRecoveryReason.TransportUnavailable),
+                                )
+                            }
+                            EventStreamConnectionState.Connecting -> Unit
+                        }
+                    }
                 }
-                needsAuthoritativeRecovery.set(false)
+
+            suspend fun performClosedLoopRecovery(reason: MessageSyncRecoveryReason) {
+                if (!isCurrentEpoch()) return
+                if (!requiresRecovery()) {
+                    enterRecovering(reason)
+                }
+                var backoffMs = MessageSyncRecoveryPolicy.INITIAL_BACKOFF_MS
+                while (isActive && isCurrentEpoch()) {
+                    drainStaging()
+                    beginAuthorityWindow()
+                    when (val result = fullReloadResult(key, reason = "overflow-recovery")) {
+                        is ReloadResult.Success -> {
+                            val becameHealthy = completeAuthorityWindow(reloadSucceeded = true)
+                            logI(
+                                "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
+                                    "source=overflow-recovery highWater=${highWater.get()}",
+                            )
+                            if (isCurrentEpoch()) {
+                                rememberPublishedFrame(storeSlot, result.messages)
+                                send(MessageListUpdate.Messages(result.messages))
+                                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                            }
+                            if (becameHealthy) return
+                        }
+                        is ReloadResult.Failure -> {
+                            completeAuthorityWindow(reloadSucceeded = false)
+                            // Retain last good frame; do not emit LoadFailed.
+                        }
+                    }
+                    MessagePipelineProbe.emit(MessagePipelineProbe.Marker.RecoveryRetry)
+                    recoveryDelay(backoffMs)
+                    backoffMs = minOf(backoffMs * 2, MessageSyncRecoveryPolicy.MAX_BACKOFF_MS)
+                }
             }
 
             suspend fun handleEvent(event: OpencodeEvent) {
+                assertOffMainThread()
                 if (event.type == "stream.reconnected") {
                     serverConnectedReloadJob?.cancel()
                     serverConnectedReloadJob = null
-                    fullReloadSilent(sessionId, directory, reason = event.type)?.let { reloaded ->
-                        logI("observeMessages emit session=$sessionId count=${reloaded.size} source=${event.type}")
-                        send(MessageListUpdate.Messages(reloaded))
-                    }
+                    enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
+                    performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
                     return
                 }
                 if (event.type == "server.connected") {
@@ -158,33 +325,42 @@ class MessageSync(
                     serverConnectedReloadJob =
                         launch {
                             delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
-                            fullReloadSilent(sessionId, directory, reason = event.type)?.let { reloaded ->
-                                logI(
-                                    "observeMessages emit session=$sessionId count=${reloaded.size} source=${event.type}",
-                                )
-                                send(MessageListUpdate.Messages(reloaded))
-                            }
+                            enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
+                            performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
                         }
                     return
                 }
 
-                if (event.sessionId != sessionId) return
+                if (event.sessionId != key.sessionId) return
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.EventAccepted)
 
+                var applyResult: MessageStoreApplyResult? = null
                 when (event.type) {
                     "message.updated" -> {
                         val infoJson = event.rawProperties?.get("info")?.jsonObject ?: return
-                        store.apply(sessionId, MessagePatch.InfoUpdated(infoJson))
+                        applyResult = engine.apply(storeSlot, MessagePatch.InfoUpdated(infoJson))
                     }
                     "message.part.updated" -> {
-                        if (requiresFullReloadForRestSeededPartUpdate(event.rawProperties, sessionId)) {
-                            fullReloadSilent(sessionId, directory, reason = "message.part.updated-rest-seeded")
-                                ?.let { reloaded ->
+                        if (requiresFullReloadForRestSeededPartUpdate(event.rawProperties, storeSlot)) {
+                            beginAuthorityWindow()
+                            when (val result = fullReloadResult(key, reason = "message.part.updated-rest-seeded")) {
+                                is ReloadResult.Success -> {
+                                    val healthy = completeAuthorityWindow(reloadSucceeded = true)
+                                    rememberPublishedFrame(storeSlot, result.messages)
                                     logI(
-                                        "observeMessages emit session=$sessionId count=${reloaded.size} " +
+                                        "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
                                             "source=message.part.updated-rest-seeded",
                                     )
-                                    send(MessageListUpdate.Messages(reloaded))
+                                    send(MessageListUpdate.Messages(result.messages))
+                                    if (!healthy) {
+                                        performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
+                                    }
                                 }
+                                is ReloadResult.Failure -> {
+                                    completeAuthorityWindow(reloadSucceeded = false)
+                                    performClosedLoopRecovery(MessageSyncRecoveryReason.ReloadFailed)
+                                }
+                            }
                             return
                         }
                         val partJson = event.rawProperties?.get("part")?.jsonObject ?: return
@@ -193,7 +369,7 @@ class MessageSync(
                                 ?.get("delta")
                                 ?.jsonPrimitive
                                 ?.contentOrNull
-                        store.apply(sessionId, MessagePatch.PartUpdated(partJson, delta))
+                        applyResult = engine.apply(storeSlot, MessagePatch.PartUpdated(partJson, delta))
                     }
                     "message.part.delta" -> {
                         val props = event.rawProperties ?: return
@@ -202,7 +378,7 @@ class MessageSync(
                         val messageId = props["messageID"]?.jsonPrimitive?.contentOrNull ?: return
                         val partId = props["partID"]?.jsonPrimitive?.contentOrNull ?: return
                         val delta = props["delta"]?.jsonPrimitive?.contentOrNull ?: return
-                        store.apply(sessionId, MessagePatch.PartDelta(messageId, partId, delta))
+                        applyResult = engine.apply(storeSlot, MessagePatch.PartDelta(messageId, partId, delta))
                     }
                     "message.removed" -> {
                         val messageId =
@@ -210,18 +386,29 @@ class MessageSync(
                                 ?.get("messageID")
                                 ?.jsonPrimitive
                                 ?.contentOrNull ?: return
-                        store.apply(sessionId, MessagePatch.Removed(messageId))
+                        applyResult = engine.apply(storeSlot, MessagePatch.Removed(messageId))
                     }
                     "message.part.removed" -> {
-                        if (requiresFullReloadForRestSeededPartRemoval(event.rawProperties, sessionId)) {
-                            fullReloadSilent(sessionId, directory, reason = "message.part.removed-rest-seeded")
-                                ?.let { reloaded ->
+                        if (requiresFullReloadForRestSeededPartRemoval(event.rawProperties, storeSlot)) {
+                            beginAuthorityWindow()
+                            when (val result = fullReloadResult(key, reason = "message.part.removed-rest-seeded")) {
+                                is ReloadResult.Success -> {
+                                    val healthy = completeAuthorityWindow(reloadSucceeded = true)
+                                    rememberPublishedFrame(storeSlot, result.messages)
                                     logI(
-                                        "observeMessages emit session=$sessionId count=${reloaded.size} " +
+                                        "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
                                             "source=message.part.removed-rest-seeded",
                                     )
-                                    send(MessageListUpdate.Messages(reloaded))
+                                    send(MessageListUpdate.Messages(result.messages))
+                                    if (!healthy) {
+                                        performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
+                                    }
                                 }
+                                is ReloadResult.Failure -> {
+                                    completeAuthorityWindow(reloadSucceeded = false)
+                                    performClosedLoopRecovery(MessageSyncRecoveryReason.ReloadFailed)
+                                }
+                            }
                             return
                         }
                         val messageId =
@@ -234,19 +421,27 @@ class MessageSync(
                                 ?.get("partID")
                                 ?.jsonPrimitive
                                 ?.contentOrNull ?: return
-                        store.apply(sessionId, MessagePatch.PartRemoved(messageId, partId))
+                        applyResult = engine.apply(storeSlot, MessagePatch.PartRemoved(messageId, partId))
                     }
                     "session.idle" -> {
-                        val reloaded = fullReloadSilent(sessionId, directory, reason = "session.idle")
-                        if (reloaded != null) {
-                            logI("observeMessages emit session=$sessionId count=${reloaded.size} source=session.idle")
-                            send(MessageListUpdate.Messages(reloaded))
-                        } else {
-                            store.finishStreamingText(sessionId)
-                            val recovered = store.messages(sessionId)
-                            if (markChanged(sessionId, recovered)) {
-                                logW("session.idle reload failed; resumed polling session=$sessionId")
-                                send(MessageListUpdate.Messages(recovered))
+                        when (val result = fullReloadResult(key, reason = "session.idle")) {
+                            is ReloadResult.Success -> {
+                                rememberPublishedFrame(storeSlot, result.messages)
+                                logI(
+                                    "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
+                                        "source=session.idle",
+                                )
+                                send(MessageListUpdate.Messages(result.messages))
+                                publishHealth(MessageSyncHealth.Healthy)
+                            }
+                            is ReloadResult.Failure -> {
+                                engine.finishStreamingText(storeSlot)
+                                val recovered = engine.messages(storeSlot)
+                                if (markChanged(storeSlot, recovered)) {
+                                    rememberPublishedFrame(storeSlot, recovered)
+                                    logW("session.idle reload failed; resumed polling session=${key.sessionId}")
+                                    send(MessageListUpdate.Messages(recovered))
+                                }
                             }
                         }
                         return
@@ -254,67 +449,94 @@ class MessageSync(
                     else -> return
                 }
 
-                val messages = store.messages(sessionId)
-                if (markChanged(sessionId, messages)) {
-                    logD(
-                        "observeMessages emit session=$sessionId count=${messages.size} " +
-                            "source=sse-incremental type=${event.type}",
+                val changeSet =
+                    when (val result = applyResult) {
+                        is MessageStoreApplyResult.Changed -> result.changeSet
+                        else -> return
+                    }
+                if (!engine.shouldPublishLive(changeSet)) return
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.ReducerCommitted)
+                val frame =
+                    engine.frameAfterChange(
+                        storeSlot,
+                        changeSet,
+                        lastPublishedFrames[storeSlot],
                     )
-                    send(MessageListUpdate.Messages(messages))
-                }
+                rememberPublishedFrame(storeSlot, frame, changeSet.sessionRevision)
+                logD(
+                    "observeMessages emit session=${key.sessionId} count=${frame.size} " +
+                        "source=sse-incremental type=${event.type} revision=${changeSet.sessionRevision}",
+                )
+                send(MessageListUpdate.Messages(frame))
+                MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
             }
 
-            logI("observeMessages subscribe session=$sessionId directory=${directory ?: "-"}")
+            logI("observeMessages subscribe session=${key.sessionId} directory=${directory ?: "-"}")
             try {
-                val expectedRevision = store.revision(sessionId)
+                val expectedRevision = engine.revision(storeSlot)
                 var loaded: List<Message>? = null
                 var failure: Throwable? = null
                 val elapsedMs =
                     measureTimeMillis {
-                        runCatching { listMessages(sessionId, directory) }
+                        runCatching { listMessages(key.sessionId, directory) }
                             .onSuccess { loaded = it }
                             .onFailure { failure = it }
                     }
-                if (needsAuthoritativeRecovery.get()) {
+                if (requiresRecovery()) {
                     logW(
-                        "eventStagingRejectStaleAuthority session=$sessionId " +
+                        "eventStagingRejectStaleAuthority session=${key.sessionId} " +
                             "highWater=${highWater.get()} ms=$elapsedMs",
                     )
-                    performOverflowRecovery()
+                    performClosedLoopRecovery(MessageSyncRecoveryReason.Overflow)
                 } else {
                     val messages = loaded
                     if (messages == null) {
-                        logW("fullReload failed session=$sessionId reason=initial-subscribe ms=$elapsedMs")
-                        send(
-                            MessageListUpdate.LoadFailed(
-                                failure ?: IllegalStateException("Message load failed"),
-                            ),
-                        )
+                        if (lastPublishedFrames.containsKey(storeSlot)) {
+                            publishHealth(MessageSyncHealth.Recovering(MessageSyncRecoveryReason.ReloadFailed))
+                            performClosedLoopRecovery(MessageSyncRecoveryReason.ReloadFailed)
+                        } else {
+                            logW("fullReload failed session=${key.sessionId} reason=initial-subscribe ms=$elapsedMs")
+                            send(
+                                MessageListUpdate.LoadFailed(
+                                    failure ?: IllegalStateException("Message load failed"),
+                                ),
+                            )
+                        }
                     } else {
-                        store.replaceAllIfRevision(sessionId, messages, expectedRevision)
-                        val merged = store.messages(sessionId)
-                        lastFingerprints[sessionId] = messageFingerprint(merged)
+                        engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)
+                        val merged = engine.messages(storeSlot)
+                        rememberPublishedFrame(storeSlot, merged)
+                        publishHealth(MessageSyncHealth.Healthy)
                         logI(
-                            "fullReload session=$sessionId reason=initial-subscribe " +
+                            "fullReload session=${key.sessionId} reason=initial-subscribe " +
                                 "count=${merged.size} ms=$elapsedMs",
                         )
                         logI(
-                            "observeMessages emit session=$sessionId count=${merged.size} " +
+                            "observeMessages emit session=${key.sessionId} count=${merged.size} " +
                                 "source=initial-subscribe",
                         )
                         send(MessageListUpdate.Messages(merged))
+                        MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
                     }
                 }
 
                 for (item in staging) {
                     when (item) {
-                        is StagedItem.Overflow -> {
-                            performOverflowRecovery()
+                        is StagedItem.Overflow, is StagedItem.RecoveryRequired -> {
+                            val reason =
+                                (health.get() as? MessageSyncHealth.Recovering)?.reason
+                                    ?: MessageSyncRecoveryReason.Overflow
+                            performClosedLoopRecovery(reason)
                         }
                         is StagedItem.Event -> {
-                            noteDequeued()
-                            if (needsAuthoritativeRecovery.get()) {
-                                performOverflowRecovery()
+                            noteDequeued(item.byteCost)
+                            if (item.epoch != observationEpoch) {
+                                // Drop stale-epoch work.
+                            } else if (requiresRecovery() || pendingRecoveryWhileIdle.getAndSet(false)) {
+                                val reason =
+                                    (health.get() as? MessageSyncHealth.Recovering)?.reason
+                                        ?: MessageSyncRecoveryReason.Overflow
+                                performClosedLoopRecovery(reason)
                             } else {
                                 handleEvent(item.event)
                             }
@@ -324,6 +546,7 @@ class MessageSync(
             } finally {
                 serverConnectedReloadJob?.cancel()
                 producer.cancel()
+                connectionWatcher.cancel()
                 staging.close()
             }
         }
@@ -331,29 +554,36 @@ class MessageSync(
     private sealed interface StagedItem {
         data class Event(
             val event: OpencodeEvent,
+            val epoch: Long,
+            val byteCost: Int,
         ) : StagedItem
 
         data object Overflow : StagedItem
+
+        data object RecoveryRequired : StagedItem
     }
 
-    private fun timelinePollFlow(
-        sessionId: String,
-        directory: String?,
-    ): Flow<MessageListUpdate> =
+    private fun timelinePollFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
+            val storeSlot = key.storeSlot
+            val directory = key.directory.ifEmpty { null }
             while (true) {
                 delay(pollIntervalMs)
+                if (healthByKey[key]?.requiresAuthoritativeRecovery == true) continue
                 // Polling REST mid-stream publishes a behind snapshot and looks like the
                 // assistant message clearing then reprinting from the start.
-                if (store.hasStreamingText(sessionId)) continue
-                val expectedRevision = store.revision(sessionId)
-                val messages = runCatching { listMessages(sessionId, directory) }.getOrNull() ?: continue
+                if (engine.hasStreamingText(storeSlot)) continue
+                val expectedRevision = engine.revision(storeSlot)
+                val messages = runCatching { listMessages(key.sessionId, directory) }.getOrNull() ?: continue
                 val fp = messageFingerprint(messages)
-                if (fp != lastFingerprints[sessionId]) {
-                    if (!store.replaceAllIfRevision(sessionId, messages, expectedRevision)) continue
-                    val merged = store.messages(sessionId)
-                    lastFingerprints[sessionId] = messageFingerprint(merged)
-                    logD("observeMessages emit session=$sessionId count=${merged.size} source=poll fingerprint-changed")
+                if (fp != lastFingerprints[storeSlot]) {
+                    if (!engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)) continue
+                    val merged = engine.messages(storeSlot)
+                    rememberPublishedFrame(storeSlot, merged)
+                    logD(
+                        "observeMessages emit session=${key.sessionId} count=${merged.size} " +
+                            "source=poll fingerprint-changed",
+                    )
                     send(MessageListUpdate.Messages(merged))
                 }
             }
@@ -370,68 +600,59 @@ class MessageSync(
     }
 
     private suspend fun fullReloadOrThrow(
-        sessionId: String,
-        directory: String?,
+        key: MessageSessionKey,
         reason: String,
     ): List<Message> {
         var messages: List<Message>? = null
-        val expectedRevision = store.revision(sessionId)
+        val storeSlot = key.storeSlot
+        val directory = key.directory.ifEmpty { null }
+        val expectedRevision = engine.revision(storeSlot)
         val elapsedMs =
             measureTimeMillis {
-                messages = listMessages(sessionId, directory)
+                messages = listMessages(key.sessionId, directory)
             }
-        store.replaceAllIfRevision(sessionId, messages!!, expectedRevision)
-        val merged = store.messages(sessionId)
-        val fp = messageFingerprint(merged)
-        lastFingerprints[sessionId] = fp
+        engine.replaceAllIfRevision(storeSlot, messages!!, expectedRevision)
+        val merged = engine.messages(storeSlot)
+        rememberPublishedFrame(storeSlot, merged)
         logI(
-            "fullReload session=$sessionId reason=$reason count=${merged.size} ms=$elapsedMs",
+            "fullReload session=${key.sessionId} reason=$reason count=${merged.size} ms=$elapsedMs",
         )
         return merged
     }
 
     private suspend fun fullReloadResult(
-        sessionId: String,
-        directory: String?,
+        key: MessageSessionKey,
         reason: String,
     ): ReloadResult {
         var messages: List<Message>? = null
         var failure: Throwable? = null
-        val expectedRevision = store.revision(sessionId)
+        val storeSlot = key.storeSlot
+        val directory = key.directory.ifEmpty { null }
+        val expectedRevision = engine.revision(storeSlot)
         val elapsedMs =
             measureTimeMillis {
-                runCatching { listMessages(sessionId, directory) }
+                runCatching { listMessages(key.sessionId, directory) }
                     .onSuccess { messages = it }
                     .onFailure { failure = it }
             }
         val loaded = messages
         if (loaded == null) {
-            logW("fullReload failed session=$sessionId reason=$reason ms=$elapsedMs")
+            logW("fullReload failed session=${key.sessionId} reason=$reason ms=$elapsedMs")
             return ReloadResult.Failure(failure ?: IllegalStateException("Message load failed"))
         }
-        store.replaceAllIfRevision(sessionId, loaded, expectedRevision)
-        val merged = store.messages(sessionId)
-        val fp = messageFingerprint(merged)
-        lastFingerprints[sessionId] = fp
+        engine.replaceAllIfRevision(storeSlot, loaded, expectedRevision)
+        val merged = engine.messages(storeSlot)
+        rememberPublishedFrame(storeSlot, merged)
         logI(
-            "fullReload session=$sessionId reason=$reason count=${merged.size} ms=$elapsedMs",
+            "fullReload session=${key.sessionId} reason=$reason count=${merged.size} ms=$elapsedMs",
         )
+        MessagePipelineProbe.emit(MessagePipelineProbe.Marker.ReducerCommitted)
         return ReloadResult.Success(merged)
     }
 
-    private suspend fun fullReloadSilent(
-        sessionId: String,
-        directory: String?,
-        reason: String,
-    ): List<Message>? =
-        when (val result = fullReloadResult(sessionId, directory, reason)) {
-            is ReloadResult.Success -> result.messages
-            is ReloadResult.Failure -> null
-        }
-
     private fun requiresFullReloadForRestSeededPartUpdate(
         rawProperties: JsonObject?,
-        sessionId: String,
+        storeSlot: String,
     ): Boolean {
         val messageId =
             rawProperties
@@ -441,15 +662,15 @@ class MessageSync(
                 ?.jsonPrimitive
                 ?.contentOrNull
                 ?: return false
-        return store.isRestSeededMessage(sessionId, messageId)
+        return engine.isRestSeededMessage(storeSlot, messageId)
     }
 
     private fun requiresFullReloadForRestSeededPartRemoval(
         rawProperties: JsonObject?,
-        sessionId: String,
+        storeSlot: String,
     ): Boolean {
         val messageId = rawProperties?.get("messageID")?.jsonPrimitive?.contentOrNull ?: return false
-        return store.isRestSeededMessage(sessionId, messageId)
+        return engine.isRestSeededMessage(storeSlot, messageId)
     }
 
     private fun messageFingerprint(messages: List<Message>): String =
@@ -458,7 +679,8 @@ class MessageSync(
                 message.parts.joinToString(",") { part ->
                     when (part) {
                         is MessagePart.Text -> "text:${part.text.length}:${part.text.hashCode()}:${part.isStreaming}"
-                        is MessagePart.Tool -> "tool:${part.callId}:${part.status}:${part.output?.hashCode()}:${part.error?.hashCode()}"
+                        is MessagePart.Tool ->
+                            "tool:${part.callId}:${part.status}:${part.output?.hashCode()}:${part.error?.hashCode()}"
                         is MessagePart.File ->
                             "file:${part.id}:${part.filename}:${part.mime}:" +
                                 "${part.dataUrl.length}:${part.dataUrl.hashCode()}"
@@ -467,13 +689,23 @@ class MessageSync(
             "${message.id}:${message.text.length}:${message.text.hashCode()}:$parts"
         }
 
+    private fun rememberPublishedFrame(
+        storeSlot: String,
+        messages: List<Message>,
+        revision: Long? = null,
+    ) {
+        lastPublishedFrames[storeSlot] = messages
+        lastPublishedRevisions[storeSlot] = revision ?: engine.revision(storeSlot)
+        lastFingerprints[storeSlot] = messageFingerprint(messages)
+    }
+
     private fun markChanged(
-        sessionId: String,
+        storeSlot: String,
         messages: List<Message>,
     ): Boolean {
         val fp = messageFingerprint(messages)
-        if (fp == lastFingerprints[sessionId]) return false
-        lastFingerprints[sessionId] = fp
+        if (fp == lastFingerprints[storeSlot]) return false
+        rememberPublishedFrame(storeSlot, messages)
         return true
     }
 
@@ -488,11 +720,6 @@ class MessageSync(
     private fun logW(message: String) {
         runCatching { Log.w(TAG, message) }
     }
-
-    private data class ObservationKey(
-        val sessionId: String,
-        val directory: String,
-    )
 
     private companion object {
         private const val TAG = "MessageSync"

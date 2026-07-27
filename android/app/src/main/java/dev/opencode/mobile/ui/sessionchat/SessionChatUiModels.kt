@@ -80,6 +80,8 @@ data class SessionChatUiState(
     val sessionTitle: String,
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem> = emptyList(),
+    /** Last projected timeline frame; reused when only non-timeline regions republish. */
+    val timelineFrame: TimelineFrame? = null,
     val composer: SessionChatComposerState = SessionChatComposerState(),
     val isSending: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -235,6 +237,7 @@ data class ChildSessionNavigationTarget(
 data class SessionChatTimelineRegionState(
     val timeline: SessionChatTimelineState = SessionChatTimelineState.Loading,
     val messages: List<SessionChatMessageItem> = emptyList(),
+    val timelineFrame: TimelineFrame? = null,
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
 )

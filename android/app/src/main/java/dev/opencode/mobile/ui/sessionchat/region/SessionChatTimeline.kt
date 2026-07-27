@@ -1,18 +1,26 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.sessionchat.ContentRevision
+import dev.opencode.mobile.ui.sessionchat.DisplayFrame
+import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
+import dev.opencode.mobile.ui.sessionchat.OptimisticInputs
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.TimelineFrame
+import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -23,10 +31,6 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 class SessionChatTimeline(
     private val messageRepository: MessageRepository,
@@ -47,6 +51,8 @@ class SessionChatTimeline(
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
     private var pendingBaselineSignatures: Map<String, String> = emptyMap()
     private var lastLoadedMessages: List<Message> = emptyList()
+    private var lastTimelineFrame: TimelineFrame? = null
+    private var nextFrameRevision: Long = 1L
 
     fun bind(
         sessionId: String,
@@ -63,6 +69,9 @@ class SessionChatTimeline(
         pendingOptimisticRows = emptyList()
         pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
+        lastTimelineFrame = null
+        nextFrameRevision = 1L
+        BlockDecorationCache.clear()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
             it.copy(timeline = SessionChatTimelineState.Loading, errorMessage = null)
@@ -164,10 +173,25 @@ class SessionChatTimeline(
         pendingBaselineSignatures =
             _state.value.messages
                 .filterNot { it.isPending }
-                .associate { it.id to it.reconciliationSignature() }
+                .associate { item ->
+                    item.id to TimelineProjector.reconciliationSignature(TimelineProjector.rowFromMessageItem(item))
+                }
+        val pendingRows = enrichedRows.map(TimelineProjector::rowFromMessageItem)
+        val previous = lastTimelineFrame
+        val frame =
+            TimelineFrame(
+                frameRevision = nextFrameRevision++,
+                rows = (previous?.rows.orEmpty()) + pendingRows,
+                insertedRowIDs = pendingRows.map { it.id }.toSet(),
+                changedRowIDs = emptySet(),
+                removedRowIDs = emptySet(),
+                layoutChangedRowIDs = emptySet(),
+            )
+        lastTimelineFrame = frame
         _state.update {
             it.copy(
                 messages = it.messages + enrichedRows,
+                timelineFrame = frame,
                 timeline = SessionChatTimelineState.Ready,
                 errorMessage = null,
             )
@@ -181,9 +205,24 @@ class SessionChatTimeline(
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
         pendingBaselineSignatures = emptyMap()
+        val previous = lastTimelineFrame
+        val frame =
+            previous?.let { prior ->
+                val rows = prior.rows.filterNot { it.id == optimisticId }
+                TimelineFrame(
+                    frameRevision = nextFrameRevision++,
+                    rows = rows,
+                    insertedRowIDs = emptySet(),
+                    changedRowIDs = emptySet(),
+                    removedRowIDs = setOf(optimisticId).intersect(prior.rows.map { it.id }.toSet()),
+                    layoutChangedRowIDs = emptySet(),
+                )
+            }
+        lastTimelineFrame = frame
         _state.update {
             it.copy(
                 messages = it.messages.filterNot { item -> item.id == optimisticId },
+                timelineFrame = frame,
                 errorMessage = error,
             )
         }
@@ -229,36 +268,30 @@ class SessionChatTimeline(
         display: DisplayMessage,
         previous: SessionChatMessageItem? = null,
     ): SessionChatMessageItem? {
-        val message = display.message
-        val blocks = SessionChatTimelineBlocks.build(role = message.role, parts = message.parts)
-        val resolvedBlocks =
-            when {
-                blocks.isNotEmpty() -> blocks
-                message.text.isNotBlank() -> listOf(SessionChatTimelineBlock.Text(message.text))
-                else -> emptyList()
+        val body = displayMessageBody(display, previous) ?: return null
+        val previousFrame =
+            previous?.let { item ->
+                TimelineFrame(
+                    frameRevision = 0L,
+                    rows = listOf(TimelineProjector.rowFromMessageItem(item)),
+                    insertedRowIDs = emptySet(),
+                    changedRowIDs = emptySet(),
+                    removedRowIDs = emptySet(),
+                    layoutChangedRowIDs = emptySet(),
+                )
             }
-        val attachments = blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
-        if (resolvedBlocks.isEmpty() && attachments.isEmpty()) return null
-
-        val isStreaming = display.isStreaming
-        val renderedMarkdown =
-            display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
-                isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
-            }
-
-        return SessionChatMessageItem(
-            id = message.id,
-            role = message.role,
-            text = message.text,
-            metadataLabel = metadataLabel(message),
-            isStreaming = isStreaming,
-            renderedMarkdown = renderedMarkdown,
-            blocks = resolvedBlocks,
-            attachments = attachments,
-            modelProviderId = message.modelProviderId,
-            modelId = message.modelId,
-            contextInputTokens = message.contextInputTokens,
-        )
+        val projected =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = boundSessionId ?: display.message.id,
+                        frameRevision = 0L,
+                        sourceRevision = 0L,
+                        messages = listOf(body),
+                    ),
+                previous = previousFrame,
+            )
+        return projected.rows.singleOrNull()?.let(TimelineProjector::toMessageItem)
     }
 
     fun latestModelHintFromMessages(messages: List<Message>): LatestModelHint? {
@@ -401,16 +434,43 @@ class SessionChatTimeline(
         lastLoadedMessages = displayMessages.map { it.message }
         val stateSnapshot = _state.value
         val previousById = stateSnapshot.messages.associateBy { it.id }
-        val structuralStartedAt = System.nanoTime()
-        val structural = withContext(ioDispatcher) { timelineMessages(displayMessages, previousById) }
-        val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
-        val merged =
+        val previousFrame = lastTimelineFrame
+        val sessionKey = sourceSessionId
+        val optimisticInputs =
             if (fromQuietRefresh && mergePendingWhileSending) {
-                mergeWithPending(structural, pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } })
+                val pendingItems =
+                    pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } }
+                OptimisticInputs(
+                    pendingRows = pendingItems.map(TimelineProjector::rowFromMessageItem),
+                    baselineSignatures = pendingBaselineSignatures,
+                )
             } else {
-                structural
+                OptimisticInputs()
             }
+        val frameRevision = nextFrameRevision++
+        val structuralStartedAt = System.nanoTime()
+        val projected =
+            withContext(ioDispatcher) {
+                val bodies =
+                    sortedDisplayMessages(displayMessages).mapNotNull { display ->
+                        displayMessageBody(display, previousById[display.id])
+                    }
+                TimelineProjector.project(
+                    frame =
+                        DisplayFrame(
+                            sessionKey = sessionKey,
+                            frameRevision = frameRevision,
+                            sourceRevision = 0L,
+                            messages = bodies,
+                        ),
+                    optimisticInputs = optimisticInputs,
+                    previous = previousFrame,
+                )
+            }
+        val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
+        val merged = projected.rows.map(TimelineProjector::toMessageItem)
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+        lastTimelineFrame = projected
         val timeline =
             when {
                 merged.isEmpty() -> SessionChatTimelineState.Empty
@@ -430,6 +490,7 @@ class SessionChatTimeline(
             state.copy(
                 timeline = resolvedTimeline,
                 messages = merged,
+                timelineFrame = projected,
                 isRefreshing = isRefreshing,
                 errorMessage =
                     if (fromQuietRefresh) {
@@ -455,10 +516,16 @@ class SessionChatTimeline(
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
         pendingBaselineSignatures = emptyMap()
-        _state.update {
-            it.copy(
+        // Retain the last good timeline when one exists; only clear on cold failure.
+        _state.update { current ->
+            val retainLastGood = current.messages.isNotEmpty()
+            if (!retainLastGood) {
+                lastTimelineFrame = null
+            }
+            current.copy(
                 timeline = SessionChatTimelineState.Error,
-                messages = emptyList(),
+                messages = if (retainLastGood) current.messages else emptyList(),
+                timelineFrame = if (retainLastGood) current.timelineFrame else null,
                 errorMessage = errorMessage(throwable),
             )
         }
@@ -469,46 +536,7 @@ class SessionChatTimeline(
         worktree: String,
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
-    private fun mergeWithPending(
-        serverItems: List<SessionChatMessageItem>,
-        pendingItems: List<SessionChatMessageItem>,
-    ): List<SessionChatMessageItem> {
-        if (pendingItems.isEmpty()) return serverItems
-        val pendingToKeep =
-            pendingItems.filter { pending ->
-                !serverItems.any { server ->
-                    pendingBaselineSignatures[server.id] != server.reconciliationSignature() &&
-                        server.matchesOptimistic(pending)
-                }
-            }
-        return serverItems + pendingToKeep
-    }
-
-    private fun SessionChatMessageItem.matchesOptimistic(pending: SessionChatMessageItem): Boolean =
-        role == MessageRole.User &&
-            text == pending.text &&
-            attachments.size == pending.attachments.size &&
-            attachments.zip(pending.attachments).all { (server, optimistic) ->
-                server.id == optimistic.id || server.signature == optimistic.signature
-            }
-
-    private fun SessionChatMessageItem.reconciliationSignature(): String =
-        buildString {
-            append(role.name)
-            append('\u0000')
-            append(text)
-            attachments.forEach { attachment ->
-                append('\u0000')
-                append(attachment.id)
-                append('\u0000')
-                append(attachment.signature)
-            }
-        }
-
-    private fun timelineMessages(
-        displayMessages: List<DisplayMessage>,
-        previousById: Map<String, SessionChatMessageItem>,
-    ): List<SessionChatMessageItem> =
+    private fun sortedDisplayMessages(displayMessages: List<DisplayMessage>): List<DisplayMessage> =
         displayMessages
             .withIndex()
             .sortedWith { left, right ->
@@ -521,18 +549,75 @@ class SessionChatTimeline(
                             .compareTo(right.value.message.id)
                     else -> left.index.compareTo(right.index)
                 }
-            }.mapNotNull { toMessageItem(it.value, previousById[it.value.id]) }
+            }.map { it.value }
 
-    private fun metadataLabel(message: Message): String {
-        val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
-        return listOfNotNull(message.mode, message.model, message.variant, timeLabel).joinToString(" · ")
+    private fun displayMessageBody(
+        display: DisplayMessage,
+        previous: SessionChatMessageItem?,
+    ): DisplayMessageBody? {
+        val message = display.message
+        val resolvedBlocks =
+            SessionChatTimelineBlocks.buildOrFallback(
+                role = message.role,
+                parts = message.parts,
+                messageId = message.id,
+                fallbackText = message.text,
+            )
+        if (resolvedBlocks.isEmpty()) return null
+
+        val sessionKey = boundSessionId ?: message.id
+        val isStreaming = display.isStreaming
+        val blocksWithCache =
+            resolvedBlocks.map { block ->
+                if (block !is SessionChatTimelineBlock.Text) {
+                    block
+                } else {
+                    val revision = ContentRevision.of(block.text)
+                    val cached =
+                        BlockDecorationCache.get(
+                            sessionKey = sessionKey,
+                            blockID = block.blockID,
+                            textHash = revision.textHash,
+                            textLength = revision.textLength,
+                            isStreaming = isStreaming,
+                        )
+                    if (cached != null && block.renderedMarkdown == null) {
+                        block.copy(renderedMarkdown = cached)
+                    } else {
+                        block
+                    }
+                }
+            }
+
+        val renderedMarkdown =
+            display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
+                display.isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
+            }
+        val blocks = attachMarkdownBridge(blocksWithCache, renderedMarkdown)
+        return DisplayMessageBody(message = message, blocks = blocks)
     }
 
-    private fun formatSentTime(epochMs: Long): String =
-        Instant
-            .ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .format(SentTimeFormatter)
+    /**
+     * Temporary Phase 5 bridge: message-scoped markdown lands on the sole text
+     * block when per-block cache has not already decorated it.
+     */
+    private fun attachMarkdownBridge(
+        blocks: List<SessionChatTimelineBlock>,
+        renderedMarkdown: MarkdownDocument?,
+    ): List<SessionChatTimelineBlock> {
+        if (renderedMarkdown == null) return blocks
+        val textBlockIndexes =
+            blocks.mapIndexedNotNull { index, block ->
+                index.takeIf { block is SessionChatTimelineBlock.Text }
+            }
+        if (textBlockIndexes.size != 1) return blocks
+        val textIndex = textBlockIndexes.single()
+        val textBlock = blocks[textIndex] as SessionChatTimelineBlock.Text
+        if (textBlock.renderedMarkdown != null) return blocks
+        return blocks.toMutableList().also {
+            it[textIndex] = textBlock.copy(renderedMarkdown = renderedMarkdown)
+        }
+    }
 
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {
@@ -559,6 +644,5 @@ class SessionChatTimeline(
 
     companion object {
         private const val TAG = "SessionChatTimeline"
-        private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     }
 }

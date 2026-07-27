@@ -135,6 +135,9 @@ struct SessionChatUiState: Equatable {
     var sessionTitle: String
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
+    /// Projected timeline frame with declared ID sets. Reused when only
+    /// composer / session-info / review / command republish.
+    var timelineFrame: TimelineFrame = .empty
     var composer: SessionChatComposerState
     var isSending: Bool = false
     var isRefreshing: Bool = false
@@ -240,6 +243,7 @@ struct SessionChatUiState: Equatable {
             sessionTitle: sessionTitle,
             timeline: .loading,
             messages: [],
+            timelineFrame: .empty,
             composer: SessionChatComposerState(
                 text: "",
                 selectedModel: nil,

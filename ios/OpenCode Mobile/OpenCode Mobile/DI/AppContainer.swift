@@ -99,13 +99,18 @@ extension Container {
     }
 
     var messageStore: Factory<InMemoryMessageStore> {
-        self { @MainActor in InMemoryMessageStore() }.singleton
+        self { InMemoryMessageStore() }.singleton
+    }
+
+    var sessionMessageEngine: Factory<SessionMessageEngine> {
+        self { SessionMessageEngine(store: self.messageStore()) }.singleton
     }
 
     var messageSync: Factory<MessageSync> {
-        self { @MainActor in
+        self {
             let api = self.messagesAPIClient()
             let adapter = self.messageDomainAdapter()
+            let manager = self.activeConnectionManager()
             return MessageSync(
                 listMessages: { sessionID, directory in
                     do {
@@ -114,8 +119,15 @@ extension Container {
                         throw adapter.mapError(error)
                     }
                 },
-                store: self.messageStore(),
-                eventStream: self.foregroundEventStream()
+                store: self.sessionMessageEngine(),
+                eventStream: self.foregroundEventStream(),
+                connectionProfileIDProvider: {
+                    guard let connection = manager.connection else { return "local" }
+                    return PreparedHistoryCacheKey.profileID(
+                        baseURL: connection.baseURL.absoluteString,
+                        username: connection.username
+                    )
+                }
             )
         }.singleton
     }

@@ -66,9 +66,9 @@ class MessageContentPreparer
                                     val previous = previousById[message.id]
                                     val display =
                                         prepareMessageOnWorker(
-                                            message,
-                                            previous,
-                                            mode,
+                                            message = message,
+                                            previous = previous,
+                                            mode = mode,
                                         )
                                     add(display)
                                     when {
@@ -121,15 +121,45 @@ class MessageContentPreparer
             message: Message,
             previous: DisplayMessage? = null,
             mode: MessagePreparationMode = MessagePreparationMode.Final,
+            sessionKey: String = "",
         ): DisplayMessage =
             withContext(computationDispatcher) {
-                prepareMessageOnWorker(message, previous, mode)
+                prepareMessageOnWorker(message, previous, mode, sessionKey)
+            }
+
+        /**
+         * Prepare Markdown for one presentation text block.
+         * Writes the preparer LRU keyed by session + block + content revision + streaming.
+         */
+        suspend fun prepareTextBlock(
+            blockID: String,
+            plain: String,
+            isStreaming: Boolean,
+            sessionKey: String = "",
+            mode: MessagePreparationMode = MessagePreparationMode.Streaming,
+        ): MarkdownDocument? =
+            withContext(computationDispatcher) {
+                if (mode == MessagePreparationMode.Streaming &&
+                    plain.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
+                ) {
+                    return@withContext null
+                }
+                if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
+                    return@withContext null
+                }
+                parseDocumentSafely(
+                    sessionKey = sessionKey,
+                    blockID = blockID,
+                    text = plain,
+                    isStreaming = isStreaming,
+                )
             }
 
         private fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
             mode: MessagePreparationMode,
+            sessionKey: String = "",
         ): DisplayMessage {
             val isStreaming = messageIsStreaming(message)
             if (mode == MessagePreparationMode.Streaming &&
@@ -153,7 +183,12 @@ class MessageContentPreparer
                     ?: if (mode == MessagePreparationMode.FinalPlaceholder) {
                         previous?.renderedMarkdown
                     } else {
-                        parseDocumentSafely(message.id, message.text, isStreaming)
+                        parseDocumentSafely(
+                            sessionKey = sessionKey,
+                            blockID = message.id,
+                            text = message.text,
+                            isStreaming = isStreaming,
+                        )
                     }
             return DisplayMessage(message = message, renderedMarkdown = document)
         }
@@ -162,17 +197,19 @@ class MessageContentPreparer
             message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
 
         private fun parseDocumentSafely(
-            messageId: String,
+            sessionKey: String,
+            blockID: String,
             text: String,
             isStreaming: Boolean,
         ): MarkdownDocument? =
-            runCatching { parseDocument(messageId, text, isStreaming) }
+            runCatching { parseDocument(sessionKey, blockID, text, isStreaming) }
                 .onFailure { error ->
-                    logI("preparePlainFallback messageIdHash=${messageId.hashCode()} reason=${error.javaClass.simpleName}")
+                    logI("preparePlainFallback blockIdHash=${blockID.hashCode()} reason=${error.javaClass.simpleName}")
                 }.getOrNull()
 
         private fun parseDocument(
-            messageId: String,
+            sessionKey: String,
+            blockID: String,
             text: String,
             isStreaming: Boolean,
         ): MarkdownDocument? {
@@ -181,7 +218,8 @@ class MessageContentPreparer
             }
             val cacheKey =
                 CacheKey(
-                    messageId = messageId,
+                    sessionKey = sessionKey,
+                    blockID = blockID,
                     textHash = stableMarkdownSourceHash(text),
                     textLength = text.length,
                     isStreaming = isStreaming,
@@ -254,7 +292,8 @@ class MessageContentPreparer
         }
 
         private data class CacheKey(
-            val messageId: String,
+            val sessionKey: String,
+            val blockID: String,
             val textHash: Int,
             val textLength: Int,
             val isStreaming: Boolean,

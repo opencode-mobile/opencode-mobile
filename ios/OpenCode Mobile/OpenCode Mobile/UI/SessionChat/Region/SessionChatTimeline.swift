@@ -6,6 +6,8 @@ final class SessionChatTimeline {
     var onChange: (() -> Void)?
 
     private(set) var state = SessionChatTimelineRegionState()
+    /// Latest projected frame for Screen Model reuse and host declared-ID apply.
+    private(set) var timelineFrame: TimelineFrame = .empty
 
     private let sessionID: String
     private let worktree: String
@@ -18,6 +20,7 @@ final class SessionChatTimeline {
     private var pendingOptimisticRows: [SessionChatRow] = []
     private var pendingBaselineSignatureCounts: [String: Int] = [:]
     private var lastLoadedMessages: [Message] = []
+    private var displayFrameRevision: UInt64 = 0
 
     init(
         sessionID: String,
@@ -39,6 +42,8 @@ final class SessionChatTimeline {
         pendingOptimisticRows = []
         pendingBaselineSignatureCounts = [:]
         lastLoadedMessages = []
+        timelineFrame = .empty
+        displayFrameRevision = 0
         state = SessionChatTimelineRegionState()
         notifyChange()
     }
@@ -162,6 +167,14 @@ final class SessionChatTimeline {
         state.messages.append(contentsOf: rows)
         state.timeline = .ready
         state.errorMessage = nil
+        let inserted = Set(rows.map(\.id))
+        publishSyntheticTimelineFrame(
+            messages: state.messages,
+            insertedRowIDs: inserted,
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: inserted
+        )
         notifyChange()
     }
 
@@ -171,6 +184,13 @@ final class SessionChatTimeline {
         pendingBaselineSignatureCounts = [:]
         state.messages.removeAll { $0.id == optimisticID }
         state.errorMessage = error
+        publishSyntheticTimelineFrame(
+            messages: state.messages,
+            insertedRowIDs: [],
+            changedRowIDs: [],
+            removedRowIDs: [optimisticID],
+            layoutChangedRowIDs: []
+        )
         notifyChange()
     }
 
@@ -216,52 +236,48 @@ final class SessionChatTimeline {
     }
 
     func row(from display: DisplayMessage, previous: SessionChatRow? = nil) -> SessionChatRow? {
-        let message = display.message
-        let isStreaming = display.isStreaming
-        let renderedMarkdown = display.renderedMarkdown ?? previous?.renderedMarkdown.flatMap { document in
-            isStreaming && (previous?.isStreaming == true || previous?.text == message.text) ? document : nil
-        }
-
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: sessionID,
+            frameRevision: 0,
+            sourceRevision: 0,
+            displayMessages: [display]
+        )
+        guard !frame.messages.isEmpty else { return nil }
+        let previousTimeline: TimelineFrame? =
+            if let previous {
+                TimelineFrame(
+                    frameRevision: 0,
+                    rows: [TimelineRow.fromSessionChatRow(previous)],
+                    insertedRowIDs: [],
+                    changedRowIDs: [],
+                    removedRowIDs: [],
+                    layoutChangedRowIDs: []
+                )
+            } else {
+                nil
+            }
+        let projected = SessionChatTimelineProjector.project(
+            frame: frame,
+            optimistic: .none,
+            previous: previousTimeline,
+            metadataLabel: { [self] message in
+                metadataLabel(
+                    mode: message.mode,
+                    model: message.model,
+                    variant: message.variant,
+                    sentAtEpochMs: message.sentAtEpochMs
+                )
+            }
+        )
+        guard let timelineRow = projected.rows.first else { return nil }
         if let previous,
-           !previous.isPending,
-           previous.text == message.text,
-           previous.isStreaming == isStreaming,
-           previous.role == message.role,
-           previous.renderedMarkdown?.sourceHash == renderedMarkdown?.sourceHash,
-           previous.renderedMarkdown?.blocks.count == renderedMarkdown?.blocks.count
+           !projected.changedRowIDs.contains(previous.id),
+           !projected.insertedRowIDs.contains(previous.id),
+           projected.rows.contains(where: { $0.id == previous.id })
         {
             return previous
         }
-
-        let structuralBlocks = SessionChatTimelineBlocks.build(role: message.role, parts: message.parts)
-        let resolvedBlocks: [SessionChatTimelineBlock] =
-            if !structuralBlocks.isEmpty {
-                structuralBlocks
-            } else if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                [.text(message.text)]
-            } else {
-                []
-            }
-        guard !resolvedBlocks.isEmpty else { return nil }
-
-        return SessionChatRow(
-            id: message.id,
-            role: message.role,
-            text: message.text,
-            metadataLabel: metadataLabel(
-                mode: message.mode,
-                model: message.model,
-                variant: message.variant,
-                sentAtEpochMs: message.sentAtEpochMs
-            ),
-            isPending: false,
-            isStreaming: isStreaming,
-            renderedMarkdown: renderedMarkdown,
-            blocks: resolvedBlocks,
-            modelProviderID: message.modelProviderID,
-            modelID: message.modelID,
-            contextInputTokens: message.contextInputTokens
-        )
+        return timelineRow.toSessionChatRow()
     }
 
     private func applyLoadedDisplayMessagesTransform(
@@ -277,34 +293,68 @@ final class SessionChatTimeline {
         let isSending = fromQuietRefresh ? mergePendingWhileSending : false
         let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
         let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
-        let sortedDisplays =
-            displayMessages
-                .enumerated()
-                .sorted { left, right in
-                    let leftTime = left.element.message.sentAtEpochMs
-                    let rightTime = right.element.message.sentAtEpochMs
-                    if let leftTime, let rightTime {
-                        if leftTime != rightTime { return leftTime < rightTime }
-                        return left.element.message.id < right.element.message.id
-                    }
-                    return left.offset < right.offset
-                }
-                .map(\.element)
-        var serverRows: [SessionChatRow] = []
-        serverRows.reserveCapacity(sortedDisplays.count)
         let applyStartedAt = ContinuousClock.now
-        var rebuiltCount = 0
-        for (index, display) in sortedDisplays.enumerated() {
-            let previous = previousByID[display.id]
-            if let built = row(from: display, previous: previous) {
-                if previous.map({ $0.id == built.id && $0.renderedMarkdown?.sourceHash == built.renderedMarkdown?.sourceHash && $0.text == built.text && $0.isStreaming == built.isStreaming }) != true {
-                    rebuiltCount += 1
-                }
-                serverRows.append(built)
+
+        displayFrameRevision &+= 1
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: sessionID,
+            frameRevision: displayFrameRevision,
+            sourceRevision: displayFrameRevision,
+            displayMessages: displayMessages
+        )
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+
+        let pendingRows: [TimelineRow]
+        if fromQuietRefresh, isSending {
+            let source = pendingOptimisticRows.isEmpty
+                ? stateSnapshot.messages.filter(\.isPending)
+                : pendingOptimisticRows
+            pendingRows = source.map { TimelineRow.fromSessionChatRow($0) }
+        } else {
+            pendingRows = []
+        }
+        let optimistic = OptimisticInputs(
+            pendingRows: pendingRows,
+            baselineSignatureCounts: pendingBaselineSignatureCounts,
+            mergePending: fromQuietRefresh && isSending
+        )
+        let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
+            ? nil
+            : timelineFrame
+        let projected = SessionChatTimelineProjector.project(
+            frame: frame,
+            optimistic: optimistic,
+            previous: previousFrame,
+            metadataLabel: { [self] message in
+                metadataLabel(
+                    mode: message.mode,
+                    model: message.model,
+                    variant: message.variant,
+                    sentAtEpochMs: message.sentAtEpochMs
+                )
             }
-            // Yield often on large histories so Back/navigation can run between rows.
+        )
+        timelineFrame = projected
+
+        var rows: [SessionChatRow] = []
+        rows.reserveCapacity(projected.rows.count)
+        var rebuiltCount = 0
+        for (index, timelineRow) in projected.rows.enumerated() {
+            let previous = previousByID[timelineRow.id]
+            let reusePrevious =
+                previous != nil
+                && !projected.changedRowIDs.contains(timelineRow.id)
+                && !projected.insertedRowIDs.contains(timelineRow.id)
+                && !timelineRow.isPending
+            if reusePrevious, let previous {
+                rows.append(previous)
+            } else {
+                rebuiltCount += 1
+                rows.append(timelineRow.toSessionChatRow())
+            }
             let shouldYield =
-                display.message.text.count >= 4_000
+                timelineRow.text.count >= 4_000
                 || rebuiltCount > 0 && rebuiltCount % 2 == 0
                 || (index > 0 && index % 4 == 0)
             if shouldYield {
@@ -312,23 +362,13 @@ final class SessionChatTimeline {
                 guard !Task.isCancelled else { return }
             }
         }
+
         let applyMs = Int((ContinuousClock.now - applyStartedAt) / .milliseconds(1))
-        if applyMs >= 50 || serverRows.count >= 20 {
+        if applyMs >= 50 || rows.count >= 20 {
             OpenCodeLog.sessionChat.info(
-                "timelineApply rows=\(serverRows.count) rebuilt=\(rebuiltCount) ms=\(applyMs)"
+                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) changed=\(projected.changedRowIDs.count) layout=\(projected.layoutChangedRowIDs.count) ms=\(applyMs)"
             )
         }
-        let rows =
-            if fromQuietRefresh, isSending {
-                mergeWithPending(
-                    serverRows,
-                    pendingRows: pendingOptimisticRows.isEmpty
-                        ? stateSnapshot.messages.filter(\.isPending)
-                        : pendingOptimisticRows
-                )
-            } else {
-                serverRows
-            }
         guard !Task.isCancelled else { return }
 
         let timeline: SessionChatTimelineState =
@@ -361,6 +401,7 @@ final class SessionChatTimeline {
         }
         notifyChange()
         SessionPerformanceProbe.emit("styled_timeline_published")
+        MessagePipelineProbe.emit(.styledPaintCompleted)
         onPublished?()
     }
 
@@ -368,11 +409,44 @@ final class SessionChatTimeline {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
         pendingBaselineSignatureCounts = [:]
-        lastLoadedMessages = []
+        // Retain the last good timeline when one exists; only clear on cold failure.
+        let retainLastGood = !state.messages.isEmpty
+        if !retainLastGood {
+            lastLoadedMessages = []
+            timelineFrame = .empty
+            state.messages = []
+        }
         state.timeline = .error
-        state.messages = []
         state.errorMessage = errorMessage(error)
         notifyChange()
+    }
+
+    private func publishSyntheticTimelineFrame(
+        messages: [SessionChatRow],
+        insertedRowIDs: Set<String>,
+        changedRowIDs: Set<String>,
+        removedRowIDs: Set<String>,
+        layoutChangedRowIDs: Set<String>
+    ) {
+        let previousByID = Dictionary(uniqueKeysWithValues: timelineFrame.rows.map { ($0.id, $0) })
+        let rows = messages.map { row -> TimelineRow in
+            if let previous = previousByID[row.id],
+               !insertedRowIDs.contains(row.id),
+               !changedRowIDs.contains(row.id)
+            {
+                return previous
+            }
+            return TimelineRow.fromSessionChatRow(row)
+        }
+        displayFrameRevision &+= 1
+        timelineFrame = TimelineFrame(
+            frameRevision: displayFrameRevision,
+            rows: rows,
+            insertedRowIDs: insertedRowIDs,
+            changedRowIDs: changedRowIDs,
+            removedRowIDs: removedRowIDs,
+            layoutChangedRowIDs: layoutChangedRowIDs
+        )
     }
 
     private func latestModelHint(from messages: [Message]) -> LatestModelHint? {
@@ -404,39 +478,8 @@ final class SessionChatTimeline {
         )
     }
 
-    private func mergeWithPending(_ serverRows: [SessionChatRow], pendingRows: [SessionChatRow]) -> [SessionChatRow] {
-        guard !pendingRows.isEmpty else { return serverRows }
-        var serverCounts = signatureCounts(serverRows)
-        let pendingToKeep =
-            pendingRows.filter { pending in
-                let signature = optimisticSignature(pending)
-                let baselineCount = pendingBaselineSignatureCounts[signature, default: 0]
-                guard serverCounts[signature, default: 0] > baselineCount else { return true }
-                serverCounts[signature, default: 0] -= 1
-                return false
-            }
-        return serverRows + pendingToKeep
-    }
-
     private func signatureCounts(_ rows: [SessionChatRow]) -> [String: Int] {
-        rows.reduce(into: [:]) { counts, row in
-            guard row.role == .user else { return }
-            counts[optimisticSignature(row), default: 0] += 1
-        }
-    }
-
-    private func optimisticSignature(_ row: SessionChatRow) -> String {
-        let content = row.blocks.compactMap { block -> String? in
-            switch block {
-            case .text(let text):
-                "text:\(text)"
-            case .attachment(let file):
-                "file:\(file.id):\(file.mime):\(file.dataURL)"
-            case .toolCard, .toolGroup:
-                nil
-            }
-        }
-        return content.isEmpty ? "text:\(row.text)" : content.joined(separator: "|")
+        SessionChatTimelineProjector.signatureCounts(fromSessionChatRows: rows)
     }
 
     private func metadataLabel(mode: String?, model: String?, variant: String? = nil, sentAtEpochMs: Int64? = nil) -> String {

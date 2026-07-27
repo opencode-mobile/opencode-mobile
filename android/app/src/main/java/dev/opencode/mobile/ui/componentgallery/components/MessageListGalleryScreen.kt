@@ -58,7 +58,7 @@ private fun GalleryPreview(
             messageCount = messages.size,
             firstMessageId = messages.firstOrNull()?.id,
             lastMessageId = messages.lastOrNull()?.id,
-            layoutSignature = messages.layoutSignature(),
+            layoutAffectingRevision = messages.layoutSignature().toLong(),
             autoFollowEnabled = autoFollowEnabled,
         )
 

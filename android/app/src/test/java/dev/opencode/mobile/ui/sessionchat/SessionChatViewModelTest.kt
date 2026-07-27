@@ -79,6 +79,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Ignore
@@ -468,6 +469,28 @@ class SessionChatViewModelTest {
             assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertEquals(1, state.messages.size)
             assertEquals("Hello", state.messages.first().text)
+            assertNotNull(state.timelineFrame)
+            assertEquals(1, state.timelineFrame?.rows?.size)
+        }
+
+    @Test
+    fun composerChange_reusesTimelineFrameAndMessages() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val before = viewModel.uiState.value
+            assertNotNull(before.timelineFrame)
+
+            viewModel.updateComposerText("draft only")
+            advanceUntilIdle()
+
+            val after = viewModel.uiState.value
+            assertEquals("draft only", after.composer.text)
+            assertSame(before.timelineFrame, after.timelineFrame)
+            assertSame(before.messages, after.messages)
+            assertEquals(before.timeline, after.timeline)
         }
 
     @Test
@@ -2117,7 +2140,7 @@ class SessionChatViewModelTest {
                     id = "msg-1",
                     role = MessageRole.Assistant,
                     text = "Hello",
-                    parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true)),
+                    parts = listOf(MessagePart.Text(text = "Hello", isStreaming = true, id = "prt-1")),
                 )
             val item = requireNotNull(viewModel.toMessageItem(message))
             assertTrue(item.isStreaming)
@@ -2132,7 +2155,7 @@ class SessionChatViewModelTest {
                     id = "msg-1",
                     role = MessageRole.Assistant,
                     text = "Done",
-                    parts = listOf(MessagePart.Text(text = "Done", isStreaming = false)),
+                    parts = listOf(MessagePart.Text(text = "Done", isStreaming = false, id = "prt-1")),
                 )
             val item = requireNotNull(viewModel.toMessageItem(message))
             assertFalse(item.isStreaming)
@@ -2147,7 +2170,7 @@ class SessionChatViewModelTest {
                     id = "msg-1",
                     role = MessageRole.Assistant,
                     text = "",
-                    parts = listOf(MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed)),
+                    parts = listOf(MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "prt-1")),
                 )
             val item = requireNotNull(viewModel.toMessageItem(message))
             assertFalse(item.isStreaming)
@@ -2173,7 +2196,7 @@ class SessionChatViewModelTest {
                     id = "msg-1",
                     role = MessageRole.User,
                     text = "Between",
-                    parts = listOf(firstFile, MessagePart.Text("Between"), secondFile),
+                    parts = listOf(firstFile, MessagePart.Text("Between", id = "prt-text"), secondFile),
                 )
 
             val item = requireNotNull(viewModel.toMessageItem(message))
@@ -2285,7 +2308,7 @@ class SessionChatViewModelTest {
                         id = "msg-1",
                         role = MessageRole.Assistant,
                         text = "# Partial heading",
-                        parts = listOf(MessagePart.Text(text = "# Partial heading", isStreaming = true)),
+                        parts = listOf(MessagePart.Text(text = "# Partial heading", isStreaming = true, id = "prt-1")),
                     ),
                     previous,
                 ),

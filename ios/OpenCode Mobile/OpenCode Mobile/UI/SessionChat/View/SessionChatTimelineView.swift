@@ -4,6 +4,7 @@ import SwiftUI
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
     let messages: [SessionChatRow]
+    let timelineFrame: TimelineFrame
     let isRefreshing: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
@@ -17,6 +18,7 @@ struct SessionChatTimelineViewProps {
     init(
         timeline: SessionChatTimelineState,
         messages: [SessionChatRow],
+        timelineFrame: TimelineFrame = .empty,
         isRefreshing: Bool,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
@@ -29,6 +31,7 @@ struct SessionChatTimelineViewProps {
     ) {
         self.timeline = timeline
         self.messages = messages
+        self.timelineFrame = timelineFrame
         self.isRefreshing = isRefreshing
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
@@ -96,6 +99,7 @@ private struct SessionChatTimelineReadyView: View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: props.messages,
+                applyPacket: .from(props.timelineFrame),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh
             ) { message in
@@ -233,17 +237,19 @@ private struct SessionChatMessageRow: View {
 
 private extension SessionChatRow {
     var outgoingContent: [OpenCodeOutgoingMessageContent] {
-        let content = blocks.enumerated().compactMap { index, block -> OpenCodeOutgoingMessageContent? in
+        let content = blocks.compactMap { block -> OpenCodeOutgoingMessageContent? in
             switch block {
-            case .text(let text):
-                .text(id: String(index), text: text)
-            case .attachment(let file):
+            case .text(let blockID, let text, _):
+                .text(id: blockID, text: text)
+            case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
             case .toolCard, .toolGroup:
                 nil
             }
         }
-        return content.isEmpty ? [.text(id: "message", text: text)] : content
+        return content.isEmpty
+            ? [.text(id: PresentationBlockId.messageFallback(id), text: text)]
+            : content
     }
 }
 
@@ -276,38 +282,52 @@ private struct AssistantMessageContent: View {
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
-            return [.text(message.text)]
+            return [
+                .text(
+                    blockID: PresentationBlockId.messageFallback(message.id),
+                    text: message.text,
+                    renderedMarkdown: nil
+                ),
+            ]
         }
         return message.blocks
     }
 
-    private var singleTextBlock: Bool {
-        blocks.filter {
-            if case .text = $0 { return true }
-            return false
-        }.count == 1
+    /// Migration bridge: prefer per-block markdown; fall back to message-root
+    /// only when the block has none and exactly one text block remains.
+    private var textBlockCount: Int {
+        blocks.reduce(0) { count, block in
+            if case .text = block { return count + 1 }
+            return count
+        }
+    }
+
+    private func renderedMarkdown(for blockMarkdown: NativeMarkdownDocument?) -> NativeMarkdownDocument? {
+        if let blockMarkdown { return blockMarkdown }
+        return textBlockCount == 1 ? message.renderedMarkdown : nil
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(blocks, id: \.blockID) { block in
                 switch block {
-                case .text(let text):
+                case .text(_, let text, let blockMarkdown):
+                    let markdown = renderedMarkdown(for: blockMarkdown)
                     AssistantMessageBubble(
                         text: text,
-                        renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil,
+                        renderedMarkdown: markdown,
                         isStreaming: message.isStreaming
                     )
                     .modifier(
                         SessionChatMessageActionsGestureModifier(
-                            renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil,
+                            renderedMarkdown: markdown,
                             accessibilityLabel: "Assistant message",
                             onOpenMessageActions: onOpenMessageActions
                         )
                     )
-                case .attachment(let file):
+                case .attachment(_, let file):
                     OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
-                case .toolCard(let card):
+                case .toolCard(_, let card):
                     OpenCodeToolCallCard(
                         status: card.status.toolCallCardStatus,
                         title: card.title,
@@ -317,7 +337,7 @@ private struct AssistantMessageContent: View {
                         errorText: card.errorText,
                         action: toolCardAction(for: card)
                     )
-                case .toolGroup(let group):
+                case .toolGroup(_, let group):
                     OpenCodeToolCallCard(
                         status: group.status.toolCallCardStatus,
                         title: group.title,

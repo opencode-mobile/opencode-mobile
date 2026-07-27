@@ -25,6 +25,9 @@ class InMemoryMessageStore
         private val baseMessages = ConcurrentHashMap<String, List<Message>>()
         private val revisions = ConcurrentHashMap<String, Long>()
 
+        /** Pending text delta pieces keyed by session → "messageId\\upartId". */
+        private val deltaChunks = ConcurrentHashMap<String, MutableMap<String, MutableList<String>>>()
+
         @Synchronized
         override fun replaceAll(
             sessionId: String,
@@ -42,6 +45,7 @@ class InMemoryMessageStore
             partsCaches[sessionId]!!.clear()
             partOrders[sessionId]!!.clear()
             ignoredPartIds[sessionId]!!.clear()
+            deltaChunks[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
             seedPartIdentities(sessionId, messages)
@@ -52,15 +56,17 @@ class InMemoryMessageStore
         override fun apply(
             sessionId: String,
             patch: MessagePatch,
-        ) {
-            when (patch) {
-                is MessagePatch.InfoUpdated -> applyInfoUpdated(sessionId, patch.infoJson)
-                is MessagePatch.PartUpdated -> applyPartUpdated(sessionId, patch.partJson, patch.delta)
-                is MessagePatch.PartDelta -> applyPartDelta(sessionId, patch.messageId, patch.partId, patch.delta)
-                is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
-                is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
-            }
+        ): MessageStoreApplyResult {
+            val mutation =
+                when (patch) {
+                    is MessagePatch.InfoUpdated -> applyInfoUpdated(sessionId, patch.infoJson)
+                    is MessagePatch.PartUpdated -> applyPartUpdated(sessionId, patch.partJson, patch.delta)
+                    is MessagePatch.PartDelta -> applyPartDelta(sessionId, patch.messageId, patch.partId, patch.delta)
+                    is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
+                    is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
+                } ?: return MessageStoreApplyResult.NoChange
             bumpRevision(sessionId)
+            return MessageStoreApplyResult.Changed(mutation.copy(sessionRevision = revision(sessionId)))
         }
 
         @Synchronized
@@ -72,16 +78,49 @@ class InMemoryMessageStore
             val base = baseMessages[sessionId].orEmpty()
             val baseById = base.associateBy { it.id }
 
-            return order.mapNotNull { messageId ->
-                val infoJson = infos[messageId] ?: return@mapNotNull baseById[messageId]
-                val info = tryParseInfoDto(infoJson) ?: return@mapNotNull baseById[messageId]
-                val messageParts = orderedParts(messageId, parts, orders)
+            return order.mapNotNull { messageId -> rebuildMessage(sessionId, messageId, infos, parts, orders, baseById) }
+        }
+
+        @Synchronized
+        fun message(
+            sessionId: String,
+            messageId: String,
+        ): Message? {
+            val infos = infoCaches[sessionId] ?: emptyMap()
+            val parts = partsCaches[sessionId] ?: emptyMap()
+            val orders = partOrders[sessionId] ?: emptyMap()
+            val order = messageOrders[sessionId] ?: return null
+            if (messageId !in order) return null
+            val baseById = baseMessages[sessionId].orEmpty().associateBy { it.id }
+            return rebuildMessage(sessionId, messageId, infos, parts, orders, baseById)
+        }
+
+        private fun rebuildMessage(
+            sessionId: String,
+            messageId: String,
+            infos: Map<String, JsonObject>,
+            parts: Map<String, Map<String, MessagePart>>,
+            orders: Map<String, List<String>>,
+            baseById: Map<String, Message>,
+        ): Message? {
+            val infoJson = infos[messageId]
+            if (infoJson != null) {
+                val info = tryParseInfoDto(infoJson) ?: return baseById[messageId]
+                val messageParts = orderedParts(sessionId, messageId, parts, orders)
                 val message = adapter.toMessage(info, messageParts)
-                when {
+                return when {
                     message.hasRenderableContent() -> message
                     else -> baseById[messageId]
                 }
             }
+            val baseMessage = baseById[messageId] ?: return null
+            val liveParts = orderedParts(sessionId, messageId, parts, orders)
+            if (liveParts.isEmpty()) return baseMessage
+            val flat = adapter.flattenedText(liveParts)
+            return baseMessage.copy(
+                parts = liveParts,
+                text = flat.ifBlank { baseMessage.text },
+            )
         }
 
         @Synchronized
@@ -97,8 +136,10 @@ class InMemoryMessageStore
         @Synchronized
         override fun hasStreamingText(sessionId: String): Boolean {
             val sessionParts = partsCaches[sessionId] ?: return false
-            return sessionParts.values.any { messageParts ->
-                messageParts.values.any { part -> part is MessagePart.Text && part.isStreaming }
+            return sessionParts.any { (messageId, messageParts) ->
+                messageParts.any { (partId, part) ->
+                    part is MessagePart.Text && (part.isStreaming || hasChunks(sessionId, messageId, partId))
+                }
             }
         }
 
@@ -119,11 +160,14 @@ class InMemoryMessageStore
         @Synchronized
         override fun finishStreamingText(sessionId: String) {
             var changed = false
-            for (messageParts in partsCaches[sessionId]?.values.orEmpty()) {
+            for ((messageId, messageParts) in partsCaches[sessionId].orEmpty()) {
                 for (entry in messageParts.entries) {
                     val text = entry.value as? MessagePart.Text ?: continue
-                    if (text.isStreaming) {
-                        entry.setValue(text.copy(isStreaming = false))
+                    val flattened = flattenedText(sessionId, messageId, text)
+                    val wasStreaming = text.isStreaming || hasChunks(sessionId, messageId, text.id)
+                    if (wasStreaming || flattened != text.text) {
+                        entry.setValue(text.copy(text = flattened, isStreaming = false))
+                        clearChunks(sessionId, messageId, text.id)
                         changed = true
                     }
                 }
@@ -140,53 +184,82 @@ class InMemoryMessageStore
             messageOrders.clear()
             baseMessages.clear()
             revisions.clear()
+            deltaChunks.clear()
         }
 
         private fun applyInfoUpdated(
             sessionId: String,
             infoJson: JsonObject,
-        ) {
+        ): SessionChangeSet? {
             val info = json.decodeFromJsonElement<MessageInfoDto>(infoJson)
             val messageId = info.id
 
             ensureCaches(sessionId)
+            val order = messageOrders[sessionId]!!
+            val inserted = messageId !in order
             infoCaches[sessionId]!![messageId] = infoJson
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
-
-            val order = messageOrders[sessionId]!!
-            if (messageId !in order) {
+            if (inserted) {
                 order.add(messageId)
             }
+            return SessionChangeSet(
+                sessionRevision = 0,
+                insertedMessageIds = if (inserted) setOf(messageId) else emptySet(),
+                changedMessageIds = if (inserted) emptySet() else setOf(messageId),
+                structuralChange = inserted,
+            )
         }
 
         private fun applyPartUpdated(
             sessionId: String,
             partJson: JsonObject,
             delta: String?,
-        ) {
-            val partDto = tryParsePartDto(partJson) ?: return
-            val messageId = partDto.messageId ?: return
-            val partId = partDto.id ?: return
+        ): SessionChangeSet? {
+            val partDto = tryParsePartDto(partJson) ?: return null
+            val messageId = partDto.messageId ?: return null
+            val partId = partDto.id ?: return null
 
             ensureCaches(sessionId)
             val msgParts = partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             val msgPartOrder = partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
 
-            val resolvedPart = resolvePart(partDto, msgParts[partId], delta)
+            val resolvedPart = resolvePart(sessionId, messageId, partDto, msgParts[partId], delta)
             if (resolvedPart == null) {
-                // Reasoning/step/etc. — never promote their deltas into assistant text.
+                val hadPart = msgParts.containsKey(partId)
                 ignoredPartIds[sessionId]!!.getOrPut(messageId) { mutableSetOf() }.add(partId)
                 msgParts.remove(partId)
                 msgPartOrder.removeAll { it == partId }
-                return
+                clearChunks(sessionId, messageId, partId)
+                if (!hadPart) return null
+                return SessionChangeSet(
+                    sessionRevision = 0,
+                    changedMessageIds = setOf(messageId),
+                    changedPartIdsByMessage = mapOf(messageId to setOf(partId)),
+                    structuralChange = true,
+                )
             }
 
             ignoredPartIds[sessionId]?.get(messageId)?.remove(partId)
-            if (partId !in msgPartOrder) {
+            val insertedPart = partId !in msgPartOrder
+            if (insertedPart) {
                 msgPartOrder.add(partId)
             }
+            val previous = msgParts[partId]
             msgParts[partId] = resolvedPart
+            if (delta == null) {
+                clearChunks(sessionId, messageId, partId)
+            }
+            val streamingChanged =
+                (previous as? MessagePart.Text)?.isStreaming !=
+                    (resolvedPart as? MessagePart.Text)?.isStreaming
+            return SessionChangeSet(
+                sessionRevision = 0,
+                changedMessageIds = setOf(messageId),
+                changedPartIdsByMessage = mapOf(messageId to setOf(partId)),
+                streamingStateChangedIds = if (streamingChanged) setOf(messageId) else emptySet(),
+                structuralChange = insertedPart,
+            )
         }
 
         private fun applyPartDelta(
@@ -194,35 +267,63 @@ class InMemoryMessageStore
             messageId: String,
             partId: String,
             delta: String,
-        ) {
-            if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return
-            val msgParts = partsCaches[sessionId]?.get(messageId) ?: return
-            val existing = msgParts[partId] as? MessagePart.Text ?: return
-            msgParts[partId] = existing.copy(text = existing.text + delta, isStreaming = true)
+        ): SessionChangeSet? {
+            if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return null
+            val msgParts = partsCaches[sessionId]?.get(messageId) ?: return null
+            val existing = msgParts[partId] as? MessagePart.Text ?: return null
+            appendChunk(sessionId, messageId, partId, delta)
+            val wasStreaming = existing.isStreaming
+            if (!wasStreaming) {
+                msgParts[partId] = existing.copy(isStreaming = true)
+            }
+            return SessionChangeSet(
+                sessionRevision = 0,
+                changedMessageIds = setOf(messageId),
+                changedPartIdsByMessage = mapOf(messageId to setOf(partId)),
+                streamingStateChangedIds = if (wasStreaming) emptySet() else setOf(messageId),
+            )
         }
 
         private fun applyMessageRemoved(
             sessionId: String,
             messageId: String,
-        ) {
+        ): SessionChangeSet? {
+            val existed =
+                infoCaches[sessionId]?.containsKey(messageId) == true ||
+                    messageOrders[sessionId]?.contains(messageId) == true
+            if (!existed) return null
             infoCaches[sessionId]?.remove(messageId)
             partsCaches[sessionId]?.remove(messageId)
             partOrders[sessionId]?.remove(messageId)
             ignoredPartIds[sessionId]?.remove(messageId)
             messageOrders[sessionId]?.removeAll { it == messageId }
+            deltaChunks[sessionId]?.keys?.removeAll { it.startsWith("$messageId\u0000") }
+            return SessionChangeSet(
+                sessionRevision = 0,
+                removedMessageIds = setOf(messageId),
+                structuralChange = true,
+            )
         }
 
         private fun applyPartRemoved(
             sessionId: String,
             messageId: String,
             partId: String,
-        ) {
-            partsCaches[sessionId]?.get(messageId)?.remove(partId)
+        ): SessionChangeSet? {
+            val removed = partsCaches[sessionId]?.get(messageId)?.remove(partId) != null
             partOrders[sessionId]?.get(messageId)?.removeAll { it == partId }
             ignoredPartIds[sessionId]?.get(messageId)?.remove(partId)
             if (ignoredPartIds[sessionId]?.get(messageId)?.isEmpty() == true) {
                 ignoredPartIds[sessionId]?.remove(messageId)
             }
+            clearChunks(sessionId, messageId, partId)
+            if (!removed) return null
+            return SessionChangeSet(
+                sessionRevision = 0,
+                changedMessageIds = setOf(messageId),
+                changedPartIdsByMessage = mapOf(messageId to setOf(partId)),
+                structuralChange = true,
+            )
         }
 
         private fun ensureCaches(sessionId: String) {
@@ -231,48 +332,118 @@ class InMemoryMessageStore
             partOrders.getOrPut(sessionId) { mutableMapOf() }
             ignoredPartIds.getOrPut(sessionId) { mutableMapOf() }
             messageOrders.getOrPut(sessionId) { mutableListOf() }
+            deltaChunks.getOrPut(sessionId) { mutableMapOf() }
         }
 
         private fun bumpRevision(sessionId: String) {
             revisions[sessionId] = (revisions[sessionId] ?: 0L) + 1L
         }
 
+        private fun chunkKey(
+            messageId: String,
+            partId: String?,
+        ): String? = partId?.let { "$messageId\u0000$it" }
+
+        private fun appendChunk(
+            sessionId: String,
+            messageId: String,
+            partId: String,
+            delta: String,
+        ) {
+            val key = chunkKey(messageId, partId) ?: return
+            ensureCaches(sessionId)
+            deltaChunks[sessionId]!!.getOrPut(key) { mutableListOf() }.add(delta)
+        }
+
+        private fun clearChunks(
+            sessionId: String,
+            messageId: String,
+            partId: String?,
+        ) {
+            val key = chunkKey(messageId, partId) ?: return
+            deltaChunks[sessionId]?.remove(key)
+        }
+
+        private fun hasChunks(
+            sessionId: String,
+            messageId: String,
+            partId: String?,
+        ): Boolean {
+            val key = chunkKey(messageId, partId) ?: return false
+            return deltaChunks[sessionId]?.get(key)?.isNotEmpty() == true
+        }
+
+        private fun flattenedText(
+            sessionId: String,
+            messageId: String,
+            part: MessagePart.Text,
+        ): String {
+            val key = chunkKey(messageId, part.id) ?: return part.text
+            val chunks = deltaChunks[sessionId]?.get(key).orEmpty()
+            if (chunks.isEmpty()) return part.text
+            return buildString(part.text.length + chunks.sumOf { it.length }) {
+                append(part.text)
+                chunks.forEach { append(it) }
+            }
+        }
+
         private fun resolvePart(
+            sessionId: String,
+            messageId: String,
             partDto: MessagePartDto,
             existingPart: MessagePart?,
             delta: String?,
         ): MessagePart? {
             if (delta != null && partDto.type == "text") {
-                val existingText =
-                    if (existingPart is MessagePart.Text) {
-                        existingPart.text
-                    } else {
-                        partDto.text.orEmpty()
+                val baseText =
+                    when (existingPart) {
+                        is MessagePart.Text -> existingPart.text
+                        else -> partDto.text.orEmpty()
                     }
-                return MessagePart.Text(
-                    text = existingText + delta,
-                    isStreaming = true,
-                    id = partDto.id,
-                )
+                val partId = partDto.id
+                val textPart =
+                    MessagePart.Text(
+                        text = baseText,
+                        isStreaming = true,
+                        id = partId,
+                    )
+                if (partId != null) {
+                    appendChunk(sessionId, messageId, partId, delta)
+                }
+                return textPart
             }
             return adapter.toMessagePart(partDto)
         }
 
         private fun orderedParts(
+            sessionId: String,
             messageId: String,
             parts: Map<String, Map<String, MessagePart>>,
             orders: Map<String, List<String>>,
         ): List<MessagePart> {
             val messageParts = parts[messageId] ?: return emptyList()
             val orderedIds = orders[messageId].orEmpty()
-            val ordered = orderedIds.mapNotNull { messageParts[it] }
+            val ordered =
+                orderedIds.mapNotNull { partId ->
+                    messageParts[partId]?.let { resolveStoredPart(sessionId, messageId, it) }
+                }
             val leftovers =
                 messageParts
                     .filterKeys { it !in orderedIds }
                     .toSortedMap()
                     .values
-                    .toList()
+                    .map { resolveStoredPart(sessionId, messageId, it) }
             return ordered + leftovers
+        }
+
+        private fun resolveStoredPart(
+            sessionId: String,
+            messageId: String,
+            part: MessagePart,
+        ): MessagePart {
+            val text = part as? MessagePart.Text ?: return part
+            val flattened = flattenedText(sessionId, messageId, text)
+            return if (flattened == text.text) text else text.copy(text = flattened)
         }
 
         private fun seedPartIdentities(

@@ -47,6 +47,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
     func start() {
         stop()
         OpenCodeLog.sse.info("foreground SSE stream starting")
+        _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
         streamTask = Task { @MainActor [weak self] in
@@ -89,6 +90,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         }
         if shouldPublishReconnect {
             OpenCodeLog.sse.info("foreground SSE stream reconnected")
+            _ = ConnectionEpoch.shared.bump()
             publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
             emittedReconnectForCurrentStream = true
         }

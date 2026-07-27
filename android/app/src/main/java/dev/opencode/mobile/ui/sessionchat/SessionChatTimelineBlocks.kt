@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -13,17 +14,24 @@ import kotlinx.serialization.json.intOrNull
 /**
  * Session Chat presentation units inside one message timeline item.
  * Built from structured parts with hide rules and lightweight tool chrome.
+ * Every block carries a stable [blockID] derived from server part IDs.
  */
 sealed class SessionChatTimelineBlock {
+    abstract val blockID: String
+
     data class Text(
+        override val blockID: String,
         val text: String,
+        val renderedMarkdown: MarkdownDocument? = null,
     ) : SessionChatTimelineBlock()
 
     data class Attachment(
+        override val blockID: String,
         val attachment: SessionChatAttachmentItem,
     ) : SessionChatTimelineBlock()
 
     data class ToolCard(
+        override val blockID: String,
         val toolName: String,
         val status: ToolStatus,
         val title: String,
@@ -41,6 +49,7 @@ sealed class SessionChatTimelineBlock {
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
+        override val blockID: String,
         val count: Int,
         val status: ToolStatus,
         val title: String,
@@ -55,20 +64,26 @@ object SessionChatTimelineBlocks {
     fun build(
         role: MessageRole,
         parts: List<MessagePart>,
-    ): List<SessionChatTimelineBlock> {
-        if (parts.isEmpty()) return emptyList()
+    ): SessionChatTimelineBlocksResult {
+        if (parts.isEmpty()) return SessionChatTimelineBlocksResult.Ok(emptyList())
 
         val allowToolCards = role == MessageRole.Assistant
         val blocks = mutableListOf<SessionChatTimelineBlock>()
-        val pendingText = mutableListOf<String>()
+        val pendingText = mutableListOf<Pair<String, String>>()
 
-        fun flushText() {
-            if (pendingText.isEmpty()) return
-            val merged = pendingText.joinToString("\n")
+        fun flushText(): Boolean {
+            if (pendingText.isEmpty()) return true
+            val merged = pendingText.joinToString("\n") { it.second }
+            val ids = pendingText.map { it.first }
             pendingText.clear()
             if (merged.isNotEmpty()) {
-                blocks += SessionChatTimelineBlock.Text(merged)
+                blocks +=
+                    SessionChatTimelineBlock.Text(
+                        blockID = PresentationBlockId.mergedText(ids),
+                        text = merged,
+                    )
             }
+            return true
         }
 
         var index = 0
@@ -77,7 +92,8 @@ object SessionChatTimelineBlocks {
                 is MessagePart.Text -> {
                     val trimmed = part.text.trim()
                     if (trimmed.isNotEmpty()) {
-                        pendingText += trimmed
+                        val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        pendingText += partId to trimmed
                     }
                     index += 1
                 }
@@ -86,7 +102,7 @@ object SessionChatTimelineBlocks {
                         index += 1
                         continue
                     }
-                    flushText()
+                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
                     if (isContextTool(part.toolName)) {
                         val groupTools = mutableListOf<MessagePart.Tool>()
                         var lookAhead = index
@@ -97,26 +113,59 @@ object SessionChatTimelineBlocks {
                             lookAhead += 1
                         }
                         if (groupTools.size >= 2) {
-                            blocks += toToolGroup(groupTools)
+                            val group = toToolGroup(groupTools) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                            blocks += group
                             index = lookAhead
                         } else {
-                            blocks += toToolCard(part)
+                            val card = toToolCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                            blocks += card
                             index += 1
                         }
                     } else {
-                        blocks += toToolCard(part)
+                        val card = toToolCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                        blocks += card
                         index += 1
                     }
                 }
                 is MessagePart.File -> {
-                    flushText()
-                    blocks += SessionChatTimelineBlock.Attachment(AttachmentPresentationMapper.from(part))
+                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks +=
+                        SessionChatTimelineBlock.Attachment(
+                            blockID = PresentationBlockId.direct(part.id),
+                            attachment = AttachmentPresentationMapper.from(part),
+                        )
                     index += 1
                 }
             }
         }
-        flushText()
-        return blocks
+        if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
+        return SessionChatTimelineBlocksResult.Ok(blocks)
+    }
+
+    /** Convenience for call sites that fall back when identity is incomplete. */
+    fun buildOrFallback(
+        role: MessageRole,
+        parts: List<MessagePart>,
+        messageId: String,
+        fallbackText: String,
+    ): List<SessionChatTimelineBlock> {
+        fun fallbackBlocks(): List<SessionChatTimelineBlock> =
+            if (fallbackText.isNotBlank()) {
+                listOf(
+                    SessionChatTimelineBlock.Text(
+                        blockID = PresentationBlockId.messageFallback(messageId),
+                        text = fallbackText,
+                    ),
+                )
+            } else {
+                emptyList()
+            }
+
+        return when (val result = build(role, parts)) {
+            is SessionChatTimelineBlocksResult.Ok ->
+                result.blocks.ifEmpty { fallbackBlocks() }
+            SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
+        }
     }
 
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean {
@@ -132,7 +181,8 @@ object SessionChatTimelineBlocks {
 
     private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
 
-    private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup {
+    private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup? {
+        val memberIds = tools.map { it.id ?: return null }
         val status = worstStatus(tools.map { it.status })
         val errorText =
             tools
@@ -140,6 +190,7 @@ object SessionChatTimelineBlocks {
                 ?.error
                 ?.takeIf { it.isNotEmpty() }
         return SessionChatTimelineBlock.ToolGroup(
+            blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
             status = status,
             title = contextGroupTitle(tools),
@@ -181,7 +232,8 @@ object SessionChatTimelineBlocks {
         return ToolStatus.Completed
     }
 
-    private fun toToolCard(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolCard {
+    private fun toToolCard(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolCard? {
+        val partId = tool.id ?: return null
         val name = tool.toolName.lowercase()
         val chrome = specializedChrome(name, tool) ?: genericChrome(tool)
         val errorText =
@@ -190,6 +242,7 @@ object SessionChatTimelineBlocks {
                 else -> null
             }
         return SessionChatTimelineBlock.ToolCard(
+            blockID = PresentationBlockId.direct(partId),
             toolName = tool.toolName,
             status = tool.status,
             title = chrome.title,

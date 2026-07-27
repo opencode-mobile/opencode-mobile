@@ -72,6 +72,7 @@ struct SessionChatView: View {
                 props: SessionChatTimelineViewProps(
                     timeline: viewModel.uiState.timeline,
                     messages: viewModel.uiState.messages,
+                    timelineFrame: viewModel.uiState.timelineFrame,
                     isRefreshing: viewModel.uiState.isRefreshing,
                     errorMessage: viewModel.uiState.errorMessage,
                     reviewChangesSummary: viewModel.uiState.reviewChangesSummary,

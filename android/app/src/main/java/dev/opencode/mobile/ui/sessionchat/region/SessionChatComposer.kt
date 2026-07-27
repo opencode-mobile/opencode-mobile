@@ -29,6 +29,7 @@ import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
+import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
@@ -578,8 +579,23 @@ class SessionChatComposer(
                             attachments = attachmentItems,
                             blocks =
                                 buildList {
-                                    if (display.text.isNotBlank()) add(SessionChatTimelineBlock.Text(display.text))
-                                    attachmentItems.forEach { add(SessionChatTimelineBlock.Attachment(it)) }
+                                    if (display.text.isNotBlank()) {
+                                        add(
+                                            SessionChatTimelineBlock.Text(
+                                                blockID = PresentationBlockId.messageFallback(display.id),
+                                                text = display.text,
+                                                renderedMarkdown = display.renderedMarkdown,
+                                            ),
+                                        )
+                                    }
+                                    attachmentItems.forEach { item ->
+                                        add(
+                                            SessionChatTimelineBlock.Attachment(
+                                                blockID = PresentationBlockId.direct(item.id),
+                                                attachment = item,
+                                            ),
+                                        )
+                                    }
                                 },
                         ),
                     )

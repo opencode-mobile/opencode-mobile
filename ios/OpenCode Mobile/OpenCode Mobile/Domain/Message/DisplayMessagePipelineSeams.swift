@@ -22,6 +22,14 @@ protocol DisplayMessagePreparing: AnyObject, Sendable {
         previous: DisplayMessage?,
         mode: MessagePreparationMode
     ) async -> DisplayMessage
+
+    func prepareTextBlock(
+        blockID: String,
+        plain: String,
+        isStreaming: Bool,
+        sessionKey: String,
+        mode: MessagePreparationMode
+    ) async -> NativeMarkdownDocument?
 }
 
 /// Monotonic clock and sleep used for streaming quiet-window / max-batch pacing.

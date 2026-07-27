@@ -20,6 +20,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -46,16 +48,19 @@ import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
+import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.displayLabel
 
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem>,
+    val timelineFrame: TimelineFrame? = null,
     val isRefreshing: Boolean,
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
@@ -110,6 +115,7 @@ internal fun SessionChatTimelineView(
         SessionChatTimelineState.Ready -> {
             SessionChatTimelineReadyView(
                 messages = props.messages,
+                timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
                 reviewChangesSummary = props.reviewChangesSummary,
                 onRefresh = props.onRefresh,
@@ -128,6 +134,7 @@ internal fun SessionChatTimelineView(
 @Composable
 private fun SessionChatTimelineReadyView(
     messages: List<SessionChatMessageItem>,
+    timelineFrame: TimelineFrame?,
     isRefreshing: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
     onRefresh: () -> Unit,
@@ -138,13 +145,17 @@ private fun SessionChatTimelineReadyView(
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Declared IDs from TimelineFrame drive layout follow; no history-wide layoutSignature.
+    val layoutAffectingRevision = timelineFrame?.layoutAffectingRevision() ?: 0L
+    val messageIds = remember(messages) { messages.map { it.id } }
     val timeline =
         rememberMessageListTimeline(
             messageCount = messages.size,
             firstMessageId = messages.firstOrNull()?.id,
             lastMessageId = messages.lastOrNull()?.id,
-            layoutSignature = messages.layoutSignature(),
+            layoutAffectingRevision = layoutAffectingRevision,
             autoFollowEnabled = true,
+            messageIdsChronological = messageIds,
         )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -290,13 +301,15 @@ private fun SessionChatMessageRow(
 }
 
 private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessageContent> {
-    val textBlocks = blocks.filterIsInstance<SessionChatTimelineBlock.Text>()
+    val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
     return blocks.mapNotNull { block ->
         when (block) {
             is SessionChatTimelineBlock.Text ->
                 OpenCodeOutgoingMessageContent.Text(
                     text = block.text,
-                    renderedMarkdown = renderedMarkdown.takeIf { textBlocks.size == 1 },
+                    renderedMarkdown =
+                        block.renderedMarkdown
+                            ?: renderedMarkdown.takeIf { textBlockCount == 1 },
                 )
             is SessionChatTimelineBlock.Attachment ->
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
@@ -336,70 +349,81 @@ private fun AssistantMessageContent(
 ) {
     val blocks =
         message.blocks.ifEmpty {
-            listOf(SessionChatTimelineBlock.Text(text = message.text))
+            listOf(
+                SessionChatTimelineBlock.Text(
+                    blockID = PresentationBlockId.messageFallback(message.id),
+                    text = message.text,
+                ),
+            )
         }
-    val singleTextBlock = blocks.count { it is SessionChatTimelineBlock.Text } == 1
+    val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.Start,
     ) {
         blocks.forEach { block ->
-            when (block) {
-                is SessionChatTimelineBlock.Text ->
-                    AssistantMessageBubble(
-                        text = block.text,
-                        renderedMarkdown = message.renderedMarkdown.takeIf { singleTextBlock },
-                        isStreaming = message.isStreaming,
-                        modifier =
-                            messageActionsModifier(
-                                renderedMarkdown = message.renderedMarkdown.takeIf { singleTextBlock },
-                                onOpenMessageActions = onOpenMessageActions,
-                                messageDescription = "Assistant message",
-                            ),
-                    )
-                is SessionChatTimelineBlock.Attachment ->
-                    OpenCodeMessageAttachment(AttachmentPresentationMapper.from(block.attachment))
-                is SessionChatTimelineBlock.ToolCard ->
-                    OpenCodeToolCallCard(
-                        status = block.status.toToolCallCardStatus(),
-                        title = block.title,
-                        subtitle = block.subtitle,
-                        additions = block.additions,
-                        deletions = block.deletions,
-                        errorText = block.errorText,
-                        onClick =
-                            when {
-                                block.childSessionId != null -> {
-                                    {
-                                        onChildSessionTap(block.childSessionId, block.title)
+            key(block.blockID) {
+                when (block) {
+                    is SessionChatTimelineBlock.Text -> {
+                        val renderedMarkdown =
+                            block.renderedMarkdown
+                                ?: message.renderedMarkdown.takeIf { textBlockCount == 1 }
+                        AssistantMessageBubble(
+                            text = block.text,
+                            renderedMarkdown = renderedMarkdown,
+                            isStreaming = message.isStreaming,
+                            modifier =
+                                messageActionsModifier(
+                                    renderedMarkdown = renderedMarkdown,
+                                    onOpenMessageActions = onOpenMessageActions,
+                                    messageDescription = "Assistant message",
+                                ),
+                        )
+                    }
+                    is SessionChatTimelineBlock.Attachment ->
+                        OpenCodeMessageAttachment(AttachmentPresentationMapper.from(block.attachment))
+                    is SessionChatTimelineBlock.ToolCard ->
+                        OpenCodeToolCallCard(
+                            status = block.status.toToolCallCardStatus(),
+                            title = block.title,
+                            subtitle = block.subtitle,
+                            additions = block.additions,
+                            deletions = block.deletions,
+                            errorText = block.errorText,
+                            onClick =
+                                when {
+                                    block.childSessionId != null -> {
+                                        {
+                                            onChildSessionTap(block.childSessionId, block.title)
+                                        }
                                     }
-                                }
-                                block.opensChangesReview -> {
-                                    {
-                                        onChangesReviewTap(message.id, block.changesInitialFilePath)
+                                    block.opensChangesReview -> {
+                                        {
+                                            onChangesReviewTap(message.id, block.changesInitialFilePath)
+                                        }
                                     }
-                                }
-                                block.detailText != null -> {
-                                    {
-                                        onToolDetailTap(
-                                            SessionChatToolDetailTarget(
-                                                title = block.title,
-                                                body = block.detailText,
-                                            ),
-                                        )
+                                    block.detailText != null -> {
+                                        {
+                                            onToolDetailTap(
+                                                SessionChatToolDetailTarget(
+                                                    title = block.title,
+                                                    body = block.detailText,
+                                                ),
+                                            )
+                                        }
                                     }
-                                }
-                                else -> null
-                            },
-                    )
-                is SessionChatTimelineBlock.ToolGroup ->
-                    OpenCodeToolCallCard(
-                        status = block.status.toToolCallCardStatus(),
-                        title = block.title,
-                        subtitle = block.subtitle,
-                        errorText = block.errorText,
-                    )
+                                    else -> null
+                                },
+                        )
+                    is SessionChatTimelineBlock.ToolGroup ->
+                        OpenCodeToolCallCard(
+                            status = block.status.toToolCallCardStatus(),
+                            title = block.title,
+                            subtitle = block.subtitle,
+                            errorText = block.errorText,
+                        )
+                }
             }
         }
     }
@@ -446,23 +470,6 @@ private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
     }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
-
-private fun List<SessionChatMessageItem>.layoutSignature(): Int =
-    fold(size) { result, message ->
-        31 * result +
-            message.id.hashCode() +
-            message.text.length +
-            message.blocks.size +
-            message.attachments.size +
-            message.renderedMarkdown.layoutSignature() +
-            if (message.isStreaming) 1 else 0
-    }
-
-private fun MarkdownDocument?.layoutSignature(): Int =
-    when (this) {
-        null -> 0
-        else -> 31 * sourceHash + blocks.size
-    }
 
 @Composable
 private fun FallbackMessageBubble(

@@ -2,7 +2,7 @@ import Foundation
 
 protocol MessageStore: AnyObject {
     func replaceAll(sessionID: String, messages: [Message])
-    func apply(sessionID: String, patch: MessagePatch)
+    func apply(sessionID: String, patch: MessagePatch) -> MessageStoreApplyResult
     func messages(sessionID: String) -> [Message]
     /// True when a REST-seeded message contains a part without a stable server identity.
     func isRestSeededMessage(sessionID: String, messageID: String) -> Bool

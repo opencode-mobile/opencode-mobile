@@ -1,0 +1,277 @@
+import Foundation
+import Testing
+@testable import OpenCode_Mobile
+
+struct SessionChatTimelineProjectorTests {
+    @Test func interleavedTextToolText_blockIDsStableAcrossReproject() {
+        let parts: [MessagePart] = [
+            text("t1", "Before"),
+            .tool(
+                ToolPart(
+                    id: "bash-1",
+                    toolName: "bash",
+                    status: .completed,
+                    input: ["command": .string("ls")],
+                    output: "a.txt"
+                )
+            ),
+            text("t2", "After"),
+        ]
+        let message = makeMessage(id: "msg-1", parts: parts, text: "Before\nAfter")
+        let frame1 = displayFrame(messages: [DisplayMessage(message: message)])
+        let first = project(frame1)
+        #expect(first.rows.count == 1)
+        let blockIDs = first.rows[0].blocks.map(\.blockID)
+        #expect(blockIDs == [
+            PresentationBlockId.direct("t1"),
+            PresentationBlockId.direct("bash-1"),
+            PresentationBlockId.direct("t2"),
+        ])
+
+        let frame2 = DisplayFrame(
+            sessionKey: frame1.sessionKey,
+            frameRevision: 2,
+            sourceRevision: 2,
+            messages: frame1.messages
+        )
+        let second = project(frame2, previous: first)
+        #expect(second.changedRowIDs.isEmpty)
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.rows[0].blocks.map(\.blockID) == blockIDs)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+    }
+
+    @Test func toolGroupMembershipChange_changesBlockIDAndMarksRowChanged() {
+        let twoParts: [MessagePart] = [
+            .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
+            .tool(ToolPart(id: "g1", toolName: "grep", status: .completed)),
+        ]
+        let threeParts: [MessagePart] = [
+            .tool(ToolPart(id: "r1", toolName: "read", status: .completed)),
+            .tool(ToolPart(id: "g1", toolName: "grep", status: .completed)),
+            .tool(ToolPart(id: "l1", toolName: "glob", status: .completed)),
+        ]
+        let firstMessage = makeMessage(id: "msg-group", parts: twoParts, text: "")
+        let secondMessage = makeMessage(id: "msg-group", parts: threeParts, text: "")
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        #expect(first.rows[0].blocks.map(\.blockID) == [
+            PresentationBlockId.toolGroup(["r1", "g1"]),
+        ])
+
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        )
+        #expect(second.rows[0].blocks.map(\.blockID) == [
+            PresentationBlockId.toolGroup(["r1", "g1", "l1"]),
+        ])
+        #expect(second.changedRowIDs.contains("msg-group"))
+        #expect(second.layoutChangedRowIDs.contains("msg-group"))
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision &+ 1)
+    }
+
+    @Test func optimisticThenAuthoritative_reconcilesMatchingSignature() {
+        let pending = TimelineRow(
+            id: "optimistic-1",
+            role: .user,
+            text: "Hello",
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-1"),
+                    text: "Hello",
+                    renderedMarkdown: nil
+                ),
+            ],
+            contentRevision: ContentRevision.of("Hello"),
+            layoutRevision: 1
+        )
+        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
+        let empty = project(displayFrame(messages: []))
+        #expect(empty.rows.isEmpty)
+
+        let withOptimistic = project(
+            displayFrame(revision: 1, messages: []),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            ),
+            previous: empty
+        )
+        #expect(withOptimistic.rows.map(\.id) == ["optimistic-1"])
+
+        let authoritative = makeMessage(
+            id: "server-1",
+            role: .user,
+            parts: [text("u1", "Hello")],
+            text: "Hello"
+        )
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: authoritative)]),
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [signature: 0],
+                mergePending: true
+            ),
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["server-1"])
+        #expect(reconciled.rows.allSatisfy { !$0.isPending })
+        #expect(reconciled.removedRowIDs.contains("optimistic-1"))
+        #expect(reconciled.insertedRowIDs.contains("server-1"))
+    }
+
+    @Test func unchangedContent_retainsLayoutRevisionAndEmptyChangeSets() {
+        let message = makeMessage(
+            id: "stable",
+            parts: [text("t1", "Steady")],
+            text: "Steady"
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: message)]))
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: message)]),
+            previous: first
+        )
+        #expect(second.changedRowIDs.isEmpty)
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.insertedRowIDs.isEmpty)
+        #expect(second.removedRowIDs.isEmpty)
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        #expect(second.rows[0].contentRevision == first.rows[0].contentRevision)
+    }
+
+    @Test func plainToDecorated_advancesLayoutRevisionAndLayoutChangedIDs() {
+        let message = makeMessage(
+            id: "decorate-me",
+            parts: [text("t1", "# Title")],
+            text: "# Title"
+        )
+        let plain = project(displayFrame(messages: [DisplayMessage(message: message)]))
+        #expect(plain.rows[0].renderedMarkdown == nil)
+        guard case .text(_, _, let plainDoc) = plain.rows[0].blocks[0] else {
+            Issue.record("Expected text block")
+            return
+        }
+        #expect(plainDoc == nil)
+
+        let document = NativeMarkdownDocument(
+            sourceHash: stableMarkdownSourceHash("# Title"),
+            blocks: [.paragraph([.text("Title")])]
+        )
+        let decoratedDisplay = DisplayMessage(message: message, renderedMarkdown: document)
+        let decorated = project(
+            displayFrame(revision: 2, messages: [decoratedDisplay]),
+            previous: plain
+        )
+        #expect(decorated.changedRowIDs.contains("decorate-me"))
+        #expect(decorated.layoutChangedRowIDs.contains("decorate-me"))
+        #expect(decorated.rows[0].layoutRevision == plain.rows[0].layoutRevision &+ 1)
+        #expect(decorated.rows[0].renderedMarkdown?.sourceHash == document.sourceHash)
+        guard case .text(_, _, let blockDoc) = decorated.rows[0].blocks[0] else {
+            Issue.record("Expected text block with markdown")
+            return
+        }
+        #expect(blockDoc?.sourceHash == document.sourceHash)
+    }
+
+    @Test func displayFrameBuilder_attachesBlockDecorationCacheHits() {
+        let cache = BlockDecorationCache(maxEntries: 8)
+        let plain = "# Cached"
+        let blockID = PresentationBlockId.direct("t1")
+        let document = NativeMarkdownDocument(
+            sourceHash: 42,
+            blocks: [.paragraph([.text("Cached")])]
+        )
+        cache.put(
+            sessionKey: "session-a",
+            blockID: blockID,
+            contentRevision: ContentRevision.of(plain),
+            isStreaming: false,
+            document: document
+        )
+        let message = makeMessage(
+            id: "cached-msg",
+            parts: [text("t1", plain)],
+            text: plain
+        )
+        let blocks = DisplayFrameBuilder.attachCachedBlockMarkdown(
+            [
+                .text(blockID: blockID, text: plain, renderedMarkdown: nil),
+            ],
+            sessionKey: "session-a",
+            isStreaming: false,
+            cache: cache
+        )
+        guard case .text(_, _, let attached) = blocks[0] else {
+            Issue.record("Expected text block")
+            return
+        }
+        #expect(attached?.sourceHash == 42)
+
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: "session-a",
+            frameRevision: 1,
+            sourceRevision: 1,
+            displayMessages: [DisplayMessage(message: message, renderedMarkdown: nil)]
+        )
+        // Shared cache is separate; builder default uses .shared — ensure sole-text
+        // bridge remains nil when message has no root markdown and shared misses.
+        #expect(frame.messages[0].renderedMarkdown == nil)
+    }
+
+    @Test func contentRevision_usesTextHashAndLength() {
+        let revision = ContentRevision.of("abc")
+        #expect(revision.textLength == 3)
+        #expect(revision.textHash == stableMarkdownSourceHash("abc"))
+    }
+
+    // MARK: - Helpers
+
+    private func project(
+        _ frame: DisplayFrame,
+        optimistic: OptimisticInputs = .none,
+        previous: TimelineFrame? = nil
+    ) -> TimelineFrame {
+        SessionChatTimelineProjector.project(
+            frame: frame,
+            optimistic: optimistic,
+            previous: previous,
+            metadataLabel: { _ in "" }
+        )
+    }
+
+    private func displayFrame(
+        revision: UInt64 = 1,
+        messages: [DisplayMessage]
+    ) -> DisplayFrame {
+        DisplayFrameBuilder.build(
+            sessionKey: "session-a",
+            frameRevision: revision,
+            sourceRevision: revision,
+            displayMessages: messages
+        )
+    }
+
+    private func makeMessage(
+        id: String,
+        role: MessageRole = .assistant,
+        parts: [MessagePart],
+        text: String
+    ) -> Message {
+        Message(
+            id: id,
+            role: role,
+            text: text,
+            parts: parts,
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1
+        )
+    }
+
+    private func text(_ id: String, _ value: String) -> MessagePart {
+        .text(TextPart(id: id, text: value, isStreaming: false))
+    }
+}

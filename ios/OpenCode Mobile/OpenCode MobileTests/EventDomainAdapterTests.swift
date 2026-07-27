@@ -117,16 +117,17 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
     }
 
     func start() {
-        connectionState = .connected
-        for continuation in connectionStateContinuations.values {
-            continuation.yield(.connected)
-        }
+        setConnectionState(.connected)
     }
 
     func stop() {
-        connectionState = .idle
+        setConnectionState(.idle)
+    }
+
+    func setConnectionState(_ state: EventStreamConnectionState) {
+        connectionState = state
         for continuation in connectionStateContinuations.values {
-            continuation.yield(.idle)
+            continuation.yield(state)
         }
     }
 

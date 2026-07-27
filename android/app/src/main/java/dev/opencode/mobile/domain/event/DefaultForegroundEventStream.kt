@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import android.util.Log
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.message.ConnectionEpoch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -39,6 +40,7 @@ class DefaultForegroundEventStream
         override fun start() {
             if (streamJob?.isActive == true) return
             logI("foreground SSE stream starting")
+            ConnectionEpoch.shared.bump()
             streamJob =
                 scope.launch {
                     var retryAttempt = 0
@@ -114,6 +116,7 @@ class DefaultForegroundEventStream
             }
             if (shouldPublishReconnect) {
                 logI("foreground SSE stream reconnected")
+                ConnectionEpoch.shared.bump()
                 _events.emit(OpencodeEvent(type = "stream.reconnected"))
                 emittedReconnectForCurrentStream = true
             }

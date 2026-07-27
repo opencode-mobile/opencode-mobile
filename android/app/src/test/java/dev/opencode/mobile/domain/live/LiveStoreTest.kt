@@ -1,10 +1,13 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
+import dev.opencode.mobile.domain.message.MESSAGE_EVENT_STAGING_CAPACITY
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
@@ -13,8 +16,10 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.message.MessageSync
-import dev.opencode.mobile.domain.message.MESSAGE_EVENT_STAGING_CAPACITY
+import dev.opencode.mobile.domain.message.MessageSyncHealth
+import dev.opencode.mobile.domain.message.MessageSyncRecoveryReason
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
@@ -28,6 +33,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
@@ -145,6 +151,219 @@ class MessageSyncTest {
             assertTrue(emissions.isNotEmpty())
             assertEquals("recovered", emissions.last().single().text)
             assertTrue(emissions.none { frame -> frame.any { it.id == "msg-rest" && it.text == "from-rest" } })
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_overflowRecoveryFailureKeepsRecoveringAndLastFrame() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+
+            repository.shouldFailLoad = true
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            advanceTimeBy(50)
+
+            assertEquals("Hello", emissions.last().single().text)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_eventDuringRecoveryKeepsRecoveringUntilQuietAuthority() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+
+            val recoveryGate = CompletableDeferred<Unit>()
+            repository.nextLoadGate = recoveryGate
+            eventStream.emit(OpencodeEvent(type = "stream.reconnected", sessionId = "ses-1"))
+            // Start recovery only — do not advanceUntilIdle while the REST gate is held.
+            advanceTimeBy(1)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering)
+
+            // Inject a relevant race while the authority window is open.
+            eventStream.emit(messageUpdatedEvent("msg-race", "assistant"))
+            advanceTimeBy(1)
+
+            repository.messages = listOf(Message(id = "msg-final", role = MessageRole.Assistant, text = "final"))
+            recoveryGate.complete(Unit)
+            // First attempt closes raced; backoff(1) then a quiet reconcile.
+            advanceTimeBy(50)
+
+            assertEquals("final", emissions.last().single().text)
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_sessionKeysIsolateProfiles() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val syncA = createMessageSync(repository, eventStream, connectionProfileId = "profile-a")
+            val syncB = createMessageSync(repository, eventStream, connectionProfileId = "profile-b")
+
+            val messagesA = syncA.firstMessages("ses-1", "/repo")
+            repository.messages = listOf(Message(id = "msg-b", role = MessageRole.Assistant, text = "B"))
+            val messagesB = syncB.firstMessages("ses-1", "/repo")
+
+            assertEquals("Hello", messagesA.single().text)
+            assertEquals("B", messagesB.single().text)
+        }
+
+    @Test
+    fun observeMessages_routerIgnoresNonMessageEvents() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            val before = emissions.size
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-1"))
+            eventStream.emit(OpencodeEvent(type = "session.created", sessionId = "ses-1"))
+            advanceTimeBy(50)
+            assertEquals(before, emissions.size)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_byteCapacityOverflowEntersRecovering() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = 60_000L,
+                    eventStagingCapacity = 64,
+                    eventStagingByteCapacity = 200,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+
+            repository.shouldFailLoad = true
+            repeat(8) {
+                eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-1", delta = "x".repeat(80)))
+            }
+            advanceTimeBy(50)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering)
+            assertEquals("Hello", emissions.last().single().text)
+            repository.shouldFailLoad = false
+            advanceTimeBy(50)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_transportDropEntersStaleWhileRetainingFrame() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+
+            eventStream.start()
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Disconnected)
+            advanceTimeBy(1)
+
+            val health = sync.syncHealth("ses-1", "/repo")
+            assertTrue(health is MessageSyncHealth.Stale)
+            assertEquals(
+                MessageSyncRecoveryReason.TransportUnavailable,
+                (health as MessageSyncHealth.Stale).reason,
+            )
+            assertEquals("Hello", emissions.last().single().text)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_staleEpochEventDoesNotMutateStore() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val epoch = ConnectionEpoch()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = 60_000L,
+                    connectionEpoch = epoch,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+            val before = emissions.size
+
+            epoch.bump()
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-1", delta = " should-not-apply"))
+            advanceTimeBy(50)
+
+            assertEquals(before, emissions.size)
+            assertEquals("Hello", emissions.last().single().text)
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
@@ -698,8 +917,8 @@ class MessageSyncTest {
 
     @Test
     fun replaceAllClearsStreamingAndMakesRestAuthoritative() {
-        val store = InMemoryMessageStore(MessageDomainAdapter())
-        store.apply(
+        val engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter()))
+        engine.apply(
             "ses-1",
             MessagePatch.InfoUpdated(
                 buildJsonObject {
@@ -709,7 +928,7 @@ class MessageSyncTest {
                 },
             ),
         )
-        store.apply(
+        engine.apply(
             "ses-1",
             MessagePatch.PartUpdated(
                 buildJsonObject {
@@ -722,8 +941,8 @@ class MessageSyncTest {
                 delta = null,
             ),
         )
-        store.apply("ses-1", MessagePatch.PartDelta(messageId = "msg-2", partId = "prt-1", delta = "Hel"))
-        store.replaceAll(
+        engine.apply("ses-1", MessagePatch.PartDelta(messageId = "msg-2", partId = "prt-1", delta = "Hel"))
+        engine.replaceAll(
             "ses-1",
             listOf(
                 Message(
@@ -734,9 +953,9 @@ class MessageSyncTest {
                 ),
             ),
         )
-        store.apply("ses-1", MessagePatch.PartDelta(messageId = "msg-2", partId = "prt-1", delta = "lo"))
+        engine.apply("ses-1", MessagePatch.PartDelta(messageId = "msg-2", partId = "prt-1", delta = "lo"))
 
-        val msg2 = store.messages("ses-1").single { it.id == "msg-2" }
+        val msg2 = engine.messages("ses-1").single { it.id == "msg-2" }
         assertEquals("Final", msg2.text)
         val textPart = msg2.parts.single() as MessagePart.Text
         assertFalse(textPart.isStreaming)
@@ -915,14 +1134,19 @@ class MessageSyncTest {
         repository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream,
         eventStagingCapacity: Int = MESSAGE_EVENT_STAGING_CAPACITY,
+        connectionProfileId: String = "local",
+        pollIntervalMs: Long = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
     ): MessageSync {
         val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         return MessageSync(
             listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
-            store = InMemoryMessageStore(MessageDomainAdapter()),
+            engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
             eventStream = eventStream,
             liveStoreScope = scope,
+            pollIntervalMs = pollIntervalMs,
             eventStagingCapacity = eventStagingCapacity,
+            connectionProfileIdProvider = { connectionProfileId },
+            recoveryDelay = { delay(1) },
         )
     }
 

@@ -10,8 +10,10 @@ nonisolated func stableMarkdownSourceHash(_ markdown: String) -> Int {
     return hash
 }
 
+/// Preparer LRU key: sessionKey + blockID + contentRevision + isStreaming (no generation).
 nonisolated private struct MessageMarkdownCacheKey: Hashable, Sendable {
-    let messageID: String
+    let sessionKey: String
+    let blockID: String
     let textHash: Int
     let textLength: Int
     let isStreaming: Bool
@@ -99,6 +101,7 @@ final class MessageContentPreparer: @unchecked Sendable {
                     message,
                     previous: previous,
                     mode: mode,
+                    sessionKey: "",
                     documentCache: documentCache
                 )
                 prepared.append(display)
@@ -144,6 +147,34 @@ final class MessageContentPreparer: @unchecked Sendable {
                 message,
                 previous: previous,
                 mode: mode,
+                sessionKey: "",
+                documentCache: documentCache
+            )
+        }.value
+    }
+
+    /// Parse a single text block and write the preparer LRU (no generation).
+    nonisolated func prepareTextBlock(
+        blockID: String,
+        plain: String,
+        isStreaming: Bool,
+        sessionKey: String = "",
+        mode: MessagePreparationMode = .final
+    ) async -> NativeMarkdownDocument? {
+        await Task.detached(priority: .userInitiated) { [documentCache] in
+            if mode == .streaming,
+               plain.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
+            {
+                return nil
+            }
+            guard OpenCodeRenderedMarkdownDetector.shouldRender(plain) else {
+                return nil
+            }
+            return Self.parseDocument(
+                sessionKey: sessionKey,
+                blockID: blockID,
+                text: plain,
+                isStreaming: isStreaming,
                 documentCache: documentCache
             )
         }.value
@@ -153,16 +184,17 @@ final class MessageContentPreparer: @unchecked Sendable {
         _ message: Message,
         previous: DisplayMessage?,
         mode: MessagePreparationMode,
+        sessionKey: String,
         documentCache: MessageMarkdownDocumentCache
     ) -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
         if mode == .streaming,
-           message.text.count >= streamingPlainTextCharacterThreshold
+           message.text.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
         {
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
         if mode == .historyPlainFirst {
-            if message.text.count < streamingPlainTextCharacterThreshold,
+            if message.text.count < MessageContentPreparer.streamingPlainTextCharacterThreshold,
                let reusable = reusableDocument(
                 for: message,
                 previous: previous,
@@ -186,8 +218,12 @@ final class MessageContentPreparer: @unchecked Sendable {
         } else if mode == .finalPlaceholder {
             document = previous?.renderedMarkdown
         } else {
+            let blockID =
+                StreamingTextBlockIdentity.resolvePrimary(message: message)?.blockID
+                ?? PresentationBlockId.messageFallback(message.id)
             document = parseDocumentSafely(
-                messageID: message.id,
+                sessionKey: sessionKey,
+                blockID: blockID,
                 text: message.text,
                 isStreaming: isStreaming,
                 documentCache: documentCache
@@ -210,13 +246,15 @@ final class MessageContentPreparer: @unchecked Sendable {
     /// `OpenCodeRenderedMarkdownParser`; this seam keeps the call site aligned with
     /// Android's safe-plain fallback contract.
     nonisolated private static func parseDocumentSafely(
-        messageID: String,
+        sessionKey: String,
+        blockID: String,
         text: String,
         isStreaming: Bool,
         documentCache: MessageMarkdownDocumentCache
     ) -> NativeMarkdownDocument? {
         parseDocument(
-            messageID: messageID,
+            sessionKey: sessionKey,
+            blockID: blockID,
             text: text,
             isStreaming: isStreaming,
             documentCache: documentCache
@@ -224,7 +262,8 @@ final class MessageContentPreparer: @unchecked Sendable {
     }
 
     nonisolated private static func parseDocument(
-        messageID: String,
+        sessionKey: String,
+        blockID: String,
         text: String,
         isStreaming: Bool,
         documentCache: MessageMarkdownDocumentCache
@@ -232,10 +271,12 @@ final class MessageContentPreparer: @unchecked Sendable {
         guard OpenCodeRenderedMarkdownDetector.shouldRender(text) else {
             return nil
         }
+        let revision = ContentRevision.of(text)
         let cacheKey = MessageMarkdownCacheKey(
-            messageID: messageID,
-            textHash: stableMarkdownSourceHash(text),
-            textLength: text.count,
+            sessionKey: sessionKey,
+            blockID: blockID,
+            textHash: revision.textHash,
+            textLength: revision.textLength,
             isStreaming: isStreaming
         )
         if let cached = documentCache.value(for: cacheKey) { return cached }

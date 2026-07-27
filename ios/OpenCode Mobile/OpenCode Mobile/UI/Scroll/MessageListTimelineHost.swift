@@ -1,9 +1,13 @@
 import SwiftUI
 import UIKit
 
-struct MessageListTimelineHost<Item: Identifiable & Equatable, ItemContent: View>: UIViewControllerRepresentable
+struct MessageListTimelineHost<Item: Identifiable, ItemContent: View>: UIViewControllerRepresentable
 where Item.ID == String {
     let items: [Item]
+    /// Declared change/layout ID sets from `TimelineFrame`. When nil (gallery),
+    /// the host diffs ID lists only and reconfigures surviving IDs — never
+    /// list-wide `Item` Equatable discovery.
+    var applyPacket: MessageListTimelineApplyPacket? = nil
     var scrollController: TimelineScrollController
     var onRefresh: (() async -> Void)?
     var horizontalContentPadding: CGFloat = MessageListTimelineDefaults.horizontalContentPadding
@@ -25,7 +29,11 @@ where Item.ID == String {
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
-        viewController.apply(items: items, animatingDifferences: false)
+        viewController.apply(
+            items: items,
+            packet: applyPacket,
+            animatingDifferences: false
+        )
         return viewController
     }
 
@@ -41,12 +49,16 @@ where Item.ID == String {
         viewController.updateRefreshControlAvailability()
         // Keep snapshot updates unanimated for now; open-settling still races
         // estimated heights and looks like messages sliding in.
-        viewController.apply(items: items, animatingDifferences: false)
+        viewController.apply(
+            items: items,
+            packet: applyPacket,
+            animatingDifferences: false
+        )
     }
 }
 
 @MainActor
-final class MessageListTimelineViewController<Item: Identifiable & Equatable, ItemContent: View>:
+final class MessageListTimelineViewController<Item: Identifiable, ItemContent: View>:
     UIViewController,
     UICollectionViewDelegate,
     TimelineScrollPerforming
@@ -64,7 +76,7 @@ where Item.ID == String {
     private var dataSource: UICollectionViewDiffableDataSource<String, String>!
     private var itemsByID: [String: Item] = [:]
     private var orderedIDs: [String] = []
-    private var currentItems: [Item] = []
+    private var lastAppliedFrameRevision: UInt64?
     private var lastContentHeight: CGFloat = 0
     private var lastViewportHeight: CGFloat = 0
     private var hasCompletedInitialScroll = false
@@ -79,7 +91,13 @@ where Item.ID == String {
     /// Enrich publishes coalesce here while the user is actively scrolling so
     /// plain→markdown cell reconfigure does not hitch under a pan.
     private var pendingApplyItems: [Item]?
+    private var pendingApplyPacket: MessageListTimelineApplyPacket?
     private var pendingApplyAnimated = false
+
+    /// Test seam: last reconfigure ID set passed to Diffable (declared path).
+    private(set) var lastReconfiguredIDs: Set<String> = []
+    /// Test seam: whether the last apply used declared IDs (vs gallery fallback).
+    private(set) var lastApplyUsedDeclaredIDs = false
 
     init(
         itemContent: @escaping (Item) -> ItemContent,
@@ -120,7 +138,11 @@ where Item.ID == String {
         reportGeometry()
     }
 
-    func apply(items: [Item], animatingDifferences: Bool) {
+    func apply(
+        items: [Item],
+        packet: MessageListTimelineApplyPacket?,
+        animatingDifferences: Bool
+    ) {
         guard isViewLoaded, dataSource != nil else { return }
 
         let isActivelyScrolling =
@@ -129,28 +151,31 @@ where Item.ID == String {
             || scrollController?.isUserScrolling == true
         if isActivelyScrolling {
             pendingApplyItems = items
+            pendingApplyPacket = packet
             pendingApplyAnimated = animatingDifferences
             return
         }
 
         pendingApplyItems = nil
-        performApply(items: items, animatingDifferences: animatingDifferences)
+        pendingApplyPacket = nil
+        performApply(items: items, packet: packet, animatingDifferences: animatingDifferences)
     }
 
     private func flushPendingApplyIfNeeded() {
         guard let pendingApplyItems else { return }
         let items = pendingApplyItems
+        let packet = pendingApplyPacket
         let animated = pendingApplyAnimated
         self.pendingApplyItems = nil
-        performApply(items: items, animatingDifferences: animated)
+        self.pendingApplyPacket = nil
+        performApply(items: items, packet: packet, animatingDifferences: animated)
     }
 
-    private func performApply(items: [Item], animatingDifferences: Bool) {
-        guard items != currentItems else { return }
-
-        let previousItems = itemsByID
-        let previousOrderedIDs = orderedIDs
-        let previousCount = previousOrderedIDs.count
+    private func performApply(
+        items: [Item],
+        packet: MessageListTimelineApplyPacket?,
+        animatingDifferences: Bool
+    ) {
         // Diffable data source asserts on duplicate identifiers. Keep last-wins
         // content and a de-duplicated id list for the snapshot.
         var uniqueItems: [Item] = []
@@ -161,24 +186,68 @@ where Item.ID == String {
             }
         }
         uniqueItems.reverse()
-        currentItems = uniqueItems
+        let newOrderedIDs = uniqueItems.map(\.id)
+        let previousOrderedIDs = orderedIDs
+        let previousCount = previousOrderedIDs.count
+        let previousIDSet = Set(previousOrderedIDs)
+
+        let resolvedPacket =
+            packet
+            ?? MessageListTimelineApplyPacket.reconfigureAllSurviving(
+                frameRevision: (lastAppliedFrameRevision ?? 0) &+ 1,
+                previousIDs: previousIDSet,
+                nextIDs: newOrderedIDs
+            )
+        lastApplyUsedDeclaredIDs = packet != nil
+
+        // Skip without list-wide Item Equatable:
+        // 1) Same frameRevision already applied (composer/session-info reuse keeps
+        //    declared sets from the original timeline publish — do not re-apply).
+        // 2) Empty declared sets + identical ID order (no-op projector frame).
+        if newOrderedIDs == previousOrderedIDs {
+            if let lastRevision = lastAppliedFrameRevision,
+               resolvedPacket.frameRevision == lastRevision
+            {
+                itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
+                lastReconfiguredIDs = []
+                return
+            }
+            if resolvedPacket.insertedRowIDs.isEmpty,
+               resolvedPacket.changedRowIDs.isEmpty,
+               resolvedPacket.removedRowIDs.isEmpty,
+               resolvedPacket.layoutChangedRowIDs.isEmpty
+            {
+                itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
+                lastAppliedFrameRevision = resolvedPacket.frameRevision
+                lastReconfiguredIDs = []
+                return
+            }
+        }
+
+        let layoutAffecting = resolvedPacket.layoutAffectingRowIDs
+        let shouldCaptureUnarmedAnchor =
+            hasCompletedInitialScroll
+            && !isSettlingInitialLoad
+            && scrollController?.isPinnedToEnd != true
+            && scrollController?.isProgrammaticScrolling != true
+            && !layoutAffecting.isEmpty
+        let visibleAnchor = shouldCaptureUnarmedAnchor ? captureVisibleAnchor() : nil
+
         itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
-        orderedIDs = uniqueItems.map(\.id)
+        orderedIDs = newOrderedIDs
+        lastAppliedFrameRevision = resolvedPacket.frameRevision
 
         var snapshot = NSDiffableDataSourceSnapshot<String, String>()
         snapshot.appendSections(["main"])
         snapshot.appendItems(orderedIDs, toSection: "main")
 
         let existingIDs = Set(dataSource.snapshot().itemIdentifiers)
-        let changedIDs = orderedIDs.filter { id in
-            guard existingIDs.contains(id),
-                  let previous = previousItems[id],
-                  let current = itemsByID[id]
-            else { return false }
-            return previous != current
+        let reconfigureIDs = orderedIDs.filter { id in
+            existingIDs.contains(id) && resolvedPacket.reconfigureRowIDs.contains(id)
         }
-        if !changedIDs.isEmpty {
-            snapshot.reconfigureItems(changedIDs)
+        lastReconfiguredIDs = Set(reconfigureIDs)
+        if !reconfigureIDs.isEmpty {
+            snapshot.reconfigureItems(reconfigureIDs)
         }
 
         // Difference animations are off for now — initial load and short-thread
@@ -188,6 +257,11 @@ where Item.ID == String {
             guard let self else { return }
             self.dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
                 guard let self else { return }
+
+                if let visibleAnchor {
+                    self.restoreVisibleAnchor(visibleAnchor)
+                }
+
                 let shouldStayPinned =
                     !self.hasCompletedInitialScroll
                     || self.isSettlingInitialLoad
@@ -196,7 +270,8 @@ where Item.ID == String {
                 let isReconfigureOnly =
                     self.hasCompletedInitialScroll
                     && self.orderedIDs.count == previousCount
-                    && !changedIDs.isEmpty
+                    && layoutAffecting.isEmpty
+                    && !reconfigureIDs.isEmpty
                 // While heights are still settling after open, skip re-pin on
                 // identity-stable updates (warm cache-hit). Re-pinning was
                 // re-entering self-sizing and blocking scroll for seconds.
@@ -204,7 +279,7 @@ where Item.ID == String {
                     self.isSettlingInitialLoad
                     && self.hasCompletedInitialScroll
                     && self.orderedIDs.count == previousCount
-                if shouldStayPinned, !isReconfigureOnly, !skipPinDuringSettle {
+                if shouldStayPinned, visibleAnchor == nil, !isReconfigureOnly, !skipPinDuringSettle {
                     self.pinToBottomWithoutAnimation()
                 } else {
                     // Do not force layoutIfNeeded while reading history — enrich
@@ -224,6 +299,9 @@ where Item.ID == String {
 
                 if self.orderedIDs.count != previousCount {
                     self.scrollController?.updateMessageCount(self.orderedIDs.count)
+                } else if !layoutAffecting.isEmpty {
+                    // Declared layout growth with stable count (plain→decorated).
+                    self.scrollController?.notifyContentGrew()
                 }
             }
         }
@@ -231,6 +309,47 @@ where Item.ID == String {
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation(applySnapshot)
         CATransaction.commit()
+    }
+
+    // MARK: - Unarmed visible-anchor capture / restore
+
+    private struct VisibleAnchor {
+        let itemID: String
+        let offsetFromViewportTop: CGFloat
+    }
+
+    private func captureVisibleAnchor() -> VisibleAnchor? {
+        guard let collectionView else { return nil }
+        let visible = collectionView.indexPathsForVisibleItems.sorted {
+            $0.item < $1.item
+        }
+        guard let first = visible.first, first.item < orderedIDs.count else { return nil }
+        let itemID = orderedIDs[first.item]
+        guard let attributes = collectionView.layoutAttributesForItem(at: first) else { return nil }
+        let offsetFromViewportTop = attributes.frame.minY - collectionView.contentOffset.y
+        return VisibleAnchor(itemID: itemID, offsetFromViewportTop: offsetFromViewportTop)
+    }
+
+    private func restoreVisibleAnchor(_ anchor: VisibleAnchor) {
+        guard let collectionView else { return }
+        guard let index = orderedIDs.firstIndex(of: anchor.itemID) else { return }
+        let indexPath = IndexPath(item: index, section: 0)
+        guard collectionView.numberOfSections > 0,
+              collectionView.numberOfItems(inSection: 0) > indexPath.item,
+              let attributes = collectionView.layoutAttributesForItem(at: indexPath)
+        else { return }
+
+        let targetY = attributes.frame.minY - anchor.offsetFromViewportTop
+        let minY = -collectionView.adjustedContentInset.top
+        let maxY = bottomContentOffsetY()
+        let clamped = min(max(targetY, minY), maxY)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            collectionView.setContentOffset(CGPoint(x: 0, y: clamped), animated: false)
+        }
+        CATransaction.commit()
+        reportGeometry()
     }
 
     func performScrollToEnd(animated: Bool) {

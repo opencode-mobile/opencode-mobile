@@ -489,7 +489,8 @@ final class SessionChatComposer {
 
         let attachmentBlocks = submittedAttachments.map { attachment in
             SessionChatTimelineBlock.attachment(
-                FilePart(
+                blockID: PresentationBlockId.direct(attachment.id),
+                file: FilePart(
                     id: attachment.id,
                     filename: attachment.filename,
                     mime: attachment.mime,
@@ -498,7 +499,16 @@ final class SessionChatComposer {
                 )
             )
         }
-        let optimisticBlocks = (trimmed.isEmpty ? [] : [SessionChatTimelineBlock.text(trimmed)]) + attachmentBlocks
+        let optimisticBlocks =
+            (trimmed.isEmpty
+                ? []
+                : [
+                    SessionChatTimelineBlock.text(
+                        blockID: PresentationBlockId.direct("optimistic-text"),
+                        text: trimmed,
+                        renderedMarkdown: nil
+                    ),
+                ]) + attachmentBlocks
 
         let optimistic = SessionChatRow(
             id: "pending-\(UUID().uuidString)",

@@ -9,7 +9,7 @@ interface MessageStore {
     fun apply(
         sessionId: String,
         patch: MessagePatch,
-    )
+    ): MessageStoreApplyResult
 
     fun messages(sessionId: String): List<Message>
 

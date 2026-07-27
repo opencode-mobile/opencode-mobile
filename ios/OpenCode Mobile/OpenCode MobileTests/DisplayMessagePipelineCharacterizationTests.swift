@@ -307,6 +307,114 @@ struct DisplayMessagePipelineCharacterizationTests {
         task.cancel()
         _ = await waitUntil { collector.isFinished }
     }
+
+    @Test func blockedPreparerDoesNotDelayPlainStreamingTextLane() async {
+        let harness = Harness(holdSleep: true)
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("seed")]))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        collector.emissions.removeAll()
+        harness.preparer.prepareMessagesInvocations.removeAll()
+
+        harness.preparer.holdNextPrepareMessages()
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello")]))
+        _ = await waitUntil { harness.clock.pendingSleep != nil }
+        #expect(collector.emissions.isEmpty)
+
+        harness.clock.releaseSleep()
+        let plainPublished = await waitUntil { collector.emissions.count == 1 }
+        #expect(plainPublished)
+        #expect(collector.emissions[0].first?.text == "# Hello")
+        #expect(collector.emissions[0].first?.isStreaming == true)
+        #expect(collector.emissions[0].first?.renderedMarkdown == nil)
+
+        harness.clock.advance(by: streamingPrepareMaxBatchDuration)
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello world")]))
+        let secondPlain = await waitUntil { collector.emissions.count == 2 }
+        #expect(secondPlain)
+        #expect(collector.emissions[1].first?.text == "# Hello world")
+        #expect(collector.emissions[1].first?.renderedMarkdown == nil)
+
+        harness.preparer.releaseNextPrepareMessages()
+        if harness.clock.pendingSleep != nil {
+            harness.clock.releaseSleep()
+        }
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(collector.emissions.last?.first?.text == "# Hello world")
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
+    @Test func largeStreamingSkipsDecorationUntilFinalization() async {
+        let harness = Harness()
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        let largeText = "# " + String(
+            repeating: "x",
+            count: MessageContentPreparer.streamingPlainTextCharacterThreshold
+        )
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: largeText)]))
+        let streamed = await waitUntil { collector.emissions.count >= 1 }
+        #expect(streamed)
+        #expect(collector.emissions.allSatisfy { frame in
+            frame.allSatisfy { $0.renderedMarkdown == nil }
+        })
+        #expect(harness.preparer.prepareMessagesInvocations.allSatisfy { $0.mode != .streaming })
+
+        collector.emissions.removeAll()
+        harness.preparer.prepareMessagesInvocations.removeAll()
+        await harness.source.emit(.messages([finalAssistant(id: "msg-1", text: largeText)]))
+        let finalized = await waitUntil { collector.emissions.count == 2 }
+        #expect(finalized)
+        #expect(
+            harness.preparer.prepareMessagesInvocations.map(\.mode)
+                == [.finalPlaceholder, .final]
+        )
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
+    /// Dense max-batch deltas must not cancel every in-flight prepare before publish.
+    /// Repro: overlapping prepares under continuous streaming (see ses_06118 logs).
+    @Test func denseStreamingMaxBatchPublishesProgressively() async {
+        let harness = Harness()
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("seed")]))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        collector.emissions.removeAll()
+
+        harness.clock.advance(by: streamingPrepareMaxBatchDuration)
+        harness.preparer.minimumPrepareDelay = .milliseconds(40)
+
+        for count in 1 ... 8 {
+            let text = String(repeating: "x", count: count)
+            await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: text)]))
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        let published = await waitUntil(timeout: .seconds(2)) {
+            collector.emissions.count >= 2
+        }
+        #expect(published)
+        #expect(collector.emissions.last?.first?.text == "xxxxxxxx")
+        #expect(collector.emissions.last?.first?.isStreaming == true)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
 }
 
 @MainActor
@@ -362,6 +470,8 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     private var holdNextPrepareMessagesRequested = false
     private var holdNextPrepareMessageRequested = false
     private var documentSerial = 1
+    /// Wall-clock delay inside `prepareMessages` so dense intake can overlap prepares.
+    var minimumPrepareDelay: Duration?
 
     var prepareMessagesInvocations: [PrepareMessagesInvocation] {
         get {
@@ -440,6 +550,10 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
             }
         }
 
+        if let minimumPrepareDelay {
+            try? await Task.sleep(for: minimumPrepareDelay)
+        }
+
         return messages.map { message in
             prepareMessageOnWorker(
                 message,
@@ -471,6 +585,50 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
             message,
             previous: previous,
             mode: mode
+        )
+    }
+
+    func prepareTextBlock(
+        blockID: String,
+        plain: String,
+        isStreaming: Bool,
+        sessionKey: String,
+        mode: MessagePreparationMode
+    ) async -> NativeMarkdownDocument? {
+        lock.lock()
+        _prepareMessagesInvocations.append(
+            PrepareMessagesInvocation(mode: mode)
+        )
+        // Share the prepareMessages hold so blocked-preparer characterization
+        // still covers disposable streaming decoration.
+        let shouldHold = holdNextPrepareMessagesRequested
+        holdNextPrepareMessagesRequested = false
+        lock.unlock()
+
+        if shouldHold {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                prepareMessagesHold = continuation
+                lock.unlock()
+            }
+        }
+
+        if let minimumPrepareDelay {
+            try? await Task.sleep(for: minimumPrepareDelay)
+        }
+
+        if mode == .streaming,
+           plain.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
+        {
+            return nil
+        }
+        lock.lock()
+        let hash = documentSerial
+        documentSerial += 1
+        lock.unlock()
+        return NativeMarkdownDocument(
+            sourceHash: hash,
+            blocks: [.paragraph([.text(plain)])]
         )
     }
 

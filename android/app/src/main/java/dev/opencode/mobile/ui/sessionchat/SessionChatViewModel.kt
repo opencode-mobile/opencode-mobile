@@ -735,6 +735,24 @@ class SessionChatViewModel
             refilterQuestionOrphans()
             val visibleQuestion = visibleQuestionRequest()
             val questionDraft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            val previous = _uiState.value
+            // Reuse the same TimelineFrame + message list when only composer / session-info /
+            // review / command republish — avoids O(n) remap solely from those regions.
+            val timelineUnchanged =
+                timelineState.timelineFrame === previous.timelineFrame &&
+                    timelineState.messages === previous.messages
+            val messages =
+                if (timelineUnchanged) {
+                    previous.messages
+                } else {
+                    timelineState.messages
+                }
+            val timelineFrame =
+                if (timelineUnchanged) {
+                    previous.timelineFrame
+                } else {
+                    timelineState.timelineFrame
+                }
             val timelineEmptyError =
                 if (timelineState.timeline == SessionChatTimelineState.Error) {
                     timelineState.errorMessage
@@ -762,7 +780,8 @@ class SessionChatViewModel
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
-                messages = timelineState.messages,
+                messages = messages,
+                timelineFrame = timelineFrame,
                 composer = composerState.composer,
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,

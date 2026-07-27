@@ -89,6 +89,187 @@ struct MessageSyncTests {
         #expect(collector.emissions.contains { frame in frame.contains { $0.id == "msg-rest" } } == false)
     }
 
+    @Test func overflowRecoveryFailure_keepsRecoveringAndLastFrame() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        repo.shouldFailList = true
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: "ses-1", rawProperties: nil))
+        let kept = await waitUntil {
+            if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return true
+            }
+            return false
+        }
+        #expect(kept)
+        #expect(collector.latest()?.first?.text == "Hello")
+
+        // Let recovery converge so the observation task can exit cleanly.
+        repo.shouldFailList = false
+        _ = await waitUntil {
+            sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+        }
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
+    @Test func eventDuringRecovery_keepsRecoveringUntilQuietAuthority() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        // Enter recovering via failed reconnect (no REST hold / MainActor deadlock).
+        repo.shouldFailList = true
+        eventStream.emit(OpencodeEvent(type: "stream.reconnected", sessionID: "ses-1", rawProperties: nil))
+        let recovering = await waitUntil {
+            if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return true
+            }
+            return false
+        }
+        #expect(recovering)
+
+        // Session-relevant event while recovering must keep authority open.
+        eventStream.emit(eventWithInfo(id: "msg-race", role: "assistant", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(20))
+
+        repo.messages = [
+            Message(
+                id: "msg-final",
+                role: .assistant,
+                text: "final",
+                parts: [.text(TextPart(text: "final", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        repo.shouldFailList = false
+
+        let healthy = await waitUntil {
+            collector.latest()?.first?.text == "final"
+                && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+        }
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+        #expect(healthy)
+    }
+
+    @Test func sessionKeys_isolateProfiles() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let syncA = makeMessageSync(repo: repo, eventStream: eventStream, connectionProfileID: "profile-a")
+        let syncB = makeMessageSync(repo: repo, eventStream: eventStream, connectionProfileID: "profile-b")
+
+        let collectorA = MessageCollector()
+        let taskA = Task { await collectorA.collect(syncA.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loadedA = await waitUntil { collectorA.latest()?.first?.text == "Hello" }
+        #expect(loadedA)
+
+        repo.messages = [
+            Message(
+                id: "msg-b",
+                role: .assistant,
+                text: "B",
+                parts: [.text(TextPart(text: "B", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let collectorB = MessageCollector()
+        let taskB = Task { await collectorB.collect(syncB.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loadedB = await waitUntil { collectorB.latest()?.first?.text == "B" }
+        taskA.cancel()
+        taskB.cancel()
+        #expect(loadedB)
+        #expect(collectorA.latest()?.first?.text == "Hello")
+    }
+
+    @Test func router_ignoresNonMessageEvents() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        let before = collector.emissions.count
+
+        eventStream.emit(OpencodeEvent(type: "permission.asked", sessionID: "ses-1", rawProperties: nil))
+        eventStream.emit(OpencodeEvent(type: "session.created", sessionID: "ses-1", rawProperties: nil))
+        try? await Task.sleep(for: .milliseconds(100))
+        task.cancel()
+        #expect(collector.emissions.count == before)
+    }
+
+    @Test func transportDrop_entersStaleWhileRetainingFrame() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        eventStream.start()
+        eventStream.setConnectionState(.disconnected)
+        let stale = await waitUntil {
+            if case .stale(.transportUnavailable) = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                return true
+            }
+            return false
+        }
+        task.cancel()
+        #expect(stale)
+        #expect(collector.latest()?.first?.text == "Hello")
+    }
+
+    @Test func staleEpoch_eventDoesNotMutateStore() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let epoch = ConnectionEpoch()
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: 60_000,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            connectionEpoch: epoch
+        )
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+        let before = collector.emissions.count
+
+        _ = epoch.bump()
+        eventStream.emit(
+            eventWithPartDelta(
+                partID: "prt-1",
+                messageID: "msg-1",
+                delta: " should-not-apply",
+                sessionID: "ses-1"
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(150))
+        task.cancel()
+        #expect(collector.emissions.count == before)
+        #expect(collector.latest()?.first?.text == "Hello")
+    }
+
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -445,7 +626,7 @@ struct MessageSyncTests {
 
     @Test func replaceAll_clearsStreamingAndMakesRestAuthoritative() async {
         let store = InMemoryMessageStore()
-        store.apply(
+        _ = store.apply(
             sessionID: "ses-1",
             patch: .infoUpdated([
                 "id": .string("msg-2"),
@@ -453,7 +634,7 @@ struct MessageSyncTests {
                 "sessionID": .string("ses-1"),
             ])
         )
-        store.apply(
+        _ = store.apply(
             sessionID: "ses-1",
             patch: .partUpdated(part: [
                 "id": .string("prt-1"),
@@ -463,7 +644,7 @@ struct MessageSyncTests {
                 "text": .string(""),
             ], delta: nil)
         )
-        store.apply(
+        _ = store.apply(
             sessionID: "ses-1",
             patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: "Hel")
         )
@@ -481,7 +662,7 @@ struct MessageSyncTests {
                 ),
             ]
         )
-        store.apply(
+        _ = store.apply(
             sessionID: "ses-1",
             patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: "lo")
         )
@@ -860,6 +1041,7 @@ struct MessageSyncTests {
 
 private final class MessageCollector: @unchecked Sendable {
     private(set) var emissions: [[Message]] = []
+    private(set) var isFinished = false
 
     func collect(_ stream: AsyncStream<MessageListUpdate>) async {
         for await update in stream {
@@ -867,6 +1049,7 @@ private final class MessageCollector: @unchecked Sendable {
                 emissions.append(messages)
             }
         }
+        isFinished = true
     }
 
     func latest() -> [Message]? {
@@ -895,16 +1078,19 @@ private func makeMessageSync(
     repo: FakeLiveMessageRepository,
     eventStream: FakeForegroundEventStream,
     pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
-    eventStagingCapacity: Int = messageEventStagingCapacity
+    eventStagingCapacity: Int = messageEventStagingCapacity,
+    connectionProfileID: String = "local"
 ) -> MessageSync {
     MessageSync(
         listMessages: { sessionID, directory in
             try await repo.listMessages(sessionID: sessionID, directory: directory)
         },
-        store: InMemoryMessageStore(),
+        store: SessionMessageEngine(store: InMemoryMessageStore()),
         eventStream: eventStream,
         pollIntervalMs: pollIntervalMs,
-        eventStagingCapacity: eventStagingCapacity
+        eventStagingCapacity: eventStagingCapacity,
+        connectionProfileIDProvider: { connectionProfileID },
+        recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
     )
 }
 

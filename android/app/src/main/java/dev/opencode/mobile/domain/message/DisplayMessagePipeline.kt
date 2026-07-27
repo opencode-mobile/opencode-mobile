@@ -1,6 +1,10 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.markdown.stableMarkdownSourceHash
+import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -9,6 +13,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.TimeSource
 
 /** Quiet window before publishing the latest streaming snapshot. */
@@ -45,19 +50,27 @@ class DisplayMessagePipeline(
         channelFlow {
             var previousById = emptyMap<String, DisplayMessage>()
             var pendingMessages: List<Message>? = null
+            var lastPublishedMessages: List<Message>? = null
             var currentGeneration = 0L
             var debounceJob: Job? = null
             var prepareJob: Job? = null
+            var decorationJob: Job? = null
             var enrichmentJob: Job? = null
             var lastPublishedAt: kotlin.time.TimeMark? = null
+            // True while coalescing a live streaming reply (including in-flight prepare).
+            var isStreamingSession = false
+            val decorationBacklog = DecorationBacklog()
 
             fun invalidateInFlightWork() {
                 debounceJob?.cancel()
                 debounceJob = null
                 prepareJob?.cancel()
                 prepareJob = null
+                decorationJob?.cancel()
+                decorationJob = null
                 enrichmentJob?.cancel()
                 enrichmentJob = null
+                decorationBacklog.clear()
             }
 
             fun nextGeneration(): Long {
@@ -86,26 +99,168 @@ class DisplayMessagePipeline(
                 return true
             }
 
-            fun schedulePrepare(
+            fun buildPlainStreamingFrame(messages: List<Message>): List<DisplayMessage> =
+                messages.map { message ->
+                    val previous = previousById[message.id]
+                    val streaming = messageHasStreamingText(message)
+                    when {
+                        streaming -> DisplayMessage(message = message, renderedMarkdown = null)
+                        previous != null &&
+                            previous.text == message.text &&
+                            previous.renderedMarkdown != null ->
+                            DisplayMessage(message = message, renderedMarkdown = previous.renderedMarkdown)
+                        else -> DisplayMessage(message = message, renderedMarkdown = null)
+                    }
+                }
+
+            fun decorationIdentityMatches(job: DecorationJob): Boolean {
+                val messages = lastPublishedMessages ?: return false
+                return messages.any { message ->
+                    val target = resolveStreamingDecorationTarget(message) ?: return@any false
+                    target.blockID == job.blockID &&
+                        target.textHash == job.textHash &&
+                        target.textLength == job.textLength &&
+                        target.isStreaming == job.isStreaming
+                }
+            }
+
+            fun drainDecorationBacklog() {
+                if (decorationJob?.isActive == true) return
+                decorationJob =
+                    launch {
+                        while (isActive) {
+                            val job = decorationBacklog.poll() ?: break
+                            if (!isCurrent(job.generation) || !decorationIdentityMatches(job)) {
+                                continue
+                            }
+                            val targetMessage =
+                                job.messages.firstOrNull { message ->
+                                    resolveStreamingDecorationTarget(message)?.blockID == job.blockID
+                                } ?: continue
+                            val target =
+                                resolveStreamingDecorationTarget(targetMessage) ?: continue
+                            val document =
+                                try {
+                                    contentPreparer.prepareTextBlock(
+                                        blockID = job.blockID,
+                                        plain = target.plain,
+                                        isStreaming = job.isStreaming,
+                                        sessionKey = job.sessionKey,
+                                        mode = MessagePreparationMode.Streaming,
+                                    )
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    // Keep current plain text; disposable decoration may retry later.
+                                    continue
+                                }
+                            if (document == null) continue
+                            if (!isActive || !isCurrent(job.generation)) continue
+                            if (!decorationIdentityMatches(job)) continue
+                            // Generation + identity reject completed before cache mutation.
+                            BlockDecorationCache.put(
+                                sessionKey = job.sessionKey,
+                                blockID = job.blockID,
+                                textHash = job.textHash,
+                                textLength = job.textLength,
+                                isStreaming = job.isStreaming,
+                                document = document,
+                            )
+                            val soleTextBridge = messageHasSoleTextBlock(targetMessage)
+                            var changed = false
+                            val merged =
+                                job.messages.map { message ->
+                                    val previous = previousById[message.id]
+                                    when {
+                                        message.id == targetMessage.id &&
+                                            (previous == null || previous.text == message.text) -> {
+                                            changed = true
+                                            DisplayMessage(
+                                                message = message,
+                                                renderedMarkdown =
+                                                    document.takeIf { soleTextBridge },
+                                            )
+                                        }
+                                        previous != null && previous.text == message.text -> previous
+                                        else -> DisplayMessage(message = message, renderedMarkdown = null)
+                                    }
+                                }
+                            if (!changed) continue
+                            if (!commitPrepared(job.generation, merged, MessagePreparationMode.Streaming)) {
+                                continue
+                            }
+                            send(DisplayMessageListUpdate.Messages(merged))
+                        }
+                        decorationJob = null
+                    }
+            }
+
+            fun scheduleStreamingDecoration(
                 generation: Long,
                 messages: List<Message>,
-                mode: MessagePreparationMode,
-                onCommitted: (() -> Unit)? = null,
             ) {
-                prepareJob?.cancel()
-                prepareJob =
+                val streamingMessage =
+                    messages.firstOrNull(::messageHasStreamingText) ?: return
+                val target = resolveStreamingDecorationTarget(streamingMessage) ?: return
+                if (target.plain.length >=
+                    MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
+                ) {
+                    return
+                }
+                if (!OpenCodeMarkdownDetector.shouldRender(target.plain)) return
+                val job =
+                    DecorationJob(
+                        generation = generation,
+                        sessionKey = sessionId,
+                        blockID = target.blockID,
+                        textHash = target.textHash,
+                        textLength = target.textLength,
+                        isStreaming = true,
+                        messages = messages,
+                        priority = 2,
+                    )
+                if (!decorationBacklog.replaceStreamingJob(job)) return
+                drainDecorationBacklog()
+            }
+
+            suspend fun publishPlainStreamingFrame(
+                generation: Long,
+                messages: List<Message>,
+            ) {
+                if (!isCurrent(generation)) return
+                val frame = buildPlainStreamingFrame(messages)
+                previousById = frame.associateBy { it.id }
+                lastPublishedMessages = messages
+                lastPublishedAt = timeSource.markNow()
+                send(DisplayMessageListUpdate.Messages(frame))
+                scheduleStreamingDecoration(generation, messages)
+            }
+
+            fun scheduleStreamingPublish(generation: Long) {
+                debounceJob?.cancel()
+                debounceJob =
                     launch {
-                        val snapshot = previousById
-                        val prepared =
-                            contentPreparer.prepareMessages(
-                                messages,
-                                snapshot,
-                                mode,
-                            )
+                        delayMillis(STREAMING_PREPARE_DEBOUNCE_MS)
                         if (!isActive || !isCurrent(generation)) return@launch
-                        if (!commitPrepared(generation, prepared, mode)) return@launch
-                        send(DisplayMessageListUpdate.Messages(prepared))
-                        onCommitted?.invoke()
+                        val latest = pendingMessages ?: return@launch
+                        pendingMessages = null
+                        publishPlainStreamingFrame(generation, latest)
+                        // Catch up if denser tokens arrived during this plain publish.
+                        val catchUp = pendingMessages
+                        if (catchUp != null && hasStreamingDelta(catchUp)) {
+                            val dueForMaxBatch =
+                                lastPublishedAt
+                                    ?.elapsedNow()
+                                    ?.inWholeMilliseconds
+                                    ?.let { it >= STREAMING_PREPARE_MAX_BATCH_MS }
+                                    ?: true
+                            if (dueForMaxBatch) {
+                                pendingMessages = null
+                                publishPlainStreamingFrame(currentGeneration, catchUp)
+                            } else {
+                                scheduleStreamingPublish(currentGeneration)
+                            }
+                        }
                     }
             }
 
@@ -127,6 +282,7 @@ class DisplayMessagePipeline(
                         if (!commitPrepared(generation, placeholder, MessagePreparationMode.FinalPlaceholder)) {
                             return@launch
                         }
+                        lastPublishedMessages = messages
                         send(DisplayMessageListUpdate.Messages(placeholder))
 
                         val finalized =
@@ -137,6 +293,7 @@ class DisplayMessagePipeline(
                             )
                         if (!isActive || !isCurrent(generation)) return@launch
                         if (!commitPrepared(generation, finalized, MessagePreparationMode.Final)) return@launch
+                        lastPublishedMessages = messages
                         send(DisplayMessageListUpdate.Messages(finalized))
                     }
             }
@@ -169,6 +326,7 @@ class DisplayMessagePipeline(
                         suspend fun publishSnapshot() {
                             if (!isCurrent(generation)) return
                             previousById = byId.toMap()
+                            lastPublishedMessages = messages
                             lastPublishedAt = timeSource.markNow()
                             send(DisplayMessageListUpdate.Messages(messages.map { byId.getValue(it.id) }))
                         }
@@ -217,15 +375,27 @@ class DisplayMessagePipeline(
                     }
             }
 
-            fun scheduleStreamingPublish(generation: Long) {
-                debounceJob?.cancel()
-                debounceJob =
+            fun schedulePrepare(
+                generation: Long,
+                messages: List<Message>,
+                mode: MessagePreparationMode,
+                onCommitted: (() -> Unit)? = null,
+            ) {
+                prepareJob?.cancel()
+                prepareJob =
                     launch {
-                        delayMillis(STREAMING_PREPARE_DEBOUNCE_MS)
+                        val snapshot = previousById
+                        val prepared =
+                            contentPreparer.prepareMessages(
+                                messages,
+                                snapshot,
+                                mode,
+                            )
                         if (!isActive || !isCurrent(generation)) return@launch
-                        val latest = pendingMessages ?: return@launch
-                        pendingMessages = null
-                        schedulePrepare(generation, latest, MessagePreparationMode.Streaming)
+                        if (!commitPrepared(generation, prepared, mode)) return@launch
+                        lastPublishedMessages = messages
+                        send(DisplayMessageListUpdate.Messages(prepared))
+                        onCommitted?.invoke()
                     }
             }
 
@@ -236,15 +406,26 @@ class DisplayMessagePipeline(
                             nextGeneration()
                             invalidateInFlightWork()
                             pendingMessages = null
+                            lastPublishedMessages = null
+                            isStreamingSession = false
+                            BlockDecorationCache.clear()
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
                         is MessageListUpdate.Messages -> {
-                            val generation = nextGeneration()
-                            invalidateInFlightWork()
                             if (hasStreamingDelta(update.messages)) {
-                                // Keep the latest snapshot. Publish after a short quiet window,
-                                // but also flush when the max batch age is exceeded so dense
-                                // token bursts still stream instead of appearing only at the end.
+                                // Coalesce streaming tokens into pendingMessages. Do not bump
+                                // generation on every delta — decoration stays generation-gated
+                                // and rejects on text-identity mismatch within the session.
+                                if (!isStreamingSession) {
+                                    isStreamingSession = true
+                                    nextGeneration()
+                                    invalidateInFlightWork()
+                                } else {
+                                    enrichmentJob?.cancel()
+                                    enrichmentJob = null
+                                    debounceJob?.cancel()
+                                    debounceJob = null
+                                }
                                 pendingMessages = update.messages
                                 val dueForMaxBatch =
                                     lastPublishedAt
@@ -256,12 +437,15 @@ class DisplayMessagePipeline(
                                     debounceJob = null
                                     val latest = pendingMessages ?: update.messages
                                     pendingMessages = null
-                                    schedulePrepare(generation, latest, MessagePreparationMode.Streaming)
+                                    publishPlainStreamingFrame(currentGeneration, latest)
                                 } else {
-                                    scheduleStreamingPublish(generation)
+                                    scheduleStreamingPublish(currentGeneration)
                                 }
                             } else {
+                                val generation = nextGeneration()
+                                invalidateInFlightWork()
                                 pendingMessages = null
+                                isStreamingSession = false
                                 val hadStreamingPrevious = previousById.values.any { it.isStreaming }
                                 if (hadStreamingPrevious) {
                                     scheduleFinalization(generation, update.messages)
@@ -302,9 +486,69 @@ class DisplayMessagePipeline(
     }
 
     private fun hasStreamingDelta(messages: List<Message>): Boolean =
-        messages.any { message ->
-            message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+        messages.any(::messageHasStreamingText)
+}
+
+private fun messageHasStreamingText(message: Message): Boolean =
+    message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+
+internal data class StreamingDecorationTarget(
+    val blockID: String,
+    val plain: String,
+    val textHash: Int,
+    val textLength: Int,
+    val isStreaming: Boolean,
+)
+
+/**
+ * Resolve the streaming text presentation block for decoration.
+ * Prefer [PresentationBlockId.mergedText] from streaming text part IDs;
+ * fall back to [PresentationBlockId.messageFallback] when IDs are incomplete.
+ */
+internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecorationTarget? {
+    val streamingParts =
+        message.parts.filterIsInstance<MessagePart.Text>().filter { it.isStreaming }
+    if (streamingParts.isEmpty()) return null
+    val pieces =
+        streamingParts.mapNotNull { part ->
+            val trimmed = part.text.trim()
+            if (trimmed.isEmpty()) null else part to trimmed
         }
+    if (pieces.isEmpty()) return null
+    val partIds = pieces.mapNotNull { (part, _) -> part.id }
+    val hasCompleteIds = partIds.size == pieces.size
+    val blockID =
+        if (hasCompleteIds) {
+            PresentationBlockId.mergedText(partIds)
+        } else {
+            PresentationBlockId.messageFallback(message.id)
+        }
+    // Match SessionChatTimelineBlocks: structured merge uses trimmed joins;
+    // incomplete IDs fall back to message.text as the sole block source.
+    val plain =
+        if (hasCompleteIds) {
+            pieces.joinToString("\n") { it.second }
+        } else {
+            message.text
+        }
+    return StreamingDecorationTarget(
+        blockID = blockID,
+        plain = plain,
+        textHash = stableMarkdownSourceHash(plain),
+        textLength = plain.length,
+        isStreaming = true,
+    )
+}
+
+private fun messageHasSoleTextBlock(message: Message): Boolean {
+    val blocks =
+        SessionChatTimelineBlocks.buildOrFallback(
+            role = message.role,
+            parts = message.parts,
+            messageId = message.id,
+            fallbackText = message.text,
+        )
+    return blocks.count { it is SessionChatTimelineBlock.Text } == 1
 }
 
 internal fun shouldPlainFirstHistoryPublish(

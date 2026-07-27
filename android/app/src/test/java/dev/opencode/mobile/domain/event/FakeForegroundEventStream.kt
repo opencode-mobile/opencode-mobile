@@ -18,6 +18,10 @@ class FakeForegroundEventStream : ForegroundEventStream {
         _events.tryEmit(event)
     }
 
+    fun setConnectionState(state: EventStreamConnectionState) {
+        _connectionState.value = state
+    }
+
     override fun start() {
         _connectionState.value = EventStreamConnectionState.Connected
     }

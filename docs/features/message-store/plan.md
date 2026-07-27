@@ -47,9 +47,11 @@ tokenize run in a content-preparation layer so UI receives almost-ready rows.
 ## Architecture
 
 Domain messages (`Message` with plain text/parts) flow from the store through
-sync into a **content-preparation pipeline** that emits `DisplayMessage` rows
-(message + optional `MarkdownDocument`). Session Chat timeline merges those into
-UI rows; views render spans only.
+sync into a **content-preparation pipeline** that emits list-shaped
+`DisplayMessage` rows. Per-text-block Markdown lives in `BlockDecorationCache`
+(keyed by `blockID` + `contentRevision`); `DisplayMessage.renderedMarkdown` is
+only a residual sole-text bridge. Session Chat projects internal `DisplayFrame`
+→ `TimelineFrame` and views paint per-block documents.
 
 ```mermaid
 flowchart TB
@@ -100,17 +102,28 @@ flowchart TB
 
 Full load vs part-streaming flow, ordering guarantees, and execution contexts
 are documented in [assistant-message-pipeline.md](./assistant-message-pipeline.md).
+The implemented ViewModel-to-native-pixels architecture, including row
+projection, structured blocks, native markdown painting, and timeline scroll
+ownership, is documented in
+[message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
+A self-contained visual review is available in
+[message-display-rendering-pipeline.html](./message-display-rendering-pipeline.html).
 The latest-wins, bounded cross-platform hardening is complete in
 [pipeline-hardening-plan.md](./pipeline-hardening-plan.md), with a step-status
 board in [pipeline-hardening-plan.html](./pipeline-hardening-plan.html).
+The next reliability and responsiveness slice is planned in
+[message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md),
+with a visual phase board in
+[message-display-rendering-hardening-plan.html](./message-display-rendering-hardening-plan.html).
 
 | Step | Layer | What happens |
 |------|--------|----------------|
-| REST + SSE | `MessageSync` → `InMemoryMessageStore` | Raw server messages kept as domain `Message` |
-| Observe | `DisplayMessagePipeline` | Debounced streaming; calls preparer |
-| **Prepare** | **`MessageContentPreparer`** | Detect markdown, parse, highlight code → `DisplayMessage.renderedMarkdown` |
-| Structural merge | `SessionChatTimeline` | Ordering, quiet refresh, optimistic merge → UI rows |
-| Render | Session Chat views | SwiftUI / Compose read spans from prepared documents |
+| REST + SSE | `MessageSync` → `SessionMessageEngine` / store | Raw server messages kept as domain `Message`; engine is reducer facade |
+| Observe | `DisplayMessagePipeline` | Dual-lane text + decoration; calls preparer |
+| **Prepare** | **`MessageContentPreparer`** | Detect markdown, parse, highlight → per-block docs in `BlockDecorationCache` (sole-text `DisplayMessage.renderedMarkdown` residual bridge only) |
+| Structural merge | Pure projector + `SessionChatTimeline` | `DisplayFrame` → `TimelineFrame`; optimistic inputs; declared ID sets |
+| Screen state | `SessionChatViewModel` | `timelineFrame` on UiState; combine composer, info, review, commands |
+| Render | Session Chat views / hosts | Declared-ID apply; paint Markdown from text blocks |
 
 Composer uses `prepareOptimisticUserMessage` for the **optimistic send bubble**
 before the server row appears. Streaming text updates re-prepare on each

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -30,6 +31,14 @@ interface DisplayMessagePreparing {
         previous: DisplayMessage? = null,
         mode: MessagePreparationMode = MessagePreparationMode.Final,
     ): DisplayMessage
+
+    suspend fun prepareTextBlock(
+        blockID: String,
+        plain: String,
+        isStreaming: Boolean,
+        sessionKey: String = "",
+        mode: MessagePreparationMode = MessagePreparationMode.Streaming,
+    ): MarkdownDocument?
 }
 
 fun MessageSync.asDisplayMessageSnapshotSource(): DisplayMessageSnapshotSource =
@@ -59,5 +68,20 @@ fun MessageContentPreparer.asDisplayMessagePreparing(): DisplayMessagePreparing 
                 message,
                 previous,
                 mode,
+            )
+
+        override suspend fun prepareTextBlock(
+            blockID: String,
+            plain: String,
+            isStreaming: Boolean,
+            sessionKey: String,
+            mode: MessagePreparationMode,
+        ): MarkdownDocument? =
+            this@asDisplayMessagePreparing.prepareTextBlock(
+                blockID = blockID,
+                plain = plain,
+                isStreaming = isStreaming,
+                sessionKey = sessionKey,
+                mode = mode,
             )
     }

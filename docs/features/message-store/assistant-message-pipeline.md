@@ -4,11 +4,14 @@ How Session Chat turns server messages into timeline rows for **full load**
 (history open) and **part streaming** (live assistant text).
 
 This document describes the **implemented** cross-platform assistant-message
-pipeline. The hardening plan and acceptance ledger live in
-[pipeline-hardening-plan.md](./pipeline-hardening-plan.md). Feature scope and
-durable decisions remain canonical in [plan.md](./plan.md) and
-[decisions.md](./decisions.md). Intentional platform mechanism differences are
-recorded in [parity-gaps.md](./parity-gaps.md).
+pipeline. Earlier pipeline-hardening acceptance lives in
+[pipeline-hardening-plan.md](./pipeline-hardening-plan.md). End-to-end display
+reliability Phases 1–6 are shipped; Phase 7a is soak + documentation closeout
+in
+[message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md).
+Feature scope and durable decisions remain canonical in [plan.md](./plan.md)
+and [decisions.md](./decisions.md). Intentional platform mechanism differences
+are recorded in [parity-gaps.md](./parity-gaps.md).
 
 ## Architectural goals
 
@@ -33,22 +36,36 @@ The pipeline must:
 Session Chat depends on `MessageRepository.observeDisplayMessages` and
 `refreshDisplayMessages`. The repository delegates display behavior to one deep
 `DisplayMessagePipeline` module. Timeline callers do not choose debounce,
-preparation, caching, or finalization strategies.
+preparation, caching, or finalization strategies. Public observation stays
+list-shaped (`DisplayMessageListUpdate` / `DisplayMessage`) by intentional Phase
+7a lock; internal `DisplayFrame` / `TimelineFrame` live in the UI projector
+seam documented in
+[message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
 
 ```mermaid
 flowchart LR
   UI[SessionChatTimeline] -->|observe| Repo[MessageRepository]
   Repo -->|delegate| Pipe[DisplayMessagePipeline]
   Pipe -->|observe raw messages| Sync[MessageSync]
-  Sync <--> Store[InMemoryMessageStore]
+  Sync <--> Engine[SessionMessageEngine]
+  Engine <--> Store[InMemoryMessageStore]
   Pipe -->|prepare| Prep[MessageContentPreparer]
+  Pipe -->|decorate| Cache[BlockDecorationCache]
   Pipe -. DisplayMessage updates .-> Repo
   Repo -. DisplayMessage updates .-> UI
 ```
 
-`MessageSync` owns transport merge policy. `DisplayMessagePipeline` owns display
-policy. `MessageContentPreparer` owns markdown parsing and highlighting.
-`SessionChatTimeline` owns structural row conversion and optimistic-row merge.
+`MessageSync` owns transport, staging, recovery, poll, and observation.
+`SessionMessageEngine` is the named single-writer reducer facade over store
+apply/replace (Sync + Pipeline remain separate orchestrators through 7a).
+`DisplayMessagePipeline` owns dual-lane display policy: a text lane that always
+publishes plain source at the 16/48 coalesce cadence, and a disposable
+decoration lane that writes per-block Markdown into `BlockDecorationCache`.
+`MessageContentPreparer` owns markdown parsing and highlighting.
+`SessionChatTimeline` owns observation lifecycle and supplies optimistic inputs
+to the pure projector. `syncHealth` is assert-only on `MessageSync` (no UI).
+The optional Phase 4 `SessionChangeSet` → pipeline decoration hint was never
+wired.
 
 ## Data flow
 
@@ -258,21 +275,31 @@ These are execution contexts, not guaranteed operating-system threads.
 Platform mechanisms may differ, but ordering, publish-count, recovery, and
 boundedness guarantees are shared.
 
+The downstream Screen Model, row projection, native renderer, and auto-follow
+architecture are documented in
+[message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
+
 ## Cache and buffer policy
 
-- The markdown document cache remains bounded and keyed by message identity,
-  source hash, source length, and streaming state.
+- Per-block Markdown documents are keyed by `sessionKey` + `blockID` +
+  `contentRevision` + streaming state in `BlockDecorationCache` / preparer LRU.
+  `DisplayMessage.renderedMarkdown` is a residual sole-text bridge only.
 - The iOS warm prepared-history cache is keyed by connection profile, directory,
   and session ID, and bounded by a `512_000`-character text-cost budget and an
   `8`-session entry cap (LRU eviction). Eviction also covers session deletion,
   connection/profile reset, and memory pressure.
 - Android may add a warm prepared-history cache only if measurement shows it is
   needed; instant usable history remains the shared product requirement.
-- Per-observation event staging is capped at `4_096` events. Overflow marks
-  authoritative recovery required and never silently continues with missing
-  deltas.
+- Pending decoration is bounded separately (`DecorationBacklog`: count + char
+  cost); pressure drops lowest-priority jobs and never blocks the text lane.
+- Per-observation event staging is capped at `4_096` events and a byte budget.
+  Overflow marks authoritative recovery required and never silently continues
+  with missing deltas.
 - Cache eviction affects performance only. It must not affect raw message
   correctness.
+- Poll / REST authority paths still use fingerprints; live SSE uses change-set
+  / revision publish rules (fingerprint retirement is parked under
+  [Phase 7b](./message-display-rendering-7b-plan.md); won’t-do without a cost signal).
 
 ## Failure behavior
 
@@ -280,10 +307,10 @@ boundedness guarantees are shared.
 | --- | --- |
 | Initial REST failure | Publish `loadFailed`; retain no pending display work |
 | Explicit refresh failure | Return the error to the caller; keep last good timeline |
-| Parser failure | Publish safe plain text for the current generation and record the failure without message content |
-| SSE disconnect | Keep last good snapshot and revision-gate reconnect reload |
+| Parser / preparer failure | Keep published plain text for the current generation; record failure without message content; do not throw into the timeline |
+| SSE disconnect | Keep last good snapshot; `stale(transportUnavailable)` then `recovering(reconnect)` on restore |
 | Idle reconciliation failure | Clear streaming flags and allow watchdog recovery |
-| Event-intake overflow | Mark authoritative recovery required; never silently continue with missing deltas |
+| Event-intake overflow | Enter `recovering(overflow)`; never silently continue with missing deltas; healthy only after validated authoritative replace |
 
 ## Observability
 
@@ -296,12 +323,12 @@ Logs must not include message text. Production and test seams already record:
 - preparation duration and character count;
 - cache hit, miss, and eviction counts;
 - enrichment batch number and message count;
-- buffer high-water mark and overflow recovery; and
+- buffer high-water mark and overflow recovery;
+- decoration backlog pressure; and
 - timeline structural-apply duration.
 
-Phase 6 verification treats those fields as the measurement surface for time to
-first usable history, streaming publish age, preparation duration, enrichment
-frame count, and retained cache cost.
+Phase 7a maps those invariants onto the shared soak scenario names in
+[phase-7a-soak-matrix.md](./phase-7a-soak-matrix.md).
 
 ## Platform differences
 
@@ -313,6 +340,8 @@ overflow recovery match across platforms. Remaining intentional differences:
   row wipe).
 - Store atomicity and timeline structural conversion use platform-native
   executors (`MainActor` vs synchronized store / worker→Main).
+- Android drag apply is newest-immutable; iOS coalesces cell applies during
+  drag (see [parity-gaps.md](./parity-gaps.md)).
 
 See [parity-gaps.md](./parity-gaps.md).
 
@@ -321,14 +350,20 @@ See [parity-gaps.md](./parity-gaps.md).
 ### iOS
 
 - [`MessageSync.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/MessageSync.swift)
+- [`SessionMessageEngine.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/SessionMessageEngine.swift)
 - [`DisplayMessagePipeline.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/DisplayMessagePipeline.swift)
 - [`MessageContentPreparer.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/MessageContentPreparer.swift)
+- [`BlockDecorationCache.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/BlockDecorationCache.swift)
+- [`DecorationBacklog.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/DecorationBacklog.swift)
 - [`DefaultForegroundEventStream.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Event/DefaultForegroundEventStream.swift)
 - [`SessionChatTimeline.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/UI/SessionChat/Region/SessionChatTimeline.swift)
 - [`MessageSyncTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/MessageSyncTests.swift)
+- [`SessionMessageEngineTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/SessionMessageEngineTests.swift)
 - [`DisplayMessagePipelinePacingTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/DisplayMessagePipelinePacingTests.swift)
 - [`DisplayMessagePipelineWarmReopenTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/DisplayMessagePipelineWarmReopenTests.swift)
 - [`DisplayMessagePipelineCharacterizationTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/DisplayMessagePipelineCharacterizationTests.swift)
+- [`DecorationBacklogTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/DecorationBacklogTests.swift)
+- [`BlockDecorationCacheTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/BlockDecorationCacheTests.swift)
 - [`PreparedHistoryCacheTests.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20MobileTests/PreparedHistoryCacheTests.swift)
 - [`MessageEventStaging.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/MessageEventStaging.swift)
 - [`PreparedHistoryCache.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/PreparedHistoryCache.swift)
@@ -336,12 +371,18 @@ See [parity-gaps.md](./parity-gaps.md).
 ### Android
 
 - [`MessageSync.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/MessageSync.kt)
+- [`SessionMessageEngine.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/SessionMessageEngine.kt)
 - [`DisplayMessagePipeline.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/DisplayMessagePipeline.kt)
 - [`MessageContentPreparer.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/MessageContentPreparer.kt)
+- [`BlockDecorationCache.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/BlockDecorationCache.kt)
+- [`DecorationBacklog.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/DecorationBacklog.kt)
 - [`LiveStoreScope.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/live/LiveStoreScope.kt)
 - [`SessionChatTimeline.kt`](../../../android/app/src/main/java/dev/opencode/mobile/ui/sessionchat/region/SessionChatTimeline.kt)
 - [`LiveStoreTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/live/LiveStoreTest.kt)
+- [`SessionMessageEngineTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/message/SessionMessageEngineTest.kt)
 - [`DisplayMessagePipelinePacingTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/message/DisplayMessagePipelinePacingTest.kt)
 - [`DisplayMessagePipelineCharacterizationTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/message/DisplayMessagePipelineCharacterizationTest.kt)
+- [`DecorationBacklogTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/message/DecorationBacklogTest.kt)
+- [`BlockDecorationCacheTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/message/BlockDecorationCacheTest.kt)
 - [`MessageContentPreparerTest.kt`](../../../android/app/src/test/java/dev/opencode/mobile/domain/message/MessageContentPreparerTest.kt)
 - [`MessageEventStaging.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/MessageEventStaging.kt)
