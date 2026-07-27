@@ -44,6 +44,51 @@ struct MessageSyncTests {
         #expect(streamed)
     }
 
+    @Test func initialLoad_overflowDuringRestTriggersAuthoritativeRecovery() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = [
+            Message(
+                id: "msg-rest",
+                role: .assistant,
+                text: "from-rest",
+                parts: [.text(TextPart(text: "from-rest", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        repo.holdNextListMessages()
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, eventStagingCapacity: 2)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let blocked = await waitUntil { repo.isListBlocked }
+        #expect(blocked)
+
+        for index in 0..<4 {
+            eventStream.emit(eventWithInfo(id: "msg-burst-\(index)", role: "assistant", sessionID: "ses-1"))
+        }
+        repo.messages = [
+            Message(
+                id: "msg-recovered",
+                role: .assistant,
+                text: "recovered",
+                parts: [.text(TextPart(text: "recovered", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        repo.resumeListMessages()
+
+        let recovered = await waitUntil {
+            collector.latest()?.count == 1 && collector.latest()?.first?.id == "msg-recovered"
+        }
+        task.cancel()
+        #expect(recovered)
+        #expect(collector.emissions.contains { frame in frame.contains { $0.id == "msg-rest" } } == false)
+    }
+
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -849,7 +894,8 @@ private final class DisplayMessageCollector: @unchecked Sendable {
 private func makeMessageSync(
     repo: FakeLiveMessageRepository,
     eventStream: FakeForegroundEventStream,
-    pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs
+    pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
+    eventStagingCapacity: Int = messageEventStagingCapacity
 ) -> MessageSync {
     MessageSync(
         listMessages: { sessionID, directory in
@@ -857,7 +903,8 @@ private func makeMessageSync(
         },
         store: InMemoryMessageStore(),
         eventStream: eventStream,
-        pollIntervalMs: pollIntervalMs
+        pollIntervalMs: pollIntervalMs,
+        eventStagingCapacity: eventStagingCapacity
     )
 }
 

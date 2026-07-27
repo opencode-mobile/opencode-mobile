@@ -23,7 +23,7 @@ struct DisplayMessagePipelinePacingTests {
         )
 
         let preparer = MessageContentPreparer()
-        let streaming = await preparer.prepareMessage(streamingMessage)
+        let streaming = await preparer.prepareMessage(streamingMessage, mode: .streaming)
         #expect(streaming.renderedMarkdown == nil)
         #expect(streaming.isStreaming)
 
@@ -36,7 +36,7 @@ struct DisplayMessagePipelinePacingTests {
             mode: nil,
             sentAtEpochMs: nil
         )
-        let finished = await preparer.prepareMessage(finalMessage)
+        let finished = await preparer.prepareMessage(finalMessage, mode: .final)
         #expect(finished.renderedMarkdown != nil)
         #expect(!finished.isStreaming)
     }

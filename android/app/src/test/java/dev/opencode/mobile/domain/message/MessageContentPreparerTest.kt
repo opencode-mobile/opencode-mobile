@@ -225,7 +225,7 @@ class MessageContentPreparerTest {
                 preparer.prepareMessages(
                     listOf(finalMessage),
                     mapOf("m1" to previous),
-                    reuseStreamingDocumentAsFinalPlaceholder = true,
+                    mode = MessagePreparationMode.FinalPlaceholder,
                 )
             assertSame(previousDoc, placeholder.first().renderedMarkdown)
         }

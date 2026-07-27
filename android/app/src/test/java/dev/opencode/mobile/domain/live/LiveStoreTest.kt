@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageSync
+import dev.opencode.mobile.domain.message.MESSAGE_EVENT_STAGING_CAPACITY
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
@@ -107,6 +108,45 @@ class MessageSyncTest {
 
             assertEquals("Hello", emissions.last().first { it.id == "msg-2" }.text)
             collectJob.cancel()
+        }
+
+    @Test
+    fun observeMessages_overflowDuringInitialRestTriggersAuthoritativeRecovery() =
+        runTest(testDispatcher) {
+            val initialLoadGate = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository(holdLoadUntil = initialLoadGate)
+            repository.messages =
+                listOf(
+                    Message(id = "msg-rest", role = MessageRole.Assistant, text = "from-rest"),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, eventStagingCapacity = 2)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            // Fill staging beyond capacity while REST is held.
+            repeat(4) { index ->
+                eventStream.emit(messageUpdatedEvent("msg-burst-$index", "assistant"))
+            }
+            // Authoritative recovery reload sees the recovered snapshot.
+            repository.messages =
+                listOf(
+                    Message(id = "msg-recovered", role = MessageRole.Assistant, text = "recovered"),
+                )
+            initialLoadGate.complete(Unit)
+            advanceTimeBy(1)
+
+            assertTrue(emissions.isNotEmpty())
+            assertEquals("recovered", emissions.last().single().text)
+            assertTrue(emissions.none { frame -> frame.any { it.id == "msg-rest" && it.text == "from-rest" } })
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
         }
 
     @Test
@@ -874,6 +914,7 @@ class MessageSyncTest {
     private fun createMessageSync(
         repository: FakeMessageRepository,
         eventStream: FakeForegroundEventStream,
+        eventStagingCapacity: Int = MESSAGE_EVENT_STAGING_CAPACITY,
     ): MessageSync {
         val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         return MessageSync(
@@ -881,6 +922,7 @@ class MessageSyncTest {
             store = InMemoryMessageStore(MessageDomainAdapter()),
             eventStream = eventStream,
             liveStoreScope = scope,
+            eventStagingCapacity = eventStagingCapacity,
         )
     }
 

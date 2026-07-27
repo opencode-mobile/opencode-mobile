@@ -125,7 +125,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
                 sentAtEpochMs: nil
             ),
             previous: previous,
-            reuseStreamingDocumentAsFinalPlaceholder: true
+            mode: .finalPlaceholder
         )
 
         #expect(prepared.renderedMarkdown?.sourceHash == 99)

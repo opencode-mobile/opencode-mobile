@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 typealias MessageListFetcher = @Sendable (String, String?) async throws -> [Message]
 
@@ -13,6 +14,7 @@ final class MessageSync {
     private let store: InMemoryMessageStore
     private let eventStream: any ForegroundEventStream
     private let pollIntervalMs: Int
+    private let eventStagingCapacity: Int
 
     private var observationCache: [ObservationKey: SharedLiveObservation<MessageListUpdate>] = [:]
     private var lastFingerprint: [String: String] = [:]
@@ -21,12 +23,14 @@ final class MessageSync {
         listMessages: @escaping MessageListFetcher,
         store: InMemoryMessageStore,
         eventStream: any ForegroundEventStream,
-        pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs
+        pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
+        eventStagingCapacity: Int = messageEventStagingCapacity
     ) {
         self.listMessages = listMessages
         self.store = store
         self.eventStream = eventStream
         self.pollIntervalMs = pollIntervalMs
+        self.eventStagingCapacity = eventStagingCapacity
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -60,9 +64,19 @@ final class MessageSync {
         directory: String?,
         yield: @escaping (MessageListUpdate) -> Void
     ) async {
-        // Register before the initial REST request. AsyncStream buffers events that
-        // arrive while history is loading, closing the part-shell/delta loss window.
-        let eventUpdates = eventStream.events()
+        // Register before the initial REST request. Bounded staging closes the
+        // part-shell/delta loss window without an unbounded observation buffer.
+        let staging = MessageEventStaging(capacity: eventStagingCapacity)
+        let producer = Task { @MainActor [eventStream] in
+            for await event in eventStream.events() {
+                staging.enqueue(event)
+            }
+            staging.finish()
+        }
+        defer {
+            producer.cancel()
+            staging.finish()
+        }
 
         let publishMessages: @MainActor @Sendable ([Message]) -> Void = { [weak self] messages in
             guard let self else { return }
@@ -74,22 +88,52 @@ final class MessageSync {
         // identical REST republish so DisplayMessagePipeline does not cancel
         // in-flight enrich / plain-first and start over on the MainActor.
         let fingerprintBeforeReload = lastFingerprint[sessionID]
-        switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "initial-subscribe") {
-        case .success(let messages):
+        let expectedRevision = store.revision(sessionID: sessionID)
+        do {
+            SessionPerformanceProbe.emit("history_request_started")
+            let messages = try await listMessages(sessionID, directory)
             SessionPerformanceProbe.emit("history_request_finished")
-            let fingerprint = messageFingerprint(messages)
-            if fingerprintBeforeReload != fingerprint {
-                publishMessages(messages)
+            if staging.needsAuthoritativeRecovery {
+                OpenCodeLog.messageContent.info(
+                    "eventStagingRejectStaleAuthority session=\(sessionID, privacy: .public) highWater=\(staging.highWater)"
+                )
+                await performOverflowRecovery(
+                    sessionID: sessionID,
+                    directory: directory,
+                    staging: staging,
+                    publishMessages: publishMessages
+                )
+            } else {
+                _ = store.replaceAllIfRevision(
+                    sessionID: sessionID,
+                    messages: messages,
+                    expectedRevision: expectedRevision
+                )
+                let merged = store.messages(sessionID: sessionID)
+                let fingerprint = messageFingerprint(merged)
+                lastFingerprint[sessionID] = fingerprint
+                if fingerprintBeforeReload != fingerprint {
+                    publishMessages(merged)
+                }
             }
-        case .failure(let error):
+        } catch {
             SessionPerformanceProbe.emit("history_request_finished")
-            yield(.loadFailed(error))
+            if staging.needsAuthoritativeRecovery {
+                await performOverflowRecovery(
+                    sessionID: sessionID,
+                    directory: directory,
+                    staging: staging,
+                    publishMessages: publishMessages
+                )
+            } else {
+                yield(.loadFailed(error))
+            }
         }
 
         async let eventLoop: Void = runEventRefreshLoop(
             sessionID: sessionID,
             directory: directory,
-            eventUpdates: eventUpdates,
+            staging: staging,
             publishMessages: publishMessages
         )
         async let pollLoop: Void = runTimelinePollLoop(
@@ -98,6 +142,25 @@ final class MessageSync {
             publishMessages: publishMessages
         )
         _ = await (eventLoop, pollLoop)
+    }
+
+    private func performOverflowRecovery(
+        sessionID: String,
+        directory: String?,
+        staging: MessageEventStaging,
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+    ) async {
+        staging.drain()
+        await fullReloadSilent(
+            sessionID: sessionID,
+            directory: directory,
+            reason: "overflow-recovery",
+            publishMessages: publishMessages
+        )
+        staging.clearRecoveryFlag()
+        OpenCodeLog.messageContent.info(
+            "eventStagingRecovery session=\(sessionID, privacy: .public) highWater=\(staging.highWater)"
+        )
     }
 
     private enum ReloadResult {
@@ -155,82 +218,118 @@ final class MessageSync {
     private func runEventRefreshLoop(
         sessionID: String,
         directory: String?,
-        eventUpdates: AsyncStream<OpencodeEvent>,
+        staging: MessageEventStaging,
         publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
     ) async {
         var debounceTask: Task<Void, Never>?
         defer { debounceTask?.cancel() }
 
-        for await event in eventUpdates {
-            if event.type == "stream.reconnected" {
-                debounceTask?.cancel()
-                debounceTask = nil
-                await fullReloadSilent(
+        while let item = await staging.dequeue() {
+            switch item {
+            case .overflow:
+                await performOverflowRecovery(
+                    sessionID: sessionID,
+                    directory: directory,
+                    staging: staging,
+                    publishMessages: publishMessages
+                )
+                continue
+            case .event(let event):
+                if staging.needsAuthoritativeRecovery {
+                    await performOverflowRecovery(
+                        sessionID: sessionID,
+                        directory: directory,
+                        staging: staging,
+                        publishMessages: publishMessages
+                    )
+                    continue
+                }
+                await handleStagedEvent(
+                    event: event,
+                    sessionID: sessionID,
+                    directory: directory,
+                    debounceTask: &debounceTask,
+                    publishMessages: publishMessages
+                )
+            }
+        }
+    }
+
+    private func handleStagedEvent(
+        event: OpencodeEvent,
+        sessionID: String,
+        directory: String?,
+        debounceTask: inout Task<Void, Never>?,
+        publishMessages: @escaping @MainActor @Sendable ([Message]) -> Void
+    ) async {
+        if event.type == "stream.reconnected" {
+            debounceTask?.cancel()
+            debounceTask = nil
+            await fullReloadSilent(
+                sessionID: sessionID,
+                directory: directory,
+                reason: event.type,
+                publishMessages: publishMessages
+            )
+            return
+        }
+
+        if event.type == "server.connected" {
+            debounceTask?.cancel()
+            debounceTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
+                guard !Task.isCancelled, let self else { return }
+                await self.fullReloadSilent(
                     sessionID: sessionID,
                     directory: directory,
                     reason: event.type,
                     publishMessages: publishMessages
                 )
-                continue
             }
+            return
+        }
 
-            if event.type == "server.connected" {
-                debounceTask?.cancel()
-                debounceTask = Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
-                    guard !Task.isCancelled, let self else { return }
-                    await self.fullReloadSilent(
-                        sessionID: sessionID,
-                        directory: directory,
-                        reason: event.type,
-                        publishMessages: publishMessages
-                    )
-                }
-                continue
+        guard event.sessionID == sessionID else { return }
+
+        switch event.type {
+        case "message.updated":
+            handleMessageUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
+        case "message.part.updated":
+            if requiresFullReloadForRestSeededPartUpdate(event: event, sessionID: sessionID) {
+                await fullReloadSilent(
+                    sessionID: sessionID,
+                    directory: directory,
+                    reason: "message.part.updated-rest-seeded",
+                    publishMessages: publishMessages
+                )
+                return
             }
-
-            guard event.sessionID == sessionID else { continue }
-
-            switch event.type {
-            case "message.updated":
-                handleMessageUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
-            case "message.part.updated":
-                if requiresFullReloadForRestSeededPartUpdate(event: event, sessionID: sessionID) {
-                    await fullReloadSilent(
-                        sessionID: sessionID,
-                        directory: directory,
-                        reason: "message.part.updated-rest-seeded",
-                        publishMessages: publishMessages
-                    )
-                    continue
-                }
-                handleMessagePartUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
-            case "message.part.delta":
-                handleMessagePartDelta(event: event, sessionID: sessionID, publishMessages: publishMessages)
-            case "message.removed":
-                handleMessageRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
-            case "message.part.removed":
-                if requiresFullReloadForRestSeededPartRemoval(event: event, sessionID: sessionID) {
-                    await fullReloadSilent(
-                        sessionID: sessionID,
-                        directory: directory,
-                        reason: "message.part.removed-rest-seeded",
-                        publishMessages: publishMessages
-                    )
-                    continue
-                }
-                handleMessagePartRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
-            case "session.idle":
-                switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "session.idle") {
-                case .success(let messages):
-                    publishMessages(messages)
-                case .failure:
-                    store.finishStreamingText(sessionID: sessionID)
-                    emitMessages(sessionID: sessionID, publishMessages: publishMessages)
-                }
-            default:
-                continue
+            handleMessagePartUpdated(event: event, sessionID: sessionID, publishMessages: publishMessages)
+        case "message.part.delta":
+            handleMessagePartDelta(event: event, sessionID: sessionID, publishMessages: publishMessages)
+        case "message.removed":
+            handleMessageRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
+        case "message.part.removed":
+            if requiresFullReloadForRestSeededPartRemoval(event: event, sessionID: sessionID) {
+                await fullReloadSilent(
+                    sessionID: sessionID,
+                    directory: directory,
+                    reason: "message.part.removed-rest-seeded",
+                    publishMessages: publishMessages
+                )
+                return
             }
+            handleMessagePartRemoved(event: event, sessionID: sessionID, publishMessages: publishMessages)
+        case "session.idle":
+            switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "session.idle") {
+            case .success(let messages):
+                publishMessages(messages)
+            case .failure:
+                store.finishStreamingText(sessionID: sessionID)
+                emitMessages(sessionID: sessionID, publishMessages: publishMessages)
+            }
+        default:
+            return
         }
     }
 

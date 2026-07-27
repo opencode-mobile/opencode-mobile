@@ -52,8 +52,7 @@ class MessageContentPreparer
         suspend fun prepareMessages(
             messages: List<Message>,
             previousById: Map<String, DisplayMessage> = emptyMap(),
-            reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
-            skipMarkdown: Boolean = false,
+            mode: MessagePreparationMode = MessagePreparationMode.Final,
         ): List<DisplayMessage> =
             withContext(computationDispatcher) {
                 var parsedCount = 0
@@ -69,8 +68,7 @@ class MessageContentPreparer
                                         prepareMessageOnWorker(
                                             message,
                                             previous,
-                                            reuseStreamingDocumentAsFinalPlaceholder,
-                                            skipMarkdown,
+                                            mode,
                                         )
                                     add(display)
                                     when {
@@ -85,7 +83,7 @@ class MessageContentPreparer
                 logI(
                     "prepareMessages count=${messages.size} parsed=$parsedCount reused=$reusedCount " +
                         "markdown=${prepared.count { it.renderedMarkdown != null }} " +
-                        "skipMarkdown=$skipMarkdown ms=$elapsedMs",
+                        "mode=$mode ms=$elapsedMs",
                 )
                 prepared
             }
@@ -116,49 +114,62 @@ class MessageContentPreparer
                             }
                         },
                 ),
+                mode = MessagePreparationMode.Final,
             )
 
         suspend fun prepareMessage(
             message: Message,
             previous: DisplayMessage? = null,
-            reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
-            skipMarkdown: Boolean = false,
+            mode: MessagePreparationMode = MessagePreparationMode.Final,
         ): DisplayMessage =
             withContext(computationDispatcher) {
-                prepareMessageOnWorker(message, previous, reuseStreamingDocumentAsFinalPlaceholder, skipMarkdown)
+                prepareMessageOnWorker(message, previous, mode)
             }
 
         private fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
-            reuseStreamingDocumentAsFinalPlaceholder: Boolean = false,
-            skipMarkdown: Boolean = false,
+            mode: MessagePreparationMode,
         ): DisplayMessage {
             val isStreaming = messageIsStreaming(message)
-            if (isStreaming &&
-                !reuseStreamingDocumentAsFinalPlaceholder &&
+            if (mode == MessagePreparationMode.Streaming &&
                 message.text.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
             ) {
                 return DisplayMessage(message = message, renderedMarkdown = null)
             }
-            if (skipMarkdown) {
+            if (mode == MessagePreparationMode.HistoryPlainFirst) {
+                if (message.text.length < STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD) {
+                    reusableDocument(message, previous, mode)?.let { reusable ->
+                        return DisplayMessage(message = message, renderedMarkdown = reusable)
+                    }
+                }
                 return DisplayMessage(message = message, renderedMarkdown = null)
             }
             if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
                 return DisplayMessage(message = message, renderedMarkdown = null)
             }
             val document =
-                reusableDocument(message, previous, reuseStreamingDocumentAsFinalPlaceholder)
-                    ?: if (reuseStreamingDocumentAsFinalPlaceholder) {
+                reusableDocument(message, previous, mode)
+                    ?: if (mode == MessagePreparationMode.FinalPlaceholder) {
                         previous?.renderedMarkdown
                     } else {
-                        parseDocument(message.id, message.text, isStreaming)
+                        parseDocumentSafely(message.id, message.text, isStreaming)
                     }
             return DisplayMessage(message = message, renderedMarkdown = document)
         }
 
         private fun messageIsStreaming(message: Message): Boolean =
             message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+
+        private fun parseDocumentSafely(
+            messageId: String,
+            text: String,
+            isStreaming: Boolean,
+        ): MarkdownDocument? =
+            runCatching { parseDocument(messageId, text, isStreaming) }
+                .onFailure { error ->
+                    logI("preparePlainFallback messageIdHash=${messageId.hashCode()} reason=${error.javaClass.simpleName}")
+                }.getOrNull()
 
         private fun parseDocument(
             messageId: String,
@@ -192,7 +203,7 @@ class MessageContentPreparer
         private fun reusableDocument(
             message: Message,
             previous: DisplayMessage?,
-            reuseStreamingDocumentAsFinalPlaceholder: Boolean,
+            mode: MessagePreparationMode,
         ): MarkdownDocument? {
             val isStreaming = messageIsStreaming(message)
             val existing = previous?.renderedMarkdown
@@ -210,7 +221,7 @@ class MessageContentPreparer
             ) {
                 return previous.renderedMarkdown
             }
-            if (reuseStreamingDocumentAsFinalPlaceholder &&
+            if (mode == MessagePreparationMode.FinalPlaceholder &&
                 !isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
@@ -234,6 +245,12 @@ class MessageContentPreparer
 
             /** Open histories above this markdown-candidate size as plain text first. */
             const val HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD = 4_000
+
+            /** Newest-first enrich publishes once the open viewport is ready. */
+            const val HISTORY_ENRICH_VIEWPORT_MESSAGE_COUNT = 3
+
+            /** Character budget for the initial enrichment viewport batch. */
+            const val HISTORY_ENRICH_VIEWPORT_CHARACTER_BUDGET = 12_000
         }
 
         private data class CacheKey(

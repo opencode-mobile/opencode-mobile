@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import UIKit
 
 /// Quiet window before publishing the latest streaming snapshot.
 let streamingPrepareDebounceNs: UInt64 = 16_000_000
@@ -9,27 +10,68 @@ let streamingPrepareMaxBatchDuration: Duration = .milliseconds(48)
 
 @MainActor
 final class DisplayMessagePipeline {
-    private let messageSync: MessageSync
-    private let contentPreparer: MessageContentPreparer
-    /// Survives leave/reopen for a session so warm reopen can reuse prepared
-    /// markdown instead of plain-first + full enrich from scratch.
-    private var preparedBySessionID: [String: [String: DisplayMessage]] = [:]
+    private let snapshotSource: any DisplayMessageSnapshotSource
+    private let contentPreparer: any DisplayMessagePreparing
+    private let clock: any DisplayMessagePipelineClock
+    private let messageSync: MessageSync?
+    private let connectionProfileIDProvider: () -> String
+    private let preparedHistoryCache: PreparedHistoryCache
+    private var memoryPressureObserver: NSObjectProtocol?
 
-    init(messageSync: MessageSync, contentPreparer: MessageContentPreparer) {
-        self.messageSync = messageSync
+    init(
+        messageSync: MessageSync,
+        contentPreparer: MessageContentPreparer,
+        clock: (any DisplayMessagePipelineClock)? = nil,
+        connectionProfileIDProvider: @escaping () -> String = { "local" },
+        preparedHistoryCache: PreparedHistoryCache? = nil
+    ) {
+        self.snapshotSource = messageSync
         self.contentPreparer = contentPreparer
+        self.clock = clock ?? SystemDisplayMessagePipelineClock()
+        self.messageSync = messageSync
+        self.connectionProfileIDProvider = connectionProfileIDProvider
+        self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
+        observeMemoryPressure()
+    }
+
+    init(
+        snapshotSource: any DisplayMessageSnapshotSource,
+        contentPreparer: any DisplayMessagePreparing,
+        clock: (any DisplayMessagePipelineClock)? = nil,
+        messageSync: MessageSync? = nil,
+        connectionProfileIDProvider: @escaping () -> String = { "local" },
+        preparedHistoryCache: PreparedHistoryCache? = nil
+    ) {
+        self.snapshotSource = snapshotSource
+        self.contentPreparer = contentPreparer
+        self.clock = clock ?? SystemDisplayMessagePipelineClock()
+        self.messageSync = messageSync
+        self.connectionProfileIDProvider = connectionProfileIDProvider
+        self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
+    }
+
+    deinit {
+        if let memoryPressureObserver {
+            NotificationCenter.default.removeObserver(memoryPressureObserver)
+        }
     }
 
     func clearPreparedCache() {
-        preparedBySessionID.removeAll()
+        preparedHistoryCache.removeAll(reason: "cache-reset")
+    }
+
+    func removePreparedCache(sessionID: String) {
+        preparedHistoryCache.removeSession(sessionID: sessionID)
     }
 
     /// Warm reopen rows from the in-memory store, with prepared markdown attached
     /// when the per-session cache is complete (Android-like instant styled open).
-    func peekWarmDisplayMessages(sessionID: String) -> [DisplayMessage]? {
+    func peekWarmDisplayMessages(sessionID: String, directory: String? = nil) -> [DisplayMessage]? {
+        guard let messageSync else { return nil }
         let messages = messageSync.peekStoreMessages(sessionID: sessionID)
         guard !messages.isEmpty else { return nil }
-        let cached = preparedBySessionID[sessionID] ?? [:]
+        let key = cacheKey(sessionID: sessionID, directory: directory)
+        let cached = preparedHistoryCache.messages(for: key) ?? [:]
         if hasCompletePreparedMarkdownCache(messages: messages, previousByID: cached) {
             return messages.map { message in
                 cached[message.id] ?? DisplayMessage(message: message, renderedMarkdown: nil)
@@ -38,170 +80,277 @@ final class DisplayMessagePipeline {
         return messages.map { DisplayMessage(message: $0, renderedMarkdown: nil) }
     }
 
+    private func cacheKey(sessionID: String, directory: String?) -> PreparedHistoryCacheKey {
+        PreparedHistoryCacheKey(
+            connectionProfileID: connectionProfileIDProvider(),
+            directory: directory,
+            sessionID: sessionID
+        )
+    }
+
+    private func observeMemoryPressure() {
+        memoryPressureObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.preparedHistoryCache.handleMemoryPressure()
+            }
+        }
+    }
+
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
         AsyncStream { continuation in
             let task = Task { @MainActor in
-                var previousByID: [String: DisplayMessage] = preparedBySessionID[sessionID] ?? [:]
+                let cacheKey = self.cacheKey(sessionID: sessionID, directory: directory)
+                var previousByID: [String: DisplayMessage] = preparedHistoryCache.messages(for: cacheKey) ?? [:]
                 var pendingMessages: [Message]?
+                var currentGeneration: UInt64 = 0
                 var debounceTask: Task<Void, Never>?
+                var prepareTask: Task<Void, Never>?
                 var enrichmentTask: Task<Void, Never>?
-                var lastPublishedAt: ContinuousClock.Instant?
+                var lastPublishedAt: Duration?
                 if !previousByID.isEmpty {
                     OpenCodeLog.messageContent.info(
                         "displayCache hit session=\(sessionID, privacy: .public) count=\(previousByID.count)"
                     )
                 }
 
+                func invalidateInFlightWork() {
+                    debounceTask?.cancel()
+                    debounceTask = nil
+                    prepareTask?.cancel()
+                    prepareTask = nil
+                    enrichmentTask?.cancel()
+                    enrichmentTask = nil
+                }
+
+                func nextGeneration() -> UInt64 {
+                    currentGeneration &+= 1
+                    return currentGeneration
+                }
+
+                func isCurrent(_ generation: UInt64) -> Bool {
+                    generation == currentGeneration
+                }
+
                 @MainActor
-                func publishPrepared(
-                    _ messages: [Message],
-                    reason: String,
-                    reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
-                    skipMarkdown: Bool = false
-                ) async {
-                    let streaming = messagesContainStreamingText(messages)
-                    let streamingChars = messages.reduce(0) { partial, message in
-                        guard messageHasStreamingText(message) else { return partial }
-                        return max(partial, message.text.count)
-                    }
-                    let sinceLastPublishMs: Int = {
-                        guard let lastPublishedAt else { return -1 }
-                        return Int((ContinuousClock.now - lastPublishedAt) / .milliseconds(1))
-                    }()
-                    let prepared = await contentPreparer.prepareMessages(
-                        messages,
-                        previousByID: previousByID,
-                        reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
-                        skipMarkdown: skipMarkdown
-                    )
-                    // Keep previously prepared markdown when this frame intentionally
-                    // skipped parsing (plain-first open). Merge any reused docs from
-                    // the skipMarkdown frame so warm partial cache stays durable.
-                    if !skipMarkdown {
+                func commitPrepared(
+                    generation: UInt64,
+                    prepared: [DisplayMessage],
+                    mode: MessagePreparationMode
+                ) -> Bool {
+                    guard isCurrent(generation) else { return false }
+                    if mode.replacesPreparedCache {
                         previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
-                        preparedBySessionID[sessionID] = previousByID
+                        preparedHistoryCache.setMessages(previousByID, for: cacheKey)
                     } else {
                         for display in prepared where display.renderedMarkdown != nil {
                             previousByID[display.id] = display
                         }
                         if !previousByID.isEmpty {
-                            preparedBySessionID[sessionID] = previousByID
+                            preparedHistoryCache.setMessages(previousByID, for: cacheKey)
                         }
                     }
-                    lastPublishedAt = ContinuousClock.now
-                    OpenCodeLog.messageContent.info(
-                        "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs)"
-                    )
-                    continuation.yield(.messages(prepared))
+                    lastPublishedAt = clock.now
+                    return true
                 }
 
                 @MainActor
-                func enrichHistoryInBackground(_ messages: [Message]) async {
-                    // Newest-first like Android, but only two UI publishes max:
-                    // 1) open-viewport markdown (what the user is looking at)
-                    // 2) remaining history once fully prepared
-                    // Per-bubble publishes looked like row-by-row reprinting.
-                    var byID = Dictionary(
-                        uniqueKeysWithValues: messages.map { message in
-                            (
-                                message.id,
-                                previousByID[message.id].flatMap { cached in
-                                    cached.text == message.text ? cached : nil
-                                } ?? DisplayMessage(message: message, renderedMarkdown: nil)
-                            )
+                func schedulePrepare(
+                    generation: UInt64,
+                    messages: [Message],
+                    reason: String,
+                    mode: MessagePreparationMode,
+                    onCommitted: (() -> Void)? = nil
+                ) {
+                    prepareTask?.cancel()
+                    prepareTask = Task { @MainActor in
+                        let streaming = messagesContainStreamingText(messages)
+                        let streamingChars = messages.reduce(0) { partial, message in
+                            guard messageHasStreamingText(message) else { return partial }
+                            return max(partial, message.text.count)
                         }
-                    )
-                    var enrichedCount = 0
-                    var viewportEnrichedCount = 0
-                    var viewportCharactersRemaining =
-                        MessageContentPreparer.historyEnrichViewportCharacterBudget
-                    var publishedViewport = false
-
-                    func publishSnapshot(reason: String, count: Int) {
-                        let snapshot = messages.map { byID[$0.id]! }
-                        previousByID = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })
-                        preparedBySessionID[sessionID] = previousByID
-                        lastPublishedAt = ContinuousClock.now
+                        let sinceLastPublishMs: Int = {
+                            guard let lastPublishedAt else { return -1 }
+                            return Int((clock.now - lastPublishedAt) / .milliseconds(1))
+                        }()
+                        let snapshot = previousByID
+                        let prepared = await contentPreparer.prepareMessages(
+                            messages,
+                            previousByID: snapshot,
+                            mode: mode
+                        )
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+                        guard commitPrepared(
+                            generation: generation,
+                            prepared: prepared,
+                            mode: mode
+                        ) else { return }
                         OpenCodeLog.messageContent.info(
-                            "displayPublish reason=\(reason, privacy: .public) count=\(count)"
+                            "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
                         )
-                        continuation.yield(.messages(snapshot))
+                        continuation.yield(.messages(prepared))
+                        onCommitted?()
                     }
+                }
 
-                    for message in messages.reversed() {
-                        guard !Task.isCancelled else { return }
-                        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
-                        if let cached = byID[message.id],
-                           cached.renderedMarkdown != nil,
-                           cached.text == message.text {
-                            continue
+                @MainActor
+                func scheduleFinalization(generation: UInt64, messages: [Message]) {
+                    prepareTask?.cancel()
+                    prepareTask = Task { @MainActor in
+                        let snapshot = previousByID
+                        let placeholder = await contentPreparer.prepareMessages(
+                            messages,
+                            previousByID: snapshot,
+                            mode: .finalPlaceholder
+                        )
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+                        guard commitPrepared(
+                            generation: generation,
+                            prepared: placeholder,
+                            mode: .finalPlaceholder
+                        ) else { return }
+                        OpenCodeLog.messageContent.info(
+                            "displayPublish reason=final-placeholder generation=\(generation)"
+                        )
+                        continuation.yield(.messages(placeholder))
+
+                        let finalized = await contentPreparer.prepareMessages(
+                            messages,
+                            previousByID: previousByID,
+                            mode: .final
+                        )
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+                        guard commitPrepared(
+                            generation: generation,
+                            prepared: finalized,
+                            mode: .final
+                        ) else { return }
+                        OpenCodeLog.messageContent.info(
+                            "displayPublish reason=final generation=\(generation)"
+                        )
+                        continuation.yield(.messages(finalized))
+                    }
+                }
+
+                @MainActor
+                func enrichHistoryInBackground(generation: UInt64, messages: [Message]) {
+                    enrichmentTask?.cancel()
+                    enrichmentTask = Task { @MainActor in
+                        await Task.yield()
+                        await clock.sleep(for: .milliseconds(48))
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+
+                        var byID = Dictionary(
+                            uniqueKeysWithValues: messages.map { message in
+                                (
+                                    message.id,
+                                    previousByID[message.id].flatMap { cached in
+                                        cached.text == message.text ? cached : nil
+                                    } ?? DisplayMessage(message: message, renderedMarkdown: nil)
+                                )
+                            }
+                        )
+                        var enrichedCount = 0
+                        var viewportEnrichedCount = 0
+                        var viewportCharactersRemaining =
+                            MessageContentPreparer.historyEnrichViewportCharacterBudget
+                        var publishedViewport = false
+
+                        @MainActor
+                        func publishSnapshot(reason: String, count: Int) {
+                            guard isCurrent(generation) else { return }
+                            let snapshot = messages.map { byID[$0.id]! }
+                            previousByID = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })
+                            preparedHistoryCache.setMessages(previousByID, for: cacheKey)
+                            lastPublishedAt = clock.now
+                            OpenCodeLog.messageContent.info(
+                                "displayPublish reason=\(reason, privacy: .public) count=\(count) generation=\(generation)"
+                            )
+                            continuation.yield(.messages(snapshot))
                         }
 
-                        let prepared = await contentPreparer.prepareMessage(
-                            message,
-                            previous: byID[message.id]
-                        )
-                        guard !Task.isCancelled else { return }
-                        byID[message.id] = prepared
-                        previousByID[message.id] = prepared
-                        preparedBySessionID[sessionID] = previousByID
-                        enrichedCount += 1
+                        for message in messages.reversed() {
+                            guard !Task.isCancelled, isCurrent(generation) else { return }
+                            guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+                            if let cached = byID[message.id],
+                               cached.renderedMarkdown != nil,
+                               cached.text == message.text {
+                                continue
+                            }
 
-                        if !publishedViewport {
-                            viewportEnrichedCount += 1
-                            viewportCharactersRemaining -= message.text.count
-                            let viewportReady =
-                                viewportEnrichedCount
-                                >= MessageContentPreparer.historyEnrichViewportMessageCount
-                                || viewportCharactersRemaining <= 0
-                            if viewportReady {
-                                publishSnapshot(
-                                    reason: "enrich-viewport",
-                                    count: viewportEnrichedCount
-                                )
-                                publishedViewport = true
+                            let prepared = await contentPreparer.prepareMessage(
+                                message,
+                                previous: byID[message.id],
+                                mode: .historyEnrichment
+                            )
+                            guard !Task.isCancelled, isCurrent(generation) else { return }
+                            byID[message.id] = prepared
+                            previousByID[message.id] = prepared
+                            preparedHistoryCache.setMessages(previousByID, for: cacheKey)
+                            enrichedCount += 1
+
+                            if !publishedViewport {
+                                viewportEnrichedCount += 1
+                                viewportCharactersRemaining -= message.text.count
+                                let viewportReady =
+                                    viewportEnrichedCount
+                                    >= MessageContentPreparer.historyEnrichViewportMessageCount
+                                    || viewportCharactersRemaining <= 0
+                                if viewportReady {
+                                    publishSnapshot(
+                                        reason: "enrich-viewport",
+                                        count: viewportEnrichedCount
+                                    )
+                                    publishedViewport = true
+                                }
                             }
                         }
-                    }
-                    guard !Task.isCancelled else { return }
-                    guard enrichedCount > 0 else { return }
-                    if !publishedViewport {
-                        publishSnapshot(reason: "enrich-batch", count: enrichedCount)
-                    } else if enrichedCount > viewportEnrichedCount {
-                        publishSnapshot(
-                            reason: "enrich-batch",
-                            count: enrichedCount - viewportEnrichedCount
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+                        guard enrichedCount > 0 else { return }
+                        if !publishedViewport {
+                            publishSnapshot(reason: "enrich-batch", count: enrichedCount)
+                        } else if enrichedCount > viewportEnrichedCount {
+                            publishSnapshot(
+                                reason: "enrich-batch",
+                                count: enrichedCount - viewportEnrichedCount
+                            )
+                        }
+                        OpenCodeLog.messageContent.info(
+                            "historyEnrich finished count=\(enrichedCount) viewport=\(viewportEnrichedCount) generation=\(generation)"
                         )
                     }
-                    OpenCodeLog.messageContent.info(
-                        "historyEnrich finished count=\(enrichedCount) viewport=\(viewportEnrichedCount)"
-                    )
                 }
 
                 @MainActor
-                func scheduleStreamingPublish() {
+                func scheduleStreamingPublish(generation: UInt64) {
                     debounceTask?.cancel()
                     debounceTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: streamingPrepareDebounceNs)
-                        guard !Task.isCancelled else { return }
+                        await clock.sleep(for: .nanoseconds(Int64(streamingPrepareDebounceNs)))
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
                         guard let latest = pendingMessages else { return }
                         pendingMessages = nil
-                        await publishPrepared(latest, reason: "debounce")
+                        schedulePrepare(
+                            generation: generation,
+                            messages: latest,
+                            reason: "debounce",
+                            mode: .streaming
+                        )
                     }
                 }
 
-                for await update in messageSync.observeMessages(sessionID: sessionID, directory: directory) {
+                for await update in snapshotSource.observeMessages(sessionID: sessionID, directory: directory) {
                     switch update {
                     case .loadFailed(let error):
-                        debounceTask?.cancel()
-                        debounceTask = nil
-                        enrichmentTask?.cancel()
-                        enrichmentTask = nil
+                        _ = nextGeneration()
+                        invalidateInFlightWork()
                         pendingMessages = nil
                         continuation.yield(.loadFailed(error))
                     case .messages(let messages):
-                        enrichmentTask?.cancel()
-                        enrichmentTask = nil
+                        let generation = nextGeneration()
+                        invalidateInFlightWork()
                         if messagesContainStreamingText(messages) {
                             // Keep the latest snapshot. Publish after a short quiet window,
                             // but also flush when the max batch age is exceeded so dense
@@ -209,66 +358,68 @@ final class DisplayMessagePipeline {
                             pendingMessages = messages
                             let dueForMaxBatch: Bool = {
                                 guard let lastPublishedAt else { return true }
-                                return ContinuousClock.now - lastPublishedAt >= streamingPrepareMaxBatchDuration
+                                return clock.now - lastPublishedAt >= streamingPrepareMaxBatchDuration
                             }()
                             if dueForMaxBatch {
-                                debounceTask?.cancel()
-                                debounceTask = nil
                                 let latest = pendingMessages ?? messages
                                 pendingMessages = nil
-                                await publishPrepared(latest, reason: "max-batch")
+                                schedulePrepare(
+                                    generation: generation,
+                                    messages: latest,
+                                    reason: "max-batch",
+                                    mode: .streaming
+                                )
                             } else {
-                                scheduleStreamingPublish()
+                                scheduleStreamingPublish(generation: generation)
                             }
                         } else {
-                            debounceTask?.cancel()
-                            debounceTask = nil
                             pendingMessages = nil
-                            // Fast frame: keep streaming markdown. Slow frame: full TextMate.
                             let hadStreamingPrevious = previousByID.values.contains(where: \.isStreaming)
                             let hasCompleteMarkdownCache = hasCompletePreparedMarkdownCache(
                                 messages: messages,
                                 previousByID: previousByID
                             )
                             if hadStreamingPrevious {
-                                await publishPrepared(
-                                    messages,
-                                    reason: "final-placeholder",
-                                    reuseStreamingDocumentAsFinalPlaceholder: true
-                                )
-                                await publishPrepared(messages, reason: "final")
+                                scheduleFinalization(generation: generation, messages: messages)
                             } else if hasCompleteMarkdownCache {
-                                // Match Android warm reopen: attach cached markdown in one
-                                // publish. UICollectionView only configures visible cells, so
-                                // off-screen history does not need row-by-row reveal staging.
-                                await publishPrepared(messages, reason: "cache-hit")
+                                schedulePrepare(
+                                    generation: generation,
+                                    messages: messages,
+                                    reason: "cache-hit",
+                                    mode: .final
+                                )
                             } else if shouldPlainFirstHistoryPublish(
                                 messages: messages,
                                 previousByID: previousByID
                             ) {
-                                // Open large histories as plain text first so the chat is
-                                // usable while TextMate runs. Enrich newest-first and publish
-                                // at most twice (open viewport, then remaining history) —
-                                // never per-bubble frames (row-by-row reprint).
-                                await publishPrepared(messages, reason: "plain-first", skipMarkdown: true)
-                                enrichmentTask = Task { @MainActor in
-                                    await Task.yield()
-                                    try? await Task.sleep(for: .milliseconds(48))
-                                    guard !Task.isCancelled else { return }
-                                    await enrichHistoryInBackground(messages)
-                                }
+                                schedulePrepare(
+                                    generation: generation,
+                                    messages: messages,
+                                    reason: "plain-first",
+                                    mode: .historyPlainFirst,
+                                    onCommitted: {
+                                        guard isCurrent(generation) else { return }
+                                        enrichHistoryInBackground(
+                                            generation: generation,
+                                            messages: messages
+                                        )
+                                    }
+                                )
                             } else {
-                                await publishPrepared(messages, reason: "final")
+                                schedulePrepare(
+                                    generation: generation,
+                                    messages: messages,
+                                    reason: "final",
+                                    mode: .final
+                                )
                             }
                         }
                     }
                 }
 
-                debounceTask?.cancel()
-                enrichmentTask?.cancel()
-                if let latest = pendingMessages {
-                    await publishPrepared(latest, reason: "flush")
-                }
+                // Teardown cancels and drops unpublished work. No flush contract.
+                invalidateInFlightWork()
+                pendingMessages = nil
                 continuation.finish()
             }
             continuation.onTermination = { _ in
@@ -278,8 +429,15 @@ final class DisplayMessagePipeline {
     }
 
     func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
+        guard let messageSync else {
+            preconditionFailure("refreshDisplayMessages requires a MessageSync-backed pipeline")
+        }
         let messages = try await messageSync.refreshMessages(sessionID: sessionID, directory: directory)
-        return await contentPreparer.prepareMessages(messages)
+        return await contentPreparer.prepareMessages(
+            messages,
+            previousByID: [:],
+            mode: .final
+        )
     }
 }
 

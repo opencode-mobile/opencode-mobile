@@ -126,9 +126,17 @@ extension Container {
 
     var displayMessagePipeline: Factory<DisplayMessagePipeline> {
         self { @MainActor in
-            DisplayMessagePipeline(
+            let manager = self.activeConnectionManager()
+            return DisplayMessagePipeline(
                 messageSync: self.messageSync(),
-                contentPreparer: self.messageContentPreparer()
+                contentPreparer: self.messageContentPreparer(),
+                connectionProfileIDProvider: {
+                    guard let connection = manager.connection else { return "local" }
+                    return PreparedHistoryCacheKey.profileID(
+                        baseURL: connection.baseURL.absoluteString,
+                        username: connection.username
+                    )
+                }
             )
         }.singleton
     }

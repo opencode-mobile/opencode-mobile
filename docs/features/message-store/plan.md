@@ -98,6 +98,12 @@ flowchart TB
 
 ### Where markdown runs
 
+Full load vs part-streaming flow, ordering guarantees, and execution contexts
+are documented in [assistant-message-pipeline.md](./assistant-message-pipeline.md).
+The latest-wins, bounded cross-platform hardening is complete in
+[pipeline-hardening-plan.md](./pipeline-hardening-plan.md), with a step-status
+board in [pipeline-hardening-plan.html](./pipeline-hardening-plan.html).
+
 | Step | Layer | What happens |
 |------|--------|----------------|
 | REST + SSE | `MessageSync` → `InMemoryMessageStore` | Raw server messages kept as domain `Message` |

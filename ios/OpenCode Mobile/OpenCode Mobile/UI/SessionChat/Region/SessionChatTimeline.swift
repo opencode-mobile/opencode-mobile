@@ -46,7 +46,7 @@ final class SessionChatTimeline {
     func startObserving() {
         cancelObservationTasks()
         let generation = observationGeneration
-        if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID), !warm.isEmpty {
+        if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID, directory: worktree), !warm.isEmpty {
             // Warm reopen: show store rows immediately (styled when cache is complete).
             state.timeline = .ready
             state.errorMessage = nil

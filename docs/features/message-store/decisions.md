@@ -61,14 +61,14 @@ down as the reply grows. When streaming ends, the pipeline first emits a
 the full TextMate parse so the UI does not stall 3–9s on the transition. Opening
 a history whose markdown-candidate text is ≥4k chars first publishes a
 `plain-first` frame (no markdown parse) so the timeline becomes ready quickly,
-then enriches markdown newest-first off the critical path and publishes at
-most twice (`enrich-viewport` for the open bottom, then `enrich-batch` for
-older history) — never one bubble at a time, which looked like the chat
-reprinting row by row. Parse work runs on a `userInitiated` worker batch
-(Android `Dispatchers.Default` equivalent) instead of MainActor + utility
-priority. Enrichment remains cancellable: a newer live
-snapshot cancels it immediately instead of waiting behind the remaining
-history parse. On iOS, `DisplayMessagePipeline` also keeps a
+then enriches markdown newest-first off the critical path. Both platforms
+publish at most twice after plain-first (`enrich-viewport` for the open bottom,
+then `enrich-batch` for older history), using a shared 3-message / 12k-character
+viewport budget. Parse work runs on a
+`userInitiated` worker batch (Android `Dispatchers.Default` equivalent) instead
+of MainActor + utility priority. New live snapshots invalidate enrichment;
+the pipeline-hardening target adds a generation check before any completed
+preparation mutates caches or publishes. On iOS, `DisplayMessagePipeline` also keeps a
 per-session prepared-markdown cache across leave/reopen. A warm open with a
 complete cache publishes a single `cache-hit` frame with markdown already
 attached (peek + observe), matching Android's LazyColumn feel: visible cells
@@ -81,7 +81,9 @@ MainActor`, so an unmarked parser would hop TextMate back onto the main thread
 even inside `Task.detached`. Session Chat timelines coalesce-latest
 while apply is in flight (iOS uses a tracked, lifecycle-cancelled apply task
 with `Task.yield`; Android preserves explicit/post-send applies in a FIFO queue
-while coalescing only callback-free live frames). Large streaming replies (≥8k
+while coalescing only callback-free live frames, and `.conflate()` on the
+display observation keeps the latest fully styled enrichment snapshot when apply
+is busy). Large streaming replies (≥8k
 chars) skip markdown preparation and render plain text until the message
 finishes; large streaming code fences (≥2k chars) also render as plain monospace
 until highlight runs on the final frame. Android also constructs large
@@ -89,6 +91,83 @@ finalized annotated strings off the UI thread. See
 [plan.md](./plan.md#where-markdown-runs) for the full data flow.
 
 `RenderedMarkdownMapper` in the UI layer is removed.
+
+## Pipeline hardening — latest-wins generations (Phase 2)
+
+A finalized non-streaming snapshot owns one observation-local generation.
+Placeholder reuse and the authoritative final prepare both commit only while
+that generation is still current. Newer live snapshots increment the
+generation and discard in-flight finalization work.
+
+Cancellation remains advisory for synchronous TextMate work. Generation checks
+gate every prepared-cache mutation and every `DisplayMessageListUpdate.Messages`
+publish. Observation teardown cancels and drops pending work; it does not flush
+a deferred streaming snapshot.
+
+## Pipeline hardening — preparation modes (Phase 3)
+
+Preparation uses one closed platform-native mode. Boolean flag combinations are
+not part of the public preparer/pipeline call shape.
+
+| Mode | Purpose | Updates prepared cache |
+| --- | --- | --- |
+| `streaming` | Live streaming prepare; plain text above the streaming size threshold | Yes |
+| `historyPlainFirst` | Usable cold history without missing markdown parses | No full replace; merge only rows that already carry a document |
+| `historyEnrichment` | Newest-first missing markdown for history | Yes (per enriched row / batch) |
+| `finalPlaceholder` | Reuse last streaming document when identity and source text match | Yes |
+| `final` | Authoritative finalized markdown, including cache-hit and small history | Yes |
+
+Parse failure always falls back to safe plain text for the current generation and
+must not throw into the timeline. Streaming text above the configured threshold
+uses plain text under `streaming` until finalization runs `final`.
+
+## Pipeline hardening — bounds and overflow (Phase 5)
+
+Phase 5 locks capacities and recovery before implementation. Numbers are
+provisional constants that may be tuned from high-water logs; the recovery
+contract must not change without revisiting this decision.
+
+### iOS warm prepared-history cache
+
+Android keeps the intentional no-warm-cache parity gap unless later measurement
+shows reopen hangs without one.
+
+| Rule | Choice |
+| --- | --- |
+| Key | `connectionProfileID` + `directory` + `sessionID` (no cross-profile or cross-directory reuse) |
+| Cost unit | Sum of retained `DisplayMessage.text` character counts across all cache entries |
+| Total cost budget | `512_000` characters |
+| Session entry cap | `8` retained sessions (whichever of cost or entry count binds first) |
+| Eviction order | Least-recently used session entry until under both limits |
+| Also evict on | Session delete, profile/connection reset (`clearPreparedCache`), memory-pressure notification |
+| Effect of eviction | Performance only (cold reopen may plain-first + enrich); raw store correctness unchanged |
+
+Character cost is the measurable proxy for parse/render weight. Rendered-document
+heap size is not tracked directly; memory-pressure eviction covers underestimation.
+
+### Event intake (both platforms)
+
+Applies to the **per-observation staging buffer** between foreground event
+subscription and store apply (Android today: `MessageSync` `.buffer(Channel.UNLIMITED)`;
+iOS equivalent startup/live staging). The Android fan-out SharedFlow capacity
+of `4_096` stays as the process-wide emit buffer and is **not** the silent-drop
+path for accepted text deltas.
+
+| Rule | Choice |
+| --- | --- |
+| Capacity unit | Event count (not byte cost) |
+| Staging capacity | `4_096` events (aligned with existing Android SharedFlow sizing) |
+| On overflow | Never drop accepted deltas silently |
+| Overflow action | Mark the observation `needsAuthoritativeRecovery`, stop enqueueing further staged events for that observation, and enter authoritative recovery |
+| If initial REST is not yet authoritative | Do not commit that REST snapshot as authority; recover first |
+| If already live | Trigger revision-aware full reload (`overflow-recovery`); resume staging only after a successful authoritative replace |
+| Observability | Log high-water mark, overflow, and recovery reason without message content |
+
+Byte-cost accounting is deferred: event count matches the existing fan-out bound
+and is cheap to enforce on the hot path.
+
+See [pipeline-hardening-plan.md](./pipeline-hardening-plan.md) for Phase 5
+implementation steps.
 
 ## SSE client timeouts
 

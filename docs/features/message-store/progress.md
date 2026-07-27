@@ -6,6 +6,23 @@
   native apps.
 - [x] OPE-82 `message.part.delta` streaming, reconciliation, watchdog, and
   content-preparation behavior are documented.
+- [x] The latest-wins, bounded target architecture and phased cross-platform
+  hardening plan are documented.
+- [x] Phase 1 characterization and test seams are in place on iOS and Android
+  (`DisplayMessagePipelineCharacterizationTest` /
+  `DisplayMessagePipelineCharacterizationTests`).
+- [x] Phase 2 latest-wins generations, intake/prepare split, and drop-on-teardown
+  are implemented on both platforms.
+- [x] Phase 3 closed preparation modes replace boolean preparer flags on both
+  platforms (`MessagePreparationMode`).
+- [x] Phase 4 shared two-batch history enrichment (viewport + remaining) on
+  both platforms.
+- [x] Phase 5 bounded iOS prepared-history cache and 4,096-event staging with
+  authoritative overflow recovery on both platforms.
+- [x] Phase 6 verification closeout: focused suites green on both platforms;
+  architecture document describes the implemented pipeline; acceptance gates
+  closed. Intentional parity gaps remain in
+  [parity-gaps.md](./parity-gaps.md).
 
 ## Design-system
 
@@ -46,4 +63,5 @@ None.
 
 ## Remaining work
 
-None for the documented message-store slice.
+None for the pipeline-hardening plan. Follow-up product work (if any) should
+open a new feature slice rather than reopen Phases 1–6.

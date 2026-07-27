@@ -82,8 +82,7 @@ final class MessageContentPreparer: @unchecked Sendable {
     nonisolated func prepareMessages(
         _ messages: [Message],
         previousByID: [String: DisplayMessage] = [:],
-        reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
-        skipMarkdown: Bool = false
+        mode: MessagePreparationMode = .final
     ) async -> [DisplayMessage] {
         // Match Android `Dispatchers.Default`: one worker hop for the batch,
         // not a MainActor round-trip between every message.
@@ -99,8 +98,7 @@ final class MessageContentPreparer: @unchecked Sendable {
                 let display = Self.prepareMessageOnWorker(
                     message,
                     previous: previous,
-                    reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
-                    skipMarkdown: skipMarkdown,
+                    mode: mode,
                     documentCache: documentCache
                 )
                 prepared.append(display)
@@ -116,7 +114,7 @@ final class MessageContentPreparer: @unchecked Sendable {
             }
             let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
             OpenCodeLog.messageContent.info(
-                "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) skipMarkdown=\(skipMarkdown) ms=\(elapsedMs)"
+                "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) mode=\(mode.rawValue, privacy: .public) ms=\(elapsedMs)"
             )
             return prepared
         }.value
@@ -131,22 +129,21 @@ final class MessageContentPreparer: @unchecked Sendable {
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: nil
-            )
+            ),
+            mode: .final
         )
     }
 
     nonisolated func prepareMessage(
         _ message: Message,
         previous: DisplayMessage? = nil,
-        reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
-        skipMarkdown: Bool = false
+        mode: MessagePreparationMode = .final
     ) async -> DisplayMessage {
         await Task.detached(priority: .userInitiated) { [documentCache] in
             Self.prepareMessageOnWorker(
                 message,
                 previous: previous,
-                reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
-                skipMarkdown: skipMarkdown,
+                mode: mode,
                 documentCache: documentCache
             )
         }.value
@@ -155,23 +152,21 @@ final class MessageContentPreparer: @unchecked Sendable {
     nonisolated private static func prepareMessageOnWorker(
         _ message: Message,
         previous: DisplayMessage?,
-        reuseStreamingDocumentAsFinalPlaceholder: Bool,
-        skipMarkdown: Bool,
+        mode: MessagePreparationMode,
         documentCache: MessageMarkdownDocumentCache
     ) -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
-        if isStreaming,
-           !reuseStreamingDocumentAsFinalPlaceholder,
+        if mode == .streaming,
            message.text.count >= streamingPlainTextCharacterThreshold
         {
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
-        if skipMarkdown {
+        if mode == .historyPlainFirst {
             if message.text.count < streamingPlainTextCharacterThreshold,
                let reusable = reusableDocument(
                 for: message,
                 previous: previous,
-                reuseStreamingDocumentAsFinalPlaceholder: false
+                mode: mode
                )
             {
                 return DisplayMessage(message: message, renderedMarkdown: reusable)
@@ -185,13 +180,13 @@ final class MessageContentPreparer: @unchecked Sendable {
         if let reusable = reusableDocument(
             for: message,
             previous: previous,
-            reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder
+            mode: mode
         ) {
             document = reusable
-        } else if reuseStreamingDocumentAsFinalPlaceholder {
+        } else if mode == .finalPlaceholder {
             document = previous?.renderedMarkdown
         } else {
-            document = parseDocument(
+            document = parseDocumentSafely(
                 messageID: message.id,
                 text: message.text,
                 isStreaming: isStreaming,
@@ -211,6 +206,23 @@ final class MessageContentPreparer: @unchecked Sendable {
     }
 
     /// Synchronous TextMate on the worker thread — callers already hopped off MainActor.
+    /// Parser bridge failures already degrade to a plain-text document inside
+    /// `OpenCodeRenderedMarkdownParser`; this seam keeps the call site aligned with
+    /// Android's safe-plain fallback contract.
+    nonisolated private static func parseDocumentSafely(
+        messageID: String,
+        text: String,
+        isStreaming: Bool,
+        documentCache: MessageMarkdownDocumentCache
+    ) -> NativeMarkdownDocument? {
+        parseDocument(
+            messageID: messageID,
+            text: text,
+            isStreaming: isStreaming,
+            documentCache: documentCache
+        )
+    }
+
     nonisolated private static func parseDocument(
         messageID: String,
         text: String,
@@ -235,7 +247,7 @@ final class MessageContentPreparer: @unchecked Sendable {
     nonisolated private static func reusableDocument(
         for message: Message,
         previous: DisplayMessage?,
-        reuseStreamingDocumentAsFinalPlaceholder: Bool
+        mode: MessagePreparationMode
     ) -> NativeMarkdownDocument? {
         let isStreaming = messageIsStreaming(message)
         if let existing = previous?.renderedMarkdown,
@@ -250,7 +262,7 @@ final class MessageContentPreparer: @unchecked Sendable {
            previous.text == message.text {
             return previous.renderedMarkdown
         }
-        if reuseStreamingDocumentAsFinalPlaceholder,
+        if mode == .finalPlaceholder,
            !isStreaming,
            let previous,
            previous.isStreaming,
