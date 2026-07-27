@@ -61,13 +61,21 @@ down as the reply grows. When streaming ends, the pipeline first emits a
 the full TextMate parse so the UI does not stall 3–9s on the transition. Opening
 a history whose markdown-candidate text is ≥4k chars first publishes a
 `plain-first` frame (no markdown parse) so the timeline becomes ready quickly,
-then enriches **one markdown message at a time, newest first** (utility QoS /
-single-thread worker, with a short yield between publishes) so the bottom of
-the timeline (where open settles) paints markdown before older off-screen
-history, and scrolling stays responsive instead of freezing through a
-multi-second batch TextMate pass. Enrichment runs as cancellable follow-up work:
-a newer live snapshot cancels it immediately instead of waiting behind the
-remaining history parse. On iOS, markdown
+then enriches markdown newest-first off the critical path and publishes at
+most twice (`enrich-viewport` for the open bottom, then `enrich-batch` for
+older history) — never one bubble at a time, which looked like the chat
+reprinting row by row. Parse work runs on a `userInitiated` worker batch
+(Android `Dispatchers.Default` equivalent) instead of MainActor + utility
+priority. Enrichment remains cancellable: a newer live
+snapshot cancels it immediately instead of waiting behind the remaining
+history parse. On iOS, `DisplayMessagePipeline` also keeps a
+per-session prepared-markdown cache across leave/reopen. A warm open with a
+complete cache publishes a single `cache-hit` frame with markdown already
+attached (peek + observe), matching Android's LazyColumn feel: visible cells
+configure once, off-screen history configures on scroll, and the UI does not
+wipe then reprint rows. `MessageSync` skips an identical fingerprint republish after
+replaying `SharedLiveObservation.lastValue`, and Session Chat can warm-start
+from in-memory store rows without a loading spinner. On iOS, markdown
 parse must stay `nonisolated`: the target sets `SWIFT_DEFAULT_ACTOR_ISOLATION =
 MainActor`, so an unmarked parser would hop TextMate back onto the main thread
 even inside `Task.detached`. Session Chat timelines coalesce-latest

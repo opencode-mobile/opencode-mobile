@@ -76,6 +76,10 @@ where Item.ID == String {
     private var userScrollEndTask: Task<Void, Never>?
     private var contentSizeObservation: NSKeyValueObservation?
     private var refreshControl: UIRefreshControl?
+    /// Enrich publishes coalesce here while the user is actively scrolling so
+    /// plain→markdown cell reconfigure does not hitch under a pan.
+    private var pendingApplyItems: [Item]?
+    private var pendingApplyAnimated = false
 
     init(
         itemContent: @escaping (Item) -> ItemContent,
@@ -118,6 +122,30 @@ where Item.ID == String {
 
     func apply(items: [Item], animatingDifferences: Bool) {
         guard isViewLoaded, dataSource != nil else { return }
+
+        let isActivelyScrolling =
+            collectionView.isDragging
+            || collectionView.isDecelerating
+            || scrollController?.isUserScrolling == true
+        if isActivelyScrolling {
+            pendingApplyItems = items
+            pendingApplyAnimated = animatingDifferences
+            return
+        }
+
+        pendingApplyItems = nil
+        performApply(items: items, animatingDifferences: animatingDifferences)
+    }
+
+    private func flushPendingApplyIfNeeded() {
+        guard let pendingApplyItems else { return }
+        let items = pendingApplyItems
+        let animated = pendingApplyAnimated
+        self.pendingApplyItems = nil
+        performApply(items: items, animatingDifferences: animated)
+    }
+
+    private func performApply(items: [Item], animatingDifferences: Bool) {
         guard items != currentItems else { return }
 
         let previousItems = itemsByID
@@ -165,12 +193,24 @@ where Item.ID == String {
                     || self.isSettlingInitialLoad
                     || self.scrollController?.isPinnedToEnd == true
                     || self.scrollController?.isProgrammaticScrolling == true
-                if shouldStayPinned {
+                let isReconfigureOnly =
+                    self.hasCompletedInitialScroll
+                    && self.orderedIDs.count == previousCount
+                    && !changedIDs.isEmpty
+                // While heights are still settling after open, skip re-pin on
+                // identity-stable updates (warm cache-hit). Re-pinning was
+                // re-entering self-sizing and blocking scroll for seconds.
+                let skipPinDuringSettle =
+                    self.isSettlingInitialLoad
+                    && self.hasCompletedInitialScroll
+                    && self.orderedIDs.count == previousCount
+                if shouldStayPinned, !isReconfigureOnly, !skipPinDuringSettle {
                     self.pinToBottomWithoutAnimation()
                 } else {
-                    UIView.performWithoutAnimation {
-                        self.collectionView.layoutIfNeeded()
-                    }
+                    // Do not force layoutIfNeeded while reading history — enrich
+                    // reconfigure of off-screen / partially visible markdown cells
+                    // was hitching scrolls for multi-second MainActor layout passes.
+                    // Same for warm reopen of unchanged identity rows.
                     self.reportGeometry()
                 }
 
@@ -194,30 +234,49 @@ where Item.ID == String {
     }
 
     func performScrollToEnd(animated: Bool) {
-        collectionView.layoutIfNeeded()
         guard !orderedIDs.isEmpty else { return }
         // Match content-growth anchoring: never yank the offset under an
         // active user pan or residual deceleration.
         guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
 
-        // Never animate scroll during open settle; pill taps can animate after.
-        let allowAnimation = animated && !isSettlingInitialLoad && hasCompletedInitialScroll
+        // Never call layoutIfNeeded here. On tall self-sizing markdown histories
+        // it measures off-screen hosting cells and freezes MainActor for seconds
+        // (warm Large-reply reopen), which is exactly when users try to scroll.
+        let lastIndex = IndexPath(item: orderedIDs.count - 1, section: 0)
+        let canScrollToItem =
+            collectionView.numberOfSections > 0
+            && collectionView.numberOfItems(inSection: 0) > lastIndex.item
+
+        // Never animate scroll during open settle; pill taps can animate after
+        // only for short remaining distances. Animating through tall markdown
+        // histories forces self-sizing of many huge cells mid-flight.
         let bottomOffset = bottomContentOffsetY()
-        if allowAnimation {
-            collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: true)
-            return
-        }
+        let remaining = abs(bottomOffset - collectionView.contentOffset.y)
+        let allowAnimation =
+            animated
+            && !isSettlingInitialLoad
+            && hasCompletedInitialScroll
+            && remaining <= max(collectionView.bounds.height * 2.5, 900)
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation {
-            collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: false)
-            collectionView.layoutIfNeeded()
+            if allowAnimation {
+                collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: true)
+            } else if canScrollToItem {
+                collectionView.scrollToItem(at: lastIndex, at: .bottom, animated: false)
+            } else {
+                collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: false)
+            }
+            if orderedIDs.count <= 8 {
+                updateBottomAlignmentInset()
+            }
         }
         CATransaction.commit()
         reportGeometry()
 
-        // Estimated cell heights often resolve on the next turn; re-pin then.
+        // Estimated cell heights often resolve on the next turn; re-pin then
+        // without a full layout pass.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard !self.collectionView.isDragging, !self.collectionView.isDecelerating else {
@@ -241,11 +300,13 @@ where Item.ID == String {
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
             scrollController?.endUserScrolling()
+            flushPendingApplyIfNeeded()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         scrollController?.endUserScrolling()
+        flushPendingApplyIfNeeded()
     }
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
@@ -281,9 +342,9 @@ where Item.ID == String {
         collectionView.contentInsetAdjustmentBehavior = .automatic
         collectionView.delegate = self
         collectionView.keyboardDismissMode = .interactive
-        // Prevent self-sizing invalidations from implicitly animating cell frames
-        // while estimated heights resolve on open.
-        collectionView.selfSizingInvalidation = .enabledIncludingConstraints
+        // Prefer lighter invalidation: including constraints re-measured tall
+        // markdown cells aggressively during open and blocked scrolling.
+        collectionView.selfSizingInvalidation = .enabled
         view.addSubview(collectionView)
         self.collectionView = collectionView
     }
@@ -417,7 +478,8 @@ where Item.ID == String {
 
     private func updateBottomAlignmentInset() {
         guard collectionView.bounds.height > 0 else { return }
-        collectionView.layoutIfNeeded()
+        // Avoid layoutIfNeeded here: viewDidLayoutSubviews + pin paths already
+        // call this frequently, and full self-sizing of large histories hangs UI.
 
         let systemTopInset = max(0, collectionView.adjustedContentInset.top - bottomAlignmentTopInset)
         let bottomInset = collectionView.adjustedContentInset.bottom
@@ -453,16 +515,27 @@ where Item.ID == String {
 
     private func pinToBottomWithoutAnimation() {
         guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
+        guard !orderedIDs.isEmpty else { return }
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation {
-            collectionView.layoutIfNeeded()
-            updateBottomAlignmentInset()
-            let refinedOffset = bottomContentOffsetY()
-            if abs(collectionView.contentOffset.y - refinedOffset) > 0.5 {
-                collectionView.setContentOffset(CGPoint(x: 0, y: refinedOffset), animated: false)
-                collectionView.layoutIfNeeded()
+            // Prefer scrolling the last item into view. Never layoutIfNeeded —
+            // measuring a tall self-sizing timeline stalls MainActor for seconds.
+            let lastIndex = IndexPath(item: orderedIDs.count - 1, section: 0)
+            if collectionView.numberOfSections > 0,
+               collectionView.numberOfItems(inSection: 0) > lastIndex.item
+            {
+                collectionView.scrollToItem(at: lastIndex, at: .bottom, animated: false)
+            } else {
+                collectionView.setContentOffset(
+                    CGPoint(x: 0, y: bottomContentOffsetY()),
+                    animated: false
+                )
+            }
+            // Short threads still need the top inset so content sits on the bottom edge.
+            if orderedIDs.count <= 8 {
+                updateBottomAlignmentInset()
             }
         }
         CATransaction.commit()
@@ -482,7 +555,6 @@ where Item.ID == String {
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation {
             collectionView.contentOffset.y += delta
-            collectionView.layoutIfNeeded()
         }
         CATransaction.commit()
     }
@@ -497,6 +569,7 @@ where Item.ID == String {
                   !collectionView.isDecelerating
             else { return }
             scrollController?.endUserScrolling()
+            flushPendingApplyIfNeeded()
         }
     }
 

@@ -17,6 +17,9 @@ enum OpenCodeRenderedMarkdownDetector: Sendable {
 struct OpenCodeRenderedMarkdown: View {
     /// Skip expensive span painting for large fences while the message is still streaming.
     static let streamingPlainCodeCharacterThreshold = 2_000
+    /// Match Android: build large attributed strings off the main actor and show
+    /// plain placeholders until ready so enrich/scroll stay responsive.
+    static let backgroundAttributedCharacterThreshold = 2_000
 
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
@@ -48,8 +51,9 @@ struct OpenCodeRenderedMarkdown: View {
     }
 
     var body: some View {
+        let entries = document.blocksWithStableIdentities
         VStack(alignment: .leading, spacing: blockSpacing) {
-            ForEach(document.blocksWithStableIdentities) { entry in
+            ForEach(entries) { entry in
                 blockView(entry.block)
             }
         }
@@ -131,22 +135,13 @@ struct OpenCodeRenderedMarkdown: View {
         code: String,
         spans: [NativeCodeSpan]
     ) -> some View {
-        let usePlainStreamingText =
+        let forcePlain =
             isStreaming && code.count >= Self.streamingPlainCodeCharacterThreshold
         ScrollView(.horizontal, showsIndicators: true) {
-            Group {
-                if usePlainStreamingText {
-                    Text(code)
-                        .font(OpenCodeTypography.code)
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                } else {
-                    Text(NativeMarkdownAttributedString.code(code, spans: spans))
-                        .font(OpenCodeTypography.code)
-                }
-            }
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            DeferredHighlightedCodeText(code: code, spans: spans, forcePlain: forcePlain)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
@@ -158,19 +153,8 @@ struct OpenCodeRenderedMarkdown: View {
 
     private func diffBlock(lines: [NativeDiffLine]) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(lines.indices, id: \.self) { index in
-                    let line = lines[index]
-                    Text(NativeMarkdownAttributedString.code(line.text, spans: line.spans))
-                        .font(OpenCodeTypography.code)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(minWidth: 320, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 1)
-                        .background(diffLineBackground(line.kind))
-                }
-            }
-            .padding(.vertical, 8)
+            DeferredHighlightedDiffBlock(lines: lines)
+                .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
@@ -248,19 +232,6 @@ struct OpenCodeRenderedMarkdown: View {
             OpenCodeColors.markdownH3
         }
     }
-
-    private func diffLineBackground(_ kind: NativeDiffLineKind) -> Color {
-        switch kind {
-        case .added:
-            OpenCodeColors.diffAdd.opacity(0.18)
-        case .deleted:
-            OpenCodeColors.diffDelete.opacity(0.16)
-        case .header:
-            OpenCodeColors.syntaxDiffUnknown.opacity(0.14)
-        case .context:
-            Color.clear
-        }
-    }
 }
 
 enum NativeMarkdownAttributedString {
@@ -269,8 +240,33 @@ enum NativeMarkdownAttributedString {
         let spans: [NativeCodeSpan]
     }
 
-    private static var cachedCodeKey: CodeCacheKey?
-    private static var cachedCodeValue: AttributedString?
+    nonisolated private final class CodeAttributedCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var key: CodeCacheKey?
+        private var value: AttributedString?
+
+        func value(for key: CodeCacheKey) -> AttributedString? {
+            lock.lock()
+            defer { lock.unlock() }
+            guard self.key == key else { return nil }
+            return value
+        }
+
+        func store(_ value: AttributedString, for key: CodeCacheKey) {
+            lock.lock()
+            defer { lock.unlock() }
+            self.key = key
+            self.value = value
+        }
+    }
+
+    nonisolated private static let codeCache = CodeAttributedCache()
+
+    static func plainText(from inlines: [NativeMarkdownInline]) -> String {
+        var output = ""
+        appendPlain(inlines, into: &output)
+        return output
+    }
 
     static func inline(
         _ inlines: [NativeMarkdownInline],
@@ -287,10 +283,72 @@ enum NativeMarkdownAttributedString {
         spans: [NativeCodeSpan]
     ) -> AttributedString {
         let cacheKey = CodeCacheKey(code: code, spans: spans)
-        if cachedCodeKey == cacheKey, let cachedCodeValue {
-            return cachedCodeValue
+        if let cached = codeCache.value(for: cacheKey) {
+            return cached
         }
 
+        let output = codeUsingSwiftUI(code, spans: spans)
+        codeCache.store(output, for: cacheKey)
+        return output
+    }
+
+    /// Builds via UIKit colors so highlighting can leave the main actor.
+    nonisolated static func code(
+        _ code: String,
+        spans: [NativeCodeSpan],
+        palette: NativeCodeColorPalette
+    ) -> AttributedString {
+        let cacheKey = CodeCacheKey(code: code, spans: spans)
+        if let cached = codeCache.value(for: cacheKey) {
+            return cached
+        }
+
+        let output = codeUsingUIKit(code, spans: spans, palette: palette)
+        codeCache.store(output, for: cacheKey)
+        return output
+    }
+
+    nonisolated private static func codeUsingUIKit(
+        _ code: String,
+        spans: [NativeCodeSpan],
+        palette: NativeCodeColorPalette
+    ) -> AttributedString {
+        let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let attributed = NSMutableAttributedString(
+            string: code,
+            attributes: [
+                .font: font,
+                .foregroundColor: palette.color(for: .plain),
+            ]
+        )
+        let utf16Count = (code as NSString).length
+        let sortedSpans = spans.sorted {
+            let leftPriority = stylePriority(for: $0.role)
+            let rightPriority = stylePriority(for: $1.role)
+            if leftPriority != rightPriority { return leftPriority < rightPriority }
+            let leftWidth = $0.end - $0.start
+            let rightWidth = $1.end - $1.start
+            if leftWidth != rightWidth { return leftWidth > rightWidth }
+            if $0.start != $1.start { return $0.start < $1.start }
+            return $0.end < $1.end
+        }
+        for span in sortedSpans {
+            let start = max(0, min(span.start, utf16Count))
+            let end = max(start, min(span.end, utf16Count))
+            guard start < end else { continue }
+            attributed.addAttribute(
+                .foregroundColor,
+                value: palette.color(for: span.role),
+                range: NSRange(location: start, length: end - start)
+            )
+        }
+        return AttributedString(attributed)
+    }
+
+    private static func codeUsingSwiftUI(
+        _ code: String,
+        spans: [NativeCodeSpan]
+    ) -> AttributedString {
         var output = AttributedString(code)
         output.font = OpenCodeTypography.code
         output.foregroundColor = OpenCodeColors.textStrong
@@ -325,15 +383,29 @@ enum NativeMarkdownAttributedString {
             )
             output[startIndex..<endIndex].foregroundColor = color(for: span.role)
         }
-
-        cachedCodeKey = cacheKey
-        cachedCodeValue = output
         return output
     }
 
     private static func stringIndex(in value: String, utf16Offset: Int) -> String.Index? {
         let utf16Index = value.utf16.index(value.utf16.startIndex, offsetBy: utf16Offset)
         return String.Index(utf16Index, within: value)
+    }
+
+    private static func appendPlain(_ inlines: [NativeMarkdownInline], into output: inout String) {
+        for inline in inlines {
+            switch inline {
+            case .text(let value), .code(let value):
+                output.append(value)
+            case .emphasis(let children), .strong(let children):
+                appendPlain(children, into: &output)
+            case .link(_, let children):
+                appendPlain(children, into: &output)
+            case .imageAlt(let alt):
+                output.append("[image: \(alt)]")
+            case .softBreak, .hardBreak:
+                output.append("\n")
+            }
+        }
     }
 
     private static func append(
@@ -378,14 +450,7 @@ enum NativeMarkdownAttributedString {
         return text
     }
 
-    private static func styledCode(
-        _ value: String,
-        color: Color
-    ) -> AttributedString {
-        styled(value, font: OpenCodeTypography.code, color: color)
-    }
-
-    private static func stylePriority(for role: NativeCodeTokenRole) -> Int {
+    nonisolated private static func stylePriority(for role: NativeCodeTokenRole) -> Int {
         switch role {
         case .punctuation:
             0
@@ -464,17 +529,152 @@ enum NativeMarkdownAttributedString {
     }
 }
 
+/// UIKit colors captured on the main actor for off-main code highlighting.
+struct NativeCodeColorPalette: Sendable {
+    private let colors: [NativeCodeTokenRole: UIColor]
+    private let plain: UIColor
+
+    @MainActor
+    static func current() -> NativeCodeColorPalette {
+        NativeCodeColorPalette(
+            colors: [
+                .plain: UIColor(OpenCodeColors.textStrong),
+                .comment: UIColor(OpenCodeColors.syntaxComment),
+                .keyword: UIColor(OpenCodeColors.syntaxKeyword),
+                .type: UIColor(OpenCodeColors.syntaxType),
+                .variable: UIColor(OpenCodeColors.syntaxVariable),
+                .property: UIColor(OpenCodeColors.syntaxConstant),
+                .constant: UIColor(OpenCodeColors.syntaxConstant),
+                .function: UIColor(OpenCodeColors.syntaxPrimitive),
+                .number: UIColor(OpenCodeColors.syntaxProperty),
+                .attribute: UIColor(OpenCodeColors.syntaxProperty),
+                .string: UIColor(OpenCodeColors.syntaxString),
+                .operatorToken: UIColor(OpenCodeColors.syntaxOperator),
+                .punctuation: UIColor(OpenCodeColors.syntaxPunctuation),
+                .tag: UIColor(OpenCodeColors.syntaxInfo),
+                .inserted: UIColor(OpenCodeColors.diffAdd),
+                .deleted: UIColor(OpenCodeColors.diffDelete),
+                .warning: UIColor(OpenCodeColors.syntaxDiffUnknown),
+                .critical: UIColor(OpenCodeColors.syntaxCritical),
+            ],
+            plain: UIColor(OpenCodeColors.textStrong)
+        )
+    }
+
+    nonisolated func color(for role: NativeCodeTokenRole) -> UIColor {
+        colors[role] ?? plain
+    }
+}
+
 private struct InlineMarkdownText: View {
     let inlines: [NativeMarkdownInline]
     let font: Font
     let color: Color
 
     var body: some View {
-        // Style synchronously on first paint. Deferring via `.task` showed plain
-        // text for a frame, then swapped in attributed markdown and resized the
-        // UICollectionView cell — visible as a late layout jump on open.
+        // Keep inline styling synchronous for layout stability on open. Large
+        // fenced code/diff blocks use DeferredHighlighted* instead (Android parity).
         Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Plain-first code paint for large fences; highlight off the main actor.
+private struct DeferredHighlightedCodeText: View {
+    let code: String
+    let spans: [NativeCodeSpan]
+    let forcePlain: Bool
+
+    @State private var styled: AttributedString?
+
+    private var needsBackgroundBuild: Bool {
+        !forcePlain && code.count >= OpenCodeRenderedMarkdown.backgroundAttributedCharacterThreshold
+    }
+
+    var body: some View {
+        Text(displayText)
+            .font(OpenCodeTypography.code)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .task(id: code) {
+                guard !forcePlain else {
+                    styled = nil
+                    return
+                }
+                if !needsBackgroundBuild {
+                    styled = NativeMarkdownAttributedString.code(code, spans: spans)
+                    return
+                }
+                await Task.yield()
+                let code = code
+                let spans = spans
+                let palette = await MainActor.run { NativeCodeColorPalette.current() }
+                styled = await Task.detached(priority: .utility) {
+                    NativeMarkdownAttributedString.code(code, spans: spans, palette: palette)
+                }.value
+            }
+    }
+
+    private var displayText: AttributedString {
+        styled ?? AttributedString(code)
+    }
+}
+
+private struct DeferredHighlightedDiffBlock: View {
+    let lines: [NativeDiffLine]
+
+    @State private var styledLines: [AttributedString]?
+
+    private var totalCharacters: Int {
+        lines.reduce(0) { $0 + $1.text.count }
+    }
+
+    private var needsBackgroundBuild: Bool {
+        totalCharacters >= OpenCodeRenderedMarkdown.backgroundAttributedCharacterThreshold
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(lines.indices, id: \.self) { index in
+                let line = lines[index]
+                let text = styledLines?[index] ?? AttributedString(line.text)
+                Text(text)
+                    .font(OpenCodeTypography.code)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 320, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 1)
+                    .background(diffLineBackground(line.kind))
+            }
+        }
+        .task(id: totalCharacters) {
+            if !needsBackgroundBuild {
+                styledLines = lines.map {
+                    NativeMarkdownAttributedString.code($0.text, spans: $0.spans)
+                }
+                return
+            }
+            await Task.yield()
+            let lines = lines
+            let palette = await MainActor.run { NativeCodeColorPalette.current() }
+            styledLines = await Task.detached(priority: .utility) {
+                lines.map {
+                    NativeMarkdownAttributedString.code($0.text, spans: $0.spans, palette: palette)
+                }
+            }.value
+        }
+    }
+
+    private func diffLineBackground(_ kind: NativeDiffLineKind) -> Color {
+        switch kind {
+        case .added:
+            OpenCodeColors.diffAdd.opacity(0.18)
+        case .deleted:
+            OpenCodeColors.diffDelete.opacity(0.16)
+        case .header:
+            OpenCodeColors.syntaxDiffUnknown.opacity(0.14)
+        case .context:
+            Color.clear
+        }
     }
 }
 

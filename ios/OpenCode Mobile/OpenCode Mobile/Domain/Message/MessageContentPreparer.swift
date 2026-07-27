@@ -64,52 +64,62 @@ final class MessageContentPreparer: @unchecked Sendable {
 
     /// While streaming, skip markdown tokenization above this size and let the
     /// bubble render plain text. Full parse still runs on the final frame.
-    static let streamingPlainTextCharacterThreshold = 8_000
+    nonisolated static let streamingPlainTextCharacterThreshold = 8_000
 
     /// When opening a history whose markdown-candidate text exceeds this size,
     /// publish a plain-text frame first so the timeline is usable before TextMate.
-    static let historyPlainFirstMarkdownCharacterThreshold = 4_000
+    nonisolated static let historyPlainFirstMarkdownCharacterThreshold = 4_000
+
+    /// Newest-first enrich publishes once the open viewport is ready so iOS
+    /// matches Android's perceived speed without per-bubble UI frames.
+    nonisolated static let historyEnrichViewportMessageCount = 3
+    nonisolated static let historyEnrichViewportCharacterBudget = 12_000
 
     nonisolated private let documentCache = MessageMarkdownDocumentCache(maxEntries: 32)
 
     init() {}
 
-    func prepareMessages(
+    nonisolated func prepareMessages(
         _ messages: [Message],
         previousByID: [String: DisplayMessage] = [:],
         reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
         skipMarkdown: Bool = false
     ) async -> [DisplayMessage] {
-        let startedAt = Date()
-        var prepared: [DisplayMessage] = []
-        prepared.reserveCapacity(messages.count)
-        var parsedCount = 0
-        var reusedCount = 0
-        var streamingChars = 0
-        for message in messages {
-            let previous = previousByID[message.id]
-            let display = await prepareMessage(
-                message,
-                previous: previous,
-                reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
-                skipMarkdown: skipMarkdown
+        // Match Android `Dispatchers.Default`: one worker hop for the batch,
+        // not a MainActor round-trip between every message.
+        await Task.detached(priority: .userInitiated) { [documentCache] in
+            let startedAt = Date()
+            var prepared: [DisplayMessage] = []
+            prepared.reserveCapacity(messages.count)
+            var parsedCount = 0
+            var reusedCount = 0
+            var streamingChars = 0
+            for message in messages {
+                let previous = previousByID[message.id]
+                let display = Self.prepareMessageOnWorker(
+                    message,
+                    previous: previous,
+                    reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
+                    skipMarkdown: skipMarkdown,
+                    documentCache: documentCache
+                )
+                prepared.append(display)
+                if Self.messageIsStreaming(message) {
+                    streamingChars = max(streamingChars, message.text.count)
+                }
+                guard display.renderedMarkdown != nil else { continue }
+                if Self.wasReused(display: display, previous: previous) {
+                    reusedCount += 1
+                } else {
+                    parsedCount += 1
+                }
+            }
+            let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
+            OpenCodeLog.messageContent.info(
+                "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) skipMarkdown=\(skipMarkdown) ms=\(elapsedMs)"
             )
-            prepared.append(display)
-            if messageIsStreaming(message) {
-                streamingChars = max(streamingChars, message.text.count)
-            }
-            guard display.renderedMarkdown != nil else { continue }
-            if wasReused(display: display, previous: previous) {
-                reusedCount += 1
-            } else {
-                parsedCount += 1
-            }
-        }
-        let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
-        OpenCodeLog.messageContent.info(
-            "prepareMessages count=\(messages.count) parsed=\(parsedCount) reused=\(reusedCount) markdown=\(prepared.count { $0.renderedMarkdown != nil }) streamingChars=\(streamingChars) skipMarkdown=\(skipMarkdown) ms=\(elapsedMs)"
-        )
-        return prepared
+            return prepared
+        }.value
     }
 
     func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
@@ -125,22 +135,47 @@ final class MessageContentPreparer: @unchecked Sendable {
         )
     }
 
-    func prepareMessage(
+    nonisolated func prepareMessage(
         _ message: Message,
         previous: DisplayMessage? = nil,
         reuseStreamingDocumentAsFinalPlaceholder: Bool = false,
         skipMarkdown: Bool = false
     ) async -> DisplayMessage {
+        await Task.detached(priority: .userInitiated) { [documentCache] in
+            Self.prepareMessageOnWorker(
+                message,
+                previous: previous,
+                reuseStreamingDocumentAsFinalPlaceholder: reuseStreamingDocumentAsFinalPlaceholder,
+                skipMarkdown: skipMarkdown,
+                documentCache: documentCache
+            )
+        }.value
+    }
+
+    nonisolated private static func prepareMessageOnWorker(
+        _ message: Message,
+        previous: DisplayMessage?,
+        reuseStreamingDocumentAsFinalPlaceholder: Bool,
+        skipMarkdown: Bool,
+        documentCache: MessageMarkdownDocumentCache
+    ) -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
-        // Large live replies: print plain text until the message finishes so
-        // SwiftUI is not rebuilding a growing markdown tree every publish.
         if isStreaming,
            !reuseStreamingDocumentAsFinalPlaceholder,
-           message.text.count >= Self.streamingPlainTextCharacterThreshold
+           message.text.count >= streamingPlainTextCharacterThreshold
         {
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
         if skipMarkdown {
+            if message.text.count < streamingPlainTextCharacterThreshold,
+               let reusable = reusableDocument(
+                for: message,
+                previous: previous,
+                reuseStreamingDocumentAsFinalPlaceholder: false
+               )
+            {
+                return DisplayMessage(message: message, renderedMarkdown: reusable)
+            }
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
         guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
@@ -154,19 +189,19 @@ final class MessageContentPreparer: @unchecked Sendable {
         ) {
             document = reusable
         } else if reuseStreamingDocumentAsFinalPlaceholder {
-            // Keep the last streaming render for one frame; full TextMate runs on the follow-up.
             document = previous?.renderedMarkdown
         } else {
-            document = await parseDocument(
+            document = parseDocument(
                 messageID: message.id,
                 text: message.text,
-                isStreaming: isStreaming
+                isStreaming: isStreaming,
+                documentCache: documentCache
             )
         }
         return DisplayMessage(message: message, renderedMarkdown: document)
     }
 
-    private func messageIsStreaming(_ message: Message) -> Bool {
+    nonisolated private static func messageIsStreaming(_ message: Message) -> Bool {
         message.parts.contains { part in
             if case .text(let textPart) = part {
                 return textPart.isStreaming
@@ -175,13 +210,13 @@ final class MessageContentPreparer: @unchecked Sendable {
         }
     }
 
-    /// Must stay off MainActor: default actor isolation is MainActor, and history
-    /// enrich depends on this running inside `Task.detached` without hopping back.
-    nonisolated private func parseDocument(
+    /// Synchronous TextMate on the worker thread — callers already hopped off MainActor.
+    nonisolated private static func parseDocument(
         messageID: String,
         text: String,
-        isStreaming: Bool
-    ) async -> NativeMarkdownDocument? {
+        isStreaming: Bool,
+        documentCache: MessageMarkdownDocumentCache
+    ) -> NativeMarkdownDocument? {
         guard OpenCodeRenderedMarkdownDetector.shouldRender(text) else {
             return nil
         }
@@ -193,14 +228,11 @@ final class MessageContentPreparer: @unchecked Sendable {
         )
         if let cached = documentCache.value(for: cacheKey) { return cached }
 
-        let parsed = await Task.detached(priority: .utility) {
-            OpenCodeRenderedMarkdownParser.parse(text, isStreaming: isStreaming)
-        }.value
-
+        let parsed = OpenCodeRenderedMarkdownParser.parse(text, isStreaming: isStreaming)
         return documentCache.insertIfAbsent(parsed, for: cacheKey)
     }
 
-    private func reusableDocument(
+    nonisolated private static func reusableDocument(
         for message: Message,
         previous: DisplayMessage?,
         reuseStreamingDocumentAsFinalPlaceholder: Bool
@@ -218,7 +250,6 @@ final class MessageContentPreparer: @unchecked Sendable {
            previous.text == message.text {
             return previous.renderedMarkdown
         }
-        // Stream → final: keep the cheap streaming render until TextMate finishes.
         if reuseStreamingDocumentAsFinalPlaceholder,
            !isStreaming,
            let previous,
@@ -229,7 +260,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         return nil
     }
 
-    private func wasReused(display: DisplayMessage, previous: DisplayMessage?) -> Bool {
+    nonisolated private static func wasReused(display: DisplayMessage, previous: DisplayMessage?) -> Bool {
         guard let previous,
               let previousDocument = previous.renderedMarkdown,
               let document = display.renderedMarkdown
@@ -240,5 +271,4 @@ final class MessageContentPreparer: @unchecked Sendable {
             && previous.text == display.text
             && previous.isStreaming == display.isStreaming
     }
-
 }

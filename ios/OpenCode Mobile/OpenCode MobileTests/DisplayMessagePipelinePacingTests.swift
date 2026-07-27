@@ -64,5 +64,22 @@ struct DisplayMessagePipelinePacingTests {
                 previousByID: ["msg-1": alreadyPrepared]
             )
         )
+        let cachedDoc = NativeMarkdownDocument(
+            sourceHash: 1,
+            blocks: [.paragraph([.text("cached")])]
+        )
+        let fullyCached = DisplayMessage(message: messages[0], renderedMarkdown: cachedDoc)
+        #expect(
+            hasCompletePreparedMarkdownCache(
+                messages: messages,
+                previousByID: ["msg-1": fullyCached]
+            )
+        )
+        #expect(
+            !shouldPlainFirstHistoryPublish(
+                messages: messages,
+                previousByID: ["msg-1": fullyCached]
+            )
+        )
     }
 }

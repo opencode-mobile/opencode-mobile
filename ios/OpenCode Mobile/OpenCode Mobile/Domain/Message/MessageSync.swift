@@ -51,6 +51,10 @@ final class MessageSync {
         store.clear()
     }
 
+    func peekStoreMessages(sessionID: String) -> [Message] {
+        store.messages(sessionID: sessionID)
+    }
+
     private func runMessageLoop(
         sessionID: String,
         directory: String?,
@@ -66,10 +70,17 @@ final class MessageSync {
             self.lastFingerprint[sessionID] = self.messageFingerprint(messages)
         }
 
+        // Warm reopen already replayed SharedLiveObservation.lastValue. Skip an
+        // identical REST republish so DisplayMessagePipeline does not cancel
+        // in-flight enrich / plain-first and start over on the MainActor.
+        let fingerprintBeforeReload = lastFingerprint[sessionID]
         switch await fullReloadResult(sessionID: sessionID, directory: directory, reason: "initial-subscribe") {
         case .success(let messages):
             SessionPerformanceProbe.emit("history_request_finished")
-            publishMessages(messages)
+            let fingerprint = messageFingerprint(messages)
+            if fingerprintBeforeReload != fingerprint {
+                publishMessages(messages)
+            }
         case .failure(let error):
             SessionPerformanceProbe.emit("history_request_finished")
             yield(.loadFailed(error))

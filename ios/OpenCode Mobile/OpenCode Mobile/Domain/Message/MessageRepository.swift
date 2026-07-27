@@ -4,6 +4,7 @@ import OSLog
 protocol MessageRepository: Sendable {
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate>
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate>
+    func peekWarmDisplayMessages(sessionID: String) -> [DisplayMessage]?
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message]
     func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage]
     func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage
@@ -16,6 +17,8 @@ protocol MessageRepository: Sendable {
 }
 
 extension MessageRepository {
+    func peekWarmDisplayMessages(sessionID: String) -> [DisplayMessage]? { nil }
+
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
         try await sendPromptAsync(sessionID: sessionID, options: PromptSendOptions(text: text, model: nil, variant: nil, mode: nil), directory: directory)
     }
@@ -51,6 +54,10 @@ final class DefaultMessageRepository: MessageRepository {
         displayMessagePipeline.observeDisplayMessages(sessionID: sessionID, directory: directory)
     }
 
+    func peekWarmDisplayMessages(sessionID: String) -> [DisplayMessage]? {
+        displayMessagePipeline.peekWarmDisplayMessages(sessionID: sessionID)
+    }
+
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
         try await messageSync.refreshMessages(sessionID: sessionID, directory: directory)
     }
@@ -65,6 +72,7 @@ final class DefaultMessageRepository: MessageRepository {
 
     func clearMessageCache() {
         messageSync.clearCache()
+        displayMessagePipeline.clearPreparedCache()
     }
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {

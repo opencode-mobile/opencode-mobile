@@ -89,15 +89,16 @@
 - Current Android state: code, diff, and inline annotated strings at or above
   2,000 characters are built on `Dispatchers.Default`; Compose shows a plain
   attributed-string placeholder until the styled value is ready.
-- Current iOS state: large streaming code fences use plain monospace text and
-  the most recent finalized code attributed string is cached, but a cache miss
-  still constructs the Swift `AttributedString` synchronously from the SwiftUI
-  render path.
-- Reason: OPE-82 moved the Android construction hot path off composition while
-  the iOS renderer retained its existing synchronous attributed-string builder.
-- Owner or next action: profile a large finalized or expanded iOS code block and
-  move construction into the prepared display document if it causes a main-actor
-  hitch.
+- Current iOS state: code and diff attributed strings at or above 2,000
+  characters are built off the main actor via UIKit colors after a plain
+  placeholder frame (Android parity). Small fences stay synchronous. Timeline
+  applies are deferred while the user is actively scrolling, and scroll-to-end
+  jumps without animation when the remaining distance is large.
+- Reason: OPE-82 moved the Android construction hot path off composition; iOS
+  now mirrors that path for large fences after profiling MainActor hitches on
+  Greeting-scale histories.
+- Owner or next action: none for large code/diff; revisit large inline-only
+  documents if they still hitch without fences.
 
 ## Code Block Layout
 

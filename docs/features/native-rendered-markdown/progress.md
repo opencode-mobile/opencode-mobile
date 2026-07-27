@@ -23,16 +23,26 @@
   uses pre-parsed mock documents.
 - Staged publication: small histories are transformed before their first
   publish. Histories with at least 4,000 markdown-candidate characters publish
-  the complete plain-text timeline first, then enrich markdown messages
-  newest-first with cancellable work and yields between snapshots. Live
+then enriches markdown newest-first and publishes at most twice
+  (`enrich-viewport` for the open bottom, then `enrich-batch` for the rest) —
+  never per-bubble UI frames that look like the chat reprinting. Live
   streaming updates retain transform-before-publish semantics.
 - Outgoing overflow: structural markdown content retains collapse/expand;
   long wrapped inline markdown stays fully visible when no expand control can
   be offered.
 - Performance pass: preserves the JSON bridge and final TextMate result while
   staging expensive cold-history and large-stream work, removing avoidable
-  native render allocations, and building large finalized Android annotated
-  strings outside composition.
+  native render allocations, and building large finalized Android/iOS
+  attributed strings outside the UI critical path. iOS also defers timeline
+  applies while scrolling, jumps scroll-to-end for long remaining distances,
+  reuses per-session prepared markdown on warm reopen as a single `cache-hit`
+  (peek attaches cached docs when complete), skips identical REST republishes
+  after `lastValue` replay, pins tall timelines via `scrollToItem`, paints
+  markdown cells fully in the data model (visible huge cells may paint plain
+  for one frame before attaching markdown so scroll stays interactive), and
+  reuses unchanged timeline rows so enrich no longer rebuilds the full history
+  on every publish. Scroll-to-end / pin paths never call `layoutIfNeeded` on
+  tall timelines.
 - Performance measurement: Session Chat ViewModel benchmarks load 20 rendered
   markdown messages with 3,000 total TypeScript lines through the production
   highlighter path on each platform.

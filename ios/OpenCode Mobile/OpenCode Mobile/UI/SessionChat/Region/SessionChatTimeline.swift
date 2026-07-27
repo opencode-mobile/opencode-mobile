@@ -46,48 +46,69 @@ final class SessionChatTimeline {
     func startObserving() {
         cancelObservationTasks()
         let generation = observationGeneration
+        if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID), !warm.isEmpty {
+            // Warm reopen: show store rows immediately (styled when cache is complete).
+            state.timeline = .ready
+            state.errorMessage = nil
+            notifyChange()
+            observationTask = Task {
+                await applyLoadedDisplayMessagesTransform(
+                    warm,
+                    isRefreshing: false,
+                    fromQuietRefresh: true
+                )
+                await Task.yield()
+                guard !Task.isCancelled, self.observationGeneration == generation else { return }
+                await runObservationLoop(generation: generation)
+            }
+            return
+        }
         state.timeline = .loading
         state.errorMessage = nil
         notifyChange()
         observationTask = Task {
-            var pendingUpdate: DisplayMessageListUpdate?
+            await runObservationLoop(generation: generation)
+        }
+    }
 
-            @MainActor
-            func kickApply() {
-                guard displayApplyTask == nil else { return }
-                displayApplyTask = Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    while let current = pendingUpdate {
-                        guard self.observationGeneration == generation, !Task.isCancelled else { return }
-                        pendingUpdate = nil
-                        switch current {
-                        case .loadFailed(let error):
-                            applyError(error)
-                        case .messages(let displayMessages):
-                            await applyLoadedDisplayMessagesTransform(
-                                displayMessages,
-                                isRefreshing: false,
-                                fromQuietRefresh: true
-                            )
-                        }
-                        // Yield so the observation task can land a newer snapshot while we apply;
-                        // without this, MainActor serialize makes coalesce-latest a no-op.
-                        await Task.yield()
+    private func runObservationLoop(generation: Int) async {
+        var pendingUpdate: DisplayMessageListUpdate?
+
+        @MainActor
+        func kickApply() {
+            guard displayApplyTask == nil else { return }
+            displayApplyTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                while let current = pendingUpdate {
+                    guard self.observationGeneration == generation, !Task.isCancelled else { return }
+                    pendingUpdate = nil
+                    switch current {
+                    case .loadFailed(let error):
+                        applyError(error)
+                    case .messages(let displayMessages):
+                        await applyLoadedDisplayMessagesTransform(
+                            displayMessages,
+                            isRefreshing: false,
+                            fromQuietRefresh: true
+                        )
                     }
-                    guard self.observationGeneration == generation else { return }
-                    self.displayApplyTask = nil
-                    if pendingUpdate != nil, !Task.isCancelled {
-                        kickApply()
-                    }
+                    // Yield so the observation task can land a newer snapshot while we apply;
+                    // without this, MainActor serialize makes coalesce-latest a no-op.
+                    await Task.yield()
+                }
+                guard self.observationGeneration == generation else { return }
+                self.displayApplyTask = nil
+                if pendingUpdate != nil, !Task.isCancelled {
+                    kickApply()
                 }
             }
+        }
 
-            for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
-                guard observationGeneration == generation, !Task.isCancelled else { return }
-                // Coalesce-latest while transform/SwiftUI apply is in flight.
-                pendingUpdate = update
-                kickApply()
-            }
+        for await update in messageRepository.observeDisplayMessages(sessionID: sessionID, directory: worktree) {
+            guard observationGeneration == generation, !Task.isCancelled else { return }
+            // Coalesce-latest while transform/SwiftUI apply is in flight.
+            pendingUpdate = update
+            kickApply()
         }
     }
 
@@ -196,6 +217,22 @@ final class SessionChatTimeline {
 
     func row(from display: DisplayMessage, previous: SessionChatRow? = nil) -> SessionChatRow? {
         let message = display.message
+        let isStreaming = display.isStreaming
+        let renderedMarkdown = display.renderedMarkdown ?? previous?.renderedMarkdown.flatMap { document in
+            isStreaming && (previous?.isStreaming == true || previous?.text == message.text) ? document : nil
+        }
+
+        if let previous,
+           !previous.isPending,
+           previous.text == message.text,
+           previous.isStreaming == isStreaming,
+           previous.role == message.role,
+           previous.renderedMarkdown?.sourceHash == renderedMarkdown?.sourceHash,
+           previous.renderedMarkdown?.blocks.count == renderedMarkdown?.blocks.count
+        {
+            return previous
+        }
+
         let structuralBlocks = SessionChatTimelineBlocks.build(role: message.role, parts: message.parts)
         let resolvedBlocks: [SessionChatTimelineBlock] =
             if !structuralBlocks.isEmpty {
@@ -207,10 +244,6 @@ final class SessionChatTimeline {
             }
         guard !resolvedBlocks.isEmpty else { return nil }
 
-        let isStreaming = display.isStreaming
-        let renderedMarkdown = display.renderedMarkdown ?? previous?.renderedMarkdown.flatMap { document in
-            isStreaming && (previous?.isStreaming == true || previous?.text == message.text) ? document : nil
-        }
         return SessionChatRow(
             id: message.id,
             role: message.role,
@@ -244,7 +277,7 @@ final class SessionChatTimeline {
         let isSending = fromQuietRefresh ? mergePendingWhileSending : false
         let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
         let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
-        let serverRows =
+        let sortedDisplays =
             displayMessages
                 .enumerated()
                 .sorted { left, right in
@@ -256,7 +289,35 @@ final class SessionChatTimeline {
                     }
                     return left.offset < right.offset
                 }
-                .compactMap { row(from: $0.element, previous: previousByID[$0.element.id]) }
+                .map(\.element)
+        var serverRows: [SessionChatRow] = []
+        serverRows.reserveCapacity(sortedDisplays.count)
+        let applyStartedAt = ContinuousClock.now
+        var rebuiltCount = 0
+        for (index, display) in sortedDisplays.enumerated() {
+            let previous = previousByID[display.id]
+            if let built = row(from: display, previous: previous) {
+                if previous.map({ $0.id == built.id && $0.renderedMarkdown?.sourceHash == built.renderedMarkdown?.sourceHash && $0.text == built.text && $0.isStreaming == built.isStreaming }) != true {
+                    rebuiltCount += 1
+                }
+                serverRows.append(built)
+            }
+            // Yield often on large histories so Back/navigation can run between rows.
+            let shouldYield =
+                display.message.text.count >= 4_000
+                || rebuiltCount > 0 && rebuiltCount % 2 == 0
+                || (index > 0 && index % 4 == 0)
+            if shouldYield {
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+            }
+        }
+        let applyMs = Int((ContinuousClock.now - applyStartedAt) / .milliseconds(1))
+        if applyMs >= 50 || serverRows.count >= 20 {
+            OpenCodeLog.sessionChat.info(
+                "timelineApply rows=\(serverRows.count) rebuilt=\(rebuiltCount) ms=\(applyMs)"
+            )
+        }
         let rows =
             if fromQuietRefresh, isSending {
                 mergeWithPending(

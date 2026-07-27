@@ -357,13 +357,30 @@ private extension FilePart {
 }
 
 private struct AssistantMessageBubble: View {
+    /// Huge markdown trees stall the first UICollectionView cell configuration
+    /// (and therefore scroll). Paint plain for one frame, then attach markdown
+    /// on the next turn — not a pipeline row-reprint.
+    static let deferredMarkdownCharacterThreshold = 3_000
+
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
     var isStreaming: Bool = false
 
+    @State private var paintMarkdown: Bool
+
+    init(text: String, renderedMarkdown: NativeMarkdownDocument?, isStreaming: Bool = false) {
+        self.text = text
+        self.renderedMarkdown = renderedMarkdown
+        self.isStreaming = isStreaming
+        let shouldDefer =
+            renderedMarkdown != nil
+            && text.count >= Self.deferredMarkdownCharacterThreshold
+        _paintMarkdown = State(initialValue: renderedMarkdown != nil && !shouldDefer)
+    }
+
     var body: some View {
         Group {
-            if let renderedMarkdown {
+            if paintMarkdown, let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
                     variant: .assistantMessage,
@@ -382,6 +399,19 @@ private struct AssistantMessageBubble: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+        .task(id: paintTaskID) {
+            guard renderedMarkdown != nil, !paintMarkdown else { return }
+            // Let the open frame finish so the user can scroll before TextMate
+            // trees are hosted in the visible cells.
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(32))
+            guard !Task.isCancelled else { return }
+            paintMarkdown = true
+        }
+    }
+
+    private var paintTaskID: String {
+        "\(text.count):\(renderedMarkdown?.sourceHash ?? 0)"
     }
 }
 

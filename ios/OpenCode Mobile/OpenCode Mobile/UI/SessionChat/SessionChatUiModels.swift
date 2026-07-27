@@ -40,18 +40,21 @@ struct SessionChatRow: Identifiable, Equatable {
     }
 
     static func == (lhs: SessionChatRow, rhs: SessionChatRow) -> Bool {
-        lhs.id == rhs.id &&
-            lhs.role == rhs.role &&
-            lhs.text == rhs.text &&
-            lhs.metadataLabel == rhs.metadataLabel &&
-            lhs.isPending == rhs.isPending &&
-            lhs.isStreaming == rhs.isStreaming &&
-            lhs.blocks == rhs.blocks &&
-            lhs.modelProviderID == rhs.modelProviderID &&
-            lhs.modelID == rhs.modelID &&
-            lhs.contextInputTokens == rhs.contextInputTokens &&
-            lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash &&
-            lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count
+        guard lhs.id == rhs.id,
+              lhs.role == rhs.role,
+              lhs.isPending == rhs.isPending,
+              lhs.isStreaming == rhs.isStreaming,
+              lhs.modelProviderID == rhs.modelProviderID,
+              lhs.modelID == rhs.modelID,
+              lhs.contextInputTokens == rhs.contextInputTokens,
+              lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash,
+              lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
+              lhs.text.count == rhs.text.count,
+              lhs.metadataLabel == rhs.metadataLabel,
+              lhs.blocks.count == rhs.blocks.count
+        else { return false }
+        // Huge assistant replies: compare text only after cheap fields match.
+        return lhs.text == rhs.text && lhs.blocks == rhs.blocks
     }
 }
 
