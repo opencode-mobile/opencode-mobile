@@ -31,6 +31,21 @@ data class TimelineFrame(
     val changedRowIDs: Set<String>,
     val removedRowIDs: Set<String>,
     val layoutChangedRowIDs: Set<String>,
+    /**
+     * Newest streaming row grew in text length without a structural layout key change.
+     * Armed follow may pin; unarmed visible-anchor restore must ignore this set.
+     */
+    val grewBottomRowIDs: Set<String> = emptySet(),
+    /**
+     * Markdown-only subset of [layoutChangedRowIDs] (streaming flag and block structure
+     * unchanged). Still layout-affecting for scroll in Phase 2; Phase 3 may coalesce.
+     */
+    val decorateRowIDs: Set<String> = emptySet(),
+    /**
+     * Region-owned: load / refresh / post-send applies that must never be coalesced away.
+     * Not inferred from ID sets.
+     */
+    val isRequired: Boolean = false,
 ) {
     /** Row IDs whose apply can change list geometry (inserts ∪ layout-affecting restyles). */
     fun layoutAffectingRowIDs(): Set<String> = insertedRowIDs + layoutChangedRowIDs
@@ -41,6 +56,12 @@ data class TimelineFrame(
      */
     fun layoutAffectingRevision(): Long =
         if (layoutAffectingRowIDs().isEmpty()) 0L else frameRevision
+
+    /** Armed-only pin key for streaming bottom growth (not unarmed restore). */
+    fun growBottomRevision(): Long =
+        if (grewBottomRowIDs.isEmpty()) 0L else frameRevision
+
+    fun withRequired(isRequired: Boolean): TimelineFrame = copy(isRequired = isRequired)
 }
 
 /**
@@ -118,6 +139,29 @@ object TimelineProjector {
             contextInputTokens = row.contextInputTokens,
         )
     }
+
+    /**
+     * Build display message items with iOS-parity row reuse: unchanged non-pending
+     * rows keep the previous [SessionChatMessageItem] instance (same object identity).
+     * Still returns a full list every frame — not a patch protocol.
+     */
+    fun mergeMessageItems(
+        frame: TimelineFrame,
+        previousById: Map<String, SessionChatMessageItem>,
+    ): List<SessionChatMessageItem> =
+        frame.rows.map { row ->
+            val previous = previousById[row.id]
+            val reusePrevious =
+                previous != null &&
+                    row.id !in frame.changedRowIDs &&
+                    row.id !in frame.insertedRowIDs &&
+                    !row.isPending
+            if (reusePrevious) {
+                previous
+            } else {
+                toMessageItem(row)
+            }
+        }
 
     fun metadataLabel(message: Message): String {
         val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
@@ -202,7 +246,6 @@ object TimelineProjector {
 
     private fun layoutKey(row: TimelineRow): LayoutKey =
         LayoutKey(
-            textLength = row.text.length,
             blockCount = row.blocks.size,
             hasMarkdown =
                 row.blocks.any {
@@ -215,8 +258,9 @@ object TimelineProjector {
 
     private fun blockLayoutFingerprint(block: SessionChatTimelineBlock): String =
         when (block) {
+            // Text length is content-only while streaming; GrowBottom declares height growth.
             is SessionChatTimelineBlock.Text ->
-                "t:${block.blockID}:${block.text.length}:${block.renderedMarkdown != null}"
+                "t:${block.blockID}:${block.renderedMarkdown != null}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
             is SessionChatTimelineBlock.ToolCard ->
@@ -227,7 +271,6 @@ object TimelineProjector {
         }
 
     private data class LayoutKey(
-        val textLength: Int,
         val blockCount: Int,
         val hasMarkdown: Boolean,
         val isStreaming: Boolean,
@@ -272,10 +315,13 @@ object TimelineProjector {
         val previousById = previousRows.associateBy { it.id }
         val currentIds = rows.map { it.id }.toSet()
         val previousIds = previousById.keys
+        val newestId = rows.lastOrNull()?.id
 
         val inserted = linkedSetOf<String>()
         val changed = linkedSetOf<String>()
         val layoutChanged = linkedSetOf<String>()
+        val grewBottom = linkedSetOf<String>()
+        val decorate = linkedSetOf<String>()
 
         for (row in rows) {
             val prior = previousById[row.id]
@@ -285,6 +331,15 @@ object TimelineProjector {
                     changed += row.id
                     if (row.layoutRevision != prior.layoutRevision) {
                         layoutChanged += row.id
+                        if (isMarkdownOnlyLayoutChange(prior, row)) {
+                            decorate += row.id
+                        }
+                    } else if (
+                        row.id == newestId &&
+                        row.isStreaming &&
+                        row.text.length > prior.text.length
+                    ) {
+                        grewBottom += row.id
                     }
                 }
             }
@@ -297,8 +352,65 @@ object TimelineProjector {
             changedRowIDs = changed,
             removedRowIDs = previousIds - currentIds,
             layoutChangedRowIDs = layoutChanged,
+            grewBottomRowIDs = grewBottom,
+            decorateRowIDs = decorate,
         )
     }
+
+    /**
+     * Layout bump caused only by markdown presence/sourceHash while streaming flag and
+     * non-markdown structure stay the same. Streaming end is Structure, not Decorate.
+     */
+    internal fun isMarkdownOnlyLayoutChange(
+        prior: TimelineRow,
+        row: TimelineRow,
+    ): Boolean {
+        if (prior.isStreaming != row.isStreaming) return false
+        if (structureFingerprint(prior) != structureFingerprint(row)) return false
+        return markdownFingerprint(prior) != markdownFingerprint(row)
+    }
+
+    private fun structureFingerprint(row: TimelineRow): String =
+        buildString {
+            append(row.blocks.size)
+            append('\u0000')
+            row.attachments.forEach { attachment ->
+                append(attachment.id)
+                append('\u0000')
+                append(attachment.signature)
+                append('\u0000')
+            }
+            row.blocks.forEach { block ->
+                append(structureBlockFingerprint(block))
+                append('|')
+            }
+        }
+
+    private fun structureBlockFingerprint(block: SessionChatTimelineBlock): String =
+        when (block) {
+            is SessionChatTimelineBlock.Text -> "t:${block.blockID}"
+            is SessionChatTimelineBlock.Attachment ->
+                "a:${block.blockID}:${block.attachment.filename}"
+            is SessionChatTimelineBlock.ToolCard ->
+                "c:${block.blockID}:${block.title}:${block.subtitle}:${block.status}:" +
+                    "${block.errorText}:${block.additions}:${block.deletions}"
+            is SessionChatTimelineBlock.ToolGroup ->
+                "g:${block.blockID}:${block.count}:${block.title}:${block.subtitle}:${block.status}"
+        }
+
+    private fun markdownFingerprint(row: TimelineRow): String =
+        buildString {
+            row.blocks.forEach { block ->
+                if (block is SessionChatTimelineBlock.Text) {
+                    append(block.blockID)
+                    append(':')
+                    append(block.renderedMarkdown != null)
+                    append(':')
+                    append(block.renderedMarkdown?.sourceHash ?: 0)
+                    append('|')
+                }
+            }
+        }
 
     private fun formatSentTime(epochMs: Long): String =
         Instant

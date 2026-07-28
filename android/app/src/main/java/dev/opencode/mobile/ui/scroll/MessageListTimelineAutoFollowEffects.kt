@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.scroll
 
+import android.util.Log
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -17,6 +18,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.distinctUntilChanged
+
+private const val LAYOUT_AFFECTING_LOG_TAG = "SessionChatScroll"
 
 internal val MessageListMessageResizeAnimationSpec =
     tween<IntSize>(
@@ -197,6 +200,50 @@ internal fun MessageListAutoFollowLayoutAffectingEffect(
     LaunchedEffect(layoutAffectingRevision, autoFollowEnabled) {
         // `0` means content-only / no layout-affecting declared IDs — skip follow.
         if (layoutAffectingRevision != 0L && messageCount > 0) {
+            runCatching {
+                Log.d(
+                    LAYOUT_AFFECTING_LOG_TAG,
+                    "layoutAffecting armed-follow rev=$layoutAffectingRevision " +
+                        "count=$messageCount enabled=$autoFollowEnabled",
+                )
+            }
+            followMessageListLayoutChangeIfNeeded(
+                listState = listState,
+                messageCount = messageCount,
+                autoFollowEnabled = autoFollowEnabled,
+                autoFollowTolerancePx = autoFollowTolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowState = autoFollowState,
+                scrollController = scrollController,
+            )
+        }
+    }
+}
+
+/**
+ * Armed-only pin for streaming newest-row growth (`grewBottomRowIDs`).
+ * Does not drive unarmed visible-anchor restore.
+ */
+@Composable
+internal fun MessageListAutoFollowGrowBottomEffect(
+    growBottomRevision: Long,
+    messageCount: Int,
+    autoFollowEnabled: Boolean,
+    listState: LazyListState,
+    autoFollowTolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+    autoFollowState: MessageListAutoFollowState,
+    scrollController: MessageListTimelineScrollController,
+) {
+    LaunchedEffect(growBottomRevision, autoFollowEnabled) {
+        if (growBottomRevision != 0L && messageCount > 0) {
+            runCatching {
+                Log.d(
+                    LAYOUT_AFFECTING_LOG_TAG,
+                    "growBottom armed-follow rev=$growBottomRevision " +
+                        "count=$messageCount enabled=$autoFollowEnabled",
+                )
+            }
             followMessageListLayoutChangeIfNeeded(
                 listState = listState,
                 messageCount = messageCount,
@@ -284,6 +331,14 @@ internal fun MessageListUnarmedVisibleAnchorEffect(
         // `0` means content-only / no layout-affecting declared IDs — skip.
         if (layoutAffectingRevision == 0L || currentMessageIds.isEmpty()) {
             return@LaunchedEffect
+        }
+
+        runCatching {
+            Log.d(
+                LAYOUT_AFFECTING_LOG_TAG,
+                "layoutAffecting unarmed-anchor rev=$layoutAffectingRevision " +
+                    "count=${currentMessageIds.size}",
+            )
         }
 
         val messageCount = currentMessageIds.size

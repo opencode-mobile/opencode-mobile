@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,8 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -43,6 +50,7 @@ import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListScrollToEndOverlay
+import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
 import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
@@ -54,8 +62,11 @@ import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.displayLabel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
@@ -145,17 +156,49 @@ private fun SessionChatTimelineReadyView(
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Declared IDs from TimelineFrame drive layout follow; no history-wide layoutSignature.
-    val layoutAffectingRevision = timelineFrame?.layoutAffectingRevision() ?: 0L
-    val messageIds = remember(messages) { messages.map { it.id } }
+    val listState = rememberLazyListState()
+    val isScrollInProgress by remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+
+    // Host-side latest-wins hold under drag/fling (iOS pendingApply parity).
+    // Required frames flush immediately; other kinds keep the committed snapshot.
+    var committedMessages by remember { mutableStateOf(messages) }
+    var committedFrame by remember { mutableStateOf(timelineFrame) }
+    LaunchedEffect(messages, timelineFrame, isScrollInProgress) {
+        val hold =
+            MessageListTimelineApplyHold.shouldHold(
+                isScrollInProgress = isScrollInProgress,
+                isRequired = timelineFrame?.isRequired == true,
+            )
+        if (!hold) {
+            committedMessages = messages
+            committedFrame = timelineFrame
+        } else {
+            runCatching {
+                Log.d(
+                    "SessionChatScroll",
+                    "timelineApplyHold scrollInProgress=true required=false " +
+                        "incomingCount=${messages.size} committedCount=${committedMessages.size}",
+                )
+            }
+        }
+    }
+
+    val apply = committedFrame?.let(TimelineApply::classify)
+    val layoutAffectingRevision = apply?.layoutAffectingRevision ?: 0L
+    val growBottomRevision = apply?.growBottomRevision ?: 0L
+    val messageIds = remember(committedMessages) { committedMessages.map { it.id } }
     val timeline =
         rememberMessageListTimeline(
-            messageCount = messages.size,
-            firstMessageId = messages.firstOrNull()?.id,
-            lastMessageId = messages.lastOrNull()?.id,
+            messageCount = committedMessages.size,
+            firstMessageId = committedMessages.firstOrNull()?.id,
+            lastMessageId = committedMessages.lastOrNull()?.id,
             layoutAffectingRevision = layoutAffectingRevision,
+            growBottomRevision = growBottomRevision,
             autoFollowEnabled = true,
             messageIdsChronological = messageIds,
+            listState = listState,
         )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -166,7 +209,7 @@ private fun SessionChatTimelineReadyView(
         ) {
             MessageListReversedTimelineColumn(
                 timeline = timeline,
-                items = messages,
+                items = committedMessages,
                 bottomAnchorKey = SESSION_CHAT_BOTTOM_ANCHOR_KEY,
                 modifier = Modifier.fillMaxSize(),
                 key = { message -> message.id },
@@ -177,7 +220,9 @@ private fun SessionChatTimelineReadyView(
                     onToolDetailTap = onToolDetailTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
-                    animateSizeChanges = isNewestMessage,
+                    // Streaming height growth is GrowBottom + unanimated layout; do not
+                    // animateContentSize on production Session Chat (gallery may still demo it).
+                    animateSizeChanges = false,
                     onContentSizeAnimationFinished = onContentSizeSettled,
                     modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
                 )
@@ -442,8 +487,34 @@ private fun AssistantMessageBubble(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp)
 
+    val shouldDeferMarkdown =
+        SessionChatMarkdownPaint.shouldDefer(
+            textLength = text.length,
+            hasMarkdown = renderedMarkdown != null,
+        )
+    // Persist across length growth (iOS @State parity). Do not key remember on
+    // text.length — that would reset defer and thrash plain↔markdown while streaming.
+    var paintMarkdown by remember {
+        mutableStateOf(renderedMarkdown != null && !shouldDeferMarkdown)
+    }
+    LaunchedEffect(renderedMarkdown == null, shouldDeferMarkdown) {
+        when {
+            renderedMarkdown == null -> paintMarkdown = false
+            !shouldDeferMarkdown -> paintMarkdown = true
+            // Deferred: leave current value (false until delay; true stays painted).
+        }
+    }
+    LaunchedEffect(renderedMarkdown, text.length, paintMarkdown) {
+        if (renderedMarkdown == null || paintMarkdown || !shouldDeferMarkdown) {
+            return@LaunchedEffect
+        }
+        yield()
+        delay(SessionChatMarkdownPaint.DEFER_MILLISECONDS)
+        paintMarkdown = true
+    }
+
     when {
-        renderedMarkdown != null ->
+        paintMarkdown && renderedMarkdown != null ->
             OpenCodeRenderedMarkdown(
                 document = renderedMarkdown,
                 variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
@@ -459,6 +530,20 @@ private fun AssistantMessageBubble(
                 color = MaterialTheme.colorScheme.onSurface,
             )
     }
+}
+
+/**
+ * Session Chat–only large-markdown paint deferral (iOS AssistantMessageBubble parity).
+ * Not part of the public OpenCodeRenderedMarkdown API.
+ */
+internal object SessionChatMarkdownPaint {
+    const val DEFERRED_CHARACTER_THRESHOLD = 3_000
+    const val DEFER_MILLISECONDS = 32L
+
+    fun shouldDefer(
+        textLength: Int,
+        hasMarkdown: Boolean,
+    ): Boolean = hasMarkdown && textLength >= DEFERRED_CHARACTER_THRESHOLD
 }
 
 private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =

@@ -1,5 +1,120 @@
 # Session Chat Decisions
 
+## Ship Android region row-reuse (Phase 4)
+
+- Date: 2026-07-28
+- Decision: Implement Android `TimelineProjector.mergeMessageItems` mirroring
+  iOS `reusePrevious` in `SessionChatTimeline.publishDisplayMessages` without
+  waiting for device measurement. Still publish a full message list each frame;
+  reuse object identity for unchanged non-pending rows. Do not reopen parked
+  public `DisplayFrame` observation or introduce a host patch protocol.
+- Reason: Seam was already clear; remaining cost was unproven but the change is
+  small, region-only, and restores cross-platform reuse parity.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: reuse incorrectly keeps a stale row, or pending/insert paths
+  fail to rebuild.
+
+## Defer Phase 4 patch / row-reuse until measured
+
+- Date: 2026-07-28
+- Decision: ~~Do not implement Phase 4 until device acceptance fails or traces
+  show O(n) remapping as a hotspot.~~ **Superseded the same day** by
+  **Ship Android region row-reuse (Phase 4)** after an explicit product choice
+  to implement without waiting on measurement.
+- Reason: Original deferral was a whether-to-ship gate, not an unknown how.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: n/a — superseded.
+
+## Separate content and layout revisions for streaming timeline updates
+
+- Date: 2026-07-28
+- Decision: Session Chat timeline projection must keep two revision planes.
+  `contentRevision` may change every streaming frame; `layoutRevision` changes
+  only when geometry policy says so (structure, real height growth of the
+  newest row, height-changing decoration, streaming→final). Streaming
+  `textLength` alone must not automatically mark a frame layout-affecting.
+  Newest-row streaming growth uses an explicit `GrowBottom` (or equivalent)
+  layout intent: pin if auto-follow is armed; do not run unarmed visible-anchor
+  restore on pure Content updates. Do not animate row height while streaming on
+  either platform. Scroll controllers react to declared layout intents, not
+  every Screen Model republish. Required load / refresh / send applies never
+  coalesce away.
+- Reason: domain display coalescing already bounds SSE publish rate; scroll
+  jank under stream comes from host remeasure / rebind / follow coupling when
+  every length delta is treated as layout-affecting (especially Android
+  `animateContentSize` on the newest reverse-`LazyColumn` row).
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: host-observed GrowBottom under-follows in production, or
+  Instruments shows remaining hitch after Phases 1–3 and Phase 4 patch updates
+  are warranted.
+
+## Use thin TimelineApply classify seam (not host rewrite)
+
+- Date: 2026-07-28
+- Decision: Phase 2 introduces a thin `TimelineApply` / `TimelineApplyKind`
+  classify seam derived from `TimelineFrame` ID sets plus region `isRequired`.
+  Do not rewrite Diffable or Compose invalidation around kinds. Keep
+  `Structure`, `Content`, `GrowBottom`, `Decorate`, and `Required` as a
+  multi-kind set. Partition markdown-only layout bumps into `decorateRowIDs`
+  (streaming end remains Structure). iOS Required applies flush immediately
+  under drag; Decorate stays layout-affecting for follow revisions; Phase 3
+  Android hold pends non-Required kinds (including Decorate) under scroll.
+- Reason: Phase 1 already delivered the scroll-policy split; hosts need kinds
+  for logs and Phase 3 policy without boiling list hosts.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: kinds prove insufficient for further host policy, or Phase 4
+  patch updates need finer invalidation than classify provides.
+
+## Android host latest-wins hold + Session Chat markdown defer
+
+- Date: 2026-07-28
+- Decision: Production Android Session Chat holds `messages` + `timelineFrame`
+  while `LazyListState.isScrollInProgress`, flushing only Required frames
+  immediately (`MessageListTimelineApplyHold`). Large assistant markdown
+  (≥3000 chars) paints plain first, then yield + ~32 ms
+  (`SessionChatMarkdownPaint`). Policy stays view-owned; gallery unchanged;
+  vsync gate stays out.
+- Reason: Match iOS drag pending-apply and large-markdown paint defer without
+  pushing scroll awareness into the Screen Model or region publisher.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: hold drops Structure on settle, Required sticks under fling, or
+  deferred markdown causes a jarring height jump after stream end.
+
+## Suppress iOS self-resize animation + seed row height estimates
+
+- Date: 2026-07-28
+- Decision: Session Chat / Message List host cells use
+  `MessageListTimelineHostCell` to wrap `apply(_:)` and
+  `preferredLayoutAttributesFitting` in disabled CALayer actions so UIKit's
+  default animated self-resize (WWDC22) snaps instead of sliding. Seed
+  compositional `.estimated` height from a per-id last-known height cache with
+  role/length heuristics (`MessageListTimelineHeightEstimating`); keep
+  `selfSizingInvalidation = .enabled` (not including constraints). Do not call
+  `layoutIfNeeded` on pin/apply paths. Escalation (CALayer `action(for:)`, custom
+  layout) only if device still shows visible fall after this slice.
+- Reason: Diffable `animatingDifferences: false` and SwiftUI transaction nil do
+  not wrap UIKit's internal estimate→real frame mutation; flat `estimated(72)`
+  maximized the visible correction.
+- Revisit when: acceptance still shows animated settle, or intrinsic height
+  thrash requires SwiftUI-side stabilization.
+
+## Pin iOS timeline with absolute bottom content offset
+
+- Date: 2026-07-28
+- Decision: Programmatic pin / scroll-to-end / re-pin on iOS
+  `MessageListTimelineHost` always uses
+  `setContentOffset(y: bottomContentOffsetY())` (contentSize − viewport +
+  `adjustedContentInset.bottom`). Do not prefer `scrollToItem(last, .bottom)`.
+  Keep section `bottomContentPadding` as the sole bottom padding; do not bake
+  padding into the last message cell. Do not add a trailing bottom-anchor spacer
+  unless absolute-offset pinning still fails acceptance after estimate retries.
+- Reason: `scrollToItem(.bottom)` targets estimated last-cell frames and lands
+  short of section bottom inset / true scrollable extent, causing short-of-bottom
+  opens and visible estimate→self-size “falling.” OPE-67 already chose absolute
+  bottom offset math.
+- Revisit when: device acceptance still shows short-of-bottom after retries, or
+  a fixed trailing spacer (Android-like anchor) is warranted.
+
 ## Use UIKit-backed virtualized iOS timeline
 
 - Date: 2026-07-20

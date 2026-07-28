@@ -176,6 +176,98 @@ struct SessionChatTimelineProjectorTests {
         #expect(blockDoc?.sourceHash == document.sourceHash)
     }
 
+    @Test func streamingTextGrowth_marksGrewBottomNotLayoutChanged() {
+        let firstMessage = makeMessage(
+            id: "stream-1",
+            parts: [text("t1", "Hi", isStreaming: true)],
+            text: "Hi"
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        let secondMessage = makeMessage(
+            id: "stream-1",
+            parts: [text("t1", "Hi there", isStreaming: true)],
+            text: "Hi there"
+        )
+        let second = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        )
+        #expect(second.changedRowIDs.contains("stream-1"))
+        #expect(second.layoutChangedRowIDs.isEmpty)
+        #expect(second.layoutAffectingRowIDs.isEmpty)
+        #expect(second.grewBottomRowIDs == ["stream-1"])
+        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        #expect(second.rows[0].isStreaming)
+    }
+
+    @Test func streamingEnd_marksLayoutChanged() {
+        let streamingMessage = makeMessage(
+            id: "stream-end",
+            parts: [text("t1", "Done", isStreaming: true)],
+            text: "Done"
+        )
+        let streaming = project(displayFrame(messages: [DisplayMessage(message: streamingMessage)]))
+        let finalizedMessage = makeMessage(
+            id: "stream-end",
+            parts: [text("t1", "Done", isStreaming: false)],
+            text: "Done"
+        )
+        let finalized = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: finalizedMessage)]),
+            previous: streaming
+        )
+        #expect(finalized.changedRowIDs.contains("stream-end"))
+        #expect(finalized.layoutChangedRowIDs.contains("stream-end"))
+        #expect(finalized.decorateRowIDs.isEmpty)
+        #expect(finalized.grewBottomRowIDs.isEmpty)
+        #expect(finalized.rows[0].layoutRevision == streaming.rows[0].layoutRevision &+ 1)
+        let kinds = TimelineApply.classify(finalized).kinds
+        #expect(kinds.contains(.structure))
+        #expect(!kinds.contains(.decorate))
+    }
+
+    @Test func plainToDecorated_marksDecorateKind() {
+        let message = makeMessage(
+            id: "decorate-me",
+            parts: [text("t1", "# Title")],
+            text: "# Title"
+        )
+        let plain = project(displayFrame(messages: [DisplayMessage(message: message)]))
+        let document = NativeMarkdownDocument(
+            sourceHash: stableMarkdownSourceHash("# Title"),
+            blocks: [.paragraph([.text("Title")])]
+        )
+        let decoratedDisplay = DisplayMessage(message: message, renderedMarkdown: document)
+        let decorated = project(
+            displayFrame(revision: 2, messages: [decoratedDisplay]),
+            previous: plain
+        )
+        #expect(decorated.decorateRowIDs == ["decorate-me"])
+        let kinds = TimelineApply.classify(decorated).kinds
+        #expect(kinds.contains(.decorate))
+        #expect(!kinds.contains(.structure))
+    }
+
+    @Test func classify_requiredAndGrowBottom_carryMultipleKinds() {
+        let firstMessage = makeMessage(
+            id: "stream-1",
+            parts: [text("t1", "Hi", isStreaming: true)],
+            text: "Hi"
+        )
+        let first = project(displayFrame(messages: [DisplayMessage(message: firstMessage)]))
+        let secondMessage = makeMessage(
+            id: "stream-1",
+            parts: [text("t1", "Hi there", isStreaming: true)],
+            text: "Hi there"
+        )
+        let grew = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
+            previous: first
+        ).withRequired(true)
+        let kinds = TimelineApply.classify(grew).kinds
+        #expect(kinds == [.required, .growBottom])
+    }
+
     @Test func displayFrameBuilder_attachesBlockDecorationCacheHits() {
         let cache = BlockDecorationCache(maxEntries: 8)
         let plain = "# Cached"
@@ -271,7 +363,7 @@ struct SessionChatTimelineProjectorTests {
         )
     }
 
-    private func text(_ id: String, _ value: String) -> MessagePart {
-        .text(TextPart(id: id, text: value, isStreaming: false))
+    private func text(_ id: String, _ value: String, isStreaming: Bool = false) -> MessagePart {
+        .text(TextPart(id: id, text: value, isStreaming: isStreaming))
     }
 }

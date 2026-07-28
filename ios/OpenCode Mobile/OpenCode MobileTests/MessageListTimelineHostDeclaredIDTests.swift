@@ -31,7 +31,11 @@ struct MessageListTimelineHostDeclaredIDTests {
                 insertedRowIDs: ["a", "b", "c"],
                 changedRowIDs: [],
                 removedRowIDs: [],
-                layoutChangedRowIDs: ["a", "b", "c"]
+                layoutChangedRowIDs: ["a", "b", "c"],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false,
+                kinds: [.structure]
             ),
             animatingDifferences: false
         )
@@ -49,7 +53,11 @@ struct MessageListTimelineHostDeclaredIDTests {
                 insertedRowIDs: [],
                 changedRowIDs: ["b"],
                 removedRowIDs: [],
-                layoutChangedRowIDs: []
+                layoutChangedRowIDs: [],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false,
+                kinds: [.content]
             ),
             animatingDifferences: false
         )
@@ -79,7 +87,11 @@ struct MessageListTimelineHostDeclaredIDTests {
             insertedRowIDs: ["a", "b"],
             changedRowIDs: [],
             removedRowIDs: [],
-            layoutChangedRowIDs: ["a", "b"]
+            layoutChangedRowIDs: ["a", "b"],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false,
+            kinds: [.structure]
         )
         controller.apply(items: items, packet: packet, animatingDifferences: false)
         #expect(controller.lastReconfiguredIDs.isEmpty || controller.lastApplyUsedDeclaredIDs)
@@ -88,16 +100,58 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(controller.lastReconfiguredIDs.isEmpty)
     }
 
-    @Test func layoutAffecting_isInsertedUnionLayoutChanged() {
-        let packet = MessageListTimelineApplyPacket(
-            frameRevision: 1,
-            insertedRowIDs: ["new"],
-            changedRowIDs: ["content-only"],
-            removedRowIDs: [],
-            layoutChangedRowIDs: ["taller"]
+    @Test func requiredPacket_appliesImmediatelyWhileDragging() {
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            interItemSpacing: 0
         )
-        #expect(packet.layoutAffectingRowIDs == ["new", "taller"])
-        #expect(packet.reconfigureRowIDs == ["content-only", "taller"])
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+
+        let initial = [EqualityCountingItem(id: "a", label: "A1")]
+        controller.apply(
+            items: initial,
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 1,
+                insertedRowIDs: ["a"],
+                changedRowIDs: [],
+                removedRowIDs: [],
+                layoutChangedRowIDs: ["a"],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false,
+                kinds: [.structure]
+            ),
+            animatingDifferences: false
+        )
+
+        // Simulate an active user scroll without requiring a UIKit gesture.
+        let scroll = TimelineScrollController()
+        controller.scrollController = scroll
+        scroll.beginUserScrolling()
+
+        let requiredItems = [EqualityCountingItem(id: "a", label: "A2")]
+        controller.apply(
+            items: requiredItems,
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 2,
+                insertedRowIDs: [],
+                changedRowIDs: ["a"],
+                removedRowIDs: [],
+                layoutChangedRowIDs: [],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: true,
+                kinds: [.required, .content]
+            ),
+            animatingDifferences: false
+        )
+
+        #expect(controller.lastReconfiguredIDs == ["a"])
+        #expect(controller.lastApplyUsedDeclaredIDs)
     }
 }
 

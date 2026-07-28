@@ -76,6 +76,7 @@ where Item.ID == String {
     private var dataSource: UICollectionViewDiffableDataSource<String, String>!
     private var itemsByID: [String: Item] = [:]
     private var orderedIDs: [String] = []
+    private let rowHeightCache = MessageListTimelineRowHeightCache()
     private var lastAppliedFrameRevision: UInt64?
     private var lastContentHeight: CGFloat = 0
     private var lastViewportHeight: CGFloat = 0
@@ -149,7 +150,8 @@ where Item.ID == String {
             collectionView.isDragging
             || collectionView.isDecelerating
             || scrollController?.isUserScrolling == true
-        if isActivelyScrolling {
+        // Required applies (load / refresh / post-send) must never pend under drag.
+        if isActivelyScrolling, packet?.isRequired != true {
             pendingApplyItems = items
             pendingApplyPacket = packet
             pendingApplyAnimated = animatingDifferences
@@ -235,6 +237,7 @@ where Item.ID == String {
 
         itemsByID = Dictionary(uniqueKeysWithValues: uniqueItems.map { ($0.id, $0) })
         orderedIDs = newOrderedIDs
+        rowHeightCache.retainOnly(ids: Set(newOrderedIDs))
         lastAppliedFrameRevision = resolvedPacket.frameRevision
 
         var snapshot = NSDiffableDataSourceSnapshot<String, String>()
@@ -361,37 +364,36 @@ where Item.ID == String {
         // Never call layoutIfNeeded here. On tall self-sizing markdown histories
         // it measures off-screen hosting cells and freezes MainActor for seconds
         // (warm Large-reply reopen), which is exactly when users try to scroll.
-        let lastIndex = IndexPath(item: orderedIDs.count - 1, section: 0)
-        let canScrollToItem =
-            collectionView.numberOfSections > 0
-            && collectionView.numberOfItems(inSection: 0) > lastIndex.item
-
+        //
+        // Always pin to true scrollable extent via bottomContentOffsetY — do not
+        // prefer scrollToItem(.bottom), which targets estimated last-cell frames
+        // and lands short of section bottom inset / adjustedContentInset.
+        let bottomOffset = bottomContentOffsetY()
+        let remaining = abs(bottomOffset - collectionView.contentOffset.y)
         // Never animate scroll during open settle; pill taps can animate after
         // only for short remaining distances. Animating through tall markdown
         // histories forces self-sizing of many huge cells mid-flight.
-        let bottomOffset = bottomContentOffsetY()
-        let remaining = abs(bottomOffset - collectionView.contentOffset.y)
         let allowAnimation =
             animated
             && !isSettlingInitialLoad
             && hasCompletedInitialScroll
             && remaining <= max(collectionView.bounds.height * 2.5, 900)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        UIView.performWithoutAnimation {
-            if allowAnimation {
-                collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: true)
-            } else if canScrollToItem {
-                collectionView.scrollToItem(at: lastIndex, at: .bottom, animated: false)
-            } else {
+        if allowAnimation {
+            // Animated scrolls must not sit inside performWithoutAnimation /
+            // CATransaction.disableActions or UIKit cancels the animation.
+            collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: true)
+        } else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            UIView.performWithoutAnimation {
                 collectionView.setContentOffset(CGPoint(x: 0, y: bottomOffset), animated: false)
+                if orderedIDs.count <= 8 {
+                    updateBottomAlignmentInset()
+                }
             }
-            if orderedIDs.count <= 8 {
-                updateBottomAlignmentInset()
-            }
+            CATransaction.commit()
         }
-        CATransaction.commit()
         reportGeometry()
 
         // Estimated cell heights often resolve on the next turn; re-pin then
@@ -438,7 +440,7 @@ where Item.ID == String {
 
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(72)
+                heightDimension: .estimated(MessageListTimelineDefaults.estimatedRowHeight)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
             let group = NSCollectionLayoutGroup.vertical(layoutSize: itemSize, subitems: [item])
@@ -470,10 +472,13 @@ where Item.ID == String {
 
     private func configureDataSource() {
         let cellRegistration = UICollectionView.CellRegistration<
-            UICollectionViewCell,
+            MessageListTimelineHostCell,
             String
         > { [weak self] cell, _, itemID in
             guard let self, let item = self.itemsByID[itemID] else { return }
+            cell.itemID = itemID
+            cell.heightCache = self.rowHeightCache
+            cell.estimatedHeightSeed = self.estimatedHeightSeed(for: item)
             cell.contentConfiguration = UIHostingConfiguration {
                 self.itemContent(item)
             }
@@ -490,6 +495,13 @@ where Item.ID == String {
                 item: itemID
             )
         }
+    }
+
+    private func estimatedHeightSeed(for item: Item) -> CGFloat {
+        if let estimating = item as? any MessageListTimelineHeightEstimating {
+            return estimating.timelineRowHeightEstimate
+        }
+        return MessageListTimelineDefaults.estimatedRowHeight
     }
 
     private func configureRefreshControl() {
@@ -587,11 +599,11 @@ where Item.ID == String {
     }
 
     private func bottomContentOffsetY() -> CGFloat {
-        max(
-            -collectionView.adjustedContentInset.top,
-            collectionView.contentSize.height
-                - collectionView.bounds.height
-                + collectionView.adjustedContentInset.bottom
+        MessageListTimelineBottomOffset.y(
+            contentHeight: collectionView.contentSize.height,
+            viewportHeight: collectionView.bounds.height,
+            adjustedTopInset: collectionView.adjustedContentInset.top,
+            adjustedBottomInset: collectionView.adjustedContentInset.bottom
         )
     }
 
@@ -639,19 +651,12 @@ where Item.ID == String {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation {
-            // Prefer scrolling the last item into view. Never layoutIfNeeded —
-            // measuring a tall self-sizing timeline stalls MainActor for seconds.
-            let lastIndex = IndexPath(item: orderedIDs.count - 1, section: 0)
-            if collectionView.numberOfSections > 0,
-               collectionView.numberOfItems(inSection: 0) > lastIndex.item
-            {
-                collectionView.scrollToItem(at: lastIndex, at: .bottom, animated: false)
-            } else {
-                collectionView.setContentOffset(
-                    CGPoint(x: 0, y: bottomContentOffsetY()),
-                    animated: false
-                )
-            }
+            // True scrollable extent — not scrollToItem(.bottom), which misses
+            // section bottom padding and fights estimated last-cell frames.
+            collectionView.setContentOffset(
+                CGPoint(x: 0, y: bottomContentOffsetY()),
+                animated: false
+            )
             // Short threads still need the top inset so content sits on the bottom edge.
             if orderedIDs.count <= 8 {
                 updateBottomAlignmentInset()

@@ -19,6 +19,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import kotlinx.coroutines.CoroutineDispatcher
@@ -468,9 +469,18 @@ class SessionChatTimeline(
                 )
             }
         val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000
-        val merged = projected.rows.map(TimelineProjector::toMessageItem)
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
-        lastTimelineFrame = projected
+        val isRequired = !(fromQuietRefresh && onPublished == null)
+        val stamped = projected.withRequired(isRequired)
+        val apply = TimelineApply.classify(stamped)
+        lastTimelineFrame = stamped
+        val previousMessageCount = previousById.size
+        val merged = TimelineProjector.mergeMessageItems(stamped, previousById)
+        val rebuiltCount =
+            merged.count { item ->
+                val previous = previousById[item.id]
+                previous == null || previous !== item
+            }
         val timeline =
             when {
                 merged.isEmpty() -> SessionChatTimelineState.Empty
@@ -484,13 +494,20 @@ class SessionChatTimeline(
             }
         logI(
             "applyLoadedDisplayMessages ready session=$sourceSessionId source=$source " +
-                "timeline=$timeline messages=${merged.size} structuralMs=$structuralMs",
+                "timeline=$timeline messages=${merged.size} rebuilt=$rebuiltCount " +
+                "previous=$previousMessageCount structuralMs=$structuralMs " +
+                "kinds=${TimelineApply.kindsLabel(apply.kinds)} required=$isRequired " +
+                "inserted=${stamped.insertedRowIDs.size} changed=${stamped.changedRowIDs.size} " +
+                "layoutChanged=${stamped.layoutChangedRowIDs.size} " +
+                "decorate=${stamped.decorateRowIDs.size} grewBottom=${stamped.grewBottomRowIDs.size} " +
+                "layoutAffectingRev=${stamped.layoutAffectingRevision()} " +
+                "growBottomRev=${stamped.growBottomRevision()}",
         )
         _state.update { state ->
             state.copy(
                 timeline = resolvedTimeline,
                 messages = merged,
-                timelineFrame = projected,
+                timelineFrame = stamped,
                 isRefreshing = isRefreshing,
                 errorMessage =
                     if (fromQuietRefresh) {

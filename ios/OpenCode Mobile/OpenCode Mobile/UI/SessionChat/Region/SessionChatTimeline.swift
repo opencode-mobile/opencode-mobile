@@ -251,7 +251,10 @@ final class SessionChatTimeline {
                     insertedRowIDs: [],
                     changedRowIDs: [],
                     removedRowIDs: [],
-                    layoutChangedRowIDs: []
+                    layoutChangedRowIDs: [],
+                    grewBottomRowIDs: [],
+                    decorateRowIDs: [],
+                    isRequired: false
                 )
             } else {
                 nil
@@ -335,17 +338,20 @@ final class SessionChatTimeline {
                 )
             }
         )
-        timelineFrame = projected
+        let isRequired = !(fromQuietRefresh && onPublished == nil)
+        let stamped = projected.withRequired(isRequired)
+        let apply = TimelineApply.classify(stamped)
+        timelineFrame = stamped
 
         var rows: [SessionChatRow] = []
-        rows.reserveCapacity(projected.rows.count)
+        rows.reserveCapacity(stamped.rows.count)
         var rebuiltCount = 0
-        for (index, timelineRow) in projected.rows.enumerated() {
+        for (index, timelineRow) in stamped.rows.enumerated() {
             let previous = previousByID[timelineRow.id]
             let reusePrevious =
                 previous != nil
-                && !projected.changedRowIDs.contains(timelineRow.id)
-                && !projected.insertedRowIDs.contains(timelineRow.id)
+                && !stamped.changedRowIDs.contains(timelineRow.id)
+                && !stamped.insertedRowIDs.contains(timelineRow.id)
                 && !timelineRow.isPending
             if reusePrevious, let previous {
                 rows.append(previous)
@@ -364,9 +370,10 @@ final class SessionChatTimeline {
         }
 
         let applyMs = Int((ContinuousClock.now - applyStartedAt) / .milliseconds(1))
-        if applyMs >= 50 || rows.count >= 20 {
+        let layoutAffectingCount = stamped.layoutAffectingRowIDs.count
+        if applyMs >= 50 || rows.count >= 20 || layoutAffectingCount > 0 || !stamped.grewBottomRowIDs.isEmpty {
             OpenCodeLog.sessionChat.info(
-                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) changed=\(projected.changedRowIDs.count) layout=\(projected.layoutChangedRowIDs.count) ms=\(applyMs)"
+                "timelineApply rows=\(rows.count) rebuilt=\(rebuiltCount) kinds=\(TimelineApply.kindsLabel(apply.kinds), privacy: .public) required=\(isRequired) changed=\(stamped.changedRowIDs.count) layout=\(stamped.layoutChangedRowIDs.count) layoutAffecting=\(layoutAffectingCount) decorate=\(stamped.decorateRowIDs.count) grewBottom=\(stamped.grewBottomRowIDs.count) inserted=\(stamped.insertedRowIDs.count) rev=\(stamped.frameRevision) ms=\(applyMs)"
             )
         }
         guard !Task.isCancelled else { return }
@@ -426,7 +433,10 @@ final class SessionChatTimeline {
         insertedRowIDs: Set<String>,
         changedRowIDs: Set<String>,
         removedRowIDs: Set<String>,
-        layoutChangedRowIDs: Set<String>
+        layoutChangedRowIDs: Set<String>,
+        grewBottomRowIDs: Set<String> = [],
+        decorateRowIDs: Set<String> = [],
+        isRequired: Bool = false
     ) {
         let previousByID = Dictionary(uniqueKeysWithValues: timelineFrame.rows.map { ($0.id, $0) })
         let rows = messages.map { row -> TimelineRow in
@@ -445,7 +455,10 @@ final class SessionChatTimeline {
             insertedRowIDs: insertedRowIDs,
             changedRowIDs: changedRowIDs,
             removedRowIDs: removedRowIDs,
-            layoutChangedRowIDs: layoutChangedRowIDs
+            layoutChangedRowIDs: layoutChangedRowIDs,
+            grewBottomRowIDs: grewBottomRowIDs,
+            decorateRowIDs: decorateRowIDs,
+            isRequired: isRequired
         )
     }
 

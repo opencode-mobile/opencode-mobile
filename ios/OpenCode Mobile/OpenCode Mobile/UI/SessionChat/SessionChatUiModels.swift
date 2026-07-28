@@ -58,6 +58,24 @@ struct SessionChatRow: Identifiable, Equatable {
     }
 }
 
+extension SessionChatRow: MessageListTimelineHeightEstimating {
+    var timelineRowHeightEstimate: CGFloat {
+        let style: MessageListTimelineRowHeightEstimate.Style =
+            switch role {
+            case .user:
+                .outgoing
+            case .assistant:
+                .assistant
+            case .tool, .command, .unknown:
+                .compact
+            }
+        return MessageListTimelineRowHeightEstimate.fallback(
+            characterCount: text.count,
+            style: style
+        )
+    }
+}
+
 struct SessionChatComposerState: Equatable {
     var text: String
     var attachments: [Attachment] = []

@@ -4,6 +4,25 @@
 
 - Status: complete for scaffold-first Session Chat entry.
 - Shared scope: row tap opens Session Chat with local message/composer behavior.
+- **2026-07-28:** Streaming UI update backpressure plan drafted (architecture
+  review). See
+  [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+  and companion
+  [streaming-ui-update-backpressure-plan.html](./streaming-ui-update-backpressure-plan.html).
+  **Phases 0–5 complete (uncommitted):** baseline layoutAffecting counters;
+  Android Session Chat newest-row size animation disabled; projector text-length
+  no longer layout-affecting; `grewBottomRowIDs` / armed GrowBottom follow; thin
+  `TimelineApply` classify seam (`decorate` / `isRequired`); iOS Required
+  flush-under-drag; Android host latest-wins hold under scroll + Session Chat
+  ≥3k markdown paint defer; Android region row-reuse
+  (`TimelineProjector.mergeMessageItems` / iOS `reusePrevious` parity). Manual
+  acceptance scenarios 1–6 still open on device.
+- **2026-07-28:** iOS programmatic pin / scroll-to-end now always uses
+  `setContentOffset(bottomContentOffsetY())` instead of preferring
+  `scrollToItem(.bottom)` (short-of-bottom + estimate settle “fall”).
+- **2026-07-28:** iOS host cell self-resize animation suppressed
+  (`MessageListTimelineHostCell`) + per-row height cache / heuristic estimate
+  seed (replacing flat `estimated(72)`).
 
 ## Design System
 

@@ -39,6 +39,9 @@ enum SessionChatTimelineProjector {
 
         var changed: Set<String> = []
         var layoutChanged: Set<String> = []
+        var grewBottom: Set<String> = []
+        var decorate: Set<String> = []
+        let newestID = rows.last?.id
         for row in rows {
             guard let prior = previousByID[row.id] else {
                 // Inserted rows are layout-affecting for hosts.
@@ -50,6 +53,14 @@ enum SessionChatTimelineProjector {
             }
             if row.layoutRevision != prior.layoutRevision || layoutFingerprint(prior) != layoutFingerprint(row) {
                 layoutChanged.insert(row.id)
+                if isMarkdownOnlyLayoutChange(prior: prior, row: row) {
+                    decorate.insert(row.id)
+                }
+            } else if row.id == newestID,
+                      row.isStreaming,
+                      row.text.count > prior.text.count
+            {
+                grewBottom.insert(row.id)
             }
         }
 
@@ -59,7 +70,10 @@ enum SessionChatTimelineProjector {
             insertedRowIDs: inserted,
             changedRowIDs: changed,
             removedRowIDs: removed,
-            layoutChangedRowIDs: layoutChanged
+            layoutChangedRowIDs: layoutChanged,
+            grewBottomRowIDs: grewBottom,
+            decorateRowIDs: decorate,
+            isRequired: false
         )
     }
 
@@ -212,6 +226,7 @@ enum SessionChatTimelineProjector {
     }
 
     /// Height-affecting fingerprint for layoutRevision advances.
+    /// Text length is content-only while streaming; GrowBottom declares height growth.
     private static func layoutFingerprint(_ row: TimelineRow) -> String {
         let markdownPresent = row.renderedMarkdown != nil
             || row.blocks.contains { block in
@@ -220,8 +235,8 @@ enum SessionChatTimelineProjector {
             }
         let blockKey = row.blocks.map { block -> String in
             switch block {
-            case .text(let id, let text, let doc):
-                "t:\(id):\(text.count):\(doc?.sourceHash ?? 0)"
+            case .text(let id, _, let doc):
+                "t:\(id):\(doc != nil):\(doc?.sourceHash ?? 0)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id)"
             case .toolCard(let id, let card):
@@ -230,7 +245,42 @@ enum SessionChatTimelineProjector {
                 "g:\(id):\(group.count):\(group.status.rawValue):\(group.title)"
             }
         }.joined(separator: "|")
-        return "\(row.text.count):\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(blockKey)"
+        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(blockKey)"
+    }
+
+    /// Layout bump caused only by markdown presence/sourceHash while streaming flag and
+    /// non-markdown structure stay the same. Streaming end is Structure, not Decorate.
+    static func isMarkdownOnlyLayoutChange(prior: TimelineRow, row: TimelineRow) -> Bool {
+        guard prior.isStreaming == row.isStreaming else { return false }
+        guard structureFingerprint(prior) == structureFingerprint(row) else { return false }
+        return markdownFingerprint(prior) != markdownFingerprint(row)
+    }
+
+    private static func structureFingerprint(_ row: TimelineRow) -> String {
+        let attachments = row.blocks.compactMap { block -> String? in
+            if case .attachment(let id, let file) = block { return "a:\(id):\(file.id)" }
+            return nil
+        }.joined(separator: "|")
+        let blocks = row.blocks.map { block -> String in
+            switch block {
+            case .text(let id, _, _):
+                "t:\(id)"
+            case .attachment(let id, let file):
+                "a:\(id):\(file.id)"
+            case .toolCard(let id, let card):
+                "c:\(id):\(card.toolName):\(card.status.rawValue):\(card.title)"
+            case .toolGroup(let id, let group):
+                "g:\(id):\(group.count):\(group.status.rawValue):\(group.title)"
+            }
+        }.joined(separator: "|")
+        return "\(row.blocks.count)|\(attachments)|\(blocks)"
+    }
+
+    private static func markdownFingerprint(_ row: TimelineRow) -> String {
+        row.blocks.compactMap { block -> String? in
+            guard case .text(let id, _, let doc) = block else { return nil }
+            return "\(id):\(doc != nil):\(doc?.sourceHash ?? 0)"
+        }.joined(separator: "|")
     }
 
     private static func provisional(

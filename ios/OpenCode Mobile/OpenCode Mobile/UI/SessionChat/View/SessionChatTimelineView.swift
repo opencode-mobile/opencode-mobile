@@ -119,6 +119,14 @@ private struct SessionChatTimelineReadyView: View {
                     ProgressView()
                 }
             }
+            .onChange(of: props.timelineFrame.frameRevision) { _, rev in
+                let layoutIDs = props.timelineFrame.layoutAffectingRowIDs
+                if !layoutIDs.isEmpty {
+                    logScroll(
+                        "layoutAffecting count=\(layoutIDs.count) rev=\(rev)"
+                    )
+                }
+            }
 
             MessageListScrollToEndOverlay(
                 visible: showScrollToEnd

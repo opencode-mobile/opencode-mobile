@@ -302,6 +302,135 @@ class TimelineProjectorTest {
     }
 
     @Test
+    fun project_streamingTextGrowth_marksGrewBottomNotLayoutChanged() {
+        val first =
+            projectAssistant(
+                parts = listOf(MessagePart.Text("Hi", id = "prt-1", isStreaming = true)),
+                frameRevision = 1L,
+            )
+        val second =
+            projectAssistant(
+                parts = listOf(MessagePart.Text("Hi there", id = "prt-1", isStreaming = true)),
+                frameRevision = 2L,
+                previous = first,
+            )
+
+        assertEquals(setOf("msg-1"), second.changedRowIDs)
+        assertTrue(second.layoutChangedRowIDs.isEmpty())
+        assertTrue(second.layoutAffectingRowIDs().isEmpty())
+        assertEquals(0L, second.layoutAffectingRevision())
+        assertEquals(setOf("msg-1"), second.grewBottomRowIDs)
+        assertEquals(2L, second.growBottomRevision())
+        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+        assertTrue(second.rows.single().isStreaming)
+    }
+
+    @Test
+    fun project_streamingEnd_marksLayoutChanged() {
+        val streaming =
+            projectAssistant(
+                parts = listOf(MessagePart.Text("Done", id = "prt-1", isStreaming = true)),
+                frameRevision = 1L,
+            )
+        val finalized =
+            projectAssistant(
+                parts = listOf(MessagePart.Text("Done", id = "prt-1", isStreaming = false)),
+                frameRevision = 2L,
+                previous = streaming,
+            )
+
+        assertEquals(setOf("msg-1"), finalized.changedRowIDs)
+        assertEquals(setOf("msg-1"), finalized.layoutChangedRowIDs)
+        assertTrue(finalized.decorateRowIDs.isEmpty())
+        assertTrue(finalized.grewBottomRowIDs.isEmpty())
+        assertEquals(0L, finalized.growBottomRevision())
+        assertTrue(finalized.rows.single().layoutRevision > streaming.rows.single().layoutRevision)
+        val apply = TimelineApply.classify(finalized)
+        assertTrue(apply.kinds.contains(TimelineApplyKind.Structure))
+        assertFalse(apply.kinds.contains(TimelineApplyKind.Decorate))
+    }
+
+    @Test
+    fun project_plainToDecorated_marksDecorateNotStructureAlone() {
+        val plainBlocks =
+            listOf(
+                SessionChatTimelineBlock.Text(
+                    blockID = PresentationBlockId.direct("prt-1"),
+                    text = "Hello",
+                ),
+            )
+        val message =
+            Message(
+                id = "msg-1",
+                role = MessageRole.Assistant,
+                text = "Hello",
+                parts = listOf(MessagePart.Text("Hello", id = "prt-1")),
+            )
+        val plain =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = listOf(DisplayMessageBody(message, plainBlocks)),
+                    ),
+            )
+        val decoratedBlocks =
+            listOf(
+                SessionChatTimelineBlock.Text(
+                    blockID = PresentationBlockId.direct("prt-1"),
+                    text = "Hello",
+                    renderedMarkdown =
+                        MarkdownDocument(
+                            sourceHash = ContentRevision.of("Hello").textHash,
+                            blocks = emptyList(),
+                        ),
+                ),
+            )
+        val decorated =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 2L,
+                        sourceRevision = 0L,
+                        messages = listOf(DisplayMessageBody(message, decoratedBlocks)),
+                    ),
+                previous = plain,
+            )
+
+        assertEquals(setOf("msg-1"), decorated.layoutChangedRowIDs)
+        assertEquals(setOf("msg-1"), decorated.decorateRowIDs)
+        val apply = TimelineApply.classify(decorated)
+        assertTrue(apply.kinds.contains(TimelineApplyKind.Decorate))
+        assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
+        assertEquals(setOf("msg-1"), decorated.layoutAffectingRowIDs())
+    }
+
+    @Test
+    fun classify_requiredAndGrowBottom_carryMultipleKinds() {
+        val streaming =
+            projectAssistant(
+                parts = listOf(MessagePart.Text("Hi", id = "prt-1", isStreaming = true)),
+                frameRevision = 1L,
+            )
+        val grew =
+            projectAssistant(
+                parts = listOf(MessagePart.Text("Hi there", id = "prt-1", isStreaming = true)),
+                frameRevision = 2L,
+                previous = streaming,
+            ).withRequired(true)
+        val apply = TimelineApply.classify(grew)
+        assertEquals(
+            setOf(TimelineApplyKind.Required, TimelineApplyKind.GrowBottom),
+            apply.kinds,
+        )
+        assertEquals(0L, apply.layoutAffectingRevision)
+        assertEquals(2L, apply.growBottomRevision)
+    }
+
+    @Test
     fun layoutAffectingRevision_insertsDriveFollowKey() {
         val first =
             projectAssistant(
@@ -373,6 +502,137 @@ class TimelineProjectorTest {
         assertEquals(setOf("new", "taller"), frame.layoutAffectingRowIDs())
         assertEquals(9L, frame.layoutAffectingRevision())
         assertFalse(frame.layoutAffectingRowIDs().contains("content-only"))
+    }
+
+    @Test
+    fun mergeMessageItems_reusesUnchangedHistoryWhileStreamingBottomRebuilds() {
+        val history =
+            SessionChatMessageItem(
+                id = "history-1",
+                role = MessageRole.User,
+                text = "Earlier",
+                metadataLabel = "user",
+            )
+        val priorStreaming =
+            SessionChatMessageItem(
+                id = "stream-1",
+                role = MessageRole.Assistant,
+                text = "Hi",
+                metadataLabel = "assistant",
+                isStreaming = true,
+            )
+        val frame =
+            TimelineFrame(
+                frameRevision = 2L,
+                rows =
+                    listOf(
+                        TimelineRow(
+                            id = "history-1",
+                            role = MessageRole.User,
+                            text = "Earlier",
+                            metadataLabel = "user",
+                            contentRevision = ContentRevision.of("Earlier"),
+                            layoutRevision = 1L,
+                        ),
+                        TimelineRow(
+                            id = "stream-1",
+                            role = MessageRole.Assistant,
+                            text = "Hi there",
+                            metadataLabel = "assistant",
+                            isStreaming = true,
+                            contentRevision = ContentRevision.of("Hi there"),
+                            layoutRevision = 1L,
+                        ),
+                    ),
+                insertedRowIDs = emptySet(),
+                changedRowIDs = setOf("stream-1"),
+                removedRowIDs = emptySet(),
+                layoutChangedRowIDs = emptySet(),
+                grewBottomRowIDs = setOf("stream-1"),
+            )
+
+        val merged =
+            TimelineProjector.mergeMessageItems(
+                frame = frame,
+                previousById = mapOf(history.id to history, priorStreaming.id to priorStreaming),
+            )
+
+        assertEquals(2, merged.size)
+        assertSame(history, merged[0])
+        assertEquals("Hi there", merged[1].text)
+        assertTrue(merged[1] !== priorStreaming)
+    }
+
+    @Test
+    fun mergeMessageItems_rebuildsInsertedAndPendingRows() {
+        val existing =
+            SessionChatMessageItem(
+                id = "msg-1",
+                role = MessageRole.User,
+                text = "Hello",
+                metadataLabel = "user",
+            )
+        val previousPending =
+            SessionChatMessageItem(
+                id = "pending-1",
+                role = MessageRole.User,
+                text = "Sending",
+                metadataLabel = "user",
+                isPending = true,
+            )
+        val frame =
+            TimelineFrame(
+                frameRevision = 3L,
+                rows =
+                    listOf(
+                        TimelineRow(
+                            id = "msg-1",
+                            role = MessageRole.User,
+                            text = "Hello",
+                            metadataLabel = "user",
+                            contentRevision = ContentRevision.of("Hello"),
+                            layoutRevision = 1L,
+                        ),
+                        TimelineRow(
+                            id = "pending-1",
+                            role = MessageRole.User,
+                            text = "Sending",
+                            metadataLabel = "user",
+                            isPending = true,
+                            contentRevision = ContentRevision.of("Sending"),
+                            layoutRevision = 1L,
+                        ),
+                        TimelineRow(
+                            id = "msg-2",
+                            role = MessageRole.Assistant,
+                            text = "New",
+                            metadataLabel = "assistant",
+                            contentRevision = ContentRevision.of("New"),
+                            layoutRevision = 1L,
+                        ),
+                    ),
+                insertedRowIDs = setOf("msg-2"),
+                changedRowIDs = emptySet(),
+                removedRowIDs = emptySet(),
+                layoutChangedRowIDs = emptySet(),
+            )
+
+        val merged =
+            TimelineProjector.mergeMessageItems(
+                frame = frame,
+                previousById =
+                    mapOf(
+                        existing.id to existing,
+                        previousPending.id to previousPending,
+                    ),
+            )
+
+        assertSame(existing, merged[0])
+        assertTrue(merged[1].isPending)
+        assertTrue(merged[1] !== previousPending)
+        assertEquals("pending-1", merged[1].id)
+        assertEquals("msg-2", merged[2].id)
+        assertEquals("New", merged[2].text)
     }
 
     private fun projectAssistant(

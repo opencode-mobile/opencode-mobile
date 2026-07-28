@@ -77,6 +77,13 @@ struct TimelineFrame: Equatable, Sendable {
     let changedRowIDs: Set<String>
     let removedRowIDs: Set<String>
     let layoutChangedRowIDs: Set<String>
+    /// Newest streaming row grew in text length without a structural layout key change.
+    /// Armed follow may pin via content-size growth; unarmed restore ignores this set.
+    let grewBottomRowIDs: Set<String>
+    /// Markdown-only subset of `layoutChangedRowIDs`. Still layout-affecting in Phase 2.
+    let decorateRowIDs: Set<String>
+    /// Region-owned load / refresh / post-send applies that must not be coalesced away.
+    let isRequired: Bool
 
     static let empty = TimelineFrame(
         frameRevision: 0,
@@ -84,7 +91,10 @@ struct TimelineFrame: Equatable, Sendable {
         insertedRowIDs: [],
         changedRowIDs: [],
         removedRowIDs: [],
-        layoutChangedRowIDs: []
+        layoutChangedRowIDs: [],
+        grewBottomRowIDs: [],
+        decorateRowIDs: [],
+        isRequired: false
     )
 
     /// Hosts treat inserts and layout changes as layout-affecting for scroll.
@@ -96,6 +106,20 @@ struct TimelineFrame: Equatable, Sendable {
     var reconfigureRowIDs: Set<String> {
         changedRowIDs.union(layoutChangedRowIDs)
     }
+
+    func withRequired(_ isRequired: Bool) -> TimelineFrame {
+        TimelineFrame(
+            frameRevision: frameRevision,
+            rows: rows,
+            insertedRowIDs: insertedRowIDs,
+            changedRowIDs: changedRowIDs,
+            removedRowIDs: removedRowIDs,
+            layoutChangedRowIDs: layoutChangedRowIDs,
+            grewBottomRowIDs: grewBottomRowIDs,
+            decorateRowIDs: decorateRowIDs,
+            isRequired: isRequired
+        )
+    }
 }
 
 /// Declared-ID apply packet for `MessageListTimelineHost` (Phase 6).
@@ -105,6 +129,10 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
     let changedRowIDs: Set<String>
     let removedRowIDs: Set<String>
     let layoutChangedRowIDs: Set<String>
+    let grewBottomRowIDs: Set<String>
+    let decorateRowIDs: Set<String>
+    let isRequired: Bool
+    let kinds: Set<TimelineApplyKind>
 
     var layoutAffectingRowIDs: Set<String> {
         insertedRowIDs.union(layoutChangedRowIDs)
@@ -115,12 +143,17 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
     }
 
     static func from(_ frame: TimelineFrame) -> MessageListTimelineApplyPacket {
-        MessageListTimelineApplyPacket(
+        let apply = TimelineApply.classify(frame)
+        return MessageListTimelineApplyPacket(
             frameRevision: frame.frameRevision,
             insertedRowIDs: frame.insertedRowIDs,
             changedRowIDs: frame.changedRowIDs,
             removedRowIDs: frame.removedRowIDs,
-            layoutChangedRowIDs: frame.layoutChangedRowIDs
+            layoutChangedRowIDs: frame.layoutChangedRowIDs,
+            grewBottomRowIDs: frame.grewBottomRowIDs,
+            decorateRowIDs: frame.decorateRowIDs,
+            isRequired: frame.isRequired,
+            kinds: apply.kinds
         )
     }
 
@@ -131,12 +164,20 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         nextIDs: [String]
     ) -> MessageListTimelineApplyPacket {
         let nextSet = Set(nextIDs)
+        let inserted = nextSet.subtracting(previousIDs)
+        let surviving = nextSet.intersection(previousIDs)
         return MessageListTimelineApplyPacket(
             frameRevision: frameRevision,
-            insertedRowIDs: nextSet.subtracting(previousIDs),
-            changedRowIDs: nextSet.intersection(previousIDs),
+            insertedRowIDs: inserted,
+            changedRowIDs: surviving,
             removedRowIDs: previousIDs.subtracting(nextSet),
-            layoutChangedRowIDs: nextSet.subtracting(previousIDs)
+            layoutChangedRowIDs: inserted,
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false,
+            kinds: surviving.isEmpty && inserted.isEmpty
+                ? []
+                : [.structure, .content]
         )
     }
 }

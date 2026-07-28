@@ -59,8 +59,9 @@ internal fun rememberMessageListTimeline(
     layoutAffectingRevision: Long,
     autoFollowEnabled: Boolean,
     messageIdsChronological: List<String> = emptyList(),
+    growBottomRevision: Long = 0L,
+    listState: LazyListState = rememberLazyListState(),
 ): MessageListTimelineHandle {
-    val listState = rememberLazyListState()
     val density = LocalDensity.current
     val revealThresholdMinPx =
         with(density) { MessageListTimelineDefaults.revealThresholdMin.roundToPx() }
@@ -150,6 +151,18 @@ internal fun rememberMessageListTimeline(
     // Armed: declared-ID layout follow → await layout → exact end.
     MessageListAutoFollowLayoutAffectingEffect(
         layoutAffectingRevision = layoutAffectingRevision,
+        messageCount = messageCount,
+        autoFollowEnabled = autoFollowEnabled,
+        listState = listState,
+        autoFollowTolerancePx = autoFollowTolerancePx,
+        bottomAnchorHeightPx = bottomAnchorHeightPx,
+        autoFollowState = autoFollowState,
+        scrollController = scrollController,
+    )
+
+    // Armed only: streaming bottom growth without layoutAffecting (no unarmed restore).
+    MessageListAutoFollowGrowBottomEffect(
+        growBottomRevision = growBottomRevision,
         messageCount = messageCount,
         autoFollowEnabled = autoFollowEnabled,
         listState = listState,
