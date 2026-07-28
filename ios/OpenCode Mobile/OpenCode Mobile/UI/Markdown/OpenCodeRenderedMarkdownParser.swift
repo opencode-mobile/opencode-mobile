@@ -8,7 +8,8 @@ enum OpenCodeRenderedMarkdownParser {
     nonisolated static func parse(
         _ markdown: String,
         variant: OpenCodeRenderedMarkdownVariant = .standalone,
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        textMateEnabled: Bool = false
     ) -> NativeMarkdownDocument {
         do {
             let encoder = JSONEncoder()
@@ -16,7 +17,8 @@ enum OpenCodeRenderedMarkdownParser {
             let request = NativeMarkdownParseRequest(
                 markdown: markdown,
                 variant: variant.rawValue,
-                isStreaming: isStreaming
+                isStreaming: isStreaming,
+                textMateEnabled: textMateEnabled
             )
             let requestData = try encoder.encode(request)
             guard let requestJson = String(data: requestData, encoding: .utf8) else {
@@ -47,4 +49,5 @@ nonisolated private struct NativeMarkdownParseRequest: Encodable, Sendable {
     let markdown: String
     let variant: String
     let isStreaming: Bool
+    let textMateEnabled: Bool
 }

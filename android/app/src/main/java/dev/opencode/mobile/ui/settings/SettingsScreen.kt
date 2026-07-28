@@ -47,6 +47,8 @@ fun SettingsScreen(
     onApplyPreset: (String) -> Unit,
     showSessionListOnHome: Boolean,
     onShowSessionListOnHomeChange: (Boolean) -> Unit,
+    textMateEnabled: Boolean,
+    onTextMateEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
@@ -135,6 +137,20 @@ fun SettingsScreen(
             }
 
             SectionHeader(title = "Developer Tools")
+
+            OpenCodeListItem(
+                title = "TextMate Highlighting",
+                subtitle = "Full grammar syntax colors for code fences (slower)",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
+                trailing = {
+                    Switch(
+                        checked = textMateEnabled,
+                        onCheckedChange = onTextMateEnabledChange,
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
 
             OpenCodeListItem(
                 title = "Component Gallery",
@@ -229,6 +245,8 @@ private fun SettingsScreenLightPreview() {
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
             onShowSessionListOnHomeChange = {},
+            textMateEnabled = false,
+            onTextMateEnabledChange = {},
         )
     }
 }
@@ -246,6 +264,8 @@ private fun SettingsScreenDarkPreview() {
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
             onShowSessionListOnHomeChange = {},
+            textMateEnabled = false,
+            onTextMateEnabledChange = {},
         )
     }
 }

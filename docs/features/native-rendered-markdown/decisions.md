@@ -1,5 +1,25 @@
 # Native Rendered Markdown Decisions
 
+## Markdown Fences Close Like CommonMark / Web
+
+- Decision: Fenced code blocks close at the first bare closing fence of the same
+  marker. There is no special nest-depth for `markdown`/`md` fences.
+- Reason: The prior nest-depth extension (from highlighting regression work)
+  kept LLM doc samples wrapped in `` ```markdown `` as one literal CodeBlock,
+  while opencode web renders post-first-close content as real markdown. Mobile
+  approximates web chat rendering; first-fence-wins restores that parity.
+- Date: 2026-07-28.
+
+## TextMate Highlighting Is Opt-In Via Settings
+
+- Decision: TextMate grammar highlighting runs only when Settings → Developer
+  Tools → **TextMate Highlighting** is enabled. Default is **off**; code fences
+  use the semantic-fallback highlighter instead.
+- Reason: TextMate is the expensive path on open and settle; semantic fallback
+  keeps Session Chat responsive while still coloring common tokens. Power users
+  can opt into full grammar fidelity.
+- Date: 2026-07-28.
+
 ## Native Renderer Replaces WebView
 
 - Decision: Rendered Markdown uses native SwiftUI and Compose rendering rather

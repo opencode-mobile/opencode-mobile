@@ -385,9 +385,9 @@ private extension FilePart {
 }
 
 private struct AssistantMessageBubble: View {
-    /// Huge markdown trees stall the first UICollectionView cell configuration
-    /// (and therefore scroll). Paint plain for one frame, then attach markdown
-    /// on the next turn — not a pipeline row-reprint.
+    /// Huge markdown trees can stall layout when a doc arrives on an already
+    /// visible plain bubble. Defer ≥3k only in that late-arrival path — not
+    /// when markdown is already prepared on first appear.
     static let deferredMarkdownCharacterThreshold = 3_000
 
     let text: String
@@ -400,10 +400,10 @@ private struct AssistantMessageBubble: View {
         self.text = text
         self.renderedMarkdown = renderedMarkdown
         self.isStreaming = isStreaming
-        let shouldDefer =
-            renderedMarkdown != nil
-            && text.count >= Self.deferredMarkdownCharacterThreshold
-        _paintMarkdown = State(initialValue: renderedMarkdown != nil && !shouldDefer)
+        // If the pipeline already prepared markdown (including hold-ready open),
+        // paint it immediately. Defer only applies when a doc arrives later on an
+        // already-visible plain bubble (enrich / stream) — see .task below.
+        _paintMarkdown = State(initialValue: renderedMarkdown != nil)
     }
 
     var body: some View {
@@ -429,8 +429,12 @@ private struct AssistantMessageBubble: View {
         )
         .task(id: paintTaskID) {
             guard renderedMarkdown != nil, !paintMarkdown else { return }
-            // Let the open frame finish so the user can scroll before TextMate
-            // trees are hosted in the visible cells.
+            // Doc arrived after plain paint (enrich while visible). Let the open
+            // frame finish so scroll stays responsive before hosting TextMate trees.
+            guard text.count >= Self.deferredMarkdownCharacterThreshold else {
+                paintMarkdown = true
+                return
+            }
             await Task.yield()
             try? await Task.sleep(for: .milliseconds(32))
             guard !Task.isCancelled else { return }

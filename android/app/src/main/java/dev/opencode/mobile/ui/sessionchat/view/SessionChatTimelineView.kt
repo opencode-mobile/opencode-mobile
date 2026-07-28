@@ -492,20 +492,25 @@ private fun AssistantMessageBubble(
             textLength = text.length,
             hasMarkdown = renderedMarkdown != null,
         )
-    // Persist across length growth (iOS @State parity). Do not key remember on
-    // text.length — that would reset defer and thrash plain↔markdown while streaming.
+    // If markdown is already prepared when the bubble first appears (hold-ready
+    // open / reconfigure with doc), paint immediately. Defer only when a doc
+    // arrives later on an already-visible plain bubble.
     var paintMarkdown by remember {
-        mutableStateOf(renderedMarkdown != null && !shouldDeferMarkdown)
+        mutableStateOf(renderedMarkdown != null)
     }
     LaunchedEffect(renderedMarkdown == null, shouldDeferMarkdown) {
         when {
             renderedMarkdown == null -> paintMarkdown = false
             !shouldDeferMarkdown -> paintMarkdown = true
-            // Deferred: leave current value (false until delay; true stays painted).
+            // Late ≥3k doc: keep current paintMarkdown (false until delay).
         }
     }
     LaunchedEffect(renderedMarkdown, text.length, paintMarkdown) {
-        if (renderedMarkdown == null || paintMarkdown || !shouldDeferMarkdown) {
+        if (renderedMarkdown == null || paintMarkdown) {
+            return@LaunchedEffect
+        }
+        if (!shouldDeferMarkdown) {
+            paintMarkdown = true
             return@LaunchedEffect
         }
         yield()
@@ -533,8 +538,9 @@ private fun AssistantMessageBubble(
 }
 
 /**
- * Session Chat–only large-markdown paint deferral (iOS AssistantMessageBubble parity).
- * Not part of the public OpenCodeRenderedMarkdown API.
+ * Session Chat–only large-markdown paint deferral for **late** doc arrival
+ * (enrich while a plain bubble is already visible). Initial appear with a
+ * prepared document paints immediately — including hold-ready opens.
  */
 internal object SessionChatMarkdownPaint {
     const val DEFERRED_CHARACTER_THRESHOLD = 3_000

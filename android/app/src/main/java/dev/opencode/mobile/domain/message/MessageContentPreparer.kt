@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import android.util.Log
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
@@ -48,6 +49,10 @@ class MessageContentPreparer
                 override fun removeEldestEntry(eldest: MutableMap.MutableEntry<CacheKey, MarkdownDocument>?): Boolean =
                     size > MAX_CACHE_ENTRIES
             }
+
+        fun clearDocumentCache() {
+            synchronized(cacheLock) { cache.clear() }
+        }
 
         suspend fun prepareMessages(
             messages: List<Message>,
@@ -152,6 +157,7 @@ class MessageContentPreparer
                     blockID = blockID,
                     text = plain,
                     isStreaming = isStreaming,
+                    textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                 )
             }
 
@@ -162,24 +168,43 @@ class MessageContentPreparer
             sessionKey: String = "",
         ): DisplayMessage {
             val isStreaming = messageIsStreaming(message)
+            val highlightEpoch = MarkdownHighlightPreferences.epoch
+            val textMateEnabled = MarkdownHighlightPreferences.textMateEnabled
             if (mode == MessagePreparationMode.Streaming &&
                 message.text.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
             ) {
-                return DisplayMessage(message = message, renderedMarkdown = null)
+                return DisplayMessage(
+                    message = message,
+                    renderedMarkdown = null,
+                    highlightEpoch = highlightEpoch,
+                )
             }
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
                 if (message.text.length < STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD) {
                     reusableDocument(message, previous, mode)?.let { reusable ->
-                        return DisplayMessage(message = message, renderedMarkdown = reusable)
+                        return DisplayMessage(
+                            message = message,
+                            renderedMarkdown = reusable,
+                            highlightEpoch = highlightEpoch,
+                        )
                     }
                 }
-                return DisplayMessage(message = message, renderedMarkdown = null)
+                return DisplayMessage(
+                    message = message,
+                    renderedMarkdown = null,
+                    highlightEpoch = highlightEpoch,
+                )
             }
             if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
-                return DisplayMessage(message = message, renderedMarkdown = null)
+                return DisplayMessage(
+                    message = message,
+                    renderedMarkdown = null,
+                    highlightEpoch = highlightEpoch,
+                )
             }
+            val reused = reusableDocument(message, previous, mode)
             val document =
-                reusableDocument(message, previous, mode)
+                reused
                     ?: if (mode == MessagePreparationMode.FinalPlaceholder) {
                         previous?.renderedMarkdown
                     } else {
@@ -188,9 +213,23 @@ class MessageContentPreparer
                             blockID = message.id,
                             text = message.text,
                             isStreaming = isStreaming,
+                            textMateEnabled = textMateEnabled,
                         )
                     }
-            return DisplayMessage(message = message, renderedMarkdown = document)
+            val awaitingTextMateUpgrade =
+                when {
+                    !textMateEnabled -> false
+                    mode == MessagePreparationMode.FinalPlaceholder && document != null ->
+                        previous?.awaitingTextMateUpgrade == true || previous?.isStreaming == true
+                    reused != null -> previous?.awaitingTextMateUpgrade == true
+                    else -> false
+                }
+            return DisplayMessage(
+                message = message,
+                renderedMarkdown = document,
+                awaitingTextMateUpgrade = awaitingTextMateUpgrade,
+                highlightEpoch = highlightEpoch,
+            )
         }
 
         private fun messageIsStreaming(message: Message): Boolean =
@@ -201,17 +240,26 @@ class MessageContentPreparer
             blockID: String,
             text: String,
             isStreaming: Boolean,
+            textMateEnabled: Boolean,
         ): MarkdownDocument? =
-            runCatching { parseDocument(sessionKey, blockID, text, isStreaming) }
-                .onFailure { error ->
-                    logI("preparePlainFallback blockIdHash=${blockID.hashCode()} reason=${error.javaClass.simpleName}")
-                }.getOrNull()
+            runCatching {
+                parseDocument(
+                    sessionKey = sessionKey,
+                    blockID = blockID,
+                    text = text,
+                    isStreaming = isStreaming,
+                    textMateEnabled = textMateEnabled,
+                )
+            }.onFailure { error ->
+                logI("preparePlainFallback blockIdHash=${blockID.hashCode()} reason=${error.javaClass.simpleName}")
+            }.getOrNull()
 
         private fun parseDocument(
             sessionKey: String,
             blockID: String,
             text: String,
             isStreaming: Boolean,
+            textMateEnabled: Boolean,
         ): MarkdownDocument? {
             if (!OpenCodeMarkdownDetector.shouldRender(text)) {
                 return null
@@ -223,6 +271,7 @@ class MessageContentPreparer
                     textHash = stableMarkdownSourceHash(text),
                     textLength = text.length,
                     isStreaming = isStreaming,
+                    textMateEnabled = textMateEnabled,
                 )
             synchronized(cacheLock) {
                 cache[cacheKey]?.let { return it }
@@ -232,6 +281,7 @@ class MessageContentPreparer
                     markdown = text,
                     codeHighlighter = serializedCodeHighlighter,
                     isStreaming = isStreaming,
+                    textMateEnabled = textMateEnabled,
                 )
             return synchronized(cacheLock) {
                 cache[cacheKey] ?: document.also { cache[cacheKey] = it }
@@ -245,9 +295,14 @@ class MessageContentPreparer
         ): MarkdownDocument? {
             val isStreaming = messageIsStreaming(message)
             val existing = previous?.renderedMarkdown
+            val highlightEpoch = MarkdownHighlightPreferences.epoch
+            // Final must not settle-reuse a FinalPlaceholder that still holds
+            // streaming semantic-fallback spans (`awaitingTextMateUpgrade`).
             if (existing != null &&
                 !isStreaming &&
                 previous.isStreaming != true &&
+                !previous.awaitingTextMateUpgrade &&
+                previous.highlightEpoch == highlightEpoch &&
                 previous.text == message.text
             ) {
                 return existing
@@ -255,6 +310,7 @@ class MessageContentPreparer
             if (isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
+                previous.highlightEpoch == highlightEpoch &&
                 previous.text == message.text
             ) {
                 return previous.renderedMarkdown
@@ -263,6 +319,7 @@ class MessageContentPreparer
                 !isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
+                previous.highlightEpoch == highlightEpoch &&
                 previous.text == message.text
             ) {
                 return previous.renderedMarkdown
@@ -284,6 +341,14 @@ class MessageContentPreparer
             /** Open histories above this markdown-candidate size as plain text first. */
             const val HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD = 4_000
 
+            /**
+             * Experimental: keep Session Chat on Loading until the newest
+             * markdown candidate is enriched. Plain-first still prepares without
+             * TextMate but is not published. Flip to false to restore immediate
+             * plain Ready.
+             */
+            const val HOLD_READY_UNTIL_NEWEST_MARKDOWN = true
+
             /** Newest-first enrich publishes once the open viewport is ready. */
             const val HISTORY_ENRICH_VIEWPORT_MESSAGE_COUNT = 3
 
@@ -297,5 +362,6 @@ class MessageContentPreparer
             val textHash: Int,
             val textLength: Int,
             val isStreaming: Boolean,
+            val textMateEnabled: Boolean,
         )
     }

@@ -75,6 +75,25 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
     }
 
     @Test
+    fun streamingForcePlainOnlyForLargeFences() {
+        assertEquals(
+            false,
+            forcePlainStreamingCode(isStreaming = true, codeLength = 500),
+        )
+        assertEquals(
+            false,
+            forcePlainStreamingCode(isStreaming = false, codeLength = 5_000),
+        )
+        assertEquals(
+            true,
+            forcePlainStreamingCode(
+                isStreaming = true,
+                codeLength = STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD,
+            ),
+        )
+    }
+
+    @Test
     fun pathARolesUseDedicatedSyntaxColorsWhilePlainStaysBody() {
         val code = "count += 1;"
         val colors = testCodeColors()

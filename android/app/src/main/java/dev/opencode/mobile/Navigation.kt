@@ -51,6 +51,7 @@ import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDeta
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
@@ -149,6 +150,8 @@ fun MainNavigation() {
                                                 showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
                                                 onShowSessionListOnHomeChange =
                                                     settingsViewModel::setShowSessionListOnHome,
+                                                textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
+                                                onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                             )
                                         }
                                     }

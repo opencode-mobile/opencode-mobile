@@ -10,6 +10,8 @@ data class MarkdownParseRequest(
     val markdown: String,
     val variant: String = "standalone",
     val isStreaming: Boolean = false,
+    /** When false, prefer the semantic-fallback highlighter over TextMate. */
+    val textMateEnabled: Boolean = false,
 )
 
 @Serializable
@@ -219,6 +221,7 @@ object OpenCodeMarkdownJson {
             openCodeCodeHighlighterForParse(
                 preferred = OpenCodeMarkdownHighlighterProvider.default,
                 isStreaming = request.isStreaming,
+                textMateEnabled = request.textMateEnabled,
             )
         return json.encodeToString(
             OpenCodeMarkdownParser.parse(
@@ -247,17 +250,29 @@ object OpenCodeMarkdownDetector {
 fun openCodeCodeHighlighterForParse(
     preferred: OpenCodeCodeHighlighter,
     isStreaming: Boolean,
-): OpenCodeCodeHighlighter = if (isStreaming) OpenCodeSemanticFallbackHighlighter else preferred
+    textMateEnabled: Boolean = false,
+): OpenCodeCodeHighlighter =
+    if (isStreaming || !textMateEnabled) {
+        OpenCodeSemanticFallbackHighlighter
+    } else {
+        preferred
+    }
 
 object OpenCodeMarkdownParser {
     fun parse(
         markdown: String,
         codeHighlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
         isStreaming: Boolean = false,
+        textMateEnabled: Boolean = false,
     ): MarkdownDocument =
         parse(
             markdown = markdown,
-            codeHighlighter = openCodeCodeHighlighterForParse(preferred = codeHighlighter, isStreaming = isStreaming),
+            codeHighlighter =
+                openCodeCodeHighlighterForParse(
+                    preferred = codeHighlighter,
+                    isStreaming = isStreaming,
+                    textMateEnabled = textMateEnabled,
+                ),
         )
 
     fun parse(
@@ -403,22 +418,12 @@ object OpenCodeMarkdownParser {
         val language = match.groupValues[2].trim().takeIf { it.isNotBlank() }?.substringBefore(' ')
         val normalizedLanguage = language?.lowercase()
         val content = mutableListOf<String>()
-        var nestedMarkdownFenceDepth = 0
         var index = start + 1
         while (index < lines.size) {
             val line = lines[index]
-            val closesFence = line.closesFence(marker)
-            if (closesFence && nestedMarkdownFenceDepth == 0) {
+            if (line.closesFence(marker)) {
                 break
             }
-
-            if (normalizedLanguage.isMarkdownLanguage()) {
-                when {
-                    line.opensNestedFence(marker) -> nestedMarkdownFenceDepth += 1
-                    closesFence && nestedMarkdownFenceDepth > 0 -> nestedMarkdownFenceDepth -= 1
-                }
-            }
-
             content += line
             index += 1
         }
@@ -645,15 +650,6 @@ object OpenCodeMarkdownParser {
         val trimmed = trim()
         return trimmed.length >= marker.length && trimmed.all { char -> char == marker.first() }
     }
-
-    private fun String.opensNestedFence(marker: String): Boolean {
-        val match = fenceRegex.find(this) ?: return false
-        val nestedMarker = match.groupValues[1]
-        val info = match.groupValues[2].trim()
-        return nestedMarker.first() == marker.first() && info.isNotEmpty()
-    }
-
-    private fun String?.isMarkdownLanguage(): Boolean = this == "markdown" || this == "md"
 
 }
 

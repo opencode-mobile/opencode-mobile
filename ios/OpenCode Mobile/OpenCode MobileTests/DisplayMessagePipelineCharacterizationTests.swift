@@ -26,6 +26,7 @@ struct DisplayMessagePipelineCharacterizationTests {
 
     @Test func largeHistoryPublishesPlainFirstThenAtMostTwoEnrichmentFrames() async {
         let harness = Harness(holdSleep: true)
+        let holdReady = MessageContentPreparer.holdReadyUntilNewestMarkdown
         let collector = CharacterizationDisplayCollector()
         let task = Task {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
@@ -43,25 +44,39 @@ struct DisplayMessagePipelineCharacterizationTests {
         )
 
         await harness.source.emit(.messages(history))
-        let plainFirst = await waitUntil {
-            collector.emissions.count == 1 && collector.emissions[0].allSatisfy { $0.renderedMarkdown == nil }
-        }
-        #expect(plainFirst)
-        #expect(harness.preparer.prepareMessagesInvocations[0].mode == .historyPlainFirst)
-        #expect(harness.clock.pendingSleep == .milliseconds(48))
+        if holdReady {
+            let preparedQuietly = await waitUntil {
+                harness.preparer.prepareMessagesInvocations.contains { $0.mode == .historyPlainFirst }
+            }
+            #expect(preparedQuietly)
+            let fullyStyled = await waitUntil {
+                collector.emissions.last?.count == 5
+                    && collector.emissions.last?.allSatisfy { $0.renderedMarkdown != nil } == true
+            }
+            #expect(fullyStyled)
+            #expect(collector.emissions.count <= 2)
+            #expect(collector.emissions.contains { $0.last?.renderedMarkdown != nil })
+        } else {
+            let plainFirst = await waitUntil {
+                collector.emissions.count == 1 && collector.emissions[0].allSatisfy { $0.renderedMarkdown == nil }
+            }
+            #expect(plainFirst)
+            #expect(harness.preparer.prepareMessagesInvocations[0].mode == .historyPlainFirst)
+            #expect(harness.clock.pendingSleep == .milliseconds(48))
 
-        harness.clock.releaseSleep()
-        let enriched = await waitUntil {
-            collector.emissions.count >= 2
-                && collector.emissions.last?.allSatisfy { $0.renderedMarkdown != nil } == true
-        }
-        #expect(enriched)
+            harness.clock.releaseSleep()
+            let enriched = await waitUntil {
+                collector.emissions.count >= 2
+                    && collector.emissions.last?.allSatisfy { $0.renderedMarkdown != nil } == true
+            }
+            #expect(enriched)
 
-        let enrichmentFrames = Array(collector.emissions.dropFirst())
-        #expect(enrichmentFrames.count <= 2)
-        #expect(enrichmentFrames.last?.count == 5)
-        #expect(enrichmentFrames.last?.allSatisfy { $0.renderedMarkdown != nil } == true)
-        #expect(enrichmentFrames.first?.last?.renderedMarkdown != nil)
+            let enrichmentFrames = Array(collector.emissions.dropFirst())
+            #expect(enrichmentFrames.count <= 2)
+            #expect(enrichmentFrames.last?.count == 5)
+            #expect(enrichmentFrames.last?.allSatisfy { $0.renderedMarkdown != nil } == true)
+            #expect(enrichmentFrames.first?.last?.renderedMarkdown != nil)
+        }
 
         task.cancel()
         _ = await waitUntil { collector.isFinished }
@@ -69,22 +84,32 @@ struct DisplayMessagePipelineCharacterizationTests {
 
     @Test func largeSingleMessageHistoryPublishesPlainFirstThenOneViewportEnrichment() async {
         let harness = Harness(holdSleep: true)
+        let holdReady = MessageContentPreparer.holdReadyUntilNewestMarkdown
         let collector = CharacterizationDisplayCollector()
         let task = Task {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
         await harness.source.emit(.messages([largeMarkdownAssistant(id: "msg-1")]))
-        let plainFirst = await waitUntil {
-            collector.emissions.count == 1 && collector.emissions[0].allSatisfy { $0.renderedMarkdown == nil }
-        }
-        #expect(plainFirst)
-        #expect(harness.clock.pendingSleep == .milliseconds(48))
+        if holdReady {
+            let enriched = await waitUntil {
+                collector.emissions.count == 1
+                    && collector.emissions[0].first?.renderedMarkdown != nil
+            }
+            #expect(enriched)
+            #expect(harness.clock.pendingSleep == nil)
+        } else {
+            let plainFirst = await waitUntil {
+                collector.emissions.count == 1 && collector.emissions[0].allSatisfy { $0.renderedMarkdown == nil }
+            }
+            #expect(plainFirst)
+            #expect(harness.clock.pendingSleep == .milliseconds(48))
 
-        harness.clock.releaseSleep()
-        let enriched = await waitUntil { collector.emissions.count == 2 }
-        #expect(enriched)
-        #expect(collector.emissions[1].first?.renderedMarkdown != nil)
+            harness.clock.releaseSleep()
+            let enriched = await waitUntil { collector.emissions.count == 2 }
+            #expect(enriched)
+            #expect(collector.emissions[1].first?.renderedMarkdown != nil)
+        }
 
         task.cancel()
         _ = await waitUntil { collector.isFinished }
@@ -251,6 +276,9 @@ struct DisplayMessagePipelineCharacterizationTests {
 
     @Test func cancelledEnrichmentPrepareDoesNotPublishAfterNewerLiveSnapshot() async {
         let harness = Harness(holdSleep: true)
+        // Needs a published plain-first baseline before parking enrich.
+        guard !MessageContentPreparer.holdReadyUntilNewestMarkdown else { return }
+
         let collector = CharacterizationDisplayCollector()
         let task = Task {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))

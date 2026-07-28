@@ -17,6 +17,7 @@ nonisolated private struct MessageMarkdownCacheKey: Hashable, Sendable {
     let textHash: Int
     let textLength: Int
     let isStreaming: Bool
+    let textMateEnabled: Bool
 }
 
 nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendable {
@@ -59,6 +60,13 @@ nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendabl
         order.removeAll { $0 == key }
         order.append(key)
     }
+
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        values.removeAll()
+        order.removeAll()
+    }
 }
 
 final class MessageContentPreparer: @unchecked Sendable {
@@ -69,8 +77,13 @@ final class MessageContentPreparer: @unchecked Sendable {
     nonisolated static let streamingPlainTextCharacterThreshold = 8_000
 
     /// When opening a history whose markdown-candidate text exceeds this size,
-    /// publish a plain-text frame first so the timeline is usable before TextMate.
+    /// prepare a plain-text frame first so enrichment can start without TextMate.
     nonisolated static let historyPlainFirstMarkdownCharacterThreshold = 4_000
+
+    /// Experimental: keep Session Chat on Loading until the newest markdown
+    /// candidate is enriched. Plain-first still runs internally but is not
+    /// published. Flip to `false` to restore immediate plain Ready.
+    nonisolated static let holdReadyUntilNewestMarkdown = true
 
     /// Newest-first enrich publishes once the open viewport is ready so iOS
     /// matches Android's perceived speed without per-bubble UI frames.
@@ -81,14 +94,20 @@ final class MessageContentPreparer: @unchecked Sendable {
 
     init() {}
 
+    nonisolated func clearDocumentCache() {
+        documentCache.clear()
+    }
+
     nonisolated func prepareMessages(
         _ messages: [Message],
         previousByID: [String: DisplayMessage] = [:],
         mode: MessagePreparationMode = .final
     ) async -> [DisplayMessage] {
+        let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
+        let highlightEpoch = MarkdownHighlightPreferences.currentEpoch()
         // Match Android `Dispatchers.Default`: one worker hop for the batch,
         // not a MainActor round-trip between every message.
-        await Task.detached(priority: .userInitiated) { [documentCache] in
+        return await Task.detached(priority: .userInitiated) { [documentCache] in
             let startedAt = Date()
             var prepared: [DisplayMessage] = []
             prepared.reserveCapacity(messages.count)
@@ -102,7 +121,9 @@ final class MessageContentPreparer: @unchecked Sendable {
                     previous: previous,
                     mode: mode,
                     sessionKey: "",
-                    documentCache: documentCache
+                    documentCache: documentCache,
+                    textMateEnabled: textMateEnabled,
+                    highlightEpoch: highlightEpoch
                 )
                 prepared.append(display)
                 if Self.messageIsStreaming(message) {
@@ -142,13 +163,17 @@ final class MessageContentPreparer: @unchecked Sendable {
         previous: DisplayMessage? = nil,
         mode: MessagePreparationMode = .final
     ) async -> DisplayMessage {
-        await Task.detached(priority: .userInitiated) { [documentCache] in
+        let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
+        let highlightEpoch = MarkdownHighlightPreferences.currentEpoch()
+        return await Task.detached(priority: .userInitiated) { [documentCache] in
             Self.prepareMessageOnWorker(
                 message,
                 previous: previous,
                 mode: mode,
                 sessionKey: "",
-                documentCache: documentCache
+                documentCache: documentCache,
+                textMateEnabled: textMateEnabled,
+                highlightEpoch: highlightEpoch
             )
         }.value
     }
@@ -161,20 +186,22 @@ final class MessageContentPreparer: @unchecked Sendable {
         sessionKey: String = "",
         mode: MessagePreparationMode = .final
     ) async -> NativeMarkdownDocument? {
-        await Task.detached(priority: .userInitiated) { [documentCache] in
+        let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
+        return await Task.detached(priority: .userInitiated) { [documentCache] in
             if mode == .streaming,
                plain.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
             {
-                return nil
+                return nil as NativeMarkdownDocument?
             }
             guard OpenCodeRenderedMarkdownDetector.shouldRender(plain) else {
-                return nil
+                return nil as NativeMarkdownDocument?
             }
             return Self.parseDocument(
                 sessionKey: sessionKey,
                 blockID: blockID,
                 text: plain,
                 isStreaming: isStreaming,
+                textMateEnabled: textMateEnabled,
                 documentCache: documentCache
             )
         }.value
@@ -185,36 +212,57 @@ final class MessageContentPreparer: @unchecked Sendable {
         previous: DisplayMessage?,
         mode: MessagePreparationMode,
         sessionKey: String,
-        documentCache: MessageMarkdownDocumentCache
+        documentCache: MessageMarkdownDocumentCache,
+        textMateEnabled: Bool,
+        highlightEpoch: Int
     ) -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
         if mode == .streaming,
            message.text.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
         {
-            return DisplayMessage(message: message, renderedMarkdown: nil)
+            return DisplayMessage(
+                message: message,
+                renderedMarkdown: nil,
+                highlightEpoch: highlightEpoch
+            )
         }
         if mode == .historyPlainFirst {
             if message.text.count < MessageContentPreparer.streamingPlainTextCharacterThreshold,
                let reusable = reusableDocument(
                 for: message,
                 previous: previous,
-                mode: mode
+                mode: mode,
+                highlightEpoch: highlightEpoch
                )
             {
-                return DisplayMessage(message: message, renderedMarkdown: reusable)
+                return DisplayMessage(
+                    message: message,
+                    renderedMarkdown: reusable,
+                    highlightEpoch: highlightEpoch
+                )
             }
-            return DisplayMessage(message: message, renderedMarkdown: nil)
+            return DisplayMessage(
+                message: message,
+                renderedMarkdown: nil,
+                highlightEpoch: highlightEpoch
+            )
         }
         guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
-            return DisplayMessage(message: message, renderedMarkdown: nil)
+            return DisplayMessage(
+                message: message,
+                renderedMarkdown: nil,
+                highlightEpoch: highlightEpoch
+            )
         }
-        let document: NativeMarkdownDocument?
-        if let reusable = reusableDocument(
+        let reused = reusableDocument(
             for: message,
             previous: previous,
-            mode: mode
-        ) {
-            document = reusable
+            mode: mode,
+            highlightEpoch: highlightEpoch
+        )
+        let document: NativeMarkdownDocument?
+        if let reused {
+            document = reused
         } else if mode == .finalPlaceholder {
             document = previous?.renderedMarkdown
         } else {
@@ -226,10 +274,27 @@ final class MessageContentPreparer: @unchecked Sendable {
                 blockID: blockID,
                 text: message.text,
                 isStreaming: isStreaming,
+                textMateEnabled: textMateEnabled,
                 documentCache: documentCache
             )
         }
-        return DisplayMessage(message: message, renderedMarkdown: document)
+        let awaitingTextMateUpgrade: Bool
+        if !textMateEnabled {
+            awaitingTextMateUpgrade = false
+        } else if mode == .finalPlaceholder, document != nil {
+            awaitingTextMateUpgrade =
+                previous?.awaitingTextMateUpgrade == true || previous?.isStreaming == true
+        } else if reused != nil {
+            awaitingTextMateUpgrade = previous?.awaitingTextMateUpgrade == true
+        } else {
+            awaitingTextMateUpgrade = false
+        }
+        return DisplayMessage(
+            message: message,
+            renderedMarkdown: document,
+            awaitingTextMateUpgrade: awaitingTextMateUpgrade,
+            highlightEpoch: highlightEpoch
+        )
     }
 
     nonisolated private static func messageIsStreaming(_ message: Message) -> Bool {
@@ -250,6 +315,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         blockID: String,
         text: String,
         isStreaming: Bool,
+        textMateEnabled: Bool,
         documentCache: MessageMarkdownDocumentCache
     ) -> NativeMarkdownDocument? {
         parseDocument(
@@ -257,6 +323,7 @@ final class MessageContentPreparer: @unchecked Sendable {
             blockID: blockID,
             text: text,
             isStreaming: isStreaming,
+            textMateEnabled: textMateEnabled,
             documentCache: documentCache
         )
     }
@@ -266,6 +333,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         blockID: String,
         text: String,
         isStreaming: Bool,
+        textMateEnabled: Bool,
         documentCache: MessageMarkdownDocumentCache
     ) -> NativeMarkdownDocument? {
         guard OpenCodeRenderedMarkdownDetector.shouldRender(text) else {
@@ -277,29 +345,40 @@ final class MessageContentPreparer: @unchecked Sendable {
             blockID: blockID,
             textHash: revision.textHash,
             textLength: revision.textLength,
-            isStreaming: isStreaming
+            isStreaming: isStreaming,
+            textMateEnabled: textMateEnabled
         )
         if let cached = documentCache.value(for: cacheKey) { return cached }
 
-        let parsed = OpenCodeRenderedMarkdownParser.parse(text, isStreaming: isStreaming)
+        let parsed = OpenCodeRenderedMarkdownParser.parse(
+            text,
+            isStreaming: isStreaming,
+            textMateEnabled: textMateEnabled
+        )
         return documentCache.insertIfAbsent(parsed, for: cacheKey)
     }
 
     nonisolated private static func reusableDocument(
         for message: Message,
         previous: DisplayMessage?,
-        mode: MessagePreparationMode
+        mode: MessagePreparationMode,
+        highlightEpoch: Int
     ) -> NativeMarkdownDocument? {
         let isStreaming = messageIsStreaming(message)
+        // Final must not settle-reuse a FinalPlaceholder that still holds
+        // streaming semantic-fallback spans (`awaitingTextMateUpgrade`).
         if let existing = previous?.renderedMarkdown,
            !isStreaming,
            previous?.isStreaming != true,
+           previous?.awaitingTextMateUpgrade != true,
+           previous?.highlightEpoch == highlightEpoch,
            previous?.text == message.text {
             return existing
         }
         if isStreaming,
            let previous,
            previous.isStreaming,
+           previous.highlightEpoch == highlightEpoch,
            previous.text == message.text {
             return previous.renderedMarkdown
         }
@@ -307,6 +386,7 @@ final class MessageContentPreparer: @unchecked Sendable {
            !isStreaming,
            let previous,
            previous.isStreaming,
+           previous.highlightEpoch == highlightEpoch,
            previous.text == message.text {
             return previous.renderedMarkdown
         }

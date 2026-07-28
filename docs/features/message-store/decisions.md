@@ -149,8 +149,8 @@ not part of the public preparer/pipeline call shape.
 | `streaming` | Live streaming prepare; plain text above the streaming size threshold | Yes |
 | `historyPlainFirst` | Usable cold history without missing markdown parses | No full replace; merge only rows that already carry a document |
 | `historyEnrichment` | Newest-first missing markdown for history | Yes (per enriched row / batch) |
-| `finalPlaceholder` | Reuse last streaming document when identity and source text match | Yes |
-| `final` | Authoritative finalized markdown, including cache-hit and small history | Yes |
+| `finalPlaceholder` | Reuse last streaming document when identity and source text match; marks `awaitingTextMateUpgrade` | Yes |
+| `final` | Authoritative TextMate markdown; must not settle-reuse an `awaitingTextMateUpgrade` placeholder | Yes |
 
 Parse failure always falls back to safe plain text for the current generation and
 must not throw into the timeline. Streaming text above the configured threshold

@@ -15,11 +15,9 @@ enum OpenCodeRenderedMarkdownDetector: Sendable {
 }
 
 struct OpenCodeRenderedMarkdown: View {
-    /// Skip expensive span painting for large fences while the message is still streaming.
+    /// Skip expensive span painting for large fences while streaming. Smaller
+    /// fences paint prepared (semantic-fallback) spans so code stays colored.
     static let streamingPlainCodeCharacterThreshold = 2_000
-    /// Match Android: build large attributed strings off the main actor and show
-    /// plain placeholders until ready so enrich/scroll stay responsive.
-    static let backgroundAttributedCharacterThreshold = 2_000
 
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
@@ -135,8 +133,7 @@ struct OpenCodeRenderedMarkdown: View {
         code: String,
         spans: [NativeCodeSpan]
     ) -> some View {
-        let forcePlain =
-            isStreaming && code.count >= Self.streamingPlainCodeCharacterThreshold
+        let forcePlain = Self.forcePlainStreamingCode(isStreaming: isStreaming, codeLength: code.count)
         ScrollView(.horizontal, showsIndicators: true) {
             DeferredHighlightedCodeText(code: code, spans: spans, forcePlain: forcePlain)
                 .fixedSize(horizontal: true, vertical: false)
@@ -572,72 +569,46 @@ private struct InlineMarkdownText: View {
     let color: Color
 
     var body: some View {
-        // Keep inline styling synchronous for layout stability on open. Large
-        // fenced code/diff blocks use DeferredHighlighted* instead (Android parity).
         Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
             .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-/// Plain-first code paint for large fences; highlight off the main actor.
+/// Applies prepared spans on first paint. Large streaming fences stay plain
+/// via `forcePlain`. When colored, do not stack `.foregroundStyle` on the
+/// attributed Text — SwiftUI double-paints and glyphs look corrupted.
 private struct DeferredHighlightedCodeText: View {
     let code: String
     let spans: [NativeCodeSpan]
     let forcePlain: Bool
 
-    @State private var styled: AttributedString?
-
-    private var needsBackgroundBuild: Bool {
-        !forcePlain && code.count >= OpenCodeRenderedMarkdown.backgroundAttributedCharacterThreshold
-    }
-
     var body: some View {
-        Text(displayText)
-            .font(OpenCodeTypography.code)
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .task(id: code) {
-                guard !forcePlain else {
-                    styled = nil
-                    return
-                }
-                if !needsBackgroundBuild {
-                    styled = NativeMarkdownAttributedString.code(code, spans: spans)
-                    return
-                }
-                await Task.yield()
-                let code = code
-                let spans = spans
-                let palette = await MainActor.run { NativeCodeColorPalette.current() }
-                styled = await Task.detached(priority: .utility) {
-                    NativeMarkdownAttributedString.code(code, spans: spans, palette: palette)
-                }.value
-            }
+        if forcePlain {
+            Text(code)
+                .font(OpenCodeTypography.code)
+                .foregroundStyle(OpenCodeColors.textStrong)
+        } else {
+            Text(NativeMarkdownAttributedString.code(code, spans: spans))
+                .font(OpenCodeTypography.code)
+        }
     }
+}
 
-    private var displayText: AttributedString {
-        styled ?? AttributedString(code)
+extension OpenCodeRenderedMarkdown {
+    /// Whether fenced code should paint plain text for this streaming frame.
+    static func forcePlainStreamingCode(isStreaming: Bool, codeLength: Int) -> Bool {
+        isStreaming && codeLength >= streamingPlainCodeCharacterThreshold
     }
 }
 
 private struct DeferredHighlightedDiffBlock: View {
     let lines: [NativeDiffLine]
 
-    @State private var styledLines: [AttributedString]?
-
-    private var totalCharacters: Int {
-        lines.reduce(0) { $0 + $1.text.count }
-    }
-
-    private var needsBackgroundBuild: Bool {
-        totalCharacters >= OpenCodeRenderedMarkdown.backgroundAttributedCharacterThreshold
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(lines.indices, id: \.self) { index in
                 let line = lines[index]
-                let text = styledLines?[index] ?? AttributedString(line.text)
-                Text(text)
+                Text(NativeMarkdownAttributedString.code(line.text, spans: line.spans))
                     .font(OpenCodeTypography.code)
                     .fixedSize(horizontal: true, vertical: false)
                     .frame(minWidth: 320, alignment: .leading)
@@ -645,22 +616,6 @@ private struct DeferredHighlightedDiffBlock: View {
                     .padding(.vertical, 1)
                     .background(diffLineBackground(line.kind))
             }
-        }
-        .task(id: totalCharacters) {
-            if !needsBackgroundBuild {
-                styledLines = lines.map {
-                    NativeMarkdownAttributedString.code($0.text, spans: $0.spans)
-                }
-                return
-            }
-            await Task.yield()
-            let lines = lines
-            let palette = await MainActor.run { NativeCodeColorPalette.current() }
-            styledLines = await Task.detached(priority: .utility) {
-                lines.map {
-                    NativeMarkdownAttributedString.code($0.text, spans: $0.spans, palette: palette)
-                }
-            }.value
         }
     }
 

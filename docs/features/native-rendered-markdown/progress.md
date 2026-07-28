@@ -3,6 +3,10 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-28: Reverted `` ```markdown `` nest-depth special case. Fences close on
+  the first bare closing marker (CommonMark / opencode web). Parser test
+  `markdownFenceClosesOnFirstBareFenceLikeCommonMark` replaces the old nested-
+  fence keep-open assertion.
 - Shared docs and ADR: added.
 - Android runtime: native renderer implemented and WebView asset removed.
 - iOS runtime: native SwiftUI renderer implemented and WebView asset removed.

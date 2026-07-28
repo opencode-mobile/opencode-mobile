@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -117,6 +118,29 @@ struct SettingsView: View {
                         style: .card,
                         startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
                         action: { showComponentGallery = true }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "TextMate Highlighting",
+                        subtitle: "Full grammar syntax colors for code fences (slower)",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
+                        trailing: {
+                            Toggle(
+                                "TextMate Highlighting",
+                                isOn: Binding(
+                                    get: { markdownHighlightPreferences.textMateEnabled },
+                                    set: { newValue in
+                                        markdownHighlightPreferences.setTextMateEnabled(newValue)
+                                        MessageContentPreparer.shared.clearDocumentCache()
+                                        BlockDecorationCache.shared.clear()
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
                     )
                     .padding(.horizontal, 16)
 

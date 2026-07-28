@@ -350,10 +350,19 @@ final class DisplayMessagePipeline {
                             mode: mode
                         ) else { return }
                         lastPublishedMessages = messages
-                        OpenCodeLog.messageContent.info(
-                            "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
-                        )
-                        continuation.yield(.messages(prepared))
+                        let suppressPublish =
+                            mode == .historyPlainFirst
+                            && MessageContentPreparer.holdReadyUntilNewestMarkdown
+                        if !suppressPublish {
+                            OpenCodeLog.messageContent.info(
+                                "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
+                            )
+                            continuation.yield(.messages(prepared))
+                        } else {
+                            OpenCodeLog.messageContent.info(
+                                "displayPublish suppressed reason=\(reason, privacy: .public) holdReady=true generation=\(generation)"
+                            )
+                        }
                         onCommitted?()
                     }
                 }
@@ -382,7 +391,10 @@ final class DisplayMessagePipeline {
 
                         let finalized = await contentPreparer.prepareMessages(
                             messages,
-                            previousByID: previousByID,
+                            // Use pre-placeholder snapshot so Final does not
+                            // settle-reuse streaming-quality spans via the
+                            // placeholder DisplayMessage (isStreaming=false).
+                            previousByID: snapshot,
                             mode: .final
                         )
                         guard !Task.isCancelled, isCurrent(generation) else { return }
@@ -403,8 +415,12 @@ final class DisplayMessagePipeline {
                 func enrichHistoryInBackground(generation: UInt64, messages: [Message]) {
                     enrichmentTask?.cancel()
                     enrichmentTask = Task { @MainActor in
+                        let holdReady = MessageContentPreparer.holdReadyUntilNewestMarkdown
                         await Task.yield()
-                        await clock.sleep(for: .milliseconds(48))
+                        // Spinner is already up when holding Ready — start TextMate ASAP.
+                        if !holdReady {
+                            await clock.sleep(for: .milliseconds(48))
+                        }
                         guard !Task.isCancelled, isCurrent(generation) else { return }
 
                         var byID = Dictionary(
@@ -461,12 +477,13 @@ final class DisplayMessagePipeline {
                                 viewportEnrichedCount += 1
                                 viewportCharactersRemaining -= message.text.count
                                 let viewportReady =
-                                    viewportEnrichedCount
+                                    holdReady
+                                    || viewportEnrichedCount
                                     >= MessageContentPreparer.historyEnrichViewportMessageCount
                                     || viewportCharactersRemaining <= 0
                                 if viewportReady {
                                     publishSnapshot(
-                                        reason: "enrich-viewport",
+                                        reason: holdReady ? "enrich-newest" : "enrich-viewport",
                                         count: viewportEnrichedCount
                                     )
                                     publishedViewport = true
@@ -474,6 +491,11 @@ final class DisplayMessagePipeline {
                             }
                         }
                         guard !Task.isCancelled, isCurrent(generation) else { return }
+                        // Escape hatch: hold path must not leave the UI on Loading forever.
+                        if holdReady, !publishedViewport {
+                            publishSnapshot(reason: "enrich-escape", count: 0)
+                            return
+                        }
                         guard enrichedCount > 0 else { return }
                         if !publishedViewport {
                             publishSnapshot(reason: "enrich-batch", count: enrichedCount)

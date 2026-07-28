@@ -149,7 +149,10 @@ The mode is internal to the pipeline. Callers receive only
 | any active state | Observation ends | Cancel scheduling and drop unpublished work | `terminated` |
 
 `finalPlaceholder` is opportunistic. Timeline coalescing may replace it with the
-final frame before SwiftUI or Compose renders it.
+final frame before SwiftUI or Compose renders it. The placeholder DisplayMessage
+sets `awaitingTextMateUpgrade` so `final` cannot settle-reuse streaming
+(semantic-fallback) spans; pipeline Final prepare also uses the pre-placeholder
+snapshot as `previousByID`.
 
 ## 1. Full load
 

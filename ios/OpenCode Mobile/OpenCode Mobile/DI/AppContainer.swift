@@ -397,6 +397,9 @@ extension Container {
             shared.messageRepository().clearMessageCache()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
+            MarkdownHighlightPreferences.shared.clear()
+            MessageContentPreparer.shared.clearDocumentCache()
+            BlockDecorationCache.shared.clear()
         }
     }
 }

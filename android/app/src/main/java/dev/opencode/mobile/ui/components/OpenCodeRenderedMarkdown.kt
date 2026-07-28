@@ -70,9 +70,21 @@ object OpenCodeRenderedMarkdownDetector {
     fun shouldRender(text: String): Boolean = OpenCodeMarkdownDetector.shouldRender(text)
 }
 
-/** Skip expensive span painting for large fences while the message is still streaming. */
-private const val STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD = 2_000
+/**
+ * Skip expensive span painting for large fences while the message is still
+ * streaming. Smaller fences paint prepared (semantic-fallback) spans so code
+ * stays colored during the stream.
+ */
+internal const val STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD = 2_000
+
+/** Defer only large *inline* attributed builds; fenced code/diff paint spans sync. */
 private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
+
+/** Whether fenced code should paint plain text for this streaming frame. */
+internal fun forcePlainStreamingCode(
+    isStreaming: Boolean,
+    codeLength: Int,
+): Boolean = isStreaming && codeLength >= STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD
 
 @Composable
 fun OpenCodeRenderedMarkdown(
@@ -221,14 +233,12 @@ private fun CodeBlockView(
 ) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
-    val usePlainStreamingText =
-        isStreaming && block.code.length >= STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD
     val annotated =
         rememberCodeAnnotatedString(
             code = block.code,
             spans = block.spans,
             colors = colors,
-            forcePlain = usePlainStreamingText,
+            forcePlain = forcePlainStreamingCode(isStreaming, block.code.length),
         )
     Box(
         modifier =
@@ -586,40 +596,20 @@ private fun rememberCodeAnnotatedString(
     colors: CodeColors,
     forcePlain: Boolean,
 ): AnnotatedString {
+    // Spans are prepared in the pipeline — paint colored on first frame.
+    // Large streaming fences stay plain via forcePlain (no annotated rebuild jank).
     if (forcePlain) return remember(code) { AnnotatedString(code) }
-    if (code.length < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
-        return remember(code, spans, colors) { buildCodeAnnotatedString(code, spans, colors) }
-    }
-    var annotated by remember(code, spans, colors) { mutableStateOf<AnnotatedString?>(null) }
-    LaunchedEffect(code, spans, colors) {
-        annotated =
-            withContext(Dispatchers.Default) {
-                buildCodeAnnotatedString(code, spans, colors)
-            }
-    }
-    return annotated ?: remember(code) { AnnotatedString(code) }
+    return remember(code, spans, colors) { buildCodeAnnotatedString(code, spans, colors) }
 }
 
 @Composable
 private fun rememberDiffLineAnnotatedStrings(
     lines: List<dev.opencode.mobile.markdown.DiffLine>,
     colors: CodeColors,
-): List<AnnotatedString> {
-    val totalCharacters = remember(lines) { lines.sumOf { it.text.length } }
-    if (totalCharacters < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
-        return remember(lines, colors) {
-            lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
-        }
+): List<AnnotatedString> =
+    remember(lines, colors) {
+        lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
     }
-    var annotatedLines by remember(lines, colors) { mutableStateOf<List<AnnotatedString>?>(null) }
-    LaunchedEffect(lines, colors) {
-        annotatedLines =
-            withContext(Dispatchers.Default) {
-                lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
-            }
-    }
-    return annotatedLines ?: remember(lines) { lines.map { line -> AnnotatedString(line.text) } }
-}
 
 @Composable
 private fun rememberMarkdownAnnotatedString(

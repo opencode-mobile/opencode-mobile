@@ -23,6 +23,25 @@
 - **2026-07-28:** iOS host cell self-resize animation suppressed
   (`MessageListTimelineHostCell`) + per-row height cache / heuristic estimate
   seed (replacing flat `estimated(72)`).
+- **2026-07-28:** Experimental `HOLD_READY_UNTIL_NEWEST_MARKDOWN` /
+  `holdReadyUntilNewestMarkdown`: large histories keep Session Chat on Loading
+  until the newest markdown candidate is enriched (plain-first not published).
+  Flip the flag to `false` to restore immediate plain Ready.
+- **2026-07-28:** Assistant bubbles paint prepared markdown immediately on first
+  appear; ≥3k paint-defer remains only for docs that arrive later on an already
+  visible plain bubble.
+- **2026-07-28:** Fenced code/diff paint prepared spans on first frame (no
+  plain→colored flash). Streaming fences under 2k chars paint semantic-fallback
+  spans; only larger fences stay plain via `forcePlain`. iOS highlighted Text
+  does not stack `.foregroundStyle` on attributed colors (fixes garbled
+  overlapping glyphs).
+- **2026-07-28:** Fixed TextMate upgrade after stream end: `FinalPlaceholder`
+  now marks `awaitingTextMateUpgrade`, and `Final` must not settle-reuse that
+  streaming-quality document. Pipeline also passes the pre-placeholder snapshot
+  into `Final` prepare.
+- **2026-07-28:** TextMate highlighting is Settings → Developer Tools gated
+  (`MarkdownHighlightPreferences`, default **off**). When off, all parses use
+  semantic fallback; toggling bumps `highlightEpoch` and clears prepared caches.
 
 ## Design System
 

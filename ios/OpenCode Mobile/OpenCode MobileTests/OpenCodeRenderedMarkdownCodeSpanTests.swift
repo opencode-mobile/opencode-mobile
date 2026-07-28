@@ -131,6 +131,67 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(prepared.renderedMarkdown?.sourceHash == 99)
     }
 
+    @Test func preparerFinalAfterPlaceholderUpgradesStreamingDocument() async {
+        let preferences = MarkdownHighlightPreferences.shared
+        let priorTextMateEnabled = preferences.textMateEnabled
+        preferences.setTextMateEnabled(true)
+        MessageContentPreparer.shared.clearDocumentCache()
+        defer {
+            preferences.setTextMateEnabled(priorTextMateEnabled)
+            MessageContentPreparer.shared.clearDocumentCache()
+        }
+
+        let markdown = "```kotlin\nval answer = 42\n```"
+        let streamingMessage = Message(
+            id: "message-1",
+            role: .assistant,
+            text: markdown,
+            parts: [.text(TextPart(text: markdown, isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let finalMessage = Message(
+            id: "message-1",
+            role: .assistant,
+            text: markdown,
+            parts: [.text(TextPart(text: markdown, isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+
+        let streaming = await MessageContentPreparer.shared.prepareMessage(
+            streamingMessage,
+            mode: .streaming
+        )
+        #expect(streaming.renderedMarkdown != nil)
+        #expect(streaming.awaitingTextMateUpgrade == false)
+
+        let placeholder = await MessageContentPreparer.shared.prepareMessage(
+            finalMessage,
+            previous: streaming,
+            mode: .finalPlaceholder
+        )
+        #expect(placeholder.awaitingTextMateUpgrade)
+        #expect(placeholder.renderedMarkdown?.sourceHash == streaming.renderedMarkdown?.sourceHash)
+
+        let finalized = await MessageContentPreparer.shared.prepareMessage(
+            finalMessage,
+            previous: placeholder,
+            mode: .final
+        )
+        #expect(finalized.renderedMarkdown != nil)
+        #expect(finalized.awaitingTextMateUpgrade == false)
+        // Streaming uses semantic fallback; Final must clear that diagnostic via TextMate.
+        #expect(
+            streaming.renderedMarkdown?.diagnostics.contains { $0.kind == "HighlighterFallback" } == true
+        )
+        #expect(
+            finalized.renderedMarkdown?.diagnostics.contains { $0.kind == "HighlighterFallback" } != true
+        )
+    }
+
     @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() {
         let snippet = """
         // HTTP Client with interceptors, retry logic
@@ -154,7 +215,8 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             \(snippet)
             ```
             """,
-            variant: .standalone
+            variant: .standalone,
+            textMateEnabled: true
         )
 
         guard case .codeBlock(_, let code, let spans) = document.blocks.first else {
@@ -201,7 +263,8 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             \(snippet)
             ```
             """,
-            variant: .standalone
+            variant: .standalone,
+            textMateEnabled: true
         )
 
         guard case .codeBlock(_, let code, let spans) = document.blocks.first else {
@@ -217,6 +280,23 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             spans.contains {
                 $0.role == .string && utf16Text(in: code, start: $0.start, end: $0.end).contains("Division by zero")
             }
+        )
+    }
+
+    @Test func streamingForcePlainOnlyForLargeFences() {
+        #expect(
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: true, codeLength: 500)
+                == false
+        )
+        #expect(
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: false, codeLength: 5_000)
+                == false
+        )
+        #expect(
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(
+                isStreaming: true,
+                codeLength: OpenCodeRenderedMarkdown.streamingPlainCodeCharacterThreshold
+            ) == true
         )
     }
 

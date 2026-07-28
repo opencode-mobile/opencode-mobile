@@ -288,7 +288,10 @@ class DisplayMessagePipeline(
                         val finalized =
                             contentPreparer.prepareMessages(
                                 messages,
-                                previousById,
+                                // Use pre-placeholder snapshot so Final does not
+                                // settle-reuse streaming-quality spans via the
+                                // placeholder DisplayMessage (isStreaming=false).
+                                snapshot,
                                 MessagePreparationMode.Final,
                             )
                         if (!isActive || !isCurrent(generation)) return@launch
@@ -305,7 +308,11 @@ class DisplayMessagePipeline(
                 enrichmentJob?.cancel()
                 enrichmentJob =
                     launch {
-                        delayMillis(48)
+                        val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
+                        // Spinner is already up when holding Ready — start TextMate ASAP.
+                        if (!holdReady) {
+                            delayMillis(48)
+                        }
                         if (!isActive || !isCurrent(generation)) return@launch
 
                         val byId =
@@ -356,7 +363,8 @@ class DisplayMessagePipeline(
                                 viewportEnrichedCount += 1
                                 viewportCharactersRemaining -= message.text.length
                                 val viewportReady =
-                                    viewportEnrichedCount >=
+                                    holdReady ||
+                                        viewportEnrichedCount >=
                                         MessageContentPreparer.HISTORY_ENRICH_VIEWPORT_MESSAGE_COUNT ||
                                         viewportCharactersRemaining <= 0
                                 if (viewportReady) {
@@ -368,6 +376,11 @@ class DisplayMessagePipeline(
                             yield()
                         }
                         if (!isActive || !isCurrent(generation)) return@launch
+                        // Escape hatch: hold path must not leave the UI on Loading forever.
+                        if (holdReady && !publishedViewport) {
+                            publishSnapshot()
+                            return@launch
+                        }
                         if (enrichedCount == 0) return@launch
                         if (!publishedViewport || enrichedCount > viewportEnrichedCount) {
                             publishSnapshot()
@@ -394,7 +407,12 @@ class DisplayMessagePipeline(
                         if (!isActive || !isCurrent(generation)) return@launch
                         if (!commitPrepared(generation, prepared, mode)) return@launch
                         lastPublishedMessages = messages
-                        send(DisplayMessageListUpdate.Messages(prepared))
+                        val suppressPublish =
+                            mode == MessagePreparationMode.HistoryPlainFirst &&
+                                MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
+                        if (!suppressPublish) {
+                            send(DisplayMessageListUpdate.Messages(prepared))
+                        }
                         onCommitted?.invoke()
                     }
             }

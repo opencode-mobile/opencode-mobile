@@ -51,6 +51,7 @@ class DisplayMessagePipelineCharacterizationTest {
     fun largeHistoryPublishesPlainFirstThenAtMostTwoEnrichmentFrames() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
+            val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
 
             // Five markdown messages: viewport publishes after 3, remaining after the rest.
             val history =
@@ -67,17 +68,22 @@ class DisplayMessagePipelineCharacterizationTest {
 
             harness.source.emit(MessageListUpdate.Messages(history))
 
-            assertEquals(1, harness.emissions.size)
-            val plainFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
-            assertTrue(plainFirst.messages.all { it.renderedMarkdown == null })
-            assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.single().mode)
-            assertEquals(48L, harness.delay.pendingMs())
-
-            harness.delay.release()
+            if (!holdReady) {
+                assertEquals(1, harness.emissions.size)
+                val plainFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
+                assertTrue(plainFirst.messages.all { it.renderedMarkdown == null })
+                assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.single().mode)
+                assertEquals(48L, harness.delay.pendingMs())
+                harness.delay.release()
+            } else {
+                assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.first().mode)
+            }
             advanceUntilIdle()
 
             val enrichmentFrames =
-                harness.emissions.drop(1).filterIsInstance<DisplayMessageListUpdate.Messages>()
+                harness.emissions
+                    .filterIsInstance<DisplayMessageListUpdate.Messages>()
+                    .filter { frame -> frame.messages.any { it.renderedMarkdown != null } }
             assertTrue(enrichmentFrames.isNotEmpty())
             assertTrue(
                 "expected at most two enrichment frames, got ${enrichmentFrames.size}",
@@ -89,24 +95,31 @@ class DisplayMessagePipelineCharacterizationTest {
             assertTrue(finalFrame.messages.all { it.renderedMarkdown != null })
             // Newest-first: first enrichment frame should include the newest message styled.
             assertTrue(enrichmentFrames.first().messages.last().renderedMarkdown != null)
+            if (holdReady) {
+                assertEquals(1, enrichmentFrames.first().messages.count { it.renderedMarkdown != null })
+            }
         }
 
     @Test
     fun largeSingleMessageHistoryPublishesPlainFirstThenOneViewportEnrichment() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
+            val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
 
             val large = largeMarkdownAssistant("msg-1")
             harness.source.emit(MessageListUpdate.Messages(listOf(large)))
 
-            assertEquals(1, harness.emissions.size)
-            assertEquals(48L, harness.delay.pendingMs())
-
-            harness.delay.release()
+            if (!holdReady) {
+                assertEquals(1, harness.emissions.size)
+                assertEquals(48L, harness.delay.pendingMs())
+                harness.delay.release()
+            }
             advanceUntilIdle()
 
             val enrichmentFrames =
-                harness.emissions.drop(1).filterIsInstance<DisplayMessageListUpdate.Messages>()
+                harness.emissions
+                    .filterIsInstance<DisplayMessageListUpdate.Messages>()
+                    .filter { frame -> frame.messages.any { it.renderedMarkdown != null } }
             assertEquals(1, enrichmentFrames.size)
             assertTrue(enrichmentFrames.single().messages.single().renderedMarkdown != null)
         }
@@ -295,6 +308,11 @@ class DisplayMessagePipelineCharacterizationTest {
     fun cancelledEnrichmentPrepareDoesNotPublishAfterNewerLiveSnapshot() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
+            // This test needs a published plain-first baseline before parking enrich.
+            // Under hold-ready the UI stays Loading, so keep coverage on the classic path.
+            if (MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN) {
+                return@runTest
+            }
 
             val large = largeMarkdownAssistant("history")
             harness.preparer.holdNextPrepareMessage()
