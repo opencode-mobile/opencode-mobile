@@ -59,4 +59,27 @@ final class ConnectionEpoch: @unchecked Sendable {
     }
 }
 
+/// Per-observation generation. Adopted forward on stream.reconnected /
+/// server.connected so an SSE start/reconnect bump does not latch Recovering.
+final class ObservationEpoch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: UInt64
+
+    init(_ value: UInt64) {
+        self.value = value
+    }
+
+    var current: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func adopt(_ newValue: UInt64) {
+        lock.lock()
+        defer { lock.unlock() }
+        value = newValue
+    }
+}
+
 nonisolated let messageEventStagingByteCapacity = 2_000_000

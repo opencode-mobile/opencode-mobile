@@ -159,7 +159,7 @@ final class MessageSync: @unchecked Sendable {
         key: MessageSessionKey,
         yield: @escaping (MessageListUpdate) -> Void
     ) async {
-        let observationEpoch = connectionEpoch.current()
+        let observationEpoch = ObservationEpoch(connectionEpoch.current())
         // Register before the initial REST request. Bounded staging closes the
         // part-shell/delta loss window without an unbounded observation buffer.
         let staging = MessageEventStaging(
@@ -168,7 +168,7 @@ final class MessageSync: @unchecked Sendable {
         )
         let producer = Task { [eventStream] in
             for await event in await eventStream.events() {
-                staging.enqueue(event, sessionID: key.sessionID, epoch: observationEpoch)
+                staging.enqueue(event, sessionID: key.sessionID, epoch: observationEpoch.current)
             }
             staging.finish()
         }
@@ -182,7 +182,7 @@ final class MessageSync: @unchecked Sendable {
                 case .disconnected, .reconnecting, .idle:
                     guard seenConnected else { continue }
                     guard self.fingerprint(for: key.storeSlot) != nil else { continue }
-                    guard self.connectionEpoch.current() == observationEpoch else { return }
+                    guard self.connectionEpoch.current() == observationEpoch.current else { return }
                     let current = self.syncHealth(sessionID: key.sessionID, directory: key.directory.isEmpty ? nil : key.directory)
                     guard current.isHealthy else { continue }
                     staging.enterStale(.transportUnavailable)
@@ -200,7 +200,7 @@ final class MessageSync: @unchecked Sendable {
 
         let publishMessages: @Sendable ([Message]) -> Void = { [weak self] messages in
             guard let self else { return }
-            guard self.connectionEpoch.current() == observationEpoch else { return }
+            guard self.connectionEpoch.current() == observationEpoch.current else { return }
             self.setPublishedFrame(
                 messages,
                 revision: self.store.revision(sessionID: key.storeSlot),
@@ -289,11 +289,15 @@ final class MessageSync: @unchecked Sendable {
     private func performClosedLoopRecovery(
         key: MessageSessionKey,
         staging: MessageEventStaging,
-        observationEpoch: UInt64,
+        observationEpoch: ObservationEpoch,
         reason: MessageSyncRecoveryReason,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
-        guard connectionEpoch.current() == observationEpoch else { return }
+        guard connectionEpoch.current() == observationEpoch.current else {
+            staging.clearRecoveringLatch()
+            setHealth(.healthy, for: key)
+            return
+        }
         if !staging.needsAuthoritativeRecovery {
             staging.enterRecovering(reason)
         }
@@ -377,10 +381,10 @@ final class MessageSync: @unchecked Sendable {
         key: MessageSessionKey,
         reason: String,
         staging: MessageEventStaging?,
-        observationEpoch: UInt64,
+        observationEpoch: ObservationEpoch,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
-        guard connectionEpoch.current() == observationEpoch else { return }
+        guard connectionEpoch.current() == observationEpoch.current else { return }
         if let staging {
             staging.beginAuthorityWindow()
         }
@@ -422,7 +426,7 @@ final class MessageSync: @unchecked Sendable {
     private func runEventRefreshLoop(
         key: MessageSessionKey,
         staging: MessageEventStaging,
-        observationEpoch: UInt64,
+        observationEpoch: ObservationEpoch,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         var debounceTask: Task<Void, Never>?
@@ -443,7 +447,7 @@ final class MessageSync: @unchecked Sendable {
                 )
                 continue
             case .event(let event, let eventEpoch, _):
-                guard eventEpoch == observationEpoch else { continue }
+                guard eventEpoch == observationEpoch.current else { continue }
                 if staging.needsAuthoritativeRecovery {
                     await performClosedLoopRecovery(
                         key: key,
@@ -474,14 +478,14 @@ final class MessageSync: @unchecked Sendable {
         event: OpencodeEvent,
         key: MessageSessionKey,
         staging: MessageEventStaging,
-        observationEpoch: UInt64,
+        observationEpoch: ObservationEpoch,
         debounceTask: inout Task<Void, Never>?,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
-        guard connectionEpoch.current() == observationEpoch else { return }
         if event.type == "stream.reconnected" {
             debounceTask?.cancel()
             debounceTask = nil
+            observationEpoch.adopt(connectionEpoch.current())
             staging.enterRecovering(.reconnect, wakeConsumer: false)
             setHealth(staging.currentHealth, for: key)
             await performClosedLoopRecovery(
@@ -499,6 +503,7 @@ final class MessageSync: @unchecked Sendable {
             debounceTask = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs))
                 guard !Task.isCancelled, let self else { return }
+                observationEpoch.adopt(self.connectionEpoch.current())
                 staging.enterRecovering(.reconnect, wakeConsumer: false)
                 self.setHealth(staging.currentHealth, for: key)
                 await self.performClosedLoopRecovery(
@@ -511,6 +516,8 @@ final class MessageSync: @unchecked Sendable {
             }
             return
         }
+
+        guard connectionEpoch.current() == observationEpoch.current else { return }
 
         guard event.sessionID == key.sessionID else { return }
 
@@ -673,14 +680,14 @@ final class MessageSync: @unchecked Sendable {
     private func runTimelinePollLoop(
         key: MessageSessionKey,
         staging: MessageEventStaging,
-        observationEpoch: UInt64,
+        observationEpoch: ObservationEpoch,
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(pollIntervalMs))
             guard !Task.isCancelled else { return }
             if staging.needsAuthoritativeRecovery { continue }
-            guard connectionEpoch.current() == observationEpoch else { return }
+            guard connectionEpoch.current() == observationEpoch.current else { return }
             // Polling REST mid-stream publishes a behind snapshot and looks like the
             // assistant message clearing then reprinting from the start.
             if store.hasStreamingText(sessionID: key.storeSlot) { continue }

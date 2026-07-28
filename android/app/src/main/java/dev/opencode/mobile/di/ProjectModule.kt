@@ -18,8 +18,13 @@ import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
+import dev.opencode.mobile.lifecycle.ForegroundEventLifecycleCoordinator
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import javax.inject.Singleton
 
@@ -72,5 +77,17 @@ abstract class EventStreamModule {
         @Provides
         @Singleton
         fun provideEventDomainAdapter(json: Json): EventDomainAdapter = EventDomainAdapter(json)
+
+        @Provides
+        @Singleton
+        fun provideForegroundEventLifecycleCoordinator(
+            foregroundEventStream: ForegroundEventStream,
+            activeConnectionManager: ActiveConnectionManager,
+        ): ForegroundEventLifecycleCoordinator =
+            ForegroundEventLifecycleCoordinator(
+                foregroundEventStream = foregroundEventStream,
+                hasActiveConnection = { activeConnectionManager.current() != null },
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            )
     }
 }

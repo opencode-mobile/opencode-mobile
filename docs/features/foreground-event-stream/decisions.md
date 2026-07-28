@@ -38,7 +38,10 @@ Map server status `type` to product copy: `busy` → **Working**, `retry` → **
 
 ## Lifecycle
 
-- **App foreground:** Android `ProcessLifecycleOwner` start/stop; iOS `scenePhase` `.active` / `.background` on `AppRootView`.
+- **App foreground:** Android `ProcessLifecycleOwner` start/stop with a **5s
+  stop grace** so photo/document pickers (system activities that briefly stop
+  the process) do not tear down SSE; iOS `scenePhase` `.active` / `.background`
+  on `AppRootView` (`.inactive` keeps the stream, which covers pickers).
 - **Session Chat (iOS):** `startObserving()` on appear; `stopObserving()` on explicit back or after a short delayed disappear (avoids killing SSE when the home Screen Model refresh re-renders the navigation parent). Android relies on scoped `ViewModel` cancellation on navigate back.
 
 ## Heartbeats

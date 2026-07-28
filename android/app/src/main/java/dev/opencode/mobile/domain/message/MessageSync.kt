@@ -27,6 +27,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.system.measureTimeMillis
 
@@ -104,7 +105,10 @@ class MessageSync(
 
     private fun incrementalMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
-            val observationEpoch = connectionEpoch.current()
+            // Adopted forward on stream.reconnected / server.connected so a
+            // ConnectionEpoch bump from SSE start/reconnect does not latch
+            // Recovering on a stale observation generation.
+            val observationEpoch = AtomicLong(connectionEpoch.current())
             val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
             val health = AtomicReference<MessageSyncHealth>(MessageSyncHealth.Healthy)
             val authorityWindowOpen = AtomicBoolean(false)
@@ -223,7 +227,11 @@ class MessageSync(
                 }
             }
 
-            fun isCurrentEpoch(): Boolean = connectionEpoch.current() == observationEpoch
+            fun isCurrentEpoch(): Boolean = connectionEpoch.current() == observationEpoch.get()
+
+            fun adoptCurrentEpoch() {
+                observationEpoch.set(connectionEpoch.current())
+            }
 
             val producer =
                 launch {
@@ -244,7 +252,7 @@ class MessageSync(
                         }
                         val result =
                             staging.trySend(
-                                StagedItem.Event(event, observationEpoch, cost),
+                                StagedItem.Event(event, observationEpoch.get(), cost),
                             )
                         if (result.isSuccess) {
                             noteQueued(cost)
@@ -278,7 +286,15 @@ class MessageSync(
                 }
 
             suspend fun performClosedLoopRecovery(reason: MessageSyncRecoveryReason) {
-                if (!isCurrentEpoch()) return
+                if (!isCurrentEpoch()) {
+                    // SSE start/reconnect bumps ConnectionEpoch under an in-flight
+                    // observation. Never leave Recovering latched when we cannot
+                    // complete authority for this generation.
+                    if (requiresRecovery()) {
+                        publishHealth(MessageSyncHealth.Healthy)
+                    }
+                    return
+                }
                 if (!requiresRecovery()) {
                     enterRecovering(reason)
                 }
@@ -316,6 +332,7 @@ class MessageSync(
                 if (event.type == "stream.reconnected") {
                     serverConnectedReloadJob?.cancel()
                     serverConnectedReloadJob = null
+                    adoptCurrentEpoch()
                     enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                     performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
                     return
@@ -325,12 +342,14 @@ class MessageSync(
                     serverConnectedReloadJob =
                         launch {
                             delay(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS)
+                            adoptCurrentEpoch()
                             enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
                             performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
                         }
                     return
                 }
 
+                if (!isCurrentEpoch()) return
                 if (event.sessionId != key.sessionId) return
                 MessagePipelineProbe.emit(MessagePipelineProbe.Marker.EventAccepted)
 
@@ -530,7 +549,7 @@ class MessageSync(
                         }
                         is StagedItem.Event -> {
                             noteDequeued(item.byteCost)
-                            if (item.epoch != observationEpoch) {
+                            if (item.epoch != observationEpoch.get()) {
                                 // Drop stale-epoch work.
                             } else if (requiresRecovery() || pendingRecoveryWhileIdle.getAndSet(false)) {
                                 val reason =

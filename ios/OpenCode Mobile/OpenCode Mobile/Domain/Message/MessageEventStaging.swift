@@ -115,6 +115,16 @@ final class MessageEventStaging: @unchecked Sendable {
         }
     }
 
+    /// Clears a Recovering latch when authority cannot run for this generation.
+    func clearRecoveringLatch() {
+        lock.lock()
+        defer { lock.unlock() }
+        if case .recovering = health {
+            health = .healthy
+        }
+        pendingRecoveryWhileIdle = false
+    }
+
     func beginAuthorityWindow() {
         lock.lock()
         defer { lock.unlock() }

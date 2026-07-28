@@ -369,6 +369,54 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_serverConnectedAfterEpochBumpRecoversAndAppliesLiveDeltas() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val epoch = ConnectionEpoch()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = 60_000L,
+                    connectionEpoch = epoch,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+
+            // Foreground SSE start bumps the shared epoch, then emits server.connected.
+            // Recovery must adopt the new generation or it latches Recovering forever.
+            epoch.bump()
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS + 50)
+
+            assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Live after reconnect"))
+            advanceTimeBy(50)
+
+            assertEquals(
+                "Live after reconnect",
+                emissions.last().first { it.id == "msg-2" }.text,
+            )
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_fullReloadOnReconnected() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

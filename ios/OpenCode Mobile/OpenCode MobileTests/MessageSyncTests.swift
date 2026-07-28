@@ -270,6 +270,49 @@ struct MessageSyncTests {
         #expect(collector.latest()?.first?.text == "Hello")
     }
 
+    @Test func serverConnected_afterEpochBump_recoversAndAppliesLiveDeltas() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let epoch = ConnectionEpoch()
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: 60_000,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            connectionEpoch: epoch
+        )
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        _ = epoch.bump()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil, rawProperties: nil))
+        // Wait for debounced adopt + recovery; isHealthy alone is true before reconnect.
+        try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.messageDebounceMs + 250))
+        #expect(sync.syncHealth(sessionID: "ses-1", directory: "/repo").isHealthy)
+
+        eventStream.emit(eventWithInfo(id: "msg-2", role: "assistant", sessionID: "ses-1"))
+        eventStream.emit(eventWithTextPart(partID: "prt-1", messageID: "msg-2", text: "", sessionID: "ses-1"))
+        eventStream.emit(
+            eventWithPartDelta(
+                partID: "prt-1",
+                messageID: "msg-2",
+                delta: "Live after reconnect",
+                sessionID: "ses-1"
+            )
+        )
+        let streamed = await waitUntil {
+            collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live after reconnect"
+        }
+        task.cancel()
+        #expect(streamed)
+    }
+
     @Test func messageUpdated_suppressesEmptyNewSlot() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
