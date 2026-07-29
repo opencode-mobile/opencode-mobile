@@ -40,7 +40,7 @@ class MarkdownSessionChatBenchmarkTest {
                     OpenCodeTextMateGrammarBundleLoader
                         .loadBundled(bundledTestResourceReader(), metrics)
                         .bundle,
-                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend, metrics),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexRuntime(), metrics),
                 metricsSink = metrics,
             )
         val messages = longMarkdownHistory()

@@ -43,7 +43,7 @@ class PopularLanguageHighlighterSmokeTest {
     private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter =
         OpenCodeSyntaxHighlighter(
             grammarBundle = bundledGrammarBundle(),
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
+            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexRuntime()),
         )
 
     private companion object {

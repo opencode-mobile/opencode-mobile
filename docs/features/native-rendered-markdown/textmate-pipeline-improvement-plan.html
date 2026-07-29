@@ -649,7 +649,7 @@
         <span class="number">2</span>
         <h3>Deep module and one owner</h3>
         <p>Introduce the engine behind existing preparation, serialize mutable state, and keep current fallback/final-upgrade behavior.</p>
-        <div class="gate">Gate: no race and no UI-executor work.</div>
+        <div class="gate">Status: closed. Injected lazy owner adapters, deterministic identity, exact-source checks, and pure attachment pass on both platforms.</div>
       </div>
       <div class="phase">
         <span class="number">3</span>
@@ -675,6 +675,17 @@
         <p>Run device, pressure, thermal, cancellation, and soak matrices; promote only languages that meet correctness and latency gates.</p>
         <div class="gate">Gate: all acceptance criteria pass on both platforms.</div>
       </div>
+    </div>
+
+    <h2>Phase 2 closure</h2>
+    <div class="panel">
+      <ul>
+        <li>The shared <code>TextMateHighlightingEngine</code> accepts one fence with an opaque key, monotonic revision, exact source, intent, and policy epoch.</li>
+        <li>Structural parsing produces a complete semantic-fallback document first; deterministic locators and pure attachment reject stale or mismatched results.</li>
+        <li>Android lazily creates one KMP/Joni runtime on its owner lane behind a mutex. iOS lazily creates one KMP/libonig runtime behind a Swift actor.</li>
+        <li>Joni and libonig regex caches are instance-owned, not process-global or thread-local production state.</li>
+        <li>Shared Android/JVM tests, the full iOS-simulator KMP suite, Android 24-way first-use stress, 17 focused iOS tests, and the simulator app build pass.</li>
+      </ul>
     </div>
 
     <h2>Alternatives considered</h2>
@@ -717,18 +728,19 @@
       <div class="decision"><strong>4 · Latency</strong><span>Owned hypotheses become gates only after evidence-backed decisions.</span></div>
       <div class="decision"><strong>5 · Rollout</strong><span>Versioned language allowlist beneath the global preference.</span></div>
     </div>
-    <p class="caption">Phase 1 is closed on the named simulated correctness,
-      lifetime, retained-state, fixture, and soak matrix. Physical release
-      calibration remains mandatory in Phase 6. Phase 2 has not started and
-      also requires deterministic fence identity, exact-source validation,
-      pure span attachment, and the asynchronous platform-to-KMP seam.</p>
+    <p class="caption">Phases 1 and 2 are closed. The shared asynchronous engine,
+      deterministic fence identity, monotonic revision, exact-source validation,
+      pure attachment, and lazy single-owner Android/iOS adapters are implemented.
+      Physical release calibration remains mandatory in Phase 6. Phase 3 is next
+      and owns scheduling, coalescing, deadlines, backpressure, trim handling,
+      and queue/cancellation metrics.</p>
 
     <p class="footer">
       Canonical source:
       <a href="./textmate-pipeline-improvement-plan.md">textmate-pipeline-improvement-plan.md</a>
       · Starting evidence:
       <a href="./textmate-markdown-highlighter-architecture-report.html">current architecture report</a>
-      · Implementation status: Phase 1 closed; Phase 2 not started; Phase 6 owns physical release calibration
+      · Implementation status: Phases 1–2 closed; Phase 3 next; Phase 6 owns physical release calibration
     </p>
   </main>
 </body>

@@ -10,7 +10,7 @@ import org.joni.Syntax
 import org.joni.exception.JOniException
 import kotlin.time.TimeSource
 
-object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
+class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
     override val name: String = "joni-oniguruma"
 
     override val isOnigurumaCompatible: Boolean = true

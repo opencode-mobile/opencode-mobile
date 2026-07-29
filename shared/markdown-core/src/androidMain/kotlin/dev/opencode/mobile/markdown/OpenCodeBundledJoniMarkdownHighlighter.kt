@@ -14,7 +14,7 @@ object OpenCodeBundledJoniMarkdownHighlighter {
 
         return OpenCodeSyntaxHighlighter(
             grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend, metricsSink),
+            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexRuntime(), metricsSink),
             metricsSink = metricsSink,
         )
     }
@@ -25,11 +25,8 @@ object OpenCodeBundledJoniMarkdownHighlighter {
     fun createFromApplicationContext(): OpenCodeSyntaxHighlighter =
         createFromContext(OpenCodeAndroidMarkdownAssets.requireApplicationContext())
 
-    fun default(): OpenCodeCodeHighlighter = lazyDefault
-
-    private val lazyDefault: OpenCodeSyntaxHighlighter by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+    fun default(): OpenCodeCodeHighlighter =
         runCatching { createFromApplicationContext() }.getOrElse { create(classpathResourceReader()) }
-    }
 
     private fun classpathResourceReader(): OpenCodeTextMateResourceReader =
         OpenCodeTextMateResourceReader { resourcePath ->

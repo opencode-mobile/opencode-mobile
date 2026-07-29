@@ -8,6 +8,7 @@ import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
+import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.markdown.SyntaxHighlightResult
 import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
@@ -31,7 +32,7 @@ class MessageContentPreparerTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private fun createPreparer(): MessageContentPreparer =
-        MessageContentPreparer(RecordingHighlighter()).apply {
+        MessageContentPreparer(OpenCodeTextMateHighlightingEngine(RecordingHighlighter())).apply {
             computationDispatcher = testDispatcher
         }
 
@@ -244,7 +245,7 @@ class MessageContentPreparerTest {
             try {
                 val highlighter = RecordingHighlighter()
                 val preparer =
-                    MessageContentPreparer(highlighter).apply {
+                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
                         computationDispatcher = testDispatcher
                     }
                 val markdown = "```kotlin\nval answer = 42\n```"
@@ -303,7 +304,7 @@ class MessageContentPreparerTest {
             try {
                 val logbook = RecordingLogbook()
                 val preparer =
-                    MessageContentPreparer(RecordingHighlighter(), logbook).apply {
+                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(RecordingHighlighter()), logbook).apply {
                         computationDispatcher = testDispatcher
                     }
                 val markdown = "```kotlin\nval answer = 42\n```"
@@ -350,7 +351,7 @@ class MessageContentPreparerTest {
             try {
                 val highlighter = BlockingHighlighter()
                 val preparer =
-                    MessageContentPreparer(highlighter).apply {
+                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
                         computationDispatcher = Dispatchers.Default
                     }
                 val finalPreparation =

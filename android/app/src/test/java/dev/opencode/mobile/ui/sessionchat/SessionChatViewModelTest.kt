@@ -48,6 +48,7 @@ import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
+import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -683,7 +684,10 @@ class SessionChatViewModelTest {
                         }
                     }
                 }
-            val preparer = MessageContentPreparer(highlighter).apply { computationDispatcher = testDispatcher }
+            val preparer =
+                MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
+                    computationDispatcher = testDispatcher
+                }
             val preparerMs =
                 measureMs {
                     preparer.prepareMessages(messages)
@@ -2878,7 +2882,7 @@ private class FakeMessageRepository(
     var failListMessagesAfterSend: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
     private val contentPreparer: MessageContentPreparer =
-        MessageContentPreparer(OpenCodeSyntaxHighlighter.default).apply {
+        MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
             computationDispatcher = Dispatchers.Unconfined
         },
 ) : MessageRepository {

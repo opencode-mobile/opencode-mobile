@@ -2,7 +2,7 @@ package dev.opencode.mobile.markdown
 
 /**
  * Temporary Kotlin [Regex] shim used for regression comparisons. Production iOS uses
- * [OpenCodeLibOnigRegexBackend]; Android uses [OpenCodeJoniRegexBackend].
+ * `OpenCodeLibOnigRegexRuntime`; Android uses `OpenCodeJoniRegexRuntime`.
  */
 object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "kotlin-regex-hybrid-textmate-bridge"

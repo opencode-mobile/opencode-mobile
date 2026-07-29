@@ -6,17 +6,19 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
 class OpenCodeJoniRegexBackendAndroidTest {
+    private val backend = OpenCodeJoniRegexRuntime()
+
     @Test
     fun joniBackendReportsOnigurumaCompatibility() {
-        assertEquals("joni-oniguruma", OpenCodeJoniRegexBackend.name)
-        assertTrue(OpenCodeJoniRegexBackend.isOnigurumaCompatible)
+        assertEquals("joni-oniguruma", backend.name)
+        assertTrue(backend.isOnigurumaCompatible)
     }
 
     @Test
     fun joniBackendSupportsTextMateBackslashGAnchor() {
         val code = "> quote"
         val match =
-            OpenCodeJoniRegexBackend.find(
+            backend.find(
                 pattern = "\\G> ?",
                 input = code,
                 startIndex = 0,
@@ -30,7 +32,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
     fun joniBackendSupportsNamedCapturesAndUtf8Offsets() {
         val code = "é<tag>body</tag>"
         val match =
-            OpenCodeJoniRegexBackend.find(
+            backend.find(
                 pattern = "<(?<name>[A-Za-z]+)>",
                 input = code,
                 startIndex = 0,
@@ -94,7 +96,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
                         },
                 ).primaryGrammarFor("sample") ?: error("missing sample grammar")
 
-        val result = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend).tokenize(grammar, "val answer = 1")
+        val result = OpenCodeTextMateNativeTokenizer(backend).tokenize(grammar, "val answer = 1")
 
         assertTrue(result.diagnostics.none { diagnostic -> diagnostic.kind == MarkdownDiagnosticKind.HighlighterBackendFallback })
         assertTrue(result.tokens.any { token -> token.scopes.any { scope -> scope.startsWith("keyword") } })
@@ -157,7 +159,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
         val optionBegin =
             "[\\t ]++(-)((?![\\n!#\\&()<>\\[{|]|$|[\\t ;]))"
         val line = "set -euo pipefail"
-        val match = OpenCodeJoniRegexBackend.find(optionBegin, line, 3, line.length)
+        val match = backend.find(optionBegin, line, 3, line.length)
         assertEquals(3, match?.start)
         assertEquals(5, match?.end)
     }
@@ -167,7 +169,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
         val normalStatementBegin =
             "(?!^[\\t ]*+$)(?:(?<=(?:^until| until|\\tuntil|^while| while|\\twhile|^elif| elif|\\telif|^else| else|\\telse|^then| then|\\tthen|^do| do|\\tdo|^if| if|\\tif) )|(?<=^|[!\\&(;`{|]))[\\t ]*+(?!nocorrect\\W|nocorrect\\$|function\\W|function\\$|foreach\\W|foreach\\$|repeat\\W|repeat\\$|logout\\W|logout\\$|coproc\\W|coproc\\$|select\\W|select\\$|while\\W|while\\$|pushd\\W|pushd\\$|until\\W|until\\$|case\\W|case\\$|done\\W|done\\$|elif\\W|elif\\$|else\\W|else\\$|esac\\W|esac\\$|popd\\W|popd\\$|then\\W|then\\$|time\\W|time\\$|for\\W|for\\$|end\\W|end\\$|fi\\W|fi\\$|do\\W|do\\$|in\\W|in\\$|if\\W|if\\$)"
         val line = "set -euo pipefail"
-        val match = OpenCodeJoniRegexBackend.find(normalStatementBegin, line, 0, line.length)
+        val match = backend.find(normalStatementBegin, line, 0, line.length)
 
         assertEquals(TextMateRegexMatch(0, 0, listOf(TextMateRegexCapture(0, 0, 0))), match)
     }
@@ -335,7 +337,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
                     },
                 ).bundle ?: error("missing bundled TextMate grammar bundle")
         val grammar = bundle.primaryGrammarFor("javascript") ?: error("missing javascript grammar")
-        val result = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend).tokenizeLine(grammar, line, bundle)
+        val result = OpenCodeTextMateNativeTokenizer(backend).tokenizeLine(grammar, line, bundle)
         val templateOpenRules = result.state.openRules.filter { it.endPattern == "`" }
         assertTrue(
             templateOpenRules.isEmpty(),
@@ -349,7 +351,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
 
         assertEquals(
             null,
-            OpenCodeJoniRegexBackend.find(
+            backend.find(
                 pattern = badPattern,
                 input = "test",
                 startIndex = 0,
@@ -358,7 +360,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
         )
         assertEquals(
             null,
-            OpenCodeJoniRegexBackend.find(
+            backend.find(
                 pattern = badPattern,
                 input = "test",
                 startIndex = 0,
@@ -371,7 +373,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
     fun joniMatchesZeroWidthClassEndAfterClosingBrace() {
         val code = "class Foo {}"
         val match =
-            OpenCodeJoniRegexBackend.find(
+            backend.find(
                 pattern = "(?<=})",
                 input = code,
                 startIndex = 0,
@@ -409,7 +411,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
                     },
                 ).bundle ?: error("missing bundled TextMate grammar bundle")
         val grammar = bundle.primaryGrammarFor("javascript") ?: error("missing javascript grammar")
-        val tokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend)
+        val tokenizer = OpenCodeTextMateNativeTokenizer(backend)
         val prefix =
             """
               async request(method, path, options = {}) {
@@ -428,7 +430,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
         )
     }
 
-    private fun bundledTokenizer(): OpenCodeTextMateNativeTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend)
+    private fun bundledTokenizer(): OpenCodeTextMateNativeTokenizer = OpenCodeTextMateNativeTokenizer(backend)
 
     private fun bundledGrammarBundle(): TextMateGrammarBundle {
         return OpenCodeTextMateGrammarBundleLoader
@@ -527,7 +529,7 @@ class OpenCodeJoniRegexBackendAndroidTest {
     }
 
     private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter =
-        Top10GoldenFixtureAssertions.bundledHighlighter(OpenCodeJoniRegexBackend)
+        Top10GoldenFixtureAssertions.bundledHighlighter(backend)
 
     private fun assertNoDuplicateSpanRanges(fixtureId: String) {
         val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }

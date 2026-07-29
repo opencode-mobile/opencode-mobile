@@ -1,7 +1,7 @@
 # TextMate Pipeline Architecture Proposal
 
-**Status:** accepted target; Phase 1 closed on simulated backends;
-physical-device calibration remains in Phase 6; Phase 2 not started
+**Status:** accepted target; Phases 1–2 implemented; Phase 3 next;
+physical-device calibration remains in Phase 6
 **Date:** 2026-07-29
 **Applies to:** Android/Joni and iOS/libonig through
 `shared/markdown-core`
@@ -29,6 +29,25 @@ current.
 
 This is the proposal. The current synchronous parser-owned TextMate path is not
 the target architecture.
+
+### Implemented foundation
+
+Phase 2 now implements the proposal's deep boundary and ownership foundation:
+
+- structural Markdown produces the complete semantic-fallback document first;
+- finalized code fences enter an injected asynchronous
+  `TextMateHighlightingEngine` one fence at a time;
+- deterministic locators plus opaque keys, monotonic revisions, policy epochs,
+  and exact source make each result independently rejectable;
+- pure attachment replaces spans only after every identity check passes;
+- Android owns one lazily initialized KMP/Joni runtime on an injected
+  single-lane dispatcher; iOS owns one lazily initialized KMP/libonig runtime
+  behind a Swift actor; and
+- compiled-regex caches are instance state, not process-global or thread-local
+  production state.
+
+Priority scheduling, coalescing, deadlines, bounded queues, and trim policy are
+still Phase 3. Compiled rule programs and weighted caches remain Phase 4.
 
 ## Architecture at a glance
 
@@ -397,10 +416,9 @@ The architecture triage accepted these policies on 2026-07-29:
    language allowlist after per-language correctness, performance, fallback,
    native-lifetime, memory, and soak gates pass on Joni and libonig.
 
-Phase 1 is closed on the named simulator/emulator correctness, native-lifetime,
-retained-state, reference-fixture, and 30-minute soak matrix in the
+Phases 1 and 2 are closed with the correctness, ownership, lifetime, simulator,
+and interface evidence in the
 [implementation plan](./textmate-pipeline-improvement-plan.md). Physical release
-calibration remains mandatory in Phase 6 before default enablement. Phase 2 has
-not started; its seam must specify a deterministic fence locator, an opaque
-monotonic revision token, exact-source validation, a pure span-attachment
-operation, and the asynchronous platform-to-KMP adapter.
+calibration remains mandatory in Phase 6 before default enablement. Phase 3 is
+next and owns priority, coalescing, work limits, deadlines, trim handling, and
+queue/cancellation metrics.

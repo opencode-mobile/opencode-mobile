@@ -3,6 +3,23 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Closed TextMate pipeline Phase 2. Shared
+  `TextMateHighlightingEngine` now upgrades individual finalized fences after
+  structural parsing has produced a complete semantic-fallback document. The
+  contract carries deterministic opaque fence identity, caller-owned monotonic
+  revision, exact source, intent, and policy epoch; pure attachment rejects
+  changed documents, fences, identity, revision, policy, source, and failed or
+  cancelled results. Android injects one lazily initialized KMP/Joni runtime on
+  a single-lane dispatcher behind a mutex. iOS injects one lazily initialized
+  KMP/libonig runtime behind a Swift actor. Backend regex caches are
+  instance-owned; production no longer depends on process-global Joni or
+  thread-local libonig caches. Streaming fallback, final placeholder/upgrade,
+  logbook observations, and outer generation publication gates are preserved.
+  Shared Android tests, the complete iOS-simulator KMP suite, focused Android
+  preparer plus 24-way first-use ownership tests, 17 focused iOS engine/bridge/
+  logbook/rendering tests, and an iPhone 17 Pro simulator build/run pass.
+  Phase 3 is next and owns scheduling, deadlines, coalescing, backpressure,
+  trim handling, and queue/cancellation metrics.
 - 2026-07-29: Closed TextMate pipeline Phase 1 on the accepted simulated
   backend matrix. The Pixel 9a Android 17 / API 37 AVD completed 457
   mixed-language cycles over 1,801.760 seconds; retained PSS changed from
@@ -17,7 +34,7 @@
   seconds cold and 52.891–53.074 seconds warm on iOS. These are diagnostic
   baselines and show that warm reuse is absent or inconsistent; they are not
   shipping guardrails. The rebuilt Android short soak, focused iOS libonig
-  class, and harness builds pass. Phase 2 has not started. Physical release
+  class, and harness builds pass. Phase 2 was subsequently closed above. Physical release
   performance, memory-pressure, bridge, thermal, cancellation, and soak
   calibration remains mandatory in Phase 6 before default enablement.
 - 2026-07-29: Added a persisted developer-only TextMate parsing logbook on
@@ -60,16 +77,15 @@
   50.324 ms maximum native search on an iPhone 17 Pro simulator; it is
   diagnostic only. Phase 1 was still open at that point; the later accepted
   decision above closes it on simulated backends and moves physical release
-  calibration to Phase 6. Phase 2 has not started.
+  calibration to Phase 6. Phase 2 was subsequently closed above.
 - 2026-07-29: Locked the TextMate pipeline architecture after independent
   module/concurrency and performance/memory/reliability triages. The five
   architecture choices are recorded in
   [decisions](./decisions.md): a deep asynchronous post-parse engine, one
   instance-owned serial KMP runtime per platform, pooled 24 MiB eviction /
   32 MiB admission guardrails, evidence-owned provisional latency targets, and
-  a versioned language promotion allowlist. Phase 1 was authorized. Phase 2 remains
-  gated on deterministic fence identity, exact-source validation, pure span
-  attachment, and the asynchronous platform-to-KMP seam.
+  a versioned language promotion allowlist. Phases 1 and 2 are now closed;
+  Phase 3 is next.
 - 2026-07-29: Completed a software-architect review and separated the selected
   [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md)
   from its six-phase
@@ -89,8 +105,8 @@
 - iOS runtime: native SwiftUI renderer implemented and WebView asset removed.
 - Shared KMP: render-tree parser module added and wired into Android and iOS.
 - Highlighter: Android runtime now has a Joni-backed TextMate path; iOS now uses
-  the shared tokenizer with the libonig-backed
-  `OpenCodeLibOnigRegexBackend`. The hybrid Kotlin `Regex` path is retained for
+  the shared tokenizer with the instance-owned libonig-backed
+  `OpenCodeLibOnigRegexRuntime`. The hybrid Kotlin `Regex` path is retained for
   regression comparison only. Android/Joni JavaScript regression fixtures and
   open-rule invariants are active. Full Shiki golden parity remains open.
 - Parse threading: Android and iOS now parse markdown off the UI thread,
@@ -104,7 +120,7 @@
   uses pre-parsed mock documents.
 - Staged publication: small histories are transformed before their first
   publish. Histories with at least 4,000 markdown-candidate characters publish
-then enriches markdown newest-first and publishes at most twice
+  plain first, then enrich Markdown newest-first and publish at most twice
   (`enrich-viewport` for the open bottom, then `enrich-batch` for the rest) —
   never per-bubble UI frames that look like the chat reprinting. Live
   streaming updates retain transform-before-publish semantics.

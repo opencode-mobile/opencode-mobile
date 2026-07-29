@@ -10,17 +10,19 @@ import kotlin.time.TimeSource
 import kotlin.time.measureTime
 
 class OpenCodeLibOnigIosTest {
+    private val backend = OpenCodeLibOnigRegexRuntime()
+
     @Test
     fun libOnigBackendReportsOnigurumaCompatibility() {
-        assertEquals("libonig", OpenCodeLibOnigRegexBackend.name)
-        assertTrue(OpenCodeLibOnigRegexBackend.isOnigurumaCompatible)
+        assertEquals("libonig", backend.name)
+        assertTrue(backend.isOnigurumaCompatible)
     }
 
     @Test
     fun libOnigBackendSupportsTextMateBackslashGAnchor() {
         val code = "> quote"
         val match =
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = "\\G> ?",
                 input = code,
                 startIndex = 0,
@@ -34,7 +36,7 @@ class OpenCodeLibOnigIosTest {
     fun libOnigBackendSupportsNamedCapturesAndUtf8Offsets() {
         val code = "é<tag>body</tag>"
         val match =
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = "<(?<name>[A-Za-z]+)>",
                 input = code,
                 startIndex = 0,
@@ -49,7 +51,7 @@ class OpenCodeLibOnigIosTest {
     @Test
     fun libOnigTokenizerDoesNotEmitBackendFallbackDiagnostic() {
         val grammar = sampleGrammar()
-        val result = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend).tokenize(grammar, "val answer = 1")
+        val result = OpenCodeTextMateNativeTokenizer(backend).tokenize(grammar, "val answer = 1")
 
         assertTrue(result.diagnostics.none { diagnostic -> diagnostic.kind == MarkdownDiagnosticKind.HighlighterBackendFallback })
         assertTrue(result.tokens.any { token -> token.scopes.any { scope -> scope.startsWith("keyword") } })
@@ -59,7 +61,7 @@ class OpenCodeLibOnigIosTest {
     fun libOnigMatchesZeroWidthClassEndAfterClosingBrace() {
         val code = "class Foo {}"
         val match =
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = "(?<=})",
                 input = code,
                 startIndex = 0,
@@ -76,7 +78,7 @@ class OpenCodeLibOnigIosTest {
 
         assertEquals(
             null,
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = badPattern,
                 input = "test",
                 startIndex = 0,
@@ -85,7 +87,7 @@ class OpenCodeLibOnigIosTest {
         )
         assertEquals(
             null,
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = badPattern,
                 input = "test",
                 startIndex = 0,
@@ -96,18 +98,18 @@ class OpenCodeLibOnigIosTest {
 
     @Test
     fun libOnigBackendAccountsForCachedAndDecompositionProbeAllocations() {
-        OpenCodeLibOnigRegexBackend.clearCache()
-        val baseline = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        backend.clearCache()
+        val baseline = backend.allocationSnapshot()
 
         val direct =
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = "answer",
                 input = "answer",
                 startIndex = 0,
                 endIndex = 6,
             )
         val decomposed =
-            OpenCodeLibOnigRegexBackend.find(
+            backend.find(
                 pattern = "(?:foo|(?Z))",
                 input = "foo",
                 startIndex = 0,
@@ -116,13 +118,13 @@ class OpenCodeLibOnigIosTest {
 
         assertEquals(0, direct?.start)
         assertEquals(0, decomposed?.start)
-        val populated = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        val populated = backend.allocationSnapshot()
         assertTrue(populated.allocations > baseline.allocations)
         assertTrue(populated.frees > baseline.frees, "Successful decomposition probes must be freed immediately")
         assertTrue(populated.live > 0, "Cached compiled expressions should remain live before cache clear")
 
-        OpenCodeLibOnigRegexBackend.clearCache()
-        val cleared = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        backend.clearCache()
+        val cleared = backend.allocationSnapshot()
         assertEquals(0, cleared.live)
         assertEquals(cleared.allocations, cleared.frees)
     }
@@ -240,7 +242,7 @@ class OpenCodeLibOnigIosTest {
             )
         val bundle = bundledGrammarBundle()
         val grammar = bundle.primaryGrammarFor("javascript") ?: error("missing javascript grammar")
-        val tokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend)
+        val tokenizer = OpenCodeTextMateNativeTokenizer(backend)
 
         fixtureIds.forEach { fixtureId ->
             val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }
@@ -265,7 +267,7 @@ class OpenCodeLibOnigIosTest {
                 ?.coerceIn(0, MAX_BENCHMARK_WARM_SAMPLE_COUNT)
                 ?: 0
         val messages = longMarkdownHistory()
-        OpenCodeLibOnigRegexBackend.clearCache()
+        backend.clearCache()
         val metrics = SoakMetricsSink()
         val coldStartedAt = TimeSource.Monotonic.markNow()
         val highlighter =
@@ -274,7 +276,7 @@ class OpenCodeLibOnigIosTest {
                     OpenCodeTextMateGrammarBundleLoader
                         .loadBundled(bundledTestResourceReader(), metrics)
                         .bundle,
-                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend, metrics),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(backend, metrics),
                 metricsSink = metrics,
             )
         val markdownCount = messages.count { OpenCodeMarkdownDetector.shouldRender(it) }
@@ -311,8 +313,8 @@ class OpenCodeLibOnigIosTest {
                 "messages=20 code-lines=3000",
         )
 
-        OpenCodeLibOnigRegexBackend.clearCache()
-        val cleared = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        backend.clearCache()
+        val cleared = backend.allocationSnapshot()
         assertEquals(0, cleared.live)
         assertEquals(cleared.allocations, cleared.frees)
     }
@@ -326,7 +328,7 @@ class OpenCodeLibOnigIosTest {
             return
         }
 
-        OpenCodeLibOnigRegexBackend.clearCache()
+        backend.clearCache()
         val metrics = SoakMetricsSink()
         val highlighter =
             OpenCodeSyntaxHighlighter(
@@ -334,7 +336,7 @@ class OpenCodeLibOnigIosTest {
                     OpenCodeTextMateGrammarBundleLoader
                         .loadBundled(bundledTestResourceReader(), metrics)
                         .bundle,
-                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend, metrics),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(backend, metrics),
                 metricsSink = metrics,
             )
         val workload = mixedLanguageWorkload()
@@ -342,7 +344,7 @@ class OpenCodeLibOnigIosTest {
         repeat(SOAK_WARM_UP_CYCLES) {
             parseCycle(workload, highlighter)
         }
-        val retainedBaseline = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        val retainedBaseline = backend.allocationSnapshot()
         var peakLiveExpressions = retainedBaseline.live
         var cycles = 0
         val startedAt = TimeSource.Monotonic.markNow()
@@ -353,11 +355,11 @@ class OpenCodeLibOnigIosTest {
             peakLiveExpressions =
                 maxOf(
                     peakLiveExpressions,
-                    OpenCodeLibOnigRegexBackend.allocationSnapshot().live,
+                    backend.allocationSnapshot().live,
                 )
         }
 
-        val retainedFinal = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        val retainedFinal = backend.allocationSnapshot()
         val elapsedMs = startedAt.elapsedNow().inWholeMilliseconds
         assertTrue(cycles > 0, "The soak must complete at least one mixed-language cycle")
         assertEquals(
@@ -366,8 +368,8 @@ class OpenCodeLibOnigIosTest {
             "The libonig cache must stop growing after the warm-up cycles",
         )
 
-        OpenCodeLibOnigRegexBackend.clearCache()
-        val cleared = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        backend.clearCache()
+        val cleared = backend.allocationSnapshot()
         assertEquals(0, cleared.live)
         assertEquals(cleared.allocations, cleared.frees)
         println(
@@ -442,7 +444,7 @@ class OpenCodeLibOnigIosTest {
     private fun bundledHighlighter(): OpenCodeSyntaxHighlighter =
         OpenCodeSyntaxHighlighter(
             grammarBundle = bundledGrammarBundle(),
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend),
+            textMateTokenizer = OpenCodeTextMateNativeTokenizer(backend),
         )
 
     private fun sampleGrammar(): TextMateGrammarPayload {

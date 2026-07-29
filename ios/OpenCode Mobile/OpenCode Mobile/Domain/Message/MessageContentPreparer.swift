@@ -16,8 +16,22 @@ nonisolated private struct MessageMarkdownCacheKey: Hashable, Sendable {
     let blockID: String
     let textHash: Int
     let textLength: Int
+    let exactSource: String
     let isStreaming: Bool
     let textMateEnabled: Bool
+    let policyEpoch: Int
+}
+
+nonisolated private final class TextMateHighlightRevisionSource: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Int64 = 0
+
+    func next() -> TextMateHighlightRevision {
+        lock.lock()
+        defer { lock.unlock() }
+        value &+= 1
+        return TextMateHighlightRevision(value: value)
+    }
 }
 
 nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendable {
@@ -92,9 +106,15 @@ final class MessageContentPreparer: @unchecked Sendable {
 
     nonisolated private let documentCache = MessageMarkdownDocumentCache(maxEntries: 32)
     nonisolated private let textMateLogbook: any TextMateLogbookRecording
+    nonisolated private let textMateEngine: any TextMateHighlighting
+    nonisolated private let highlightRevisions = TextMateHighlightRevisionSource()
 
-    nonisolated init(textMateLogbook: any TextMateLogbookRecording = TextMateLogbook.shared) {
+    nonisolated init(
+        textMateLogbook: any TextMateLogbookRecording = TextMateLogbook.shared,
+        textMateEngine: any TextMateHighlighting = KMPTextMateHighlightingEngine.shared
+    ) {
         self.textMateLogbook = textMateLogbook
+        self.textMateEngine = textMateEngine
     }
 
     nonisolated func clearDocumentCache() {
@@ -110,7 +130,9 @@ final class MessageContentPreparer: @unchecked Sendable {
         let highlightEpoch = MarkdownHighlightPreferences.currentEpoch()
         // Match Android `Dispatchers.Default`: one worker hop for the batch,
         // not a MainActor round-trip between every message.
-        return await Task.detached(priority: .userInitiated) { [documentCache, textMateLogbook] in
+        return await Task.detached(
+            priority: .userInitiated
+        ) { [documentCache, textMateLogbook, textMateEngine, highlightRevisions] in
             let startedAt = Date()
             var prepared: [DisplayMessage] = []
             prepared.reserveCapacity(messages.count)
@@ -119,13 +141,15 @@ final class MessageContentPreparer: @unchecked Sendable {
             var streamingChars = 0
             for message in messages {
                 let previous = previousByID[message.id]
-                let display = Self.prepareMessageOnWorker(
+                let display = await Self.prepareMessageOnWorker(
                     message,
                     previous: previous,
                     mode: mode,
                     sessionKey: "",
                     documentCache: documentCache,
                     textMateLogbook: textMateLogbook,
+                    textMateEngine: textMateEngine,
+                    highlightRevisions: highlightRevisions,
                     textMateEnabled: textMateEnabled,
                     highlightEpoch: highlightEpoch
                 )
@@ -169,14 +193,18 @@ final class MessageContentPreparer: @unchecked Sendable {
     ) async -> DisplayMessage {
         let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
         let highlightEpoch = MarkdownHighlightPreferences.currentEpoch()
-        return await Task.detached(priority: .userInitiated) { [documentCache, textMateLogbook] in
-            Self.prepareMessageOnWorker(
+        return await Task.detached(
+            priority: .userInitiated
+        ) { [documentCache, textMateLogbook, textMateEngine, highlightRevisions] in
+            await Self.prepareMessageOnWorker(
                 message,
                 previous: previous,
                 mode: mode,
                 sessionKey: "",
                 documentCache: documentCache,
                 textMateLogbook: textMateLogbook,
+                textMateEngine: textMateEngine,
+                highlightRevisions: highlightRevisions,
                 textMateEnabled: textMateEnabled,
                 highlightEpoch: highlightEpoch
             )
@@ -192,7 +220,10 @@ final class MessageContentPreparer: @unchecked Sendable {
         mode: MessagePreparationMode = .final
     ) async -> NativeMarkdownDocument? {
         let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
-        return await Task.detached(priority: .userInitiated) { [documentCache, textMateLogbook] in
+        let policyEpoch = MarkdownHighlightPreferences.currentEpoch()
+        return await Task.detached(
+            priority: .userInitiated
+        ) { [documentCache, textMateLogbook, textMateEngine, highlightRevisions] in
             if mode == .streaming,
                plain.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
             {
@@ -201,14 +232,18 @@ final class MessageContentPreparer: @unchecked Sendable {
             guard OpenCodeRenderedMarkdownDetector.shouldRender(plain) else {
                 return nil as NativeMarkdownDocument?
             }
-            return Self.parseDocument(
+            return await Self.parseDocument(
                 sessionKey: sessionKey,
                 blockID: blockID,
                 text: plain,
                 isStreaming: isStreaming,
                 textMateEnabled: textMateEnabled,
+                policyEpoch: policyEpoch,
+                intent: mode.textMateHighlightIntent,
                 documentCache: documentCache,
-                textMateLogbook: textMateLogbook
+                textMateLogbook: textMateLogbook,
+                textMateEngine: textMateEngine,
+                highlightRevisions: highlightRevisions
             )
         }.value
     }
@@ -220,9 +255,11 @@ final class MessageContentPreparer: @unchecked Sendable {
         sessionKey: String,
         documentCache: MessageMarkdownDocumentCache,
         textMateLogbook: any TextMateLogbookRecording,
+        textMateEngine: any TextMateHighlighting,
+        highlightRevisions: TextMateHighlightRevisionSource,
         textMateEnabled: Bool,
         highlightEpoch: Int
-    ) -> DisplayMessage {
+    ) async -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
         if mode == .streaming,
            message.text.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
@@ -276,14 +313,18 @@ final class MessageContentPreparer: @unchecked Sendable {
             let blockID =
                 StreamingTextBlockIdentity.resolvePrimary(message: message)?.blockID
                 ?? PresentationBlockId.messageFallback(message.id)
-            document = parseDocumentSafely(
+            document = await parseDocumentSafely(
                 sessionKey: sessionKey,
                 blockID: blockID,
                 text: message.text,
                 isStreaming: isStreaming,
                 textMateEnabled: textMateEnabled,
+                policyEpoch: highlightEpoch,
+                intent: mode.textMateHighlightIntent,
                 documentCache: documentCache,
-                textMateLogbook: textMateLogbook
+                textMateLogbook: textMateLogbook,
+                textMateEngine: textMateEngine,
+                highlightRevisions: highlightRevisions
             )
         }
         let awaitingTextMateUpgrade: Bool
@@ -314,27 +355,33 @@ final class MessageContentPreparer: @unchecked Sendable {
         }
     }
 
-    /// Synchronous TextMate on the worker thread — callers already hopped off MainActor.
-    /// Parser bridge failures already degrade to a plain-text document inside
-    /// `OpenCodeRenderedMarkdownParser`; this seam keeps the call site aligned with
-    /// Android's safe-plain fallback contract.
+    /// Structural fallback stays usable if the asynchronous TextMate upgrade is
+    /// cancelled, rejected, or cannot cross the KMP bridge.
     nonisolated private static func parseDocumentSafely(
         sessionKey: String,
         blockID: String,
         text: String,
         isStreaming: Bool,
         textMateEnabled: Bool,
+        policyEpoch: Int,
+        intent: TextMateHighlightIntent,
         documentCache: MessageMarkdownDocumentCache,
-        textMateLogbook: any TextMateLogbookRecording
-    ) -> NativeMarkdownDocument? {
-        parseDocument(
+        textMateLogbook: any TextMateLogbookRecording,
+        textMateEngine: any TextMateHighlighting,
+        highlightRevisions: TextMateHighlightRevisionSource
+    ) async -> NativeMarkdownDocument? {
+        await parseDocument(
             sessionKey: sessionKey,
             blockID: blockID,
             text: text,
             isStreaming: isStreaming,
             textMateEnabled: textMateEnabled,
+            policyEpoch: policyEpoch,
+            intent: intent,
             documentCache: documentCache,
-            textMateLogbook: textMateLogbook
+            textMateLogbook: textMateLogbook,
+            textMateEngine: textMateEngine,
+            highlightRevisions: highlightRevisions
         )
     }
 
@@ -344,9 +391,13 @@ final class MessageContentPreparer: @unchecked Sendable {
         text: String,
         isStreaming: Bool,
         textMateEnabled: Bool,
+        policyEpoch: Int,
+        intent: TextMateHighlightIntent,
         documentCache: MessageMarkdownDocumentCache,
-        textMateLogbook: any TextMateLogbookRecording
-    ) -> NativeMarkdownDocument? {
+        textMateLogbook: any TextMateLogbookRecording,
+        textMateEngine: any TextMateHighlighting,
+        highlightRevisions: TextMateHighlightRevisionSource
+    ) async -> NativeMarkdownDocument? {
         guard OpenCodeRenderedMarkdownDetector.shouldRender(text) else {
             return nil
         }
@@ -356,26 +407,53 @@ final class MessageContentPreparer: @unchecked Sendable {
             blockID: blockID,
             textHash: revision.textHash,
             textLength: revision.textLength,
+            exactSource: text,
             isStreaming: isStreaming,
-            textMateEnabled: textMateEnabled
+            textMateEnabled: textMateEnabled,
+            policyEpoch: policyEpoch
         )
         if let cached = documentCache.value(for: cacheKey) { return cached }
 
+        let fallbackDocument = OpenCodeRenderedMarkdownParser.parse(
+            text,
+            isStreaming: isStreaming,
+            textMateEnabled: false
+        )
         let document: NativeMarkdownDocument
-        if textMateEnabled && !isStreaming {
-            let parsed = OpenCodeRenderedMarkdownParser.parseObserved(
-                text,
-                isStreaming: false,
-                textMateEnabled: true
-            )
-            textMateLogbook.submit(parsed.textMateObservations)
-            document = parsed.document
+        if !textMateEnabled || isStreaming {
+            document = fallbackDocument
         } else {
-            document = OpenCodeRenderedMarkdownParser.parse(
-                text,
-                isStreaming: isStreaming,
-                textMateEnabled: textMateEnabled
+            let highlightRevision = highlightRevisions.next()
+            let fences = fallbackDocument.textMateFences(
+                ownerKey: "\(sessionKey.utf16.count):\(sessionKey):\(blockID)",
+                revision: highlightRevision,
+                policyEpoch: Int64(policyEpoch)
             )
+            var upgraded = fallbackDocument
+            for fence in fences {
+                guard !Task.isCancelled else { return fallbackDocument }
+                do {
+                    let result = try await textMateEngine.highlight(
+                        fence.request(
+                            intent: intent,
+                            messageCharacters: text.utf16.count,
+                            fenceCount: fences.count
+                        )
+                    )
+                    textMateLogbook.submit([result.observation])
+                    if case .attached(let attached) = upgraded.attachingTextMate(
+                        fence: fence,
+                        result: result
+                    ) {
+                        upgraded = attached
+                    }
+                } catch is CancellationError {
+                    return fallbackDocument
+                } catch {
+                    return fallbackDocument
+                }
+            }
+            document = upgraded
         }
         return documentCache.insertIfAbsent(document, for: cacheKey)
     }
@@ -425,5 +503,18 @@ final class MessageContentPreparer: @unchecked Sendable {
         return previousDocument.sourceHash == document.sourceHash
             && previous.text == display.text
             && previous.isStreaming == display.isStreaming
+    }
+}
+
+nonisolated private extension MessagePreparationMode {
+    var textMateHighlightIntent: TextMateHighlightIntent {
+        switch self {
+        case .final:
+            .interactiveFinal
+        case .historyEnrichment:
+            .visibleHistory
+        default:
+            .backgroundHistory
+        }
     }
 }

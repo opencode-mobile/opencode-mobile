@@ -27,7 +27,6 @@ import oniguruma.onig_region_new
 import oniguruma.onig_search
 import oniguruma.opencode_onig_region_beg_at
 import oniguruma.opencode_onig_region_end_at
-import kotlin.native.concurrent.ThreadLocal
 import kotlin.time.TimeSource
 
 @OptIn(ExperimentalForeignApi::class)
@@ -43,9 +42,6 @@ private sealed class LibOnigRegexCacheEntry {
     data object Failed : LibOnigRegexCacheEntry()
 }
 
-@ThreadLocal
-private var libOnigRegexCache: MutableMap<String, LibOnigRegexCacheEntry> = mutableMapOf()
-
 internal data class OpenCodeLibOnigAllocationSnapshot(
     val allocations: Long,
     val frees: Long,
@@ -53,17 +49,15 @@ internal data class OpenCodeLibOnigAllocationSnapshot(
     val live: Long = allocations - frees
 }
 
-@ThreadLocal
-private var libOnigAllocations: Long = 0
-
-@ThreadLocal
-private var libOnigFrees: Long = 0
-
 @OptIn(ExperimentalForeignApi::class)
-object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
+class OpenCodeLibOnigRegexRuntime : OpenCodeTextMateRegexBackend {
     override val name: String = "libonig"
 
     override val isOnigurumaCompatible: Boolean = true
+
+    private val libOnigRegexCache: MutableMap<String, LibOnigRegexCacheEntry> = mutableMapOf()
+    private var libOnigAllocations: Long = 0
+    private var libOnigFrees: Long = 0
 
     private fun resolvePattern(
         pattern: String,

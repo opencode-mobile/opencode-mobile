@@ -16,11 +16,11 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.MessageSyncRecoveryReason
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -29,6 +29,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
+import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -838,7 +839,7 @@ class MessageSyncTest {
             val eventStream = FakeForegroundEventStream()
             val sync = createMessageSync(repository, eventStream)
             val preparer =
-                MessageContentPreparer(OpenCodeSyntaxHighlighter.default).apply {
+                MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
                     computationDispatcher = testDispatcher
                 }
             val pipeline = DisplayMessagePipeline(sync, preparer)

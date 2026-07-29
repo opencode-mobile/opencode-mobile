@@ -78,13 +78,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
                 group.addTask {
                     let fixture = fixtures[index % fixtures.count]
                     let markdown = "```\(fixture.0)\n\(fixture.1)\n```"
-                    let document = await Task.detached(priority: .userInitiated) {
-                        OpenCodeRenderedMarkdownParser.parse(
-                            markdown,
-                            isStreaming: false,
-                            textMateEnabled: true
-                        )
-                    }.value
+                    let document = await highlightedDocument(markdown, ownerKey: "parallel-\(index)")
                     return (index, document)
                 }
             }
@@ -270,7 +264,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         )
     }
 
-    @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() {
+    @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() async {
         let snippet = """
         // HTTP Client with interceptors, retry logic
         class HttpClient {
@@ -287,14 +281,13 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
           }
         }
         """
-        let document = OpenCodeRenderedMarkdownParser.parse(
+        let document = await highlightedDocument(
             """
             ```javascript
             \(snippet)
             ```
             """,
-            variant: .standalone,
-            textMateEnabled: true
+            ownerKey: "http-client"
         )
 
         guard case .codeBlock(_, let code, let spans) = document.blocks.first else {
@@ -314,7 +307,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(role(for: "#baseUrl", in: code, spans: spans, occurrence: 1) == .property)
     }
 
-    @Test func javaMainClassCodeBlockUsesWebAlignedTokenRoles() {
+    @Test func javaMainClassCodeBlockUsesWebAlignedTokenRoles() async {
         let snippet = """
         public class Main {
             public static void main(String[] args) {
@@ -335,14 +328,13 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             }
         }
         """
-        let document = OpenCodeRenderedMarkdownParser.parse(
+        let document = await highlightedDocument(
             """
             ```java
             \(snippet)
             ```
             """,
-            variant: .standalone,
-            textMateEnabled: true
+            ownerKey: "java-main"
         )
 
         guard case .codeBlock(_, let code, let spans) = document.blocks.first else {
@@ -407,6 +399,34 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             let renderedHex = hex(rendered, traits: darkTraits).lowercased()
             #expect(renderedHex == expectedHex, "Expected role \(role) to resolve token \(token)")
         }
+    }
+
+    private func highlightedDocument(
+        _ markdown: String,
+        ownerKey: String
+    ) async -> NativeMarkdownDocument {
+        let fallback = OpenCodeRenderedMarkdownParser.parse(markdown, textMateEnabled: false)
+        let fences = fallback.textMateFences(
+            ownerKey: ownerKey,
+            revision: TextMateHighlightRevision(value: 1),
+            policyEpoch: 1
+        )
+        var document = fallback
+        for fence in fences {
+            guard let result = try? await KMPTextMateHighlightingEngine.shared.highlight(
+                fence.request(
+                    intent: .interactiveFinal,
+                    messageCharacters: markdown.utf16.count,
+                    fenceCount: fences.count
+                )
+            ) else {
+                continue
+            }
+            if case .attached(let attached) = document.attachingTextMate(fence: fence, result: result) {
+                document = attached
+            }
+        }
+        return document
     }
 }
 

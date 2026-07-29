@@ -108,12 +108,17 @@
   3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
   Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
   diagnostic reference values, not release guardrails.
-- Implementation gate: Phase 1 is closed on the accepted Pixel 9a Android 17 AVD
-  and iPhone 17 Pro iOS 26.5 simulator evidence recorded above. Phase 2 has not
-  started and additionally requires a deterministic fence locator, pure
-  span-attachment operation, exact-source correctness check, monotonic revision
-  token, and asynchronous platform-to-KMP adapter. Physical release calibration
-  is a Phase 6 default-enablement gate.
+- Implementation gate: Phases 1 and 2 are closed. The shared engine owns the
+  fence-level asynchronous request/result contract; deterministic locators,
+  opaque keys, monotonic revisions, policy epochs, exact-source validation, and
+  pure attachment reject stale work. Android uses one lazily initialized
+  single-lane KMP/Joni owner and iOS one lazily initialized actor-owned
+  KMP/libonig runtime. Backend caches are instance-owned rather than
+  process-global or thread-local in production. Shared Android and iOS KMP
+  suites, focused native engine/preparer tests, concurrent first-use stress,
+  and the iOS simulator app build pass. Phase 3 owns scheduling, coalescing,
+  deadlines, backpressure, trim handling, and queue/cancellation metrics.
+  Physical release calibration is a Phase 6 default-enablement gate.
 - Date: 2026-07-29.
 
 ## Markdown Fences Close Like CommonMark / Web

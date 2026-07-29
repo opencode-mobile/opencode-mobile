@@ -299,7 +299,7 @@
 <body>
   <main>
     <section class="hero">
-      <span class="badge">Accepted Architecture · Phase 1 Closed · Phase 6 Physical Gate</span>
+      <span class="badge">Accepted Architecture · Phases 1–2 Closed · Phase 3 Next</span>
       <h1>TextMate Pipeline Architecture Proposal</h1>
       <p class="proposal">
         Create one asynchronous, single-owner
@@ -309,7 +309,7 @@
       <div class="status">
         <div><strong>Publication authority</strong><span>The existing display pipeline remains authoritative.</span></div>
         <div><strong>Shared implementation</strong><span>KMP owns policy and tokenization; native adapters own Joni/libonig mechanics.</span></div>
-        <div><strong>Implementation status</strong><span>Phase 1 closed on named simulated backends; Phase 6 owns physical calibration; Phase 2 not started.</span></div>
+        <div><strong>Implementation status</strong><span>Phases 1–2 closed; Phase 3 owns scheduling/backpressure; Phase 6 owns physical calibration.</span></div>
       </div>
     </section>
 
@@ -336,18 +336,18 @@
       </p>
     </div>
 
-    <h2>Current direction → accepted architecture</h2>
+    <h2>Pre-migration → accepted architecture</h2>
     <table>
-      <thead><tr><th>Concern</th><th>Current direction</th><th>Proposal</th></tr></thead>
+      <thead><tr><th>Concern</th><th>Before Phase 2</th><th>Implemented / target</th></tr></thead>
       <tbody>
-        <tr><td>Entry point</td><td>Synchronous work inside fence parsing</td><td>Asynchronous upgrade behind one engine API</td></tr>
-        <tr><td>First output</td><td>Can depend on final highlighting</td><td>Complete plain/fallback document first</td></tr>
-        <tr><td>Mutable state</td><td>Distributed preparation and caches</td><td>One owner per platform</td></tr>
-        <tr><td>Ordering</td><td>Detached task timing</td><td>Interactive final → visible history → background</td></tr>
-        <tr><td>Revisions</td><td>Full re-tokenization</td><td>Bounded line-state reuse</td></tr>
-        <tr><td>iOS lifetime</td><td>Raw thread-local pointers</td><td>Leased executor-owned regex values</td></tr>
-        <tr><td>Memory</td><td>Unweighted caches</td><td>Soft/hard budgets plus pressure trim</td></tr>
-        <tr><td>Evidence</td><td>Aggregate preparation time</td><td>Measured queue, compile, tokenize, repair, cache, and memory stages</td></tr>
+        <tr><td>Entry point</td><td>Synchronous work inside fence parsing</td><td><span class="pill ok">Implemented</span> asynchronous upgrade behind one engine API</td></tr>
+        <tr><td>First output</td><td>Could depend on final highlighting</td><td><span class="pill ok">Implemented</span> complete semantic fallback before TextMate</td></tr>
+        <tr><td>Mutable state</td><td>Distributed preparation and caches</td><td><span class="pill ok">Implemented</span> one lazy owner per platform</td></tr>
+        <tr><td>Ordering</td><td>Detached task timing</td><td><span class="pill warn">Phase 3</span> interactive final → visible history → background</td></tr>
+        <tr><td>Revisions</td><td>Hash/length hints</td><td><span class="pill ok">Identity implemented</span>; line-state reuse is Phase 5</td></tr>
+        <tr><td>iOS lifetime</td><td>Raw thread-local pointers</td><td><span class="pill ok">Instance owner</span>; leased values and weighted eviction are Phase 4</td></tr>
+        <tr><td>Memory</td><td>Unweighted caches</td><td><span class="pill warn">Phase 4</span> soft/hard budgets plus pressure trim</td></tr>
+        <tr><td>Evidence</td><td>Aggregate preparation time</td><td>Stage metrics implemented; queue/cancellation metrics are Phase 3</td></tr>
       </tbody>
     </table>
 
@@ -510,12 +510,12 @@
         <div class="choice"><strong>Latency</strong><span>Owned hypotheses; evidence-backed decision before release gating.</span></div>
         <div class="choice"><strong>Rollout</strong><span>Versioned language allowlist beneath one global preference.</span></div>
       </div>
-      <p>Phase 1 is closed on the named Android emulator / iOS Simulator
-        correctness, lifetime, retained-state, reference-fixture, and
-        30-minute soak matrix. Physical release-build calibration remains
-        mandatory in Phase 6. Phase 2 has not started and also requires
-        deterministic fence identity, exact-source validation, pure span
-        attachment, and the asynchronous platform-to-KMP seam.</p>
+      <p>Phases 1 and 2 are closed. Structural fallback now precedes the
+        injected asynchronous engine; deterministic fence identity, monotonic
+        revision, exact-source validation, pure attachment, and lazy
+        single-owner Android/iOS adapters are implemented and verified.
+        Phase 3 is next. Physical release-build calibration remains mandatory
+        in Phase 6.</p>
     </section>
 
     <p class="footer">

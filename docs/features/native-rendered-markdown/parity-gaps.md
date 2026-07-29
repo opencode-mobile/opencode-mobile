@@ -7,42 +7,39 @@
 - Shared intent: one persisted entry per actual finalized TextMate fence
   attempt, with the same content-free schema, outcomes, UTF-16 counts, stage
   summaries, retention, clear behavior, and store-health reporting.
-- Current iOS state: the observed KMP JSON envelope is decoded into native
-  values and submitted without blocking to a serial Application Support JSONL
-  store; Developer Tools exposes the bounded logbook.
-- Current Android state: the observed shared parser envelope is submitted
-  without blocking to a serial files-directory JSONL store; Developer Tools
-  exposes the same bounded logbook.
+- Current iOS state: each engine result returns the same content-free
+  observation, which is submitted without blocking to a serial Application
+  Support JSONL store; Developer Tools exposes the bounded logbook.
+- Current Android state: each shared engine result returns the same observation,
+  which is submitted without blocking to a serial files-directory JSONL store;
+  Developer Tools exposes the same bounded logbook.
 - Intentional platform difference: only the native storage location and
   concurrency primitive differ. iOS uses a utility `DispatchQueue` plus lock;
   Android uses a coroutine writer plus bounded channel.
-- Owner or next action: retain schema and behavior parity when Phase 2 moves
-  parsing behind the asynchronous single-owner engine.
+- Owner or next action: retain schema and behavior parity when Phase 3 adds
+  queue, deadline, coalescing, and cancellation measurements.
 
 ## TextMate Execution And Memory Ownership
 
-- Status: Phase 1 closed and aligned; Phase 2 ownership migration pending
+- Status: Phases 1–2 closed and aligned; Phase 3 scheduling pending
 - Area: architecture and performance
 - Shared intent: both apps should expose the same reusable highlighting-engine
   contract and share priority, cancellation, cache budgets, quality outcomes,
   metric names, work limits, and release gates while retaining native regex and
   executor adapters.
-- Current Android state: the shared stateful highlighter is serialized, the
-  process-wide Joni regex cache can be reached by multiple preparation jobs,
-  and the Phase 1 stage metrics are active at the shared/Joni seams.
-- Current iOS state: detached preparation can still reach shared mutable grammar
-  and resolved-rule maps, and compiled libonig pointers remain thread-local
-  until Phase 2. Phase 1 now counts every successful allocation/free, releases
-  successful decomposition probes immediately, supports explicit cache reset,
-  records the shared/libonig metrics, and keys attributed code by palette
-  revision.
-- Reason: current platform mechanisms were added incrementally around one shared
-  tokenizer and do not yet provide a single ownership, memory-pressure, or
-  measurement contract.
-- Owner or next action: satisfy the Phase 2 single-owner seam gate in the
-  [implementation plan](./textmate-pipeline-improvement-plan.md), specify
-  deterministic fence identity, exact-source validation, pure span attachment,
-  and the asynchronous platform-to-KMP seam. Physical release performance,
+- Current Android state: an injected lazy engine is constructed and invoked
+  only on one single-lane dispatcher under a mutex. Grammar, tokenizer, and
+  instance-owned Joni regex-cache mutation share that owner.
+- Current iOS state: an injected Swift actor lazily constructs and exclusively
+  invokes one KMP grammar/tokenizer/libonig runtime. Native regex pointers live
+  in its instance-owned map; allocation/free accounting and explicit clear
+  remain active.
+- Reason: Phase 2 gives both platforms the same deep contract, deterministic
+  identity, exact-source validation, pure attachment, and single ownership.
+  Weighted memory pressure and scheduling policy intentionally remain later
+  phases.
+- Owner or next action: satisfy the Phase 3 scheduling and backpressure gate in
+  the [implementation plan](./textmate-pipeline-improvement-plan.md). Physical release performance,
   memory-pressure, bridge, thermal, cancellation, and soak calibration remains
   a Phase 6 default-enablement gate.
 
@@ -54,15 +51,15 @@
   Oniguruma-compatible native backend and Shiki-level breadth.
 - Current iOS state: SwiftUI renderer calls the KMP JSON bridge, which loads
   bundled TextMate grammar resources from the app bundle and tokenizes through
-  the shared TextMate tokenizer with `OpenCodeLibOnigRegexBackend` (libonig via
+  the shared TextMate tokenizer with `OpenCodeLibOnigRegexRuntime` (libonig via
   Kotlin/Native cinterop). Production iOS no longer emits
   `HighlighterBackendFallback` for the regex backend. The hybrid
   `OpenCodeKotlinRegexHybridTextMateBackend` (Kotlin `Regex` shim; deprecated
   typealias `OpenCodeOnigurumaRegexBackend`) remains in `commonMain` for
   regression comparisons only.
-- Current Android state: session chat, component gallery, and the KMP platform
-  provider all resolve the same bundled Joni TextMate highlighter through
-  `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
+- Current Android state: Session Chat resolves the bundled Joni TextMate
+  highlighter only through the injected engine. Component Gallery uses the
+  stateless semantic fallback. JavaScript HttpClient and withCache
   regression snippets pass Joni and iOS-hybrid backend regression coverage.
   A top-language TextMate pack is bundled with Shiki golden fixtures and smoke
   coverage for the requested Shiki-supported languages, including Java, C#,

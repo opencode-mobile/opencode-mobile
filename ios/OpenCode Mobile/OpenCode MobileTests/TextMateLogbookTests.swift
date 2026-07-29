@@ -4,16 +4,24 @@ import Testing
 
 @Suite(.serialized)
 struct TextMateLogbookTests {
-    @Test func observedBridgeReturnsFenceMetadataWithoutSourceContent() {
+    @Test func engineReturnsFenceMetadataWithoutSourceContent() async throws {
         let markdown = "Unicode 😀\n\n```missing-language\nsecret source\n```"
 
-        let result = OpenCodeRenderedMarkdownParser.parseObserved(
-            markdown,
-            textMateEnabled: true
+        let result = try await KMPTextMateHighlightingEngine.shared.highlight(
+            TextMateHighlightRequest(
+                key: TextMateCodeBlockKey(value: "logbook:fence"),
+                revision: TextMateHighlightRevision(value: 1),
+                language: "missing-language",
+                source: "secret source",
+                intent: .interactiveFinal,
+                policyEpoch: 1,
+                messageCharacters: markdown.utf16.count,
+                fenceIndex: 0,
+                fenceCount: 1
+            )
         )
 
-        #expect(result.textMateObservations.count == 1)
-        let observation = result.textMateObservations[0]
+        let observation = result.observation
         #expect(observation.outcome == "Unsupported")
         #expect(observation.messageCharacters == markdown.utf16.count)
         #expect(observation.fenceCharacters == "secret source".utf16.count)

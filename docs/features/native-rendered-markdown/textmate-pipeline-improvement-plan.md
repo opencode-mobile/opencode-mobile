@@ -1,7 +1,7 @@
 # TextMate Pipeline Implementation Plan
 
-**Status:** architecture locked; Phase 1 closed on simulated backends;
-physical-device release calibration remains in Phase 6; Phase 2 not started
+**Status:** architecture locked; Phases 1–2 closed; Phase 3 next;
+physical-device release calibration remains in Phase 6
 **Date:** 2026-07-29
 **Scope:** reusable fenced-code highlighting in `shared/markdown-core`, including
 Android/Joni and iOS/libonig adapters
@@ -545,6 +545,35 @@ before TextMate is enabled by default.
 
 **Gate:** no race under first-use/concurrent request stress; no UI-executor
 work; all production and test entry points use an injected engine instance.
+
+#### Phase 2 closure evidence — 2026-07-29
+
+- `TextMateHighlightingEngine` is now the shared asynchronous fence-level
+  interface. Requests and results carry an opaque deterministic block key,
+  caller-owned monotonic revision, exact source, closed intent, policy epoch,
+  semantic spans, outcome, diagnostics, and content-free observation.
+- Structural parsing always creates a complete semantic-fallback document
+  before finalized fences enter TextMate. `codeFences` creates deterministic
+  locators; `attachTextMateResult` is a pure copy operation that rejects a
+  changed document, fence, identity, revision, policy, source, or
+  non-attachable outcome.
+- Android injects one lazily constructed KMP engine behind a single-lane
+  dispatcher and mutex. Grammar loading, first use, mutable Joni cache access,
+  and all later requests execute on that owner lane.
+- iOS injects one lazily constructed KMP JSON engine behind a Swift actor. The
+  actor creates the grammar/runtime on the first detached preparation request
+  and exclusively owns its libonig cache.
+- Joni and libonig compiled-pattern caches are instance state. Production no
+  longer relies on a process-global Joni cache or thread-local libonig maps.
+- Streaming remains semantic fallback. Finalization and history enrichment
+  retain the existing placeholder/final-upgrade and outer generation gates;
+  Phase 3 still owns scheduling, coalescing, deadlines, and backpressure.
+- Verification passed: shared Android/JVM tests; the complete iOS-simulator KMP
+  suite; focused Android preparer and 24-way concurrent first-use/owner-lane
+  tests; 17 focused iOS engine, first-use, bridge, logbook, and rendering tests;
+  and an iPhone 17 Pro simulator build/run.
+
+**Gate result:** closed. Phase 3 is the next phase.
 
 ### Phase 3 — Scheduling, deadlines, and backpressure
 

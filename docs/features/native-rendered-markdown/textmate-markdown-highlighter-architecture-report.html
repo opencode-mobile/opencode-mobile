@@ -297,14 +297,14 @@
 <body>
   <main>
     <section class="hero">
-      <span class="badge">Architecture report · 2026-07-29</span>
+      <span class="badge">Architecture report · Phases 1–2 closed · Phase 3 next</span>
       <h1>TextMate Markdown Highlighter</h1>
       <p class="summary">
         opencode-mobile runs Shiki-derived TextMate grammars through a custom
         Kotlin Multiplatform interpreter. It emits scope stacks, compresses them
         into 18 product-owned semantic roles, and paints those roles with native
         Compose and SwiftUI theme tokens. This report also traces task
-        ownership, generation-gated publication, cache lifetime, memory
+        ownership, deterministic fence identity, generation-gated publication, cache lifetime, memory
         pressure, native regex allocations, and transient allocation hotspots.
       </p>
       <div class="facts">
@@ -322,15 +322,17 @@
         <div class="arrow">→</div>
         <div class="node">Background<br>preparer + LRU</div>
         <div class="arrow">→</div>
-        <div class="node warn">Policy gate<br>TextMate or fallback</div>
+        <div class="node shared">Structural parse<br>complete fallback</div>
         <div class="arrow">→</div>
-        <div class="node shared">Fence parser<br>language + code</div>
+        <div class="node warn">Final fence<br>key + revision + source</div>
         <div class="arrow">→</div>
-        <div class="node shared">Manifest + lazy<br>grammar load</div>
+        <div class="node shared">Injected engine<br>single owner</div>
         <div class="arrow">→</div>
         <div class="node shared">Custom TextMate<br>tokenizer</div>
         <div class="arrow">→</div>
         <div class="node">Scope stack<br>→ 18 roles</div>
+        <div class="arrow">→</div>
+        <div class="node warn">Pure exact-source<br>attachment</div>
         <div class="arrow">→</div>
         <div class="node">Native attributed<br>code</div>
       </div>
@@ -401,9 +403,9 @@
         <h3>Android · Joni</h3>
         <ul>
           <li>Joni 2.2.7 with UTF-8 and Ruby syntax</li>
-          <li>Concurrent compiled-regex cache</li>
+          <li>Instance-owned compiled-regex cache</li>
           <li>Grammar resources loaded from Android assets</li>
-          <li>Highlighter access serialized by <code>MessageContentPreparer</code></li>
+          <li>Lazy engine creation and access serialized on one owner lane</li>
           <li>Typed KMP render tree consumed directly by Compose</li>
         </ul>
       </section>
@@ -411,9 +413,9 @@
         <h3>iOS · libonig</h3>
         <ul>
           <li>Oniguruma 6.9.9 static archives through C interop</li>
-          <li>Thread-local compiled-regex cache</li>
+          <li>Actor-owned instance compiled-regex cache</li>
           <li>Grammar resources copied into the application bundle</li>
-          <li>KMP render tree crosses a JSON bridge</li>
+          <li>KMP engine result crosses a narrow JSON bridge</li>
           <li>UTF-16 spans paint through SwiftUI or off-main UIKit construction</li>
         </ul>
       </section>
@@ -428,7 +430,7 @@
         <div class="arrow">/</div>
         <div class="node ios">iOS<br>detached task</div>
         <div class="arrow">→</div>
-        <div class="node shared">Synchronous Markdown<br>+ TextMate parse</div>
+        <div class="node shared">Fallback parse →<br>async fence engine</div>
         <div class="arrow">→</div>
         <div class="node warn">Generation + block<br>identity gate</div>
         <div class="arrow">→</div>
@@ -458,13 +460,13 @@
         </tr>
         <tr>
           <td>TextMate state</td>
-          <td>Highlighter calls serialized with one lock</td>
-          <td>Shared grammar/tokenizer maps have no highlighter-wide actor or lock</td>
+          <td>Lazy injected engine on one dispatcher lane plus mutex</td>
+          <td>Lazy injected KMP engine behind one Swift actor</td>
         </tr>
         <tr>
           <td>Regex state</td>
-          <td>Process-wide concurrent cache</td>
-          <td>One unbounded native-pointer cache per worker thread</td>
+          <td>Instance-owned cache on the owner lane</td>
+          <td>Instance-owned native-pointer cache behind the actor</td>
         </tr>
         <tr>
           <td>Publication</td>
@@ -519,7 +521,7 @@
         <tr>
           <td>Grammar payloads</td>
           <td>Physically limited by bundled resources</td>
-          <td>Process lifetime; no eviction</td>
+          <td>Engine-instance lifetime; no weighted eviction yet</td>
         </tr>
         <tr>
           <td>Resolved rules</td>
@@ -529,12 +531,12 @@
         <tr>
           <td>Android regexes</td>
           <td>No explicit bound</td>
-          <td>Process-wide JVM-managed entries, including failed patterns</td>
+          <td>Engine-instance JVM-managed entries, including failed patterns</td>
         </tr>
         <tr>
           <td>iOS regexes</td>
-          <td>No explicit bound, duplicated per thread</td>
-          <td>Raw pointers have no <code>onig_free</code> disposal path</td>
+          <td>No explicit bound; one actor-owned instance</td>
+          <td>Explicit clear pairs retained pointers with <code>onig_free</code></td>
         </tr>
         <tr>
           <td>Painted code</td>
@@ -571,16 +573,15 @@
           and exposes explicit cache cleanup. The accepted 30-minute simulated
           matrix completed 457 Android/Joni cycles and 1,128 iOS/libonig cycles
           with stable post-warm-up retained state and allocation/free equality.
-          Phase 1 is closed; weighted retained-cache ownership remains part of
-          the proposed single-owner engine.
+          Phase 1 is closed; weighted retained-cache eviction remains Phase 4.
         </p>
       </section>
       <section class="panel">
-        <h3><span class="pill warn">Concurrency risk</span></h3>
+        <h3><span class="pill ok">Phase 2 single ownership</span></h3>
         <p>
-          The iOS regex map is thread-local, but the process-wide grammar bundle
-          and tokenizer rule map remain shared mutable state reachable from
-          detached preparation tasks.
+          Android now owns a lazy KMP/Joni runtime on one dispatcher lane behind
+          a mutex. iOS owns a lazy KMP/libonig runtime behind a Swift actor.
+          Grammar, tokenizer, rule, and regex mutation cannot overlap.
         </p>
       </section>
     </div>
@@ -592,7 +593,7 @@
         <div class="arrow">→</div>
         <div class="node">Request-local<br>stage accumulator</div>
         <div class="arrow">→</div>
-        <div class="node">Observed parse<br>envelope</div>
+        <div class="node">Engine result<br>observation</div>
         <div class="arrow">→</div>
         <div class="node android">Bounded native<br>JSONL writer</div>
         <div class="arrow">→</div>
@@ -730,9 +731,9 @@
       </thead>
       <tbody>
         <tr>
-          <td>iOS shared mutable grammar/rule caches</td>
-          <td>Detached tasks can reach one lazy platform highlighter; only libonig's regex cache is thread-local</td>
-          <td>Parallel first-use stress test, then serialization or immutable preload</td>
+          <td>Engine scheduling and backpressure</td>
+          <td>Phase 2 serializes ownership but does not yet prioritize, coalesce, deadline, or bound queued work</td>
+          <td>Phase 3 pathological-highlighter tests plus queue/cancellation metrics</td>
         </tr>
         <tr>
           <td>Phase 6 physical-device release calibration</td>

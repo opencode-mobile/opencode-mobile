@@ -1,6 +1,7 @@
 # TextMate Markdown Highlighter Architecture Report
 
 **Date:** 2026-07-29
+**Implementation status:** Phases 1–2 closed; Phase 3 next
 **Scope:** fenced code blocks in opencode-mobile's native Rendered Markdown path
 **Evidence:** current repository source and tests, TextMate's grammar manual,
 Shiki documentation, and `vscode-textmate` source
@@ -39,18 +40,19 @@ JSON, YAML, Shell, Rust, and Go match the Shiki semantic oracle on Android/Joni
 and iOS/libonig. The broad generated corpus remains behind an ignored test, and
 some languages still depend on post-tokenization repairs or smoke coverage.
 
-Thread and memory ownership are only partially symmetric. Android serializes
-access to the shared stateful highlighter; iOS runs parsing in detached tasks
-while sharing mutable grammar and resolved-rule caches. Both platforms bound
-prepared documents and block decorations to 32 entries, but grammar, rule, and
-compiled-regex caches have no weighted budget. Phase 1 now accounts for iOS
-libonig allocation/free lifetime and disposes decomposition probes correctly,
-but the proposed single-owner engine and weighted cache policy remain Phase 2
-work.
+Thread and memory ownership are now symmetric at the engine boundary. Both
+platforms structurally parse a complete semantic-fallback document, then send
+individual finalized fences through one injected asynchronous
+`TextMateHighlightingEngine`. Android owns a lazy KMP/Joni instance on one
+dispatcher lane behind a mutex; iOS owns a lazy KMP/libonig instance behind a
+Swift actor. Joni and libonig compiled-pattern caches are instance state rather
+than process-global or thread-local production state. Prepared documents and
+block decorations remain 32-entry LRUs, while weighted grammar/rule/regex
+budgets and trim policy remain Phase 4 work.
 
 A developer-only TextMate logbook now makes real finalized fence attempts
-inspectable across launches. The shared parser emits content-free,
-request-scoped observations; native bounded JSONL stores persist them off the UI
+inspectable across launches. Each engine result emits a content-free,
+request-scoped observation; native bounded JSONL stores persist it off the UI
 thread, and Developer Tools shows outcomes, sizes, spans, total latency, and
 aggregate stage timings. It is diagnostic evidence, not a scheduler or budget
 enforcement mechanism.
@@ -59,7 +61,7 @@ enforcement mechanism.
 
 | Area | Current implementation |
 | --- | --- |
-| Markdown entry point | Shared KMP parser; direct typed call on Android, JSON bridge on iOS |
+| Markdown entry point | Shared structural KMP parser followed by injected fence-level engine |
 | Runtime tokenizer | Custom `OpenCodeTextMateNativeTokenizer` |
 | Android regex backend | Joni 2.2.7, Oniguruma-compatible |
 | iOS regex backend | libonig 6.9.9 through Kotlin/Native C interop |
@@ -73,9 +75,9 @@ enforcement mechanism.
 | Broad oracle | Present but ignored |
 | Incremental reuse | State is carried between lines inside one parse; not reused between message revisions |
 | Preparation threads | Android `Dispatchers.Default`; iOS detached user-initiated tasks |
-| Highlighter ownership | Android singleton with serialized calls; iOS process-wide lazy instance without highlighter-wide serialization |
+| Highlighter ownership | One lazy instance-owned KMP runtime: Android owner lane + mutex; iOS Swift actor |
 | Bounded document caches | 32 prepared documents + 32 block decorations per platform |
-| Compiled regex lifetime | Android process-wide concurrent map; iOS unbounded thread-local native-pointer maps |
+| Compiled regex lifetime | Instance-owned Joni map; instance-owned libonig pointer map with allocation/free accounting |
 | Persisted diagnostics | Developer-only native JSONL logbook; newest 500 actual finalized fence attempts |
 
 ## 1. End-to-end runtime pipeline
@@ -83,29 +85,30 @@ enforcement mechanism.
 ```mermaid
 flowchart LR
     A["Markdown message"] --> B["MessageContentPreparer<br/>background worker + 32-entry LRU"]
-    B --> C{"TextMate enabled<br/>and not streaming?"}
-    C -->|No| D["Semantic fallback highlighter"]
-    C -->|Yes| E["Platform TextMate highlighter"]
-    D --> F["OpenCodeMarkdownParser.parseFence"]
-    E --> F
-    F --> G["Normalize fence language / alias"]
-    G --> H["TextMateGrammarBundle.primaryGrammarFor"]
-    H --> I["Lazy grammar JSON load + typed decode"]
-    I --> J["OpenCodeTextMateNativeTokenizer"]
-    J --> K["Joni on Android<br/>libonig on iOS"]
-    K --> L["TextMate scope-stack tokens"]
-    L --> M["Scope mapper: scopes → CodeTokenRole"]
-    M --> N["Overlap partition + language repairs + merge"]
-    N --> O["MarkdownDocument.CodeBlock spans"]
-    O --> P["Compose AnnotatedString"]
-    O --> Q["Swift AttributedString"]
+    B --> C["Structural KMP parse<br/>complete semantic fallback"]
+    C --> D{"TextMate enabled<br/>and finalized?"}
+    D -->|No| O["Publish fallback document"]
+    D -->|Yes| E["Deterministic fence locator<br/>key + revision + exact source"]
+    E --> F["Injected TextMateHighlightingEngine"]
+    F --> G["Single-owned KMP runtime"]
+    G --> H["Grammar lookup + lazy decode"]
+    H --> I["OpenCodeTextMateNativeTokenizer"]
+    I --> J["Instance-owned Joni/libonig backend"]
+    J --> K["Scope mapper + repairs"]
+    K --> L["HighlightResult"]
+    L --> M{"Pure identity +<br/>exact-source attachment"}
+    M -->|current| N["Decorated MarkdownDocument"]
+    M -->|stale/failed| O
+    N --> P["Outer generation gate + publish"]
+    O --> P
+    P --> Q["Compose / SwiftUI native painting"]
 ```
 
 The pipeline crosses four architectural boundaries:
 
 1. **message preparation** decides when work may run and whether a cached
    document is reusable;
-2. **Markdown projection** finds a fence and extracts its language and code;
+2. **Markdown projection** finds a fence and assigns deterministic identity;
 3. **syntax analysis** resolves a grammar, executes TextMate rules, and maps
    scopes to semantic roles;
 4. **native painting** applies platform theme colors to the semantic ranges.
@@ -402,12 +405,12 @@ platform seam.
 ```mermaid
 flowchart TB
     T["Shared TextMate tokenizer"] --> R["OpenCodeTextMateRegexBackend"]
-    R --> A["Android: OpenCodeJoniRegexBackend"]
-    R --> I["iOS: OpenCodeLibOnigRegexBackend"]
+    R --> A["Android: OpenCodeJoniRegexRuntime"]
+    R --> I["iOS: OpenCodeLibOnigRegexRuntime"]
     R --> K["Tests only: Kotlin Regex hybrid"]
-    A --> A1["Concurrent compiled-pattern cache"]
+    A --> A1["Instance-owned compiled-pattern cache"]
     A --> A2["Joni / UTF-8 bytes / Ruby syntax"]
-    I --> I1["Thread-local compiled-pattern cache"]
+    I --> I1["Instance-owned native-pointer cache"]
     I --> I2["libonig C API / UTF-8 bytes / Ruby syntax"]
     K --> K1["Fallback diagnostic"]
 ```
@@ -427,20 +430,20 @@ Both production backends apply the same compatibility layer:
 
 ### Android
 
-`OpenCodeJoniRegexBackend` uses Joni with UTF-8 encoding, Ruby syntax,
+`OpenCodeJoniRegexRuntime` uses Joni with UTF-8 encoding, Ruby syntax,
 multiline mode, and capture groups. Its compiled-pattern cache is a
-`ConcurrentHashMap`. Compilation is serialized because Joni prints large
+per-engine `ConcurrentHashMap`. Compilation is serialized because Joni prints large
 numbers of grammar warnings to `System.err`; the backend temporarily swaps in a
 no-op stream during compilation.
 
-The Android highlighter is constructed from app assets by
-`OpenCodeBundledJoniMarkdownHighlighter` and injected as a singleton.
+The Android adapter lazily constructs the highlighter from app assets through
+`OpenCodeBundledJoniMarkdownHighlighter` on its single owner lane.
 
 ### iOS
 
-`OpenCodeLibOnigRegexBackend` calls libonig through Kotlin/Native C interop with
+`OpenCodeLibOnigRegexRuntime` calls libonig through Kotlin/Native C interop with
 the same UTF-8, Ruby, multiline, and capture-group configuration. Compiled regex
-pointers are stored in a thread-local map.
+pointers are stored in the actor-owned runtime instance.
 
 The module pins Oniguruma 6.9.9. A Gradle task builds static archives for device,
 Apple Silicon simulator, and x86_64 simulator. On a clean machine the build
@@ -562,10 +565,10 @@ monospaced native views.
 ## 10. Thread and memory management
 
 Thread management here means more than "run parsing in the background." The
-system has to coordinate observation jobs, synchronous TextMate work, mutable
-process caches, native regex allocations, and UI publication. Memory management
-similarly spans several independent cache layers with different owners and
-lifetimes.
+system coordinates outer observation jobs, an asynchronous fence engine, one
+mutable runtime owner, native regex allocations, and UI publication. Memory
+management still spans several cache layers, but grammar/tokenizer/regex
+mutation now has one instance owner on each platform.
 
 ### 10.1 Execution and publication ownership
 
@@ -577,20 +580,24 @@ flowchart TB
     end
     subgraph Worker["Background preparation"]
         C["MessageContentPreparer<br/>batch or single block"]
-        D["Markdown parse"]
-        E["Synchronous TextMate fence parse"]
+        D["Structural fallback parse"]
+        E["Fence request<br/>key + revision + source"]
     end
-    subgraph Shared["Shared mutable highlighter state"]
+    subgraph Engine["Injected single-owner engine"]
+        K["Android owner lane + mutex<br/>or iOS actor"]
         F["Grammar payload maps"]
         G["Resolved-rule map"]
-        H["Compiled-regex cache"]
+        H["Instance regex cache"]
     end
 
     A -->|"launch / await"| C
     C --> D --> E
-    E --> F
-    E --> G
-    E --> H
+    E --> K
+    K --> F
+    K --> G
+    K --> H
+    H --> L["HighlightResult"]
+    L --> M{"Pure exact-source<br/>attachment"}
     C -->|"document LRU write"| I["Prepared-document cache"]
     A -->|"generation + identity check"| J["Block-decoration cache"]
     J --> B
@@ -610,9 +617,9 @@ The pipeline owns **publication correctness**:
 One distinction matters: `MessageContentPreparer` writes its 32-entry document
 LRU before the outer pipeline can perform its generation check. A cancelled but
 already-running parse can therefore populate that LRU. The entry is content-
-revision keyed, so this is primarily bounded memory churn rather than stale UI
-publication. The block-decoration cache has the stronger rule: generation and
-identity are checked before its write.
+revision and exact-source keyed, so this is bounded memory churn rather than
+stale UI publication. The block-decoration cache has the stronger rule:
+generation and identity are checked before its write.
 
 ### 10.2 Platform thread model
 
@@ -623,20 +630,16 @@ identity are checked before its write.
 | Batch behavior | One worker context processes messages sequentially | One detached task processes a batch sequentially |
 | UI publication | Flow send after generation check | Main-actor `AsyncStream` yield after generation check |
 | Document-cache synchronization | `synchronized(cacheLock)` | `NSLock` inside an `@unchecked Sendable` cache |
-| TextMate synchronization | `synchronized(highlighterLock)` around language checks and highlighting | No highlighter-wide lock or actor |
-| Regex-cache synchronization | Process-wide `ConcurrentHashMap`; compilation additionally serialized while `System.err` is redirected | `@ThreadLocal` mutable map; each worker thread gets its own cache |
+| TextMate synchronization | Injected lazy engine on one dispatcher lane plus mutex | Injected lazy KMP engine behind one Swift actor |
+| Regex-cache synchronization | Instance-owned map, reached only on the owner lane; compilation also guards temporary `System.err` redirection | Instance-owned mutable map, reached only through the actor |
 | Renderer work | Compose `remember`; large annotations may be built on `Dispatchers.Default` | UIKit-backed large annotation construction can run off main actor |
 
-Android deliberately serializes only the stateful TextMate highlighter. Final
-and history preparation jobs may otherwise run concurrently, while streaming
-uses the stateless semantic fallback and does not wait for the TextMate lock.
-
-iOS's process-wide lazy highlighter contains one `TextMateGrammarBundle` and one
-`OpenCodeTextMateNativeTokenizer`. Detached tasks can reach them concurrently.
-The libonig cache is thread-local, but the grammar bundle's
-`loadedByResourcePath`, `failedResourcePaths`, and diagnostics collections and
-the tokenizer's `resolvedRulesCache` are shared mutable maps without a lock or
-actor. This remains an **inferred data-race risk, not a reproduced defect**.
+Final and history preparation jobs may run concurrently outside the engine.
+Streaming uses the stateless semantic fallback and does not wait for TextMate.
+The adapter creates grammar, tokenizer, resolved-rule, and regex state lazily
+on its owner and serializes every engine call. The Phase 2 first-use tests cover
+24 concurrent Android requests and parallel iOS requests without overlapping
+runtime mutation or losing source.
 
 ### 10.3 Cache hierarchy, bounds, and lifetime
 
@@ -646,21 +649,21 @@ flowchart LR
     B --> C["Prepared document LRU<br/>32 entries"]
     C --> D["Block decoration LRU<br/>32 entries"]
     D --> E["Native attributed output<br/>composition or 1-entry cache"]
-    F["Lazy grammar payloads<br/>up to bundled resources"] --> G["Resolved rules<br/>unbounded map"]
-    G --> H["Compiled regexes<br/>unbounded per process/thread"]
+    F["Lazy grammar payloads<br/>one engine instance"] --> G["Resolved rules<br/>unbounded map"]
+    G --> H["Compiled regexes<br/>unbounded instance map"]
 ```
 
 | Memory owner | Key / contents | Bound | Lifetime and clearing |
 | --- | --- | --- | --- |
 | Observation-local prepared state | message ID → `DisplayMessage` | Current session size | Released when observation ends; replaced or merged by preparation mode |
 | iOS prepared-history cache | profile + directory + session → prepared messages | 8 sessions and 512,000 source characters | Main-actor LRU; cleared on session deletion, explicit reset, or iOS memory warning |
-| Prepared-document cache | session + block + 32-bit text hash + length + streaming + TextMate flag → parsed document | 32 entries on each platform | Application preparer lifetime; explicit settings/profile reset |
+| Prepared-document cache | session + block + hash + length + exact source + streaming + TextMate flag + policy epoch → parsed document | 32 entries on each platform | Application preparer lifetime; explicit settings/profile reset |
 | Block-decoration cache | session + block + revision + streaming → parsed block document | 32 entries on each platform | Shared application lifetime; cleared on reset and selected pipeline/timeline transitions |
-| Grammar payload cache | resource path → decoded JSON object and typed grammar | No explicit eviction; physically limited by the 74-resource bundle | Highlighter/process lifetime |
-| Failed grammar set and diagnostics | resource paths and diagnostic objects | No explicit eviction; limited by attempted bundled resources | Highlighter/process lifetime |
-| Resolved-rule cache | grammar scope + pattern signature + include/base-scope context → flattened rules | No explicit bound or clearing | Tokenizer/highlighter lifetime; data-dependent key count |
-| Android regex cache | normalized pattern → compiled, decomposed, or failed entry | No explicit bound | Process lifetime; failed patterns are retained too |
-| iOS regex cache | same logical entries, containing native `OnigRegexType*` pointers | No explicit bound, separately duplicated per worker thread | Thread lifetime; no cache-clear or pointer-disposal path |
+| Grammar payload cache | resource path → decoded JSON object and typed grammar | No explicit eviction; physically limited by the 74-resource bundle | Engine-instance lifetime |
+| Failed grammar set and diagnostics | resource paths and diagnostic objects | No explicit eviction; limited by attempted bundled resources | Engine-instance lifetime |
+| Resolved-rule cache | grammar scope + pattern signature + include/base-scope context → flattened rules | No explicit bound or clearing | Engine-instance lifetime; data-dependent key count |
+| Android regex cache | normalized pattern → compiled, decomposed, or failed entry | No explicit bound | Engine-instance lifetime; failed patterns are retained too |
+| iOS regex cache | same logical entries, containing native `OnigRegexType*` pointers | No explicit bound | Actor-owned engine-instance lifetime; explicit clear exists for the runtime |
 | Android painted code | code + spans + colors in Compose `remember` | Composition-scoped | Released with the relevant composition/key change |
 | iOS painted code | code + spans → `AttributedString` | One global entry | Process lifetime until replaced; protected by `NSLock` |
 
@@ -670,31 +673,28 @@ span lists, so 32 entries is not a predictable memory ceiling. The iOS
 prepared-history cache uses source-character count as a proxy but does not
 measure retained render-tree, span, dictionary, or attributed-string cost.
 
-The prepared-document key stores a 32-bit FNV-style hash and length rather than
-the complete source. Including session and block identity makes accidental
-reuse unlikely, but a same-length hash collision can return a document for the
-wrong source because a cache hit does not compare the original text.
+The prepared-document key retains hash and length for cheap identity evidence
+but now also compares the exact source and policy epoch. Hash collision alone
+cannot return a document for different text.
 
 ### 10.4 Native regex ownership
 
-Android compiled `Regex` objects are JVM-managed. The concurrent cache retains
-them for the process lifetime, but the runtime owns their eventual memory.
+Android compiled `Regex` objects are JVM-managed. The engine instance retains
+them while it lives, and the runtime owns their eventual memory.
 
 iOS is different:
 
-- successful `onig_new` results are raw native pointers stored in a thread-local
-  map;
+- successful `onig_new` results are raw native pointers stored in the
+  actor-owned runtime map;
 - match regions are correctly paired with `onig_region_free`;
-- compiled regex pointers are never paired with `onig_free`;
-- there is no cache disposal hook on memory warning or highlighter reset;
-- alternation-decomposition probing calls `compilePattern(candidate)` only to
-  test whether a candidate compiles, then discards the returned pointer. Those
-  successful probe allocations have no owner and no release call.
+- cache clear pairs every retained compiled pointer with `onig_free`;
+- successful alternation-decomposition probes are freed immediately; and
+- Phase 1 allocation/free counters and the 30-minute simulator soak verify
+  stable live ownership for the accepted fixture.
 
-The cached pointers can be described as process/thread-lifetime retention, but
-the discarded decomposition-probe pointers are a **source-confirmed native
-allocation leak**. The report does not quantify its size or frequency; that
-requires a memgraph or allocation trace.
+Phase 3 still needs to connect memory-pressure trim requests to the engine, and
+Phase 4 needs weighted admission/eviction. The native pointers themselves are
+no longer ownerless or duplicated per worker thread.
 
 ### 10.5 Allocation behavior inside one fence
 
@@ -731,7 +731,7 @@ management concern.
 
 iOS observes `UIApplication.didReceiveMemoryWarningNotification`, but currently
 clears only `PreparedHistoryCache`. The 32-entry document cache, block
-decorations, grammar payloads, resolved rules, thread-local native regex
+decorations, grammar payloads, resolved rules, actor-owned native regex
 pointers, and one-entry attributed cache remain resident. Android exposes
 explicit document/block cache clearing through settings and some lifecycle
 paths, but this highlighter slice has no trim-memory policy for grammar,
@@ -853,9 +853,9 @@ evidence that Joni/libonig are absent.
    the default Session Chat experience.
 2. **Broad correctness is not proven.** Sixty-two language entries represent
    bundle breadth, not exact tokenizer parity.
-3. **iOS shared-cache concurrency is not explicitly controlled.** This is a
-   risk requiring verification, not a reported crash.
-4. **There is no tokenizer time budget or cancellation check.** Once a
+3. **There is no engine queue/backpressure policy yet.** Phase 2 serializes
+   ownership; Phase 3 must add priority, coalescing, deadlines, and work limits.
+4. **There is no tokenizer time budget or inner cancellation check.** Once a
    synchronous fence parse begins, cancellation cannot interrupt the tokenizer.
 5. **Physical-device release calibration is still pending.** Simulator and host
    measurements are diagnostic and cannot establish mobile guardrails.
@@ -886,11 +886,11 @@ evidence that Joni/libonig are absent.
 
 ## 15. Recommended next steps
 
-Phase 1 lifetime safety, request-scoped metrics, the developer logbook, and the
-accepted simulated closure matrix are complete. The most valuable remaining
-sequence is:
+Phase 1 lifetime safety and Phase 2 single ownership are complete. The most
+valuable remaining sequence is:
 
-1. put the highlighter behind the proposed single-owner asynchronous engine;
+1. add Phase 3 priority, coalescing, deadlines, work limits, trim handling, and
+   queue/cancellation metrics behind the existing engine interface;
 2. reuse a per-line UTF-8 search buffer/index map instead of rebuilding it for
    every regex search;
 3. give grammar, resolved-rule, and compiled-regex caches observable counts,
@@ -912,8 +912,9 @@ sequence is:
 
 Physical low- and mid-tier release-build latency, memory-pressure, bridge,
 thermal, cancellation, and soak calibration remains mandatory in Phase 6 before
-TextMate is enabled by default. Simulator evidence closes the Phase 1
-architecture/lifetime gate but is not a shipping performance claim.
+TextMate remains disabled by default. Simulator evidence closes the Phase 1
+architecture/lifetime gate, and interface/ownership evidence closes Phase 2;
+neither is a shipping performance claim.
 
 ## 16. File map
 
@@ -925,11 +926,14 @@ architecture/lifetime gate but is not a shipping performance claim.
 | Lazy grammar bundle | [`OpenCodeTextMateGrammarBundle.kt`](../../../shared/markdown-core/src/commonMain/kotlin/dev/opencode/mobile/markdown/OpenCodeTextMateGrammarBundle.kt) |
 | Custom tokenizer and regex interface | [`OpenCodeTextMateTokenizer.kt`](../../../shared/markdown-core/src/commonMain/kotlin/dev/opencode/mobile/markdown/OpenCodeTextMateTokenizer.kt) |
 | Scope projection and repair pipeline | [`OpenCodeSyntaxHighlighter.kt`](../../../shared/markdown-core/src/commonMain/kotlin/dev/opencode/mobile/markdown/OpenCodeSyntaxHighlighter.kt) |
+| Shared engine contract, fence identity, and pure attachment | [`TextMateHighlightingEngine.kt`](../../../shared/markdown-core/src/commonMain/kotlin/dev/opencode/mobile/markdown/TextMateHighlightingEngine.kt) |
 | Android Joni backend | [`OpenCodeJoniRegexBackend.kt`](../../../shared/markdown-core/src/androidMain/kotlin/dev/opencode/mobile/markdown/OpenCodeJoniRegexBackend.kt) |
 | iOS libonig backend | [`OpenCodeLibOnigRegexBackend.kt`](../../../shared/markdown-core/src/iosMain/kotlin/dev/opencode/mobile/markdown/OpenCodeLibOnigRegexBackend.kt) |
 | Grammar/oracle generator | [`generate-markdown-highlighter-fixtures.mjs`](../../../scripts/generate-markdown-highlighter-fixtures.mjs) |
 | Android preparation/cache/threading | [`MessageContentPreparer.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/MessageContentPreparer.kt) |
 | iOS preparation/cache/threading | [`MessageContentPreparer.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/MessageContentPreparer.swift) |
+| Android engine owner adapter | [`AndroidTextMateHighlightingEngine.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/textmate/AndroidTextMateHighlightingEngine.kt) |
+| iOS engine owner adapter | [`TextMateHighlightingEngine.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/TextMate/TextMateHighlightingEngine.swift) |
 | Android generation/task ownership | [`DisplayMessagePipeline.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/DisplayMessagePipeline.kt) |
 | iOS generation/task ownership | [`DisplayMessagePipeline.swift`](../../../ios/OpenCode%20Mobile/OpenCode%20Mobile/Domain/Message/DisplayMessagePipeline.swift) |
 | Android block-decoration LRU | [`BlockDecorationCache.kt`](../../../android/app/src/main/java/dev/opencode/mobile/domain/message/BlockDecorationCache.kt) |

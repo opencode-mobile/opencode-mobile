@@ -3,14 +3,15 @@ package dev.opencode.mobile.di
 import android.content.Context
 import dagger.Module
 import dagger.Provides
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
-import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
+import dev.opencode.mobile.domain.textmate.AndroidTextMateHighlightingEngine
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
-import java.io.File
+import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
+import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
+import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Singleton
 
@@ -19,10 +20,17 @@ import javax.inject.Singleton
 object MarkdownModule {
     @Provides
     @Singleton
-    fun provideMarkdownCodeHighlighter(
+    fun provideTextMateHighlightingEngine(
         @ApplicationContext context: Context,
-    ): OpenCodeCodeHighlighter =
-        OpenCodeBundledJoniMarkdownHighlighter.createFromContext(context)
+    ): TextMateHighlightingEngine =
+        AndroidTextMateHighlightingEngine(
+            delegateFactory = {
+                OpenCodeTextMateHighlightingEngine(
+                    OpenCodeBundledJoniMarkdownHighlighter.createFromContext(context),
+                )
+            },
+            ownerDispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
 
     @Provides
     @Singleton

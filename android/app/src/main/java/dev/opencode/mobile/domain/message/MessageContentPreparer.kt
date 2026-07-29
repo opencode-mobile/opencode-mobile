@@ -4,56 +4,35 @@ import android.util.Log
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.textmate.NoOpTextMateLogbookRecorder
 import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
+import dev.opencode.mobile.markdown.HighlightIntent
+import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.MarkdownDocument
-import dev.opencode.mobile.markdown.OpenCodeTextMateMetricsSink
-import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
+import dev.opencode.mobile.markdown.MarkdownHighlightAttachment
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.markdown.TextMateHighlightingEngine
+import dev.opencode.mobile.markdown.attachTextMateResult
+import dev.opencode.mobile.markdown.codeFences
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.system.measureTimeMillis
+import kotlin.coroutines.coroutineContext
 
 @Singleton
 class MessageContentPreparer
     @Inject
     constructor(
-        private val codeHighlighter: OpenCodeCodeHighlighter,
+        private val textMateEngine: TextMateHighlightingEngine,
         private val textMateLogbook: TextMateLogbookRecorder = NoOpTextMateLogbookRecorder,
     ) {
         internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
-
-        // Final/history parses may run concurrently so a cancelled, synchronous
-        // history parse cannot hold up a live snapshot. The bundled TextMate
-        // tokenizer owns a mutable rule cache, though, so serialize only access
-        // to that highlighter. Streaming parses select the stateless semantic
-        // fallback before reaching this wrapper and remain unblocked.
-        private val highlighterLock = Any()
-        private val serializedCodeHighlighter =
-            object : OpenCodeCodeHighlighter {
-                override fun supportsLanguage(languageOrAlias: String?): Boolean =
-                    synchronized(highlighterLock) {
-                        codeHighlighter.supportsLanguage(languageOrAlias)
-                    }
-
-                override fun highlight(
-                    languageOrAlias: String?,
-                    code: String,
-                ) = synchronized(highlighterLock) {
-                    codeHighlighter.highlight(languageOrAlias, code)
-                }
-
-                override fun highlight(
-                    languageOrAlias: String?,
-                    code: String,
-                    metricsSink: OpenCodeTextMateMetricsSink,
-                ) = synchronized(highlighterLock) {
-                    codeHighlighter.highlight(languageOrAlias, code, metricsSink)
-                }
-            }
+        private val nextHighlightRevision = AtomicLong(0)
 
         private val cacheLock = Any()
         private val cache =
@@ -74,29 +53,25 @@ class MessageContentPreparer
             withContext(computationDispatcher) {
                 var parsedCount = 0
                 var reusedCount = 0
-                var elapsedMs = 0L
-                val prepared =
-                    buildList(messages.size) {
-                        elapsedMs =
-                            measureTimeMillis {
-                                for (message in messages) {
-                                    val previous = previousById[message.id]
-                                    val display =
-                                        prepareMessageOnWorker(
-                                            message = message,
-                                            previous = previous,
-                                            mode = mode,
-                                        )
-                                    add(display)
-                                    when {
-                                        display.renderedMarkdown == null -> Unit
-                                        previous?.renderedMarkdown != null &&
-                                            display.renderedMarkdown === previous.renderedMarkdown -> reusedCount++
-                                        else -> parsedCount++
-                                    }
-                                }
-                            }
+                val startedAt = System.nanoTime()
+                val prepared = ArrayList<DisplayMessage>(messages.size)
+                for (message in messages) {
+                    val previous = previousById[message.id]
+                    val display =
+                        prepareMessageOnWorker(
+                            message = message,
+                            previous = previous,
+                            mode = mode,
+                        )
+                    prepared += display
+                    when {
+                        display.renderedMarkdown == null -> Unit
+                        previous?.renderedMarkdown != null &&
+                            display.renderedMarkdown === previous.renderedMarkdown -> reusedCount++
+                        else -> parsedCount++
                     }
+                }
+                val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
                 logI(
                     "prepareMessages count=${messages.size} parsed=$parsedCount reused=$reusedCount " +
                         "markdown=${prepared.count { it.renderedMarkdown != null }} " +
@@ -170,10 +145,12 @@ class MessageContentPreparer
                     text = plain,
                     isStreaming = isStreaming,
                     textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
+                    policyEpoch = MarkdownHighlightPreferences.epoch.toLong(),
+                    intent = mode.highlightIntent(),
                 )
             }
 
-        private fun prepareMessageOnWorker(
+        private suspend fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
             mode: MessagePreparationMode,
@@ -226,6 +203,8 @@ class MessageContentPreparer
                             text = message.text,
                             isStreaming = isStreaming,
                             textMateEnabled = textMateEnabled,
+                            policyEpoch = highlightEpoch.toLong(),
+                            intent = mode.highlightIntent(),
                         )
                     }
             val awaitingTextMateUpgrade =
@@ -247,31 +226,40 @@ class MessageContentPreparer
         private fun messageIsStreaming(message: Message): Boolean =
             message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
 
-        private fun parseDocumentSafely(
+        private suspend fun parseDocumentSafely(
             sessionKey: String,
             blockID: String,
             text: String,
             isStreaming: Boolean,
             textMateEnabled: Boolean,
+            policyEpoch: Long,
+            intent: HighlightIntent,
         ): MarkdownDocument? =
-            runCatching {
+            try {
                 parseDocument(
                     sessionKey = sessionKey,
                     blockID = blockID,
                     text = text,
                     isStreaming = isStreaming,
                     textMateEnabled = textMateEnabled,
+                    policyEpoch = policyEpoch,
+                    intent = intent,
                 )
-            }.onFailure { error ->
+            } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
                 logI("preparePlainFallback blockIdHash=${blockID.hashCode()} reason=${error.javaClass.simpleName}")
-            }.getOrNull()
+                null
+            }
 
-        private fun parseDocument(
+        private suspend fun parseDocument(
             sessionKey: String,
             blockID: String,
             text: String,
             isStreaming: Boolean,
             textMateEnabled: Boolean,
+            policyEpoch: Long,
+            intent: HighlightIntent,
         ): MarkdownDocument? {
             if (!OpenCodeMarkdownDetector.shouldRender(text)) {
                 return null
@@ -282,29 +270,50 @@ class MessageContentPreparer
                     blockID = blockID,
                     textHash = stableMarkdownSourceHash(text),
                     textLength = text.length,
+                    exactSource = text,
                     isStreaming = isStreaming,
                     textMateEnabled = textMateEnabled,
+                    policyEpoch = policyEpoch,
                 )
             synchronized(cacheLock) {
                 cache[cacheKey]?.let { return it }
             }
+            val fallbackDocument =
+                OpenCodeMarkdownParser.parse(
+                    markdown = text,
+                    codeHighlighter = OpenCodeSemanticFallbackHighlighter,
+                    isStreaming = isStreaming,
+                    textMateEnabled = false,
+                )
             val document =
-                if (textMateEnabled && !isStreaming) {
-                    val envelope =
-                        OpenCodeMarkdownParser.parseObserved(
-                            markdown = text,
-                            codeHighlighter = serializedCodeHighlighter,
-                            observeTextMate = true,
-                        )
-                    textMateLogbook.submit(envelope.textMateObservations)
-                    envelope.document
+                if (!textMateEnabled || isStreaming) {
+                    fallbackDocument
                 } else {
-                    OpenCodeMarkdownParser.parse(
-                        markdown = text,
-                        codeHighlighter = serializedCodeHighlighter,
-                        isStreaming = isStreaming,
-                        textMateEnabled = textMateEnabled,
-                    )
+                    val revision = HighlightRevision(nextHighlightRevision.incrementAndGet())
+                    val fences =
+                        fallbackDocument.codeFences(
+                            ownerKey = "${sessionKey.length}:$sessionKey:$blockID",
+                            revision = revision,
+                            policyEpoch = policyEpoch,
+                        )
+                    var upgraded = fallbackDocument
+                    for (fence in fences) {
+                        coroutineContext.ensureActive()
+                        val result =
+                            textMateEngine.highlight(
+                                fence.request(
+                                    intent = intent,
+                                    messageCharacters = text.length,
+                                    fenceCount = fences.size,
+                                ),
+                            )
+                        textMateLogbook.submit(listOf(result.observation))
+                        when (val attachment = upgraded.attachTextMateResult(fence, result)) {
+                            is MarkdownHighlightAttachment.Attached -> upgraded = attachment.document
+                            is MarkdownHighlightAttachment.Rejected -> Unit
+                        }
+                    }
+                    upgraded
                 }
             return synchronized(cacheLock) {
                 cache[cacheKey] ?: document.also { cache[cacheKey] = it }
@@ -384,7 +393,16 @@ class MessageContentPreparer
             val blockID: String,
             val textHash: Int,
             val textLength: Int,
+            val exactSource: String,
             val isStreaming: Boolean,
             val textMateEnabled: Boolean,
+            val policyEpoch: Long,
         )
+
+        private fun MessagePreparationMode.highlightIntent(): HighlightIntent =
+            when (this) {
+                MessagePreparationMode.Final -> HighlightIntent.InteractiveFinal
+                MessagePreparationMode.HistoryEnrichment -> HighlightIntent.VisibleHistory
+                else -> HighlightIntent.BackgroundHistory
+            }
     }
