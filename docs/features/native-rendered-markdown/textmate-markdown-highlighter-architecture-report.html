@@ -568,8 +568,11 @@
         <p>
           iOS now accounts for successful libonig allocation/free operations,
           immediately releases successful alternation-decomposition probes,
-          and exposes explicit cache cleanup. Weighted retained-cache ownership
-          remains part of the proposed single-owner engine.
+          and exposes explicit cache cleanup. The accepted 30-minute simulated
+          matrix completed 457 Android/Joni cycles and 1,128 iOS/libonig cycles
+          with stable post-warm-up retained state and allocation/free equality.
+          Phase 1 is closed; weighted retained-cache ownership remains part of
+          the proposed single-owner engine.
         </p>
       </section>
       <section class="panel">
@@ -732,9 +735,9 @@
           <td>Parallel first-use stress test, then serialization or immutable preload</td>
         </tr>
         <tr>
-          <td>Physical-device release calibration</td>
-          <td>Simulator and host measurements are diagnostic, not mobile guardrails</td>
-          <td>Frozen release fixture on named low- and mid-tier devices plus a 30-minute soak</td>
+          <td>Phase 6 physical-device release calibration</td>
+          <td>Phase 1 simulator and host measurements are diagnostic, not mobile guardrails</td>
+          <td>Before default enablement, run the frozen release fixture on named low- and mid-tier devices plus a 30-minute soak</td>
         </tr>
         <tr>
           <td>Per-search UTF-8 index allocation</td>
@@ -749,7 +752,7 @@
         <tr>
           <td>Diagnostic-only logbook</td>
           <td>Measurements do not enforce queue, time, memory, or cancellation budgets</td>
-          <td>Turn accepted physical-device evidence into per-language promotion guardrails</td>
+          <td>Turn accepted Phase 6 physical-device evidence into per-language promotion guardrails</td>
         </tr>
         <tr>
           <td>No parse time budget</td>

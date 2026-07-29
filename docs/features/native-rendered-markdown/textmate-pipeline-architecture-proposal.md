@@ -1,7 +1,7 @@
 # TextMate Pipeline Architecture Proposal
 
-**Status:** accepted target; Phase 1 code complete and simulator-verified;
-physical-device calibration pending; Phase 2 not started
+**Status:** accepted target; Phase 1 closed on simulated backends;
+physical-device calibration remains in Phase 6; Phase 2 not started
 **Date:** 2026-07-29
 **Applies to:** Android/Joni and iOS/libonig through
 `shared/markdown-core`
@@ -356,12 +356,16 @@ Initial device hypotheses and their owners:
 | UI-executor TextMate work | All layers | zero |
 | Thirty-minute mixed-language soak | Engine | no positive retained-memory growth after five warm-up cycles |
 
-Phase 1 freezes named low- and mid-tier devices, fixtures, build mode, thermal
-state, bridge inclusion, cold/warm definitions, and sample counts. These values
-may change before becoming release gates only through an evidence-backed entry
-in `decisions.md`. Material backend, grammar, repair, scheduler, or compiler
-changes require an explicit rebaseline rather than silently inheriting old
-numbers.
+Phase 1 freezes named Android emulator and iOS Simulator configurations,
+fixtures, test build mode, bridge inclusion, cold/warm definitions, sample
+counts, and a mixed-language soak. Those runs establish correctness, lifetime,
+and reproducible architectural baselines; they do not establish shipping
+latency, thermal, or peak-memory guarantees. Phase 6 freezes representative
+physical low- and mid-tier devices and release builds before default enablement.
+Values may change before becoming release gates only through an evidence-backed
+entry in `decisions.md`. Material backend, grammar, repair, scheduler, or
+compiler changes require an explicit rebaseline rather than silently inheriting
+old numbers.
 
 ## What this proposal does not change
 
@@ -385,18 +389,18 @@ The architecture triage accepted these policies on 2026-07-29:
 2. use one active, instance-owned serial KMP runtime per platform initially;
    no process-global or thread-local mutable production caches;
 3. use 24 MiB as the provisional pooled eviction threshold and 32 MiB as the
-   retained-cache admission ceiling, subject to an evidence-backed Phase 1
-   decision;
+   retained-cache admission ceiling, subject to simulator evidence in Phase 1
+   and physical release calibration in Phase 6;
 4. keep the documented latency numbers as owned hypotheses until the applicable
    implementation phase and device evidence make them enforceable;
 5. keep one global user preference but enable TextMate through a versioned
    language allowlist after per-language correctness, performance, fallback,
    native-lifetime, memory, and soak gates pass on Joni and libonig.
 
-Phase 1 instrumentation and lifetime-safety code is complete and
-simulator-verified. Its release-build physical-device calibration remains an
-open close gate. Before Phase 2, that gate must be accepted and the
-implementation must specify a deterministic fence locator, an opaque monotonic
-revision token, exact-source validation, a pure span-attachment operation, and
-the asynchronous platform-to-KMP adapter. The six-phase sequence remains in the
-[implementation plan](./textmate-pipeline-improvement-plan.md).
+Phase 1 is closed on the named simulator/emulator correctness, native-lifetime,
+retained-state, reference-fixture, and 30-minute soak matrix in the
+[implementation plan](./textmate-pipeline-improvement-plan.md). Physical release
+calibration remains mandatory in Phase 6 before default enablement. Phase 2 has
+not started; its seam must specify a deterministic fence locator, an opaque
+monotonic revision token, exact-source validation, a pure span-attachment
+operation, and the asynchronous platform-to-KMP adapter.

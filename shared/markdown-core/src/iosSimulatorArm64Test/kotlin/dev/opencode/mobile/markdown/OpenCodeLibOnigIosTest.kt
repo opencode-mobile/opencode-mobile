@@ -1,9 +1,12 @@
 package dev.opencode.mobile.markdown
 
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.toKString
+import platform.posix.getenv
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.TimeSource
 import kotlin.time.measureTime
 
 class OpenCodeLibOnigIosTest {
@@ -252,9 +255,19 @@ class OpenCodeLibOnigIosTest {
         }
     }
 
+    @OptIn(ExperimentalForeignApi::class)
     @Test
     fun benchmarkLongMarkdownHistoryLibOnigBackend() {
-        val metrics = RecordingOpenCodeTextMateMetricsSink()
+        val warmSampleCount =
+            getenv("TEXTMATE_BENCHMARK_WARM_SAMPLES")
+                ?.toKString()
+                ?.toIntOrNull()
+                ?.coerceIn(0, MAX_BENCHMARK_WARM_SAMPLE_COUNT)
+                ?: 0
+        val messages = longMarkdownHistory()
+        OpenCodeLibOnigRegexBackend.clearCache()
+        val metrics = SoakMetricsSink()
+        val coldStartedAt = TimeSource.Monotonic.markNow()
         val highlighter =
             OpenCodeSyntaxHighlighter(
                 grammarBundle =
@@ -264,22 +277,30 @@ class OpenCodeLibOnigIosTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend, metrics),
                 metricsSink = metrics,
             )
-        val messages = longMarkdownHistory()
         val markdownCount = messages.count { OpenCodeMarkdownDetector.shouldRender(it) }
 
-        val parserMs =
-            measureTime {
-                messages.forEach { message ->
-                    if (OpenCodeMarkdownDetector.shouldRender(message)) {
-                        OpenCodeMarkdownParser.parse(message, highlighter)
+        messages.forEach { message ->
+            if (OpenCodeMarkdownDetector.shouldRender(message)) {
+                OpenCodeMarkdownParser.parse(message, highlighter)
+            }
+        }
+        val coldTotalMs = coldStartedAt.elapsedNow().inWholeMilliseconds
+        val warmSamplesMs =
+            List(warmSampleCount) {
+                measureTime {
+                    messages.forEach { message ->
+                        if (OpenCodeMarkdownDetector.shouldRender(message)) {
+                            OpenCodeMarkdownParser.parse(message, highlighter)
+                        }
                     }
-                }
-            }.inWholeMilliseconds
+                }.inWholeMilliseconds
+            }
 
+        assertTrue(coldTotalMs >= 0)
         assertEquals(20, markdownCount)
-        assertFalse(parserMs < 0)
         println(
-            "MARKDOWN_BENCHMARK kmp-libonig parser-ms=$parserMs " +
+            "MARKDOWN_BENCHMARK kmp-libonig parser-ms=$coldTotalMs cold-ms=$coldTotalMs " +
+                "warm-ms=${warmSamplesMs.joinToString(",")} warm-samples=$warmSampleCount " +
                 "grammar-ms=${metrics.totalMilliseconds(TextMateMetricStage.GrammarLoad)} " +
                 "regex-compile-ms=${metrics.totalMilliseconds(TextMateMetricStage.RegexCompile)} " +
                 "regex-search-ms=${metrics.totalMilliseconds(TextMateMetricStage.RegexSearch)} " +
@@ -289,7 +310,134 @@ class OpenCodeLibOnigIosTest {
                 "repair-ms=${metrics.totalMilliseconds(TextMateMetricStage.Repair)} " +
                 "messages=20 code-lines=3000",
         )
+
+        OpenCodeLibOnigRegexBackend.clearCache()
+        val cleared = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        assertEquals(0, cleared.live)
+        assertEquals(cleared.allocations, cleared.frees)
     }
+
+    @OptIn(ExperimentalForeignApi::class)
+    @Test
+    fun mixedLanguageSoakWhenRequested() {
+        val durationSeconds = getenv("TEXTMATE_SOAK_SECONDS")?.toKString()?.toLongOrNull() ?: 0L
+        if (durationSeconds <= 0L) {
+            println("TEXTMATE_SOAK skipped; set TEXTMATE_SOAK_SECONDS to run the opt-in soak")
+            return
+        }
+
+        OpenCodeLibOnigRegexBackend.clearCache()
+        val metrics = SoakMetricsSink()
+        val highlighter =
+            OpenCodeSyntaxHighlighter(
+                grammarBundle =
+                    OpenCodeTextMateGrammarBundleLoader
+                        .loadBundled(bundledTestResourceReader(), metrics)
+                        .bundle,
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend, metrics),
+                metricsSink = metrics,
+            )
+        val workload = mixedLanguageWorkload()
+
+        repeat(SOAK_WARM_UP_CYCLES) {
+            parseCycle(workload, highlighter)
+        }
+        val retainedBaseline = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        var peakLiveExpressions = retainedBaseline.live
+        var cycles = 0
+        val startedAt = TimeSource.Monotonic.markNow()
+
+        while (startedAt.elapsedNow().inWholeSeconds < durationSeconds) {
+            parseCycle(workload, highlighter)
+            cycles += 1
+            peakLiveExpressions =
+                maxOf(
+                    peakLiveExpressions,
+                    OpenCodeLibOnigRegexBackend.allocationSnapshot().live,
+                )
+        }
+
+        val retainedFinal = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        val elapsedMs = startedAt.elapsedNow().inWholeMilliseconds
+        assertTrue(cycles > 0, "The soak must complete at least one mixed-language cycle")
+        assertEquals(
+            retainedBaseline.live,
+            retainedFinal.live,
+            "The libonig cache must stop growing after the warm-up cycles",
+        )
+
+        OpenCodeLibOnigRegexBackend.clearCache()
+        val cleared = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        assertEquals(0, cleared.live)
+        assertEquals(cleared.allocations, cleared.frees)
+        println(
+            "TEXTMATE_SOAK platform=ios-libonig duration-ms=$elapsedMs cycles=$cycles " +
+                "warmup-cycles=$SOAK_WARM_UP_CYCLES retained-live=${retainedFinal.live} " +
+                "peak-live=$peakLiveExpressions allocations=${cleared.allocations} " +
+                "frees=${cleared.frees} native-search-count=${metrics.nativeSearchCount} " +
+                "native-search-max-ms=${metrics.nativeSearchMaximumNanoseconds / 1_000_000.0}",
+        )
+    }
+
+    private fun parseCycle(
+        workload: List<String>,
+        highlighter: OpenCodeSyntaxHighlighter,
+    ) {
+        workload.forEach { markdown ->
+            val document = OpenCodeMarkdownParser.parse(markdown, highlighter)
+            assertTrue(document.blocks.any { block -> block is MarkdownBlock.CodeBlock })
+        }
+    }
+
+    private class SoakMetricsSink : OpenCodeTextMateMetricsSink {
+        private val totalNanoseconds = LongArray(TextMateMetricStage.entries.size)
+        private val maximumNanoseconds = LongArray(TextMateMetricStage.entries.size)
+
+        var nativeSearchCount: Long = 0
+            private set
+        var nativeSearchMaximumNanoseconds: Long = 0
+            private set
+
+        override fun record(event: TextMateMetricEvent) {
+            val index = event.stage.ordinal
+            totalNanoseconds[index] += event.durationNanoseconds
+            maximumNanoseconds[index] = maxOf(maximumNanoseconds[index], event.durationNanoseconds)
+            if (event.stage == TextMateMetricStage.NativeRegexSearch) {
+                nativeSearchCount += 1
+                nativeSearchMaximumNanoseconds =
+                    maxOf(nativeSearchMaximumNanoseconds, event.durationNanoseconds)
+            }
+        }
+
+        fun totalMilliseconds(stage: TextMateMetricStage): Double = totalNanoseconds[stage.ordinal].toDouble() / 1_000_000.0
+
+        fun maximumMilliseconds(stage: TextMateMetricStage): Double = maximumNanoseconds[stage.ordinal].toDouble() / 1_000_000.0
+    }
+
+    private fun mixedLanguageWorkload(): List<String> =
+        listOf(
+            markdown("typescript") { index -> "const item$index = response$index?.value ?? 'soak';" },
+            markdown("kotlin") { index -> "val item$index = response$index?.value ?: \"soak\"" },
+            markdown("swift") { index -> "let item$index = response$index?.value ?? \"soak\"" },
+            markdown("python") { index -> "item_$index = response_$index.value if response_$index else 'soak'" },
+            markdown("json") { index -> "\"item$index\": { \"value\": $index, \"enabled\": true }," },
+            markdown("shellscript") { index -> "item_$index=\"\${response_$index:-soak}\"" },
+        )
+
+    private fun markdown(
+        language: String,
+        line: (Int) -> String,
+    ): String =
+        buildString {
+            append("## TextMate soak\n\n```")
+            append(language)
+            append('\n')
+            repeat(SOAK_LINES_PER_LANGUAGE) { index ->
+                append(line(index))
+                append('\n')
+            }
+            append("```\n")
+        }
 
     private fun bundledHighlighter(): OpenCodeSyntaxHighlighter =
         OpenCodeSyntaxHighlighter(
@@ -360,4 +508,10 @@ class OpenCodeLibOnigIosTest {
                 append("```\n")
             }
         }
+
+    private companion object {
+        const val MAX_BENCHMARK_WARM_SAMPLE_COUNT = 20
+        const val SOAK_WARM_UP_CYCLES = 5
+        const val SOAK_LINES_PER_LANGUAGE = 40
+    }
 }

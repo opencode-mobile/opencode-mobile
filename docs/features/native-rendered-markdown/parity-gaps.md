@@ -21,7 +21,7 @@
 
 ## TextMate Execution And Memory Ownership
 
-- Status: Phase 1 code aligned; physical calibration pending
+- Status: Phase 1 closed and aligned; Phase 2 ownership migration pending
 - Area: architecture and performance
 - Shared intent: both apps should expose the same reusable highlighting-engine
   contract and share priority, cancellation, cache budgets, quality outcomes,
@@ -39,13 +39,12 @@
 - Reason: current platform mechanisms were added incrementally around one shared
   tokenizer and do not yet provide a single ownership, memory-pressure, or
   measurement contract.
-- Owner or next action: close Phase 1 with release-build physical-device
-  calibration and soak evidence using the accepted
-  [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md).
-  Then satisfy the Phase 2 single-owner seam gate in the
+- Owner or next action: satisfy the Phase 2 single-owner seam gate in the
   [implementation plan](./textmate-pipeline-improvement-plan.md), specify
   deterministic fence identity, exact-source validation, pure span attachment,
-  and the asynchronous platform-to-KMP seam.
+  and the asynchronous platform-to-KMP seam. Physical release performance,
+  memory-pressure, bridge, thermal, cancellation, and soak calibration remains
+  a Phase 6 default-enablement gate.
 
 ## TextMate Highlighter
 

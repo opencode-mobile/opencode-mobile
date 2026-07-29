@@ -3,6 +3,23 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Closed TextMate pipeline Phase 1 on the accepted simulated
+  backend matrix. The Pixel 9a Android 17 / API 37 AVD completed 457
+  mixed-language cycles over 1,801.760 seconds; retained PSS changed from
+  131,491 KiB to 131,849 KiB after five warm-up cycles (+358 KiB, inside the
+  8 MiB simulator tolerance), peak PSS was 143,815 KiB, and the longest native
+  search was 62.573 ms. The iPhone 17 Pro iOS 26.5 simulator completed 1,128
+  cycles over 1,800.941 seconds; live libonig expressions remained 464,
+  peak-live remained 464, all 465 allocations were freed after cache clear,
+  maximum resident set size was 97,697,792 bytes, and the longest native search
+  was 5.794 ms. The frozen 20-message/3,000-line fixture measured 117.713
+  seconds cold and 91.938–140.374 seconds warm on the AVD, versus 52.735
+  seconds cold and 52.891–53.074 seconds warm on iOS. These are diagnostic
+  baselines and show that warm reuse is absent or inconsistent; they are not
+  shipping guardrails. The rebuilt Android short soak, focused iOS libonig
+  class, and harness builds pass. Phase 2 has not started. Physical release
+  performance, memory-pressure, bridge, thermal, cancellation, and soak
+  calibration remains mandatory in Phase 6 before default enablement.
 - 2026-07-29: Added a persisted developer-only TextMate parsing logbook on
   Android and iOS. Each actual finalized code-fence attempt records a
   content-free, request-local observation with timestamp, requested/canonical
@@ -26,8 +43,9 @@
   regression changed from deterministic signal 11 to passing. Complete shared
   Android/iOS suites pass, and the rebuilt app opened and enriched the original
   12-row `Display JavaScript code block` session without a new crash. The
-  remaining Phase 1 gate is still physical-device release calibration and soak
-  evidence.
+  remaining Phase 1 gate at that point was physical-device release calibration
+  and soak evidence; the later accepted decision above replaced it with the
+  simulated closure matrix and moved physical release calibration to Phase 6.
 - 2026-07-29: Implemented the Phase 1 TextMate measurement and native-lifetime
   slice. Shared metrics now separate grammar load/lookup, rule resolution,
   regex compile/search, tokenize, repair, cache outcomes, source-size buckets,
@@ -40,8 +58,9 @@
   pass. The debug 20-message/3,000-line reference was 2,542 ms with a 3.934 ms
   maximum native search on the arm64 Android/JVM host and 55,388 ms with a
   50.324 ms maximum native search on an iPhone 17 Pro simulator; it is
-  diagnostic only. Phase 1 remains open for release-build calibration and soak
-  evidence on named physical low- and mid-tier devices. Phase 2 has not started.
+  diagnostic only. Phase 1 was still open at that point; the later accepted
+  decision above closes it on simulated backends and moves physical release
+  calibration to Phase 6. Phase 2 has not started.
 - 2026-07-29: Locked the TextMate pipeline architecture after independent
   module/concurrency and performance/memory/reliability triages. The five
   architecture choices are recorded in

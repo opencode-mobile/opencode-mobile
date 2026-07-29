@@ -299,7 +299,7 @@
 <body>
   <main>
     <section class="hero">
-      <span class="badge">Accepted Architecture · Phase 1 Code Complete · Device Gate Open</span>
+      <span class="badge">Accepted Architecture · Phase 1 Closed · Phase 6 Physical Gate</span>
       <h1>TextMate Pipeline Architecture Proposal</h1>
       <p class="proposal">
         Create one asynchronous, single-owner
@@ -309,7 +309,7 @@
       <div class="status">
         <div><strong>Publication authority</strong><span>The existing display pipeline remains authoritative.</span></div>
         <div><strong>Shared implementation</strong><span>KMP owns policy and tokenization; native adapters own Joni/libonig mechanics.</span></div>
-        <div><strong>Implementation status</strong><span>Phase 1 simulator-verified; physical calibration pending; Phase 2 not started.</span></div>
+        <div><strong>Implementation status</strong><span>Phase 1 closed on named simulated backends; Phase 6 owns physical calibration; Phase 2 not started.</span></div>
       </div>
     </section>
 
@@ -510,11 +510,12 @@
         <div class="choice"><strong>Latency</strong><span>Owned hypotheses; evidence-backed decision before release gating.</span></div>
         <div class="choice"><strong>Rollout</strong><span>Versioned language allowlist beneath one global preference.</span></div>
       </div>
-      <p>Phase 1 instrumentation and lifetime-safety code is complete and
-        simulator-verified. Physical release-build calibration remains its
-        close gate. Phase 2 also requires deterministic fence identity,
-        exact-source validation, pure span attachment, and the asynchronous
-        platform-to-KMP seam.</p>
+      <p>Phase 1 is closed on the named Android emulator / iOS Simulator
+        correctness, lifetime, retained-state, reference-fixture, and
+        30-minute soak matrix. Physical release-build calibration remains
+        mandatory in Phase 6. Phase 2 has not started and also requires
+        deterministic fence identity, exact-source validation, pure span
+        attachment, and the asynchronous platform-to-KMP seam.</p>
     </section>
 
     <p class="footer">

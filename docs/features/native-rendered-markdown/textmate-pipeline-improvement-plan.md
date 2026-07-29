@@ -1,7 +1,7 @@
 # TextMate Pipeline Implementation Plan
 
-**Status:** architecture locked; Phase 1 code complete and simulator-verified;
-physical-device calibration pending; Phase 2 not started
+**Status:** architecture locked; Phase 1 closed on simulated backends;
+physical-device release calibration remains in Phase 6; Phase 2 not started
 **Date:** 2026-07-29
 **Scope:** reusable fenced-code highlighting in `shared/markdown-core`, including
 Android/Joni and iOS/libonig adapters
@@ -414,11 +414,14 @@ Required counts/gauges:
 | UI executor work | zero grammar decode, tokenization, or role repair |
 | Thirty-minute mixed-language soak | no retained growth after five warm-up cycles |
 
-Phase 1 freezes named low- and mid-tier devices, fixtures, build mode, thermal
-state, bridge inclusion, cold/warm definitions, and sample counts. Budgets may
-be revised before becoming release gates only through an evidence-backed entry
-in `decisions.md`. Material engine, backend, grammar, repair, scheduler, or
-compiler changes require an explicit rebaseline.
+Phase 1 freezes named simulator/emulator configurations, fixtures, test build
+mode, bridge inclusion, cold/warm definitions, and sample counts. Simulator
+results are reproducible architectural baselines, not shipping latency, thermal,
+or peak-memory guarantees. Phase 6 freezes the representative physical-device
+matrix and release configuration before any default enablement. Budgets may be
+revised before becoming release gates only through an evidence-backed entry in
+`decisions.md`. Material engine, backend, grammar, repair, scheduler, or compiler
+changes require an explicit rebaseline.
 
 ## Reliability invariants
 
@@ -446,8 +449,8 @@ compiler changes require an explicit rebaseline.
 
 ### Phase 1 — Baseline and lifetime safety
 
-- freeze named benchmark devices, release build configuration, fixtures, size
-  buckets, sample counts, and cold/warm definitions;
+- freeze named simulated benchmark targets, test build configuration, fixtures,
+  size buckets, sample counts, and cold/warm definitions;
 - define retained-cache accounting separately from peak working set;
 - instrument current queue, grammar, regex, tokenize, repair, cache, and native
   allocation behavior;
@@ -498,11 +501,37 @@ the baseline matrix and any revised guardrail are recorded in `decisions.md`.
   search and repair as the dominant iOS cost. These values are diagnostic and
   are not release gates.
 
-Phase 1 is not closed until the same frozen fixture is calibrated in release
-builds on named physical low- and mid-tier Android and iOS devices, with sample
-counts, cold/warm definitions, thermal state, bridge inclusion, peak working
-set, retained cache, and a 30-minute soak recorded. Phase 2 must not start
-before that gate is accepted.
+The accepted Phase 1 closure matrix is:
+
+| Field | Android/Joni | iOS/libonig |
+| --- | --- | --- |
+| Named target | Pixel 9a AVD, Android 17 / API 37, arm64, 4 configured cores, 2 GiB configured RAM | iPhone 17 Pro simulator, iOS 26.5, arm64 |
+| Build | Debug app plus Android instrumentation test | Kotlin/Native debug simulator test binary |
+| Reference fixture | 20 finalized TypeScript messages, 3,000 total code lines | Same |
+| Cold/warm | One fresh-process cold fixture sample, then five same-process warm fixture samples | One post-cache-clear cold fixture sample, then five same-process warm fixture samples |
+| Soak | 30 minutes; TypeScript, Kotlin, Swift, Python, JSON, and shell; 40 lines per language per cycle | Same |
+| Retained-state check | Process PSS after forced GC/finalization, with an 8 MiB simulator-noise tolerance | Stable live compiled-regex count after warm-up; allocations equal frees after explicit cache clear |
+| Peak check | Highest sampled process PSS, diagnostic only | Highest live compiled-regex count plus test-process peak RSS, diagnostic only |
+| Bridge | Shared parser through Joni included; Compose publication excluded | Shared parser through libonig included; Swift JSON/UI publication excluded |
+| Thermal | Not meaningful for an AVD; host state is recorded only as context | Not meaningful for Simulator; host state is recorded only as context |
+
+The opt-in soak and five-warm-sample calibration harnesses are excluded from
+normal CI unless explicit arguments are supplied.
+
+#### Phase 1 closure evidence — 2026-07-29
+
+| Target | 30-minute soak | Retained/peak evidence | Reference fixture |
+| --- | --- | --- | --- |
+| Pixel 9a AVD, Android 17 / API 37 | 457 cycles; 1,801.760 s; 55,537,020 native searches; 62.573 ms longest native search | 131,491 → 131,849 KiB post-warm-up PSS (+358 KiB); 143,815 KiB peak PSS | 117.713 s cold; five warm samples 91.938–140.374 s |
+| iPhone 17 Pro, iOS 26.5 simulator | 1,128 cycles; 1,800.941 s; 136,197,930 native searches; 5.794 ms longest native search | 464 retained/peak live regexes; 465 allocations = 465 frees after clear; 97,697,792-byte maximum RSS | 52.735 s cold; five warm samples 52.891–53.074 s |
+
+The rebuilt Android short soak, focused iOS libonig class, and both harness
+builds pass. Phase 1 is closed. The reference fixture shows inconsistent or
+absent warm improvement, so it is a baseline for the Phase 2–5 architecture
+work rather than evidence that the current synchronous parser-owned path is
+fast. Physical low- and mid-tier release-build latency, memory pressure, bridge,
+thermal, cancellation, and soak calibration remains a mandatory Phase 6 gate
+before TextMate is enabled by default.
 
 ### Phase 2 — Deep module and single ownership
 
@@ -598,11 +627,12 @@ These architecture choices are explained in the
 3. Use 24 MiB as the provisional pooled eviction threshold and 32 MiB as the
    retained-cache admission ceiling.
 4. Treat latency values as owned hypotheses until their implementation phase
-   and Phase 1 device evidence make them enforceable.
+   and Phase 6 physical-device evidence make them enforceable.
 5. Promote TextMate through a versioned language allowlist beneath the global
    user preference.
 
-Phase 1 code is complete and simulator-verified, but its physical-device
-calibration gate remains open. Phase 2 additionally requires that gate plus a
-deterministic fence locator, opaque monotonic revision token, exact-source
-validation, pure span attachment, and an asynchronous platform-to-KMP adapter.
+Phase 1 is closed on the named simulator/emulator correctness, lifetime, and
+soak matrix above. Physical-device release calibration remains in the Phase 6
+default-enablement gate. Phase 2 additionally requires a deterministic fence
+locator, opaque monotonic revision token, exact-source validation, pure span
+attachment, and an asynchronous platform-to-KMP adapter.

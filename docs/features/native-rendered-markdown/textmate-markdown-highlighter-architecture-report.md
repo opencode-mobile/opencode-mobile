@@ -886,29 +886,34 @@ evidence that Joni/libonig are absent.
 
 ## 15. Recommended next steps
 
-Phase 1 lifetime safety, request-scoped metrics, and the developer logbook are
-implemented. The most valuable remaining sequence is:
+Phase 1 lifetime safety, request-scoped metrics, the developer logbook, and the
+accepted simulated closure matrix are complete. The most valuable remaining
+sequence is:
 
-1. complete physical-device release calibration and soak on the frozen fixture;
-2. put the highlighter behind the proposed single-owner asynchronous engine;
-3. reuse a per-line UTF-8 search buffer/index map instead of rebuilding it for
+1. put the highlighter behind the proposed single-owner asynchronous engine;
+2. reuse a per-line UTF-8 search buffer/index map instead of rebuilding it for
    every regex search;
-4. give grammar, resolved-rule, and compiled-regex caches observable counts,
+3. give grammar, resolved-rule, and compiled-regex caches observable counts,
    weighted budgets, and memory-pressure clearing behavior;
-5. turn the logbook evidence into explicit per-language release guardrails and
+4. turn the logbook evidence into explicit per-language release guardrails and
    versioned promotion decisions;
-6. add aggregate grammar-load and regex-compile failure classification without
+5. add aggregate grammar-load and regex-compile failure classification without
    persisting source-derived patterns or messages;
-7. remove the redundant generic highlighter call for diff/patch projection;
-8. introduce a per-fence time/cancellation budget before enabling TextMate by
+6. remove the redundant generic highlighter call for diff/patch projection;
+7. introduce a per-fence time/cancellation budget before enabling TextMate by
    default;
-9. promote real Session Chat samples language by language into exact oracle
+8. promote real Session Chat samples language by language into exact oracle
    gates;
-10. measure bundle size, retained cache cost, cold grammar decode, regex
+9. measure bundle size, retained cache cost, cold grammar decode, regex
    compile, allocation count, and warm tokenize costs by language;
-11. decide deliberately between the current role model and a future
+10. decide deliberately between the current role model and a future
    scope/theme-carrying render contract before pursuing full visual Shiki
    parity.
+
+Physical low- and mid-tier release-build latency, memory-pressure, bridge,
+thermal, cancellation, and soak calibration remains mandatory in Phase 6 before
+TextMate is enabled by default. Simulator evidence closes the Phase 1
+architecture/lifetime gate but is not a shipping performance claim.
 
 ## 16. File map
 

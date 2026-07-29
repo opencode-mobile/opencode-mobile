@@ -1,5 +1,41 @@
 # Native Rendered Markdown Decisions
 
+## Phase 1 Closes On Simulated Backends; Shipping Calibration Moves To Phase 6
+
+- Decision: Phase 1 uses one named simulated backend per platform: the Pixel 9a
+  AVD on Android 17 / API 37 for Joni and the iPhone 17 Pro iOS 26.5 simulator
+  for libonig. Five warm-up cycles precede a 30-minute mixed-language soak over
+  TypeScript, Kotlin, Swift, Python, JSON, and shell. The opt-in soak harness is
+  excluded from ordinary CI unless a duration is supplied.
+- Decision: Android records process PSS after forced GC/finalization and permits
+  8 MiB of simulator noise after warm-up. iOS requires the live compiled-regex
+  count to remain stable after warm-up and requires allocation/free equality
+  after explicit cache clear. Peak PSS, peak live regexes, longest native call,
+  and simulator timings are diagnostic evidence only.
+- Decision: Phase 1 simulator evidence gates correctness, concurrency,
+  cancellation, allocation ownership, retained-state stability, and readiness
+  to introduce the single-owner engine. It does not establish real-device
+  latency, thermal, memory-pressure, or end-to-end bridge guarantees.
+- Decision: representative physical low- and mid-tier devices, release builds,
+  end-to-end bridge inclusion, thermal state, latency distributions, peak and
+  retained memory, cancellation, and a repeated soak remain mandatory in Phase
+  6 before TextMate is enabled by default.
+- Reason: the user accepted emulator/simulator evidence for the architectural
+  migration, while retaining a production gate where hardware-dependent
+  evidence can affect user-visible default enablement.
+- Evidence: Android completed 457 mixed-language cycles over 1,801.760 seconds
+  with +358 KiB retained PSS after warm-up, 143,815 KiB peak PSS, and a 62.573
+  ms longest native search. iOS completed 1,128 cycles over 1,800.941 seconds
+  with 464 retained/peak live expressions, 465 allocations matched by 465
+  frees after clear, 97,697,792 bytes maximum RSS, and a 5.794 ms longest
+  native search.
+- Evidence: the 20-message/3,000-line fixture measured 117.713 seconds cold and
+  91.938–140.374 seconds across five warm samples on the Android AVD. It
+  measured 52.735 seconds cold and 52.891–53.074 seconds warm on the iOS
+  simulator. The inconsistent/absent warm improvement is a Phase 2–5
+  optimization baseline, not a shipping gate.
+- Date: 2026-07-29.
+
 ## TextMate Logbook Is Request-Scoped, Bounded, And Content-Free
 
 - Decision: an observed parser envelope may return one
@@ -72,13 +108,12 @@
   3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
   Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
   diagnostic reference values, not release guardrails.
-- Implementation gate: Phase 1 remains open until named physical low- and
-  mid-tier Android and iOS devices run release builds with frozen sample counts,
-  cold/warm definitions, thermal state, bridge inclusion, peak and retained
-  memory accounting, and the 30-minute soak. Phase 2 additionally requires this
-  accepted evidence, a deterministic fence locator, pure span-attachment
-  operation, exact-source correctness check, monotonic revision token, and
-  asynchronous platform-to-KMP adapter.
+- Implementation gate: Phase 1 is closed on the accepted Pixel 9a Android 17 AVD
+  and iPhone 17 Pro iOS 26.5 simulator evidence recorded above. Phase 2 has not
+  started and additionally requires a deterministic fence locator, pure
+  span-attachment operation, exact-source correctness check, monotonic revision
+  token, and asynchronous platform-to-KMP adapter. Physical release calibration
+  is a Phase 6 default-enablement gate.
 - Date: 2026-07-29.
 
 ## Markdown Fences Close Like CommonMark / Web

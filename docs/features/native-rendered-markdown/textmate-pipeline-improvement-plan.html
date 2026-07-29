@@ -328,7 +328,7 @@
 <body>
   <main>
     <section class="hero">
-      <span class="badge">Architecture Locked · Phase 1 Code Complete · Device Gate Open · 2026-07-29</span>
+      <span class="badge">Architecture Locked · Phase 1 Closed On Simulated Backends · Phase 6 Physical Gate · 2026-07-29</span>
       <h1>TextMate Pipeline Implementation Plan</h1>
       <p class="summary">
         The six-phase execution plan for the selected
@@ -597,11 +597,44 @@
         </tr>
       </tbody>
     </table>
+    <h3>Frozen Phase 1 simulated matrix</h3>
+    <table>
+      <thead><tr><th>Field</th><th>Android/Joni</th><th>iOS/libonig</th></tr></thead>
+      <tbody>
+        <tr><td>Target</td><td>Pixel 9a AVD · Android 17 / API 37 · arm64 · 4 configured cores · 2 GiB configured RAM</td><td>iPhone 17 Pro simulator · iOS 26.5 · arm64</td></tr>
+        <tr><td>Build</td><td>Debug app + instrumentation test</td><td>Kotlin/Native debug simulator test</td></tr>
+        <tr><td>Reference</td><td>20 TypeScript messages · 3,000 code lines</td><td>Same fixture</td></tr>
+        <tr><td>Cold/warm samples</td><td>One fresh-process cold fixture sample; five same-process warm samples</td><td>One post-cache-clear cold fixture sample; five same-process warm samples</td></tr>
+        <tr><td>Soak</td><td>30 minutes · six languages · 40 lines each per cycle</td><td>Same workload</td></tr>
+        <tr><td>Retained state</td><td>Post-GC PSS; 8 MiB simulator-noise tolerance</td><td>Stable live regex count; allocations equal frees after clear</td></tr>
+        <tr><td>Boundary</td><td>Shared parser + Joni; Compose publication excluded</td><td>Shared parser + libonig; Swift JSON/UI publication excluded</td></tr>
+      </tbody>
+    </table>
+    <h3>Phase 1 closure evidence</h3>
+    <table>
+      <thead><tr><th>Target</th><th>30-minute soak</th><th>Retained / peak</th><th>20-message / 3,000-line fixture</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Pixel 9a AVD · Android 17 / API 37</td>
+          <td>457 cycles · 1,801.760 s · 55,537,020 native searches · 62.573 ms longest native search</td>
+          <td>131,491 → 131,849 KiB post-warm-up PSS (+358 KiB) · 143,815 KiB peak</td>
+          <td>117.713 s cold · five warm samples 91.938–140.374 s</td>
+        </tr>
+        <tr>
+          <td>iPhone 17 Pro · iOS 26.5 Simulator</td>
+          <td>1,128 cycles · 1,800.941 s · 136,197,930 native searches · 5.794 ms longest native search</td>
+          <td>464 retained/peak live regexes · 465 allocations = 465 frees after clear · 97,697,792-byte max RSS</td>
+          <td>52.735 s cold · five warm samples 52.891–53.074 s</td>
+        </tr>
+      </tbody>
+    </table>
     <p class="caption">
       Fixed fixture: 20 finalized messages and 3,000 TypeScript code lines.
-      Phase 1 remains open until release-build calibration, peak/retained-memory
-      evidence, and a 30-minute soak are recorded on named physical low- and
-      mid-tier devices. These debug values are not release gates.
+      Phase 1 is closed. Warm improvement is absent or inconsistent, so these
+      values are Phase 2–5 optimization baselines, not release gates. Physical
+      release-build latency, memory-pressure, bridge, thermal, cancellation,
+      and soak calibration remains mandatory in Phase 6 before default
+      enablement.
     </p>
 
     <h2>Six-phase migration</h2>
@@ -610,7 +643,7 @@
         <span class="number">1</span>
         <h3>Baseline and lifetime safety</h3>
         <p>Instrument stages, stress iOS first use/cancellation, fix decomposition leaks, count native allocation/free, and correct cache identity.</p>
-        <div class="gate">Status: code complete and simulator-verified. Gate still open for frozen physical-device release evidence.</div>
+        <div class="gate">Status: closed on the named simulated correctness, lifetime, retained-state, fixture, and soak matrix.</div>
       </div>
       <div class="phase">
         <span class="number">2</span>
@@ -684,17 +717,18 @@
       <div class="decision"><strong>4 · Latency</strong><span>Owned hypotheses become gates only after evidence-backed decisions.</span></div>
       <div class="decision"><strong>5 · Rollout</strong><span>Versioned language allowlist beneath the global preference.</span></div>
     </div>
-    <p class="caption">Phase 1 code is complete and simulator-verified, but its
-      physical-device calibration gate remains open. Phase 2 also requires
-      deterministic fence identity, exact-source validation, pure span
-      attachment, and the asynchronous platform-to-KMP seam.</p>
+    <p class="caption">Phase 1 is closed on the named simulated correctness,
+      lifetime, retained-state, fixture, and soak matrix. Physical release
+      calibration remains mandatory in Phase 6. Phase 2 has not started and
+      also requires deterministic fence identity, exact-source validation,
+      pure span attachment, and the asynchronous platform-to-KMP seam.</p>
 
     <p class="footer">
       Canonical source:
       <a href="./textmate-pipeline-improvement-plan.md">textmate-pipeline-improvement-plan.md</a>
       · Starting evidence:
       <a href="./textmate-markdown-highlighter-architecture-report.html">current architecture report</a>
-      · Implementation status: Phase 1 code complete; physical-device gate open
+      · Implementation status: Phase 1 closed; Phase 2 not started; Phase 6 owns physical release calibration
     </p>
   </main>
 </body>
