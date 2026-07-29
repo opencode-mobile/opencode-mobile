@@ -1,5 +1,60 @@
 # Native Rendered Markdown Decisions
 
+## TextMate Pipeline Uses One Asynchronous, Single-Owner Engine
+
+- Decision: structural Markdown first produces a complete plain or
+  semantic-fallback document. A deep asynchronous
+  `TextMateHighlightingEngine` in `shared/markdown-core` may then upgrade one
+  fence at a time through an opaque fence key, caller-owned monotonic revision
+  token, exact source, language, intent, and policy epoch. The outer display
+  pipeline remains the only visible-publication authority and revalidates
+  generation, fence identity, revision, exact source, streaming state, and
+  policy before attaching spans or mutating visible decoration caches.
+- Decision: each platform initially uses one active, instance-owned serial KMP
+  runtime for all mutable grammar, rule, regex, queue, incremental, and eviction
+  state. Android adapts it through an injected single-lane dispatcher; iOS uses
+  a serial KMP executor or worker, optionally behind a Swift actor. Production
+  mutable caches may not remain process-global or thread-local. A second
+  isolated shard requires device evidence and independent mutable/native state.
+- Decision: 24 MiB is the provisional pooled retained-cache eviction threshold
+  and 32 MiB is the admission ceiling. Accounted state includes decoded
+  grammars, rule plans, compiled regexes, incremental checkpoints, and cached
+  highlight results. Packaged resources are separate; active-job, bridge, and
+  leased allocations are peak-working-set metrics. Phase 1 may revise the
+  figures only through a new evidence-backed decision.
+- Decision: the documented latency values remain owned engineering hypotheses
+  until measured on frozen low- and mid-tier device matrices. Plain publication
+  belongs to `DisplayMessagePipeline`; queueing and service belong to the
+  engine; native-call duration belongs to the regex adapter. Material engine,
+  backend, grammar, repair, scheduler, or compiler changes require an explicit
+  rebaseline.
+- Decision: keep one global user-facing TextMate preference, backed by a
+  versioned promoted-language allowlist. A language is promoted only after its
+  Joni and libonig correctness, representative Session Chat, latency, fallback,
+  native-lifetime, memory, and soak gates pass. Other languages retain complete
+  semantic fallback.
+- Reason: independent architecture triages agreed that the current synchronous
+  parser-owned path, shared mutable caches, raw iOS native-pointer lifetime, and
+  unbounded per-search allocation cannot provide reusable, measurable, or
+  reliable highlighting. The locked design keeps optional decoration away from
+  source publication while concentrating scheduling, memory, lifetime, and
+  measurement inside one deep module.
+- Implementation gate: Phase 1 instrumentation and lifetime-safety code is
+  complete and simulator-verified. The fixed debug reference fixture is 20
+  finalized messages and 3,000 TypeScript code lines. On 2026-07-29 it measured
+  2,542 ms in the Android/Joni JVM test on an arm64 macOS 26.5.2 host, with a
+  3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
+  Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
+  diagnostic reference values, not release guardrails.
+- Implementation gate: Phase 1 remains open until named physical low- and
+  mid-tier Android and iOS devices run release builds with frozen sample counts,
+  cold/warm definitions, thermal state, bridge inclusion, peak and retained
+  memory accounting, and the 30-minute soak. Phase 2 additionally requires this
+  accepted evidence, a deterministic fence locator, pure span-attachment
+  operation, exact-source correctness check, monotonic revision token, and
+  asynchronous platform-to-KMP adapter.
+- Date: 2026-07-29.
+
 ## Markdown Fences Close Like CommonMark / Web
 
 - Decision: Fenced code blocks close at the first bare closing fence of the same
@@ -19,6 +74,20 @@
   keeps Session Chat responsive while still coloring common tokens. Power users
   can opt into full grammar fidelity.
 - Date: 2026-07-28.
+
+## Semantic Fallback Tokenization Is Iterative And Bounded
+
+- Decision: the shared semantic fallback highlighter tokenizes quoted strings,
+  line and block comments, numbers, ASCII identifiers, punctuation, and
+  operators with a single-pass scanner. It does not use a combined
+  `Regex.findAll` over an entire fence. Unterminated strings and block comments
+  extend to the end of the fence and remain complete semantic spans.
+- Reason: Kotlin/Native's recursive regex implementation overflowed the iOS
+  worker stack on a 3,968-character unterminated JavaScript string. The failure
+  terminated the app with `EXC_BAD_ACCESS` before Swift could recover. The
+  scanner makes fallback work linear and bounded while preserving the complete
+  fenced-code source.
+- Date: 2026-07-29.
 
 ## Native Renderer Replaces WebView
 

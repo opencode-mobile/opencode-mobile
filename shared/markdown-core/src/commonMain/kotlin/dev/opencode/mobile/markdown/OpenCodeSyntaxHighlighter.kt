@@ -1,5 +1,7 @@
 package dev.opencode.mobile.markdown
 
+import kotlin.time.TimeSource
+
 data class SyntaxHighlightResult(
     val spans: List<CodeSpan>,
     val diagnostics: List<MarkdownDiagnostic>,
@@ -31,6 +33,7 @@ class OpenCodeSyntaxHighlighter(
     private val grammarBundle: TextMateGrammarBundle? = null,
     private val textMateTokenizer: OpenCodeTextMateTokenizer? = null,
     private val fallbackHighlighter: OpenCodeCodeHighlighter = OpenCodeSemanticFallbackHighlighter,
+    private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
 ) : OpenCodeCodeHighlighter {
     override fun supportsLanguage(languageOrAlias: String?): Boolean =
         normalizedLanguage(languageOrAlias)?.let { language ->
@@ -41,10 +44,22 @@ class OpenCodeSyntaxHighlighter(
         languageOrAlias: String?,
         code: String,
     ): SyntaxHighlightResult {
+        val grammarLookupStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
         val grammar = normalizedLanguage(languageOrAlias)?.let { language -> grammarBundle?.primaryGrammarFor(language) }
+        grammarLookupStartedAt?.let {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.GrammarLookup,
+                    outcome = if (grammar == null) TextMateMetricOutcome.Failure else TextMateMetricOutcome.Success,
+                    durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    sourceCharacters = code.length,
+                ),
+            )
+        }
         val tokenizer = textMateTokenizer
         if (grammar != null && tokenizer != null) {
             val tokenization = tokenizer.tokenize(grammar, code, grammarBundle)
+            val repairStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
             val spans =
                 tokenization.tokens
                     .map(OpenCodeTextMateScopeMapper::codeSpanFor)
@@ -60,6 +75,16 @@ class OpenCodeSyntaxHighlighter(
                     .consolidateWithinIdentifiers(code)
                     .mergeAdjacentSemanticSpans(code)
                     .highlightPythonTripleQuotedStrings(code, languageOrAlias)
+            repairStartedAt?.let {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.Repair,
+                        outcome = TextMateMetricOutcome.Success,
+                        durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                        sourceCharacters = code.length,
+                    ),
+                )
+            }
             if (spans.isNotEmpty()) {
                 return SyntaxHighlightResult(
                     spans = spans,
@@ -892,12 +917,8 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
             "nil" to CodeTokenRole.Constant,
         )
 
-    private val tokenRegex =
-        Regex(
-            pattern =
-                """"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//.*$|#.*$|/\*.*?\*/|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[{}()\[\].,;:+\-*/%=<>!&|?]""",
-            options = setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL),
-        )
+    private val punctuationCharacters = setOf('{', '}', '(', ')', '[', ']', '.', ',', ';', ':')
+    private val operatorCharacters = setOf('+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|', '?')
 
     override fun supportsLanguage(languageOrAlias: String?): Boolean {
         val normalized = languageOrAlias?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return true
@@ -925,17 +946,101 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
     ): List<CodeSpan> {
         if (language == "scratch") return emptyList()
         if (code.isEmpty()) return emptyList()
-        return tokenRegex
-            .findAll(code)
-            .map { match ->
-                val value = match.value
-                CodeSpan(
-                    start = match.range.first,
-                    end = match.range.last + 1,
-                    role = roleFor(language, value),
-                )
-            }.filter { it.role != CodeTokenRole.Plain }
-            .toList()
+        return buildList {
+            var cursor = 0
+            while (cursor < code.length) {
+                val start = cursor
+                val end =
+                    when {
+                        code[cursor] == '"' || code[cursor] == '\'' ->
+                            quotedTokenEnd(code, cursor, code[cursor])
+                        code.startsWith("//", cursor) || code[cursor] == '#' ->
+                            lineTokenEnd(code, cursor)
+                        code.startsWith("/*", cursor) ->
+                            blockCommentEnd(code, cursor)
+                        code[cursor].isDigit() ->
+                            numberTokenEnd(code, cursor)
+                        code[cursor].isAsciiIdentifierStart() ->
+                            identifierTokenEnd(code, cursor)
+                        code[cursor] in punctuationCharacters ->
+                            cursor + 1
+                        code[cursor] in operatorCharacters ->
+                            operatorTokenEnd(code, cursor)
+                        else -> {
+                            cursor += 1
+                            continue
+                        }
+                    }
+                val role = roleFor(language, code.substring(start, end))
+                if (role != CodeTokenRole.Plain) {
+                    add(CodeSpan(start = start, end = end, role = role))
+                }
+                cursor = end
+            }
+        }
+    }
+
+    private fun quotedTokenEnd(
+        code: String,
+        start: Int,
+        quote: Char,
+    ): Int {
+        var cursor = start + 1
+        while (cursor < code.length) {
+            when (code[cursor]) {
+                '\\' -> cursor = (cursor + 2).coerceAtMost(code.length)
+                quote -> return cursor + 1
+                else -> cursor += 1
+            }
+        }
+        return code.length
+    }
+
+    private fun lineTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        val lineEnd = code.indexOf('\n', startIndex = start)
+        return if (lineEnd < 0) code.length else lineEnd
+    }
+
+    private fun blockCommentEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        val closing = code.indexOf("*/", startIndex = start + 2)
+        return if (closing < 0) code.length else closing + 2
+    }
+
+    private fun numberTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        var cursor = start
+        while (cursor < code.length && code[cursor].isDigit()) cursor += 1
+        if (cursor + 1 < code.length && code[cursor] == '.' && code[cursor + 1].isDigit()) {
+            cursor += 1
+            while (cursor < code.length && code[cursor].isDigit()) cursor += 1
+        }
+        return cursor
+    }
+
+    private fun identifierTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        var cursor = start + 1
+        while (cursor < code.length && code[cursor].isAsciiIdentifierPart()) cursor += 1
+        return cursor
+    }
+
+    private fun operatorTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        var cursor = start + 1
+        while (cursor < code.length && code[cursor] in operatorCharacters) cursor += 1
+        return cursor
     }
 
     private fun roleFor(
@@ -947,10 +1052,14 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
             value.startsWith("\"") || value.startsWith("'") -> CodeTokenRole.String
             value.firstOrNull()?.isDigit() == true -> CodeTokenRole.Number
             value in keywordRoles -> keywordRoles.getValue(value)
-            language == "json" && value.matches(Regex("""[A-Za-z_][A-Za-z0-9_]*""")) -> CodeTokenRole.Property
-            value.matches(Regex("""[{}()\[\].,;:]""")) -> CodeTokenRole.Punctuation
-            value.matches(Regex("""[+\-*/%=<>!&|?]+""")) -> CodeTokenRole.Operator
+            language == "json" && value.firstOrNull()?.isAsciiIdentifierStart() == true -> CodeTokenRole.Property
+            value.length == 1 && value[0] in punctuationCharacters -> CodeTokenRole.Punctuation
+            value.isNotEmpty() && value.all { character -> character in operatorCharacters } -> CodeTokenRole.Operator
             value.firstOrNull()?.isUpperCase() == true -> CodeTokenRole.Type
             else -> CodeTokenRole.Plain
         }
+
+    private fun Char.isAsciiIdentifierStart(): Boolean = this == '_' || this in 'A'..'Z' || this in 'a'..'z'
+
+    private fun Char.isAsciiIdentifierPart(): Boolean = isAsciiIdentifierStart() || isDigit()
 }

@@ -3,15 +3,19 @@ package dev.opencode.mobile.markdown
 import android.content.Context
 
 object OpenCodeBundledJoniMarkdownHighlighter {
-    fun create(resourceReader: OpenCodeTextMateResourceReader): OpenCodeSyntaxHighlighter {
+    fun create(
+        resourceReader: OpenCodeTextMateResourceReader,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    ): OpenCodeSyntaxHighlighter {
         val bundle =
             OpenCodeTextMateGrammarBundleLoader
-                .loadBundled(resourceReader)
+                .loadBundled(resourceReader, metricsSink)
                 .bundle
 
         return OpenCodeSyntaxHighlighter(
             grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
+            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend, metricsSink),
+            metricsSink = metricsSink,
         )
     }
 

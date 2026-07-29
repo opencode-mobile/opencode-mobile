@@ -29,8 +29,8 @@ runtime.
 - Native horizontal scrolling for code, diff, and table overflow.
 - Link taps owned by native code and limited to `http`/`https`.
 - Shared KMP render-tree model for Android and the iOS integration boundary.
-- Native semantic fallback highlighting while the TextMate/Oniguruma feasibility
-  gate remains open.
+- Native semantic fallback highlighting through a bounded single-pass scanner
+  while the TextMate/Oniguruma feasibility gate remains open.
 
 ## Out Of Scope
 
@@ -96,6 +96,16 @@ the shared KMP highlighter spans against those fixtures, add CommonMark-capable
 parser oracle fixtures for supported markdown constructs, and then decide
 whether to keep the handwritten parser behind differential tests or migrate
 render-tree construction to `jetbrains.markdown`.
+
+The selected target is described in the
+[TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md):
+keep publication generation in the existing display pipeline and place bounded,
+asynchronous block highlighting behind one reusable, single-owner engine
+interface. The architecture choices are locked: Phase 1 may begin, while Phase
+2 requires deterministic fence identity, exact-source validation, pure span
+attachment, and an asynchronous platform-to-KMP seam. The six-phase execution
+sequence is tracked separately in the
+[TextMate Pipeline Improvement Plan](./textmate-pipeline-improvement-plan.md).
 
 ## Implementation Milestones
 

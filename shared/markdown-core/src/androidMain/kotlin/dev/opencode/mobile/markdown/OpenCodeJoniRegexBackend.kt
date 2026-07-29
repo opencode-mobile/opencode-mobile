@@ -8,6 +8,7 @@ import org.joni.Option
 import org.joni.Regex
 import org.joni.Syntax
 import org.joni.exception.JOniException
+import kotlin.time.TimeSource
 
 object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "joni-oniguruma"
@@ -39,15 +40,18 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
             },
         )
 
-    private fun resolvePattern(pattern: String): RegexCacheEntry {
-        compilePattern(pattern)?.let { regex ->
+    private fun resolvePattern(
+        pattern: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): RegexCacheEntry {
+        compilePattern(pattern, metricsSink)?.let { regex ->
             return RegexCacheEntry.Compiled(regex)
         }
 
         val candidates =
             OpenCodeTextMateRegexAlternationSupport
                 .decompositionCandidates(pattern)
-                ?.filter { candidate -> compilePattern(candidate) != null }
+                ?.filter { candidate -> compilePattern(candidate, metricsSink) != null }
                 .orEmpty()
         if (candidates.isNotEmpty()) {
             return RegexCacheEntry.Decomposed(candidates)
@@ -56,29 +60,45 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
         return RegexCacheEntry.Failed
     }
 
-    private fun compilePattern(pattern: String): Regex? {
+    private fun compilePattern(
+        pattern: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): Regex? {
         val patternBytes = pattern.encodeToByteArray()
+        val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
         synchronized(compileLock) {
             val originalErr = System.err
-            return try {
-                System.setErr(silentErr)
+            val compiled =
                 try {
-                    Regex(
-                        patternBytes,
-                        0,
-                        patternBytes.size,
-                        Option.MULTILINE or Option.CAPTURE_GROUP,
-                        UTF8Encoding.INSTANCE,
-                        Syntax.RUBY,
-                    )
-                } catch (_: JOniException) {
-                    null
-                } catch (_: IllegalArgumentException) {
-                    null
+                    System.setErr(silentErr)
+                    try {
+                        Regex(
+                            patternBytes,
+                            0,
+                            patternBytes.size,
+                            Option.MULTILINE or Option.CAPTURE_GROUP,
+                            UTF8Encoding.INSTANCE,
+                            Syntax.RUBY,
+                        )
+                    } catch (_: JOniException) {
+                        null
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    }
+                } finally {
+                    System.setErr(originalErr)
                 }
-            } finally {
-                System.setErr(originalErr)
+            startedAt?.let {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.RegexCompile,
+                        outcome = if (compiled == null) TextMateMetricOutcome.Failure else TextMateMetricOutcome.Success,
+                        durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                        backend = name,
+                    ),
+                )
             }
+            return compiled
         }
     }
 
@@ -88,6 +108,7 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
         val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
         val effectivePattern =
@@ -117,21 +138,21 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
                         contiguousAnchor = contiguousAnchor,
                     )
                 }
-                return find(suffix, input, startIndex, endIndex, contiguousAnchor)
+                return find(suffix, input, startIndex, endIndex, contiguousAnchor, metricsSink)
                     ?.takeIf { match -> match.start == startIndex }
             }
         }
 
-        when (val entry = regexCache.getOrPut(effectivePattern) { resolvePattern(effectivePattern) }) {
+        when (val entry = regexCache.getOrPut(effectivePattern) { resolvePattern(effectivePattern, metricsSink) }) {
             is RegexCacheEntry.Compiled ->
                 return OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
                     pattern = effectivePattern,
-                    match = search(entry.regex, input, startIndex, endIndex),
+                    match = search(entry.regex, input, startIndex, endIndex, metricsSink),
                     contiguousAnchor = contiguousAnchor,
                 )
             is RegexCacheEntry.Decomposed -> {
                 return entry.candidates
-                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor) }
+                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor, metricsSink) }
                     .minByOrNull { match -> match.start }
             }
             RegexCacheEntry.Failed -> return null
@@ -143,6 +164,7 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
         val indexMap = Utf8IndexMap(input)
         val inputBytes = indexMap.bytes
@@ -150,7 +172,28 @@ object OpenCodeJoniRegexBackend : OpenCodeTextMateRegexBackend {
         val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, input.length))
         val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, input.length))
         val matcher = regex.matcher(inputBytes)
-        val result = matcher.search(startByte, endByte, Option.NONE)
+        val result =
+            if (metricsSink.isEnabled) {
+                val startedAt = TimeSource.Monotonic.markNow()
+                var outcome = TextMateMetricOutcome.Success
+                try {
+                    matcher.search(startByte, endByte, Option.NONE)
+                } catch (failure: Throwable) {
+                    outcome = TextMateMetricOutcome.Failure
+                    throw failure
+                } finally {
+                    metricsSink.record(
+                        TextMateMetricEvent(
+                            stage = TextMateMetricStage.NativeRegexSearch,
+                            outcome = outcome,
+                            durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                            backend = name,
+                        ),
+                    )
+                }
+            } else {
+                matcher.search(startByte, endByte, Option.NONE)
+            }
         if (result < 0) return null
 
         val region = matcher.eagerRegion

@@ -3,6 +3,7 @@ package dev.opencode.mobile.markdown
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlin.time.TimeSource
 
 fun interface OpenCodeTextMateResourceReader {
     fun readText(resourcePath: String): String?
@@ -38,6 +39,7 @@ data class TextMateGrammarBundleLoadResult(
 class TextMateGrammarBundle internal constructor(
     val manifest: TextMateGrammarManifest,
     private val reader: OpenCodeTextMateResourceReader?,
+    private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     preloadedGrammars: Map<String, TextMateGrammarPayload> = emptyMap(),
     preloadedDiagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
 ) {
@@ -96,30 +98,62 @@ class TextMateGrammarBundle internal constructor(
             manifest: TextMateGrammarManifest,
             grammars: List<TextMateGrammarPayload>,
             diagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
+            metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
         ): TextMateGrammarBundle =
             TextMateGrammarBundle(
                 manifest = manifest,
                 reader = null,
+                metricsSink = metricsSink,
                 preloadedGrammars = grammars.associateBy { grammar -> grammar.descriptor.resourcePath },
                 preloadedDiagnostics = diagnostics,
             )
     }
 
     private fun grammarForDescriptor(descriptor: TextMateGrammarDescriptor): TextMateGrammarPayload? {
-        loadedByResourcePath[descriptor.resourcePath]?.let { return it }
+        loadedByResourcePath[descriptor.resourcePath]?.let { cached ->
+            if (metricsSink.isEnabled) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.GrammarLoad,
+                        outcome = TextMateMetricOutcome.CacheHit,
+                    ),
+                )
+            }
+            return cached
+        }
         if (descriptor.resourcePath in failedResourcePaths) return null
 
         val resourceReader = reader ?: return null
 
+        val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
         val result = OpenCodeTextMateGrammarBundleLoader.loadGrammarPayload(descriptor, resourceReader)
         loadDiagnostics += result.diagnostics
         val payload = result.payload
         if (payload == null) {
             failedResourcePaths += descriptor.resourcePath
+            startedAt?.let {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.GrammarLoad,
+                        outcome = TextMateMetricOutcome.Failure,
+                        durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    ),
+                )
+            }
             return null
         }
 
-        return loadedByResourcePath.getOrPut(descriptor.resourcePath) { payload }
+        return loadedByResourcePath.getOrPut(descriptor.resourcePath) { payload }.also {
+            startedAt?.let {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.GrammarLoad,
+                        outcome = TextMateMetricOutcome.CacheMiss,
+                        durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    ),
+                )
+            }
+        }
     }
 }
 
@@ -131,7 +165,10 @@ object OpenCodeTextMateGrammarBundleLoader {
         val diagnostics: List<TextMateGrammarLoadDiagnostic>,
     )
 
-    fun loadBundled(reader: OpenCodeTextMateResourceReader): TextMateGrammarBundleLoadResult {
+    fun loadBundled(
+        reader: OpenCodeTextMateResourceReader,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    ): TextMateGrammarBundleLoadResult {
         val manifestJson =
             reader.readText(defaultManifestResourcePath)
                 ?: return TextMateGrammarBundleLoadResult(
@@ -146,12 +183,13 @@ object OpenCodeTextMateGrammarBundleLoader {
                         ),
                 )
 
-        return loadFromManifestJson(manifestJson, reader)
+        return loadFromManifestJson(manifestJson, reader, metricsSink)
     }
 
     fun loadFromManifestJson(
         manifestJson: String,
         reader: OpenCodeTextMateResourceReader,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     ): TextMateGrammarBundleLoadResult {
         val manifest =
             try {
@@ -187,6 +225,7 @@ object OpenCodeTextMateGrammarBundleLoader {
                 TextMateGrammarBundle(
                     manifest = manifest,
                     reader = reader,
+                    metricsSink = metricsSink,
                 ),
             diagnostics = emptyList(),
         )
@@ -195,11 +234,13 @@ object OpenCodeTextMateGrammarBundleLoader {
     fun load(
         manifest: TextMateGrammarManifest,
         reader: OpenCodeTextMateResourceReader,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     ): TextMateGrammarBundle {
         val bundle =
             TextMateGrammarBundle(
                 manifest = manifest,
                 reader = reader,
+                metricsSink = metricsSink,
             )
         bundle.preloadAllFromReader()
         return bundle

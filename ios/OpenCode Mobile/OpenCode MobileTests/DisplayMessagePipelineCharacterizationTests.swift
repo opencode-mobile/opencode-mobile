@@ -274,6 +274,36 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func repeatedCancellationStressNeverPublishesHeldStalePreparation() async {
+        for index in 0..<12 {
+            let harness = Harness()
+            let collector = CharacterizationDisplayCollector()
+            let task = Task {
+                await collector.collect(
+                    harness.pipeline.observeDisplayMessages(sessionID: "ses-stress-\(index)", directory: nil)
+                )
+            }
+
+            harness.preparer.holdNextPrepareMessages()
+            await harness.source.emit(.messages([plainAssistant("stale-\(index)")]))
+            #expect(await waitUntil { harness.preparer.hasPendingPrepareMessagesHold })
+
+            let currentText = "current-\(index)"
+            await harness.source.emit(.messages([plainAssistant(currentText)]))
+            #expect(await waitUntil { collector.emissions.last?.first?.text == currentText })
+            let emissionCount = collector.emissions.count
+
+            harness.preparer.releaseNextPrepareMessages()
+            try? await Task.sleep(for: .milliseconds(10))
+            #expect(collector.emissions.count == emissionCount)
+            #expect(collector.emissions.last?.first?.text == currentText)
+
+            task.cancel()
+            harness.source.finish()
+            _ = await waitUntil { collector.isFinished }
+        }
+    }
+
     @Test func cancelledEnrichmentPrepareDoesNotPublishAfterNewerLiveSnapshot() async {
         let harness = Harness(holdSleep: true)
         // Needs a published plain-first baseline before parking enrich.

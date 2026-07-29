@@ -31,6 +31,84 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(String(output.characters) == code)
     }
 
+    @Test func attributedCodeCacheIncludesPaletteRevision() {
+        let code = "let"
+        let spans = [NativeCodeSpan(start: 0, end: 3, role: .keyword)]
+        let firstPalette = NativeCodeColorPalette(
+            colors: [.keyword: .red],
+            plain: .black,
+            cacheRevision: 101
+        )
+        let secondPalette = NativeCodeColorPalette(
+            colors: [.keyword: .blue],
+            plain: .black,
+            cacheRevision: 102
+        )
+
+        let first = NativeMarkdownAttributedString.code(code, spans: spans, palette: firstPalette)
+        let second = NativeMarkdownAttributedString.code(code, spans: spans, palette: secondPalette)
+        guard let firstColor = NSAttributedString(first).attribute(
+            .foregroundColor,
+            at: 0,
+            effectiveRange: nil
+        ) as? UIColor,
+            let secondColor = NSAttributedString(second).attribute(
+                .foregroundColor,
+                at: 0,
+                effectiveRange: nil
+            ) as? UIColor
+        else {
+            Issue.record("Expected attributed code colors")
+            return
+        }
+        #expect(hex(firstColor) == "#ff0000")
+        #expect(hex(secondColor) == "#0000ff")
+    }
+
+    @Test func parallelTextMateFirstUsePreservesEveryFenceSource() async {
+        let fixtures = [
+            ("swift", "struct PhaseOne { let value = 1 }"),
+            ("kotlin", "data class PhaseOne(val value: Int)"),
+            ("typescript", "const phaseOne: number = 1"),
+            ("python", "def phase_one():\n    return 1"),
+        ]
+
+        let documents = await withTaskGroup(of: (Int, NativeMarkdownDocument).self) { group in
+            for index in 0..<16 {
+                group.addTask {
+                    let fixture = fixtures[index % fixtures.count]
+                    let markdown = "```\(fixture.0)\n\(fixture.1)\n```"
+                    let document = await Task.detached(priority: .userInitiated) {
+                        OpenCodeRenderedMarkdownParser.parse(
+                            markdown,
+                            isStreaming: false,
+                            textMateEnabled: true
+                        )
+                    }.value
+                    return (index, document)
+                }
+            }
+
+            var collected: [(Int, NativeMarkdownDocument)] = []
+            for await document in group {
+                collected.append(document)
+            }
+            return collected.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+
+        #expect(documents.count == 16)
+        for (index, document) in documents.enumerated() {
+            let expected = fixtures[index % fixtures.count].1
+            let code =
+                document.blocks.compactMap { block -> String? in
+                    guard case .codeBlock(_, let code, _) = block else { return nil }
+                    return code
+                }.first
+            #expect(code == expected)
+            #expect(!document.diagnostics.contains { $0.kind == "SwiftBridgeFallback" })
+        }
+    }
+
     @Test func preparerReusesAnExistingFinalDocumentWithoutComparingRuntimeHashes() async {
         let document = NativeMarkdownDocument(sourceHash: 17, blocks: [.paragraph([.text("Heading")])])
         let previous =
@@ -375,6 +453,11 @@ private func utf16Text(in code: String, start: Int, end: Int) -> String {
 
 private func hex(_ color: Color, traits: UITraitCollection) -> String {
     let resolved = UIColor(color).resolvedColor(with: traits)
+    return hex(resolved)
+}
+
+private func hex(_ color: UIColor) -> String {
+    let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
     var red: CGFloat = 0
     var green: CGFloat = 0
     var blue: CGFloat = 0

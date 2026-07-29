@@ -1,5 +1,33 @@
 # Native Rendered Markdown Parity Gaps
 
+## TextMate Execution And Memory Ownership
+
+- Status: Phase 1 code aligned; physical calibration pending
+- Area: architecture and performance
+- Shared intent: both apps should expose the same reusable highlighting-engine
+  contract and share priority, cancellation, cache budgets, quality outcomes,
+  metric names, work limits, and release gates while retaining native regex and
+  executor adapters.
+- Current Android state: the shared stateful highlighter is serialized, the
+  process-wide Joni regex cache can be reached by multiple preparation jobs,
+  and the Phase 1 stage metrics are active at the shared/Joni seams.
+- Current iOS state: detached preparation can still reach shared mutable grammar
+  and resolved-rule maps, and compiled libonig pointers remain thread-local
+  until Phase 2. Phase 1 now counts every successful allocation/free, releases
+  successful decomposition probes immediately, supports explicit cache reset,
+  records the shared/libonig metrics, and keys attributed code by palette
+  revision.
+- Reason: current platform mechanisms were added incrementally around one shared
+  tokenizer and do not yet provide a single ownership, memory-pressure, or
+  measurement contract.
+- Owner or next action: close Phase 1 with release-build physical-device
+  calibration and soak evidence using the accepted
+  [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md).
+  Then satisfy the Phase 2 single-owner seam gate in the
+  [implementation plan](./textmate-pipeline-improvement-plan.md), specify
+  deterministic fence identity, exact-source validation, pure span attachment,
+  and the asynchronous platform-to-KMP seam.
+
 ## TextMate Highlighter
 
 - Status: temporary

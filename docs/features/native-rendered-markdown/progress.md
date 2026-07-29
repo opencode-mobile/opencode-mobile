@@ -3,6 +3,50 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Resolved the iOS semantic-fallback crash found during Phase 1
+  simulator replay. A long unterminated quoted string drove Kotlin/Native's
+  combined fallback `Regex.findAll` into 1,216 recursive frames and a stack-
+  guard `EXC_BAD_ACCESS`. The fallback tokenizer is now a bounded single-pass
+  scanner for quoted strings, line/block comments, numbers, identifiers,
+  punctuation, and operators. A 3,968-character unterminated JavaScript string
+  regression changed from deterministic signal 11 to passing. Complete shared
+  Android/iOS suites pass, and the rebuilt app opened and enriched the original
+  12-row `Display JavaScript code block` session without a new crash. The
+  remaining Phase 1 gate is still physical-device release calibration and soak
+  evidence.
+- 2026-07-29: Implemented the Phase 1 TextMate measurement and native-lifetime
+  slice. Shared metrics now separate grammar load/lookup, rule resolution,
+  regex compile/search, tokenize, repair, cache outcomes, source-size buckets,
+  maximum exact native-search duration without recording content identity. iOS
+  now accounts every successful libonig allocation/free, releases successful
+  decomposition probes, supports explicit cache cleanup, and keys attributed
+  code by palette revision. Parallel first-use, cancellation, exact-source,
+  native-lifetime, and palette regressions pass. Complete shared Android/iOS
+  simulator suites, focused Android pipeline tests, and 12 focused Swift tests
+  pass. The debug 20-message/3,000-line reference was 2,542 ms with a 3.934 ms
+  maximum native search on the arm64 Android/JVM host and 55,388 ms with a
+  50.324 ms maximum native search on an iPhone 17 Pro simulator; it is
+  diagnostic only. Phase 1 remains open for release-build calibration and soak
+  evidence on named physical low- and mid-tier devices. Phase 2 has not started.
+- 2026-07-29: Locked the TextMate pipeline architecture after independent
+  module/concurrency and performance/memory/reliability triages. The five
+  architecture choices are recorded in
+  [decisions](./decisions.md): a deep asynchronous post-parse engine, one
+  instance-owned serial KMP runtime per platform, pooled 24 MiB eviction /
+  32 MiB admission guardrails, evidence-owned provisional latency targets, and
+  a versioned language promotion allowlist. Phase 1 was authorized. Phase 2 remains
+  gated on deterministic fence identity, exact-source validation, pure span
+  attachment, and the asynchronous platform-to-KMP seam.
+- 2026-07-29: Completed a software-architect review and separated the selected
+  [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md)
+  from its six-phase
+  [implementation plan](./textmate-pipeline-improvement-plan.md). The proposal
+  report and its
+  [HTML companion](./textmate-pipeline-architecture-proposal.html) now focus on
+  one asynchronous, single-owner engine, including its boundary, request
+  lifecycle, incremental fast path, native lifetime, bounded memory, failure
+  behavior, and measurement contract. Phase 1 implementation status is recorded
+  above.
 - 2026-07-28: Reverted `` ```markdown `` nest-depth special case. Fences close on
   the first bare closing marker (CommonMark / opencode web). Parser test
   `markdownFenceClosesOnFirstBareFenceLikeCommonMark` replaces the old nested-

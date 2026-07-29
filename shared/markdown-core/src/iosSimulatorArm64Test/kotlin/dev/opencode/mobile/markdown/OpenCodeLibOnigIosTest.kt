@@ -92,6 +92,39 @@ class OpenCodeLibOnigIosTest {
     }
 
     @Test
+    fun libOnigBackendAccountsForCachedAndDecompositionProbeAllocations() {
+        OpenCodeLibOnigRegexBackend.clearCache()
+        val baseline = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+
+        val direct =
+            OpenCodeLibOnigRegexBackend.find(
+                pattern = "answer",
+                input = "answer",
+                startIndex = 0,
+                endIndex = 6,
+            )
+        val decomposed =
+            OpenCodeLibOnigRegexBackend.find(
+                pattern = "(?:foo|(?Z))",
+                input = "foo",
+                startIndex = 0,
+                endIndex = 3,
+            )
+
+        assertEquals(0, direct?.start)
+        assertEquals(0, decomposed?.start)
+        val populated = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        assertTrue(populated.allocations > baseline.allocations)
+        assertTrue(populated.frees > baseline.frees, "Successful decomposition probes must be freed immediately")
+        assertTrue(populated.live > 0, "Cached compiled expressions should remain live before cache clear")
+
+        OpenCodeLibOnigRegexBackend.clearCache()
+        val cleared = OpenCodeLibOnigRegexBackend.allocationSnapshot()
+        assertEquals(0, cleared.live)
+        assertEquals(cleared.allocations, cleared.frees)
+    }
+
+    @Test
     fun libOnigBackendCoversWithCacheIdentifiersUniformly() {
         val code =
             """
@@ -221,7 +254,16 @@ class OpenCodeLibOnigIosTest {
 
     @Test
     fun benchmarkLongMarkdownHistoryLibOnigBackend() {
-        val highlighter = bundledHighlighter()
+        val metrics = RecordingOpenCodeTextMateMetricsSink()
+        val highlighter =
+            OpenCodeSyntaxHighlighter(
+                grammarBundle =
+                    OpenCodeTextMateGrammarBundleLoader
+                        .loadBundled(bundledTestResourceReader(), metrics)
+                        .bundle,
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend, metrics),
+                metricsSink = metrics,
+            )
         val messages = longMarkdownHistory()
         val markdownCount = messages.count { OpenCodeMarkdownDetector.shouldRender(it) }
 
@@ -237,7 +279,15 @@ class OpenCodeLibOnigIosTest {
         assertEquals(20, markdownCount)
         assertFalse(parserMs < 0)
         println(
-            "MARKDOWN_BENCHMARK kmp-libonig parser-ms=$parserMs messages=20 code-lines=3000",
+            "MARKDOWN_BENCHMARK kmp-libonig parser-ms=$parserMs " +
+                "grammar-ms=${metrics.totalMilliseconds(TextMateMetricStage.GrammarLoad)} " +
+                "regex-compile-ms=${metrics.totalMilliseconds(TextMateMetricStage.RegexCompile)} " +
+                "regex-search-ms=${metrics.totalMilliseconds(TextMateMetricStage.RegexSearch)} " +
+                "regex-search-max-ms=${metrics.maximumMilliseconds(TextMateMetricStage.RegexSearch)} " +
+                "native-regex-search-max-ms=${metrics.maximumMilliseconds(TextMateMetricStage.NativeRegexSearch)} " +
+                "tokenize-ms=${metrics.totalMilliseconds(TextMateMetricStage.Tokenize)} " +
+                "repair-ms=${metrics.totalMilliseconds(TextMateMetricStage.Repair)} " +
+                "messages=20 code-lines=3000",
         )
     }
 

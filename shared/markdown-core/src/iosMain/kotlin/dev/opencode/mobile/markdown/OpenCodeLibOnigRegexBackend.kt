@@ -20,6 +20,7 @@ import oniguruma.ONIG_OPTION_NONE
 import oniguruma.ONIG_SYNTAX_RUBY
 import oniguruma.OnigErrorInfo
 import oniguruma.OnigRegexType
+import oniguruma.onig_free
 import oniguruma.onig_new
 import oniguruma.onig_region_free
 import oniguruma.onig_region_new
@@ -27,6 +28,7 @@ import oniguruma.onig_search
 import oniguruma.opencode_onig_region_beg_at
 import oniguruma.opencode_onig_region_end_at
 import kotlin.native.concurrent.ThreadLocal
+import kotlin.time.TimeSource
 
 @OptIn(ExperimentalForeignApi::class)
 private sealed class LibOnigRegexCacheEntry {
@@ -44,21 +46,41 @@ private sealed class LibOnigRegexCacheEntry {
 @ThreadLocal
 private var libOnigRegexCache: MutableMap<String, LibOnigRegexCacheEntry> = mutableMapOf()
 
+internal data class OpenCodeLibOnigAllocationSnapshot(
+    val allocations: Long,
+    val frees: Long,
+) {
+    val live: Long = allocations - frees
+}
+
+@ThreadLocal
+private var libOnigAllocations: Long = 0
+
+@ThreadLocal
+private var libOnigFrees: Long = 0
+
 @OptIn(ExperimentalForeignApi::class)
 object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "libonig"
 
     override val isOnigurumaCompatible: Boolean = true
 
-    private fun resolvePattern(pattern: String): LibOnigRegexCacheEntry {
-        compilePattern(pattern)?.let { regex ->
+    private fun resolvePattern(
+        pattern: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): LibOnigRegexCacheEntry {
+        compilePattern(pattern, metricsSink)?.let { regex ->
             return LibOnigRegexCacheEntry.Compiled(regex)
         }
 
         val candidates =
             OpenCodeTextMateRegexAlternationSupport
                 .decompositionCandidates(pattern)
-                ?.filter { candidate -> compilePattern(candidate) != null }
+                ?.filter { candidate ->
+                    val probe = compilePattern(candidate, metricsSink) ?: return@filter false
+                    freeRegex(probe)
+                    true
+                }
                 .orEmpty()
         if (candidates.isNotEmpty()) {
             return LibOnigRegexCacheEntry.Decomposed(candidates)
@@ -67,29 +89,65 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
         return LibOnigRegexCacheEntry.Failed
     }
 
-    private fun compilePattern(pattern: String): CPointer<OnigRegexType>? {
+    private fun compilePattern(
+        pattern: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): CPointer<OnigRegexType>? {
         val patternBytes = pattern.encodeToByteArray()
-        return memScoped {
-            val regexOut = alloc<CPointerVar<OnigRegexType>>()
-            val errorInfo = alloc<OnigErrorInfo>()
-            withUtf8Range(patternBytes) { patternStart, patternEnd ->
-                val compileResult =
-                    onig_new(
-                        regexOut.ptr,
-                        patternStart,
-                        patternEnd,
-                        ONIG_OPTION_MULTILINE or ONIG_OPTION_CAPTURE_GROUP,
-                        ONIG_ENCODING_UTF8,
-                        ONIG_SYNTAX_RUBY,
-                        errorInfo.ptr,
-                    )
-                if (compileResult != 0) {
-                    null
-                } else {
-                    regexOut.value
+        val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+        val compiled =
+            memScoped {
+                val regexOut = alloc<CPointerVar<OnigRegexType>>()
+                val errorInfo = alloc<OnigErrorInfo>()
+                withUtf8Range(patternBytes) { patternStart, patternEnd ->
+                    val compileResult =
+                        onig_new(
+                            regexOut.ptr,
+                            patternStart,
+                            patternEnd,
+                            ONIG_OPTION_MULTILINE or ONIG_OPTION_CAPTURE_GROUP,
+                            ONIG_ENCODING_UTF8,
+                            ONIG_SYNTAX_RUBY,
+                            errorInfo.ptr,
+                        )
+                    if (compileResult != 0) {
+                        null
+                    } else {
+                        regexOut.value?.also { libOnigAllocations += 1 }
+                    }
                 }
             }
+        startedAt?.let {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.RegexCompile,
+                    outcome = if (compiled == null) TextMateMetricOutcome.Failure else TextMateMetricOutcome.Success,
+                    durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    backend = name,
+                ),
+            )
         }
+        return compiled
+    }
+
+    internal fun allocationSnapshot(): OpenCodeLibOnigAllocationSnapshot =
+        OpenCodeLibOnigAllocationSnapshot(
+            allocations = libOnigAllocations,
+            frees = libOnigFrees,
+        )
+
+    internal fun clearCache() {
+        libOnigRegexCache.values.forEach { entry ->
+            if (entry is LibOnigRegexCacheEntry.Compiled) {
+                freeRegex(entry.regex)
+            }
+        }
+        libOnigRegexCache.clear()
+    }
+
+    private fun freeRegex(regex: CPointer<OnigRegexType>) {
+        onig_free(regex)
+        libOnigFrees += 1
     }
 
     override fun find(
@@ -98,6 +156,7 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
         val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
         val effectivePattern =
@@ -127,23 +186,23 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
                         contiguousAnchor = contiguousAnchor,
                     )
                 }
-                return find(suffix, input, startIndex, endIndex, contiguousAnchor)
+                return find(suffix, input, startIndex, endIndex, contiguousAnchor, metricsSink)
                     ?.takeIf { match -> match.start == startIndex }
             }
         }
 
-        val entry = libOnigRegexCache.getOrPut(effectivePattern) { resolvePattern(effectivePattern) }
+        val entry = libOnigRegexCache.getOrPut(effectivePattern) { resolvePattern(effectivePattern, metricsSink) }
 
         return when (entry) {
             is LibOnigRegexCacheEntry.Compiled ->
                 OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
                     pattern = effectivePattern,
-                    match = search(entry.regex, input, startIndex, endIndex),
+                    match = search(entry.regex, input, startIndex, endIndex, metricsSink),
                     contiguousAnchor = contiguousAnchor,
                 )
             is LibOnigRegexCacheEntry.Decomposed ->
                 entry.candidates
-                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor) }
+                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor, metricsSink) }
                     .minByOrNull { match -> match.start }
             LibOnigRegexCacheEntry.Failed -> null
         }
@@ -154,6 +213,7 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
         input: String,
         startIndex: Int,
         endIndex: Int,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
         val indexMap = Utf8IndexMap(input)
         val inputBytes = indexMap.bytes
@@ -168,15 +228,43 @@ object OpenCodeLibOnigRegexBackend : OpenCodeTextMateRegexBackend {
                     val searchEnd = stringStart + searchEndByte ?: stringEnd
 
                     val matchStart =
-                        onig_search(
-                            regex,
-                            stringStart,
-                            stringEnd,
-                            searchStart,
-                            searchEnd,
-                            region,
-                            ONIG_OPTION_NONE,
-                        )
+                        if (metricsSink.isEnabled) {
+                            val startedAt = TimeSource.Monotonic.markNow()
+                            var outcome = TextMateMetricOutcome.Success
+                            try {
+                                onig_search(
+                                    regex,
+                                    stringStart,
+                                    stringEnd,
+                                    searchStart,
+                                    searchEnd,
+                                    region,
+                                    ONIG_OPTION_NONE,
+                                )
+                            } catch (failure: Throwable) {
+                                outcome = TextMateMetricOutcome.Failure
+                                throw failure
+                            } finally {
+                                metricsSink.record(
+                                    TextMateMetricEvent(
+                                        stage = TextMateMetricStage.NativeRegexSearch,
+                                        outcome = outcome,
+                                        durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                                        backend = name,
+                                    ),
+                                )
+                            }
+                        } else {
+                            onig_search(
+                                regex,
+                                stringStart,
+                                stringEnd,
+                                searchStart,
+                                searchEnd,
+                                region,
+                                ONIG_OPTION_NONE,
+                            )
+                        }
                     if (matchStart < 0) return@withUtf8Range null
 
                     val regionData = region.pointed

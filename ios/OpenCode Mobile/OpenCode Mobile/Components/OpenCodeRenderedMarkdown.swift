@@ -235,6 +235,7 @@ enum NativeMarkdownAttributedString {
     private struct CodeCacheKey: Hashable {
         let code: String
         let spans: [NativeCodeSpan]
+        let paletteRevision: UInt64
     }
 
     nonisolated private final class CodeAttributedCache: @unchecked Sendable {
@@ -279,7 +280,11 @@ enum NativeMarkdownAttributedString {
         _ code: String,
         spans: [NativeCodeSpan]
     ) -> AttributedString {
-        let cacheKey = CodeCacheKey(code: code, spans: spans)
+        let cacheKey = CodeCacheKey(
+            code: code,
+            spans: spans,
+            paletteRevision: ThemeManager.shared.revision
+        )
         if let cached = codeCache.value(for: cacheKey) {
             return cached
         }
@@ -295,7 +300,11 @@ enum NativeMarkdownAttributedString {
         spans: [NativeCodeSpan],
         palette: NativeCodeColorPalette
     ) -> AttributedString {
-        let cacheKey = CodeCacheKey(code: code, spans: spans)
+        let cacheKey = CodeCacheKey(
+            code: code,
+            spans: spans,
+            paletteRevision: palette.cacheRevision
+        )
         if let cached = codeCache.value(for: cacheKey) {
             return cached
         }
@@ -530,6 +539,17 @@ enum NativeMarkdownAttributedString {
 struct NativeCodeColorPalette: Sendable {
     private let colors: [NativeCodeTokenRole: UIColor]
     private let plain: UIColor
+    let cacheRevision: UInt64
+
+    init(
+        colors: [NativeCodeTokenRole: UIColor],
+        plain: UIColor,
+        cacheRevision: UInt64
+    ) {
+        self.colors = colors
+        self.plain = plain
+        self.cacheRevision = cacheRevision
+    }
 
     @MainActor
     static func current() -> NativeCodeColorPalette {
@@ -554,7 +574,8 @@ struct NativeCodeColorPalette: Sendable {
                 .warning: UIColor(OpenCodeColors.syntaxDiffUnknown),
                 .critical: UIColor(OpenCodeColors.syntaxCritical),
             ],
-            plain: UIColor(OpenCodeColors.textStrong)
+            plain: UIColor(OpenCodeColors.textStrong),
+            cacheRevision: ThemeManager.shared.revision
         )
     }
 

@@ -15,9 +15,17 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? =
-        specialMatch(pattern, input, startIndex, endIndex, contiguousAnchor)
-            ?: KotlinRegexTextMateRegexBackend.find(pattern, input, startIndex, endIndex, contiguousAnchor)
+        specialMatch(pattern, input, startIndex, endIndex, contiguousAnchor, metricsSink)
+            ?: KotlinRegexTextMateRegexBackend.find(
+                pattern,
+                input,
+                startIndex,
+                endIndex,
+                contiguousAnchor,
+                metricsSink,
+            )
 
     private fun specialMatch(
         pattern: String,
@@ -25,6 +33,7 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? =
         when {
             pattern == "\\G" ->
@@ -43,7 +52,7 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
                     )
                 } else {
                     KotlinRegexTextMateRegexBackend
-                        .find(suffix, input, startIndex, endIndex, contiguousAnchor)
+                        .find(suffix, input, startIndex, endIndex, contiguousAnchor, metricsSink)
                         ?.takeIf { it.start == startIndex }
                 }
             }

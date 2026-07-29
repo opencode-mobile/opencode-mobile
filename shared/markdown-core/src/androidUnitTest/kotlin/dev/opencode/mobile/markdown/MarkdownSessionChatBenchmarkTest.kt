@@ -33,10 +33,15 @@ class MarkdownSessionChatBenchmarkTest {
 
     @Test
     fun benchmarkLongMarkdownHistoryJoniBackend() {
+        val metrics = RecordingOpenCodeTextMateMetricsSink()
         val highlighter =
             OpenCodeSyntaxHighlighter(
-                grammarBundle = bundledGrammarBundle(),
-                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
+                grammarBundle =
+                    OpenCodeTextMateGrammarBundleLoader
+                        .loadBundled(bundledTestResourceReader(), metrics)
+                        .bundle,
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend, metrics),
+                metricsSink = metrics,
             )
         val messages = longMarkdownHistory()
 
@@ -50,7 +55,15 @@ class MarkdownSessionChatBenchmarkTest {
 
         assertEquals(20, messages.count { OpenCodeMarkdownDetector.shouldRender(it) })
         println(
-            "MARKDOWN_BENCHMARK kmp-joni parser-ms=$parserMs messages=20 code-lines=3000",
+            "MARKDOWN_BENCHMARK kmp-joni parser-ms=$parserMs " +
+                "grammar-ms=${metrics.totalMilliseconds(TextMateMetricStage.GrammarLoad)} " +
+                "regex-compile-ms=${metrics.totalMilliseconds(TextMateMetricStage.RegexCompile)} " +
+                "regex-search-ms=${metrics.totalMilliseconds(TextMateMetricStage.RegexSearch)} " +
+                "regex-search-max-ms=${metrics.maximumMilliseconds(TextMateMetricStage.RegexSearch)} " +
+                "native-regex-search-max-ms=${metrics.maximumMilliseconds(TextMateMetricStage.NativeRegexSearch)} " +
+                "tokenize-ms=${metrics.totalMilliseconds(TextMateMetricStage.Tokenize)} " +
+                "repair-ms=${metrics.totalMilliseconds(TextMateMetricStage.Repair)} " +
+                "messages=20 code-lines=3000",
         )
     }
 

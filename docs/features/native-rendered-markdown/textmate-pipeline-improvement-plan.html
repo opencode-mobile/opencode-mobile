@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TextMate Pipeline Implementation Plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --panel-soft: #eef2f7;
+      --text: #15181d;
+      --muted: #5e6977;
+      --line: #d6dde7;
+      --accent: #2457d6;
+      --accent-soft: #e7edfc;
+      --ok: #137333;
+      --ok-soft: #e3f3e7;
+      --warn: #8a5a00;
+      --warn-soft: #fff3d7;
+      --risk: #aa3128;
+      --risk-soft: #fde9e7;
+      --shared: #6941a5;
+      --shared-soft: #eee8f8;
+      --android: #147a4b;
+      --android-soft: #e4f4eb;
+      --ios: #126c94;
+      --ios-soft: #e2f1f8;
+      --code: #eef1f5;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171a1f;
+        --panel: #20242b;
+        --panel-soft: #272d35;
+        --text: #eef1f5;
+        --muted: #aab3be;
+        --line: #3a424d;
+        --accent: #9bb7ff;
+        --accent-soft: #27334e;
+        --ok: #8fd89e;
+        --ok-soft: #243a2b;
+        --warn: #f2c66d;
+        --warn-soft: #41351f;
+        --risk: #ff9b92;
+        --risk-soft: #442927;
+        --shared: #c6a8ef;
+        --shared-soft: #342b42;
+        --android: #8bd9ae;
+        --android-soft: #203a2d;
+        --ios: #85c9e8;
+        --ios-soft: #203642;
+        --code: #171a1f;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.48;
+    }
+
+    main {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 10px; font-size: 32px; line-height: 1.15; }
+    h2 { margin: 34px 0 12px; font-size: 22px; }
+    h3 { margin-bottom: 7px; font-size: 15px; }
+    p { color: var(--muted); }
+    a { color: var(--accent); }
+
+    code {
+      padding: 2px 5px;
+      background: var(--code);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .9em;
+    }
+
+    .hero, .panel, table {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .hero { padding: 22px; }
+    .panel { padding: 18px; }
+
+    .badge, .pill {
+      display: inline-block;
+      border-radius: 999px;
+      font-weight: 750;
+    }
+
+    .badge {
+      margin-bottom: 10px;
+      padding: 4px 9px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-size: 11px;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .pill {
+      padding: 3px 8px;
+      font-size: 11px;
+    }
+
+    .pill.ok { color: var(--ok); background: var(--ok-soft); }
+    .pill.warn { color: var(--warn); background: var(--warn-soft); }
+    .pill.risk { color: var(--risk); background: var(--risk-soft); }
+    .pill.shared { color: var(--shared); background: var(--shared-soft); }
+
+    .summary {
+      max-width: 900px;
+      margin-bottom: 0;
+      font-size: 16px;
+    }
+
+    .qualities, .grid, .phases {
+      display: grid;
+      gap: 12px;
+    }
+
+    .qualities {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
+    .quality {
+      min-height: 92px;
+      padding: 12px;
+      background: var(--panel-soft);
+      border-radius: 8px;
+    }
+
+    .quality strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .quality span { color: var(--muted); font-size: 12px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .note {
+      padding: 15px 17px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 9px;
+    }
+
+    .note p:last-child, .panel p:last-child { margin-bottom: 0; }
+
+    .diagram {
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+
+    .flow {
+      display: flex;
+      min-width: 1080px;
+      align-items: stretch;
+    }
+
+    .node {
+      display: flex;
+      flex: 1;
+      min-width: 125px;
+      min-height: 92px;
+      padding: 12px;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .node.shared { color: var(--shared); background: var(--shared-soft); }
+    .node.ok { color: var(--ok); background: var(--ok-soft); }
+    .node.warn { color: var(--warn); background: var(--warn-soft); }
+
+    .arrow {
+      display: flex;
+      width: 28px;
+      flex: 0 0 28px;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 21px;
+    }
+
+    .caption {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .interface {
+      margin: 0;
+      padding: 16px;
+      overflow-x: auto;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th { background: var(--panel-soft); font-size: 12px; }
+    th:last-child, td:last-child { border-right: 0; }
+    tr:last-child td { border-bottom: 0; }
+
+    .platform.android { background: var(--android-soft); color: var(--android); }
+    .platform.ios { background: var(--ios-soft); color: var(--ios); }
+
+    ul, ol { padding-left: 21px; }
+    li { margin: 5px 0; color: var(--muted); font-size: 14px; }
+    li strong { color: var(--text); }
+
+    .lanes {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .lane {
+      min-height: 130px;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-top-width: 4px;
+      border-radius: 9px;
+    }
+
+    .lane:nth-child(1) { border-top-color: var(--risk); }
+    .lane:nth-child(2) { border-top-color: var(--accent); }
+    .lane:nth-child(3) { border-top-color: var(--muted); }
+    .lane strong { display: block; margin-bottom: 5px; }
+    .lane p { margin: 0; font-size: 13px; }
+
+    .phases { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .phase {
+      position: relative;
+      min-height: 190px;
+      padding: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+    }
+
+    .phase .number {
+      display: inline-flex;
+      width: 27px;
+      height: 27px;
+      margin-bottom: 10px;
+      align-items: center;
+      justify-content: center;
+      color: var(--panel);
+      background: var(--accent);
+      border-radius: 50%;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .phase p { margin-bottom: 8px; font-size: 13px; }
+    .phase .gate { color: var(--text); font-size: 12px; font-weight: 700; }
+
+    .decision {
+      padding: 13px 15px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .decision strong { display: block; margin-bottom: 3px; }
+    .decision span { color: var(--muted); font-size: 13px; }
+
+    .footer {
+      margin-top: 34px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 850px) {
+      .qualities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid.two, .grid.three, .phases, .lanes { grid-template-columns: 1fr; }
+      h1 { font-size: 27px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <span class="badge">Architecture Locked · Phase 1 Code Complete · Device Gate Open · 2026-07-29</span>
+      <h1>TextMate Pipeline Implementation Plan</h1>
+      <p class="summary">
+        The six-phase execution plan for the selected
+        <a href="./textmate-pipeline-architecture-proposal.html">TextMate
+        pipeline architecture</a>: one deep module with single ownership of
+        mutable state, cooperative cancellation, incremental line reuse,
+        explicit memory budgets, and release-grade performance gates.
+      </p>
+      <div class="qualities">
+        <div class="quality"><strong>Responsive</strong><span>Plain content never waits for decoration; final work preempts history.</span></div>
+        <div class="quality"><strong>Reliable</strong><span>Latest-wins identity gates and owned native lifetime prevent stale or unsafe results.</span></div>
+        <div class="quality"><strong>Reusable</strong><span>One request/result interface serves chat, history, gallery, tests, and future consumers.</span></div>
+        <div class="quality"><strong>Fast</strong><span>Prepared line buffers, compiled programs, and incremental state remove repeated work.</span></div>
+        <div class="quality"><strong>Measurable</strong><span>Queue, compile, tokenize, repair, cache, cancellation, and memory are separate signals.</span></div>
+      </div>
+    </section>
+
+    <h2>Architect recommendation</h2>
+    <div class="note">
+      <p>
+        Introduce one <strong><code>TextMateHighlightingEngine</code></strong>
+        between Markdown fence discovery and semantic code decoration. Keep
+        the outer <code>DisplayMessagePipeline</code> responsible for snapshot
+        generation and publication; make the engine responsible for bounded
+        highlighting and internal cache correctness.
+      </p>
+      <p>
+        Start with one active engine owner on each platform. Add a second
+        isolated shard only if device measurements prove the single owner
+        cannot meet throughput goals without harming foreground latency or
+        memory.
+      </p>
+    </div>
+
+    <h2>Target runtime flow</h2>
+    <div class="diagram">
+      <div class="flow">
+        <div class="node">Fence identity<br>revision + intent</div>
+        <div class="arrow">→</div>
+        <div class="node shared">Highlighting engine<br>deep module</div>
+        <div class="arrow">→</div>
+        <div class="node">Priority scheduler<br>coalesce + deadline</div>
+        <div class="arrow">→</div>
+        <div class="node">Incremental tokenizer<br>prepared lines</div>
+        <div class="arrow">→</div>
+        <div class="node">Joni or owned<br>libonig adapter</div>
+        <div class="arrow">→</div>
+        <div class="node">Semantic role<br>projection</div>
+        <div class="arrow">→</div>
+        <div class="node ok">Current revision?<br>publish or discard</div>
+      </div>
+      <p class="caption">
+        Metrics observe every internal stage. Plain/fallback source remains
+        complete even when TextMate is cancelled, unsupported, or over budget.
+      </p>
+    </div>
+
+    <h2>Small external interface</h2>
+    <div class="grid two">
+      <pre class="interface">interface TextMateHighlightingEngine {
+  suspend fun highlight(
+    request: HighlightRequest
+  ): HighlightResult
+
+  suspend fun trim(
+    level: MemoryPressure
+  )
+}</pre>
+      <div class="panel">
+        <h3>Request contains</h3>
+        <ul>
+          <li>opaque fence key and monotonic revision token;</li>
+          <li>language, exact source, and policy epoch;</li>
+          <li>interactive-final, visible-history, or background-history intent.</li>
+        </ul>
+        <h3>Result contains</h3>
+        <ul>
+          <li>same identity plus canonical language;</li>
+          <li>ordered, non-overlapping semantic spans;</li>
+          <li>diagnostics and an all-or-nothing upgrade outcome.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Why this seam is deep</h2>
+    <div class="grid three">
+      <div class="panel">
+        <h3>Hidden complexity</h3>
+        <p>Grammar loading, rule compilation, regex objects, line state, native lifetime, cache policy, and repair versions stay internal.</p>
+      </div>
+      <div class="panel">
+        <h3>Consumer leverage</h3>
+        <p>Session Chat, viewport enrichment, Component Gallery, tests, and future code viewers share the same behavior without sharing internals.</p>
+      </div>
+      <div class="panel">
+        <h3>Replaceable adapters</h3>
+        <p>Joni and libonig remain internal platform adapters. Clock, metrics, and resource readers are test seams, not public API.</p>
+      </div>
+    </div>
+
+    <h2>Thread and ownership model</h2>
+    <table>
+      <thead>
+        <tr><th>Contract</th><th class="platform android">Android</th><th class="platform ios">iOS</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Engine owner</td><td>Limited-parallelism coroutine dispatcher</td><td>Actor or dedicated worker-backed executor</td></tr>
+        <tr><td>Active TextMate jobs</td><td>Initially one</td><td>Initially one</td></tr>
+        <tr><td>Job-local state</td><td>Mutable line traversal, never shared</td><td>Same invariant</td></tr>
+        <tr><td>Published cache entries</td><td>Immutable</td><td>Immutable</td></tr>
+        <tr><td>Regex lifetime</td><td>JVM-managed compiled handle</td><td>Leased executor-owned <code>OwnedOnigRegex</code></td></tr>
+        <tr><td>UI publication</td><td>Outer generation gate</td><td>Outer MainActor generation gate</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Cancellation and safety boundaries</h2>
+    <div class="grid two">
+      <div class="panel">
+        <h3>Cooperative checkpoints</h3>
+        <ul>
+          <li>before every physical line;</li>
+          <li>every 64 regex searches;</li>
+          <li>before capture recursion and repair passes;</li>
+          <li>when a newer revision supersedes the block.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Initial work limits</h3>
+        <ul>
+          <li>100,000 characters per highlighted block;</li>
+          <li>20,000 characters per physical line;</li>
+          <li>intent-specific time and search budgets;</li>
+          <li>structured fallback rather than partial spans.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Incremental line-state reuse</h2>
+    <div class="diagram">
+      <div class="flow">
+        <div class="node">New content<br>revision</div>
+        <div class="arrow">→</div>
+        <div class="node">Find exact<br>unchanged prefix</div>
+        <div class="arrow">→</div>
+        <div class="node warn">Back up<br>one line</div>
+        <div class="arrow">→</div>
+        <div class="node">Resume saved<br>incoming state</div>
+        <div class="arrow">→</div>
+        <div class="node">Retokenize<br>changed lines</div>
+        <div class="arrow">→</div>
+        <div class="node">Text + state<br>converged?</div>
+        <div class="arrow">→</div>
+        <div class="node ok">Reuse suffix<br>project spans</div>
+      </div>
+      <p class="caption">
+        Prefix reuse ships first. Suffix convergence waits for differential
+        fixtures covering multiline strings, heredocs, dynamic ends,
+        <code>while</code>, injections, embedded grammars, and zero-width rules.
+      </p>
+    </div>
+
+    <h2>Memory and native lifetime</h2>
+    <div class="grid two">
+      <table>
+        <thead><tr><th>Cache</th><th>Planning share or guardrail</th></tr></thead>
+        <tbody>
+          <tr><td>Decoded grammar programs</td><td>12 MiB</td></tr>
+          <tr><td>Compiled regexes</td><td>8 MiB or 4,096 entries</td></tr>
+          <tr><td>Resolved rule plans</td><td>4 MiB</td></tr>
+          <tr><td>Incremental block state</td><td>8 MiB or 64 blocks</td></tr>
+          <tr><td><strong>Pooled retained state</strong></td><td><strong>24 MiB eviction / 32 MiB admission</strong></td></tr>
+        </tbody>
+      </table>
+      <div class="panel">
+        <h3>iOS ownership invariant</h3>
+        <p>Every successful <code>onig_new</code> receives exactly one owner and eventually one <code>onig_free</code>.</p>
+        <ul>
+          <li>decomposition probes are cached as owned candidates or freed immediately;</li>
+          <li>active searches hold leases so eviction cannot free in-use regexes;</li>
+          <li>allocation, free, live, peak-count, and estimated-byte metrics are required.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Scheduling and backpressure</h2>
+    <div class="lanes">
+      <div class="lane">
+        <strong>Interactive final</strong>
+        <p>Strict deadline priority. Latest revision wins. Queue cap: eight blocks.</p>
+      </div>
+      <div class="lane">
+        <strong>Visible history</strong>
+        <p>Viewport-relevant work ages so it cannot starve and remains cancellable.</p>
+      </div>
+      <div class="lane">
+        <strong>Background history</strong>
+        <p>Drops first under memory, thermal, low-power, or queue pressure. Queue cap: 24 blocks.</p>
+      </div>
+    </div>
+    <p class="caption">
+      One active full TextMate job, at most 256,000 queued source characters,
+      latest-wins coalescing, and 8:2:1 deficit service only when no interactive
+      deadline is at risk. Plain publication never enters this queue.
+    </p>
+
+    <h2>Measurement contract</h2>
+    <div class="grid two">
+      <div class="panel">
+        <h3>Stage histograms</h3>
+        <p><code>queue_wait_ms</code>, <code>grammar_load_ms</code>, <code>rule_resolve_ms</code>, <code>regex_compile_ms</code>, <code>tokenize_ms</code>, <code>repair_ms</code>, <code>total_highlight_ms</code>, cancellation response, and longest native search.</p>
+      </div>
+      <div class="panel">
+        <h3>Bounded signals</h3>
+        <p>Characters, lines, searches, spans, reused lines, outcomes, cache entries/bytes, native allocations/frees, and queue high-water marks. Never source text or session/block identity.</p>
+      </div>
+    </div>
+
+    <h2>Provisional release budgets</h2>
+    <table>
+      <thead><tr><th>Scenario</th><th>Gate on representative release devices</th></tr></thead>
+      <tbody>
+        <tr><td>Plain/fallback after accepted snapshot</td><td>p95 ≤ 50 ms; p99 ≤ 100 ms</td></tr>
+        <tr><td>Interactive-final queue delay</td><td>p95 ≤ 8 ms; p99 ≤ 16 ms</td></tr>
+        <tr><td>Warm full highlight, 2,000 characters</td><td>p95 ≤ 12 ms</td></tr>
+        <tr><td>Warm full highlight, 8,000 characters</td><td>p95 ≤ 40 ms</td></tr>
+        <tr><td>Final 8,000-character upgrade end to end</td><td>p95 ≤ 75 ms; p99 ≤ 150 ms</td></tr>
+        <tr><td>Cancellation request to next checkpoint</td><td>p95 ≤ 8 ms, excluding an active native regex call</td></tr>
+        <tr><td>Longest native regex call</td><td>Separately measured safety distribution</td></tr>
+        <tr><td>UI-executor work</td><td>Zero grammar decode, tokenization, or role repair</td></tr>
+        <tr><td>Thirty-minute mixed-language soak</td><td>No retained growth after five warm-up cycles</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Phase 1 evidence</h2>
+    <div class="note">
+      <p>
+        Stage metrics, libonig allocation/free accounting, decomposition-probe
+        cleanup, palette-revision cache identity, parallel first-use, repeated
+        cancellation, and exact-source regressions are implemented. The
+        semantic fallback also uses a bounded single-pass scanner; its
+        3,968-character unterminated-string crash regression and original
+        12-row Session Chat replay pass. Complete shared Android and iOS
+        simulator suites, focused Android pipeline tests, and 12 focused Swift
+        tests pass.
+      </p>
+    </div>
+    <table>
+      <thead><tr><th>Reference</th><th>Environment</th><th>Debug result</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Android/Joni</td>
+          <td>arm64 macOS 26.5.2 host, JVM 17</td>
+          <td>2,542 ms; 3.934 ms max native search</td>
+          <td>Diagnostic host reference</td>
+        </tr>
+        <tr>
+          <td>iOS/libonig</td>
+          <td>iPhone 17 Pro, iOS 26.5 simulator</td>
+          <td>55,388 ms; 50.324 ms max native search</td>
+          <td>Diagnostic simulator reference; regex search and repair dominate</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="caption">
+      Fixed fixture: 20 finalized messages and 3,000 TypeScript code lines.
+      Phase 1 remains open until release-build calibration, peak/retained-memory
+      evidence, and a 30-minute soak are recorded on named physical low- and
+      mid-tier devices. These debug values are not release gates.
+    </p>
+
+    <h2>Six-phase migration</h2>
+    <div class="phases">
+      <div class="phase">
+        <span class="number">1</span>
+        <h3>Baseline and lifetime safety</h3>
+        <p>Instrument stages, stress iOS first use/cancellation, fix decomposition leaks, count native allocation/free, and correct cache identity.</p>
+        <div class="gate">Status: code complete and simulator-verified. Gate still open for frozen physical-device release evidence.</div>
+      </div>
+      <div class="phase">
+        <span class="number">2</span>
+        <h3>Deep module and one owner</h3>
+        <p>Introduce the engine behind existing preparation, serialize mutable state, and keep current fallback/final-upgrade behavior.</p>
+        <div class="gate">Gate: no race and no UI-executor work.</div>
+      </div>
+      <div class="phase">
+        <span class="number">3</span>
+        <h3>Scheduling and backpressure</h3>
+        <p>Add priority, coalescing, work limits, deadlines, trim handling, and queue/cancellation metrics.</p>
+        <div class="gate">Gate: plain budgets hold under a pathological highlighter.</div>
+      </div>
+      <div class="phase">
+        <span class="number">4</span>
+        <h3>Compiled programs and prepared lines</h3>
+        <p>Use immutable rule programs, compact IDs, one UTF-8 map per line, weighted caches, and owned libonig leases.</p>
+        <div class="gate">Gate: exact oracles pass and reuse appears in metrics.</div>
+      </div>
+      <div class="phase">
+        <span class="number">5</span>
+        <h3>Incremental reuse</h3>
+        <p>Add bounded prefix reuse, measure remaining repair cost, then add suffix convergence after multiline differential coverage.</p>
+        <div class="gate">Gate: incremental output equals full reparse.</div>
+      </div>
+      <div class="phase">
+        <span class="number">6</span>
+        <h3>Default enablement</h3>
+        <p>Run device, pressure, thermal, cancellation, and soak matrices; promote only languages that meet correctness and latency gates.</p>
+        <div class="gate">Gate: all acceptance criteria pass on both platforms.</div>
+      </div>
+    </div>
+
+    <h2>Alternatives considered</h2>
+    <table>
+      <thead><tr><th>Alternative</th><th>Benefit</th><th>Disposition</th></tr></thead>
+      <tbody>
+        <tr><td>Global lock around current highlighter</td><td>Smallest immediate race fix</td><td><span class="pill warn">Interim only</span> — no deep seam, bounded memory, incremental reuse, or measurement model.</td></tr>
+        <tr><td>Concurrent shared caches</td><td>Higher apparent history throughput</td><td><span class="pill risk">Rejected</span> — duplicates native state and worsens contention, eviction, and tail latency.</td></tr>
+        <tr><td>Shiki in WebView/JavaScript</td><td>Closer engine parity with web</td><td><span class="pill risk">Rejected</span> — adds runtime/bridge cost and does not solve mobile scheduling or ownership.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Reliability gates</h2>
+    <div class="grid two">
+      <div class="panel">
+        <h3>Correctness and publication</h3>
+        <ul>
+          <li>complete source is always renderable;</li>
+          <li>only current generation, revision, and policy may publish;</li>
+          <li>incremental output equals full reparse;</li>
+          <li>final spans are ordered, bounded, non-overlapping, deterministic.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Operational safety</h3>
+        <ul>
+          <li>queue pressure changes decoration only;</li>
+          <li>eviction changes performance only;</li>
+          <li>leased regexes cannot be freed or orphaned;</li>
+          <li>both platforms share limits, outcomes, metrics, and interface tests.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Locked implementation decisions</h2>
+    <div class="grid two">
+      <div class="decision"><strong>1 · Engine seam</strong><span>Deep asynchronous post-parse fence-upgrade module.</span></div>
+      <div class="decision"><strong>2 · Concurrency</strong><span>One active instance-owned serial KMP runtime initially.</span></div>
+      <div class="decision"><strong>3 · Memory</strong><span>24 MiB pooled eviction threshold; 32 MiB admission ceiling.</span></div>
+      <div class="decision"><strong>4 · Latency</strong><span>Owned hypotheses become gates only after evidence-backed decisions.</span></div>
+      <div class="decision"><strong>5 · Rollout</strong><span>Versioned language allowlist beneath the global preference.</span></div>
+    </div>
+    <p class="caption">Phase 1 code is complete and simulator-verified, but its
+      physical-device calibration gate remains open. Phase 2 also requires
+      deterministic fence identity, exact-source validation, pure span
+      attachment, and the asynchronous platform-to-KMP seam.</p>
+
+    <p class="footer">
+      Canonical source:
+      <a href="./textmate-pipeline-improvement-plan.md">textmate-pipeline-improvement-plan.md</a>
+      · Starting evidence:
+      <a href="./textmate-markdown-highlighter-architecture-report.html">current architecture report</a>
+      · Implementation status: Phase 1 code complete; physical-device gate open
+    </p>
+  </main>
+</body>
+</html>
