@@ -262,8 +262,11 @@ private fun TextMateMetricStage.displayName(): String =
         TextMateMetricStage.RegexCompile -> "Regex compile"
         TextMateMetricStage.RegexSearch -> "Regex search"
         TextMateMetricStage.NativeRegexSearch -> "Native regex search"
+        TextMateMetricStage.PreparedLineBuffer -> "Prepared line buffer"
+        TextMateMetricStage.Utf8IndexMap -> "UTF-8 index map"
         TextMateMetricStage.Tokenize -> "Tokenize"
         TextMateMetricStage.Repair -> "Repair"
+        TextMateMetricStage.IncrementalReuse -> "Incremental reuse"
     }
 
 @Preview(showBackground = true)

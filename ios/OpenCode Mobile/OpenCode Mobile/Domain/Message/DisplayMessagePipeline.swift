@@ -106,6 +106,31 @@ final class DisplayMessagePipeline {
                 }
             }
         }
+        observeThermalAndLowPower()
+    }
+
+    private func observeThermalAndLowPower() {
+        let publish: @Sendable () -> Void = {
+            let thermalRestricted =
+                ProcessInfo.processInfo.thermalState == .serious ||
+                ProcessInfo.processInfo.thermalState == .critical
+            let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+            let disabled = thermalRestricted || lowPower
+            Task {
+                await KMPTextMateHighlightingEngine.shared.setLowPowerOrThermal(disabled)
+            }
+        }
+        publish()
+        NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in publish() }
+        NotificationCenter.default.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in publish() }
     }
 
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {

@@ -1,5 +1,29 @@
 # Native Rendered Markdown Decisions
 
+## Phase 6 Default Enablement And Provisional Calibration
+
+- Decision: unset / first-install `textMateEnabled` defaults to **true** on
+  Android and iOS; an explicit stored `false` stays off. Settings subtitle
+  documents promoted-language defaults.
+- Decision: shared `TextMateLanguageAllowlist` (`ALLOWLIST_VERSION = 1`) promotes
+  `javascript`, `typescript`, `python`, `kotlin`, `swift`, `json`, `yaml`,
+  `shellscript`, `rust`, and `go`. Non-members use complete semantic fallback
+  even when a grammar is packaged.
+- Decision: Android `TextMateProcessPressureObserver` maps trim-memory levels to
+  engine `trim` and power-save to `setLowPowerOrThermal`. iOS memory warnings
+  trim Critical; thermal serious/critical and low-power mode set the scheduler
+  low-power flag.
+- Decision: Phase 6 closes on provisional host/simulator Tier A evidence in
+  `phase-6-calibration.md` plus allowlist/default-on wiring. Physical Tier B,
+  full 30-minute soak, and packaged-grammar device matrices are a remaining
+  post-close validation note, not an open Phase 6 gate.
+- Decision: retain a single engine owner; do not add a second shard without
+  measured single-owner Tier A miss plus non-regression proof.
+- Reason: triage locked a shippable default-on allowlist with provisional
+  calibration so the six-phase plan can close without blocking on physical
+  hardware availability in-session.
+- Date: 2026-07-29.
+
 ## Phase 5 Incremental Unchanged-Prefix Reuse
 
 - Decision: engine-owned `TextMateIncrementalStateStore` retains immutable
@@ -185,14 +209,14 @@
   3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
   Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
   diagnostic reference values, not release guardrails.
-- Implementation gate: Phases 1–5 are closed. The shared engine owns the
+- Implementation gate: Phases 1–6 are closed. The shared engine owns the
   fence-level asynchronous request/result contract plus priority scheduling,
   latest-wins coalescing, admission limits, trim, queue metrics, compiled
-  grammar programs, prepared line buffers, weighted lease-safe caches, and
-  bounded unchanged-prefix / suffix-convergent incremental reuse. Android and
-  iOS remain serial owners that drive one active job. Shared Phase 5
-  differential/oracle and reuse tests plus iOS simulator KMP compile pass.
-  Phase 6 owns physical release calibration and default language enablement.
+  grammar programs, prepared line buffers, weighted lease-safe caches, bounded
+  incremental reuse, and default-on TextMate behind allowlist v1. Android and
+  iOS remain serial owners that drive one active job. Provisional Phase 6
+  calibration is recorded; physical Tier B / full soak remain a post-close
+  validation note.
 - Date: 2026-07-29.
 
 ## Markdown Fences Close Like CommonMark / Web

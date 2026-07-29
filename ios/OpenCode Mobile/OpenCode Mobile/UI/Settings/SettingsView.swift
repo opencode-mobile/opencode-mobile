@@ -124,7 +124,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "TextMate Highlighting",
-                        subtitle: "Full grammar syntax colors for code fences (slower)",
+                        subtitle: "On by default for promoted languages; semantic fallback otherwise (can disable)",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
                         trailing: {

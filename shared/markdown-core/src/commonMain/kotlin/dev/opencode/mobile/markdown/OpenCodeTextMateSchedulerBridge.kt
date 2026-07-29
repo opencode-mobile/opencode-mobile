@@ -52,6 +52,10 @@ class OpenCodeTextMateSchedulerBridge(
         return OpenCodeMarkdownJson.json.encodeToString(completed.map { it.result })
     }
 
+    fun setLowPowerOrThermal(disabled: Boolean) {
+        scheduler.setLowPowerOrThermal(disabled)
+    }
+
     fun snapshot(): String = OpenCodeMarkdownJson.json.encodeToString(scheduler.snapshot())
 
     companion object {

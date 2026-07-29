@@ -28,8 +28,8 @@ class TextMatePhase5DifferentialOracleTest {
     fun multilineOpenRuleScriptsMatchFullReparse() {
         val grammar =
             TextMateGrammar(
-                name = "stringy",
-                scopeName = "source.stringy",
+                name = "python",
+                scopeName = "source.python",
                 patterns =
                     listOf(
                         TextMatePattern(
@@ -133,8 +133,8 @@ class TextMatePhase5DifferentialOracleTest {
 
     private fun defaultGrammar(): TextMateGrammar =
         TextMateGrammar(
-            name = "reuse",
-            scopeName = "source.reuse",
+            name = "javascript",
+            scopeName = "source.js",
             patterns =
                 listOf(
                     TextMatePattern(name = "keyword.alpha", match = "\\balpha\\b"),

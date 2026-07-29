@@ -16,27 +16,26 @@
 - Intentional platform difference: only the native storage location and
   concurrency primitive differ. iOS uses a utility `DispatchQueue` plus lock;
   Android uses a coroutine writer plus bounded channel.
-- Owner or next action: retain schema and behavior parity when Phase 6 adds
-  device-soak observation fields if needed.
+- Owner or next action: keep observation schema parity when physical Tier B
+  calibration adds host fields.
 
 ## TextMate Execution And Memory Ownership
 
-- Status: Phases 1–5 closed and aligned; Phase 6 default enablement pending
+- Status: Phases 1–6 closed and aligned; physical Tier B validation remaining
 - Area: architecture and performance
 - Shared intent: both apps should expose the same reusable highlighting-engine
   contract and share priority, cancellation, cache budgets, quality outcomes,
   metric names, work limits, and release gates while retaining native regex and
   executor adapters.
-- Current iOS state: an injected Swift actor lazily constructs and drives one
-  serial KMP/libonig runtime; prepared line buffers, OwnedOnigRegex leases, and
-  shared incremental reuse are complete through Phase 5.
-- Current Android state: one injected single-lane KMP/Joni runtime; prepared
-  line buffers, in-use regex pins, and shared incremental reuse are complete
-  through Phase 5.
+- Current iOS state: default-on TextMate with allowlist v1; serial KMP/libonig
+  owner; memory/thermal/low-power hooks drive trim and background disablement.
+- Current Android state: default-on TextMate with allowlist v1; single-lane
+  KMP/Joni owner; ComponentCallbacks2 / power-save hooks drive trim and
+  background disablement.
 - Intentional platform difference: regex backend only (Joni vs libonig) and
   lease disposal (`onig_free` vs JVM GC).
-- Owner or next action: satisfy the Phase 6 device soak / default-enablement
-  gate.
+- Owner or next action: run the remaining physical-device Tier B / full soak
+  checklist in `phase-6-calibration.md` before store release.
 
 ## TextMate Highlighter
 

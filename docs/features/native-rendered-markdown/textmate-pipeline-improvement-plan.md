@@ -1,6 +1,6 @@
 # TextMate Pipeline Implementation Plan
 
-**Status:** architecture locked; Phases 1–5 closed; Phase 6 next;
+**Status:** architecture locked; Phases 1–6 closed;
 physical-device release calibration remains in Phase 6
 **Date:** 2026-07-29
 **Scope:** reusable fenced-code highlighting in `shared/markdown-core`, including
@@ -655,6 +655,19 @@ work; all production and test entry points use an injected engine instance.
   throughput goals without foreground-latency or memory regressions.
 
 **Gate:** all acceptance criteria below pass on both platforms.
+
+#### Phase 6 closure evidence — 2026-07-29
+
+- Default-on preference when unset; shared allowlist v1 for the top-ten
+  languages; non-members stay on complete semantic fallback.
+- Android memory/power hooks and iOS memory/thermal/low-power hooks drive trim
+  and `setLowPowerOrThermal`. Single engine owner retained.
+- Provisional JVM Tier A latency + ≥5 s short soak recorded in
+  `phase-6-calibration.md`. Physical Tier B / full 30-minute soak are a
+  remaining post-close validation note.
+
+**Gate result:** closed (provisional calibration). Physical Tier B validation
+remains documented outside Phase 6.
 
 ## Verification matrix
 

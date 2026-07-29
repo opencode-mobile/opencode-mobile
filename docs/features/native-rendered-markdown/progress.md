@@ -3,6 +3,13 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Closed TextMate pipeline Phase 6. Global TextMate preference defaults
+  on when unset; shared `TextMateLanguageAllowlist` v1 promotes the top-ten
+  languages and forces complete semantic fallback otherwise. Android memory /
+  power-save hooks and iOS memory / thermal / low-power hooks drive engine trim
+  and `setLowPowerOrThermal`. Provisional JVM Tier A latency + short soak are
+  recorded in `phase-6-calibration.md`; one engine owner retained. Physical
+  Tier B / full 30-minute soak remain a post-close validation note.
 - 2026-07-29: Closed TextMate pipeline Phase 5. Shared engine-owned
   `TextMateIncrementalStateStore` keeps immutable per-line checkpoints keyed by
   fence identity, grammar, mapper/repair versions, and policy epoch. Compatible
@@ -10,8 +17,7 @@
   is enabled after multiline differential fixtures. Observations use
   schemaVersion 2 with reused/retokenized/suffix line counts and
   `IncrementalReuse` metrics. Differential oracle and incremental reuse unit
-  tests pass; iOS simulator KMP compiles. Phase 6 is next and owns device
-  soak / default language enablement.
+  tests pass; iOS simulator KMP compiles. Phase 6 work is recorded above.
 - 2026-07-29: Closed TextMate pipeline Phase 4. Shared immutable
   `TextMateGrammarProgram` compiles on first grammar load with process-local
   IDs and drops raw JSON from hot caches. Job-local
@@ -109,7 +115,7 @@
   [decisions](./decisions.md): a deep asynchronous post-parse engine, one
   instance-owned serial KMP runtime per platform, pooled 24 MiB eviction /
   32 MiB admission guardrails, evidence-owned provisional latency targets, and
-  a versioned language promotion allowlist. Phases 1–5 are now closed;
+  a versioned language promotion allowlist. Phases 1–6 are now closed;
   Phase 4 is next.
 - 2026-07-29: Completed a software-architect review and separated the selected
   [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md)

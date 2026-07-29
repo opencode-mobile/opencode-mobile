@@ -134,15 +134,28 @@ class OpenCodeSyntaxHighlighter(
         }
         val grammarLookupStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
         val normalizedLanguage = normalizedLanguage(languageOrAlias)
+        val allowlisted =
+            normalizedLanguage != null &&
+                TextMateLanguageAllowlist.isPromoted(normalizedLanguage, grammarBundle?.manifest)
         val grammar =
-            normalizedLanguage?.let { language ->
-                grammarBundle?.primaryGrammarFor(language, metricsSink)
+            if (allowlisted) {
+                normalizedLanguage?.let { language ->
+                    grammarBundle?.primaryGrammarFor(language, metricsSink)
+                }
+            } else {
+                null
             }
         grammarLookupStartedAt?.let {
             metricsSink.record(
                 TextMateMetricEvent(
                     stage = TextMateMetricStage.GrammarLookup,
-                    outcome = if (grammar == null) TextMateMetricOutcome.Failure else TextMateMetricOutcome.Success,
+                    outcome =
+                        when {
+                            normalizedLanguage == null -> TextMateMetricOutcome.Failure
+                            !allowlisted -> TextMateMetricOutcome.CacheMiss
+                            grammar == null -> TextMateMetricOutcome.Failure
+                            else -> TextMateMetricOutcome.Success
+                        },
                     durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
                     sourceCharacters = code.length,
                 ),
@@ -292,10 +305,10 @@ class OpenCodeSyntaxHighlighter(
             .highlight(languageOrAlias, code)
             .copy(
                 textMateOutcome =
-                    if (normalizedLanguage == null) {
-                        TextMateParseOutcome.Fallback
-                    } else {
-                        TextMateParseOutcome.Unsupported
+                    when {
+                        normalizedLanguage == null -> TextMateParseOutcome.Fallback
+                        !allowlisted -> TextMateParseOutcome.Fallback
+                        else -> TextMateParseOutcome.Unsupported
                     },
             )
     }

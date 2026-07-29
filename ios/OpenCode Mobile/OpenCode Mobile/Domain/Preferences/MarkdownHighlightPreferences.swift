@@ -2,7 +2,8 @@ import Foundation
 import Observation
 
 /// Controls whether Session Chat code fences use TextMate (expensive) or the
-/// semantic-fallback highlighter. Disabled by default.
+/// semantic-fallback highlighter. Enabled by default for allowlisted languages
+/// when the preference key is unset; an explicit user off stays off.
 ///
 /// Callers that change `textMateEnabled` should also clear prepared-markdown
 /// caches (preparer LRU + block decoration) so settle-reuse cannot keep the old
@@ -27,7 +28,7 @@ final class MarkdownHighlightPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if defaults.object(forKey: StorageKeys.textMateEnabled) == nil {
-            textMateEnabled = false
+            textMateEnabled = true
         } else {
             textMateEnabled = defaults.bool(forKey: StorageKeys.textMateEnabled)
         }
@@ -37,7 +38,7 @@ final class MarkdownHighlightPreferences {
     /// MainActor-free read for markdown workers (`Task.detached`).
     nonisolated static func currentTextMateEnabled(defaults: UserDefaults = .standard) -> Bool {
         if defaults.object(forKey: StorageKeys.textMateEnabled) == nil {
-            return false
+            return true
         }
         return defaults.bool(forKey: StorageKeys.textMateEnabled)
     }
@@ -58,9 +59,9 @@ final class MarkdownHighlightPreferences {
 
     func clear() {
         defaults.removeObject(forKey: StorageKeys.textMateEnabled)
-        let hadCustom = textMateEnabled
-        textMateEnabled = false
-        if hadCustom || epoch != 0 {
+        let hadCustom = !textMateEnabled || epoch != 0
+        textMateEnabled = true
+        if hadCustom {
             bumpEpoch()
         }
     }

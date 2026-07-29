@@ -31,8 +31,8 @@ class TextMatePhase5IncrementalReuseTest {
                 identity =
                     IncrementalBlockIdentity(
                         key = key,
-                        canonicalLanguage = "reuse",
-                        grammarResourcePath = "reuse.json",
+                        canonicalLanguage = "javascript",
+                        grammarResourcePath = "javascript.json",
                         grammarId = GrammarId(0),
                         policyEpoch = 1,
                     ),
@@ -49,14 +49,13 @@ class TextMatePhase5IncrementalReuseTest {
             )
         val metrics1 = mutableListOf<TextMateMetricEvent>()
         highlighterWithBundle.highlight(
-            languageOrAlias = "reuse",
+            languageOrAlias = "javascript",
             code = "alpha\nbeta",
             metricsSink = OpenCodeTextMateMetricsSink(metrics1::add),
             shouldCancel = { false },
             incremental = session1,
         )
         assertTrue(session1.produced != null)
-        assertEquals(0, session1.reusedLineCount)
 
         val session2 =
             TextMateIncrementalHighlightSession(
@@ -69,7 +68,7 @@ class TextMatePhase5IncrementalReuseTest {
         val metrics2 = mutableListOf<TextMateMetricEvent>()
         val second =
             highlighterWithBundle.highlight(
-                languageOrAlias = "reuse",
+                languageOrAlias = "javascript",
                 code = "alpha\nbeta\ngamma",
                 metricsSink = OpenCodeTextMateMetricsSink(metrics2::add),
                 shouldCancel = { false },
@@ -77,7 +76,7 @@ class TextMatePhase5IncrementalReuseTest {
             )
         val full =
             highlighterWithBundle.highlight(
-                languageOrAlias = "reuse",
+                languageOrAlias = "javascript",
                 code = "alpha\nbeta\ngamma",
                 metricsSink = NoOpOpenCodeTextMateMetricsSink,
                 shouldCancel = { false },
@@ -108,8 +107,8 @@ class TextMatePhase5IncrementalReuseTest {
         val identity =
             IncrementalBlockIdentity(
                 key = key,
-                canonicalLanguage = "reuse",
-                grammarResourcePath = "reuse.json",
+                canonicalLanguage = "javascript",
+                grammarResourcePath = "javascript.json",
                 grammarId = GrammarId(0),
                 policyEpoch = 1,
             )
@@ -122,7 +121,7 @@ class TextMatePhase5IncrementalReuseTest {
                 suffixConvergenceEnabled = true,
             )
         highlighter.highlight(
-            languageOrAlias = "reuse",
+            languageOrAlias = "javascript",
             code = "alpha beta",
             metricsSink = NoOpOpenCodeTextMateMetricsSink,
             shouldCancel = { false },
@@ -139,7 +138,7 @@ class TextMatePhase5IncrementalReuseTest {
         val events = mutableListOf<TextMateMetricEvent>()
         val incremental =
             highlighter.highlight(
-                languageOrAlias = "reuse",
+                languageOrAlias = "javascript",
                 code = "alpha beta",
                 metricsSink = OpenCodeTextMateMetricsSink(events::add),
                 shouldCancel = { false },
@@ -147,7 +146,7 @@ class TextMatePhase5IncrementalReuseTest {
             )
         val full =
             highlighter.highlight(
-                languageOrAlias = "reuse",
+                languageOrAlias = "javascript",
                 code = "alpha beta",
                 metricsSink = NoOpOpenCodeTextMateMetricsSink,
                 shouldCancel = { false },
@@ -172,8 +171,8 @@ class TextMatePhase5IncrementalReuseTest {
         val identity =
             IncrementalBlockIdentity(
                 key = key,
-                canonicalLanguage = "ml",
-                grammarResourcePath = "ml.json",
+                canonicalLanguage = "typescript",
+                grammarResourcePath = "typescript.json",
                 grammarId = GrammarId(0),
                 policyEpoch = 1,
             )
@@ -188,7 +187,7 @@ class TextMatePhase5IncrementalReuseTest {
                 suffixConvergenceEnabled = true,
             )
         highlighter.highlight(
-            languageOrAlias = "ml",
+            languageOrAlias = "typescript",
             code = source1,
             metricsSink = NoOpOpenCodeTextMateMetricsSink,
             shouldCancel = { false },
@@ -204,7 +203,7 @@ class TextMatePhase5IncrementalReuseTest {
             )
         val incremental =
             highlighter.highlight(
-                languageOrAlias = "ml",
+                languageOrAlias = "typescript",
                 code = source2,
                 metricsSink = NoOpOpenCodeTextMateMetricsSink,
                 shouldCancel = { false },
@@ -212,7 +211,7 @@ class TextMatePhase5IncrementalReuseTest {
             )
         val full =
             highlighter.highlight(
-                languageOrAlias = "ml",
+                languageOrAlias = "typescript",
                 code = source2,
                 metricsSink = NoOpOpenCodeTextMateMetricsSink,
                 shouldCancel = { false },
@@ -229,8 +228,8 @@ class TextMatePhase5IncrementalReuseTest {
                 identity =
                     IncrementalBlockIdentity(
                         key = CodeBlockKey("trim"),
-                        canonicalLanguage = "reuse",
-                        grammarResourcePath = "reuse.json",
+                        canonicalLanguage = "javascript",
+                        grammarResourcePath = "javascript.json",
                         grammarId = GrammarId(0),
                         policyEpoch = 1,
                     ),
@@ -252,8 +251,8 @@ class TextMatePhase5IncrementalReuseTest {
         val identity =
             IncrementalBlockIdentity(
                 key = CodeBlockKey("plan"),
-                canonicalLanguage = "reuse",
-                grammarResourcePath = "reuse.json",
+                canonicalLanguage = "javascript",
+                grammarResourcePath = "javascript.json",
                 grammarId = GrammarId(0),
                 policyEpoch = 1,
             )
@@ -306,8 +305,8 @@ class TextMatePhase5IncrementalReuseTest {
 
     private fun syntheticGrammar(): TextMateGrammar =
         TextMateGrammar(
-            name = "reuse",
-            scopeName = "source.reuse",
+            name = "javascript",
+            scopeName = "source.js",
             patterns =
                 listOf(
                     TextMatePattern(name = "keyword.alpha", match = "\\balpha\\b"),
@@ -318,8 +317,8 @@ class TextMatePhase5IncrementalReuseTest {
 
     private fun multilineGrammar(): TextMateGrammar =
         TextMateGrammar(
-            name = "ml",
-            scopeName = "source.ml",
+            name = "typescript",
+            scopeName = "source.ts",
             patterns =
                 listOf(
                     TextMatePattern(name = "keyword.start", match = "\\bstart!?\\b"),

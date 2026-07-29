@@ -84,6 +84,14 @@ class AndroidTextMateHighlightingEngine(
         }
     }
 
+    suspend fun setLowPowerOrThermal(disabled: Boolean) {
+        withContext(ownerDispatcher) {
+            owner.withLock {
+                scheduler.setLowPowerOrThermal(disabled)
+            }
+        }
+    }
+
     override fun schedulerSnapshot(): TextMateSchedulerSnapshot = scheduler.snapshot()
 
     private fun ensurePumpLocked() {

@@ -91,6 +91,10 @@ actor KMPTextMateHighlightingEngine: TextMateHighlighting {
         deliverAll(resultsJSON: completedJSON)
     }
 
+    func setLowPowerOrThermal(_ disabled: Bool) async {
+        activeBridge().setLowPowerOrThermal(disabled: disabled)
+    }
+
     private func enqueue(
         _ request: TextMateHighlightRequest,
         continuation: CheckedContinuation<TextMateHighlightResult, Error>
