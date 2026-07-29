@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -40,6 +42,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 @Composable
 fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
+    onTextMateLogbookClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
     onClearData: () -> Unit,
@@ -77,7 +80,12 @@ fun SettingsScreen(
         )
 
         Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SectionHeader(title = "Server")
@@ -162,6 +170,15 @@ fun SettingsScreen(
             )
 
             OpenCodeListItem(
+                title = "TextMate Logbook",
+                subtitle = "Persisted code-fence parsing measurements",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
+                onClick = onTextMateLogbookClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
                 title = "Clear All Data",
                 subtitle = "Remove connection, cache, and imported themes",
                 style = OpenCodeListItemStyle.Card,
@@ -238,6 +255,7 @@ private fun SettingsScreenLightPreview() {
     OpenCodeTheme(darkTheme = false) {
         SettingsScreen(
             onComponentGalleryClick = {},
+            onTextMateLogbookClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
@@ -257,6 +275,7 @@ private fun SettingsScreenDarkPreview() {
     OpenCodeTheme(darkTheme = true) {
         SettingsScreen(
             onComponentGalleryClick = {},
+            onTextMateLogbookClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},

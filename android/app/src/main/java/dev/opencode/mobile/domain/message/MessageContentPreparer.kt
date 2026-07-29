@@ -2,7 +2,10 @@ package dev.opencode.mobile.domain.message
 
 import android.util.Log
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.textmate.NoOpTextMateLogbookRecorder
+import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeTextMateMetricsSink
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
@@ -19,6 +22,7 @@ class MessageContentPreparer
     @Inject
     constructor(
         private val codeHighlighter: OpenCodeCodeHighlighter,
+        private val textMateLogbook: TextMateLogbookRecorder = NoOpTextMateLogbookRecorder,
     ) {
         internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
 
@@ -40,6 +44,14 @@ class MessageContentPreparer
                     code: String,
                 ) = synchronized(highlighterLock) {
                     codeHighlighter.highlight(languageOrAlias, code)
+                }
+
+                override fun highlight(
+                    languageOrAlias: String?,
+                    code: String,
+                    metricsSink: OpenCodeTextMateMetricsSink,
+                ) = synchronized(highlighterLock) {
+                    codeHighlighter.highlight(languageOrAlias, code, metricsSink)
                 }
             }
 
@@ -277,12 +289,23 @@ class MessageContentPreparer
                 cache[cacheKey]?.let { return it }
             }
             val document =
-                OpenCodeMarkdownParser.parse(
-                    markdown = text,
-                    codeHighlighter = serializedCodeHighlighter,
-                    isStreaming = isStreaming,
-                    textMateEnabled = textMateEnabled,
-                )
+                if (textMateEnabled && !isStreaming) {
+                    val envelope =
+                        OpenCodeMarkdownParser.parseObserved(
+                            markdown = text,
+                            codeHighlighter = serializedCodeHighlighter,
+                            observeTextMate = true,
+                        )
+                    textMateLogbook.submit(envelope.textMateObservations)
+                    envelope.document
+                } else {
+                    OpenCodeMarkdownParser.parse(
+                        markdown = text,
+                        codeHighlighter = serializedCodeHighlighter,
+                        isStreaming = isStreaming,
+                        textMateEnabled = textMateEnabled,
+                    )
+                }
             return synchronized(cacheLock) {
                 cache[cacheKey] ?: document.also { cache[cacheKey] = it }
             }

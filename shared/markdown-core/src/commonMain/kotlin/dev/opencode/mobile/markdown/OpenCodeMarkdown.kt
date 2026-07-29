@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.time.TimeSource
 
 @Serializable
 data class MarkdownParseRequest(
@@ -20,6 +21,12 @@ data class MarkdownDocument(
     val sourceHash: Int,
     val blocks: List<MarkdownBlock>,
     val diagnostics: List<MarkdownDiagnostic> = emptyList(),
+)
+
+@Serializable
+data class MarkdownParseEnvelope(
+    val document: MarkdownDocument,
+    val textMateObservations: List<TextMateParseObservation> = emptyList(),
 )
 
 @Serializable
@@ -217,12 +224,7 @@ object OpenCodeMarkdownJson {
 
     fun parseMarkdownJson(requestJson: String): String {
         val request = json.decodeFromString<MarkdownParseRequest>(requestJson)
-        val codeHighlighter =
-            openCodeCodeHighlighterForParse(
-                preferred = OpenCodeMarkdownHighlighterProvider.default,
-                isStreaming = request.isStreaming,
-                textMateEnabled = request.textMateEnabled,
-            )
+        val codeHighlighter = codeHighlighterFor(request)
         return json.encodeToString(
             OpenCodeMarkdownParser.parse(
                 markdown = request.markdown,
@@ -230,6 +232,24 @@ object OpenCodeMarkdownJson {
             ),
         )
     }
+
+    fun parseMarkdownObservedJson(requestJson: String): String {
+        val request = json.decodeFromString<MarkdownParseRequest>(requestJson)
+        return json.encodeToString(
+            OpenCodeMarkdownParser.parseObserved(
+                markdown = request.markdown,
+                codeHighlighter = codeHighlighterFor(request),
+                observeTextMate = request.textMateEnabled && !request.isStreaming,
+            ),
+        )
+    }
+
+    private fun codeHighlighterFor(request: MarkdownParseRequest): OpenCodeCodeHighlighter =
+        if (request.isStreaming || !request.textMateEnabled) {
+            OpenCodeSemanticFallbackHighlighter
+        } else {
+            OpenCodeMarkdownHighlighterProvider.default
+        }
 }
 
 object OpenCodeMarkdownDetector {
@@ -278,15 +298,58 @@ object OpenCodeMarkdownParser {
     fun parse(
         markdown: String,
         codeHighlighter: OpenCodeCodeHighlighter,
-    ): MarkdownDocument {
+    ): MarkdownDocument =
+        parseInternal(
+            markdown = markdown,
+            codeHighlighter = codeHighlighter,
+            observeTextMate = false,
+        ).document
+
+    fun parseObserved(
+        markdown: String,
+        codeHighlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
+        isStreaming: Boolean = false,
+        textMateEnabled: Boolean = false,
+    ): MarkdownParseEnvelope =
+        parseObserved(
+            markdown = markdown,
+            codeHighlighter =
+                openCodeCodeHighlighterForParse(
+                    preferred = codeHighlighter,
+                    isStreaming = isStreaming,
+                    textMateEnabled = textMateEnabled,
+                ),
+            observeTextMate = textMateEnabled && !isStreaming,
+        )
+
+    fun parseObserved(
+        markdown: String,
+        codeHighlighter: OpenCodeCodeHighlighter,
+        observeTextMate: Boolean,
+    ): MarkdownParseEnvelope =
+        parseInternal(
+            markdown = markdown,
+            codeHighlighter = codeHighlighter,
+            observeTextMate = observeTextMate,
+        )
+
+    private fun parseInternal(
+        markdown: String,
+        codeHighlighter: OpenCodeCodeHighlighter,
+        observeTextMate: Boolean,
+    ): MarkdownParseEnvelope {
         if (markdown.isBlank()) {
-            return MarkdownDocument(sourceHash = stableMarkdownSourceHash(markdown), blocks = emptyList())
+            return MarkdownParseEnvelope(
+                document = MarkdownDocument(sourceHash = stableMarkdownSourceHash(markdown), blocks = emptyList()),
+            )
         }
 
         val diagnostics = mutableListOf<MarkdownDiagnostic>()
+        val observations = mutableListOf<TextMateParseObservation>()
         val lines = markdown.replace("\r\n", "\n").replace('\r', '\n').split('\n')
         val blocks = mutableListOf<MarkdownBlock>()
         var index = 0
+        var fenceCount = 0
 
         while (index < lines.size) {
             val line = lines[index]
@@ -295,10 +358,20 @@ object OpenCodeMarkdownParser {
                 continue
             }
 
-            val fenced = parseFence(lines, index, codeHighlighter)
+            val fenced =
+                parseFence(
+                    lines = lines,
+                    start = index,
+                    codeHighlighter = codeHighlighter,
+                    messageCharacters = markdown.length,
+                    fenceIndex = fenceCount + 1,
+                    observeTextMate = observeTextMate,
+                )
             if (fenced != null) {
                 blocks += fenced.block
                 diagnostics += fenced.diagnostics
+                fenced.observation?.let(observations::add)
+                fenceCount += 1
                 index = fenced.nextIndex
                 continue
             }
@@ -386,10 +459,14 @@ object OpenCodeMarkdownParser {
             diagnostics += parsed.diagnostics
         }
 
-        return MarkdownDocument(
-            sourceHash = stableMarkdownSourceHash(markdown),
-            blocks = blocks,
-            diagnostics = diagnostics.distinct(),
+        return MarkdownParseEnvelope(
+            document =
+                MarkdownDocument(
+                    sourceHash = stableMarkdownSourceHash(markdown),
+                    blocks = blocks,
+                    diagnostics = diagnostics.distinct(),
+                ),
+            textMateObservations = observations.map { observation -> observation.copy(fenceCount = fenceCount) },
         )
     }
 
@@ -412,6 +489,9 @@ object OpenCodeMarkdownParser {
         lines: List<String>,
         start: Int,
         codeHighlighter: OpenCodeCodeHighlighter,
+        messageCharacters: Int,
+        fenceIndex: Int,
+        observeTextMate: Boolean,
     ): ParseResult? {
         val match = fenceRegex.find(lines[start]) ?: return null
         val marker = match.groupValues[1]
@@ -429,7 +509,15 @@ object OpenCodeMarkdownParser {
         }
         val nextIndex = if (index < lines.size) index + 1 else index
         val code = content.joinToString("\n")
-        val syntaxHighlight = codeHighlighter.highlight(normalizedLanguage, code)
+        val metrics = if (observeTextMate) OpenCodeTextMateMetricsAccumulator() else null
+        val highlightStartedAt = metrics?.let { TimeSource.Monotonic.markNow() }
+        val syntaxHighlight =
+            if (metrics == null) {
+                codeHighlighter.highlight(normalizedLanguage, code)
+            } else {
+                codeHighlighter.highlight(normalizedLanguage, code, metrics)
+            }
+        val totalNanoseconds = highlightStartedAt?.elapsedNow()?.inWholeNanoseconds ?: 0
         val diagnostics = mutableListOf<MarkdownDiagnostic>()
         if (normalizedLanguage != null && !codeHighlighter.supportsLanguage(normalizedLanguage)) {
             diagnostics +=
@@ -454,7 +542,36 @@ object OpenCodeMarkdownParser {
                     spans = syntaxHighlight.spans,
                 )
             }
-        return ParseResult(block = block, nextIndex = nextIndex, diagnostics = diagnostics)
+        val observation =
+            metrics?.let {
+                TextMateParseObservation(
+                    requestedLanguage = normalizedLanguage?.take(MAX_LOGBOOK_LANGUAGE_LENGTH),
+                    canonicalLanguage = syntaxHighlight.canonicalLanguage?.take(MAX_LOGBOOK_LANGUAGE_LENGTH),
+                    outcome =
+                        syntaxHighlight.textMateOutcome
+                            ?: if (syntaxHighlight.source == SyntaxHighlightSource.TextMate) {
+                                TextMateParseOutcome.Highlighted
+                            } else {
+                                TextMateParseOutcome.Fallback
+                            },
+                    messageCharacters = messageCharacters,
+                    fenceCharacters = code.length,
+                    fenceLines = content.size,
+                    fenceIndex = fenceIndex,
+                    fenceCount = 0,
+                    spanCount = syntaxHighlight.spans.size,
+                    backend = it.backendName(),
+                    totalNanoseconds = totalNanoseconds,
+                    stages = it.stageSummaries(),
+                    diagnosticKinds = diagnostics.map(MarkdownDiagnostic::kind).distinct(),
+                )
+            }
+        return ParseResult(
+            block = block,
+            nextIndex = nextIndex,
+            diagnostics = diagnostics,
+            observation = observation,
+        )
     }
 
     private fun parseDiffLine(line: String): DiffLine {
@@ -631,6 +748,7 @@ object OpenCodeMarkdownParser {
         val block: MarkdownBlock,
         val nextIndex: Int,
         val diagnostics: List<MarkdownDiagnostic> = emptyList(),
+        val observation: TextMateParseObservation? = null,
     )
 
     private data class TableResult(
@@ -645,6 +763,7 @@ object OpenCodeMarkdownParser {
     private val thematicBreakRegex = Regex("""^\s*(-{3,}|\*{3,}|_{3,})\s*$""")
     private val tableSeparatorRegex = Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""")
     private val rawHtmlRegex = Regex("""</?[A-Za-z][^>]*>""")
+    private const val MAX_LOGBOOK_LANGUAGE_LENGTH = 64
 
     private fun String.closesFence(marker: String): Boolean {
         val trimmed = trim()

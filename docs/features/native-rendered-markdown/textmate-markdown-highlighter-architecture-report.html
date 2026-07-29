@@ -539,7 +539,7 @@
         <tr>
           <td>Painted code</td>
           <td>Compose composition / iOS one global entry</td>
-          <td>iOS key omits palette and highlight epoch</td>
+          <td>iOS key includes palette revision; explicit reset is available</td>
         </tr>
       </tbody>
     </table>
@@ -564,12 +564,12 @@
 
     <div class="two" style="margin-top: 16px">
       <section class="panel">
-        <h3><span class="pill risk">Confirmed lifetime defect</span></h3>
+        <h3><span class="pill ok">Phase 1 lifetime safety</span></h3>
         <p>
-          iOS alternation-decomposition probing compiles candidate libonig
-          expressions only to test them, discards successful pointers, and has
-          no matching <code>onig_free</code>. Cached pointers also lack an
-          explicit disposal path.
+          iOS now accounts for successful libonig allocation/free operations,
+          immediately releases successful alternation-decomposition probes,
+          and exposes explicit cache cleanup. Weighted retained-cache ownership
+          remains part of the proposed single-owner engine.
         </p>
       </section>
       <section class="panel">
@@ -581,6 +581,47 @@
         </p>
       </section>
     </div>
+
+    <h2>Persisted developer logbook</h2>
+    <div class="diagram">
+      <div class="flow" aria-label="TextMate logbook pipeline">
+        <div class="node shared">Final TextMate fence<br>cache miss</div>
+        <div class="arrow">→</div>
+        <div class="node">Request-local<br>stage accumulator</div>
+        <div class="arrow">→</div>
+        <div class="node">Observed parse<br>envelope</div>
+        <div class="arrow">→</div>
+        <div class="node android">Bounded native<br>JSONL writer</div>
+        <div class="arrow">→</div>
+        <div class="node ios">Developer Tools<br>logbook</div>
+      </div>
+      <p class="caption">
+        Streaming, disabled TextMate, and prepared-document cache hits perform
+        no TextMate fence attempt and therefore create no entry.
+      </p>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Contract</th><th>Recorded</th><th>Explicitly excluded</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>One entry per actual finalized fence attempt</td>
+          <td>Timestamp, language, UTF-16 sizes, fence position, outcome, backend, spans, total and aggregate stage timings, diagnostic kinds</td>
+          <td>Source, session/message/fence IDs, paths, regex patterns, grammar payloads, diagnostic messages</td>
+        </tr>
+        <tr>
+          <td>Non-blocking native persistence</td>
+          <td>64 pending batches, newest 500 entries, compaction at 550 entries or 2 MiB, drop/I/O health</td>
+          <td>Rendering failure or waiting on disk I/O</td>
+        </tr>
+        <tr>
+          <td>Developer-only inspection</td>
+          <td>Summary rows, expandable stages, refresh, confirmed clear, Clear All Data integration</td>
+          <td>User-facing analytics or automatic release decisions</td>
+        </tr>
+      </tbody>
+    </table>
 
     <h2>Runtime quality policy</h2>
     <table class="matrix">
@@ -691,9 +732,9 @@
           <td>Parallel first-use stress test, then serialization or immutable preload</td>
         </tr>
         <tr>
-          <td>iOS native regex pointer lifetime</td>
-          <td>Cached pointers have no disposal hook; decomposition probes discard successful allocations</td>
-          <td>Add explicit <code>onig_free</code> ownership and verify with memgraph/allocation tracing</td>
+          <td>Physical-device release calibration</td>
+          <td>Simulator and host measurements are diagnostic, not mobile guardrails</td>
+          <td>Frozen release fixture on named low- and mid-tier devices plus a 30-minute soak</td>
         </tr>
         <tr>
           <td>Per-search UTF-8 index allocation</td>
@@ -706,9 +747,9 @@
           <td>Add cache metrics, weighted budgets, and coordinated memory-pressure clearing</td>
         </tr>
         <tr>
-          <td>iOS attributed cache key</td>
-          <td>Code and spans are keyed, but palette and highlight epoch are omitted</td>
-          <td>Key by palette/epoch and expose a clear path</td>
+          <td>Diagnostic-only logbook</td>
+          <td>Measurements do not enforce queue, time, memory, or cancellation budgets</td>
+          <td>Turn accepted physical-device evidence into per-language promotion guardrails</td>
         </tr>
         <tr>
           <td>No parse time budget</td>
@@ -717,8 +758,8 @@
         </tr>
         <tr>
           <td>Quiet grammar/regex failure</td>
-          <td>Known labels may degrade to generic fallback without root-cause diagnostics</td>
-          <td>Structured load and compile-failure counters</td>
+          <td>The logbook intentionally omits content-bearing patterns and messages</td>
+          <td>Add aggregate load/compile failure classification without source-derived values</td>
         </tr>
         <tr>
           <td>4.8 MiB grammar directory</td>

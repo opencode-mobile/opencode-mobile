@@ -5,7 +5,16 @@ import kotlin.time.TimeSource
 data class SyntaxHighlightResult(
     val spans: List<CodeSpan>,
     val diagnostics: List<MarkdownDiagnostic>,
+    val source: SyntaxHighlightSource = SyntaxHighlightSource.Unknown,
+    val canonicalLanguage: String? = null,
+    val textMateOutcome: TextMateParseOutcome? = null,
 )
+
+enum class SyntaxHighlightSource {
+    TextMate,
+    SemanticFallback,
+    Unknown,
+}
 
 interface OpenCodeCodeHighlighter {
     fun supportsLanguage(languageOrAlias: String?): Boolean
@@ -14,6 +23,12 @@ interface OpenCodeCodeHighlighter {
         languageOrAlias: String?,
         code: String,
     ): SyntaxHighlightResult
+
+    fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code)
 }
 
 interface OpenCodeTextMateTokenizer {
@@ -22,6 +37,13 @@ interface OpenCodeTextMateTokenizer {
         code: String,
         grammarBundle: TextMateGrammarBundle? = null,
     ): TextMateTokenizationResult
+
+    fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle? = null,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateTokenizationResult = tokenize(grammar, code, grammarBundle)
 }
 
 data class TextMateTokenizationResult(
@@ -43,9 +65,19 @@ class OpenCodeSyntaxHighlighter(
     override fun highlight(
         languageOrAlias: String?,
         code: String,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code, metricsSink)
+
+    override fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): SyntaxHighlightResult {
         val grammarLookupStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
-        val grammar = normalizedLanguage(languageOrAlias)?.let { language -> grammarBundle?.primaryGrammarFor(language) }
+        val normalizedLanguage = normalizedLanguage(languageOrAlias)
+        val grammar =
+            normalizedLanguage?.let { language ->
+                grammarBundle?.primaryGrammarFor(language, metricsSink)
+            }
         grammarLookupStartedAt?.let {
             metricsSink.record(
                 TextMateMetricEvent(
@@ -58,7 +90,7 @@ class OpenCodeSyntaxHighlighter(
         }
         val tokenizer = textMateTokenizer
         if (grammar != null && tokenizer != null) {
-            val tokenization = tokenizer.tokenize(grammar, code, grammarBundle)
+            val tokenization = tokenizer.tokenize(grammar, code, grammarBundle, metricsSink)
             val repairStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
             val spans =
                 tokenization.tokens
@@ -89,11 +121,30 @@ class OpenCodeSyntaxHighlighter(
                 return SyntaxHighlightResult(
                     spans = spans,
                     diagnostics = tokenization.diagnostics,
+                    source = SyntaxHighlightSource.TextMate,
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.Highlighted,
                 )
             }
+
+            return fallbackHighlighter
+                .highlight(languageOrAlias, code)
+                .copy(
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.NoSpans,
+                )
         }
 
-        return fallbackHighlighter.highlight(languageOrAlias, code)
+        return fallbackHighlighter
+            .highlight(languageOrAlias, code)
+            .copy(
+                textMateOutcome =
+                    if (normalizedLanguage == null) {
+                        TextMateParseOutcome.Fallback
+                    } else {
+                        TextMateParseOutcome.Unsupported
+                    },
+            )
     }
 
     companion object {
@@ -938,6 +989,7 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
                         "TextMate highlighter feasibility gate is pending; semantic native fallback tokens were used.",
                     ),
                 ),
+            source = SyntaxHighlightSource.SemanticFallback,
         )
 
     private fun highlightFallbackSpans(

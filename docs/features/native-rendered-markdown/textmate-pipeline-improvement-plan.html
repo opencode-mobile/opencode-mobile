@@ -568,6 +568,11 @@
         Stage metrics, libonig allocation/free accounting, decomposition-probe
         cleanup, palette-revision cache identity, parallel first-use, repeated
         cancellation, and exact-source regressions are implemented. The
+        request-scoped observed parse envelope now also feeds matching
+        developer-only Android and iOS logbooks. Native serial JSONL writers
+        retain the newest 500 content-free fence attempts, bound pending work,
+        recover around corrupt records, report drops/I/O errors, and stay off
+        the rendering critical path. The
         semantic fallback also uses a bounded single-pass scanner; its
         3,968-character unterminated-string crash regression and original
         12-row Session Chat replay pass. Complete shared Android and iOS

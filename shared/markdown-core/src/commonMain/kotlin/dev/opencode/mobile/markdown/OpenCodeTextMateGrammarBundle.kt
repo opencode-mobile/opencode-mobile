@@ -39,7 +39,7 @@ data class TextMateGrammarBundleLoadResult(
 class TextMateGrammarBundle internal constructor(
     val manifest: TextMateGrammarManifest,
     private val reader: OpenCodeTextMateResourceReader?,
-    private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    private val defaultMetricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     preloadedGrammars: Map<String, TextMateGrammarPayload> = emptyMap(),
     preloadedDiagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
 ) {
@@ -69,15 +69,21 @@ class TextMateGrammarBundle internal constructor(
     val diagnostics: List<TextMateGrammarLoadDiagnostic>
         get() = loadDiagnostics.toList()
 
-    fun grammarsFor(languageOrAlias: String?): List<TextMateGrammarPayload> {
+    fun grammarsFor(
+        languageOrAlias: String?,
+        metricsSink: OpenCodeTextMateMetricsSink = defaultMetricsSink,
+    ): List<TextMateGrammarPayload> {
         val entry = manifest.entryFor(languageOrAlias) ?: return emptyList()
-        return entry.grammars.mapNotNull { descriptor -> grammarForDescriptor(descriptor) }
+        return entry.grammars.mapNotNull { descriptor -> grammarForDescriptor(descriptor, metricsSink) }
     }
 
-    fun primaryGrammarFor(languageOrAlias: String?): TextMateGrammarPayload? {
+    fun primaryGrammarFor(
+        languageOrAlias: String?,
+        metricsSink: OpenCodeTextMateMetricsSink = defaultMetricsSink,
+    ): TextMateGrammarPayload? {
         val requested = languageOrAlias?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
         val entry = manifest.entryFor(requested) ?: return null
-        val loaded = entry.grammars.mapNotNull { descriptor -> grammarForDescriptor(descriptor) }
+        val loaded = entry.grammars.mapNotNull { descriptor -> grammarForDescriptor(descriptor, metricsSink) }
         val preferredNames = setOf(entry.language.lowercase(), requested) + entry.aliases.map { alias -> alias.lowercase() }
 
         return loaded.firstOrNull { grammar ->
@@ -86,11 +92,14 @@ class TextMateGrammarBundle internal constructor(
         } ?: loaded.firstOrNull()
     }
 
-    fun grammarForScope(scopeName: String): TextMateGrammarPayload? =
-        descriptorsByScopeName[scopeName]?.let { descriptor -> grammarForDescriptor(descriptor) }
+    fun grammarForScope(
+        scopeName: String,
+        metricsSink: OpenCodeTextMateMetricsSink = defaultMetricsSink,
+    ): TextMateGrammarPayload? =
+        descriptorsByScopeName[scopeName]?.let { descriptor -> grammarForDescriptor(descriptor, metricsSink) }
 
     internal fun preloadAllFromReader() {
-        descriptorsByResourcePath.values.forEach { descriptor -> grammarForDescriptor(descriptor) }
+        descriptorsByResourcePath.values.forEach { descriptor -> grammarForDescriptor(descriptor, defaultMetricsSink) }
     }
 
     companion object {
@@ -103,13 +112,16 @@ class TextMateGrammarBundle internal constructor(
             TextMateGrammarBundle(
                 manifest = manifest,
                 reader = null,
-                metricsSink = metricsSink,
+                defaultMetricsSink = metricsSink,
                 preloadedGrammars = grammars.associateBy { grammar -> grammar.descriptor.resourcePath },
                 preloadedDiagnostics = diagnostics,
             )
     }
 
-    private fun grammarForDescriptor(descriptor: TextMateGrammarDescriptor): TextMateGrammarPayload? {
+    private fun grammarForDescriptor(
+        descriptor: TextMateGrammarDescriptor,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateGrammarPayload? {
         loadedByResourcePath[descriptor.resourcePath]?.let { cached ->
             if (metricsSink.isEnabled) {
                 metricsSink.record(
@@ -225,7 +237,7 @@ object OpenCodeTextMateGrammarBundleLoader {
                 TextMateGrammarBundle(
                     manifest = manifest,
                     reader = reader,
-                    metricsSink = metricsSink,
+                    defaultMetricsSink = metricsSink,
                 ),
             diagnostics = emptyList(),
         )
@@ -240,7 +252,7 @@ object OpenCodeTextMateGrammarBundleLoader {
             TextMateGrammarBundle(
                 manifest = manifest,
                 reader = reader,
-                metricsSink = metricsSink,
+                defaultMetricsSink = metricsSink,
             )
         bundle.preloadAllFromReader()
         return bundle

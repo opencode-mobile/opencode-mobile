@@ -1,5 +1,24 @@
 # Native Rendered Markdown Parity Gaps
 
+## TextMate Developer Logbook
+
+- Status: aligned
+- Area: developer observability
+- Shared intent: one persisted entry per actual finalized TextMate fence
+  attempt, with the same content-free schema, outcomes, UTF-16 counts, stage
+  summaries, retention, clear behavior, and store-health reporting.
+- Current iOS state: the observed KMP JSON envelope is decoded into native
+  values and submitted without blocking to a serial Application Support JSONL
+  store; Developer Tools exposes the bounded logbook.
+- Current Android state: the observed shared parser envelope is submitted
+  without blocking to a serial files-directory JSONL store; Developer Tools
+  exposes the same bounded logbook.
+- Intentional platform difference: only the native storage location and
+  concurrency primitive differ. iOS uses a utility `DispatchQueue` plus lock;
+  Android uses a coroutine writer plus bounded channel.
+- Owner or next action: retain schema and behavior parity when Phase 2 moves
+  parsing behind the asynchronous single-owner engine.
+
 ## TextMate Execution And Memory Ownership
 
 - Status: Phase 1 code aligned; physical calibration pending

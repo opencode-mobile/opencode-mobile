@@ -467,6 +467,17 @@ the baseline matrix and any revised guardrail are recorded in `decisions.md`.
   cache hit/miss outcomes, backend, source-size buckets, and longest individual
   native regex call. Disabled metrics skip timing work. Metrics contain no
   source text or source identity.
+- Added a request-scoped observed parse envelope and persisted native developer
+  logbooks. One entry represents one actual finalized fence attempt; it records
+  UTF-16 size/fence metadata, outcome, span count, backend, total duration,
+  aggregate stage timings, and diagnostic kinds without source or app
+  identity. Streaming, disabled TextMate, and prepared-document cache hits do
+  not log.
+- Android and iOS submit observations without blocking rendering to serial
+  JSONL writers with a 64-batch pending bound, newest-500 retention, 550-entry
+  or 2 MiB compaction, corrupt-record recovery, clear integration, and visible
+  drop/I/O health. Developer Tools exposes matching summary and expandable
+  detail screens.
 - Added libonig allocation/free counters, explicit cache reset, and a regression
   proving successful decomposition probes are released immediately and all
   cached native regexes are freed on reset.

@@ -43,9 +43,17 @@ Thread and memory ownership are only partially symmetric. Android serializes
 access to the shared stateful highlighter; iOS runs parsing in detached tasks
 while sharing mutable grammar and resolved-rule caches. Both platforms bound
 prepared documents and block decorations to 32 entries, but grammar, rule, and
-compiled-regex caches have no weighted budget. The iOS libonig backend also
-contains a native allocation lifetime defect: successful decomposition probes
-discard compiled regex pointers without `onig_free`.
+compiled-regex caches have no weighted budget. Phase 1 now accounts for iOS
+libonig allocation/free lifetime and disposes decomposition probes correctly,
+but the proposed single-owner engine and weighted cache policy remain Phase 2
+work.
+
+A developer-only TextMate logbook now makes real finalized fence attempts
+inspectable across launches. The shared parser emits content-free,
+request-scoped observations; native bounded JSONL stores persist them off the UI
+thread, and Developer Tools shows outcomes, sizes, spans, total latency, and
+aggregate stage timings. It is diagnostic evidence, not a scheduler or budget
+enforcement mechanism.
 
 ## Current snapshot
 
@@ -68,6 +76,7 @@ discard compiled regex pointers without `onig_free`.
 | Highlighter ownership | Android singleton with serialized calls; iOS process-wide lazy instance without highlighter-wide serialization |
 | Bounded document caches | 32 prepared documents + 32 block decorations per platform |
 | Compiled regex lifetime | Android process-wide concurrent map; iOS unbounded thread-local native-pointer maps |
+| Persisted diagnostics | Developer-only native JSONL logbook; newest 500 actual finalized fence attempts |
 
 ## 1. End-to-end runtime pipeline
 
@@ -764,13 +773,42 @@ flowchart TD
 - grammar bundle load diagnostics are retained on `TextMateGrammarBundle` but
   are not promoted into `MarkdownDocument.diagnostics`;
 - a regex that cannot compile is cached as failed and treated as no match,
-  without a per-pattern diagnostic;
+  without recording its content-bearing pattern;
 - a known language whose grammar fails to load still appears supported because
   support checks the manifest;
 - partial grammar behavior can therefore degrade into generic fallback without
   identifying the missing resource or failed expression in the render tree.
 
-This keeps the user experience resilient but limits field diagnosis.
+### Persisted developer logbook
+
+```mermaid
+flowchart LR
+    A["Final, TextMate-enabled<br/>fence cache miss"] --> B["Request-local<br/>metrics accumulator"]
+    B --> C["Observed parse envelope"]
+    C --> D["Non-blocking native submit"]
+    D --> E["Serial JSONL writer"]
+    E --> F["Developer Tools<br/>summary + details"]
+    G["Streaming / disabled /<br/>document cache hit"] --> H["No entry"]
+```
+
+One entry represents one actual fence attempt, not one message render or UI
+frame. It stores the timestamp, requested and canonical language, UTF-16 message
+and fence character counts, fence lines and position, outcome, backend, final
+span count, total measured duration, aggregate stage counts/totals/maximums,
+and diagnostic kinds. Nested stage totals can overlap, so they must not be
+summed to reconstruct total latency.
+
+The journal intentionally excludes source text, app identity, session/message
+or fence IDs, file paths, regex patterns, grammar payloads, and diagnostic
+messages. Android and iOS each serialize writes off the UI thread, bound the
+pending queue to 64 batches, retain the newest 500 entries, compact after 550
+entries or 2 MiB, ignore corrupt records on read, and expose dropped-entry and
+storage-error health. Clear is available on the screen and through Clear All
+Data.
+
+This keeps rendering resilient while making aggregate runtime degradation
+durable and inspectable. Detailed content-bearing regex or grammar failures
+remain intentionally quiet.
 
 ## 12. Correctness evidence
 
@@ -819,8 +857,8 @@ evidence that Joni/libonig are absent.
    risk requiring verification, not a reported crash.
 4. **There is no tokenizer time budget or cancellation check.** Once a
    synchronous fence parse begins, cancellation cannot interrupt the tokenizer.
-5. **iOS decomposition probes leak compiled native regex allocations.** The
-   returned pointer is discarded without `onig_free`.
+5. **Physical-device release calibration is still pending.** Simulator and host
+   measurements are diagnostic and cannot establish mobile guardrails.
 
 ### Medium priority
 
@@ -828,14 +866,15 @@ evidence that Joni/libonig are absent.
    TextMate theme specificity, font styles, or embedded-language metadata.
 7. **Language repair passes obscure engine fidelity.** A green visible sample
    may be partly grammar-driven and partly heuristic.
-8. **Grammar and regex failures are under-observed at runtime.**
+8. **Grammar and regex failures are only aggregate-observed at runtime.** The
+   logbook deliberately omits content-bearing patterns and diagnostic messages.
 9. **No cross-revision incremental tokenization exists.**
 10. **Diff performs avoidable highlighter work before using line-level roles.**
 11. **Compiled-regex and resolved-rule caches are unbounded and have no
     memory-pressure clearing contract.**
 12. **A new UTF-8 index map is allocated for every regex search**, multiplying
     transient allocation by rule and cursor count.
-13. **The iOS attributed-code cache omits palette/epoch from its key.**
+13. **The logbook measures but does not enforce budgets or cancellation.**
 
 ### Operational
 
@@ -847,23 +886,19 @@ evidence that Joni/libonig are absent.
 
 ## 15. Recommended next steps
 
-No code change was made as part of this report. If the architecture is advanced,
-the most valuable sequence is:
+Phase 1 lifetime safety, request-scoped metrics, and the developer logbook are
+implemented. The most valuable remaining sequence is:
 
-1. add an iOS concurrency stress test around parallel first-use grammar loading
-   and tokenization, then put the highlighter behind an actor/serial executor or
-   make its caches immutable;
-2. introduce explicit libonig pointer ownership: cache entries must dispose via
-   `onig_free`, decomposition probes must not leak, and tests should verify
-   release behavior;
+1. complete physical-device release calibration and soak on the frozen fixture;
+2. put the highlighter behind the proposed single-owner asynchronous engine;
 3. reuse a per-line UTF-8 search buffer/index map instead of rebuilding it for
    every regex search;
 4. give grammar, resolved-rule, and compiled-regex caches observable counts,
    weighted budgets, and memory-pressure clearing behavior;
-5. include palette/highlight epoch in the iOS attributed-code cache key and
-   expose an explicit clear path;
-6. add structured runtime diagnostics for manifest/grammar load failure and
-   regex compile failure counts;
+5. turn the logbook evidence into explicit per-language release guardrails and
+   versioned promotion decisions;
+6. add aggregate grammar-load and regex-compile failure classification without
+   persisting source-derived patterns or messages;
 7. remove the redundant generic highlighter call for diff/patch projection;
 8. introduce a per-fence time/cancellation budget before enabling TextMate by
    default;

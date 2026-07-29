@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.theme.ThemeManager
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -34,6 +35,7 @@ class SettingsViewModel
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val messageRepository: MessageRepository,
         private val messageContentPreparer: MessageContentPreparer,
+        private val textMateLogbook: TextMateLogbook,
     ) : ViewModel() {
         fun clearAllData() {
             viewModelScope.launch {
@@ -49,6 +51,7 @@ class SettingsViewModel
                 MarkdownHighlightPreferences.clear()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
+                textMateLogbook.clear()
             }
         }
 

@@ -540,6 +540,9 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                         CodeSpan(13, 15, CodeTokenRole.Number),
                     ),
                 diagnostics = emptyList(),
+                source = SyntaxHighlightSource.TextMate,
+                canonicalLanguage = "kotlin",
+                textMateOutcome = TextMateParseOutcome.Highlighted,
             ),
             highlighter.highlight("kt", "val answer = 42"),
         )

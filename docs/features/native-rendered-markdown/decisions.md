@@ -1,5 +1,31 @@
 # Native Rendered Markdown Decisions
 
+## TextMate Logbook Is Request-Scoped, Bounded, And Content-Free
+
+- Decision: an observed parser envelope may return one
+  `TextMateParseObservation` for each actual finalized fence attempt while the
+  existing document-only parser remains available. The observation is built
+  from a request-local metrics accumulator passed explicitly through grammar
+  lookup and tokenization; there is no global or thread-local "current parse."
+- Decision: observations may contain timestamp, requested/canonical language,
+  UTF-16 character and line counts, fence position, outcome, backend, span
+  count, total duration, aggregate stage timings, and diagnostic kinds. They
+  must not contain Markdown/code source, session/message/block/fence identity,
+  file paths, diagnostic messages, regex patterns, or grammar payloads.
+- Decision: each native app owns a serial JSONL journal outside the shared
+  parser. Submission is non-blocking and bounded to 64 pending batches; storage
+  retains the newest 500 entries and compacts after 550 entries or 2 MiB.
+  Corrupt records are ignored. Queue overflow and I/O failure never block or
+  fail rendering and are surfaced as logbook health metadata.
+- Decision: the logbook is a Developer Tools surface, persists across launches,
+  has an explicit confirmed clear action, and participates in Clear All Data.
+  Streaming, disabled TextMate, and prepared-document cache hits create no
+  entries because no TextMate fence attempt occurred.
+- Reason: the pipeline needs durable field evidence without putting disk I/O,
+  mutable telemetry context, high-cardinality identity, or user content on the
+  rendering critical path.
+- Date: 2026-07-29.
+
 ## TextMate Pipeline Uses One Asynchronous, Single-Owner Engine
 
 - Decision: structural Markdown first produces a complete plain or

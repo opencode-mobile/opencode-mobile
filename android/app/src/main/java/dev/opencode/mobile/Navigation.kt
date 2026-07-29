@@ -76,6 +76,8 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
+import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
+import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 
 @Composable
 fun MainNavigation() {
@@ -139,6 +141,7 @@ fun MainNavigation() {
                                         RouteSurface {
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
+                                                onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onConnectionSetup = {
                                                     setupViewModel.configureFromCurrentProfile()
@@ -152,6 +155,18 @@ fun MainNavigation() {
                                                     settingsViewModel::setShowSessionListOnHome,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
+                                            )
+                                        }
+                                    }
+                                    entry<TextMateLogbookHome> {
+                                        RouteSurface {
+                                            val logbookViewModel: TextMateLogbookViewModel = hiltViewModel()
+                                            val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
+                                            TextMateLogbookScreen(
+                                                state = logbookState,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onRefresh = logbookViewModel::refresh,
+                                                onClear = logbookViewModel::clear,
                                             )
                                         }
                                     }

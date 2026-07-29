@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.markdown.MarkdownBlock
@@ -8,6 +9,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
 import dev.opencode.mobile.markdown.SyntaxHighlightResult
+import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -294,6 +296,42 @@ class MessageContentPreparerTest {
         }
 
     @Test
+    fun finalTextMateCacheMissLogsOnceWhileStreamingAndCacheHitsStayQuiet() =
+        runTest(testDispatcher) {
+            val prior = MarkdownHighlightPreferences.textMateEnabled
+            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            try {
+                val logbook = RecordingLogbook()
+                val preparer =
+                    MessageContentPreparer(RecordingHighlighter(), logbook).apply {
+                        computationDispatcher = testDispatcher
+                    }
+                val markdown = "```kotlin\nval answer = 42\n```"
+                val streaming =
+                    Message(
+                        id = "m1",
+                        role = MessageRole.Assistant,
+                        text = markdown,
+                        parts = listOf(MessagePart.Text(text = markdown, isStreaming = true)),
+                    )
+                val final = Message(id = "m1", role = MessageRole.Assistant, text = markdown)
+
+                preparer.prepareMessage(streaming)
+                assertTrue(logbook.observations.isEmpty())
+
+                preparer.prepareMessage(final)
+                preparer.prepareMessage(final)
+
+                assertEquals(1, logbook.observations.size)
+                assertEquals("kotlin", logbook.observations.single().requestedLanguage)
+                assertEquals(markdown.length, logbook.observations.single().messageCharacters)
+                assertEquals("val answer = 42".length, logbook.observations.single().fenceCharacters)
+            } finally {
+                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            }
+        }
+
+    @Test
     fun prepareMessagesUsesCacheForRepeatedSnapshots() =
         runTest(testDispatcher) {
             val preparer = createPreparer()
@@ -365,6 +403,14 @@ class MessageContentPreparerTest {
                 spans = listOf(CodeSpan(0, code.length, CodeTokenRole.Keyword)),
                 diagnostics = emptyList(),
             )
+        }
+    }
+
+    private class RecordingLogbook : TextMateLogbookRecorder {
+        val observations = mutableListOf<TextMateParseObservation>()
+
+        override fun submit(observations: List<TextMateParseObservation>) {
+            this.observations += observations
         }
     }
 

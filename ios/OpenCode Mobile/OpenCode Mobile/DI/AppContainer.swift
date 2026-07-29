@@ -400,6 +400,7 @@ extension Container {
             MarkdownHighlightPreferences.shared.clear()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
+            await TextMateLogbook.shared.clear()
         }
     }
 }

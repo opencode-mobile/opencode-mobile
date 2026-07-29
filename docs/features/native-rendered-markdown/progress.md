@@ -3,6 +3,20 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Added a persisted developer-only TextMate parsing logbook on
+  Android and iOS. Each actual finalized code-fence attempt records a
+  content-free, request-local observation with timestamp, requested/canonical
+  language, UTF-16 message and fence character counts, line and fence position,
+  outcome, backend, final span count, total duration, per-stage
+  count/total/maximum timings, and diagnostic kinds. Streaming, disabled
+  TextMate, and prepared-document cache hits do not create entries. Native
+  JSONL stores write off the UI thread, bound submission to 64 pending batches,
+  retain the newest 500 entries, compact at 550 entries or 2 MiB, recover valid
+  records around corrupt lines, expose dropped/write-error health, and clear
+  independently or through Clear All Data. Both Developer Tools screens expose
+  refresh, expandable details, and confirmed clear. Shared Android/iOS suites,
+  focused Android preparer/store tests, and 3 focused iOS bridge/store tests
+  pass.
 - 2026-07-29: Resolved the iOS semantic-fallback crash found during Phase 1
   simulator replay. A long unterminated quoted string drove Kotlin/Native's
   combined fallback `Regex.findAll` into 1,216 recursive frames and a stack-

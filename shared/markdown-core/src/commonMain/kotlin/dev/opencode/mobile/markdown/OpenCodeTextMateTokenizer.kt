@@ -140,11 +140,15 @@ data class TextMateLinesTokenizationResult(
     val diagnostics: List<MarkdownDiagnostic>,
 )
 
-class OpenCodeTextMateNativeTokenizer(
+class OpenCodeTextMateNativeTokenizer private constructor(
     private val regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
     private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    private val sharedState: SharedState,
 ) : OpenCodeTextMateTokenizer {
-    private val resolvedRulesCache = mutableMapOf<ResolvedRulesCacheKey, List<ResolvedTextMateRule>>()
+    constructor(
+        regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    ) : this(regexBackend, metricsSink, SharedState())
 
     override fun tokenize(
         grammar: TextMateGrammarPayload,
@@ -184,6 +188,18 @@ class OpenCodeTextMateNativeTokenizer(
             }
         }
     }
+
+    override fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateTokenizationResult =
+        OpenCodeTextMateNativeTokenizer(
+            regexBackend = regexBackend,
+            metricsSink = metricsSink,
+            sharedState = sharedState,
+        ).tokenize(grammar, code, grammarBundle)
 
     fun tokenizeLines(
         grammar: TextMateGrammarPayload,
@@ -678,7 +694,7 @@ class OpenCodeTextMateNativeTokenizer(
                 baseGrammarScope = baseGrammar.scopeName,
                 baseScopes = baseScopes,
             )
-        resolvedRulesCache[cacheKey]?.let { cached ->
+        sharedState.resolvedRulesCache[cacheKey]?.let { cached ->
             metricsSink.record(
                 TextMateMetricEvent(
                     stage = TextMateMetricStage.RuleResolve,
@@ -741,7 +757,7 @@ class OpenCodeTextMateNativeTokenizer(
             addPatterns(grammar, listOf(injection), activeIncludes, emptyList())
         }
         return rules.also {
-            resolvedRulesCache[cacheKey] = it
+            sharedState.resolvedRulesCache[cacheKey] = it
             metricsSink.record(
                 TextMateMetricEvent(
                     stage = TextMateMetricStage.RuleResolve,
@@ -1077,7 +1093,7 @@ class OpenCodeTextMateNativeTokenizer(
                     )
                 }
             else ->
-                grammarBundle?.grammarForScope(include)?.let { payload ->
+                grammarBundle?.grammarForScope(include, metricsSink)?.let { payload ->
                     IncludedTextMatePattern(
                         grammar = payload.grammar,
                         pattern = TextMatePattern(patterns = payload.grammar.patterns),
@@ -1363,6 +1379,10 @@ class OpenCodeTextMateNativeTokenizer(
         val baseGrammarScope: String,
         val baseScopes: List<String>,
     )
+
+    private class SharedState {
+        val resolvedRulesCache = mutableMapOf<ResolvedRulesCacheKey, List<ResolvedTextMateRule>>()
+    }
 
     private data class ResolvedTextMateRule(
         val grammar: TextMateGrammar,

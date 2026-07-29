@@ -23,6 +23,7 @@ struct SettingsView: View {
     let onConnectionSetup: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
+    @State private var showTextMateLogbook = false
     @State private var showClearConfirmation = false
     @State private var showThemePicker = false
     @State private var showThemeImporter = false
@@ -145,6 +146,15 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
+                        title: "TextMate Logbook",
+                        subtitle: "Persisted code-fence parsing measurements",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
+                        action: { showTextMateLogbook = true }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Clear All Data",
                         subtitle: "Remove connection, cache, and imported themes",
                         style: .card,
@@ -160,6 +170,9 @@ struct SettingsView: View {
         .background(OpenCodeColors.backgroundBase)
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
+        }
+        .navigationDestination(isPresented: $showTextMateLogbook) {
+            TextMateLogbookView()
         }
         .openCodeBottomSheet(
             isPresented: $showThemePicker,

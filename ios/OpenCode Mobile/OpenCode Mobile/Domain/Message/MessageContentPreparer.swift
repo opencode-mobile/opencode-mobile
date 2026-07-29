@@ -91,8 +91,11 @@ final class MessageContentPreparer: @unchecked Sendable {
     nonisolated static let historyEnrichViewportCharacterBudget = 12_000
 
     nonisolated private let documentCache = MessageMarkdownDocumentCache(maxEntries: 32)
+    nonisolated private let textMateLogbook: any TextMateLogbookRecording
 
-    init() {}
+    nonisolated init(textMateLogbook: any TextMateLogbookRecording = TextMateLogbook.shared) {
+        self.textMateLogbook = textMateLogbook
+    }
 
     nonisolated func clearDocumentCache() {
         documentCache.clear()
@@ -107,7 +110,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         let highlightEpoch = MarkdownHighlightPreferences.currentEpoch()
         // Match Android `Dispatchers.Default`: one worker hop for the batch,
         // not a MainActor round-trip between every message.
-        return await Task.detached(priority: .userInitiated) { [documentCache] in
+        return await Task.detached(priority: .userInitiated) { [documentCache, textMateLogbook] in
             let startedAt = Date()
             var prepared: [DisplayMessage] = []
             prepared.reserveCapacity(messages.count)
@@ -122,6 +125,7 @@ final class MessageContentPreparer: @unchecked Sendable {
                     mode: mode,
                     sessionKey: "",
                     documentCache: documentCache,
+                    textMateLogbook: textMateLogbook,
                     textMateEnabled: textMateEnabled,
                     highlightEpoch: highlightEpoch
                 )
@@ -165,13 +169,14 @@ final class MessageContentPreparer: @unchecked Sendable {
     ) async -> DisplayMessage {
         let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
         let highlightEpoch = MarkdownHighlightPreferences.currentEpoch()
-        return await Task.detached(priority: .userInitiated) { [documentCache] in
+        return await Task.detached(priority: .userInitiated) { [documentCache, textMateLogbook] in
             Self.prepareMessageOnWorker(
                 message,
                 previous: previous,
                 mode: mode,
                 sessionKey: "",
                 documentCache: documentCache,
+                textMateLogbook: textMateLogbook,
                 textMateEnabled: textMateEnabled,
                 highlightEpoch: highlightEpoch
             )
@@ -187,7 +192,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         mode: MessagePreparationMode = .final
     ) async -> NativeMarkdownDocument? {
         let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
-        return await Task.detached(priority: .userInitiated) { [documentCache] in
+        return await Task.detached(priority: .userInitiated) { [documentCache, textMateLogbook] in
             if mode == .streaming,
                plain.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
             {
@@ -202,7 +207,8 @@ final class MessageContentPreparer: @unchecked Sendable {
                 text: plain,
                 isStreaming: isStreaming,
                 textMateEnabled: textMateEnabled,
-                documentCache: documentCache
+                documentCache: documentCache,
+                textMateLogbook: textMateLogbook
             )
         }.value
     }
@@ -213,6 +219,7 @@ final class MessageContentPreparer: @unchecked Sendable {
         mode: MessagePreparationMode,
         sessionKey: String,
         documentCache: MessageMarkdownDocumentCache,
+        textMateLogbook: any TextMateLogbookRecording,
         textMateEnabled: Bool,
         highlightEpoch: Int
     ) -> DisplayMessage {
@@ -275,7 +282,8 @@ final class MessageContentPreparer: @unchecked Sendable {
                 text: message.text,
                 isStreaming: isStreaming,
                 textMateEnabled: textMateEnabled,
-                documentCache: documentCache
+                documentCache: documentCache,
+                textMateLogbook: textMateLogbook
             )
         }
         let awaitingTextMateUpgrade: Bool
@@ -316,7 +324,8 @@ final class MessageContentPreparer: @unchecked Sendable {
         text: String,
         isStreaming: Bool,
         textMateEnabled: Bool,
-        documentCache: MessageMarkdownDocumentCache
+        documentCache: MessageMarkdownDocumentCache,
+        textMateLogbook: any TextMateLogbookRecording
     ) -> NativeMarkdownDocument? {
         parseDocument(
             sessionKey: sessionKey,
@@ -324,7 +333,8 @@ final class MessageContentPreparer: @unchecked Sendable {
             text: text,
             isStreaming: isStreaming,
             textMateEnabled: textMateEnabled,
-            documentCache: documentCache
+            documentCache: documentCache,
+            textMateLogbook: textMateLogbook
         )
     }
 
@@ -334,7 +344,8 @@ final class MessageContentPreparer: @unchecked Sendable {
         text: String,
         isStreaming: Bool,
         textMateEnabled: Bool,
-        documentCache: MessageMarkdownDocumentCache
+        documentCache: MessageMarkdownDocumentCache,
+        textMateLogbook: any TextMateLogbookRecording
     ) -> NativeMarkdownDocument? {
         guard OpenCodeRenderedMarkdownDetector.shouldRender(text) else {
             return nil
@@ -350,12 +361,23 @@ final class MessageContentPreparer: @unchecked Sendable {
         )
         if let cached = documentCache.value(for: cacheKey) { return cached }
 
-        let parsed = OpenCodeRenderedMarkdownParser.parse(
-            text,
-            isStreaming: isStreaming,
-            textMateEnabled: textMateEnabled
-        )
-        return documentCache.insertIfAbsent(parsed, for: cacheKey)
+        let document: NativeMarkdownDocument
+        if textMateEnabled && !isStreaming {
+            let parsed = OpenCodeRenderedMarkdownParser.parseObserved(
+                text,
+                isStreaming: false,
+                textMateEnabled: true
+            )
+            textMateLogbook.submit(parsed.textMateObservations)
+            document = parsed.document
+        } else {
+            document = OpenCodeRenderedMarkdownParser.parse(
+                text,
+                isStreaming: isStreaming,
+                textMateEnabled: textMateEnabled
+            )
+        }
+        return documentCache.insertIfAbsent(document, for: cacheKey)
     }
 
     nonisolated private static func reusableDocument(
