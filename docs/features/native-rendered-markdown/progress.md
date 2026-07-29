@@ -3,6 +3,15 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Closed TextMate pipeline Phase 4. Shared immutable
+  `TextMateGrammarProgram` compiles on first grammar load with process-local
+  IDs and drops raw JSON from hot caches. Job-local
+  `PreparedTextMateLineBuffer` reuses one UTF-8 index map per line across Joni
+  and libonig searches. `TextMateWeightedCacheCoordinator` owns grammar / rule
+  / regex weights with lease-safe Critical trim; iOS uses `OwnedOnigRegex`
+  leases. Phase 4 reuse and lease unit tests plus Joni golden/oracle suites
+  pass; iOS simulator KMP compiles. Phase 5 is next and owns incremental
+  unchanged-prefix reuse.
 - 2026-07-29: Closed TextMate pipeline Phase 3. Shared pure
   `TextMateRequestScheduler` owns priority, latest-wins coalescing, work
   limits, interactive deadlines, trim/low-power admission, and queue metrics.
@@ -10,8 +19,8 @@
   Observations record queue wait, cancel-to-stop, and scheduling reason without
   content identity. FinalPlaceholder and streaming plain/fallback publication
   stay independent of a blocked highlighter. Shared scheduler tests and Android
-  owner/coalesce/gate tests pass. Phase 4 is next and owns compiled programs,
-  prepared line buffers, and weighted caches.
+  owner/coalesce/gate tests pass. Phase 4 compiled-program work is recorded
+  above.
 - 2026-07-29: Closed TextMate pipeline Phase 2. Shared
   `TextMateHighlightingEngine` now upgrades individual finalized fences after
   structural parsing has produced a complete semantic-fallback document. The
@@ -92,7 +101,7 @@
   [decisions](./decisions.md): a deep asynchronous post-parse engine, one
   instance-owned serial KMP runtime per platform, pooled 24 MiB eviction /
   32 MiB admission guardrails, evidence-owned provisional latency targets, and
-  a versioned language promotion allowlist. Phases 1–3 are now closed;
+  a versioned language promotion allowlist. Phases 1–4 are now closed;
   Phase 4 is next.
 - 2026-07-29: Completed a software-architect review and separated the selected
   [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md)

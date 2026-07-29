@@ -16,6 +16,23 @@ interface OpenCodeTextMateRegexBackend {
         endIndex: Int = input.length,
         contiguousAnchor: Int? = null,
         metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    ): TextMateRegexMatch? =
+        find(
+            pattern = pattern,
+            buffer = PreparedTextMateLineBuffer.prepare(input, metricsSink),
+            startIndex = startIndex,
+            endIndex = endIndex,
+            contiguousAnchor = contiguousAnchor,
+            metricsSink = metricsSink,
+        )
+
+    fun find(
+        pattern: String,
+        buffer: PreparedTextMateLineBuffer,
+        startIndex: Int,
+        endIndex: Int = buffer.length,
+        contiguousAnchor: Int? = null,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch?
 }
 
@@ -69,12 +86,13 @@ object KotlinRegexTextMateRegexBackend : OpenCodeTextMateRegexBackend {
 
     override fun find(
         pattern: String,
-        input: String,
+        buffer: PreparedTextMateLineBuffer,
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
         metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
+        val input = buffer.source
         val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
         val effectivePattern =
             OpenCodeTextMateRegexContiguousAnchorSupport.effectivePattern(
@@ -145,11 +163,23 @@ class OpenCodeTextMateNativeTokenizer private constructor(
     private val regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
     private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     private val sharedState: SharedState,
-) : OpenCodeTextMateTokenizer {
+    private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+) : OpenCodeTextMateTokenizer,
+    TextMateCacheTrimmable {
     constructor(
         regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
         metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
-    ) : this(regexBackend, metricsSink, SharedState())
+        cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+    ) : this(regexBackend, metricsSink, SharedState(cacheCoordinator), cacheCoordinator)
+
+    // Job-local prepared buffers for the active physical line.
+    private var activeLineBuffer: PreparedTextMateLineBuffer? = null
+    private var activeBoundaryBuffer: PreparedTextMateLineBuffer? = null
+
+    override fun trimCaches(level: MemoryPressure) {
+        sharedState.trimCaches(level)
+        (regexBackend as? TextMateCacheTrimmable)?.trimCaches(level)
+    }
 
     override fun tokenize(
         grammar: TextMateGrammarPayload,
@@ -167,6 +197,7 @@ class OpenCodeTextMateNativeTokenizer private constructor(
             regexBackend = regexBackend,
             metricsSink = metricsSink,
             sharedState = sharedState,
+            cacheCoordinator = cacheCoordinator,
         ).tokenize(grammar, code, grammarBundle)
 
     override fun tokenize(
@@ -278,6 +309,38 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         lineOffset: Int = 0,
         initialState: TextMateLineState = TextMateLineState.Initial,
         boundarySuffix: String = "\n",
+    ): TextMateLineTokenizationResult {
+        val previousLine = activeLineBuffer
+        val previousBoundary = activeBoundaryBuffer
+        activeLineBuffer = PreparedTextMateLineBuffer.prepare(line, metricsSink)
+        activeBoundaryBuffer =
+            if (boundarySuffix.isEmpty()) {
+                null
+            } else {
+                PreparedTextMateLineBuffer.prepare(line + boundarySuffix, metricsSink)
+            }
+        try {
+            return tokenizeLineWithActiveBuffers(
+                grammar = grammar,
+                line = line,
+                grammarBundle = grammarBundle,
+                lineOffset = lineOffset,
+                initialState = initialState,
+                boundarySuffix = boundarySuffix,
+            )
+        } finally {
+            activeLineBuffer = previousLine
+            activeBoundaryBuffer = previousBoundary
+        }
+    }
+
+    private fun tokenizeLineWithActiveBuffers(
+        grammar: TextMateGrammarPayload,
+        line: String,
+        grammarBundle: TextMateGrammarBundle?,
+        lineOffset: Int,
+        initialState: TextMateLineState,
+        boundarySuffix: String,
     ): TextMateLineTokenizationResult {
         val tokens = mutableListOf<TextMateScopeToken>()
         val lineEnd = lineOffset + line.length
@@ -499,7 +562,15 @@ class OpenCodeTextMateNativeTokenizer private constructor(
                         if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
                             return@mapNotNull null
                         }
-                        rule.findNext(code, cursor, endIndex, regexBackend, metricsSink, contiguousAnchor)
+                        rule.findNext(
+                            code,
+                            cursor,
+                            endIndex,
+                            regexBackend,
+                            metricsSink,
+                            contiguousAnchor,
+                            bufferFor(code),
+                        )
                     }
                     .minWithOrNull(
                         compareBy<TextMateRuleMatch> { it.match.start }
@@ -708,8 +779,12 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         baseGrammar: TextMateGrammar,
         baseScopes: List<String>,
     ): List<ResolvedTextMateRule> {
+        val grammarId =
+            grammarBundle?.grammars?.firstOrNull { it.scopeName == grammar.scopeName }?.grammarId?.value
+                ?: grammar.scopeName.hashCode()
         val cacheKey =
             ResolvedRulesCacheKey(
+                grammarId = grammarId,
                 grammarScope = grammar.scopeName,
                 patternsSignature = patternsSignature(patterns),
                 activeIncludes = activeIncludes,
@@ -717,6 +792,7 @@ class OpenCodeTextMateNativeTokenizer private constructor(
                 baseScopes = baseScopes,
             )
         sharedState.resolvedRulesCache[cacheKey]?.let { cached ->
+            sharedState.touchRulePlan(cacheKey)
             metricsSink.record(
                 TextMateMetricEvent(
                     stage = TextMateMetricStage.RuleResolve,
@@ -780,6 +856,10 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         }
         return rules.also {
             sharedState.resolvedRulesCache[cacheKey] = it
+            sharedState.rememberRulePlan(
+                key = cacheKey,
+                estimatedBytes = 64L + it.size * 48L + cacheKey.patternsSignature.length * 2L,
+            )
             metricsSink.record(
                 TextMateMetricEvent(
                     stage = TextMateMetricStage.RuleResolve,
@@ -916,7 +996,15 @@ class OpenCodeTextMateNativeTokenizer private constructor(
                         if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
                             return@mapNotNull null
                         }
-                        rule.findNext(code, cursor, endIndex, regexBackend, metricsSink, contiguousAnchor)
+                        rule.findNext(
+                            code,
+                            cursor,
+                            endIndex,
+                            regexBackend,
+                            metricsSink,
+                            contiguousAnchor,
+                            bufferFor(code),
+                        )
                     }
                     .minWithOrNull(
                         compareBy<TextMateRuleMatch> { it.match.start }
@@ -1040,7 +1128,7 @@ class OpenCodeTextMateNativeTokenizer private constructor(
             return measuredRegexFind(endPattern, code, startIndex, endIndex)
         }
 
-        val scopedInput = code + boundarySuffix
+        val scopedInput = activeBoundaryBuffer?.source ?: (code + boundarySuffix)
         val searchEnd = endIndex + boundarySuffix.length
         val match =
             measuredRegexFind(
@@ -1358,10 +1446,11 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         endIndex: Int = input.length,
         contiguousAnchor: Int? = null,
     ): TextMateRegexMatch? {
+        val buffer = bufferFor(input)
         if (!metricsSink.isEnabled) {
             return regexBackend.find(
                 pattern = pattern,
-                input = input,
+                buffer = buffer,
                 startIndex = startIndex,
                 endIndex = endIndex,
                 contiguousAnchor = contiguousAnchor,
@@ -1373,7 +1462,7 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         return try {
             regexBackend.find(
                 pattern = pattern,
-                input = input,
+                buffer = buffer,
                 startIndex = startIndex,
                 endIndex = endIndex,
                 contiguousAnchor = contiguousAnchor,
@@ -1394,7 +1483,14 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         }
     }
 
+    private fun bufferFor(input: String): PreparedTextMateLineBuffer {
+        activeLineBuffer?.takeIf { it.source == input }?.let { return it }
+        activeBoundaryBuffer?.takeIf { it.source == input }?.let { return it }
+        return PreparedTextMateLineBuffer.prepare(input, metricsSink)
+    }
+
     private data class ResolvedRulesCacheKey(
+        val grammarId: Int,
         val grammarScope: String,
         val patternsSignature: String,
         val activeIncludes: Set<String>,
@@ -1402,8 +1498,43 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         val baseScopes: List<String>,
     )
 
-    private class SharedState {
+    private class SharedState(
+        private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+    ) {
         val resolvedRulesCache = mutableMapOf<ResolvedRulesCacheKey, List<ResolvedTextMateRule>>()
+
+        fun trimCaches(level: MemoryPressure) {
+            when (level) {
+                MemoryPressure.Normal -> Unit
+                MemoryPressure.Moderate,
+                MemoryPressure.Critical,
+                -> {
+                    resolvedRulesCache.keys.toList().forEach { key ->
+                        cacheCoordinator.removeIfUnleased(rulePlanCacheKey(key))
+                    }
+                    resolvedRulesCache.clear()
+                    cacheCoordinator.trim(level)
+                }
+            }
+        }
+
+        fun rememberRulePlan(
+            key: ResolvedRulesCacheKey,
+            estimatedBytes: Long,
+        ) {
+            cacheCoordinator.promote(
+                key = rulePlanCacheKey(key),
+                category = TextMateWeightedCacheCoordinator.Category.RulePlan,
+                estimatedBytes = estimatedBytes,
+            )
+        }
+
+        fun touchRulePlan(key: ResolvedRulesCacheKey) {
+            cacheCoordinator.touch(rulePlanCacheKey(key))
+        }
+
+        private fun rulePlanCacheKey(key: ResolvedRulesCacheKey): String =
+            "rules:${key.grammarId}:${key.patternsSignature}:${key.activeIncludes.hashCode()}:${key.baseScopes.hashCode()}"
     }
 
     private data class ResolvedTextMateRule(
@@ -1419,13 +1550,14 @@ class OpenCodeTextMateNativeTokenizer private constructor(
             regexBackend: OpenCodeTextMateRegexBackend,
             metricsSink: OpenCodeTextMateMetricsSink,
             contiguousAnchor: Int,
+            buffer: PreparedTextMateLineBuffer,
         ): TextMateRuleMatch? {
             val patternText = pattern.match ?: pattern.begin ?: return null
             if (!metricsSink.isEnabled) {
                 val match =
                     regexBackend.find(
                         pattern = patternText,
-                        input = code,
+                        buffer = buffer,
                         startIndex = startIndex,
                         endIndex = endIndex,
                         contiguousAnchor = contiguousAnchor,
@@ -1439,7 +1571,7 @@ class OpenCodeTextMateNativeTokenizer private constructor(
                 try {
                     regexBackend.find(
                         pattern = patternText,
-                        input = code,
+                        buffer = buffer,
                         startIndex = startIndex,
                         endIndex = endIndex,
                         contiguousAnchor = contiguousAnchor,

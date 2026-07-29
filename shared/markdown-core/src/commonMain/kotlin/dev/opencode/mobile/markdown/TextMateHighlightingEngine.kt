@@ -121,6 +121,14 @@ class OpenCodeTextMateHighlightingEngine(
         trimNow(level)
     }
 
+    fun trimNow(level: MemoryPressure) {
+        when (highlighter) {
+            is OpenCodeSyntaxHighlighter -> highlighter.trimCaches(level)
+            is TextMateCacheTrimmable -> highlighter.trimCaches(level)
+            else -> Unit
+        }
+    }
+
     fun highlightNow(
         request: HighlightRequest,
         shouldCancel: () -> Boolean = { false },

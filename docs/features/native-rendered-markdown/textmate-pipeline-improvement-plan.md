@@ -1,6 +1,6 @@
 # TextMate Pipeline Implementation Plan
 
-**Status:** architecture locked; Phases 1–3 closed; Phase 4 next;
+**Status:** architecture locked; Phases 1–4 closed; Phase 5 next;
 physical-device release calibration remains in Phase 6
 **Date:** 2026-07-29
 **Scope:** reusable fenced-code highlighting in `shared/markdown-core`, including
@@ -610,6 +610,20 @@ work; all production and test entry points use an injected engine instance.
 - introduce weighted grammar/rule/regex caches and owned libonig leases.
 
 **Gate:** exact oracles pass; allocation/search metrics show the intended reuse.
+
+#### Phase 4 closure evidence — 2026-07-29
+
+- Added immutable `TextMateGrammarProgram` / `TextMateRulePlan` with
+  process-local `GrammarId`/`RuleId`; raw JSON is dropped after typed compile.
+- Job-local `PreparedTextMateLineBuffer` reuses one `Utf8IndexMap` per line;
+  Joni and libonig search prepared bytes without per-search re-encode.
+- `TextMateWeightedCacheCoordinator` weights grammar/rule/regex caches under
+  24/32 MiB budgets; Critical trim skips leased entries. iOS
+  `OwnedOnigRegex` leases wrap `onig_search`.
+- Verification: Phase 4 reuse/lease/program unit tests; Joni golden and
+  bundled highlighter suites; iOS simulator KMP compile.
+
+**Gate result:** closed. Phase 5 is the next phase.
 
 ### Phase 5 — Incremental reuse
 

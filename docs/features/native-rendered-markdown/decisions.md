@@ -1,5 +1,28 @@
 # Native Rendered Markdown Decisions
 
+## Phase 4 Compiled Programs, Prepared Buffers, And Weighted Caches
+
+- Decision: compile immutable `TextMateGrammarProgram` / `TextMateRulePlan` on
+  first successful grammar load with process-local `GrammarId`/`RuleId` values
+  assigned by DFS. Drop raw grammar JSON from the retained payload after typed
+  compile.
+- Decision: introduce job-local `PreparedTextMateLineBuffer` (one UTF-8 index
+  map per physical or boundary-augmented line). Joni and libonig search the
+  prepared bytes/index map and must not re-encode per search. Metrics stages
+  `PreparedLineBuffer` and `Utf8IndexMap` prove reuse.
+- Decision: `TextMateWeightedCacheCoordinator` weights grammar programs, rule
+  plans, and compiled regexes under the Phase 1 24 MiB eviction / 32 MiB
+  admission envelope. Leased or pinned entries are never disposed. iOS wraps
+  compiled regexes in `OwnedOnigRegex` with lease/release around `onig_search`;
+  Android pins in-use Joni entries equivalently without native free accounting.
+- Decision: Phase 4 gate is exact top-ten / golden oracle green plus unit proof
+  that maps built equal prepared buffers and are far fewer than regex searches,
+  plus Critical trim skipping leased entries.
+- Reason: triage locked the smallest wrap-and-refactor that satisfies the Phase
+  4 gate without pulling Phase 5 incremental reuse or Phase 6 device
+  calibration into this slice.
+- Date: 2026-07-29.
+
 ## Phase 3 Scheduler Policy And Platform Drivers
 
 - Decision: Phase 3 implements a shared pure `TextMateRequestScheduler` in
@@ -136,13 +159,14 @@
   3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
   Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
   diagnostic reference values, not release guardrails.
-- Implementation gate: Phases 1–3 are closed. The shared engine owns the
+- Implementation gate: Phases 1–4 are closed. The shared engine owns the
   fence-level asynchronous request/result contract plus priority scheduling,
-  latest-wins coalescing, admission limits, Phase 3 trim, and queue metrics.
+  latest-wins coalescing, admission limits, trim, queue metrics, compiled
+  grammar programs, prepared line buffers, and weighted lease-safe caches.
   Android and iOS remain serial owners that drive one active job. Shared
-  scheduler tests, Android owner/coalesce/gate tests, and focused iOS TextMate
-  tests pass. Phase 4 owns compiled programs, prepared line buffers, and
-  weighted caches. Physical release calibration is a Phase 6
+  Phase 4 reuse/lease tests, Joni golden/oracle suites, and iOS simulator KMP
+  compile pass. Phase 5 owns incremental unchanged-prefix reuse. Physical
+  release calibration is a Phase 6
   default-enablement gate.
 - Date: 2026-07-29.
 

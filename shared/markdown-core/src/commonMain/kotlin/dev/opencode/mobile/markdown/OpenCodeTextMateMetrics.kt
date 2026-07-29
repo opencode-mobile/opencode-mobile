@@ -10,6 +10,8 @@ enum class TextMateMetricStage {
     RegexCompile,
     RegexSearch,
     NativeRegexSearch,
+    PreparedLineBuffer,
+    Utf8IndexMap,
     Tokenize,
     Repair,
 }

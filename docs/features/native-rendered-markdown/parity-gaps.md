@@ -16,28 +16,26 @@
 - Intentional platform difference: only the native storage location and
   concurrency primitive differ. iOS uses a utility `DispatchQueue` plus lock;
   Android uses a coroutine writer plus bounded channel.
-- Owner or next action: retain schema and behavior parity when Phase 4 adds
-  cache and prepared-line measurements.
+- Owner or next action: retain schema and behavior parity when Phase 5 adds
+  incremental reuse measurements.
 
 ## TextMate Execution And Memory Ownership
 
-- Status: Phases 1–3 closed and aligned; Phase 4 compiled programs pending
+- Status: Phases 1–4 closed and aligned; Phase 5 incremental reuse pending
 - Area: architecture and performance
 - Shared intent: both apps should expose the same reusable highlighting-engine
   contract and share priority, cancellation, cache budgets, quality outcomes,
   metric names, work limits, and release gates while retaining native regex and
   executor adapters.
 - Current iOS state: an injected Swift actor lazily constructs and drives one
-  KMP scheduler bridge plus libonig runtime. Memory-warning trim forwards
-  Critical pressure into the shared scheduler.
-- Current Android state: an injected lazy engine constructs and drives the same
-  shared scheduler on one off-UI dispatcher with at most one active job.
-- Reason: Phase 3 moves priority, coalescing, deadlines, admission limits, trim,
-  and queue metrics into the shared engine while keeping platform serial
-  ownership from Phase 2.
-- Owner or next action: satisfy the Phase 4 compiled-program and prepared-line
-  gate in the [implementation plan](./textmate-pipeline-improvement-plan.md).
-  Physical release calibration remains a Phase 6 default-enablement gate.
+  serial KMP/libonig runtime; prepared line buffers and OwnedOnigRegex leases
+  are Phase 4 complete.
+- Current Android state: one injected single-lane KMP/Joni runtime; prepared
+  line buffers and in-use regex pins are Phase 4 complete.
+- Intentional platform difference: regex backend only (Joni vs libonig) and
+  lease disposal (`onig_free` vs JVM GC).
+- Owner or next action: satisfy the Phase 5 unchanged-prefix incremental reuse
+  gate before Phase 6 default enablement.
 
 ## TextMate Highlighter
 

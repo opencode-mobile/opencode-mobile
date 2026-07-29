@@ -7,6 +7,7 @@ object OpenCodeBundledJoniMarkdownHighlighter {
         resourceReader: OpenCodeTextMateResourceReader,
         metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     ): OpenCodeSyntaxHighlighter {
+        val cacheCoordinator = TextMateWeightedCacheCoordinator()
         val bundle =
             OpenCodeTextMateGrammarBundleLoader
                 .loadBundled(resourceReader, metricsSink)
@@ -14,7 +15,12 @@ object OpenCodeBundledJoniMarkdownHighlighter {
 
         return OpenCodeSyntaxHighlighter(
             grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexRuntime(), metricsSink),
+            textMateTokenizer =
+                OpenCodeTextMateNativeTokenizer(
+                    regexBackend = OpenCodeJoniRegexRuntime(cacheCoordinator),
+                    metricsSink = metricsSink,
+                    cacheCoordinator = cacheCoordinator,
+                ),
             metricsSink = metricsSink,
         )
     }

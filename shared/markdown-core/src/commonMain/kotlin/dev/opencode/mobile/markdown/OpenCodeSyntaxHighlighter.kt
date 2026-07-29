@@ -87,7 +87,13 @@ class OpenCodeSyntaxHighlighter(
     private val textMateTokenizer: OpenCodeTextMateTokenizer? = null,
     private val fallbackHighlighter: OpenCodeCodeHighlighter = OpenCodeSemanticFallbackHighlighter,
     private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
-) : OpenCodeCodeHighlighter {
+) : OpenCodeCodeHighlighter,
+    TextMateCacheTrimmable {
+    override fun trimCaches(level: MemoryPressure) {
+        (textMateTokenizer as? TextMateCacheTrimmable)?.trimCaches(level)
+        grammarBundle?.trimCaches(level)
+    }
+
     override fun supportsLanguage(languageOrAlias: String?): Boolean =
         normalizedLanguage(languageOrAlias)?.let { language ->
             grammarBundle?.manifest?.contains(language) == true || fallbackHighlighter.supportsLanguage(language)

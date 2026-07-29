@@ -10,7 +10,10 @@ import org.joni.Syntax
 import org.joni.exception.JOniException
 import kotlin.time.TimeSource
 
-class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
+class OpenCodeJoniRegexRuntime(
+    private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+) : OpenCodeTextMateRegexBackend,
+    TextMateCacheTrimmable {
     override val name: String = "joni-oniguruma"
 
     override val isOnigurumaCompatible: Boolean = true
@@ -18,6 +21,8 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
     private sealed class RegexCacheEntry {
         data class Compiled(
             val regex: Regex,
+            val cacheKey: String,
+            val estimatedBytes: Long,
         ) : RegexCacheEntry()
 
         data class Decomposed(
@@ -28,6 +33,7 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
     }
 
     private val regexCache = ConcurrentHashMap<String, RegexCacheEntry>()
+    private val activeSearchPins = ConcurrentHashMap<String, Int>()
 
     // Joni prints Oniguruma parse warnings to System.err for many bundled TextMate
     // patterns. Compilation is cached, but cold-start still emits thousands of lines
@@ -45,7 +51,14 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
         metricsSink: OpenCodeTextMateMetricsSink,
     ): RegexCacheEntry {
         compilePattern(pattern, metricsSink)?.let { regex ->
-            return RegexCacheEntry.Compiled(regex)
+            val cacheKey = regexCacheKey(pattern)
+            val estimated = TextMateWeightedCacheCoordinator.estimateRegexBytes(pattern)
+            cacheCoordinator.promote(
+                key = cacheKey,
+                category = TextMateWeightedCacheCoordinator.Category.CompiledRegex,
+                estimatedBytes = estimated,
+            )
+            return RegexCacheEntry.Compiled(regex, cacheKey, estimated)
         }
 
         val candidates =
@@ -104,7 +117,7 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
 
     override fun find(
         pattern: String,
-        input: String,
+        buffer: PreparedTextMateLineBuffer,
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
@@ -138,7 +151,7 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
                         contiguousAnchor = contiguousAnchor,
                     )
                 }
-                return find(suffix, input, startIndex, endIndex, contiguousAnchor, metricsSink)
+                return find(suffix, buffer, startIndex, endIndex, contiguousAnchor, metricsSink)
                     ?.takeIf { match -> match.start == startIndex }
             }
         }
@@ -147,12 +160,12 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
             is RegexCacheEntry.Compiled ->
                 return OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
                     pattern = effectivePattern,
-                    match = search(entry.regex, input, startIndex, endIndex, metricsSink),
+                    match = search(entry, buffer, startIndex, endIndex, metricsSink),
                     contiguousAnchor = contiguousAnchor,
                 )
             is RegexCacheEntry.Decomposed -> {
                 return entry.candidates
-                    .mapNotNull { candidate -> find(candidate, input, startIndex, endIndex, contiguousAnchor, metricsSink) }
+                    .mapNotNull { candidate -> find(candidate, buffer, startIndex, endIndex, contiguousAnchor, metricsSink) }
                     .minByOrNull { match -> match.start }
             }
             RegexCacheEntry.Failed -> return null
@@ -160,63 +173,107 @@ class OpenCodeJoniRegexRuntime : OpenCodeTextMateRegexBackend {
     }
 
     private fun search(
-        regex: Regex,
-        input: String,
+        entry: RegexCacheEntry.Compiled,
+        buffer: PreparedTextMateLineBuffer,
         startIndex: Int,
         endIndex: Int,
         metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
-        val indexMap = Utf8IndexMap(input)
-        val inputBytes = indexMap.bytes
+        pin(entry.cacheKey)
+        try {
+            val indexMap = buffer.indexMap
+            val inputBytes = buffer.bytes
+            val inputLength = buffer.length
 
-        val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, input.length))
-        val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, input.length))
-        val matcher = regex.matcher(inputBytes)
-        val result =
-            if (metricsSink.isEnabled) {
-                val startedAt = TimeSource.Monotonic.markNow()
-                var outcome = TextMateMetricOutcome.Success
-                try {
-                    matcher.search(startByte, endByte, Option.NONE)
-                } catch (failure: Throwable) {
-                    outcome = TextMateMetricOutcome.Failure
-                    throw failure
-                } finally {
-                    metricsSink.record(
-                        TextMateMetricEvent(
-                            stage = TextMateMetricStage.NativeRegexSearch,
-                            outcome = outcome,
-                            durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
-                            backend = name,
-                        ),
-                    )
-                }
-            } else {
-                matcher.search(startByte, endByte, Option.NONE)
-            }
-        if (result < 0) return null
-
-        val region = matcher.eagerRegion
-        val captures =
-            (0 until region.numRegs)
-                .mapNotNull { index ->
-                    val begin = region.getBeg(index)
-                    val end = region.getEnd(index)
-                    if (begin < 0 || end < begin) {
-                        null
-                    } else {
-                        TextMateRegexCapture(
-                            index = index,
-                            start = indexMap.charIndexFor(begin),
-                            end = indexMap.charIndexFor(end),
+            val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, inputLength))
+            val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, inputLength))
+            val matcher = entry.regex.matcher(inputBytes)
+            val result =
+                if (metricsSink.isEnabled) {
+                    val startedAt = TimeSource.Monotonic.markNow()
+                    var outcome = TextMateMetricOutcome.Success
+                    try {
+                        matcher.search(startByte, endByte, Option.NONE)
+                    } catch (failure: Throwable) {
+                        outcome = TextMateMetricOutcome.Failure
+                        throw failure
+                    } finally {
+                        metricsSink.record(
+                            TextMateMetricEvent(
+                                stage = TextMateMetricStage.NativeRegexSearch,
+                                outcome = outcome,
+                                durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                                backend = name,
+                            ),
                         )
                     }
+                } else {
+                    matcher.search(startByte, endByte, Option.NONE)
                 }
+            if (result < 0) return null
 
-        return TextMateRegexMatch(
-            start = indexMap.charIndexFor(result),
-            end = indexMap.charIndexFor(matcher.end),
-            captures = captures,
-        )
+            val region = matcher.eagerRegion
+            val captures =
+                (0 until region.numRegs)
+                    .mapNotNull { index ->
+                        val begin = region.getBeg(index)
+                        val end = region.getEnd(index)
+                        if (begin < 0 || end < begin) {
+                            null
+                        } else {
+                            TextMateRegexCapture(
+                                index = index,
+                                start = indexMap.charIndexFor(begin),
+                                end = indexMap.charIndexFor(end),
+                            )
+                        }
+                    }
+
+            return TextMateRegexMatch(
+                start = indexMap.charIndexFor(result),
+                end = indexMap.charIndexFor(matcher.end),
+                captures = captures,
+            )
+        } finally {
+            unpin(entry.cacheKey)
+        }
     }
+
+    override fun trimCaches(level: MemoryPressure) {
+        when (level) {
+            MemoryPressure.Normal -> Unit
+            MemoryPressure.Moderate,
+            MemoryPressure.Critical,
+            -> {
+                val victims =
+                    regexCache.entries
+                        .filter { (pattern, entry) ->
+                            entry is RegexCacheEntry.Compiled &&
+                                (activeSearchPins[entry.cacheKey] ?: 0) == 0
+                        }.map { it.key }
+                victims.forEach { pattern ->
+                    val removed = regexCache.remove(pattern)
+                    if (removed is RegexCacheEntry.Compiled) {
+                        cacheCoordinator.removeIfUnleased(removed.cacheKey)
+                    }
+                }
+                cacheCoordinator.trim(level)
+            }
+        }
+    }
+
+    private fun pin(cacheKey: String) {
+        activeSearchPins.merge(cacheKey, 1, Int::plus)
+        cacheCoordinator.lease(cacheKey)
+    }
+
+    private fun unpin(cacheKey: String) {
+        activeSearchPins.compute(cacheKey) { _, count ->
+            val next = (count ?: 1) - 1
+            if (next <= 0) null else next
+        }
+        cacheCoordinator.release(cacheKey)
+    }
+
+    private fun regexCacheKey(pattern: String): String = "joni:$pattern"
 }

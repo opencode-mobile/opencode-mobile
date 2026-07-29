@@ -64,9 +64,3 @@ data class SchedulerAdmitEnvelope(
     val ticketId: Long? = null,
     val completed: List<HighlightResult> = emptyList(),
 )
-
-fun OpenCodeTextMateHighlightingEngine.trimNow(level: MemoryPressure) {
-    // Phase 3: queue/admission policy lives in the scheduler. Regex/grammar
-    // weighted eviction remains Phase 4.
-    Unit
-}

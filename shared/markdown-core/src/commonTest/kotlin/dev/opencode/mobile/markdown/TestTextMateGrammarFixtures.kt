@@ -1,7 +1,5 @@
 package dev.opencode.mobile.markdown
 
-import kotlinx.serialization.json.buildJsonObject
-
 /** A resource-free grammar bundle for common tests, including Kotlin/Native. */
 fun testJavascriptGrammarBundle(): TextMateGrammarBundle {
     val grammar =
@@ -42,6 +40,13 @@ fun testJavascriptGrammarBundle(): TextMateGrammarBundle {
                         ),
                     ),
             ),
-        grammars = listOf(TextMateGrammarPayload(descriptor, buildJsonObject { }, grammar)),
+        grammars =
+            listOf(
+                TextMateGrammarPayload(
+                    descriptor = descriptor,
+                    grammar = grammar,
+                    grammarId = GrammarId(0),
+                ),
+            ),
     )
 }

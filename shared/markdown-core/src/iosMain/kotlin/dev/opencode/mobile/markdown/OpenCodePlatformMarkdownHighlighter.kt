@@ -10,6 +10,7 @@ internal actual fun defaultOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHi
     createOpenCodePlatformMarkdownHighlighter()
 
 internal actual fun createOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter {
+        val cacheCoordinator = TextMateWeightedCacheCoordinator()
         val bundle =
             OpenCodeTextMateGrammarBundleLoader
                 .loadBundled(OpenCodeAppleTextMateResourceReader)
@@ -17,7 +18,11 @@ internal actual fun createOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHig
 
         return OpenCodeSyntaxHighlighter(
             grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexRuntime()),
+            textMateTokenizer =
+                OpenCodeTextMateNativeTokenizer(
+                    regexBackend = OpenCodeLibOnigRegexRuntime(cacheCoordinator),
+                    cacheCoordinator = cacheCoordinator,
+                ),
         )
 }
 

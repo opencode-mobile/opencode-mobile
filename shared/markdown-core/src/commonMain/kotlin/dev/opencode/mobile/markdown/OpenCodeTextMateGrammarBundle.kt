@@ -1,7 +1,6 @@
 package dev.opencode.mobile.markdown
 
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlin.time.TimeSource
 
@@ -11,10 +10,22 @@ fun interface OpenCodeTextMateResourceReader {
 
 data class TextMateGrammarPayload(
     val descriptor: TextMateGrammarDescriptor,
-    val json: JsonObject,
     val grammar: TextMateGrammar,
+    val program: TextMateGrammarProgram,
 ) {
     val scopeName: String = grammar.scopeName
+    val grammarId: GrammarId
+        get() = program.grammarId
+
+    constructor(
+        descriptor: TextMateGrammarDescriptor,
+        grammar: TextMateGrammar,
+        grammarId: GrammarId,
+    ) : this(
+        descriptor = descriptor,
+        grammar = grammar,
+        program = TextMateGrammarProgram.compile(grammar, grammarId),
+    )
 }
 
 data class TextMateGrammarLoadDiagnostic(
@@ -40,15 +51,28 @@ class TextMateGrammarBundle internal constructor(
     val manifest: TextMateGrammarManifest,
     private val reader: OpenCodeTextMateResourceReader?,
     private val defaultMetricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
     preloadedGrammars: Map<String, TextMateGrammarPayload> = emptyMap(),
     preloadedDiagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
-) {
+) : TextMateCacheTrimmable {
     private val loadedByResourcePath = LinkedHashMap<String, TextMateGrammarPayload>()
     private val failedResourcePaths = mutableSetOf<String>()
     private val loadDiagnostics = preloadedDiagnostics.toMutableList()
+    private val grammarIdsByResourcePath: Map<String, GrammarId> =
+        manifest.languages
+            .flatMap { entry -> entry.grammars }
+            .mapIndexed { index, descriptor -> descriptor.resourcePath to GrammarId(index) }
+            .toMap()
 
     init {
-        loadedByResourcePath.putAll(preloadedGrammars)
+        preloadedGrammars.forEach { (path, payload) ->
+            loadedByResourcePath[path] = payload
+            cacheCoordinator.promote(
+                key = grammarCacheKey(path),
+                category = TextMateWeightedCacheCoordinator.Category.GrammarProgram,
+                estimatedBytes = payload.program.estimatedBytes,
+            )
+        }
     }
 
     private val descriptorsByResourcePath: Map<String, TextMateGrammarDescriptor> by lazy {
@@ -102,20 +126,40 @@ class TextMateGrammarBundle internal constructor(
         descriptorsByResourcePath.values.forEach { descriptor -> grammarForDescriptor(descriptor, defaultMetricsSink) }
     }
 
+    override fun trimCaches(level: MemoryPressure) {
+        when (level) {
+            MemoryPressure.Normal,
+            MemoryPressure.Moderate,
+            -> Unit
+            MemoryPressure.Critical -> {
+                loadedByResourcePath.keys.toList().forEach { path ->
+                    val key = grammarCacheKey(path)
+                    if (!cacheCoordinator.contains(key) || cacheCoordinator.removeIfUnleased(key)) {
+                        loadedByResourcePath.remove(path)
+                    }
+                }
+            }
+        }
+    }
+
     companion object {
         fun fromPreloaded(
             manifest: TextMateGrammarManifest,
             grammars: List<TextMateGrammarPayload>,
             diagnostics: List<TextMateGrammarLoadDiagnostic> = emptyList(),
             metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+            cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
         ): TextMateGrammarBundle =
             TextMateGrammarBundle(
                 manifest = manifest,
                 reader = null,
                 defaultMetricsSink = metricsSink,
+                cacheCoordinator = cacheCoordinator,
                 preloadedGrammars = grammars.associateBy { grammar -> grammar.descriptor.resourcePath },
                 preloadedDiagnostics = diagnostics,
             )
+
+        internal fun grammarCacheKey(resourcePath: String): String = "grammar:$resourcePath"
     }
 
     private fun grammarForDescriptor(
@@ -123,6 +167,7 @@ class TextMateGrammarBundle internal constructor(
         metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateGrammarPayload? {
         loadedByResourcePath[descriptor.resourcePath]?.let { cached ->
+            cacheCoordinator.touch(grammarCacheKey(descriptor.resourcePath))
             if (metricsSink.isEnabled) {
                 metricsSink.record(
                     TextMateMetricEvent(
@@ -138,7 +183,15 @@ class TextMateGrammarBundle internal constructor(
         val resourceReader = reader ?: return null
 
         val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
-        val result = OpenCodeTextMateGrammarBundleLoader.loadGrammarPayload(descriptor, resourceReader)
+        val grammarId =
+            grammarIdsByResourcePath[descriptor.resourcePath]
+                ?: GrammarId(loadedByResourcePath.size)
+        val result =
+            OpenCodeTextMateGrammarBundleLoader.loadGrammarPayload(
+                descriptor = descriptor,
+                reader = resourceReader,
+                grammarId = grammarId,
+            )
         loadDiagnostics += result.diagnostics
         val payload = result.payload
         if (payload == null) {
@@ -155,7 +208,14 @@ class TextMateGrammarBundle internal constructor(
             return null
         }
 
-        return loadedByResourcePath.getOrPut(descriptor.resourcePath) { payload }.also {
+        return loadedByResourcePath.getOrPut(descriptor.resourcePath) {
+            cacheCoordinator.promote(
+                key = grammarCacheKey(descriptor.resourcePath),
+                category = TextMateWeightedCacheCoordinator.Category.GrammarProgram,
+                estimatedBytes = payload.program.estimatedBytes,
+            )
+            payload
+        }.also {
             startedAt?.let {
                 metricsSink.record(
                     TextMateMetricEvent(
@@ -261,6 +321,7 @@ object OpenCodeTextMateGrammarBundleLoader {
     internal fun loadGrammarPayload(
         descriptor: TextMateGrammarDescriptor,
         reader: OpenCodeTextMateResourceReader,
+        grammarId: GrammarId = GrammarId(0),
     ): GrammarPayloadLoadResult {
         val diagnostics = mutableListOf<TextMateGrammarLoadDiagnostic>()
         val grammarJson =
@@ -308,11 +369,12 @@ object OpenCodeTextMateGrammarBundleLoader {
                     return GrammarPayloadLoadResult(payload = null, diagnostics = diagnostics)
                 }
 
+        // Raw JSON is dropped after typed compile; only the immutable program is retained.
         val payload =
             TextMateGrammarPayload(
                 descriptor = descriptor,
-                json = grammarObject,
                 grammar = grammar,
+                grammarId = grammarId,
             )
         if (payload.scopeName != descriptor.scopeName) {
             diagnostics +=

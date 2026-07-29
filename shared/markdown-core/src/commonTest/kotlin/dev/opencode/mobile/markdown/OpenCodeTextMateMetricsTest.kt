@@ -1,6 +1,5 @@
 package dev.opencode.mobile.markdown
 
-import kotlinx.serialization.json.buildJsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -32,7 +31,7 @@ class OpenCodeTextMateMetricsTest {
                         ),
                     ),
             )
-        val payload = TextMateGrammarPayload(descriptor, buildJsonObject {}, grammar)
+        val payload = TextMateGrammarPayload(descriptor, grammar, GrammarId(0))
         val manifest =
             TextMateGrammarManifest(
                 schemaVersion = 1,
@@ -94,7 +93,7 @@ class OpenCodeTextMateMetricsTest {
                         ),
                     ),
             )
-        val payload = TextMateGrammarPayload(descriptor, buildJsonObject {}, grammar)
+        val payload = TextMateGrammarPayload(descriptor, grammar, GrammarId(0))
         val manifest =
             TextMateGrammarManifest(
                 schemaVersion = 1,

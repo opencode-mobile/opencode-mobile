@@ -1,6 +1,6 @@
 package dev.opencode.mobile.markdown
 
-internal class Utf8IndexMap(
+class Utf8IndexMap(
     input: String,
 ) {
     val bytes: ByteArray = input.encodeToByteArray()
