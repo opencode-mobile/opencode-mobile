@@ -1,5 +1,33 @@
 # Native Rendered Markdown Decisions
 
+## Phase 3 Scheduler Policy And Platform Drivers
+
+- Decision: Phase 3 implements a shared pure `TextMateRequestScheduler` in
+  `commonMain`. Android and iOS adapters remain the serial execution owners and
+  drive at most one active highlight job. Do not put a shared KMP coroutine
+  run-loop behind the iOS JSON bridge, and do not duplicate queue policy per
+  platform.
+- Decision: latest-wins coalescing per `CodeBlockKey` completes older awaiters
+  with `Cancelled`. Queue-pressure and Phase 3 trim drops complete with
+  `BudgetExceeded`. Active superseded work is cooperatively cancelled at line
+  checkpoints and rewritten to `Cancelled` on finish.
+- Decision: locked limits are 1 active job, 8 pending interactive, 24 pending
+  history, and 256,000 queued source characters. Interactive-final queue wait
+  of 8 ms marks at-risk strict priority and 16 ms matches the provisional p99
+  queue budget. Visible history promotes after 250 ms for anti-starve; that
+  constant may be revised only through an evidence-backed entry here.
+- Decision: Phase 3 `trim` drops/disables speculative queue work only.
+  `Moderate` drops pending background and disables background admission;
+  `Critical` also drops pending visible history, disables history admission,
+  and cooperatively cancels a non-interactive active job. Weighted cache
+  eviction remains Phase 4.
+- Decision: the Phase 3 gate is unit-testable plain/fallback publication while a
+  highlighter is blocked. Device p95 plain and queue budgets remain Phase 6.
+- Reason: triage locked these choices to keep policy and tests shared while
+  preserving Phase 2 ownership and the existing FinalPlaceholder / viewport-
+  first publication path.
+- Date: 2026-07-29.
+
 ## Phase 1 Closes On Simulated Backends; Shipping Calibration Moves To Phase 6
 
 - Decision: Phase 1 uses one named simulated backend per platform: the Pixel 9a
@@ -108,17 +136,14 @@
   3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
   Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
   diagnostic reference values, not release guardrails.
-- Implementation gate: Phases 1 and 2 are closed. The shared engine owns the
-  fence-level asynchronous request/result contract; deterministic locators,
-  opaque keys, monotonic revisions, policy epochs, exact-source validation, and
-  pure attachment reject stale work. Android uses one lazily initialized
-  single-lane KMP/Joni owner and iOS one lazily initialized actor-owned
-  KMP/libonig runtime. Backend caches are instance-owned rather than
-  process-global or thread-local in production. Shared Android and iOS KMP
-  suites, focused native engine/preparer tests, concurrent first-use stress,
-  and the iOS simulator app build pass. Phase 3 owns scheduling, coalescing,
-  deadlines, backpressure, trim handling, and queue/cancellation metrics.
-  Physical release calibration is a Phase 6 default-enablement gate.
+- Implementation gate: Phases 1–3 are closed. The shared engine owns the
+  fence-level asynchronous request/result contract plus priority scheduling,
+  latest-wins coalescing, admission limits, Phase 3 trim, and queue metrics.
+  Android and iOS remain serial owners that drive one active job. Shared
+  scheduler tests, Android owner/coalesce/gate tests, and focused iOS TextMate
+  tests pass. Phase 4 owns compiled programs, prepared line buffers, and
+  weighted caches. Physical release calibration is a Phase 6
+  default-enablement gate.
 - Date: 2026-07-29.
 
 ## Markdown Fences Close Like CommonMark / Web

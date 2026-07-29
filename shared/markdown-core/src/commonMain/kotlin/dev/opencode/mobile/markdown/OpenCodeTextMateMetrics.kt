@@ -84,6 +84,9 @@ data class TextMateParseObservation(
     val totalNanoseconds: Long,
     val stages: List<TextMateStageSummary>,
     val diagnosticKinds: List<MarkdownDiagnosticKind>,
+    val queueWaitNanoseconds: Long = 0,
+    val cancelRequestedToStopNanoseconds: Long? = null,
+    val schedulingReason: String? = null,
 )
 
 internal class OpenCodeTextMateMetricsAccumulator : OpenCodeTextMateMetricsSink {

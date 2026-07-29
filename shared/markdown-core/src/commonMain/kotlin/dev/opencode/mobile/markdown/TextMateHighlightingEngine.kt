@@ -15,6 +15,8 @@ interface TextMateHighlightingEngine {
     suspend fun highlight(request: HighlightRequest): HighlightResult
 
     suspend fun trim(level: MemoryPressure) = Unit
+
+    fun schedulerSnapshot(): TextMateSchedulerSnapshot? = null
 }
 
 /**
@@ -115,7 +117,22 @@ class OpenCodeTextMateHighlightingEngine(
 ) : TextMateHighlightingEngine {
     override suspend fun highlight(request: HighlightRequest): HighlightResult = highlightNow(request)
 
-    fun highlightNow(request: HighlightRequest): HighlightResult {
+    override suspend fun trim(level: MemoryPressure) {
+        trimNow(level)
+    }
+
+    fun highlightNow(
+        request: HighlightRequest,
+        shouldCancel: () -> Boolean = { false },
+    ): HighlightResult {
+        if (shouldCancel()) {
+            return emptyResult(
+                request = request,
+                outcome = TextMateParseOutcome.Cancelled,
+                queueWaitNanoseconds = 0,
+                schedulingReason = TextMateSchedulingReason.Supersession.name,
+            )
+        }
         val metrics = OpenCodeTextMateMetricsAccumulator()
         val startedAt = TimeSource.Monotonic.markNow()
         return try {
@@ -125,7 +142,17 @@ class OpenCodeTextMateHighlightingEngine(
                     languageOrAlias = request.language,
                     code = request.source,
                     metricsSink = metrics,
+                    shouldCancel = shouldCancel,
                 )
+            if (shouldCancel()) {
+                return emptyResult(
+                    request = request,
+                    outcome = TextMateParseOutcome.Cancelled,
+                    queueWaitNanoseconds = 0,
+                    schedulingReason = TextMateSchedulingReason.Supersession.name,
+                    cancelRequestedToStopNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                )
+            }
             val diagnostics =
                 buildList {
                     if (request.language != null && !supported) {

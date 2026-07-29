@@ -1,7 +1,7 @@
 # TextMate Markdown Highlighter Architecture Report
 
 **Date:** 2026-07-29
-**Implementation status:** Phases 1–2 closed; Phase 3 next
+**Implementation status:** Phases 1–3 closed; Phase 4 next
 **Scope:** fenced code blocks in opencode-mobile's native Rendered Markdown path
 **Evidence:** current repository source and tests, TextMate's grammar manual,
 Shiki documentation, and `vscode-textmate` source

@@ -29,6 +29,23 @@ interface OpenCodeCodeHighlighter {
         code: String,
         metricsSink: OpenCodeTextMateMetricsSink,
     ): SyntaxHighlightResult = highlight(languageOrAlias, code)
+
+    fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+    ): SyntaxHighlightResult {
+        if (shouldCancel()) {
+            return SyntaxHighlightResult(
+                spans = emptyList(),
+                diagnostics = emptyList(),
+                source = SyntaxHighlightSource.Unknown,
+                textMateOutcome = TextMateParseOutcome.Cancelled,
+            )
+        }
+        return highlight(languageOrAlias, code, metricsSink)
+    }
 }
 
 interface OpenCodeTextMateTokenizer {
@@ -44,11 +61,25 @@ interface OpenCodeTextMateTokenizer {
         grammarBundle: TextMateGrammarBundle? = null,
         metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateTokenizationResult = tokenize(grammar, code, grammarBundle)
+
+    fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle? = null,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+    ): TextMateTokenizationResult {
+        if (shouldCancel()) {
+            return TextMateTokenizationResult(tokens = emptyList(), cancelled = true)
+        }
+        return tokenize(grammar, code, grammarBundle, metricsSink)
+    }
 }
 
 data class TextMateTokenizationResult(
     val tokens: List<TextMateScopeToken>,
     val diagnostics: List<MarkdownDiagnostic> = emptyList(),
+    val cancelled: Boolean = false,
 )
 
 class OpenCodeSyntaxHighlighter(
@@ -71,7 +102,22 @@ class OpenCodeSyntaxHighlighter(
         languageOrAlias: String?,
         code: String,
         metricsSink: OpenCodeTextMateMetricsSink,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code, metricsSink, shouldCancel = { false })
+
+    override fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
     ): SyntaxHighlightResult {
+        if (shouldCancel()) {
+            return SyntaxHighlightResult(
+                spans = emptyList(),
+                diagnostics = emptyList(),
+                source = SyntaxHighlightSource.Unknown,
+                textMateOutcome = TextMateParseOutcome.Cancelled,
+            )
+        }
         val grammarLookupStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
         val normalizedLanguage = normalizedLanguage(languageOrAlias)
         val grammar =
@@ -90,7 +136,32 @@ class OpenCodeSyntaxHighlighter(
         }
         val tokenizer = textMateTokenizer
         if (grammar != null && tokenizer != null) {
-            val tokenization = tokenizer.tokenize(grammar, code, grammarBundle, metricsSink)
+            if (shouldCancel()) {
+                return SyntaxHighlightResult(
+                    spans = emptyList(),
+                    diagnostics = emptyList(),
+                    source = SyntaxHighlightSource.Unknown,
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.Cancelled,
+                )
+            }
+            val tokenization =
+                tokenizer.tokenize(
+                    grammar = grammar,
+                    code = code,
+                    grammarBundle = grammarBundle,
+                    metricsSink = metricsSink,
+                    shouldCancel = shouldCancel,
+                )
+            if (shouldCancel() || tokenization.cancelled) {
+                return SyntaxHighlightResult(
+                    spans = emptyList(),
+                    diagnostics = tokenization.diagnostics,
+                    source = SyntaxHighlightSource.Unknown,
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.Cancelled,
+                )
+            }
             val repairStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
             val spans =
                 tokenization.tokens

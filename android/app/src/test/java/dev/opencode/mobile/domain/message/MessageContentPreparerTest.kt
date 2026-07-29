@@ -390,6 +390,71 @@ class MessageContentPreparerTest {
             }
         }
 
+    @Test
+    fun prepareFinalPlaceholderDoesNotWaitForBlockedHighlighter() =
+        runBlocking {
+            val prior = MarkdownHighlightPreferences.textMateEnabled
+            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            try {
+                val highlighter = BlockingHighlighter()
+                val preparer =
+                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
+                        computationDispatcher = Dispatchers.Default
+                    }
+                val markdown = "```kotlin\nval live = true\n```"
+                val streaming =
+                    preparer.prepareMessage(
+                        Message(
+                            id = "live",
+                            role = MessageRole.Assistant,
+                            text = markdown,
+                            parts = listOf(MessagePart.Text(markdown, isStreaming = true)),
+                        ),
+                    )
+                assertNotNull(streaming.renderedMarkdown)
+
+                val finalPreparation =
+                    async(Dispatchers.Default) {
+                        preparer.prepareMessages(
+                            listOf(
+                                Message(
+                                    id = "live",
+                                    role = MessageRole.Assistant,
+                                    text = markdown,
+                                ),
+                            ),
+                            mapOf("live" to streaming),
+                            MessagePreparationMode.Final,
+                        )
+                    }
+                assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
+                try {
+                    val placeholder =
+                        withTimeout(2_000) {
+                            preparer.prepareMessages(
+                                listOf(
+                                    Message(
+                                        id = "live",
+                                        role = MessageRole.Assistant,
+                                        text = markdown,
+                                    ),
+                                ),
+                                mapOf("live" to streaming),
+                                MessagePreparationMode.FinalPlaceholder,
+                            )
+                        }
+                    assertNotNull(placeholder.single().renderedMarkdown)
+                    assertTrue(placeholder.single().awaitingTextMateUpgrade)
+                } finally {
+                    highlighter.release.countDown()
+                }
+                finalPreparation.await()
+                Unit
+            } finally {
+                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            }
+        }
+
     private class RecordingHighlighter : OpenCodeCodeHighlighter {
         var calls: Int = 0
 

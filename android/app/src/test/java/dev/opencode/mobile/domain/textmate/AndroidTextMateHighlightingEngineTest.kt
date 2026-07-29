@@ -8,11 +8,15 @@ import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.TextMateParseOutcome
+import dev.opencode.mobile.markdown.TextMateRequestScheduler
+import dev.opencode.mobile.markdown.TextMateSchedulerLimits
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,29 +45,103 @@ class AndroidTextMateHighlightingEngineTest {
                             delegate
                         },
                         ownerDispatcher = dispatcher,
+                        scheduler =
+                            TextMateRequestScheduler(
+                                limits =
+                                    TextMateSchedulerLimits(
+                                        maxPendingInteractive = 32,
+                                        maxPendingHistory = 32,
+                                    ),
+                            ),
                     )
 
-                (1L..24L)
-                    .map { revision ->
-                        async {
-                            engine.highlight(request(revision))
-                        }
-                    }.awaitAll()
+                val results =
+                    (1L..24L)
+                        .map { revision ->
+                            async {
+                                engine.highlight(request(key = "block-$revision", revision = revision))
+                            }
+                        }.awaitAll()
 
                 assertEquals(1, delegate.maximumActive.get())
                 assertEquals(24, delegate.completed.get())
                 assertEquals(1, factoryCalls.get())
                 assertTrue(factoryThreads.all { it.startsWith("textmate-owner-test") })
                 assertTrue(delegate.threadNames.all { it.startsWith("textmate-owner-test") })
+                assertTrue(results.all { it.outcome == TextMateParseOutcome.Highlighted })
             } finally {
                 dispatcher.close()
                 executor.shutdownNow()
             }
         }
 
-    private fun request(revision: Long): HighlightRequest =
+    @Test
+    fun latestRevisionCancelsOlderActiveWork() =
+        runBlocking {
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val delegate =
+                object : TextMateHighlightingEngine {
+                    override suspend fun highlight(request: HighlightRequest): HighlightResult {
+                        entered.complete(Unit)
+                        release.await()
+                        return HighlightResult(
+                            key = request.key,
+                            revision = request.revision,
+                            source = request.source,
+                            canonicalLanguage = "Kotlin",
+                            policyEpoch = request.policyEpoch,
+                            spans = emptyList(),
+                            outcome = TextMateParseOutcome.Highlighted,
+                            diagnostics = emptyList(),
+                            observation =
+                                TextMateParseObservation(
+                                    outcome = TextMateParseOutcome.Highlighted,
+                                    messageCharacters = request.source.length,
+                                    fenceCharacters = request.source.length,
+                                    fenceLines = 1,
+                                    fenceIndex = 0,
+                                    fenceCount = 1,
+                                    spanCount = 0,
+                                    totalNanoseconds = 1,
+                                    stages = emptyList(),
+                                    diagnosticKinds = emptyList(),
+                                ),
+                        )
+                    }
+                }
+            val executor =
+                Executors.newSingleThreadExecutor { runnable ->
+                    Thread(runnable, "textmate-owner-test")
+                }
+            val dispatcher = executor.asCoroutineDispatcher()
+            try {
+                val engine = AndroidTextMateHighlightingEngine(delegate, dispatcher)
+                val first =
+                    async {
+                        engine.highlight(request(key = "block", revision = 1))
+                    }
+                withTimeout(2_000) { entered.await() }
+                val second =
+                    async {
+                        engine.highlight(request(key = "block", revision = 2))
+                    }
+                delay(50)
+                release.complete(Unit)
+                assertEquals(TextMateParseOutcome.Cancelled, first.await().outcome)
+                assertEquals(TextMateParseOutcome.Highlighted, second.await().outcome)
+            } finally {
+                dispatcher.close()
+                executor.shutdownNow()
+            }
+        }
+
+    private fun request(
+        key: String,
+        revision: Long,
+    ): HighlightRequest =
         HighlightRequest(
-            key = CodeBlockKey("block-$revision"),
+            key = CodeBlockKey(key),
             revision = HighlightRevision(revision),
             language = "kotlin",
             source = "val value = $revision",

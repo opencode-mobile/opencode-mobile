@@ -26,6 +26,47 @@ nonisolated struct NativeTextMateParseObservation: Codable, Hashable, Sendable {
     let totalNanoseconds: Int64
     let stages: [NativeTextMateStageSummary]
     let diagnosticKinds: [String]
+    let queueWaitNanoseconds: Int64?
+    let cancelRequestedToStopNanoseconds: Int64?
+    let schedulingReason: String?
+
+    init(
+        schemaVersion: Int = 1,
+        requestedLanguage: String? = nil,
+        canonicalLanguage: String? = nil,
+        outcome: String,
+        messageCharacters: Int,
+        fenceCharacters: Int,
+        fenceLines: Int,
+        fenceIndex: Int,
+        fenceCount: Int,
+        spanCount: Int,
+        backend: String? = nil,
+        totalNanoseconds: Int64,
+        stages: [NativeTextMateStageSummary],
+        diagnosticKinds: [String],
+        queueWaitNanoseconds: Int64? = nil,
+        cancelRequestedToStopNanoseconds: Int64? = nil,
+        schedulingReason: String? = nil
+    ) {
+        self.schemaVersion = schemaVersion
+        self.requestedLanguage = requestedLanguage
+        self.canonicalLanguage = canonicalLanguage
+        self.outcome = outcome
+        self.messageCharacters = messageCharacters
+        self.fenceCharacters = fenceCharacters
+        self.fenceLines = fenceLines
+        self.fenceIndex = fenceIndex
+        self.fenceCount = fenceCount
+        self.spanCount = spanCount
+        self.backend = backend
+        self.totalNanoseconds = totalNanoseconds
+        self.stages = stages
+        self.diagnosticKinds = diagnosticKinds
+        self.queueWaitNanoseconds = queueWaitNanoseconds
+        self.cancelRequestedToStopNanoseconds = cancelRequestedToStopNanoseconds
+        self.schedulingReason = schedulingReason
+    }
 }
 
 nonisolated struct TextMateLogbookEntry: Codable, Hashable, Identifiable, Sendable {

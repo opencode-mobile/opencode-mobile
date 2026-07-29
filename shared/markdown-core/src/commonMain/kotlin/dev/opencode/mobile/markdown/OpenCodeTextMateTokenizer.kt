@@ -138,6 +138,7 @@ data class TextMateLinesTokenizationResult(
     val tokens: List<TextMateScopeToken>,
     val state: TextMateLineState,
     val diagnostics: List<MarkdownDiagnostic>,
+    val cancelled: Boolean = false,
 )
 
 class OpenCodeTextMateNativeTokenizer private constructor(
@@ -154,7 +155,30 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         grammar: TextMateGrammarPayload,
         code: String,
         grammarBundle: TextMateGrammarBundle?,
+    ): TextMateTokenizationResult = tokenize(grammar, code, grammarBundle, metricsSink, shouldCancel = { false })
+
+    override fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateTokenizationResult =
+        OpenCodeTextMateNativeTokenizer(
+            regexBackend = regexBackend,
+            metricsSink = metricsSink,
+            sharedState = sharedState,
+        ).tokenize(grammar, code, grammarBundle)
+
+    override fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
     ): TextMateTokenizationResult {
+        if (shouldCancel()) {
+            return TextMateTokenizationResult(tokens = emptyList(), cancelled = true, diagnostics = backendDiagnostics())
+        }
         if (code.isEmpty()) {
             return TextMateTokenizationResult(
                 tokens = emptyList(),
@@ -165,10 +189,11 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
         var outcome = TextMateMetricOutcome.Success
         return try {
-            val tokenization = tokenizeLines(grammar, code, grammarBundle)
+            val tokenization = tokenizeLines(grammar, code, grammarBundle, shouldCancel = shouldCancel)
             TextMateTokenizationResult(
                 tokens = tokenization.tokens,
                 diagnostics = tokenization.diagnostics,
+                cancelled = tokenization.cancelled,
             )
         } catch (failure: Throwable) {
             outcome = TextMateMetricOutcome.Failure
@@ -189,29 +214,26 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         }
     }
 
-    override fun tokenize(
-        grammar: TextMateGrammarPayload,
-        code: String,
-        grammarBundle: TextMateGrammarBundle?,
-        metricsSink: OpenCodeTextMateMetricsSink,
-    ): TextMateTokenizationResult =
-        OpenCodeTextMateNativeTokenizer(
-            regexBackend = regexBackend,
-            metricsSink = metricsSink,
-            sharedState = sharedState,
-        ).tokenize(grammar, code, grammarBundle)
-
     fun tokenizeLines(
         grammar: TextMateGrammarPayload,
         code: String,
         grammarBundle: TextMateGrammarBundle? = null,
         initialState: TextMateLineState = TextMateLineState.Initial,
+        shouldCancel: () -> Boolean = { false },
     ): TextMateLinesTokenizationResult {
         val tokens = mutableListOf<TextMateScopeToken>()
         var state = initialState
         var lineStart = 0
 
         while (lineStart <= code.length) {
+            if (shouldCancel()) {
+                return TextMateLinesTokenizationResult(
+                    tokens = emptyList(),
+                    state = state,
+                    diagnostics = backendDiagnostics(),
+                    cancelled = true,
+                )
+            }
             val lineEnd = code.indexOf('\n', lineStart).let { index -> if (index == -1) code.length else index }
             val line = code.substring(lineStart, lineEnd)
             val nextLineStart = lineEnd + 1

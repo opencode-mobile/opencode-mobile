@@ -101,6 +101,9 @@ final class DisplayMessagePipeline {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.preparedHistoryCache.handleMemoryPressure()
+                Task {
+                    await KMPTextMateHighlightingEngine.shared.trim(.critical)
+                }
             }
         }
     }

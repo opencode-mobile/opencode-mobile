@@ -1,6 +1,6 @@
 # TextMate Pipeline Implementation Plan
 
-**Status:** architecture locked; Phases 1–2 closed; Phase 3 next;
+**Status:** architecture locked; Phases 1–3 closed; Phase 4 next;
 physical-device release calibration remains in Phase 6
 **Date:** 2026-07-29
 **Scope:** reusable fenced-code highlighting in `shared/markdown-core`, including
@@ -583,6 +583,24 @@ work; all production and test entry points use an injected engine instance.
 - expose queue and cancellation metrics.
 
 **Gate:** plain publication budgets hold under a blocked/pathological highlighter.
+
+#### Phase 3 closure evidence — 2026-07-29
+
+- Added shared pure `TextMateRequestScheduler` with injectable clock, 8:2:1
+  deficit service, interactive-final at-risk priority, latest-wins coalescing,
+  admission limits, and Phase 3 trim/low-power side effects.
+- Android drives the scheduler from `AndroidTextMateHighlightingEngine` with at
+  most one active off-UI job. iOS drives the same policy through
+  `OpenCodeTextMateSchedulerBridge` on the existing actor owner.
+- Observations gained content-free `queueWaitNanoseconds`,
+  `cancelRequestedToStopNanoseconds`, and `schedulingReason`. Scheduler
+  snapshots expose pending high-water marks and supersession/pressure/trim
+  counts.
+- Tokenizer/highlighter accept cooperative cancel checks between lines.
+- Verification: shared scheduler + engine unit tests; Android owner, coalesce,
+  FinalPlaceholder, and streaming-vs-blocked-highlighter gate tests.
+
+**Gate result:** closed. Phase 4 is the next phase.
 
 ### Phase 4 — Compiled programs and prepared line buffers
 

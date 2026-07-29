@@ -19,6 +19,12 @@ nonisolated enum TextMateHighlightIntent: String, Codable, Sendable {
     case backgroundHistory = "BackgroundHistory"
 }
 
+nonisolated enum TextMateMemoryPressure: String, Sendable {
+    case normal = "Normal"
+    case moderate = "Moderate"
+    case critical = "Critical"
+}
+
 nonisolated struct TextMateHighlightRequest: Encodable, Sendable {
     let key: TextMateCodeBlockKey
     let revision: TextMateHighlightRevision
@@ -43,39 +49,119 @@ nonisolated struct TextMateHighlightResult: Decodable, Sendable {
     let observation: NativeTextMateParseObservation
 }
 
+nonisolated private struct SchedulerAdmitEnvelope: Decodable, Sendable {
+    let ticketId: Int64?
+    let completed: [TextMateHighlightResult]
+}
+
 nonisolated protocol TextMateHighlighting: Sendable {
     func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult
+    func trim(_ level: TextMateMemoryPressure) async
+}
+
+extension TextMateHighlighting {
+    func trim(_ level: TextMateMemoryPressure) async {}
 }
 
 /// iOS's asynchronous platform-to-KMP adapter. Actor isolation is the sole
-/// mutable owner; the synchronous KMP call therefore cannot overlap or execute
-/// on MainActor.
+/// mutable owner; the shared Kotlin scheduler bridge owns queue policy while
+/// this actor drives at most one active highlight job per pump turn.
 actor KMPTextMateHighlightingEngine: TextMateHighlighting {
     static let shared = KMPTextMateHighlightingEngine()
 
-    private var bridge: OpenCodeTextMateHighlightingEngineJson?
+    private var bridge: OpenCodeTextMateSchedulerBridge?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private var waiters: [Int64: CheckedContinuation<TextMateHighlightResult, Error>] = [:]
+    private var ticketIdentity: [Int64: (TextMateCodeBlockKey, TextMateHighlightRevision)] = [:]
+    private var pumping = false
 
-    init(bridge: OpenCodeTextMateHighlightingEngineJson? = nil) {
+    init(bridge: OpenCodeTextMateSchedulerBridge? = nil) {
         self.bridge = bridge
     }
 
-    func highlight(_ request: TextMateHighlightRequest) throws -> TextMateHighlightResult {
-        let activeBridge: OpenCodeTextMateHighlightingEngineJson
-        if let bridge {
-            activeBridge = bridge
-        } else {
-            let created = OpenCodeTextMateHighlightingEngineJson.companion.createDefault()
-            bridge = created
-            activeBridge = created
+    func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult {
+        try await withCheckedThrowingContinuation { continuation in
+            Task { await self.enqueue(request, continuation: continuation) }
         }
-        let requestData = try encoder.encode(request)
-        guard let requestJSON = String(data: requestData, encoding: .utf8) else {
+    }
+
+    func trim(_ level: TextMateMemoryPressure) async {
+        let completedJSON = activeBridge().trim(level: level.rawValue)
+        deliverAll(resultsJSON: completedJSON)
+    }
+
+    private func enqueue(
+        _ request: TextMateHighlightRequest,
+        continuation: CheckedContinuation<TextMateHighlightResult, Error>
+    ) {
+        do {
+            let requestJSON = try encode(request)
+            let admitJSON = activeBridge().admit(requestJson: requestJSON)
+            let admit = try decoder.decode(SchedulerAdmitEnvelope.self, from: Data(admitJSON.utf8))
+            for completed in admit.completed {
+                resume(result: completed)
+            }
+            if let ticketId = admit.ticketId {
+                waiters[ticketId] = continuation
+                ticketIdentity[ticketId] = (request.key, request.revision)
+                pump()
+            } else if let rejected = admit.completed.last(where: {
+                $0.key == request.key && $0.revision == request.revision
+            }) ?? admit.completed.last {
+                continuation.resume(returning: rejected)
+            } else {
+                continuation.resume(throwing: TextMateHighlightingAdapterError.invalidUTF8)
+            }
+        } catch {
+            continuation.resume(throwing: error)
+        }
+    }
+
+    private func pump() {
+        guard !pumping else { return }
+        pumping = true
+        defer { pumping = false }
+        while let resultsJSON = activeBridge().pumpOnce() {
+            deliverAll(resultsJSON: resultsJSON)
+        }
+    }
+
+    private func deliverAll(resultsJSON: String) {
+        guard let data = resultsJSON.data(using: .utf8),
+              let results = try? decoder.decode([TextMateHighlightResult].self, from: data)
+        else {
+            return
+        }
+        for result in results {
+            resume(result: result)
+        }
+    }
+
+    private func resume(result: TextMateHighlightResult) {
+        if let ticketId = ticketIdentity.first(where: {
+            $0.value.0 == result.key && $0.value.1 == result.revision
+        })?.key {
+            ticketIdentity.removeValue(forKey: ticketId)
+            if let continuation = waiters.removeValue(forKey: ticketId) {
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    private func activeBridge() -> OpenCodeTextMateSchedulerBridge {
+        if let bridge { return bridge }
+        let created = OpenCodeTextMateSchedulerBridge.companion.createDefault()
+        bridge = created
+        return created
+    }
+
+    private func encode(_ request: TextMateHighlightRequest) throws -> String {
+        let data = try encoder.encode(request)
+        guard let json = String(data: data, encoding: .utf8) else {
             throw TextMateHighlightingAdapterError.invalidUTF8
         }
-        let responseJSON = activeBridge.highlightJson(requestJson: requestJSON)
-        return try decoder.decode(TextMateHighlightResult.self, from: Data(responseJSON.utf8))
+        return json
     }
 }
 

@@ -3,6 +3,15 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-29: Closed TextMate pipeline Phase 3. Shared pure
+  `TextMateRequestScheduler` owns priority, latest-wins coalescing, work
+  limits, interactive deadlines, trim/low-power admission, and queue metrics.
+  Android and iOS adapters remain serial owners and drive one active job.
+  Observations record queue wait, cancel-to-stop, and scheduling reason without
+  content identity. FinalPlaceholder and streaming plain/fallback publication
+  stay independent of a blocked highlighter. Shared scheduler tests and Android
+  owner/coalesce/gate tests pass. Phase 4 is next and owns compiled programs,
+  prepared line buffers, and weighted caches.
 - 2026-07-29: Closed TextMate pipeline Phase 2. Shared
   `TextMateHighlightingEngine` now upgrades individual finalized fences after
   structural parsing has produced a complete semantic-fallback document. The
@@ -18,8 +27,7 @@
   Shared Android tests, the complete iOS-simulator KMP suite, focused Android
   preparer plus 24-way first-use ownership tests, 17 focused iOS engine/bridge/
   logbook/rendering tests, and an iPhone 17 Pro simulator build/run pass.
-  Phase 3 is next and owns scheduling, deadlines, coalescing, backpressure,
-  trim handling, and queue/cancellation metrics.
+  Phase 3 scheduling work is recorded above.
 - 2026-07-29: Closed TextMate pipeline Phase 1 on the accepted simulated
   backend matrix. The Pixel 9a Android 17 / API 37 AVD completed 457
   mixed-language cycles over 1,801.760 seconds; retained PSS changed from
@@ -84,8 +92,8 @@
   [decisions](./decisions.md): a deep asynchronous post-parse engine, one
   instance-owned serial KMP runtime per platform, pooled 24 MiB eviction /
   32 MiB admission guardrails, evidence-owned provisional latency targets, and
-  a versioned language promotion allowlist. Phases 1 and 2 are now closed;
-  Phase 3 is next.
+  a versioned language promotion allowlist. Phases 1–3 are now closed;
+  Phase 4 is next.
 - 2026-07-29: Completed a software-architect review and separated the selected
   [TextMate Pipeline Architecture Proposal](./textmate-pipeline-architecture-proposal.md)
   from its six-phase
