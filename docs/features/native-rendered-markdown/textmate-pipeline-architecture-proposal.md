@@ -1,6 +1,6 @@
 # TextMate Pipeline Architecture Proposal
 
-**Status:** accepted target; Phases 1–4 implemented; Phase 5 next;
+**Status:** accepted target; Phases 1–5 implemented; Phase 6 next;
 physical-device calibration remains in Phase 6
 **Date:** 2026-07-29
 **Applies to:** Android/Joni and iOS/libonig through

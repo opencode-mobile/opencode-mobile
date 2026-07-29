@@ -14,6 +14,7 @@ class TextMateWeightedCacheCoordinator(
         GrammarProgram,
         RulePlan,
         CompiledRegex,
+        IncrementalBlock,
     }
 
     data class Snapshot(
@@ -123,10 +124,12 @@ class TextMateWeightedCacheCoordinator(
         when (level) {
             MemoryPressure.Normal -> Unit
             MemoryPressure.Moderate -> {
+                evictCategory(Category.IncrementalBlock, requireUnleased = true)
                 evictCategory(Category.CompiledRegex, requireUnleased = true)
                 evictCategory(Category.RulePlan, requireUnleased = true)
             }
             MemoryPressure.Critical -> {
+                evictCategory(Category.IncrementalBlock, requireUnleased = true)
                 evictCategory(Category.CompiledRegex, requireUnleased = true)
                 evictCategory(Category.RulePlan, requireUnleased = true)
                 evictCategory(Category.GrammarProgram, requireUnleased = true)
@@ -171,9 +174,10 @@ class TextMateWeightedCacheCoordinator(
 
     private fun categoryRank(category: Category): Int =
         when (category) {
-            Category.CompiledRegex -> 0
-            Category.RulePlan -> 1
-            Category.GrammarProgram -> 2
+            Category.IncrementalBlock -> 0
+            Category.CompiledRegex -> 1
+            Category.RulePlan -> 2
+            Category.GrammarProgram -> 3
         }
 
     companion object {

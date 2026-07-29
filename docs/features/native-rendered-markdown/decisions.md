@@ -1,5 +1,31 @@
 # Native Rendered Markdown Decisions
 
+## Phase 5 Incremental Unchanged-Prefix Reuse
+
+- Decision: engine-owned `TextMateIncrementalStateStore` retains immutable
+  per-line checkpoints (`TextMateLineCheckpoint`) with exact line text, FNV-1a
+  incoming/outgoing state fingerprints, and pre-repair relative scope tokens.
+  Open rules snapshot to `GrammarId`/`RuleId` plus resolved end/while patterns;
+  live patterns are restored from the grammar program pattern arena.
+- Decision: compatible revisions find the longest unchanged line prefix, then
+  resume at `max(0, k - 1)` (one-line backup for boundarySuffix). Bounds are 64
+  blocks, 8 MiB incremental category, 256 KiB per block, 2_048 lines per block.
+- Decision: suffix convergence copies remaining lines only when exact line text
+  and incoming-state fingerprint match; it is enabled by default after
+  multiline differential fixtures. No fuzzy/LCS matching.
+- Decision: Moderate trim drops BackgroundHistory incremental first; Critical
+  clears all incremental. Entries are not leased; promote only while the
+  request remains latest for its `CodeBlockKey`.
+- Decision: observation `schemaVersion = 2` adds `reusedLineCount`,
+  `retokenizedLineCount`, `suffixReusedLineCount`, and `incrementalMode`, plus
+  `TextMateMetricStage.IncrementalReuse`.
+- Decision: Phase 5 gate is incremental spans equal full reparse across
+  differential fixtures D1–D14 (synthetic + multiline), with Tokenize/Repair
+  metrics present and existing golden oracles still green.
+- Reason: triage locked prefix-first then suffix-in-same-slice without Phase 6
+  device calibration or public engine interface expansion.
+- Date: 2026-07-29.
+
 ## Phase 4 Compiled Programs, Prepared Buffers, And Weighted Caches
 
 - Decision: compile immutable `TextMateGrammarProgram` / `TextMateRulePlan` on
@@ -159,15 +185,14 @@
   3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
   Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
   diagnostic reference values, not release guardrails.
-- Implementation gate: Phases 1–4 are closed. The shared engine owns the
+- Implementation gate: Phases 1–5 are closed. The shared engine owns the
   fence-level asynchronous request/result contract plus priority scheduling,
   latest-wins coalescing, admission limits, trim, queue metrics, compiled
-  grammar programs, prepared line buffers, and weighted lease-safe caches.
-  Android and iOS remain serial owners that drive one active job. Shared
-  Phase 4 reuse/lease tests, Joni golden/oracle suites, and iOS simulator KMP
-  compile pass. Phase 5 owns incremental unchanged-prefix reuse. Physical
-  release calibration is a Phase 6
-  default-enablement gate.
+  grammar programs, prepared line buffers, weighted lease-safe caches, and
+  bounded unchanged-prefix / suffix-convergent incremental reuse. Android and
+  iOS remain serial owners that drive one active job. Shared Phase 5
+  differential/oracle and reuse tests plus iOS simulator KMP compile pass.
+  Phase 6 owns physical release calibration and default language enablement.
 - Date: 2026-07-29.
 
 ## Markdown Fences Close Like CommonMark / Web

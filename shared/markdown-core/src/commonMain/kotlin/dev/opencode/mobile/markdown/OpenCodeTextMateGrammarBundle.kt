@@ -122,6 +122,13 @@ class TextMateGrammarBundle internal constructor(
     ): TextMateGrammarPayload? =
         descriptorsByScopeName[scopeName]?.let { descriptor -> grammarForDescriptor(descriptor, metricsSink) }
 
+    fun grammarForId(grammarId: GrammarId): TextMateGrammarPayload? =
+        loadedByResourcePath.values.firstOrNull { payload -> payload.grammarId == grammarId }
+
+    fun grammarIdFor(grammar: TextMateGrammar): GrammarId? =
+        loadedByResourcePath.values.firstOrNull { payload -> payload.grammar === grammar }?.grammarId
+            ?: loadedByResourcePath.values.firstOrNull { payload -> payload.grammar.scopeName == grammar.scopeName }?.grammarId
+
     internal fun preloadAllFromReader() {
         descriptorsByResourcePath.values.forEach { descriptor -> grammarForDescriptor(descriptor, defaultMetricsSink) }
     }

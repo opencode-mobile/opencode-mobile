@@ -17,10 +17,22 @@ data class TextMateGrammarProgram(
     val scopeName: String,
     val rootRuleIds: List<RuleId>,
     val rules: List<TextMateRulePlan>,
+    /**
+     * Parallel to [rules]: the live [TextMatePattern] instance assigned each
+     * [RuleId] at compile time. Used for snapshot↔runtime open-rule restore.
+     */
+    val patterns: List<TextMatePattern>,
     val repositoryRuleIds: Map<String, RuleId>,
     val estimatedBytes: Long,
 ) {
     fun rule(id: RuleId): TextMateRulePlan = rules[id.value]
+
+    fun pattern(id: RuleId): TextMatePattern = patterns[id.value]
+
+    fun ruleIdOf(pattern: TextMatePattern): RuleId? {
+        val index = patterns.indexOfFirst { candidate -> candidate === pattern }
+        return if (index >= 0) RuleId(index) else null
+    }
 
     companion object {
         fun compile(
@@ -28,11 +40,13 @@ data class TextMateGrammarProgram(
             grammarId: GrammarId,
         ): TextMateGrammarProgram {
             val rules = mutableListOf<TextMateRulePlan>()
+            val patterns = mutableListOf<TextMatePattern>()
             val repositoryIds = linkedMapOf<String, RuleId>()
 
             fun visit(pattern: TextMatePattern): RuleId {
                 val ruleId = RuleId(rules.size)
                 // Reserve slot before children so nested IDs stay DFS-ordered.
+                patterns += pattern
                 rules +=
                     TextMateRulePlan(
                         ruleId = ruleId,
@@ -75,6 +89,7 @@ data class TextMateGrammarProgram(
             grammar.injections.values.forEach(::visit)
 
             val programRules = rules.toList()
+            val programPatterns = patterns.toList()
             val estimated =
                 256L +
                     programRules.sumOf { it.estimatedBytes } +
@@ -86,6 +101,7 @@ data class TextMateGrammarProgram(
                 scopeName = grammar.scopeName,
                 rootRuleIds = rootIds,
                 rules = programRules,
+                patterns = programPatterns,
                 repositoryRuleIds = repositoryIds,
                 estimatedBytes = estimated,
             )

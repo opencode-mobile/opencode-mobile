@@ -114,7 +114,13 @@ data class HighlightResult(
  */
 class OpenCodeTextMateHighlightingEngine(
     private val highlighter: OpenCodeCodeHighlighter,
+    private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+    private val incrementalStore: TextMateIncrementalStateStore =
+        TextMateIncrementalStateStore(cacheCoordinator),
+    private val suffixConvergenceEnabled: Boolean = true,
 ) : TextMateHighlightingEngine {
+    private val latestRevisionByKey = mutableMapOf<String, Long>()
+
     override suspend fun highlight(request: HighlightRequest): HighlightResult = highlightNow(request)
 
     override suspend fun trim(level: MemoryPressure) {
@@ -122,6 +128,8 @@ class OpenCodeTextMateHighlightingEngine(
     }
 
     fun trimNow(level: MemoryPressure) {
+        incrementalStore.trim(level)
+        cacheCoordinator.trim(level)
         when (highlighter) {
             is OpenCodeSyntaxHighlighter -> highlighter.trimCaches(level)
             is TextMateCacheTrimmable -> highlighter.trimCaches(level)
@@ -143,15 +151,46 @@ class OpenCodeTextMateHighlightingEngine(
         }
         val metrics = OpenCodeTextMateMetricsAccumulator()
         val startedAt = TimeSource.Monotonic.markNow()
+        val previousRevision = latestRevisionByKey[request.key.value]
+        latestRevisionByKey[request.key.value] = maxOf(previousRevision ?: -1L, request.revision.value)
         return try {
             val supported = highlighter.supportsLanguage(request.language)
+            val session =
+                if (highlighter is OpenCodeSyntaxHighlighter) {
+                    TextMateIncrementalHighlightSession(
+                        identity =
+                            IncrementalBlockIdentity(
+                                key = request.key,
+                                canonicalLanguage = request.language.orEmpty(),
+                                grammarResourcePath = "",
+                                grammarId = GrammarId(-1),
+                                policyEpoch = request.policyEpoch,
+                            ),
+                        intent = request.intent,
+                        revision = request.revision,
+                        previous = incrementalStore.get(request.key),
+                        suffixConvergenceEnabled = suffixConvergenceEnabled,
+                    )
+                } else {
+                    null
+                }
             val highlighted =
-                highlighter.highlight(
-                    languageOrAlias = request.language,
-                    code = request.source,
-                    metricsSink = metrics,
-                    shouldCancel = shouldCancel,
-                )
+                if (highlighter is OpenCodeSyntaxHighlighter && session != null) {
+                    highlighter.highlight(
+                        languageOrAlias = request.language,
+                        code = request.source,
+                        metricsSink = metrics,
+                        shouldCancel = shouldCancel,
+                        incremental = session,
+                    )
+                } else {
+                    highlighter.highlight(
+                        languageOrAlias = request.language,
+                        code = request.source,
+                        metricsSink = metrics,
+                        shouldCancel = shouldCancel,
+                    )
+                }
             if (shouldCancel()) {
                 return emptyResult(
                     request = request,
@@ -160,6 +199,10 @@ class OpenCodeTextMateHighlightingEngine(
                     schedulingReason = TextMateSchedulingReason.Supersession.name,
                     cancelRequestedToStopNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
                 )
+            }
+            val stillLatest = latestRevisionByKey[request.key.value] == request.revision.value
+            if (stillLatest) {
+                session?.produced?.let(incrementalStore::promote)
             }
             val diagnostics =
                 buildList {
@@ -188,6 +231,10 @@ class OpenCodeTextMateHighlightingEngine(
                 diagnostics = diagnostics,
                 metrics = metrics,
                 totalNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                reusedLineCount = session?.reusedLineCount ?: 0,
+                retokenizedLineCount = session?.retokenizedLineCount ?: 0,
+                suffixReusedLineCount = session?.suffixReusedLineCount ?: 0,
+                incrementalMode = session?.mode?.name,
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -218,6 +265,10 @@ class OpenCodeTextMateHighlightingEngine(
         diagnostics: List<MarkdownDiagnostic>,
         metrics: OpenCodeTextMateMetricsAccumulator,
         totalNanoseconds: Long,
+        reusedLineCount: Int = 0,
+        retokenizedLineCount: Int = 0,
+        suffixReusedLineCount: Int = 0,
+        incrementalMode: String? = null,
     ): HighlightResult =
         HighlightResult(
             key = request.key,
@@ -243,6 +294,10 @@ class OpenCodeTextMateHighlightingEngine(
                     totalNanoseconds = totalNanoseconds,
                     stages = metrics.stageSummaries(),
                     diagnosticKinds = diagnostics.map(MarkdownDiagnostic::kind).distinct(),
+                    reusedLineCount = reusedLineCount,
+                    retokenizedLineCount = retokenizedLineCount,
+                    suffixReusedLineCount = suffixReusedLineCount,
+                    incrementalMode = incrementalMode,
                 ),
         )
 

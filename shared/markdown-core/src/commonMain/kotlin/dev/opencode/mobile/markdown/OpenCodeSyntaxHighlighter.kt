@@ -115,6 +115,14 @@ class OpenCodeSyntaxHighlighter(
         code: String,
         metricsSink: OpenCodeTextMateMetricsSink,
         shouldCancel: () -> Boolean,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code, metricsSink, shouldCancel, incremental = null)
+
+    fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+        incremental: TextMateIncrementalHighlightSession?,
     ): SyntaxHighlightResult {
         if (shouldCancel()) {
             return SyntaxHighlightResult(
@@ -152,13 +160,66 @@ class OpenCodeSyntaxHighlighter(
                 )
             }
             val tokenization =
-                tokenizer.tokenize(
-                    grammar = grammar,
-                    code = code,
-                    grammarBundle = grammarBundle,
-                    metricsSink = metricsSink,
-                    shouldCancel = shouldCancel,
-                )
+                if (incremental != null && tokenizer is OpenCodeTextMateNativeTokenizer) {
+                    val resolvedIdentity =
+                        incremental.identity.copy(
+                            canonicalLanguage = grammar.descriptor.name,
+                            grammarResourcePath = grammar.descriptor.resourcePath,
+                            grammarId = grammar.grammarId,
+                        )
+                    incremental.identity = resolvedIdentity
+                    val compatiblePrevious =
+                        incremental.previous?.takeIf { previous ->
+                            previous.identity == resolvedIdentity
+                        }
+                    val plan =
+                        TextMateIncrementalPlanner.plan(
+                            previous = compatiblePrevious,
+                            identity = resolvedIdentity,
+                            source = code,
+                            suffixConvergenceEnabled = incremental.suffixConvergenceEnabled,
+                        )
+                    // Bind compatible previous into a working session for the tokenizer.
+                    val working =
+                        TextMateIncrementalHighlightSession(
+                            identity = resolvedIdentity,
+                            intent = incremental.intent,
+                            revision = incremental.revision,
+                            previous = compatiblePrevious,
+                            suffixConvergenceEnabled = incremental.suffixConvergenceEnabled,
+                        )
+                    val result =
+                        tokenizer.tokenizeLinesIncremental(
+                            grammar = grammar,
+                            code = code,
+                            grammarBundle = grammarBundle,
+                            plan = plan,
+                            session = working,
+                            shouldCancel = shouldCancel,
+                            metricsSink = metricsSink,
+                        )
+                    incremental.produced = working.produced
+                    incremental.mode = working.mode
+                    incremental.reusedLineCount = working.reusedLineCount
+                    incremental.retokenizedLineCount = working.retokenizedLineCount
+                    incremental.suffixReusedLineCount = working.suffixReusedLineCount
+                    result
+                } else {
+                    val result =
+                        tokenizer.tokenize(
+                            grammar = grammar,
+                            code = code,
+                            grammarBundle = grammarBundle,
+                            metricsSink = metricsSink,
+                            shouldCancel = shouldCancel,
+                        )
+                    TextMateLinesTokenizationResult(
+                        tokens = result.tokens,
+                        state = TextMateLineState.Initial,
+                        diagnostics = result.diagnostics,
+                        cancelled = result.cancelled,
+                    )
+                }
             if (shouldCancel() || tokenization.cancelled) {
                 return SyntaxHighlightResult(
                     spans = emptyList(),
@@ -191,6 +252,21 @@ class OpenCodeSyntaxHighlighter(
                         outcome = TextMateMetricOutcome.Success,
                         durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
                         sourceCharacters = code.length,
+                    ),
+                )
+            }
+            // Exact-source reuse skips the Tokenize stage timer inside tokenize();
+            // still emit a Tokenize CacheHit so repair/tokenize proportions exist.
+            if (incremental?.mode == TextMateIncrementalMode.ExactSource && metricsSink.isEnabled) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.Tokenize,
+                        outcome = TextMateMetricOutcome.CacheHit,
+                        durationNanoseconds = 0,
+                        sourceCharacters = code.length,
+                        sourceLines = code.count { it == '\n' } + if (code.isEmpty()) 0 else 1,
+                        reusedLineCount = incremental.reusedLineCount,
+                        retokenizedLineCount = 0,
                     ),
                 )
             }

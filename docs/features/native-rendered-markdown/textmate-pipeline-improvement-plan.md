@@ -1,6 +1,6 @@
 # TextMate Pipeline Implementation Plan
 
-**Status:** architecture locked; Phases 1–4 closed; Phase 5 next;
+**Status:** architecture locked; Phases 1–5 closed; Phase 6 next;
 physical-device release calibration remains in Phase 6
 **Date:** 2026-07-29
 **Scope:** reusable fenced-code highlighting in `shared/markdown-core`, including
@@ -632,6 +632,19 @@ work; all production and test entry points use an injected engine instance.
 - add suffix convergence only after multiline correctness fixtures pass.
 
 **Gate:** incremental output equals full reparse across differential fixtures.
+
+#### Phase 5 closure evidence — 2026-07-29
+
+- Engine-owned `TextMateIncrementalStateStore` retains immutable per-line
+  checkpoints with GrammarId/RuleId open-rule snapshots and pre-repair relative
+  tokens. Compatible revisions resume after a one-line backup; suffix
+  convergence is enabled once multiline fixtures pass.
+- Observations schemaVersion 2 records reused/retokenized/suffix line counts and
+  `IncrementalReuse` hit/miss alongside obligatory Tokenize and Repair stages.
+- Verification: Phase 5 incremental reuse + differential oracle unit tests;
+  existing engine/scheduler suites; iOS simulator KMP compile.
+
+**Gate result:** closed. Phase 6 is the next phase.
 
 ### Phase 6 — Default enablement
 

@@ -302,6 +302,332 @@ class OpenCodeTextMateNativeTokenizer private constructor(
         )
     }
 
+    fun tokenizeLinesIncremental(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle? = null,
+        plan: TextMateIncrementalReusePlan,
+        session: TextMateIncrementalHighlightSession,
+        shouldCancel: () -> Boolean = { false },
+        metricsSink: OpenCodeTextMateMetricsSink = this.metricsSink,
+    ): TextMateLinesTokenizationResult {
+        if (metricsSink !== this.metricsSink) {
+            return OpenCodeTextMateNativeTokenizer(
+                regexBackend = regexBackend,
+                metricsSink = metricsSink,
+                sharedState = sharedState,
+                cacheCoordinator = cacheCoordinator,
+            ).tokenizeLinesIncremental(
+                grammar = grammar,
+                code = code,
+                grammarBundle = grammarBundle,
+                plan = plan,
+                session = session,
+                shouldCancel = shouldCancel,
+                metricsSink = metricsSink,
+            )
+        }
+        if (code.isEmpty()) {
+            session.mode = TextMateIncrementalMode.ExactSource
+            session.reusedLineCount = 0
+            session.retokenizedLineCount = 0
+            session.suffixReusedLineCount = 0
+            session.produced =
+                IncrementalBlockState(
+                    identity = session.identity,
+                    sourceHash32 = 0,
+                    sourceLength = 0,
+                    source = code,
+                    lines = emptyList(),
+                    intent = session.intent,
+                    revision = session.revision,
+                    estimatedBytes = 128L,
+                )
+            return TextMateLinesTokenizationResult(
+                tokens = emptyList(),
+                state = TextMateLineState.Initial,
+                diagnostics = backendDiagnostics(),
+            )
+        }
+
+        val lines = TextMatePhysicalLines.split(code)
+        val offsets = TextMatePhysicalLines.lineStartOffsets(lines)
+        val checkpoints = mutableListOf<TextMateLineCheckpoint>()
+        val tokens = mutableListOf<TextMateScopeToken>()
+
+        if (plan.mode == TextMateIncrementalMode.ExactSource && plan.previous != null) {
+            plan.previous.lines.forEachIndexed { index, checkpoint ->
+                val lineOffset = offsets.getOrElse(index) { 0 }
+                tokens +=
+                    checkpoint.relativeTokens.map { token ->
+                        token.copy(start = token.start + lineOffset, end = token.end + lineOffset)
+                    }
+            }
+            session.mode = TextMateIncrementalMode.ExactSource
+            session.reusedLineCount = plan.previous.lines.size
+            session.retokenizedLineCount = 0
+            session.suffixReusedLineCount = 0
+            session.produced = plan.previous.copy(revision = session.revision, intent = session.intent)
+            if (metricsSink.isEnabled) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.IncrementalReuse,
+                        outcome = TextMateMetricOutcome.CacheHit,
+                        reusedLineCount = session.reusedLineCount,
+                        retokenizedLineCount = 0,
+                        suffixReusedLineCount = 0,
+                        sourceLines = lines.size,
+                    ),
+                )
+            }
+            return TextMateLinesTokenizationResult(
+                tokens = normalize(tokens, code.length),
+                state =
+                    restoreLineState(plan.previous.lines.lastOrNull()?.outgoing ?: TextMateLineStateSnapshot.Initial, grammar, grammarBundle)
+                        ?: TextMateLineState.Initial,
+                diagnostics = backendDiagnostics(),
+            )
+        }
+
+        checkpoints += plan.reusedPrefix
+        plan.reusedPrefix.forEachIndexed { index, checkpoint ->
+            val lineOffset = offsets.getOrElse(checkpoint.lineIndex) { offsets.getOrElse(index) { 0 } }
+            tokens +=
+                checkpoint.relativeTokens.map { token ->
+                    token.copy(start = token.start + lineOffset, end = token.end + lineOffset)
+                }
+        }
+
+        var state =
+            restoreLineState(plan.incomingAtResume, grammar, grammarBundle)
+                ?: TextMateLineState.Initial
+        var lineIndex = plan.resumeLine
+        var reusedSuffix = 0
+        var retokenized = 0
+        val tokenizeStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+
+        while (lineIndex < lines.size) {
+            if (shouldCancel()) {
+                return TextMateLinesTokenizationResult(
+                    tokens = emptyList(),
+                    state = state,
+                    diagnostics = backendDiagnostics(),
+                    cancelled = true,
+                )
+            }
+
+            if (session.suffixConvergenceEnabled && plan.previous != null) {
+                val incomingSnapshot =
+                    snapshotLineState(state, grammar, grammarBundle)
+                val previousLine = plan.previous.lines.getOrNull(lineIndex)
+                if (
+                    incomingSnapshot != null &&
+                    previousLine != null &&
+                    previousLine.lineText == lines[lineIndex] &&
+                    previousLine.incomingFingerprint == incomingSnapshot.fingerprint()
+                ) {
+                    val suffix = plan.previous.lines.drop(lineIndex)
+                    var converged = true
+                    for (candidate in suffix) {
+                        if (candidate.lineIndex >= lines.size || candidate.lineText != lines[candidate.lineIndex]) {
+                            converged = false
+                            break
+                        }
+                    }
+                    if (converged && suffix.size == lines.size - lineIndex) {
+                        suffix.forEach { checkpoint ->
+                            val lineOffset = offsets[checkpoint.lineIndex]
+                            tokens +=
+                                checkpoint.relativeTokens.map { token ->
+                                    token.copy(start = token.start + lineOffset, end = token.end + lineOffset)
+                                }
+                            checkpoints += checkpoint
+                        }
+                        reusedSuffix = suffix.size
+                        state =
+                            restoreLineState(suffix.last().outgoing, grammar, grammarBundle)
+                                ?: state
+                        break
+                    }
+                }
+            }
+
+            val line = lines[lineIndex]
+            val lineOffset = offsets[lineIndex]
+            val nextLine = lines.getOrElse(lineIndex + 1) { "" }
+            val boundarySuffix = "\n$nextLine"
+            val incomingSnapshot =
+                snapshotLineState(state, grammar, grammarBundle)
+                    ?: return fallbackFullTokenize(grammar, code, grammarBundle, session, shouldCancel)
+            val lineResult =
+                tokenizeLine(
+                    grammar = grammar,
+                    grammarBundle = grammarBundle,
+                    line = line,
+                    lineOffset = lineOffset,
+                    initialState = state,
+                    boundarySuffix = boundarySuffix,
+                )
+            val relativeTokens =
+                lineResult.tokens.map { token ->
+                    token.copy(start = token.start - lineOffset, end = token.end - lineOffset)
+                }
+            val outgoingSnapshot =
+                snapshotLineState(lineResult.state, grammar, grammarBundle)
+                    ?: return fallbackFullTokenize(grammar, code, grammarBundle, session, shouldCancel)
+            val checkpoint =
+                TextMateLineCheckpoint(
+                    lineIndex = lineIndex,
+                    lineText = line,
+                    lineTextHash32 = line.hashCode(),
+                    incoming = incomingSnapshot,
+                    incomingFingerprint = incomingSnapshot.fingerprint(),
+                    outgoing = outgoingSnapshot,
+                    outgoingFingerprint = outgoingSnapshot.fingerprint(),
+                    relativeTokens = relativeTokens,
+                    estimatedBytes =
+                        estimateCheckpointBytes(
+                            lineText = line,
+                            incoming = incomingSnapshot,
+                            outgoing = outgoingSnapshot,
+                            relativeTokens = relativeTokens,
+                        ),
+                )
+            checkpoints += checkpoint
+            tokens += lineResult.tokens
+            state = lineResult.state
+            retokenized += 1
+            lineIndex += 1
+        }
+        tokenizeStartedAt?.let {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.Tokenize,
+                    outcome = TextMateMetricOutcome.Success,
+                    durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    backend = regexBackend.name,
+                    sourceCharacters = code.length,
+                    sourceLines = lines.size,
+                    reusedLineCount = plan.reusedPrefix.size + reusedSuffix,
+                    retokenizedLineCount = retokenized,
+                    suffixReusedLineCount = reusedSuffix,
+                ),
+            )
+        }
+
+        val reusedPrefixCount = plan.reusedPrefix.size
+        session.mode =
+            when {
+                reusedSuffix > 0 && reusedPrefixCount > 0 -> TextMateIncrementalMode.PrefixSuffix
+                reusedPrefixCount > 0 -> TextMateIncrementalMode.Prefix
+                else -> TextMateIncrementalMode.None
+            }
+        session.reusedLineCount = reusedPrefixCount + reusedSuffix
+        session.retokenizedLineCount = retokenized
+        session.suffixReusedLineCount = reusedSuffix
+        session.produced =
+            IncrementalBlockState(
+                identity = session.identity,
+                sourceHash32 = code.hashCode(),
+                sourceLength = code.length,
+                source = code,
+                lines = checkpoints,
+                intent = session.intent,
+                revision = session.revision,
+                estimatedBytes = estimateBlockBytes(checkpoints),
+            )
+        if (metricsSink.isEnabled) {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.IncrementalReuse,
+                    outcome =
+                        if (session.reusedLineCount > 0) {
+                            TextMateMetricOutcome.CacheHit
+                        } else {
+                            TextMateMetricOutcome.CacheMiss
+                        },
+                    reusedLineCount = session.reusedLineCount,
+                    retokenizedLineCount = session.retokenizedLineCount,
+                    suffixReusedLineCount = session.suffixReusedLineCount,
+                    sourceLines = lines.size,
+                ),
+            )
+        }
+        return TextMateLinesTokenizationResult(
+            tokens = normalize(tokens, code.length),
+            state = state,
+            diagnostics = backendDiagnostics(),
+        )
+    }
+
+    private fun fallbackFullTokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        session: TextMateIncrementalHighlightSession,
+        shouldCancel: () -> Boolean,
+    ): TextMateLinesTokenizationResult {
+        val full =
+            tokenizeLines(
+                grammar = grammar,
+                code = code,
+                grammarBundle = grammarBundle,
+                shouldCancel = shouldCancel,
+            )
+        session.mode = TextMateIncrementalMode.None
+        session.reusedLineCount = 0
+        session.retokenizedLineCount = TextMatePhysicalLines.split(code).size
+        session.suffixReusedLineCount = 0
+        session.produced = null
+        return full
+    }
+
+    private fun snapshotLineState(
+        state: TextMateLineState,
+        primary: TextMateGrammarPayload,
+        grammarBundle: TextMateGrammarBundle?,
+    ): TextMateLineStateSnapshot? =
+        TextMateLineStateCodec.snapshot(
+            state = state,
+            resolveGrammarId = { grammar ->
+                when {
+                    grammar === primary.grammar -> primary.grammarId
+                    else -> grammarBundle?.grammarIdFor(grammar)
+                }
+            },
+            resolveRuleId = { grammar, pattern ->
+                val program =
+                    when {
+                        grammar === primary.grammar -> primary.program
+                        else -> grammarBundle?.grammarIdFor(grammar)?.let { id -> grammarBundle.grammarForId(id)?.program }
+                    }
+                program?.ruleIdOf(pattern)
+            },
+        )
+
+    private fun restoreLineState(
+        snapshot: TextMateLineStateSnapshot,
+        primary: TextMateGrammarPayload,
+        grammarBundle: TextMateGrammarBundle?,
+    ): TextMateLineState? =
+        TextMateLineStateCodec.restore(
+            snapshot = snapshot,
+            resolveGrammar = { grammarId ->
+                when {
+                    grammarId == primary.grammarId -> primary.grammar
+                    else -> grammarBundle?.grammarForId(grammarId)?.grammar
+                }
+            },
+            resolvePattern = { grammarId, ruleId ->
+                val program =
+                    when {
+                        grammarId == primary.grammarId -> primary.program
+                        else -> grammarBundle?.grammarForId(grammarId)?.program
+                    }
+                program?.pattern(ruleId)
+            },
+        )
+
     fun tokenizeLine(
         grammar: TextMateGrammarPayload,
         line: String,

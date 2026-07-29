@@ -14,6 +14,7 @@ enum class TextMateMetricStage {
     Utf8IndexMap,
     Tokenize,
     Repair,
+    IncrementalReuse,
 }
 
 @Serializable
@@ -32,6 +33,9 @@ data class TextMateMetricEvent(
     val backend: String? = null,
     val sourceCharacters: Int? = null,
     val sourceLines: Int? = null,
+    val reusedLineCount: Int? = null,
+    val retokenizedLineCount: Int? = null,
+    val suffixReusedLineCount: Int? = null,
 )
 
 fun interface OpenCodeTextMateMetricsSink {
@@ -72,7 +76,7 @@ data class TextMateStageSummary(
 
 @Serializable
 data class TextMateParseObservation(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val requestedLanguage: String? = null,
     val canonicalLanguage: String? = null,
     val outcome: TextMateParseOutcome,
@@ -89,6 +93,10 @@ data class TextMateParseObservation(
     val queueWaitNanoseconds: Long = 0,
     val cancelRequestedToStopNanoseconds: Long? = null,
     val schedulingReason: String? = null,
+    val reusedLineCount: Int = 0,
+    val retokenizedLineCount: Int = 0,
+    val suffixReusedLineCount: Int = 0,
+    val incrementalMode: String? = null,
 )
 
 internal class OpenCodeTextMateMetricsAccumulator : OpenCodeTextMateMetricsSink {
