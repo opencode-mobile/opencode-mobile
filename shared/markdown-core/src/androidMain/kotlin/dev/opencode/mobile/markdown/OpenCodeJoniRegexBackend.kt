@@ -4,6 +4,7 @@ import java.io.OutputStream
 import java.io.PrintStream
 import java.util.concurrent.ConcurrentHashMap
 import org.jcodings.specific.UTF8Encoding
+import org.joni.Matcher
 import org.joni.Option
 import org.joni.Regex
 import org.joni.Syntax
@@ -19,11 +20,33 @@ class OpenCodeJoniRegexRuntime(
     override val isOnigurumaCompatible: Boolean = true
 
     private sealed class RegexCacheEntry {
-        data class Compiled(
+        class Compiled(
             val regex: Regex,
             val cacheKey: String,
             val estimatedBytes: Long,
-        ) : RegexCacheEntry()
+        ) : RegexCacheEntry() {
+            @Volatile
+            private var cachedMatcher: Matcher? = null
+
+            @Volatile
+            private var cachedMatcherBytes: ByteArray? = null
+
+            fun matcherFor(bytes: ByteArray): Matcher {
+                val existing = cachedMatcher
+                if (existing != null && cachedMatcherBytes === bytes) {
+                    return existing
+                }
+                val created = regex.matcher(bytes)
+                cachedMatcher = created
+                cachedMatcherBytes = bytes
+                return created
+            }
+
+            fun clearMatcher() {
+                cachedMatcher = null
+                cachedMatcherBytes = null
+            }
+        }
 
         data class Decomposed(
             val candidates: List<String>,
@@ -33,7 +56,6 @@ class OpenCodeJoniRegexRuntime(
     }
 
     private val regexCache = ConcurrentHashMap<String, RegexCacheEntry>()
-    private val activeSearchPins = ConcurrentHashMap<String, Int>()
 
     // Joni prints Oniguruma parse warnings to System.err for many bundled TextMate
     // patterns. Compilation is cached, but cold-start still emits thousands of lines
@@ -78,7 +100,12 @@ class OpenCodeJoniRegexRuntime(
         metricsSink: OpenCodeTextMateMetricsSink,
     ): Regex? {
         val patternBytes = pattern.encodeToByteArray()
-        val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+        val startedAt =
+            if (metricsSink.shouldRecord(TextMateMetricStage.RegexCompile)) {
+                TimeSource.Monotonic.markNow()
+            } else {
+                null
+            }
         synchronized(compileLock) {
             val originalErr = System.err
             val compiled =
@@ -179,64 +206,69 @@ class OpenCodeJoniRegexRuntime(
         endIndex: Int,
         metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
-        pin(entry.cacheKey)
-        try {
-            val indexMap = buffer.indexMap
-            val inputBytes = buffer.bytes
-            val inputLength = buffer.length
+        // Single-owner engine lane: touch for LRU instead of per-search lease/pin.
+        cacheCoordinator.touch(entry.cacheKey)
+        val indexMap = buffer.indexMap
+        val inputBytes = buffer.bytes
+        val inputLength = buffer.length
 
-            val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, inputLength))
-            val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, inputLength))
-            val matcher = entry.regex.matcher(inputBytes)
-            val result =
-                if (metricsSink.isEnabled) {
-                    val startedAt = TimeSource.Monotonic.markNow()
-                    var outcome = TextMateMetricOutcome.Success
-                    try {
-                        matcher.search(startByte, endByte, Option.NONE)
-                    } catch (failure: Throwable) {
-                        outcome = TextMateMetricOutcome.Failure
-                        throw failure
-                    } finally {
-                        metricsSink.record(
-                            TextMateMetricEvent(
-                                stage = TextMateMetricStage.NativeRegexSearch,
-                                outcome = outcome,
-                                durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
-                                backend = name,
-                            ),
-                        )
-                    }
-                } else {
+        val startByte = indexMap.byteIndexFor(startIndex.coerceIn(0, inputLength))
+        val endByte = indexMap.byteIndexFor(endIndex.coerceIn(0, inputLength))
+        val matcher = entry.matcherFor(inputBytes)
+        val result =
+            if (metricsSink.shouldRecord(TextMateMetricStage.NativeRegexSearch)) {
+                val startedAt = TimeSource.Monotonic.markNow()
+                var outcome = TextMateMetricOutcome.Success
+                try {
                     matcher.search(startByte, endByte, Option.NONE)
+                } catch (failure: Throwable) {
+                    outcome = TextMateMetricOutcome.Failure
+                    throw failure
+                } finally {
+                    metricsSink.record(
+                        TextMateMetricEvent(
+                            stage = TextMateMetricStage.NativeRegexSearch,
+                            outcome = outcome,
+                            durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                            backend = name,
+                        ),
+                    )
                 }
-            if (result < 0) return null
+            } else {
+                matcher.search(startByte, endByte, Option.NONE)
+            }
+        if (result < 0) return null
 
-            val region = matcher.eagerRegion
-            val captures =
-                (0 until region.numRegs)
-                    .mapNotNull { index ->
-                        val begin = region.getBeg(index)
-                        val end = region.getEnd(index)
-                        if (begin < 0 || end < begin) {
-                            null
-                        } else {
-                            TextMateRegexCapture(
-                                index = index,
-                                start = indexMap.charIndexFor(begin),
-                                end = indexMap.charIndexFor(end),
-                            )
-                        }
-                    }
-
+        val region = matcher.eagerRegion
+        val captureCount = region.numRegs
+        if (captureCount <= 0) {
             return TextMateRegexMatch(
                 start = indexMap.charIndexFor(result),
                 end = indexMap.charIndexFor(matcher.end),
-                captures = captures,
+                captures = emptyList(),
             )
-        } finally {
-            unpin(entry.cacheKey)
         }
+        val captures =
+            ArrayList<TextMateRegexCapture>(captureCount).apply {
+                for (index in 0 until captureCount) {
+                    val begin = region.getBeg(index)
+                    val end = region.getEnd(index)
+                    if (begin < 0 || end < begin) continue
+                    add(
+                        TextMateRegexCapture(
+                            index = index,
+                            start = indexMap.charIndexFor(begin),
+                            end = indexMap.charIndexFor(end),
+                        ),
+                    )
+                }
+            }
+
+        return TextMateRegexMatch(
+            start = indexMap.charIndexFor(result),
+            end = indexMap.charIndexFor(matcher.end),
+            captures = captures,
+        )
     }
 
     override fun trimCaches(level: MemoryPressure) {
@@ -247,32 +279,18 @@ class OpenCodeJoniRegexRuntime(
             -> {
                 val victims =
                     regexCache.entries
-                        .filter { (pattern, entry) ->
-                            entry is RegexCacheEntry.Compiled &&
-                                (activeSearchPins[entry.cacheKey] ?: 0) == 0
-                        }.map { it.key }
+                        .filter { (_, entry) -> entry is RegexCacheEntry.Compiled }
+                        .map { it.key }
                 victims.forEach { pattern ->
                     val removed = regexCache.remove(pattern)
                     if (removed is RegexCacheEntry.Compiled) {
+                        removed.clearMatcher()
                         cacheCoordinator.removeIfUnleased(removed.cacheKey)
                     }
                 }
                 cacheCoordinator.trim(level)
             }
         }
-    }
-
-    private fun pin(cacheKey: String) {
-        activeSearchPins.merge(cacheKey, 1, Int::plus)
-        cacheCoordinator.lease(cacheKey)
-    }
-
-    private fun unpin(cacheKey: String) {
-        activeSearchPins.compute(cacheKey) { _, count ->
-            val next = (count ?: 1) - 1
-            if (next <= 0) null else next
-        }
-        cacheCoordinator.release(cacheKey)
     }
 
     private fun regexCacheKey(pattern: String): String = "joni:$pattern"

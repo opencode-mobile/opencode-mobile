@@ -7,9 +7,14 @@ package dev.opencode.mobile.markdown
  */
 internal object OpenCodeTextMateRegexLookbehindSupport {
     fun normalize(pattern: String): String {
+        // Bundled TextMate patterns rarely hit these rewrites; skip scanning when
+        // the pattern has no negative lookbehind at all.
+        if (!pattern.contains("(?<!")) return pattern
         var normalized = pattern
         for ((source, replacement) in rewrites) {
-            normalized = normalized.replace(source, replacement)
+            if (normalized.contains(source)) {
+                normalized = normalized.replace(source, replacement)
+            }
         }
         return normalized
     }

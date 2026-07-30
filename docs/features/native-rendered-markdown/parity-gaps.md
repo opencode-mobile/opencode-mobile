@@ -35,7 +35,8 @@
 - Intentional platform difference: regex backend only (Joni vs libonig) and
   lease disposal (`onig_free` vs JVM GC).
 - Owner or next action: run the remaining physical-device Tier B / full soak
-  checklist in `phase-6-calibration.md` before store release.
+  checklist in `phase-6-calibration.md` (operator loop + per-language
+  scorecards + logbook pulls) before store release.
 
 ## TextMate Highlighter
 

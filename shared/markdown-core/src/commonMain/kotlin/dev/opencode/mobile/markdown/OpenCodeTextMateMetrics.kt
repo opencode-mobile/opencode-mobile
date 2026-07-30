@@ -43,12 +43,20 @@ fun interface OpenCodeTextMateMetricsSink {
 
     val isEnabled: Boolean
         get() = true
+
+    /**
+     * Whether to time and record [stage]. Production engines keep coarse stages
+     * enabled but skip per-search stages unless verbose calibration is on.
+     */
+    fun shouldRecord(stage: TextMateMetricStage): Boolean = isEnabled
 }
 
 object NoOpOpenCodeTextMateMetricsSink : OpenCodeTextMateMetricsSink {
     override val isEnabled: Boolean = false
 
     override fun record(event: TextMateMetricEvent) = Unit
+
+    override fun shouldRecord(stage: TextMateMetricStage): Boolean = false
 }
 
 @Serializable
@@ -99,7 +107,9 @@ data class TextMateParseObservation(
     val incrementalMode: String? = null,
 )
 
-internal class OpenCodeTextMateMetricsAccumulator : OpenCodeTextMateMetricsSink {
+internal class OpenCodeTextMateMetricsAccumulator(
+    private val recordPerSearch: Boolean = false,
+) : OpenCodeTextMateMetricsSink {
     private data class MutableStageSummary(
         var eventCount: Int = 0,
         var totalNanoseconds: Long = 0,
@@ -113,7 +123,13 @@ internal class OpenCodeTextMateMetricsAccumulator : OpenCodeTextMateMetricsSink 
     private val summaries = mutableMapOf<TextMateMetricStage, MutableStageSummary>()
     private val backends = linkedSetOf<String>()
 
+    override val isEnabled: Boolean = true
+
+    override fun shouldRecord(stage: TextMateMetricStage): Boolean =
+        recordPerSearch || stage !in PER_SEARCH_STAGES
+
     override fun record(event: TextMateMetricEvent) {
+        if (!shouldRecord(event.stage)) return
         val summary = summaries.getOrPut(event.stage, ::MutableStageSummary)
         summary.eventCount += 1
         summary.totalNanoseconds = summary.totalNanoseconds.saturatedPlus(event.durationNanoseconds)
@@ -125,6 +141,14 @@ internal class OpenCodeTextMateMetricsAccumulator : OpenCodeTextMateMetricsSink 
             TextMateMetricOutcome.CacheMiss -> summary.cacheMissCount += 1
         }
         event.backend?.takeIf(String::isNotBlank)?.let(backends::add)
+    }
+
+    companion object {
+        private val PER_SEARCH_STAGES =
+            setOf(
+                TextMateMetricStage.RegexSearch,
+                TextMateMetricStage.NativeRegexSearch,
+            )
     }
 
     fun stageSummaries(): List<TextMateStageSummary> =

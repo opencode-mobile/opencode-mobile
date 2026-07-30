@@ -120,7 +120,12 @@ class OpenCodeLibOnigRegexRuntime(
         metricsSink: OpenCodeTextMateMetricsSink,
     ): CPointer<OnigRegexType>? {
         val patternBytes = pattern.encodeToByteArray()
-        val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+        val startedAt =
+            if (metricsSink.shouldRecord(TextMateMetricStage.RegexCompile)) {
+                TimeSource.Monotonic.markNow()
+            } else {
+                null
+            }
         val compiled =
             memScoped {
                 val regexOut = alloc<CPointerVar<OnigRegexType>>()
@@ -265,7 +270,7 @@ class OpenCodeLibOnigRegexRuntime(
                         val searchEnd = stringStart + searchEndByte ?: stringEnd
 
                         val matchStart =
-                            if (metricsSink.isEnabled) {
+                            if (metricsSink.shouldRecord(TextMateMetricStage.NativeRegexSearch)) {
                                 val startedAt = TimeSource.Monotonic.markNow()
                                 var outcome = TextMateMetricOutcome.Success
                                 try {

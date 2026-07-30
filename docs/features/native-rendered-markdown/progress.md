@@ -3,6 +3,21 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-30: Wave 2 Pixel 9 JS remeasure **misses** Tier A (≤2k warm p95
+  ~200 ms vs 50 ms; mixed vs Wave 1). Scorecard in `phase-6-calibration.md`.
+- 2026-07-30: Wave 2 software OnigScanner (`findEarliest` two-pass at-cursor +
+  capped search) wired through tokenizer cursor loops. Pixel remeasure pending.
+- 2026-07-30: Wave 1 Pixel 9 JS remeasure **misses** Tier A (≤2k warm p95
+  ~268 ms vs 50 ms; ~2× median speedup vs baseline). Proceed to Wave 2
+  multi-pattern search. Scorecard in `phase-6-calibration.md`.
+- 2026-07-30: Wave 1 TextMate physical latency work landed (see
+  `textmate-physical-latency-plan.md`): production engine skips per-search
+  RegexSearch/NativeRegexSearch metrics by default; tokenizer earliest-match
+  short-circuit; Joni Matcher reuse + touch instead of per-search pin/lease.
+  Pixel 9 remeasure pending before Wave 2.
+- 2026-07-30: Expanded `phase-6-calibration.md` with logbook pull steps,
+  field/gap notes, and a per-language assess/optimize loop for post-close
+  speed work and Tier B evidence.
 - 2026-07-30: Logbook combo metrics: keep Fast/OK/Slow fence budgets and add
   `chars/ms` · `spans/ms` throughput on measured rows (subtitle + details).
 - 2026-07-30: Added Developer Tools TextMate language toggles (A+B: opt out of

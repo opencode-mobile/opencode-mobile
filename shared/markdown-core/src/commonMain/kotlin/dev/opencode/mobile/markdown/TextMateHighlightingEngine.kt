@@ -121,6 +121,14 @@ class OpenCodeTextMateHighlightingEngine(
 ) : TextMateHighlightingEngine {
     private val latestRevisionByKey = mutableMapOf<String, Long>()
 
+    /**
+     * When true, observations include per-call RegexSearch / NativeRegexSearch
+     * stage events. Default false — those stages dominate wall time on dense
+     * grammars and are only needed for calibration drill-down.
+     */
+    @Volatile
+    var recordPerSearchMetrics: Boolean = false
+
     override suspend fun highlight(request: HighlightRequest): HighlightResult = highlightNow(request)
 
     override suspend fun trim(level: MemoryPressure) {
@@ -149,7 +157,7 @@ class OpenCodeTextMateHighlightingEngine(
                 schedulingReason = TextMateSchedulingReason.Supersession.name,
             )
         }
-        val metrics = OpenCodeTextMateMetricsAccumulator()
+        val metrics = OpenCodeTextMateMetricsAccumulator(recordPerSearch = recordPerSearchMetrics)
         val startedAt = TimeSource.Monotonic.markNow()
         val previousRevision = latestRevisionByKey[request.key.value]
         latestRevisionByKey[request.key.value] = maxOf(previousRevision ?: -1L, request.revision.value)
