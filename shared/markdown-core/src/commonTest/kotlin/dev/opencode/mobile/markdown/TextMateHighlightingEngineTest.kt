@@ -69,6 +69,8 @@ class TextMateHighlightingEngineTest {
         assertNotSame(document, attached)
         assertEquals(emptyList(), (document.blocks[1] as MarkdownBlock.CodeBlock).spans)
         assertEquals(result.spans, (attached.blocks[1] as MarkdownBlock.CodeBlock).spans)
+        assertEquals(document.sourceHash, attached.sourceHash)
+        assertEquals(document.renderTreeVersion + 1, attached.renderTreeVersion)
     }
 
     @Test
@@ -160,5 +162,72 @@ class TextMateHighlightingEngineTest {
             },
         )
         return requireNotNull(outcome).getOrThrow()
+    }
+
+    @Test
+    fun schedulerBridgeAdmitAcceptsSwiftOmittedNullLanguage() {
+        // Swift JSONEncoder omits nil optionals; language must still decode.
+        val json =
+            """
+            {
+              "key":{"value":"msg:0:0"},
+              "revision":{"value":1},
+              "source":"print(1)",
+              "intent":"VisibleHistory",
+              "policyEpoch":0,
+              "messageCharacters":8,
+              "fenceIndex":0,
+              "fenceCount":1
+            }
+            """.trimIndent()
+        val bridge =
+            OpenCodeTextMateSchedulerBridge(
+                engine =
+                    OpenCodeTextMateHighlightingEngine(
+                        object : OpenCodeCodeHighlighter {
+                            override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+                            override fun highlight(
+                                languageOrAlias: String?,
+                                code: String,
+                            ): SyntaxHighlightResult =
+                                SyntaxHighlightResult(
+                                    spans = emptyList(),
+                                    diagnostics = emptyList(),
+                                    source = SyntaxHighlightSource.TextMate,
+                                )
+                        },
+                    ),
+            )
+        val admitJson = bridge.admit(json)
+        val envelope = OpenCodeMarkdownJson.json.decodeFromString<SchedulerAdmitEnvelope>(admitJson)
+        assertEquals(true, envelope.ticketId != null || envelope.completed.isNotEmpty())
+    }
+
+    @Test
+    fun schedulerBridgeAdmitDoesNotAbortOnMalformedJson() {
+        val bridge =
+            OpenCodeTextMateSchedulerBridge(
+                engine =
+                    OpenCodeTextMateHighlightingEngine(
+                        object : OpenCodeCodeHighlighter {
+                            override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+                            override fun highlight(
+                                languageOrAlias: String?,
+                                code: String,
+                            ): SyntaxHighlightResult =
+                                SyntaxHighlightResult(
+                                    spans = emptyList(),
+                                    diagnostics = emptyList(),
+                                    source = SyntaxHighlightSource.TextMate,
+                                )
+                        },
+                    ),
+            )
+        val admitJson = bridge.admit("{}")
+        val envelope = OpenCodeMarkdownJson.json.decodeFromString<SchedulerAdmitEnvelope>(admitJson)
+        assertEquals(null, envelope.ticketId)
+        assertEquals(emptyList(), envelope.completed)
     }
 }

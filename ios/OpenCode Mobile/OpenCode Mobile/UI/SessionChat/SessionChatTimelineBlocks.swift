@@ -25,7 +25,10 @@ enum SessionChatTimelineBlock: Equatable, Sendable {
     static func == (lhs: SessionChatTimelineBlock, rhs: SessionChatTimelineBlock) -> Bool {
         switch (lhs, rhs) {
         case let (.text(lID, lText, lDoc), .text(rID, rText, rDoc)):
-            lID == rID && lText == rText && lDoc?.sourceHash == rDoc?.sourceHash
+            lID == rID
+                && lText == rText
+                && lDoc?.sourceHash == rDoc?.sourceHash
+                && lDoc?.renderTreeVersion == rDoc?.renderTreeVersion
         case let (.attachment(lID, lFile), .attachment(rID, rFile)):
             lID == rID && lFile == rFile
         case let (.toolCard(lID, lCard), .toolCard(rID, rCard)):

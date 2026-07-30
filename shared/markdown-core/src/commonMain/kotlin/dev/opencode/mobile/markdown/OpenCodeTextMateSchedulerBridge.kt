@@ -13,7 +13,19 @@ class OpenCodeTextMateSchedulerBridge(
     private val scheduler: TextMateRequestScheduler = TextMateRequestScheduler(),
 ) {
     fun admit(requestJson: String): String {
-        val request = OpenCodeMarkdownJson.json.decodeFromString<HighlightRequest>(requestJson)
+        val request =
+            try {
+                OpenCodeMarkdownJson.json.decodeFromString<HighlightRequest>(requestJson)
+            } catch (error: Exception) {
+                // Swift JSONEncoder omits nil optionals; never abort the host process
+                // on a decode mismatch — return a cancelled empty result instead.
+                return OpenCodeMarkdownJson.json.encodeToString(
+                    SchedulerAdmitEnvelope(
+                        ticketId = null,
+                        completed = emptyList(),
+                    ),
+                )
+            }
         val admit = scheduler.admit(request)
         return OpenCodeMarkdownJson.json.encodeToString(
             SchedulerAdmitEnvelope(

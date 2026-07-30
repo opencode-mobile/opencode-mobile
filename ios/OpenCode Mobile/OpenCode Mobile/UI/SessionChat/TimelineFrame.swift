@@ -60,6 +60,7 @@ struct TimelineRow: Equatable, Identifiable, Sendable {
               lhs.contentRevision == rhs.contentRevision,
               lhs.layoutRevision == rhs.layoutRevision,
               lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash,
+              lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion,
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,

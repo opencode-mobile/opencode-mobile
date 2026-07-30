@@ -161,11 +161,58 @@ actor KMPTextMateHighlightingEngine: TextMateHighlighting {
     }
 
     private func encode(_ request: TextMateHighlightRequest) throws -> String {
-        let data = try encoder.encode(request)
+        // Kotlin HighlightRequest treats omitted nullables as missing unless they
+        // have defaults. Encode nil `language` explicitly as JSON null.
+        let data = try encoder.encode(EncodableHighlightRequest(request))
         guard let json = String(data: data, encoding: .utf8) else {
             throw TextMateHighlightingAdapterError.invalidUTF8
         }
         return json
+    }
+}
+
+nonisolated private struct EncodableHighlightRequest: Encodable {
+    let key: TextMateCodeBlockKey
+    let revision: TextMateHighlightRevision
+    let language: String?
+    let source: String
+    let intent: TextMateHighlightIntent
+    let policyEpoch: Int64
+    let messageCharacters: Int
+    let fenceIndex: Int
+    let fenceCount: Int
+
+    init(_ request: TextMateHighlightRequest) {
+        key = request.key
+        revision = request.revision
+        language = request.language
+        source = request.source
+        intent = request.intent
+        policyEpoch = request.policyEpoch
+        messageCharacters = request.messageCharacters
+        fenceIndex = request.fenceIndex
+        fenceCount = request.fenceCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case key, revision, language, source, intent, policyEpoch, messageCharacters, fenceIndex, fenceCount
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        try container.encode(revision, forKey: .revision)
+        if let language {
+            try container.encode(language, forKey: .language)
+        } else {
+            try container.encodeNil(forKey: .language)
+        }
+        try container.encode(source, forKey: .source)
+        try container.encode(intent, forKey: .intent)
+        try container.encode(policyEpoch, forKey: .policyEpoch)
+        try container.encode(messageCharacters, forKey: .messageCharacters)
+        try container.encode(fenceIndex, forKey: .fenceIndex)
+        try container.encode(fenceCount, forKey: .fenceCount)
     }
 }
 
@@ -281,7 +328,9 @@ nonisolated extension NativeMarkdownDocument {
         }
         return .attached(
             NativeMarkdownDocument(
-                renderTreeVersion: renderTreeVersion,
+                // Keep sourceHash stable for fence identity; bump paint identity so
+                // row equality / projector return-previous notice span upgrades.
+                renderTreeVersion: renderTreeVersion + 1,
                 sourceHash: sourceHash,
                 blocks: updatedBlocks,
                 diagnostics: retainedDiagnostics + result.diagnostics

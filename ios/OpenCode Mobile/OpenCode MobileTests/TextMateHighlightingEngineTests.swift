@@ -48,6 +48,8 @@ struct TextMateHighlightingEngineTests {
         }
         #expect(originalSpans.isEmpty)
         #expect(attachedSpans == current.spans)
+        #expect(attached.renderTreeVersion == document.renderTreeVersion + 1)
+        #expect(attached.sourceHash == document.sourceHash)
     }
 
     @Test func preparerUsesInjectedEngineOffMainAndMonotonicRevisions() async {

@@ -87,7 +87,7 @@ enum class MemoryPressure {
 data class HighlightRequest(
     val key: CodeBlockKey,
     val revision: HighlightRevision,
-    val language: String?,
+    val language: String? = null,
     val source: String,
     val intent: HighlightIntent,
     val policyEpoch: Long,
@@ -441,6 +441,9 @@ fun MarkdownDocument.attachTextMateResult(
         }
     return MarkdownHighlightAttachment.Attached(
         copy(
+            // Keep sourceHash stable for fence identity; bump paint identity so
+            // platform UI equality notices span upgrades.
+            renderTreeVersion = renderTreeVersion + 1,
             blocks = updatedBlocks,
             diagnostics = (retainedDiagnostics + result.diagnostics).distinct(),
         ),

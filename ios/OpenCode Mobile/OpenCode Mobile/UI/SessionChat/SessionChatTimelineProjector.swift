@@ -95,6 +95,7 @@ enum SessionChatTimelineProjector {
            previous.role == message.role,
            previous.blocks == body.blocks,
            previous.renderedMarkdown?.sourceHash == bridgeMarkdown?.sourceHash,
+           previous.renderedMarkdown?.renderTreeVersion == bridgeMarkdown?.renderTreeVersion,
            previous.renderedMarkdown?.blocks.count == bridgeMarkdown?.blocks.count,
            previous.contentRevision == contentRevision
         {
@@ -217,6 +218,7 @@ enum SessionChatTimelineProjector {
             && lhs.text == rhs.text
             && lhs.blocks == rhs.blocks
             && lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash
+            && lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion
             && lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count
             && lhs.contentRevision == rhs.contentRevision
             && lhs.metadataLabel == rhs.metadataLabel
@@ -236,7 +238,7 @@ enum SessionChatTimelineProjector {
         let blockKey = row.blocks.map { block -> String in
             switch block {
             case .text(let id, _, let doc):
-                "t:\(id):\(doc != nil):\(doc?.sourceHash ?? 0)"
+                "t:\(id):\(doc != nil):\(doc?.sourceHash ?? 0):\(doc?.renderTreeVersion ?? 0)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id)"
             case .toolCard(let id, let card):
@@ -279,7 +281,7 @@ enum SessionChatTimelineProjector {
     private static func markdownFingerprint(_ row: TimelineRow) -> String {
         row.blocks.compactMap { block -> String? in
             guard case .text(let id, _, let doc) = block else { return nil }
-            return "\(id):\(doc != nil):\(doc?.sourceHash ?? 0)"
+            return "\(id):\(doc != nil):\(doc?.sourceHash ?? 0):\(doc?.renderTreeVersion ?? 0)"
         }.joined(separator: "|")
     }
 

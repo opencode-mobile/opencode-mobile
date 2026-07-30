@@ -48,6 +48,7 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.modelID == rhs.modelID,
               lhs.contextInputTokens == rhs.contextInputTokens,
               lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash,
+              lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion,
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,

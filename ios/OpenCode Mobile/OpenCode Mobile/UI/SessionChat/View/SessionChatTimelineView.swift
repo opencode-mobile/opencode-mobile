@@ -443,7 +443,7 @@ private struct AssistantMessageBubble: View {
     }
 
     private var paintTaskID: String {
-        "\(text.count):\(renderedMarkdown?.sourceHash ?? 0)"
+        "\(text.count):\(renderedMarkdown?.sourceHash ?? 0):\(renderedMarkdown?.renderTreeVersion ?? 0)"
     }
 }
 
