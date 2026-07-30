@@ -3,6 +3,10 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-30: **OPE-92** format-always / color-later — streaming and history
+  never leave detectable markdown as plain source; TextMate on → structure-only
+  then Final/enrichment colors; TextMate off → full semantic. Plan:
+  `ope-92-structure-first-code-blocks-plan.md`.
 - 2026-07-30: Wave 2 Pixel 9 JS remeasure **misses** Tier A (≤2k warm p95
   ~200 ms vs 50 ms; mixed vs Wave 1). Scorecard in `phase-6-calibration.md`.
 - 2026-07-30: Wave 2 software OnigScanner (`findEarliest` two-pass at-cursor +

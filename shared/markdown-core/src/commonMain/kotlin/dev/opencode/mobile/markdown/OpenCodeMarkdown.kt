@@ -13,6 +13,11 @@ data class MarkdownParseRequest(
     val isStreaming: Boolean = false,
     /** When false, prefer the semantic-fallback highlighter over TextMate. */
     val textMateEnabled: Boolean = false,
+    /**
+     * When true, parse block structure with empty code spans (no semantic or
+     * TextMate tokenization). Used for structure-first streaming first paint.
+     */
+    val structureOnly: Boolean = false,
 )
 
 @Serializable
@@ -245,10 +250,10 @@ object OpenCodeMarkdownJson {
     }
 
     private fun codeHighlighterFor(request: MarkdownParseRequest): OpenCodeCodeHighlighter =
-        if (request.isStreaming || !request.textMateEnabled) {
-            OpenCodeSemanticFallbackHighlighter
-        } else {
-            OpenCodeMarkdownHighlighterProvider.default
+        when {
+            request.structureOnly -> OpenCodeStructureOnlyHighlighter
+            request.isStreaming || !request.textMateEnabled -> OpenCodeSemanticFallbackHighlighter
+            else -> OpenCodeMarkdownHighlighterProvider.default
         }
 }
 
@@ -271,11 +276,12 @@ fun openCodeCodeHighlighterForParse(
     preferred: OpenCodeCodeHighlighter,
     isStreaming: Boolean,
     textMateEnabled: Boolean = false,
+    structureOnly: Boolean = false,
 ): OpenCodeCodeHighlighter =
-    if (isStreaming || !textMateEnabled) {
-        OpenCodeSemanticFallbackHighlighter
-    } else {
-        preferred
+    when {
+        structureOnly -> OpenCodeStructureOnlyHighlighter
+        isStreaming || !textMateEnabled -> OpenCodeSemanticFallbackHighlighter
+        else -> preferred
     }
 
 object OpenCodeMarkdownParser {
@@ -284,6 +290,7 @@ object OpenCodeMarkdownParser {
         codeHighlighter: OpenCodeCodeHighlighter = OpenCodeSyntaxHighlighter.default,
         isStreaming: Boolean = false,
         textMateEnabled: Boolean = false,
+        structureOnly: Boolean = false,
     ): MarkdownDocument =
         parse(
             markdown = markdown,
@@ -292,6 +299,7 @@ object OpenCodeMarkdownParser {
                     preferred = codeHighlighter,
                     isStreaming = isStreaming,
                     textMateEnabled = textMateEnabled,
+                    structureOnly = structureOnly,
                 ),
         )
 

@@ -13,6 +13,8 @@ data class SyntaxHighlightResult(
 enum class SyntaxHighlightSource {
     TextMate,
     SemanticFallback,
+    /** Block structure only; empty spans so chrome paints before coloring. */
+    StructureOnly,
     Unknown,
 }
 
@@ -1060,6 +1062,25 @@ class OpenCodeSyntaxHighlighter(
 
         private fun String.isStringDelimiterPunctuation(): Boolean = this == "\"" || this == "'"
     }
+}
+
+/**
+ * Fence-aware highlighter that returns no token spans. Used for structure-first
+ * streaming publication so code-block chrome/monospace paint before semantic or
+ * TextMate colors upgrade in place.
+ */
+object OpenCodeStructureOnlyHighlighter : OpenCodeCodeHighlighter {
+    override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+    override fun highlight(
+        languageOrAlias: String?,
+        code: String,
+    ): SyntaxHighlightResult =
+        SyntaxHighlightResult(
+            spans = emptyList(),
+            diagnostics = emptyList(),
+            source = SyntaxHighlightSource.StructureOnly,
+        )
 }
 
 object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {

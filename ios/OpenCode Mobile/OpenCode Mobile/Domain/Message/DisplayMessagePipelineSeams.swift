@@ -30,6 +30,14 @@ protocol DisplayMessagePreparing: AnyObject, Sendable {
         sessionKey: String,
         mode: MessagePreparationMode
     ) async -> NativeMarkdownDocument?
+
+    /// Format-first streaming parse. TextMate on → empty code spans; TextMate off →
+    /// semantic fallback. Does not touch the preparer LRU or TextMate.
+    func prepareStructureOnlyTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String
+    ) async -> NativeMarkdownDocument?
 }
 
 /// Monotonic clock and sleep used for streaming quiet-window / max-batch pacing.

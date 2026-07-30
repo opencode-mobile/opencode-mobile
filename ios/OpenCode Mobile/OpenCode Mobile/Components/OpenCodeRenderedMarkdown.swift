@@ -15,10 +15,6 @@ enum OpenCodeRenderedMarkdownDetector: Sendable {
 }
 
 struct OpenCodeRenderedMarkdown: View {
-    /// Skip expensive span painting for large fences while streaming. Smaller
-    /// fences paint prepared (semantic-fallback) spans so code stays colored.
-    static let streamingPlainCodeCharacterThreshold = 2_000
-
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
     let isStreaming: Bool
@@ -616,9 +612,9 @@ private struct DeferredHighlightedCodeText: View {
 }
 
 extension OpenCodeRenderedMarkdown {
-    /// Whether fenced code should paint plain text for this streaming frame.
-    static func forcePlainStreamingCode(isStreaming: Bool, codeLength: Int) -> Bool {
-        isStreaming && codeLength >= streamingPlainCodeCharacterThreshold
+    /// Format-always / color-later: never strip prepared spans while streaming.
+    static func forcePlainStreamingCode(isStreaming _: Bool, codeLength _: Int) -> Bool {
+        false
     }
 }
 

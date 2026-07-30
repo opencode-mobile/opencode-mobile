@@ -1,8 +1,13 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -48,10 +53,9 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
-    fun largeHistoryPublishesPlainFirstThenAtMostTwoEnrichmentFrames() =
+    fun largeHistoryPublishesFormatFirstThenAtMostTwoEnrichmentFrames() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
-            val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
 
             // Five markdown messages: viewport publishes after 3, remaining after the rest.
             val history =
@@ -68,58 +72,49 @@ class DisplayMessagePipelineCharacterizationTest {
 
             harness.source.emit(MessageListUpdate.Messages(history))
 
-            if (!holdReady) {
-                assertEquals(1, harness.emissions.size)
-                val plainFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
-                assertTrue(plainFirst.messages.all { it.renderedMarkdown == null })
-                assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.single().mode)
-                assertEquals(48L, harness.delay.pendingMs())
-                harness.delay.release()
-            } else {
-                assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.first().mode)
-            }
+            assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.first().mode)
+            // Format-always: first frame already has structured markdown.
+            assertEquals(1, harness.emissions.size)
+            val formatFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertTrue(formatFirst.messages.all { it.renderedMarkdown != null })
+            assertEquals(48L, harness.delay.pendingMs())
+            harness.delay.release()
             advanceUntilIdle()
 
             val enrichmentFrames =
                 harness.emissions
                     .filterIsInstance<DisplayMessageListUpdate.Messages>()
-                    .filter { frame -> frame.messages.any { it.renderedMarkdown != null } }
-            assertTrue(enrichmentFrames.isNotEmpty())
+                    .drop(1)
             assertTrue(
-                "expected at most two enrichment frames, got ${enrichmentFrames.size}",
+                "expected at most two enrichment frames after format-first, got ${enrichmentFrames.size}",
                 enrichmentFrames.size <= 2,
             )
 
-            val finalFrame = enrichmentFrames.last()
+            val finalFrame =
+                harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
             assertEquals(5, finalFrame.messages.size)
             assertTrue(finalFrame.messages.all { it.renderedMarkdown != null })
-            // Newest-first: first enrichment frame should include the newest message styled.
-            assertTrue(enrichmentFrames.first().messages.last().renderedMarkdown != null)
-            if (holdReady) {
-                assertEquals(1, enrichmentFrames.first().messages.count { it.renderedMarkdown != null })
-            }
         }
 
     @Test
-    fun largeSingleMessageHistoryPublishesPlainFirstThenOneViewportEnrichment() =
+    fun largeSingleMessageHistoryPublishesFormatFirstThenOneViewportEnrichment() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
-            val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
 
             val large = largeMarkdownAssistant("msg-1")
             harness.source.emit(MessageListUpdate.Messages(listOf(large)))
 
-            if (!holdReady) {
-                assertEquals(1, harness.emissions.size)
-                assertEquals(48L, harness.delay.pendingMs())
-                harness.delay.release()
-            }
+            assertEquals(1, harness.emissions.size)
+            val formatFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertTrue(formatFirst.messages.single().renderedMarkdown != null)
+            assertEquals(48L, harness.delay.pendingMs())
+            harness.delay.release()
             advanceUntilIdle()
 
             val enrichmentFrames =
                 harness.emissions
                     .filterIsInstance<DisplayMessageListUpdate.Messages>()
-                    .filter { frame -> frame.messages.any { it.renderedMarkdown != null } }
+                    .drop(1)
             assertEquals(1, enrichmentFrames.size)
             assertTrue(enrichmentFrames.single().messages.single().renderedMarkdown != null)
         }
@@ -385,9 +380,11 @@ class DisplayMessagePipelineCharacterizationTest {
             val plain = harness.emissions.single() as DisplayMessageListUpdate.Messages
             assertEquals("# Hello", plain.messages.single().text)
             assertTrue(plain.messages.single().isStreaming)
-            assertEquals(null, plain.messages.single().renderedMarkdown)
+            // Structure-first paints markdown chrome without waiting on decoration.
+            assertTrue(plain.messages.single().renderedMarkdown != null)
+            assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
             assertTrue(
-                "decoration prepare may be held, but must not block plain",
+                "decoration prepare may be held, but must not block structure-first text lane",
                 harness.preparer.hasPendingPrepareMessagesHold() ||
                     harness.preparer.prepareMessagesInvocations.isNotEmpty() ||
                     harness.preparer.prepareTextBlockInvocations.isNotEmpty(),
@@ -402,7 +399,7 @@ class DisplayMessagePipelineCharacterizationTest {
             assertEquals(2, harness.emissions.size)
             val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
             assertEquals("# Hello world", latest.messages.single().text)
-            assertEquals(null, latest.messages.single().renderedMarkdown)
+            assertTrue(latest.messages.single().renderedMarkdown != null)
 
             harness.preparer.releaseNextPrepareMessages()
             advanceUntilIdle()
@@ -413,35 +410,103 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
+    fun structureFirstStreamingPublishesCodeBlockChromeBeforeDecoration() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+            val fenced =
+                """
+                ```javascript
+                const x = 1
+                ```
+                """.trimIndent()
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            harness.emissions.clear()
+            harness.preparer.prepareStructureOnlyInvocations.clear()
+
+            harness.preparer.holdNextPrepareMessages()
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", fenced))),
+            )
+            harness.delay.release()
+            advanceUntilIdle()
+
+            assertEquals(1, harness.emissions.size)
+            val frame = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            val doc = frame.messages.single().renderedMarkdown
+            assertTrue(doc != null)
+            assertTrue(
+                doc!!.blocks.any { block -> block is MarkdownBlock.CodeBlock },
+            )
+            val code = doc.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+            assertEquals("javascript", code.language)
+            // Format-always: TextMate default on → empty spans; colors on Final.
+            assertTrue(code.spans.isEmpty())
+            assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
+            // Decoration may still be held; structure must already be visible.
+            assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty() ||
+                harness.preparer.hasPendingPrepareMessagesHold())
+        }
+
+    @Test
+    fun largeStreamingStillFormatsMarkdownStructure() =
+        runTest(testDispatcher) {
+            val harness = startHarness()
+            val prior = MarkdownHighlightPreferences.textMateEnabled
+            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            try {
+                val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+
+                harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
+                advanceUntilIdle()
+                testScheduler.advanceTimeBy(100)
+                advanceUntilIdle()
+
+                val streamingFrames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
+                assertTrue(streamingFrames.isNotEmpty())
+                assertTrue(
+                    streamingFrames.any { frame -> frame.messages.single().renderedMarkdown != null },
+                )
+                assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
+                assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty())
+            } finally {
+                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            }
+        }
+
+    @Test
     fun largeStreamingSkipsDecorationUntilFinalization() =
         runTest(testDispatcher) {
             val harness = startHarness()
-            val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+            val prior = MarkdownHighlightPreferences.textMateEnabled
+            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            try {
+                val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
 
-            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
-            advanceUntilIdle()
-            testScheduler.advanceTimeBy(100)
-            advanceUntilIdle()
+                harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
+                advanceUntilIdle()
+                testScheduler.advanceTimeBy(100)
+                advanceUntilIdle()
 
-            val streamingFrames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
-            assertTrue(streamingFrames.isNotEmpty())
-            assertTrue(streamingFrames.all { frame -> frame.messages.single().renderedMarkdown == null })
-            assertTrue(
-                harness.preparer.prepareMessagesInvocations.none {
-                    it.mode == MessagePreparationMode.Streaming
-                },
-            )
-            assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty())
+                assertTrue(
+                    harness.preparer.prepareMessagesInvocations.none {
+                        it.mode == MessagePreparationMode.Streaming
+                    },
+                )
+                assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty())
 
-            harness.emissions.clear()
-            harness.preparer.prepareMessagesInvocations.clear()
-            harness.source.emit(MessageListUpdate.Messages(listOf(finalAssistant("msg-1", largeText))))
-            advanceUntilIdle()
+                harness.emissions.clear()
+                harness.preparer.prepareMessagesInvocations.clear()
+                harness.source.emit(MessageListUpdate.Messages(listOf(finalAssistant("msg-1", largeText))))
+                advanceUntilIdle()
 
-            assertEquals(
-                listOf(MessagePreparationMode.FinalPlaceholder, MessagePreparationMode.Final),
-                harness.preparer.prepareMessagesInvocations.map { it.mode },
-            )
+                assertEquals(
+                    listOf(MessagePreparationMode.FinalPlaceholder, MessagePreparationMode.Final),
+                    harness.preparer.prepareMessagesInvocations.map { it.mode },
+                )
+            } finally {
+                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            }
         }
 
     private fun TestScope.startHarness(holdDelays: Boolean = false): Harness {
@@ -525,6 +590,7 @@ class DisplayMessagePipelineCharacterizationTest {
 
         val prepareMessagesInvocations = mutableListOf<PrepareMessagesInvocation>()
         val prepareTextBlockInvocations = mutableListOf<PrepareTextBlockInvocation>()
+        val prepareStructureOnlyInvocations = mutableListOf<PrepareStructureOnlyInvocation>()
         private var prepareMessagesHold: CompletableDeferred<Unit>? = null
         private var activePrepareMessagesHold: CompletableDeferred<Unit>? = null
         private var prepareMessageHold: CompletableDeferred<Unit>? = null
@@ -538,6 +604,12 @@ class DisplayMessagePipelineCharacterizationTest {
             val isStreaming: Boolean,
             val sessionKey: String,
             val mode: MessagePreparationMode,
+        )
+
+        data class PrepareStructureOnlyInvocation(
+            val blockID: String,
+            val plain: String,
+            val sessionKey: String,
         )
 
         fun holdNextPrepareMessages() {
@@ -650,13 +722,58 @@ class DisplayMessagePipelineCharacterizationTest {
             )
         }
 
+        override suspend fun prepareStructureOnlyTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String,
+        ): MarkdownDocument? {
+            prepareStructureOnlyInvocations +=
+                PrepareStructureOnlyInvocation(
+                    blockID = blockID,
+                    plain = plain,
+                    sessionKey = sessionKey,
+                )
+            // Must never share the decoration hold — format-first is text-lane work.
+            if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
+                return null
+            }
+            val highlighter =
+                if (MarkdownHighlightPreferences.textMateEnabled) {
+                    OpenCodeStructureOnlyHighlighter
+                } else {
+                    OpenCodeSemanticFallbackHighlighter
+                }
+            return OpenCodeMarkdownParser.parse(
+                markdown = plain,
+                codeHighlighter = highlighter,
+            )
+        }
+
         private fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
             mode: MessagePreparationMode,
         ): DisplayMessage {
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
-                return DisplayMessage(message = message, renderedMarkdown = null)
+                if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
+                    return DisplayMessage(message = message, renderedMarkdown = null)
+                }
+                val highlighter =
+                    if (MarkdownHighlightPreferences.textMateEnabled) {
+                        OpenCodeStructureOnlyHighlighter
+                    } else {
+                        OpenCodeSemanticFallbackHighlighter
+                    }
+                val document =
+                    OpenCodeMarkdownParser.parse(
+                        markdown = message.text,
+                        codeHighlighter = highlighter,
+                    )
+                return DisplayMessage(
+                    message = message,
+                    renderedMarkdown = document,
+                    awaitingTextMateUpgrade = MarkdownHighlightPreferences.textMateEnabled,
+                )
             }
             if (mode == MessagePreparationMode.FinalPlaceholder && previous?.renderedMarkdown != null) {
                 return DisplayMessage(message = message, renderedMarkdown = previous.renderedMarkdown)

@@ -198,19 +198,52 @@ final class DisplayMessagePipeline {
                     return true
                 }
 
-                func buildPlainStreamingFrame(messages: [Message]) -> [DisplayMessage] {
-                    messages.map { message in
+                @MainActor
+                func buildStructureFirstStreamingFrame(messages: [Message]) async -> [DisplayMessage] {
+                    var out: [DisplayMessage] = []
+                    out.reserveCapacity(messages.count)
+                    for message in messages {
                         let previous = previousByID[message.id]
-                        if messageHasStreamingText(message) {
-                            return DisplayMessage(message: message, renderedMarkdown: nil)
+                        guard messageHasStreamingText(message) else {
+                            if let previous,
+                               previous.text == message.text,
+                               previous.renderedMarkdown != nil {
+                                out.append(
+                                    DisplayMessage(message: message, renderedMarkdown: previous.renderedMarkdown)
+                                )
+                            } else {
+                                out.append(DisplayMessage(message: message, renderedMarkdown: nil))
+                            }
+                            continue
                         }
-                        if let previous,
-                           previous.text == message.text,
-                           previous.renderedMarkdown != nil {
-                            return DisplayMessage(message: message, renderedMarkdown: previous.renderedMarkdown)
+                        let target = StreamingTextBlockIdentity.resolveStreaming(message: message)
+                        let structure: NativeMarkdownDocument?
+                        if let target,
+                           OpenCodeRenderedMarkdownDetector.shouldRender(target.plain) {
+                            structure = await contentPreparer.prepareStructureOnlyTextBlock(
+                                blockID: target.blockID,
+                                plain: target.plain,
+                                sessionKey: sessionID
+                            )
+                        } else {
+                            structure = nil
                         }
-                        return DisplayMessage(message: message, renderedMarkdown: nil)
+                        if let structure, let target {
+                            decorationCache.put(
+                                sessionKey: sessionID,
+                                blockID: target.blockID,
+                                contentRevision: ContentRevision.of(target.plain),
+                                isStreaming: true,
+                                document: structure
+                            )
+                        }
+                        let bridge =
+                            StreamingTextBlockIdentity.isSoleTextBlock(message: message)
+                            ? structure
+                            : nil
+                        out.append(DisplayMessage(message: message, renderedMarkdown: bridge))
                     }
+                    return out
                 }
 
                 func decorationIdentityMatches(_ job: DecorationJob) -> Bool {
@@ -288,11 +321,11 @@ final class DisplayMessagePipeline {
 
                 @MainActor
                 func scheduleStreamingDecoration(generation: UInt64, messages: [Message]) {
+                    // TextMate on: keep structure-only until Final colors. Skip
+                    // streaming semantic decoration so colors do not flash early.
+                    guard !MarkdownHighlightPreferences.currentTextMateEnabled() else { return }
                     guard let streamingMessage = messages.first(where: messageHasStreamingText) else { return }
                     guard let target = StreamingTextBlockIdentity.resolveStreaming(message: streamingMessage)
-                    else { return }
-                    guard target.plain.count
-                        < MessageContentPreparer.streamingPlainTextCharacterThreshold
                     else { return }
                     guard OpenCodeRenderedMarkdownDetector.shouldRender(target.plain) else { return }
                     let job = DecorationJob(
@@ -311,15 +344,15 @@ final class DisplayMessagePipeline {
                 }
 
                 @MainActor
-                func publishPlainStreamingFrame(generation: UInt64, messages: [Message]) {
+                func publishPlainStreamingFrame(generation: UInt64, messages: [Message]) async {
                     guard isCurrent(generation) else { return }
-                    let frame = buildPlainStreamingFrame(messages: messages)
+                    let frame = await buildStructureFirstStreamingFrame(messages: messages)
                     previousByID = Dictionary(uniqueKeysWithValues: frame.map { ($0.id, $0) })
                     preparedHistoryCache.setMessages(previousByID, for: cacheKey)
                     lastPublishedMessages = messages
                     lastPublishedAt = clock.now
                     OpenCodeLog.messageContent.info(
-                        "displayPublish reason=streaming-plain chars=\(streamingMessageCharCount(messages)) generation=\(generation)"
+                        "displayPublish reason=streaming-structure-first chars=\(streamingMessageCharCount(messages)) generation=\(generation)"
                     )
                     continuation.yield(.messages(frame))
                     scheduleStreamingDecoration(generation: generation, messages: messages)
@@ -333,7 +366,7 @@ final class DisplayMessagePipeline {
                         guard !Task.isCancelled, isCurrent(generation) else { return }
                         guard let latest = pendingMessages else { return }
                         pendingMessages = nil
-                        publishPlainStreamingFrame(generation: generation, messages: latest)
+                        await publishPlainStreamingFrame(generation: generation, messages: latest)
                         if let catchUp = pendingMessages, messagesContainStreamingText(catchUp) {
                             let dueForMaxBatch: Bool = {
                                 guard let lastPublishedAt else { return true }
@@ -341,7 +374,7 @@ final class DisplayMessagePipeline {
                             }()
                             if dueForMaxBatch {
                                 pendingMessages = nil
-                                publishPlainStreamingFrame(generation: currentGeneration, messages: catchUp)
+                                await publishPlainStreamingFrame(generation: currentGeneration, messages: catchUp)
                             } else {
                                 scheduleStreamingPublish(generation: currentGeneration)
                             }
@@ -378,19 +411,12 @@ final class DisplayMessagePipeline {
                             mode: mode
                         ) else { return }
                         lastPublishedMessages = messages
-                        let suppressPublish =
-                            mode == .historyPlainFirst
-                            && MessageContentPreparer.holdReadyUntilNewestMarkdown
-                        if !suppressPublish {
-                            OpenCodeLog.messageContent.info(
-                                "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
-                            )
-                            continuation.yield(.messages(prepared))
-                        } else {
-                            OpenCodeLog.messageContent.info(
-                                "displayPublish suppressed reason=\(reason, privacy: .public) holdReady=true generation=\(generation)"
-                            )
-                        }
+                        // Format-first history is publishable; do not hold Ready on
+                        // unprocessed plain while TextMate enrichment catches up.
+                        OpenCodeLog.messageContent.info(
+                            "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
+                        )
+                        continuation.yield(.messages(prepared))
                         onCommitted?()
                     }
                 }
@@ -486,7 +512,8 @@ final class DisplayMessagePipeline {
                             guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
                             if let cached = byID[message.id],
                                cached.renderedMarkdown != nil,
-                               cached.text == message.text {
+                               cached.text == message.text,
+                               cached.awaitingTextMateUpgrade != true {
                                 continue
                             }
 
@@ -571,7 +598,7 @@ final class DisplayMessagePipeline {
                             if dueForMaxBatch {
                                 let latest = pendingMessages ?? messages
                                 pendingMessages = nil
-                                publishPlainStreamingFrame(generation: currentGeneration, messages: latest)
+                                await publishPlainStreamingFrame(generation: currentGeneration, messages: latest)
                             } else {
                                 scheduleStreamingPublish(generation: currentGeneration)
                             }

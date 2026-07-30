@@ -353,7 +353,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         )
     }
 
-    @Test func streamingForcePlainOnlyForLargeFences() {
+    @Test func streamingNeverForcePlainUnderFormatAlways() {
         #expect(
             OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: true, codeLength: 500)
                 == false
@@ -363,10 +363,8 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
                 == false
         )
         #expect(
-            OpenCodeRenderedMarkdown.forcePlainStreamingCode(
-                isStreaming: true,
-                codeLength: OpenCodeRenderedMarkdown.streamingPlainCodeCharacterThreshold
-            ) == true
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: true, codeLength: 50_000)
+                == false
         )
     }
 

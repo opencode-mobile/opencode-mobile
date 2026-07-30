@@ -496,12 +496,12 @@ without revisiting this decision.
 
 | Lane | Streaming policy |
 | --- | --- |
-| Text (correctness) | **Always** publish plain source at the existing 16 ms quiet / 48 ms max coalesce cadence, independent of decoration |
-| Decoration (disposable) | May prepare under-`8_000`-char streaming candidates as catch-up; completions remain generation-gated and may be dropped |
-| Large streaming | `≥ 8_000` chars stay plain until finalization (`STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD`); no decoration attempt while streaming |
+| Text (correctness) | **Always** publish at the existing 16 ms quiet / 48 ms max coalesce cadence. When markdown is detected, publish a formatted scaffold (`MarkdownDocument`) — never leave detectable markdown as unprocessed plain source (OPE-92 format-always). History open uses the same rule via format-first `HistoryPlainFirst` (structure/semantic), then newest-first TextMate enrichment when enabled. |
+| Decoration (disposable) | TextMate **off**: may prepare semantic catch-up; completions remain generation-gated and may be dropped. TextMate **on**: skipped while streaming — colors arrive on Final TextMate only. |
+| Color later | Structure/chrome first; token colors are a separate step (semantic when TextMate off, Final/history enrichment TextMate when on). |
 
 A blocked, slow, failed, or overloaded preparer must not delay the text lane or
-erase already published plain text. Stale decoration never mutates cache or
+erase already published formatted text. Stale decoration never mutates cache or
 visible state.
 
 ## Message display rendering hardening — Phase 5 blocks + projector

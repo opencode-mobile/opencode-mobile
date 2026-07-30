@@ -75,7 +75,7 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
     }
 
     @Test
-    fun streamingForcePlainOnlyForLargeFences() {
+    fun streamingNeverForcePlainUnderFormatAlways() {
         assertEquals(
             false,
             forcePlainStreamingCode(isStreaming = true, codeLength = 500),
@@ -85,11 +85,8 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
             forcePlainStreamingCode(isStreaming = false, codeLength = 5_000),
         )
         assertEquals(
-            true,
-            forcePlainStreamingCode(
-                isStreaming = true,
-                codeLength = STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD,
-            ),
+            false,
+            forcePlainStreamingCode(isStreaming = true, codeLength = 50_000),
         )
     }
 

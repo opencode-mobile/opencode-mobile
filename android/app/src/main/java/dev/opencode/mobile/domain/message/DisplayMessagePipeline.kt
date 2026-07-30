@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
@@ -99,19 +100,50 @@ class DisplayMessagePipeline(
                 return true
             }
 
-            fun buildPlainStreamingFrame(messages: List<Message>): List<DisplayMessage> =
-                messages.map { message ->
+            suspend fun buildStructureFirstStreamingFrame(messages: List<Message>): List<DisplayMessage> {
+                val out = ArrayList<DisplayMessage>(messages.size)
+                for (message in messages) {
                     val previous = previousById[message.id]
-                    val streaming = messageHasStreamingText(message)
-                    when {
-                        streaming -> DisplayMessage(message = message, renderedMarkdown = null)
-                        previous != null &&
-                            previous.text == message.text &&
-                            previous.renderedMarkdown != null ->
-                            DisplayMessage(message = message, renderedMarkdown = previous.renderedMarkdown)
-                        else -> DisplayMessage(message = message, renderedMarkdown = null)
+                    if (!messageHasStreamingText(message)) {
+                        out +=
+                            when {
+                                previous != null &&
+                                    previous.text == message.text &&
+                                    previous.renderedMarkdown != null ->
+                                    DisplayMessage(message = message, renderedMarkdown = previous.renderedMarkdown)
+                                else -> DisplayMessage(message = message, renderedMarkdown = null)
+                            }
+                        continue
                     }
+                    val target = resolveStreamingDecorationTarget(message)
+                    val structure =
+                        if (target != null && OpenCodeMarkdownDetector.shouldRender(target.plain)) {
+                            contentPreparer.prepareStructureOnlyTextBlock(
+                                blockID = target.blockID,
+                                plain = target.plain,
+                                sessionKey = sessionId,
+                            )
+                        } else {
+                            null
+                        }
+                    if (structure != null && target != null) {
+                        BlockDecorationCache.put(
+                            sessionKey = sessionId,
+                            blockID = target.blockID,
+                            textHash = target.textHash,
+                            textLength = target.textLength,
+                            isStreaming = true,
+                            document = structure,
+                        )
+                    }
+                    out +=
+                        DisplayMessage(
+                            message = message,
+                            renderedMarkdown = structure.takeIf { messageHasSoleTextBlock(message) },
+                        )
                 }
+                return out
+            }
 
             fun decorationIdentityMatches(job: DecorationJob): Boolean {
                 val messages = lastPublishedMessages ?: return false
@@ -199,14 +231,12 @@ class DisplayMessagePipeline(
                 generation: Long,
                 messages: List<Message>,
             ) {
+                // TextMate on: keep structure-only until Final colors. Skip
+                // streaming semantic decoration so colors do not flash early.
+                if (MarkdownHighlightPreferences.textMateEnabled) return
                 val streamingMessage =
                     messages.firstOrNull(::messageHasStreamingText) ?: return
                 val target = resolveStreamingDecorationTarget(streamingMessage) ?: return
-                if (target.plain.length >=
-                    MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
-                ) {
-                    return
-                }
                 if (!OpenCodeMarkdownDetector.shouldRender(target.plain)) return
                 val job =
                     DecorationJob(
@@ -228,7 +258,7 @@ class DisplayMessagePipeline(
                 messages: List<Message>,
             ) {
                 if (!isCurrent(generation)) return
-                val frame = buildPlainStreamingFrame(messages)
+                val frame = buildStructureFirstStreamingFrame(messages)
                 previousById = frame.associateBy { it.id }
                 lastPublishedMessages = messages
                 lastPublishedAt = timeSource.markNow()
@@ -345,7 +375,10 @@ class DisplayMessagePipeline(
                             if (!isCurrent(generation)) return@launch
                             if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
                             val cached = byId[message.id]
-                            if (cached?.renderedMarkdown != null && cached.text == message.text) {
+                            if (cached?.renderedMarkdown != null &&
+                                cached.text == message.text &&
+                                !cached.awaitingTextMateUpgrade
+                            ) {
                                 continue
                             }
                             val prepared =
@@ -407,12 +440,9 @@ class DisplayMessagePipeline(
                         if (!isActive || !isCurrent(generation)) return@launch
                         if (!commitPrepared(generation, prepared, mode)) return@launch
                         lastPublishedMessages = messages
-                        val suppressPublish =
-                            mode == MessagePreparationMode.HistoryPlainFirst &&
-                                MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
-                        if (!suppressPublish) {
-                            send(DisplayMessageListUpdate.Messages(prepared))
-                        }
+                        // Format-first history is publishable; do not hold Ready on
+                        // unprocessed plain while TextMate enrichment catches up.
+                        send(DisplayMessageListUpdate.Messages(prepared))
                         onCommitted?.invoke()
                     }
             }

@@ -86,18 +86,17 @@ nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendabl
 final class MessageContentPreparer: @unchecked Sendable {
     static let shared = MessageContentPreparer()
 
-    /// While streaming, skip markdown tokenization above this size and let the
-    /// bubble render plain text. Full parse still runs on the final frame.
+    /// Legacy size gate still used by disposable streaming decoration fixtures.
+    /// Format-first text-lane parse no longer skips on size.
     nonisolated static let streamingPlainTextCharacterThreshold = 8_000
 
     /// When opening a history whose markdown-candidate text exceeds this size,
     /// prepare a plain-text frame first so enrichment can start without TextMate.
     nonisolated static let historyPlainFirstMarkdownCharacterThreshold = 4_000
 
-    /// Experimental: keep Session Chat on Loading until the newest markdown
-    /// candidate is enriched. Plain-first still runs internally but is not
-    /// published. Flip to `false` to restore immediate plain Ready.
-    nonisolated static let holdReadyUntilNewestMarkdown = true
+    /// Legacy flag: format-first history is always published immediately.
+    /// Enrichment still upgrades TextMate colors newest-first afterward.
+    nonisolated static let holdReadyUntilNewestMarkdown = false
 
     /// Newest-first enrich publishes once the open viewport is ready so iOS
     /// matches Android's perceived speed without per-bubble UI frames.
@@ -248,6 +247,28 @@ final class MessageContentPreparer: @unchecked Sendable {
         }.value
     }
 
+    /// Format-first streaming paint: always structure when markdown is detected.
+    /// TextMate on → empty spans (colors later); TextMate off → full semantic.
+    /// Never writes the preparer LRU.
+    nonisolated func prepareStructureOnlyTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String = ""
+    ) async -> NativeMarkdownDocument? {
+        let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
+        return await Task.detached(priority: .userInitiated) {
+            guard OpenCodeRenderedMarkdownDetector.shouldRender(plain) else {
+                return nil as NativeMarkdownDocument?
+            }
+            return OpenCodeRenderedMarkdownParser.parse(
+                plain,
+                isStreaming: true,
+                textMateEnabled: false,
+                structureOnly: textMateEnabled
+            )
+        }.value
+    }
+
     nonisolated private static func prepareMessageOnWorker(
         _ message: Message,
         previous: DisplayMessage?,
@@ -271,23 +292,36 @@ final class MessageContentPreparer: @unchecked Sendable {
             )
         }
         if mode == .historyPlainFirst {
-            if message.text.count < MessageContentPreparer.streamingPlainTextCharacterThreshold,
-               let reusable = reusableDocument(
+            if let reusable = reusableDocument(
                 for: message,
                 previous: previous,
                 mode: mode,
                 highlightEpoch: highlightEpoch
-               )
-            {
+            ) {
                 return DisplayMessage(
                     message: message,
                     renderedMarkdown: reusable,
+                    awaitingTextMateUpgrade: previous?.awaitingTextMateUpgrade == true,
                     highlightEpoch: highlightEpoch
                 )
             }
+            guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
+                return DisplayMessage(
+                    message: message,
+                    renderedMarkdown: nil,
+                    highlightEpoch: highlightEpoch
+                )
+            }
+            let document = OpenCodeRenderedMarkdownParser.parse(
+                message.text,
+                isStreaming: false,
+                textMateEnabled: false,
+                structureOnly: textMateEnabled
+            )
             return DisplayMessage(
                 message: message,
-                renderedMarkdown: nil,
+                renderedMarkdown: document,
+                awaitingTextMateUpgrade: textMateEnabled,
                 highlightEpoch: highlightEpoch
             )
         }

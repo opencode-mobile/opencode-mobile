@@ -1,5 +1,32 @@
 # Native Rendered Markdown Decisions
 
+## Format-Always Streaming Markdown; Color Later
+
+- Decision: when markdown is detected on streaming text-lane coalesce, always
+  publish a formatted `MarkdownDocument` (block tree + code chrome). Do **not**
+  leave detectable markdown as unprocessed plain source. Scaffold writes
+  `BlockDecorationCache` and may bridge onto sole-text
+  `DisplayMessage.renderedMarkdown`. Scaffold parse must not share the
+  decoration preparer hold or preparer LRU.
+- Decision: **TextMate on** → first paint is structure-only (empty code spans,
+  neutral monospace). Skip streaming semantic decoration so colors do not flash
+  before Final TextMate (`attachTextMateResult`).
+- Decision: **TextMate off** → first paint uses full semantic-fallback
+  highlighting; no TextMate pass.
+- Decision: **history open** uses the same format-always rule.
+  `HistoryPlainFirst` attaches structure-only (TextMate on) or semantic
+  (TextMate off) for every markdown-bearing message and publishes immediately
+  (`holdReadyUntilNewestMarkdown = false`). Set `awaitingTextMateUpgrade` when
+  TextMate is on so background `HistoryEnrichment` still upgrades colors and does
+  not skip rows that already have a scaffold document.
+- Reason: format (structure/chrome) and color (semantic or TextMate spans) are
+  separate steps; the plain→code jump is a structure problem for streaming and
+  history scroll-back alike.
+- Date: 2026-07-30.
+- Revisit when: format-first parse cost approaches the 16/48 coalesce budget on
+  very large streaming fences, or progressive TextMate-while-streaming is
+  reopened.
+
 ## Developer Tools Language Toggles And Logbook Speed Bands
 
 - Decision: keep the global TextMate preference as the kill switch. Add Developer

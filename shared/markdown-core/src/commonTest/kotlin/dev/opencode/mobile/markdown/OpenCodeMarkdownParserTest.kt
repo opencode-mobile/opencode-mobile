@@ -219,6 +219,34 @@ class OpenCodeMarkdownParserTest {
         assertNotEquals(finalResult.spans, streamingResult.spans)
         assertEquals(CodeTokenRole.Keyword, finalResult.spans.single().role)
         assertEquals(streamingResult.spans, disabledResult.spans)
+
+        val structureOnly =
+            openCodeCodeHighlighterForParse(
+                preferred,
+                isStreaming = true,
+                textMateEnabled = true,
+                structureOnly = true,
+            )
+        val structureResult = structureOnly.highlight("kotlin", code)
+        assertTrue(structureResult.spans.isEmpty())
+        assertEquals(SyntaxHighlightSource.StructureOnly, structureResult.source)
+    }
+
+    @Test
+    fun structureOnlyParseEmitsCodeBlocksWithoutSpans() {
+        val document =
+            OpenCodeMarkdownParser.parse(
+                markdown =
+                    """
+                    ```javascript
+                    const x = 1
+                    ```
+                    """.trimIndent(),
+                structureOnly = true,
+            )
+        val code = document.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+        assertEquals("javascript", code.language)
+        assertTrue(code.spans.isEmpty())
     }
 
     @Test

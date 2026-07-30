@@ -39,6 +39,17 @@ interface DisplayMessagePreparing {
         sessionKey: String = "",
         mode: MessagePreparationMode = MessagePreparationMode.Streaming,
     ): MarkdownDocument?
+
+    /**
+     * Format-first streaming parse. TextMate on → empty code spans; TextMate off →
+     * semantic fallback. Does not touch the preparer LRU or TextMate. Returns null
+     * only when markdown is not detected (or parse fails).
+     */
+    suspend fun prepareStructureOnlyTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String = "",
+    ): MarkdownDocument?
 }
 
 fun MessageSync.asDisplayMessageSnapshotSource(): DisplayMessageSnapshotSource =
@@ -83,5 +94,16 @@ fun MessageContentPreparer.asDisplayMessagePreparing(): DisplayMessagePreparing 
                 isStreaming = isStreaming,
                 sessionKey = sessionKey,
                 mode = mode,
+            )
+
+        override suspend fun prepareStructureOnlyTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String,
+        ): MarkdownDocument? =
+            this@asDisplayMessagePreparing.prepareStructureOnlyTextBlock(
+                blockID = blockID,
+                plain = plain,
+                sessionKey = sessionKey,
             )
     }

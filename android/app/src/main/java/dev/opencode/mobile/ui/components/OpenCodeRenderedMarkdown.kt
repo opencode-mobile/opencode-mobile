@@ -70,21 +70,18 @@ object OpenCodeRenderedMarkdownDetector {
     fun shouldRender(text: String): Boolean = OpenCodeMarkdownDetector.shouldRender(text)
 }
 
-/**
- * Skip expensive span painting for large fences while the message is still
- * streaming. Smaller fences paint prepared (semantic-fallback) spans so code
- * stays colored during the stream.
- */
-internal const val STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD = 2_000
-
 /** Defer only large *inline* attributed builds; fenced code/diff paint spans sync. */
 private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
 
-/** Whether fenced code should paint plain text for this streaming frame. */
+/**
+ * Format-always / color-later: never strip prepared spans while streaming.
+ * Structure-only docs already have empty spans; semantic fallback keeps colors.
+ */
+@Suppress("UNUSED_PARAMETER")
 internal fun forcePlainStreamingCode(
     isStreaming: Boolean,
     codeLength: Int,
-): Boolean = isStreaming && codeLength >= STREAMING_PLAIN_CODE_CHARACTER_THRESHOLD
+): Boolean = false
 
 @Composable
 fun OpenCodeRenderedMarkdown(
@@ -596,8 +593,8 @@ private fun rememberCodeAnnotatedString(
     colors: CodeColors,
     forcePlain: Boolean,
 ): AnnotatedString {
-    // Spans are prepared in the pipeline — paint colored on first frame.
-    // Large streaming fences stay plain via forcePlain (no annotated rebuild jank).
+    // Spans are prepared in the pipeline — paint on first frame.
+    // Format-always: forcePlain is unused (always false).
     if (forcePlain) return remember(code) { AnnotatedString(code) }
     return remember(code, spans, colors) { buildCodeAnnotatedString(code, spans, colors) }
 }

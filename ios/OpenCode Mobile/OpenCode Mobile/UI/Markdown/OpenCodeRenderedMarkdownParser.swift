@@ -14,14 +14,16 @@ enum OpenCodeRenderedMarkdownParser {
         _ markdown: String,
         variant: OpenCodeRenderedMarkdownVariant = .standalone,
         isStreaming: Bool = false,
-        textMateEnabled: Bool = false
+        textMateEnabled: Bool = false,
+        structureOnly: Bool = false
     ) -> NativeMarkdownDocument {
         do {
             let requestJson = try encodedRequest(
                 markdown,
                 variant: variant,
                 isStreaming: isStreaming,
-                textMateEnabled: textMateEnabled
+                textMateEnabled: textMateEnabled,
+                structureOnly: structureOnly
             )
             let responseJson = OpenCodeMarkdownJson.shared.parseMarkdownJson(requestJson: requestJson)
             return try JSONDecoder().decode(NativeMarkdownDocument.self, from: Data(responseJson.utf8))
@@ -34,7 +36,8 @@ enum OpenCodeRenderedMarkdownParser {
         _ markdown: String,
         variant: OpenCodeRenderedMarkdownVariant = .standalone,
         isStreaming: Bool = false,
-        textMateEnabled: Bool = false
+        textMateEnabled: Bool = false,
+        structureOnly: Bool = false
     ) -> ObservedResult {
         let startedAt = DispatchTime.now().uptimeNanoseconds
         do {
@@ -43,7 +46,8 @@ enum OpenCodeRenderedMarkdownParser {
                 markdown,
                 variant: variant,
                 isStreaming: isStreaming,
-                textMateEnabled: textMateEnabled
+                textMateEnabled: textMateEnabled,
+                structureOnly: structureOnly
             )
             let responseJson = OpenCodeMarkdownJson.shared.parseMarkdownObservedJson(requestJson: requestJson)
             let envelope = try decoder.decode(NativeMarkdownParseEnvelope.self, from: Data(responseJson.utf8))
@@ -65,14 +69,16 @@ enum OpenCodeRenderedMarkdownParser {
         _ markdown: String,
         variant: OpenCodeRenderedMarkdownVariant,
         isStreaming: Bool,
-        textMateEnabled: Bool
+        textMateEnabled: Bool,
+        structureOnly: Bool
     ) throws -> String {
-        let request = NativeMarkdownParseRequest(
-            markdown: markdown,
-            variant: variant.rawValue,
-            isStreaming: isStreaming,
-            textMateEnabled: textMateEnabled
-        )
+            let request = NativeMarkdownParseRequest(
+                markdown: markdown,
+                variant: variant.rawValue,
+                isStreaming: isStreaming,
+                textMateEnabled: textMateEnabled,
+                structureOnly: structureOnly
+            )
         let requestData = try JSONEncoder().encode(request)
         guard let requestJson = String(data: requestData, encoding: .utf8) else {
             throw RequestEncodingError.invalidUTF8
@@ -144,4 +150,5 @@ nonisolated private struct NativeMarkdownParseRequest: Encodable, Sendable {
     let variant: String
     let isStreaming: Bool
     let textMateEnabled: Bool
+    let structureOnly: Bool
 }

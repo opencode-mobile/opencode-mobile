@@ -2,6 +2,7 @@ package dev.opencode.mobile.markdown
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlin.concurrent.Volatile
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.TimeSource
 

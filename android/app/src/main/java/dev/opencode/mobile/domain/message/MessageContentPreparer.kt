@@ -11,6 +11,7 @@ import dev.opencode.mobile.markdown.MarkdownHighlightAttachment
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import dev.opencode.mobile.markdown.attachTextMateResult
 import dev.opencode.mobile.markdown.codeFences
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.coroutineContext
 
 @Singleton
@@ -150,6 +152,42 @@ class MessageContentPreparer
                 )
             }
 
+        /**
+         * Format-first streaming paint: always structure when markdown is
+         * detected. TextMate on → empty spans (colors later); TextMate off → full
+         * semantic fallback. Never writes the preparer LRU.
+         */
+        suspend fun prepareStructureOnlyTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String = "",
+        ): MarkdownDocument? =
+            withContext(computationDispatcher) {
+                if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
+                    return@withContext null
+                }
+                val highlighter =
+                    if (MarkdownHighlightPreferences.textMateEnabled) {
+                        OpenCodeStructureOnlyHighlighter
+                    } else {
+                        OpenCodeSemanticFallbackHighlighter
+                    }
+                try {
+                    OpenCodeMarkdownParser.parse(
+                        markdown = plain,
+                        codeHighlighter = highlighter,
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    logI(
+                        "prepareStructureOnlyFallback blockIdHash=${blockID.hashCode()} " +
+                            "sessionKeyHash=${sessionKey.hashCode()} reason=${error.javaClass.simpleName}",
+                    )
+                    null
+                }
+            }
+
         private suspend fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
@@ -169,18 +207,47 @@ class MessageContentPreparer
                 )
             }
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
-                if (message.text.length < STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD) {
-                    reusableDocument(message, previous, mode)?.let { reusable ->
-                        return DisplayMessage(
-                            message = message,
-                            renderedMarkdown = reusable,
-                            highlightEpoch = highlightEpoch,
-                        )
-                    }
+                reusableDocument(message, previous, mode)?.let { reusable ->
+                    return DisplayMessage(
+                        message = message,
+                        renderedMarkdown = reusable,
+                        awaitingTextMateUpgrade = previous?.awaitingTextMateUpgrade == true,
+                        highlightEpoch = highlightEpoch,
+                    )
                 }
+                if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
+                    return DisplayMessage(
+                        message = message,
+                        renderedMarkdown = null,
+                        highlightEpoch = highlightEpoch,
+                    )
+                }
+                val highlighter =
+                    if (textMateEnabled) {
+                        OpenCodeStructureOnlyHighlighter
+                    } else {
+                        OpenCodeSemanticFallbackHighlighter
+                    }
+                val document =
+                    try {
+                        OpenCodeMarkdownParser.parse(
+                            markdown = message.text,
+                            codeHighlighter = highlighter,
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        logI(
+                            "historyFormatFirstFallback messageIdHash=${message.id.hashCode()} " +
+                                "reason=${error.javaClass.simpleName}",
+                        )
+                        null
+                    }
                 return DisplayMessage(
                     message = message,
-                    renderedMarkdown = null,
+                    renderedMarkdown = document,
+                    // TextMate on: colors arrive in HistoryEnrichment / Final.
+                    awaitingTextMateUpgrade = textMateEnabled && document != null,
                     highlightEpoch = highlightEpoch,
                 )
             }
@@ -367,19 +434,21 @@ class MessageContentPreparer
             private const val MAX_CACHE_ENTRIES = 32
             private const val TAG = "MessageContentPreparer"
 
-            /** While streaming, skip markdown above this size; full parse runs on the final frame. */
+            /**
+             * Legacy size gate still used by disposable streaming decoration and
+             * some characterization fixtures. Format-first text-lane parse no
+             * longer skips on size — markdown-bearing content always formats.
+             */
             const val STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD = 8_000
 
             /** Open histories above this markdown-candidate size as plain text first. */
             const val HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD = 4_000
 
             /**
-             * Experimental: keep Session Chat on Loading until the newest
-             * markdown candidate is enriched. Plain-first still prepares without
-             * TextMate but is not published. Flip to false to restore immediate
-             * plain Ready.
+             * Legacy flag: format-first history is always published immediately.
+             * Enrichment still upgrades TextMate colors newest-first afterward.
              */
-            const val HOLD_READY_UNTIL_NEWEST_MARKDOWN = true
+            const val HOLD_READY_UNTIL_NEWEST_MARKDOWN = false
 
             /** Newest-first enrich publishes once the open viewport is ready. */
             const val HISTORY_ENRICH_VIEWPORT_MESSAGE_COUNT = 3
