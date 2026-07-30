@@ -144,6 +144,7 @@ struct SessionChatView: View {
             composer
         }
         .background(OpenCodeColors.backgroundBase)
+        .keyboardOverlapPadding()
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,
             onRestoreToComposer: { viewModel.restoreComposerText($0) }

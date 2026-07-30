@@ -204,7 +204,7 @@ private struct OpenCodeDialogOverlayContent: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                keyboardOverlap = Self.keyboardOverlap(
+                keyboardOverlap = KeyboardOverlap.amount(
                     from: notification,
                     in: geometry.frame(in: .global)
                 )
@@ -214,17 +214,6 @@ private struct OpenCodeDialogOverlayContent: View {
             }
             .animation(.easeOut(duration: 0.25), value: keyboardOverlap)
         }
-    }
-
-    private static func keyboardOverlap(from notification: Notification, in hostFrame: CGRect) -> CGFloat {
-        guard
-            let frameValue = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue
-        else {
-            return 0
-        }
-        let keyboardFrame = frameValue.cgRectValue
-        let overlap = hostFrame.maxY - keyboardFrame.minY
-        return max(0, overlap)
     }
 }
 

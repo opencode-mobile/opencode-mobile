@@ -149,6 +149,10 @@
   `TimelineScrollController` for cancellable coalesced follow and
   distance-from-bottom pin detection. Removed the SwiftUI `LazyVStack` +
   `scrollPosition` two-step snap path.
+- **2026-07-30 / OPE-93:** Session Chat owns keyboard avoidance via
+  `keyboardOverlapPadding()` so the composer stays above the software keyboard
+  on device. The UIKit timeline host plus `UITextView` composer defeat SwiftUI's
+  automatic keyboard safe area; Android already uses `.imePadding()`.
 
 ## Architecture guardrails
 
