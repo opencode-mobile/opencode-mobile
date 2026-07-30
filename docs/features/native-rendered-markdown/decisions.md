@@ -1,5 +1,23 @@
 # Native Rendered Markdown Decisions
 
+## Developer Tools Language Toggles And Logbook Speed Bands
+
+- Decision: keep the global TextMate preference as the kill switch. Add Developer
+  Tools **TextMate Languages** with A+B overrides: opt out of allowlist-promoted
+  languages; force-enable packaged unpromoted languages. Unset override keys
+  preserve allowlist-only Phase 6 defaults.
+- Decision: inject policy through process-local `TextMateLanguageGateRegistry`
+  into `OpenCodeSyntaxHighlighter` without expanding `HighlightRequest`.
+- Decision: logbook list status for measured `Highlighted`/`NoSpans` rows shows
+  Fast/OK/Slow from fence-relative Tier A budgets (≤2k → 50 ms, ≤8k → 150 ms,
+  else scale). Subtitle and details also show wall-time throughput
+  (`chars/ms` · `spans/ms`) when `totalNanoseconds > 0`; Outcome stays in
+  details. Bands remain the UX judgment; throughput is for cross-size
+  comparison and calibration.
+- Reason: lets developers exercise cpp/php without weakening the engineering
+  promotion gate, and surfaces timing without content.
+- Date: 2026-07-30.
+
 ## Phase 6 Default Enablement And Provisional Calibration
 
 - Decision: unset / first-install `textMateEnabled` defaults to **true** on

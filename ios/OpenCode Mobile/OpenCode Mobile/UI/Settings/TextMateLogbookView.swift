@@ -1,4 +1,5 @@
 import Observation
+import OpenCodeMarkdownCore
 import SwiftUI
 
 @Observable
@@ -149,8 +150,17 @@ private struct TextMateLogbookDetailsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextMateLogbookDetailLine(label: "Fence", value: "\(observation.fenceIndex)/\(observation.fenceCount)")
+            TextMateLogbookDetailLine(label: "Outcome", value: observation.outcome)
             TextMateLogbookDetailLine(label: "Backend", value: observation.backend ?? "none")
             TextMateLogbookDetailLine(label: "Fence lines", value: "\(observation.fenceLines)")
+            TextMateLogbookDetailLine(
+                label: "Throughput",
+                value: TextMateHighlightSpeed.shared.throughputLabel(
+                    totalNanoseconds: observation.totalNanoseconds,
+                    fenceCharacters: Int32(observation.fenceCharacters),
+                    spanCount: Int32(observation.spanCount)
+                ) ?? "n/a"
+            )
             TextMateLogbookDetailLine(
                 label: "Diagnostics",
                 value: observation.diagnosticKinds.isEmpty ? "none" : observation.diagnosticKinds.joined(separator: ", ")
@@ -235,18 +245,40 @@ private extension NativeTextMateParseObservation {
     }
 
     var summary: String {
-        "\(messageCharacters) message chars · \(fenceCharacters) fence chars · " +
+        let base =
+            "\(messageCharacters) message chars · \(fenceCharacters) fence chars · " +
             "\(spanCount) spans · \(totalNanoseconds.milliseconds) ms"
+        guard let throughput = TextMateHighlightSpeed.shared.throughputLabel(
+            totalNanoseconds: totalNanoseconds,
+            fenceCharacters: Int32(fenceCharacters),
+            spanCount: Int32(spanCount)
+        ) else {
+            return base
+        }
+        return "\(base) · \(throughput)"
     }
 
     var status: OpenCodeListItemStatus {
+        if outcome == "Highlighted" || outcome == "NoSpans" {
+            let band = TextMateHighlightSpeed.shared.band(
+                totalNanoseconds: totalNanoseconds,
+                fenceCharacters: Int32(fenceCharacters)
+            )
+            if band == TextMateHighlightSpeedBand.fast {
+                return OpenCodeListItemStatus(text: "fast", tone: .success)
+            }
+            if band == TextMateHighlightSpeedBand.ok {
+                return OpenCodeListItemStatus(text: "ok", tone: .warning)
+            }
+            return OpenCodeListItemStatus(text: "slow", tone: .error)
+        }
         switch outcome {
         case "Highlighted":
-            OpenCodeListItemStatus(text: "success", tone: .success)
+            return OpenCodeListItemStatus(text: "success", tone: .success)
         case "NoSpans", "Unsupported", "Fallback":
-            OpenCodeListItemStatus(text: outcome.lowercased(), tone: .warning)
+            return OpenCodeListItemStatus(text: outcome.lowercased(), tone: .warning)
         default:
-            OpenCodeListItemStatus(text: outcome.lowercased(), tone: .error)
+            return OpenCodeListItemStatus(text: outcome.lowercased(), tone: .error)
         }
     }
 }
@@ -260,8 +292,11 @@ private extension NativeTextMateStageSummary {
         case "RegexCompile": "Regex compile"
         case "RegexSearch": "Regex search"
         case "NativeRegexSearch": "Native regex search"
+        case "PreparedLineBuffer": "Prepared line buffer"
+        case "Utf8IndexMap": "UTF-8 index map"
         case "Tokenize": "Tokenize"
         case "Repair": "Repair"
+        case "IncrementalReuse": "Incremental reuse"
         default: stage
         }
     }

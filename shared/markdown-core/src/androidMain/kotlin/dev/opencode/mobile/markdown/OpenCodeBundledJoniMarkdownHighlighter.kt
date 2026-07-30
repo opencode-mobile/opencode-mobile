@@ -28,6 +28,11 @@ object OpenCodeBundledJoniMarkdownHighlighter {
     fun createFromContext(context: Context): OpenCodeSyntaxHighlighter =
         create(assetResourceReader(context.applicationContext))
 
+    fun packagedPrimaryLanguages(context: Context): List<String> =
+        TextMatePackagedLanguages.loadPrimaryCanonicalNames(
+            assetResourceReader(context.applicationContext),
+        )
+
     fun createFromApplicationContext(): OpenCodeSyntaxHighlighter =
         createFromContext(OpenCodeAndroidMarkdownAssets.requireApplicationContext())
 

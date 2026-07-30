@@ -76,6 +76,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
+import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 
@@ -141,6 +142,7 @@ fun MainNavigation() {
                                         RouteSurface {
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
+                                                onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
                                                 onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onConnectionSetup = {
@@ -155,6 +157,13 @@ fun MainNavigation() {
                                                     settingsViewModel::setShowSessionListOnHome,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
+                                            )
+                                        }
+                                    }
+                                    entry<TextMateLanguagesHome> {
+                                        RouteSurface {
+                                            TextMateLanguagesRoute(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
                                             )
                                         }
                                     }

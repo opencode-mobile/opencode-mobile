@@ -136,7 +136,7 @@ class OpenCodeSyntaxHighlighter(
         val normalizedLanguage = normalizedLanguage(languageOrAlias)
         val allowlisted =
             normalizedLanguage != null &&
-                TextMateLanguageAllowlist.isPromoted(normalizedLanguage, grammarBundle?.manifest)
+                TextMateLanguageGateRegistry.current().admits(normalizedLanguage, grammarBundle?.manifest)
         val grammar =
             if (allowlisted) {
                 normalizedLanguage?.let { language ->

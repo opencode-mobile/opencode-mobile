@@ -26,6 +26,11 @@ internal actual fun createOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHig
         )
 }
 
+object TextMatePackagedLanguageCatalog {
+    fun primaryCanonicalNames(): List<String> =
+        TextMatePackagedLanguages.loadPrimaryCanonicalNames(OpenCodeAppleTextMateResourceReader)
+}
+
 private object OpenCodeAppleTextMateResourceReader : OpenCodeTextMateResourceReader {
     @OptIn(ExperimentalForeignApi::class)
     override fun readText(resourcePath: String): String? {

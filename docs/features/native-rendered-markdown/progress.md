@@ -3,6 +3,12 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-30: Logbook combo metrics: keep Fast/OK/Slow fence budgets and add
+  `chars/ms` · `spans/ms` throughput on measured rows (subtitle + details).
+- 2026-07-30: Added Developer Tools TextMate language toggles (A+B: opt out of
+  promoted, force-enable packaged) and logbook Fast/OK/Slow speed bands on the
+  shared OPE-88 branch. Engineering allowlist v1 remains the default when
+  overrides are unset.
 - 2026-07-29: Closed TextMate pipeline Phase 6. Global TextMate preference defaults
   on when unset; shared `TextMateLanguageAllowlist` v1 promotes the top-ten
   languages and forces complete semantic fallback otherwise. Android memory /

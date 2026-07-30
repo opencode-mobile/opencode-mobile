@@ -42,6 +42,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 @Composable
 fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
+    onTextMateLanguagesClick: () -> Unit,
     onTextMateLogbookClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
@@ -161,6 +162,15 @@ fun SettingsScreen(
             )
 
             OpenCodeListItem(
+                title = "TextMate Languages",
+                subtitle = "Opt out of promoted languages or force-enable packaged ones",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
+                onClick = onTextMateLanguagesClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
                 title = "Component Gallery",
                 subtitle = "Design-system foundations and reusable components",
                 style = OpenCodeListItemStyle.Card,
@@ -255,6 +265,7 @@ private fun SettingsScreenLightPreview() {
     OpenCodeTheme(darkTheme = false) {
         SettingsScreen(
             onComponentGalleryClick = {},
+            onTextMateLanguagesClick = {},
             onTextMateLogbookClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
@@ -275,6 +286,7 @@ private fun SettingsScreenDarkPreview() {
     OpenCodeTheme(darkTheme = true) {
         SettingsScreen(
             onComponentGalleryClick = {},
+            onTextMateLanguagesClick = {},
             onTextMateLogbookClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},

@@ -16,8 +16,8 @@
 - Intentional platform difference: only the native storage location and
   concurrency primitive differ. iOS uses a utility `DispatchQueue` plus lock;
   Android uses a coroutine writer plus bounded channel.
-- Owner or next action: keep observation schema parity when physical Tier B
-  calibration adds host fields.
+- Owner or next action: keep observation schema parity; language toggles and
+  logbook speed bands are aligned on both platforms.
 
 ## TextMate Execution And Memory Ownership
 

@@ -23,11 +23,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.textmate.TextMateLogbookEntry
+import dev.opencode.mobile.markdown.TextMateHighlightSpeed
+import dev.opencode.mobile.markdown.TextMateHighlightSpeedBand
 import dev.opencode.mobile.markdown.TextMateMetricStage
 import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.TextMateParseOutcome
 import dev.opencode.mobile.markdown.TextMateStageSummary
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -82,12 +85,13 @@ fun TextMateLogbookScreen(
             state.loading ->
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp),
+                    color = openCodeColor("interactive"),
                 )
             state.entries.isEmpty() ->
                 Text(
                     text = "No TextMate parsing entries yet.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = openCodeColor("text-base"),
                     modifier = Modifier.padding(24.dp),
                 )
             else ->
@@ -181,21 +185,30 @@ private fun TextMateLogbookDetails(observation: TextMateParseObservation) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = openCodeColor("surface-raised-base"),
+        border = BorderStroke(1.dp, openCodeColor("border-weaker-base")),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             DetailLine("Fence", "${observation.fenceIndex}/${observation.fenceCount}")
+            DetailLine("Outcome", observation.outcome.name)
             DetailLine("Backend", observation.backend ?: "none")
             DetailLine("Fence lines", observation.fenceLines.toString())
+            DetailLine(
+                "Throughput",
+                TextMateHighlightSpeed.throughputLabel(
+                    totalNanoseconds = observation.totalNanoseconds,
+                    fenceCharacters = observation.fenceCharacters,
+                    spanCount = observation.spanCount,
+                ) ?: "n/a",
+            )
             DetailLine("Diagnostics", observation.diagnosticKinds.joinToString().ifEmpty { "none" })
             Text(
                 text = "Stage timings overlap and are not additive.",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = openCodeColor("text-weaker"),
             )
             observation.stages.forEach { stage ->
                 DetailLine(
@@ -217,12 +230,12 @@ private fun DetailLine(
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = openCodeColor("text-base"),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = openCodeColor("text-strong"),
         )
     }
 }
@@ -230,12 +243,37 @@ private fun DetailLine(
 private fun TextMateParseObservation.displayLanguage(): String =
     canonicalLanguage ?: requestedLanguage ?: "Unspecified language"
 
-private fun TextMateParseObservation.summary(): String =
-    "$messageCharacters message chars · $fenceCharacters fence chars · $spanCount spans · " +
-        "${totalNanoseconds.milliseconds()} ms"
+private fun TextMateParseObservation.summary(): String {
+    val base =
+        "$messageCharacters message chars · $fenceCharacters fence chars · $spanCount spans · " +
+            "${totalNanoseconds.milliseconds()} ms"
+    val throughput =
+        TextMateHighlightSpeed.throughputLabel(
+            totalNanoseconds = totalNanoseconds,
+            fenceCharacters = fenceCharacters,
+            spanCount = spanCount,
+        )
+    return if (throughput == null) base else "$base · $throughput"
+}
 
-private fun TextMateParseObservation.status(): OpenCodeListItemStatus =
-    when (outcome) {
+private fun TextMateParseObservation.status(): OpenCodeListItemStatus {
+    val speed =
+        TextMateHighlightSpeed.bandForOutcome(
+            outcome = outcome,
+            totalNanoseconds = totalNanoseconds,
+            fenceCharacters = fenceCharacters,
+        )
+    if (speed != null) {
+        return when (speed) {
+            TextMateHighlightSpeedBand.Fast ->
+                OpenCodeListItemStatus("fast", OpenCodeListItemStatusTone.Success)
+            TextMateHighlightSpeedBand.Ok ->
+                OpenCodeListItemStatus("ok", OpenCodeListItemStatusTone.Warning)
+            TextMateHighlightSpeedBand.Slow ->
+                OpenCodeListItemStatus("slow", OpenCodeListItemStatusTone.Error)
+        }
+    }
+    return when (outcome) {
         TextMateParseOutcome.Highlighted ->
             OpenCodeListItemStatus("success", OpenCodeListItemStatusTone.Success)
         TextMateParseOutcome.NoSpans,
@@ -247,6 +285,7 @@ private fun TextMateParseObservation.status(): OpenCodeListItemStatus =
         TextMateParseOutcome.BudgetExceeded,
         -> OpenCodeListItemStatus(outcome.name.lowercase(), OpenCodeListItemStatusTone.Error)
     }
+}
 
 private fun TextMateLogbookEntry.timestampLabel(): String =
     DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
