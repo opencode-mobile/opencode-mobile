@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
+@MainActor
 struct MessageDomainAdapterTests {
     private let adapter = MessageDomainAdapter()
     private let decoder: JSONDecoder = {
@@ -175,6 +176,7 @@ struct MessageDomainAdapterTests {
         )
         let part = adapter.messagePart(from: dto)
         guard case .text(let t) = part else { Issue.record("Expected text part"); return }
+        #expect(t.id == "prt-1")
         #expect(t.text == "Hello")
         #expect(t.isStreaming == false)
     }
@@ -194,6 +196,7 @@ struct MessageDomainAdapterTests {
         )
         let part = adapter.messagePart(from: dto)
         guard case .tool(let t) = part else { Issue.record("Expected tool part"); return }
+        #expect(t.id == "prt-1")
         #expect(t.toolName == "webfetch")
         #expect(t.status == .completed)
         #expect(t.callID == "call-1")

@@ -51,6 +51,7 @@ import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDeta
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.ui.componentgallery.components.ProjectSessionSelectorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
@@ -75,6 +76,9 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
+import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
+import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
+import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 
 @Composable
 fun MainNavigation() {
@@ -138,6 +142,8 @@ fun MainNavigation() {
                                         RouteSurface {
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
+                                                onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
+                                                onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onConnectionSetup = {
                                                     setupViewModel.configureFromCurrentProfile()
@@ -149,6 +155,27 @@ fun MainNavigation() {
                                                 showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
                                                 onShowSessionListOnHomeChange =
                                                     settingsViewModel::setShowSessionListOnHome,
+                                                textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
+                                                onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
+                                            )
+                                        }
+                                    }
+                                    entry<TextMateLanguagesHome> {
+                                        RouteSurface {
+                                            TextMateLanguagesRoute(
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                            )
+                                        }
+                                    }
+                                    entry<TextMateLogbookHome> {
+                                        RouteSurface {
+                                            val logbookViewModel: TextMateLogbookViewModel = hiltViewModel()
+                                            val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
+                                            TextMateLogbookScreen(
+                                                state = logbookState,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onRefresh = logbookViewModel::refresh,
+                                                onClear = logbookViewModel::clear,
                                             )
                                         }
                                     }

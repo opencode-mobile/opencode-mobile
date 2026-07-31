@@ -23,12 +23,15 @@ struct SettingsView: View {
     let onConnectionSetup: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
+    @State private var showTextMateLogbook = false
+    @State private var showTextMateLanguages = false
     @State private var showClearConfirmation = false
     @State private var showThemePicker = false
     @State private var showThemeImporter = false
     @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,6 +124,47 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
+                        title: "TextMate Highlighting",
+                        subtitle: "On by default for promoted languages; semantic fallback otherwise (can disable)",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
+                        trailing: {
+                            Toggle(
+                                "TextMate Highlighting",
+                                isOn: Binding(
+                                    get: { markdownHighlightPreferences.textMateEnabled },
+                                    set: { newValue in
+                                        markdownHighlightPreferences.setTextMateEnabled(newValue)
+                                        MessageContentPreparer.shared.clearDocumentCache()
+                                        BlockDecorationCache.shared.clear()
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "TextMate Languages",
+                        subtitle: "Opt out of promoted languages or force-enable packaged ones",
+                        style: .card,
+                        startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
+                        action: { showTextMateLanguages = true }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "TextMate Logbook",
+                        subtitle: "Persisted code-fence parsing measurements",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
+                        action: { showTextMateLogbook = true }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Clear All Data",
                         subtitle: "Remove connection, cache, and imported themes",
                         style: .card,
@@ -136,6 +180,12 @@ struct SettingsView: View {
         .background(OpenCodeColors.backgroundBase)
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
+        }
+        .navigationDestination(isPresented: $showTextMateLanguages) {
+            TextMateLanguagesView()
+        }
+        .navigationDestination(isPresented: $showTextMateLogbook) {
+            TextMateLogbookView()
         }
         .openCodeBottomSheet(
             isPresented: $showThemePicker,

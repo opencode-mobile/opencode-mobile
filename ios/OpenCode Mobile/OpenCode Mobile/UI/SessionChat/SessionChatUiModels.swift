@@ -40,18 +40,40 @@ struct SessionChatRow: Identifiable, Equatable {
     }
 
     static func == (lhs: SessionChatRow, rhs: SessionChatRow) -> Bool {
-        lhs.id == rhs.id &&
-            lhs.role == rhs.role &&
-            lhs.text == rhs.text &&
-            lhs.metadataLabel == rhs.metadataLabel &&
-            lhs.isPending == rhs.isPending &&
-            lhs.isStreaming == rhs.isStreaming &&
-            lhs.blocks == rhs.blocks &&
-            lhs.modelProviderID == rhs.modelProviderID &&
-            lhs.modelID == rhs.modelID &&
-            lhs.contextInputTokens == rhs.contextInputTokens &&
-            lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash &&
-            lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count
+        guard lhs.id == rhs.id,
+              lhs.role == rhs.role,
+              lhs.isPending == rhs.isPending,
+              lhs.isStreaming == rhs.isStreaming,
+              lhs.modelProviderID == rhs.modelProviderID,
+              lhs.modelID == rhs.modelID,
+              lhs.contextInputTokens == rhs.contextInputTokens,
+              lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash,
+              lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion,
+              lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
+              lhs.text.count == rhs.text.count,
+              lhs.metadataLabel == rhs.metadataLabel,
+              lhs.blocks.count == rhs.blocks.count
+        else { return false }
+        // Huge assistant replies: compare text only after cheap fields match.
+        return lhs.text == rhs.text && lhs.blocks == rhs.blocks
+    }
+}
+
+extension SessionChatRow: MessageListTimelineHeightEstimating {
+    var timelineRowHeightEstimate: CGFloat {
+        let style: MessageListTimelineRowHeightEstimate.Style =
+            switch role {
+            case .user:
+                .outgoing
+            case .assistant:
+                .assistant
+            case .tool, .command, .unknown:
+                .compact
+            }
+        return MessageListTimelineRowHeightEstimate.fallback(
+            characterCount: text.count,
+            style: style
+        )
     }
 }
 
@@ -132,6 +154,9 @@ struct SessionChatUiState: Equatable {
     var sessionTitle: String
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
+    /// Projected timeline frame with declared ID sets. Reused when only
+    /// composer / session-info / review / command republish.
+    var timelineFrame: TimelineFrame = .empty
     var composer: SessionChatComposerState
     var isSending: Bool = false
     var isRefreshing: Bool = false
@@ -237,6 +262,7 @@ struct SessionChatUiState: Equatable {
             sessionTitle: sessionTitle,
             timeline: .loading,
             messages: [],
+            timelineFrame: .empty,
             composer: SessionChatComposerState(
                 text: "",
                 selectedModel: nil,

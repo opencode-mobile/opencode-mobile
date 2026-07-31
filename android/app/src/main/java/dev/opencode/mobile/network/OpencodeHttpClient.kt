@@ -59,6 +59,11 @@ class OpencodeSseHttpClient
                         baseUrl = "http://127.0.0.1:1/",
                         password = null,
                     )
-            return KtorClientFactory.create(resolved, json, contentNegotiation = false)
+            return KtorClientFactory.create(
+                connection = resolved,
+                json = json,
+                contentNegotiation = false,
+                sse = true,
+            )
         }
     }

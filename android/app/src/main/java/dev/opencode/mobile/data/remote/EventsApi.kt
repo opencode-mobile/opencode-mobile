@@ -22,33 +22,21 @@ class EventsApi(
             .prepareGet("global/event") {
                 accept(ContentType.Text.EventStream)
                 header(HttpHeaders.CacheControl, "no-cache")
+                // Match iOS: keep SSE uncompressed so framing stays line-oriented under burst.
+                header(HttpHeaders.AcceptEncoding, "identity")
             }.execute { response ->
                 onHTTPResponse(response.status.value)
                 val channel = response.bodyAsChannel()
-                val dataBuffer = StringBuilder()
+                val parser = SseDataLineParser()
                 try {
                     while (!channel.isClosedForRead) {
                         val line = channel.readUTF8Line() ?: break
-                        when {
-                            line.isEmpty() -> {
-                                if (dataBuffer.isNotEmpty()) {
-                                    onDataLine(dataBuffer.toString())
-                                    dataBuffer.clear()
-                                }
-                            }
-                            line.startsWith("data:") -> {
-                                val payload = line.removePrefix("data:").trimStart()
-                                if (dataBuffer.isNotEmpty()) dataBuffer.append('\n')
-                                dataBuffer.append(payload)
-                            }
-                            line.startsWith("{") -> {
-                                if (dataBuffer.isNotEmpty()) {
-                                    onDataLine(dataBuffer.toString())
-                                    dataBuffer.clear()
-                                }
-                                onDataLine(line)
-                            }
+                        for (payload in parser.ingest(line)) {
+                            onDataLine(payload)
                         }
+                    }
+                    for (payload in parser.finish()) {
+                        onDataLine(payload)
                     }
                 } catch (error: CancellationException) {
                     throw error

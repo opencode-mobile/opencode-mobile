@@ -1,9 +1,22 @@
 package dev.opencode.mobile.markdown
 
+import kotlin.time.TimeSource
+
 data class SyntaxHighlightResult(
     val spans: List<CodeSpan>,
     val diagnostics: List<MarkdownDiagnostic>,
+    val source: SyntaxHighlightSource = SyntaxHighlightSource.Unknown,
+    val canonicalLanguage: String? = null,
+    val textMateOutcome: TextMateParseOutcome? = null,
 )
+
+enum class SyntaxHighlightSource {
+    TextMate,
+    SemanticFallback,
+    /** Block structure only; empty spans so chrome paints before coloring. */
+    StructureOnly,
+    Unknown,
+}
 
 interface OpenCodeCodeHighlighter {
     fun supportsLanguage(languageOrAlias: String?): Boolean
@@ -12,6 +25,29 @@ interface OpenCodeCodeHighlighter {
         languageOrAlias: String?,
         code: String,
     ): SyntaxHighlightResult
+
+    fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code)
+
+    fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+    ): SyntaxHighlightResult {
+        if (shouldCancel()) {
+            return SyntaxHighlightResult(
+                spans = emptyList(),
+                diagnostics = emptyList(),
+                source = SyntaxHighlightSource.Unknown,
+                textMateOutcome = TextMateParseOutcome.Cancelled,
+            )
+        }
+        return highlight(languageOrAlias, code, metricsSink)
+    }
 }
 
 interface OpenCodeTextMateTokenizer {
@@ -20,18 +56,46 @@ interface OpenCodeTextMateTokenizer {
         code: String,
         grammarBundle: TextMateGrammarBundle? = null,
     ): TextMateTokenizationResult
+
+    fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle? = null,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateTokenizationResult = tokenize(grammar, code, grammarBundle)
+
+    fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle? = null,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+    ): TextMateTokenizationResult {
+        if (shouldCancel()) {
+            return TextMateTokenizationResult(tokens = emptyList(), cancelled = true)
+        }
+        return tokenize(grammar, code, grammarBundle, metricsSink)
+    }
 }
 
 data class TextMateTokenizationResult(
     val tokens: List<TextMateScopeToken>,
     val diagnostics: List<MarkdownDiagnostic> = emptyList(),
+    val cancelled: Boolean = false,
 )
 
 class OpenCodeSyntaxHighlighter(
     private val grammarBundle: TextMateGrammarBundle? = null,
     private val textMateTokenizer: OpenCodeTextMateTokenizer? = null,
     private val fallbackHighlighter: OpenCodeCodeHighlighter = OpenCodeSemanticFallbackHighlighter,
-) : OpenCodeCodeHighlighter {
+    private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+) : OpenCodeCodeHighlighter,
+    TextMateCacheTrimmable {
+    override fun trimCaches(level: MemoryPressure) {
+        (textMateTokenizer as? TextMateCacheTrimmable)?.trimCaches(level)
+        grammarBundle?.trimCaches(level)
+    }
+
     override fun supportsLanguage(languageOrAlias: String?): Boolean =
         normalizedLanguage(languageOrAlias)?.let { language ->
             grammarBundle?.manifest?.contains(language) == true || fallbackHighlighter.supportsLanguage(language)
@@ -40,11 +104,147 @@ class OpenCodeSyntaxHighlighter(
     override fun highlight(
         languageOrAlias: String?,
         code: String,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code, metricsSink)
+
+    override fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code, metricsSink, shouldCancel = { false })
+
+    override fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+    ): SyntaxHighlightResult = highlight(languageOrAlias, code, metricsSink, shouldCancel, incremental = null)
+
+    fun highlight(
+        languageOrAlias: String?,
+        code: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
+        incremental: TextMateIncrementalHighlightSession?,
     ): SyntaxHighlightResult {
-        val grammar = normalizedLanguage(languageOrAlias)?.let { language -> grammarBundle?.primaryGrammarFor(language) }
+        if (shouldCancel()) {
+            return SyntaxHighlightResult(
+                spans = emptyList(),
+                diagnostics = emptyList(),
+                source = SyntaxHighlightSource.Unknown,
+                textMateOutcome = TextMateParseOutcome.Cancelled,
+            )
+        }
+        val grammarLookupStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+        val normalizedLanguage = normalizedLanguage(languageOrAlias)
+        val allowlisted =
+            normalizedLanguage != null &&
+                TextMateLanguageGateRegistry.current().admits(normalizedLanguage, grammarBundle?.manifest)
+        val grammar =
+            if (allowlisted) {
+                normalizedLanguage?.let { language ->
+                    grammarBundle?.primaryGrammarFor(language, metricsSink)
+                }
+            } else {
+                null
+            }
+        grammarLookupStartedAt?.let {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.GrammarLookup,
+                    outcome =
+                        when {
+                            normalizedLanguage == null -> TextMateMetricOutcome.Failure
+                            !allowlisted -> TextMateMetricOutcome.CacheMiss
+                            grammar == null -> TextMateMetricOutcome.Failure
+                            else -> TextMateMetricOutcome.Success
+                        },
+                    durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    sourceCharacters = code.length,
+                ),
+            )
+        }
         val tokenizer = textMateTokenizer
         if (grammar != null && tokenizer != null) {
-            val tokenization = tokenizer.tokenize(grammar, code, grammarBundle)
+            if (shouldCancel()) {
+                return SyntaxHighlightResult(
+                    spans = emptyList(),
+                    diagnostics = emptyList(),
+                    source = SyntaxHighlightSource.Unknown,
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.Cancelled,
+                )
+            }
+            val tokenization =
+                if (incremental != null && tokenizer is OpenCodeTextMateNativeTokenizer) {
+                    val resolvedIdentity =
+                        incremental.identity.copy(
+                            canonicalLanguage = grammar.descriptor.name,
+                            grammarResourcePath = grammar.descriptor.resourcePath,
+                            grammarId = grammar.grammarId,
+                        )
+                    incremental.identity = resolvedIdentity
+                    val compatiblePrevious =
+                        incremental.previous?.takeIf { previous ->
+                            previous.identity == resolvedIdentity
+                        }
+                    val plan =
+                        TextMateIncrementalPlanner.plan(
+                            previous = compatiblePrevious,
+                            identity = resolvedIdentity,
+                            source = code,
+                            suffixConvergenceEnabled = incremental.suffixConvergenceEnabled,
+                        )
+                    // Bind compatible previous into a working session for the tokenizer.
+                    val working =
+                        TextMateIncrementalHighlightSession(
+                            identity = resolvedIdentity,
+                            intent = incremental.intent,
+                            revision = incremental.revision,
+                            previous = compatiblePrevious,
+                            suffixConvergenceEnabled = incremental.suffixConvergenceEnabled,
+                        )
+                    val result =
+                        tokenizer.tokenizeLinesIncremental(
+                            grammar = grammar,
+                            code = code,
+                            grammarBundle = grammarBundle,
+                            plan = plan,
+                            session = working,
+                            shouldCancel = shouldCancel,
+                            metricsSink = metricsSink,
+                        )
+                    incremental.produced = working.produced
+                    incremental.mode = working.mode
+                    incremental.reusedLineCount = working.reusedLineCount
+                    incremental.retokenizedLineCount = working.retokenizedLineCount
+                    incremental.suffixReusedLineCount = working.suffixReusedLineCount
+                    result
+                } else {
+                    val result =
+                        tokenizer.tokenize(
+                            grammar = grammar,
+                            code = code,
+                            grammarBundle = grammarBundle,
+                            metricsSink = metricsSink,
+                            shouldCancel = shouldCancel,
+                        )
+                    TextMateLinesTokenizationResult(
+                        tokens = result.tokens,
+                        state = TextMateLineState.Initial,
+                        diagnostics = result.diagnostics,
+                        cancelled = result.cancelled,
+                    )
+                }
+            if (shouldCancel() || tokenization.cancelled) {
+                return SyntaxHighlightResult(
+                    spans = emptyList(),
+                    diagnostics = tokenization.diagnostics,
+                    source = SyntaxHighlightSource.Unknown,
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.Cancelled,
+                )
+            }
+            val repairStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
             val spans =
                 tokenization.tokens
                     .map(OpenCodeTextMateScopeMapper::codeSpanFor)
@@ -60,15 +260,59 @@ class OpenCodeSyntaxHighlighter(
                     .consolidateWithinIdentifiers(code)
                     .mergeAdjacentSemanticSpans(code)
                     .highlightPythonTripleQuotedStrings(code, languageOrAlias)
+            repairStartedAt?.let {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.Repair,
+                        outcome = TextMateMetricOutcome.Success,
+                        durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                        sourceCharacters = code.length,
+                    ),
+                )
+            }
+            // Exact-source reuse skips the Tokenize stage timer inside tokenize();
+            // still emit a Tokenize CacheHit so repair/tokenize proportions exist.
+            if (incremental?.mode == TextMateIncrementalMode.ExactSource && metricsSink.isEnabled) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.Tokenize,
+                        outcome = TextMateMetricOutcome.CacheHit,
+                        durationNanoseconds = 0,
+                        sourceCharacters = code.length,
+                        sourceLines = code.count { it == '\n' } + if (code.isEmpty()) 0 else 1,
+                        reusedLineCount = incremental.reusedLineCount,
+                        retokenizedLineCount = 0,
+                    ),
+                )
+            }
             if (spans.isNotEmpty()) {
                 return SyntaxHighlightResult(
                     spans = spans,
                     diagnostics = tokenization.diagnostics,
+                    source = SyntaxHighlightSource.TextMate,
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.Highlighted,
                 )
             }
+
+            return fallbackHighlighter
+                .highlight(languageOrAlias, code)
+                .copy(
+                    canonicalLanguage = grammar.descriptor.name,
+                    textMateOutcome = TextMateParseOutcome.NoSpans,
+                )
         }
 
-        return fallbackHighlighter.highlight(languageOrAlias, code)
+        return fallbackHighlighter
+            .highlight(languageOrAlias, code)
+            .copy(
+                textMateOutcome =
+                    when {
+                        normalizedLanguage == null -> TextMateParseOutcome.Fallback
+                        !allowlisted -> TextMateParseOutcome.Fallback
+                        else -> TextMateParseOutcome.Unsupported
+                    },
+            )
     }
 
     companion object {
@@ -820,6 +1064,25 @@ class OpenCodeSyntaxHighlighter(
     }
 }
 
+/**
+ * Fence-aware highlighter that returns no token spans. Used for structure-first
+ * streaming publication so code-block chrome/monospace paint before semantic or
+ * TextMate colors upgrade in place.
+ */
+object OpenCodeStructureOnlyHighlighter : OpenCodeCodeHighlighter {
+    override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+    override fun highlight(
+        languageOrAlias: String?,
+        code: String,
+    ): SyntaxHighlightResult =
+        SyntaxHighlightResult(
+            spans = emptyList(),
+            diagnostics = emptyList(),
+            source = SyntaxHighlightSource.StructureOnly,
+        )
+}
+
 object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
     private val supportedLanguageAliases =
         setOf(
@@ -892,12 +1155,8 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
             "nil" to CodeTokenRole.Constant,
         )
 
-    private val tokenRegex =
-        Regex(
-            pattern =
-                """"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//.*$|#.*$|/\*.*?\*/|\b\d+(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[{}()\[\].,;:+\-*/%=<>!&|?]""",
-            options = setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL),
-        )
+    private val punctuationCharacters = setOf('{', '}', '(', ')', '[', ']', '.', ',', ';', ':')
+    private val operatorCharacters = setOf('+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|', '?')
 
     override fun supportsLanguage(languageOrAlias: String?): Boolean {
         val normalized = languageOrAlias?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return true
@@ -917,6 +1176,7 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
                         "TextMate highlighter feasibility gate is pending; semantic native fallback tokens were used.",
                     ),
                 ),
+            source = SyntaxHighlightSource.SemanticFallback,
         )
 
     private fun highlightFallbackSpans(
@@ -925,17 +1185,101 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
     ): List<CodeSpan> {
         if (language == "scratch") return emptyList()
         if (code.isEmpty()) return emptyList()
-        return tokenRegex
-            .findAll(code)
-            .map { match ->
-                val value = match.value
-                CodeSpan(
-                    start = match.range.first,
-                    end = match.range.last + 1,
-                    role = roleFor(language, value),
-                )
-            }.filter { it.role != CodeTokenRole.Plain }
-            .toList()
+        return buildList {
+            var cursor = 0
+            while (cursor < code.length) {
+                val start = cursor
+                val end =
+                    when {
+                        code[cursor] == '"' || code[cursor] == '\'' ->
+                            quotedTokenEnd(code, cursor, code[cursor])
+                        code.startsWith("//", cursor) || code[cursor] == '#' ->
+                            lineTokenEnd(code, cursor)
+                        code.startsWith("/*", cursor) ->
+                            blockCommentEnd(code, cursor)
+                        code[cursor].isDigit() ->
+                            numberTokenEnd(code, cursor)
+                        code[cursor].isAsciiIdentifierStart() ->
+                            identifierTokenEnd(code, cursor)
+                        code[cursor] in punctuationCharacters ->
+                            cursor + 1
+                        code[cursor] in operatorCharacters ->
+                            operatorTokenEnd(code, cursor)
+                        else -> {
+                            cursor += 1
+                            continue
+                        }
+                    }
+                val role = roleFor(language, code.substring(start, end))
+                if (role != CodeTokenRole.Plain) {
+                    add(CodeSpan(start = start, end = end, role = role))
+                }
+                cursor = end
+            }
+        }
+    }
+
+    private fun quotedTokenEnd(
+        code: String,
+        start: Int,
+        quote: Char,
+    ): Int {
+        var cursor = start + 1
+        while (cursor < code.length) {
+            when (code[cursor]) {
+                '\\' -> cursor = (cursor + 2).coerceAtMost(code.length)
+                quote -> return cursor + 1
+                else -> cursor += 1
+            }
+        }
+        return code.length
+    }
+
+    private fun lineTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        val lineEnd = code.indexOf('\n', startIndex = start)
+        return if (lineEnd < 0) code.length else lineEnd
+    }
+
+    private fun blockCommentEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        val closing = code.indexOf("*/", startIndex = start + 2)
+        return if (closing < 0) code.length else closing + 2
+    }
+
+    private fun numberTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        var cursor = start
+        while (cursor < code.length && code[cursor].isDigit()) cursor += 1
+        if (cursor + 1 < code.length && code[cursor] == '.' && code[cursor + 1].isDigit()) {
+            cursor += 1
+            while (cursor < code.length && code[cursor].isDigit()) cursor += 1
+        }
+        return cursor
+    }
+
+    private fun identifierTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        var cursor = start + 1
+        while (cursor < code.length && code[cursor].isAsciiIdentifierPart()) cursor += 1
+        return cursor
+    }
+
+    private fun operatorTokenEnd(
+        code: String,
+        start: Int,
+    ): Int {
+        var cursor = start + 1
+        while (cursor < code.length && code[cursor] in operatorCharacters) cursor += 1
+        return cursor
     }
 
     private fun roleFor(
@@ -947,10 +1291,14 @@ object OpenCodeSemanticFallbackHighlighter : OpenCodeCodeHighlighter {
             value.startsWith("\"") || value.startsWith("'") -> CodeTokenRole.String
             value.firstOrNull()?.isDigit() == true -> CodeTokenRole.Number
             value in keywordRoles -> keywordRoles.getValue(value)
-            language == "json" && value.matches(Regex("""[A-Za-z_][A-Za-z0-9_]*""")) -> CodeTokenRole.Property
-            value.matches(Regex("""[{}()\[\].,;:]""")) -> CodeTokenRole.Punctuation
-            value.matches(Regex("""[+\-*/%=<>!&|?]+""")) -> CodeTokenRole.Operator
+            language == "json" && value.firstOrNull()?.isAsciiIdentifierStart() == true -> CodeTokenRole.Property
+            value.length == 1 && value[0] in punctuationCharacters -> CodeTokenRole.Punctuation
+            value.isNotEmpty() && value.all { character -> character in operatorCharacters } -> CodeTokenRole.Operator
             value.firstOrNull()?.isUpperCase() == true -> CodeTokenRole.Type
             else -> CodeTokenRole.Plain
         }
+
+    private fun Char.isAsciiIdentifierStart(): Boolean = this == '_' || this in 'A'..'Z' || this in 'a'..'z'
+
+    private fun Char.isAsciiIdentifierPart(): Boolean = isAsciiIdentifierStart() || isDigit()
 }

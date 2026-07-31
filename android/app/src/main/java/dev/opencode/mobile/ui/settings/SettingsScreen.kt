@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -40,6 +42,8 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 @Composable
 fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
+    onTextMateLanguagesClick: () -> Unit,
+    onTextMateLogbookClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
     onClearData: () -> Unit,
@@ -47,6 +51,8 @@ fun SettingsScreen(
     onApplyPreset: (String) -> Unit,
     showSessionListOnHome: Boolean,
     onShowSessionListOnHomeChange: (Boolean) -> Unit,
+    textMateEnabled: Boolean,
+    onTextMateEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
@@ -75,7 +81,12 @@ fun SettingsScreen(
         )
 
         Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SectionHeader(title = "Server")
@@ -137,11 +148,43 @@ fun SettingsScreen(
             SectionHeader(title = "Developer Tools")
 
             OpenCodeListItem(
+                title = "TextMate Highlighting",
+                subtitle = "On by default for promoted languages; semantic fallback otherwise (can disable)",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
+                trailing = {
+                    Switch(
+                        checked = textMateEnabled,
+                        onCheckedChange = onTextMateEnabledChange,
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "TextMate Languages",
+                subtitle = "Opt out of promoted languages or force-enable packaged ones",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
+                onClick = onTextMateLanguagesClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
                 title = "Component Gallery",
                 subtitle = "Design-system foundations and reusable components",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
                 onClick = onComponentGalleryClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "TextMate Logbook",
+                subtitle = "Persisted code-fence parsing measurements",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
+                onClick = onTextMateLogbookClick,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -222,6 +265,8 @@ private fun SettingsScreenLightPreview() {
     OpenCodeTheme(darkTheme = false) {
         SettingsScreen(
             onComponentGalleryClick = {},
+            onTextMateLanguagesClick = {},
+            onTextMateLogbookClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
@@ -229,6 +274,8 @@ private fun SettingsScreenLightPreview() {
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
             onShowSessionListOnHomeChange = {},
+            textMateEnabled = false,
+            onTextMateEnabledChange = {},
         )
     }
 }
@@ -239,6 +286,8 @@ private fun SettingsScreenDarkPreview() {
     OpenCodeTheme(darkTheme = true) {
         SettingsScreen(
             onComponentGalleryClick = {},
+            onTextMateLanguagesClick = {},
+            onTextMateLogbookClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
@@ -246,6 +295,8 @@ private fun SettingsScreenDarkPreview() {
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
             onShowSessionListOnHomeChange = {},
+            textMateEnabled = false,
+            onTextMateEnabledChange = {},
         )
     }
 }

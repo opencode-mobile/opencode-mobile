@@ -256,6 +256,40 @@ struct SessionChatViewModelTests {
         #expect(messages[0].text == "Hello")
     }
 
+    @Test func nonTimelinePublish_reusesTimelineFrame() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .user,
+                        text: "Hello",
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: 1
+                    ),
+                ]
+            )
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil {
+            viewModel.uiState.timeline == .ready
+                && !viewModel.uiState.timelineFrame.rows.isEmpty
+        }
+
+        let frameBefore = viewModel.uiState.timelineFrame
+        #expect(frameBefore.frameRevision > 0)
+        #expect(!frameBefore.rows.isEmpty)
+
+        viewModel.updateComposerText("drafting without timeline remap")
+        #expect(viewModel.uiState.composer.text == "drafting without timeline remap")
+        #expect(viewModel.uiState.timelineFrame.frameRevision == frameBefore.frameRevision)
+        #expect(viewModel.uiState.timelineFrame.rows.map(\.id) == frameBefore.rows.map(\.id))
+        // Same value reuse — not a remapped copy with a new revision.
+        #expect(viewModel.uiState.timelineFrame == frameBefore)
+    }
+
     @Test func openRenameSession_prefillsCurrentTitle() async {
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
@@ -785,7 +819,7 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.attachments.isEmpty)
         #expect(viewModel.uiState.messages.contains { row in
             row.isPending && row.blocks.contains {
-                guard case let .attachment(file) = $0 else { return false }
+                guard case let .attachment(_, file) = $0 else { return false }
                 return file.filename == "notes.txt"
             }
         })
@@ -1445,7 +1479,7 @@ struct SessionChatViewModelTests {
             id: "msg-1",
             role: .assistant,
             text: "",
-            parts: [.tool(ToolPart(toolName: "bash", status: .completed))],
+            parts: [.tool(ToolPart(id: "tool-1", toolName: "bash", status: .completed))],
             model: nil,
             mode: nil,
             sentAtEpochMs: nil
@@ -1453,7 +1487,7 @@ struct SessionChatViewModelTests {
         let viewModel = makeViewModel()
         let row = viewModel.row(from: message)
         #expect(row?.isStreaming == false)
-        guard case .toolCard(let card) = row?.blocks.first else {
+        guard case .toolCard(_, let card) = row?.blocks.first else {
             Issue.record("Expected tool card block")
             return
         }
@@ -1480,9 +1514,9 @@ struct SessionChatViewModelTests {
             role: .user,
             text: "Before\nAfter",
             parts: [
-                .text(TextPart(text: "Before", isStreaming: false)),
+                .text(TextPart(id: "t1", text: "Before", isStreaming: false)),
                 .file(first),
-                .text(TextPart(text: "After", isStreaming: false)),
+                .text(TextPart(id: "t2", text: "After", isStreaming: false)),
                 .file(second),
             ],
             model: nil,
@@ -1493,10 +1527,10 @@ struct SessionChatViewModelTests {
         let row = makeViewModel().row(from: message)
 
         #expect(row?.blocks == [
-            .text("Before"),
-            .attachment(first),
-            .text("After"),
-            .attachment(second),
+            .text(blockID: PresentationBlockId.direct("t1"), text: "Before", renderedMarkdown: nil),
+            .attachment(blockID: PresentationBlockId.direct("first"), file: first),
+            .text(blockID: PresentationBlockId.direct("t2"), text: "After", renderedMarkdown: nil),
+            .attachment(blockID: PresentationBlockId.direct("second"), file: second),
         ])
     }
 

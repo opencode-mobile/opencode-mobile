@@ -64,6 +64,7 @@ sealed class MessagePart {
     data class Text(
         val text: String,
         val isStreaming: Boolean = false,
+        val id: String? = null,
     ) : MessagePart()
 
     data class Tool(
@@ -75,6 +76,7 @@ sealed class MessagePart {
         val input: JsonObject? = null,
         val output: String? = null,
         val metadata: JsonObject? = null,
+        val id: String? = null,
     ) : MessagePart()
 
     data class File(

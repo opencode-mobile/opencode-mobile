@@ -22,6 +22,7 @@ final class ThemeManager {
     private(set) var currentTheme: OpenCodeTheme
     private(set) var resolvedLight: ResolvedTokens
     private(set) var resolvedDark: ResolvedTokens
+    private(set) var revision: UInt64 = 0
     private(set) var loadError: String?
 
     private let defaults: UserDefaults
@@ -40,6 +41,7 @@ final class ThemeManager {
     func resolve() {
         resolvedLight = ThemeResolver.resolve(variant: currentTheme.light, isDark: false)
         resolvedDark = ThemeResolver.resolve(variant: currentTheme.dark, isDark: true)
+        revision &+= 1
     }
 
     func tokens(for colorScheme: ColorScheme) -> ResolvedTokens {

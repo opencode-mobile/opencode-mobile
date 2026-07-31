@@ -1,5 +1,305 @@
 # Native Rendered Markdown Decisions
 
+## Format-Always Streaming Markdown; Color Later
+
+- Decision: when markdown is detected on streaming text-lane coalesce, always
+  publish a formatted `MarkdownDocument` (block tree + code chrome). Do **not**
+  leave detectable markdown as unprocessed plain source. Scaffold writes
+  `BlockDecorationCache` and may bridge onto sole-text
+  `DisplayMessage.renderedMarkdown`. Scaffold parse must not share the
+  decoration preparer hold or preparer LRU.
+- Decision: **TextMate on** → first paint is structure-only (empty code spans,
+  neutral monospace). Skip streaming semantic decoration so colors do not flash
+  before Final TextMate (`attachTextMateResult`).
+- Decision: **TextMate off** → first paint uses full semantic-fallback
+  highlighting; no TextMate pass.
+- Decision: **history open** uses the same format-always rule.
+  `HistoryPlainFirst` attaches structure-only (TextMate on) or semantic
+  (TextMate off) for every markdown-bearing message and publishes immediately
+  (`holdReadyUntilNewestMarkdown = false`). Set `awaitingTextMateUpgrade` when
+  TextMate is on so background `HistoryEnrichment` still upgrades colors and does
+  not skip rows that already have a scaffold document.
+- Reason: format (structure/chrome) and color (semantic or TextMate spans) are
+  separate steps; the plain→code jump is a structure problem for streaming and
+  history scroll-back alike.
+- Date: 2026-07-30.
+- Revisit when: format-first parse cost approaches the 16/48 coalesce budget on
+  very large streaming fences, or progressive TextMate-while-streaming is
+  reopened.
+
+## Developer Tools Language Toggles And Logbook Speed Bands
+
+- Decision: keep the global TextMate preference as the kill switch. Add Developer
+  Tools **TextMate Languages** with A+B overrides: opt out of allowlist-promoted
+  languages; force-enable packaged unpromoted languages. Unset override keys
+  preserve allowlist-only Phase 6 defaults.
+- Decision: inject policy through process-local `TextMateLanguageGateRegistry`
+  into `OpenCodeSyntaxHighlighter` without expanding `HighlightRequest`.
+- Decision: logbook list status for measured `Highlighted`/`NoSpans` rows shows
+  Fast/OK/Slow from fence-relative Tier A budgets (≤2k → 50 ms, ≤8k → 150 ms,
+  else scale). Subtitle and details also show wall-time throughput
+  (`chars/ms` · `spans/ms`) when `totalNanoseconds > 0`; Outcome stays in
+  details. Bands remain the UX judgment; throughput is for cross-size
+  comparison and calibration.
+- Reason: lets developers exercise cpp/php without weakening the engineering
+  promotion gate, and surfaces timing without content.
+- Date: 2026-07-30.
+
+## Phase 6 Default Enablement And Provisional Calibration
+
+- Decision: unset / first-install `textMateEnabled` defaults to **true** on
+  Android and iOS; an explicit stored `false` stays off. Settings subtitle
+  documents promoted-language defaults.
+- Decision: shared `TextMateLanguageAllowlist` (`ALLOWLIST_VERSION = 1`) promotes
+  `javascript`, `typescript`, `python`, `kotlin`, `swift`, `json`, `yaml`,
+  `shellscript`, `rust`, and `go`. Non-members use complete semantic fallback
+  even when a grammar is packaged.
+- Decision: Android `TextMateProcessPressureObserver` maps trim-memory levels to
+  engine `trim` and power-save to `setLowPowerOrThermal`. iOS memory warnings
+  trim Critical; thermal serious/critical and low-power mode set the scheduler
+  low-power flag.
+- Decision: Phase 6 closes on provisional host/simulator Tier A evidence in
+  `phase-6-calibration.md` plus allowlist/default-on wiring. Physical Tier B,
+  full 30-minute soak, and packaged-grammar device matrices are a remaining
+  post-close validation note, not an open Phase 6 gate.
+- Decision: retain a single engine owner; do not add a second shard without
+  measured single-owner Tier A miss plus non-regression proof.
+- Reason: triage locked a shippable default-on allowlist with provisional
+  calibration so the six-phase plan can close without blocking on physical
+  hardware availability in-session.
+- Date: 2026-07-29.
+
+## Phase 5 Incremental Unchanged-Prefix Reuse
+
+- Decision: engine-owned `TextMateIncrementalStateStore` retains immutable
+  per-line checkpoints (`TextMateLineCheckpoint`) with exact line text, FNV-1a
+  incoming/outgoing state fingerprints, and pre-repair relative scope tokens.
+  Open rules snapshot to `GrammarId`/`RuleId` plus resolved end/while patterns;
+  live patterns are restored from the grammar program pattern arena.
+- Decision: compatible revisions find the longest unchanged line prefix, then
+  resume at `max(0, k - 1)` (one-line backup for boundarySuffix). Bounds are 64
+  blocks, 8 MiB incremental category, 256 KiB per block, 2_048 lines per block.
+- Decision: suffix convergence copies remaining lines only when exact line text
+  and incoming-state fingerprint match; it is enabled by default after
+  multiline differential fixtures. No fuzzy/LCS matching.
+- Decision: Moderate trim drops BackgroundHistory incremental first; Critical
+  clears all incremental. Entries are not leased; promote only while the
+  request remains latest for its `CodeBlockKey`.
+- Decision: observation `schemaVersion = 2` adds `reusedLineCount`,
+  `retokenizedLineCount`, `suffixReusedLineCount`, and `incrementalMode`, plus
+  `TextMateMetricStage.IncrementalReuse`.
+- Decision: Phase 5 gate is incremental spans equal full reparse across
+  differential fixtures D1–D14 (synthetic + multiline), with Tokenize/Repair
+  metrics present and existing golden oracles still green.
+- Reason: triage locked prefix-first then suffix-in-same-slice without Phase 6
+  device calibration or public engine interface expansion.
+- Date: 2026-07-29.
+
+## Phase 4 Compiled Programs, Prepared Buffers, And Weighted Caches
+
+- Decision: compile immutable `TextMateGrammarProgram` / `TextMateRulePlan` on
+  first successful grammar load with process-local `GrammarId`/`RuleId` values
+  assigned by DFS. Drop raw grammar JSON from the retained payload after typed
+  compile.
+- Decision: introduce job-local `PreparedTextMateLineBuffer` (one UTF-8 index
+  map per physical or boundary-augmented line). Joni and libonig search the
+  prepared bytes/index map and must not re-encode per search. Metrics stages
+  `PreparedLineBuffer` and `Utf8IndexMap` prove reuse.
+- Decision: `TextMateWeightedCacheCoordinator` weights grammar programs, rule
+  plans, and compiled regexes under the Phase 1 24 MiB eviction / 32 MiB
+  admission envelope. Leased or pinned entries are never disposed. iOS wraps
+  compiled regexes in `OwnedOnigRegex` with lease/release around `onig_search`;
+  Android pins in-use Joni entries equivalently without native free accounting.
+- Decision: Phase 4 gate is exact top-ten / golden oracle green plus unit proof
+  that maps built equal prepared buffers and are far fewer than regex searches,
+  plus Critical trim skipping leased entries.
+- Reason: triage locked the smallest wrap-and-refactor that satisfies the Phase
+  4 gate without pulling Phase 5 incremental reuse or Phase 6 device
+  calibration into this slice.
+- Date: 2026-07-29.
+
+## Phase 3 Scheduler Policy And Platform Drivers
+
+- Decision: Phase 3 implements a shared pure `TextMateRequestScheduler` in
+  `commonMain`. Android and iOS adapters remain the serial execution owners and
+  drive at most one active highlight job. Do not put a shared KMP coroutine
+  run-loop behind the iOS JSON bridge, and do not duplicate queue policy per
+  platform.
+- Decision: latest-wins coalescing per `CodeBlockKey` completes older awaiters
+  with `Cancelled`. Queue-pressure and Phase 3 trim drops complete with
+  `BudgetExceeded`. Active superseded work is cooperatively cancelled at line
+  checkpoints and rewritten to `Cancelled` on finish.
+- Decision: locked limits are 1 active job, 8 pending interactive, 24 pending
+  history, and 256,000 queued source characters. Interactive-final queue wait
+  of 8 ms marks at-risk strict priority and 16 ms matches the provisional p99
+  queue budget. Visible history promotes after 250 ms for anti-starve; that
+  constant may be revised only through an evidence-backed entry here.
+- Decision: Phase 3 `trim` drops/disables speculative queue work only.
+  `Moderate` drops pending background and disables background admission;
+  `Critical` also drops pending visible history, disables history admission,
+  and cooperatively cancels a non-interactive active job. Weighted cache
+  eviction remains Phase 4.
+- Decision: the Phase 3 gate is unit-testable plain/fallback publication while a
+  highlighter is blocked. Device p95 plain and queue budgets remain Phase 6.
+- Reason: triage locked these choices to keep policy and tests shared while
+  preserving Phase 2 ownership and the existing FinalPlaceholder / viewport-
+  first publication path.
+- Date: 2026-07-29.
+
+## Phase 1 Closes On Simulated Backends; Shipping Calibration Moves To Phase 6
+
+- Decision: Phase 1 uses one named simulated backend per platform: the Pixel 9a
+  AVD on Android 17 / API 37 for Joni and the iPhone 17 Pro iOS 26.5 simulator
+  for libonig. Five warm-up cycles precede a 30-minute mixed-language soak over
+  TypeScript, Kotlin, Swift, Python, JSON, and shell. The opt-in soak harness is
+  excluded from ordinary CI unless a duration is supplied.
+- Decision: Android records process PSS after forced GC/finalization and permits
+  8 MiB of simulator noise after warm-up. iOS requires the live compiled-regex
+  count to remain stable after warm-up and requires allocation/free equality
+  after explicit cache clear. Peak PSS, peak live regexes, longest native call,
+  and simulator timings are diagnostic evidence only.
+- Decision: Phase 1 simulator evidence gates correctness, concurrency,
+  cancellation, allocation ownership, retained-state stability, and readiness
+  to introduce the single-owner engine. It does not establish real-device
+  latency, thermal, memory-pressure, or end-to-end bridge guarantees.
+- Decision: representative physical low- and mid-tier devices, release builds,
+  end-to-end bridge inclusion, thermal state, latency distributions, peak and
+  retained memory, cancellation, and a repeated soak remain mandatory in Phase
+  6 before TextMate is enabled by default.
+- Reason: the user accepted emulator/simulator evidence for the architectural
+  migration, while retaining a production gate where hardware-dependent
+  evidence can affect user-visible default enablement.
+- Evidence: Android completed 457 mixed-language cycles over 1,801.760 seconds
+  with +358 KiB retained PSS after warm-up, 143,815 KiB peak PSS, and a 62.573
+  ms longest native search. iOS completed 1,128 cycles over 1,800.941 seconds
+  with 464 retained/peak live expressions, 465 allocations matched by 465
+  frees after clear, 97,697,792 bytes maximum RSS, and a 5.794 ms longest
+  native search.
+- Evidence: the 20-message/3,000-line fixture measured 117.713 seconds cold and
+  91.938–140.374 seconds across five warm samples on the Android AVD. It
+  measured 52.735 seconds cold and 52.891–53.074 seconds warm on the iOS
+  simulator. The inconsistent/absent warm improvement is a Phase 2–5
+  optimization baseline, not a shipping gate.
+- Date: 2026-07-29.
+
+## TextMate Logbook Is Request-Scoped, Bounded, And Content-Free
+
+- Decision: an observed parser envelope may return one
+  `TextMateParseObservation` for each actual finalized fence attempt while the
+  existing document-only parser remains available. The observation is built
+  from a request-local metrics accumulator passed explicitly through grammar
+  lookup and tokenization; there is no global or thread-local "current parse."
+- Decision: observations may contain timestamp, requested/canonical language,
+  UTF-16 character and line counts, fence position, outcome, backend, span
+  count, total duration, aggregate stage timings, and diagnostic kinds. They
+  must not contain Markdown/code source, session/message/block/fence identity,
+  file paths, diagnostic messages, regex patterns, or grammar payloads.
+- Decision: each native app owns a serial JSONL journal outside the shared
+  parser. Submission is non-blocking and bounded to 64 pending batches; storage
+  retains the newest 500 entries and compacts after 550 entries or 2 MiB.
+  Corrupt records are ignored. Queue overflow and I/O failure never block or
+  fail rendering and are surfaced as logbook health metadata.
+- Decision: the logbook is a Developer Tools surface, persists across launches,
+  has an explicit confirmed clear action, and participates in Clear All Data.
+  Streaming, disabled TextMate, and prepared-document cache hits create no
+  entries because no TextMate fence attempt occurred.
+- Reason: the pipeline needs durable field evidence without putting disk I/O,
+  mutable telemetry context, high-cardinality identity, or user content on the
+  rendering critical path.
+- Date: 2026-07-29.
+
+## TextMate Pipeline Uses One Asynchronous, Single-Owner Engine
+
+- Decision: structural Markdown first produces a complete plain or
+  semantic-fallback document. A deep asynchronous
+  `TextMateHighlightingEngine` in `shared/markdown-core` may then upgrade one
+  fence at a time through an opaque fence key, caller-owned monotonic revision
+  token, exact source, language, intent, and policy epoch. The outer display
+  pipeline remains the only visible-publication authority and revalidates
+  generation, fence identity, revision, exact source, streaming state, and
+  policy before attaching spans or mutating visible decoration caches.
+- Decision: each platform initially uses one active, instance-owned serial KMP
+  runtime for all mutable grammar, rule, regex, queue, incremental, and eviction
+  state. Android adapts it through an injected single-lane dispatcher; iOS uses
+  a serial KMP executor or worker, optionally behind a Swift actor. Production
+  mutable caches may not remain process-global or thread-local. A second
+  isolated shard requires device evidence and independent mutable/native state.
+- Decision: 24 MiB is the provisional pooled retained-cache eviction threshold
+  and 32 MiB is the admission ceiling. Accounted state includes decoded
+  grammars, rule plans, compiled regexes, incremental checkpoints, and cached
+  highlight results. Packaged resources are separate; active-job, bridge, and
+  leased allocations are peak-working-set metrics. Phase 1 may revise the
+  figures only through a new evidence-backed decision.
+- Decision: the documented latency values remain owned engineering hypotheses
+  until measured on frozen low- and mid-tier device matrices. Plain publication
+  belongs to `DisplayMessagePipeline`; queueing and service belong to the
+  engine; native-call duration belongs to the regex adapter. Material engine,
+  backend, grammar, repair, scheduler, or compiler changes require an explicit
+  rebaseline.
+- Decision: keep one global user-facing TextMate preference, backed by a
+  versioned promoted-language allowlist. A language is promoted only after its
+  Joni and libonig correctness, representative Session Chat, latency, fallback,
+  native-lifetime, memory, and soak gates pass. Other languages retain complete
+  semantic fallback.
+- Reason: independent architecture triages agreed that the current synchronous
+  parser-owned path, shared mutable caches, raw iOS native-pointer lifetime, and
+  unbounded per-search allocation cannot provide reusable, measurable, or
+  reliable highlighting. The locked design keeps optional decoration away from
+  source publication while concentrating scheduling, memory, lifetime, and
+  measurement inside one deep module.
+- Implementation gate: Phase 1 instrumentation and lifetime-safety code is
+  complete and simulator-verified. The fixed debug reference fixture is 20
+  finalized messages and 3,000 TypeScript code lines. On 2026-07-29 it measured
+  2,542 ms in the Android/Joni JVM test on an arm64 macOS 26.5.2 host, with a
+  3.934 ms maximum native search, and 55,388 ms for iOS/libonig on an iPhone 17
+  Pro iOS 26.5 simulator, with a 50.324 ms maximum native search. These are
+  diagnostic reference values, not release guardrails.
+- Implementation gate: Phases 1–6 are closed. The shared engine owns the
+  fence-level asynchronous request/result contract plus priority scheduling,
+  latest-wins coalescing, admission limits, trim, queue metrics, compiled
+  grammar programs, prepared line buffers, weighted lease-safe caches, bounded
+  incremental reuse, and default-on TextMate behind allowlist v1. Android and
+  iOS remain serial owners that drive one active job. Provisional Phase 6
+  calibration is recorded; physical Tier B / full soak remain a post-close
+  validation note.
+- Date: 2026-07-29.
+
+## Markdown Fences Close Like CommonMark / Web
+
+- Decision: Fenced code blocks close at the first bare closing fence of the same
+  marker. There is no special nest-depth for `markdown`/`md` fences.
+- Reason: The prior nest-depth extension (from highlighting regression work)
+  kept LLM doc samples wrapped in `` ```markdown `` as one literal CodeBlock,
+  while opencode web renders post-first-close content as real markdown. Mobile
+  approximates web chat rendering; first-fence-wins restores that parity.
+- Date: 2026-07-28.
+
+## TextMate Highlighting Preference (Superseded Default)
+
+- Decision (historical 2026-07-28): TextMate ran only when Settings → Developer
+  Tools → **TextMate Highlighting** was enabled, with default **off**.
+- Superseded by: [Phase 6 Default Enablement And Provisional Calibration](#phase-6-default-enablement-and-provisional-calibration)
+  (2026-07-29). Unset / first-install preference is now **on**, gated by the
+  shared allowlist; an explicit stored `false` stays off. Semantic fallback
+  remains the path when TextMate is off or a language is not admitted.
+- Reason for original opt-in: TextMate was the expensive path before Phase 3–6
+  scheduling, allowlist, and structure-first scaffolding.
+- Date: 2026-07-28 (default superseded 2026-07-29).
+
+## Semantic Fallback Tokenization Is Iterative And Bounded
+
+- Decision: the shared semantic fallback highlighter tokenizes quoted strings,
+  line and block comments, numbers, ASCII identifiers, punctuation, and
+  operators with a single-pass scanner. It does not use a combined
+  `Regex.findAll` over an entire fence. Unterminated strings and block comments
+  extend to the end of the fence and remain complete semantic spans.
+- Reason: Kotlin/Native's recursive regex implementation overflowed the iOS
+  worker stack on a 3,968-character unterminated JavaScript string. The failure
+  terminated the app with `EXC_BAD_ACCESS` before Swift could recover. The
+  scanner makes fallback work linear and bounded while preserving the complete
+  fenced-code source.
+- Date: 2026-07-29.
+
 ## Native Renderer Replaces WebView
 
 - Decision: Rendered Markdown uses native SwiftUI and Compose rendering rather
@@ -25,6 +325,8 @@
 
 ## Performance Work Preserves the Current Display Pipeline
 
+- Status: superseded on 2026-07-26 by **Stage Expensive Display Preparation**
+  below.
 - Decision: optimize native renderer allocations and shared span processing
   without changing all-at-once Session Chat loading, full TextMate
   highlighting, or the iOS JSON boundary.
@@ -38,6 +340,28 @@
   identifies those as the primary iOS/Android gap, not block parsing or native
   UI layout. Reconsider preserving the JSON boundary and deferring an iOS
   Oniguruma backend once code-block virtualization has been benchmarked.
+
+## Stage Expensive Display Preparation
+
+- Decision: keep the shared parser and final native render tree, but stage work
+  that would block chat interaction. Streaming snapshots use a 16 ms quiet
+  window with a flat 48 ms maximum batch age; messages at or above 8,000
+  streaming characters stay plain until finalization. Initial histories with at
+  least 4,000 markdown-candidate characters publish all rows as plain text,
+  then enrich markdown-bearing messages newest-first with cancellation and
+  yields between publications.
+- Reason: parsing and publishing every token-sized snapshot wastes TextMate and
+  native annotation work, while one all-at-once cold-history parse delays
+  scrolling and live updates. Flat pacing prevents longer replies from becoming
+  progressively less responsive.
+- Consequence: source text and history scope are unchanged. Finalized messages
+  still converge on the complete TextMate-rendered document. Android constructs
+  large finalized annotated strings outside composition; the remaining iOS
+  synchronous attributed-string construction is tracked in
+  [parity gaps](parity-gaps.md#final-native-annotation-construction).
+- Date: 2026-07-26.
+- Revisit when: deterministic device benchmarks justify different thresholds or
+  incremental parser support eliminates the need for plain placeholders.
 
 ## Markdown Parse Hot Path Lives In KMP
 

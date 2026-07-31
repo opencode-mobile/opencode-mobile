@@ -259,6 +259,7 @@ fun SessionChatScreen(
                         SessionChatTimelineViewProps(
                             timeline = uiState.timeline,
                             messages = uiState.messages,
+                            timelineFrame = uiState.timelineFrame,
                             isRefreshing = uiState.isRefreshing,
                             errorMessage = uiState.errorMessage,
                             reviewChangesSummary = uiState.reviewChangesSummary,

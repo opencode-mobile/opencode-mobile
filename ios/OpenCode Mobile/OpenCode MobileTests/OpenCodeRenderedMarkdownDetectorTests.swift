@@ -71,7 +71,8 @@ struct OpenCodeRenderedMarkdownDetectorTests {
             let answer = 42
             ```
             """,
-            variant: .standalone
+            variant: .standalone,
+            textMateEnabled: true
         )
 
         #expect(!document.diagnostics.contains { $0.kind == "HighlighterFallback" })

@@ -540,6 +540,9 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                         CodeSpan(13, 15, CodeTokenRole.Number),
                     ),
                 diagnostics = emptyList(),
+                source = SyntaxHighlightSource.TextMate,
+                canonicalLanguage = "kotlin",
+                textMateOutcome = TextMateParseOutcome.Highlighted,
             ),
             highlighter.highlight("kt", "val answer = 42"),
         )
@@ -607,7 +610,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "val", CodeTokenRole.Keyword)
@@ -649,7 +655,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "val", CodeTokenRole.Keyword)
@@ -699,7 +708,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "fix ", CodeTokenRole.String)
@@ -733,7 +745,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "+", CodeTokenRole.Punctuation)
@@ -776,7 +791,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "TODO", CodeTokenRole.Keyword)
@@ -833,7 +851,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "var", CodeTokenRole.Function)
@@ -883,7 +904,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
         val criticalTokens =
             result.spans
                 .filter { span -> span.role == CodeTokenRole.Critical }
@@ -945,7 +969,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "const", CodeTokenRole.Keyword)
@@ -988,7 +1015,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "\"hi", CodeTokenRole.String)
@@ -1075,7 +1105,10 @@ class OpenCodeMarkdownHighlighterGoldenTest {
                 textMateTokenizer = OpenCodeTextMateNativeTokenizer(),
             )
 
-        val result = highlighter.highlight("sample", code)
+        val result =
+            withForceEnabledTextMateLanguages("sample", "embedded") {
+                highlighter.highlight("sample", code)
+            }
 
         assertBackendFallbackDiagnostic(result.diagnostics)
         assertToken(code, result.spans, "note", CodeTokenRole.Tag)

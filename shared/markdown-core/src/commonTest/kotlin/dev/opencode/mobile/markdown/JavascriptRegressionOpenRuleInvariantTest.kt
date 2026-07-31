@@ -3,7 +3,6 @@ package dev.opencode.mobile.markdown
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlinx.serialization.json.buildJsonObject
 
 class JavascriptRegressionOpenRuleInvariantTest {
     @Test
@@ -33,8 +32,8 @@ class JavascriptRegressionOpenRuleInvariantTest {
                         embeddedLanguages = emptyList(),
                         aliases = emptyList(),
                     ),
-                json = buildJsonObject { },
                 grammar = grammar,
+                grammarId = GrammarId(0),
             )
         val tokenizer = OpenCodeTextMateNativeTokenizer(KotlinRegexTextMateRegexBackend)
 

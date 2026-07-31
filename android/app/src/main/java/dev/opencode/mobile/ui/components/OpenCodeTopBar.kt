@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val TopBarMinHeight = 56.dp
@@ -149,7 +150,7 @@ private fun TopBarTitleBlock(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = openCodeColor("text-strong"),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -163,7 +164,7 @@ private fun TopBarTitleBlock(
                 text = title,
                 modifier = Modifier.align(Alignment.CenterStart),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = openCodeColor("text-strong"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -184,7 +185,7 @@ private fun TopBarSubtitleLine(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = openCodeColor("text-base"),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

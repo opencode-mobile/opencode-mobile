@@ -12,6 +12,15 @@ struct MessageListGalleryMessage: Identifiable, Equatable {
     let metadataLabel: String?
 }
 
+extension MessageListGalleryMessage: MessageListTimelineHeightEstimating {
+    var timelineRowHeightEstimate: CGFloat {
+        MessageListTimelineRowHeightEstimate.fallback(
+            characterCount: text.count,
+            style: role == .assistant ? .assistant : .outgoing
+        )
+    }
+}
+
 enum MessageListGalleryMocks {
     private static let userMetadata = "Build · DeepSeek V4 Flash · 9:05 PM"
 

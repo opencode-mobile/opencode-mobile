@@ -1,5 +1,7 @@
 package dev.opencode.mobile.markdown
 
+import kotlin.time.TimeSource
+
 interface OpenCodeTextMateRegexBackend {
     val name: String
         get() = "unknown"
@@ -13,7 +15,177 @@ interface OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int = input.length,
         contiguousAnchor: Int? = null,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    ): TextMateRegexMatch? =
+        find(
+            pattern = pattern,
+            buffer = PreparedTextMateLineBuffer.prepare(input, metricsSink),
+            startIndex = startIndex,
+            endIndex = endIndex,
+            contiguousAnchor = contiguousAnchor,
+            metricsSink = metricsSink,
+        )
+
+    fun find(
+        pattern: String,
+        buffer: PreparedTextMateLineBuffer,
+        startIndex: Int,
+        endIndex: Int = buffer.length,
+        contiguousAnchor: Int? = null,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch?
+
+    /**
+     * OnigScanner-style earliest match among [candidates] (ascending id = rule
+     * order). Default implementation is a two-pass software scanner:
+     * 1) matches at [startIndex] only (tiny windows);
+     * 2) otherwise earliest later match with tightened search ends.
+     */
+    fun findEarliest(
+        candidates: List<TextMateRegexScanCandidate>,
+        buffer: PreparedTextMateLineBuffer,
+        startIndex: Int,
+        endIndex: Int = buffer.length,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    ): TextMateRegexScanMatch? =
+        TextMateRegexScanSupport.findEarliest(
+            backend = this,
+            candidates = candidates,
+            buffer = buffer,
+            startIndex = startIndex,
+            endIndex = endIndex,
+            metricsSink = metricsSink,
+        )
+}
+
+/**
+ * One pattern in a multi-rule scan. [id] is the caller-assigned rule order key
+ * (lower wins same-position ties).
+ */
+data class TextMateRegexScanCandidate(
+    val id: Int,
+    val pattern: String,
+    val contiguousAnchor: Int? = null,
+)
+
+data class TextMateRegexScanMatch(
+    val id: Int,
+    val match: TextMateRegexMatch,
+)
+
+/**
+ * Shared software OnigScanner used when the backend has no native multi-pattern
+ * engine (Joni 2.x has no RegSet).
+ */
+internal object TextMateRegexScanSupport {
+    fun findEarliest(
+        backend: OpenCodeTextMateRegexBackend,
+        candidates: List<TextMateRegexScanCandidate>,
+        buffer: PreparedTextMateLineBuffer,
+        startIndex: Int,
+        endIndex: Int,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateRegexScanMatch? {
+        if (candidates.isEmpty() || startIndex > endIndex) return null
+
+        // Pass 1: only accept matches that start at the cursor. Each search is a
+        // one-position window — much cheaper than full-line probes when a rule
+        // hits immediately (the common TextMate path). Candidates are ascending
+        // id, so the first at-cursor hit wins the same-position tie.
+        val atCursorEnd = (startIndex + 1).coerceAtMost(endIndex)
+        for (candidate in candidates) {
+            val match =
+                measuredFind(
+                    backend = backend,
+                    candidate = candidate,
+                    buffer = buffer,
+                    startIndex = startIndex,
+                    endIndex = atCursorEnd,
+                    metricsSink = metricsSink,
+                ) ?: continue
+            if (match.start == startIndex) {
+                return TextMateRegexScanMatch(id = candidate.id, match = match)
+            }
+        }
+
+        if (atCursorEnd >= endIndex) return null
+
+        // Pass 2: find the earliest later match; tighten the search end as soon
+        // as a candidate is known so remaining patterns do not rescan the whole
+        // line.
+        var best: TextMateRegexScanMatch? = null
+        for (candidate in candidates) {
+            val current = best
+            val searchEnd =
+                if (current == null) {
+                    endIndex
+                } else {
+                    (current.match.start + 1).coerceAtMost(endIndex)
+                }
+            if (searchEnd <= startIndex) break
+            val match =
+                measuredFind(
+                    backend = backend,
+                    candidate = candidate,
+                    buffer = buffer,
+                    startIndex = startIndex,
+                    endIndex = searchEnd,
+                    metricsSink = metricsSink,
+                ) ?: continue
+            if (current == null ||
+                match.start < current.match.start ||
+                (match.start == current.match.start && candidate.id < current.id)
+            ) {
+                best = TextMateRegexScanMatch(id = candidate.id, match = match)
+                if (match.start == startIndex) break
+            }
+        }
+        return best
+    }
+
+    private fun measuredFind(
+        backend: OpenCodeTextMateRegexBackend,
+        candidate: TextMateRegexScanCandidate,
+        buffer: PreparedTextMateLineBuffer,
+        startIndex: Int,
+        endIndex: Int,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateRegexMatch? {
+        if (!metricsSink.shouldRecord(TextMateMetricStage.RegexSearch)) {
+            return backend.find(
+                pattern = candidate.pattern,
+                buffer = buffer,
+                startIndex = startIndex,
+                endIndex = endIndex,
+                contiguousAnchor = candidate.contiguousAnchor,
+                metricsSink = metricsSink,
+            )
+        }
+        val startedAt = TimeSource.Monotonic.markNow()
+        var outcome = TextMateMetricOutcome.Success
+        return try {
+            backend.find(
+                pattern = candidate.pattern,
+                buffer = buffer,
+                startIndex = startIndex,
+                endIndex = endIndex,
+                contiguousAnchor = candidate.contiguousAnchor,
+                metricsSink = metricsSink,
+            )
+        } catch (failure: Throwable) {
+            outcome = TextMateMetricOutcome.Failure
+            throw failure
+        } finally {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.RegexSearch,
+                    outcome = outcome,
+                    durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                    backend = backend.name,
+                ),
+            )
+        }
+    }
 }
 
 data class TextMateRegexMatch(
@@ -36,22 +208,48 @@ object KotlinRegexTextMateRegexBackend : OpenCodeTextMateRegexBackend {
     // per match turns long fenced blocks into a regex-compilation workload.
     private val regexCache = mutableMapOf<String, Regex?>()
 
-    private fun compiledRegex(pattern: String): Regex? =
-        regexCache.getOrPut(pattern) {
+    private fun compiledRegex(
+        pattern: String,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): Regex? {
+        regexCache[pattern]?.let { return it }
+        if (regexCache.containsKey(pattern)) return null
+
+        val startedAt =
+            if (metricsSink.shouldRecord(TextMateMetricStage.RegexCompile)) {
+                TimeSource.Monotonic.markNow()
+            } else {
+                null
+            }
+        val compiled =
             try {
                 Regex(pattern, setOf(RegexOption.MULTILINE))
             } catch (_: IllegalArgumentException) {
                 null
             }
+        regexCache[pattern] = compiled
+        startedAt?.let {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.RegexCompile,
+                    outcome = if (compiled == null) TextMateMetricOutcome.Failure else TextMateMetricOutcome.Success,
+                    durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    backend = name,
+                ),
+            )
         }
+        return compiled
+    }
 
     override fun find(
         pattern: String,
-        input: String,
+        buffer: PreparedTextMateLineBuffer,
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? {
+        val input = buffer.source
         val normalizedPattern = OpenCodeTextMateRegexLookbehindSupport.normalize(pattern)
         val effectivePattern =
             OpenCodeTextMateRegexContiguousAnchorSupport.effectivePattern(
@@ -59,9 +257,17 @@ object KotlinRegexTextMateRegexBackend : OpenCodeTextMateRegexBackend {
                 startIndex = startIndex,
                 contiguousAnchor = contiguousAnchor,
             )
-        val regex = compiledRegex(effectivePattern) ?: return null
+        val regex = compiledRegex(effectivePattern, metricsSink) ?: return null
+        // Oniguruma semantics: endIndex limits where the match may *start*;
+        // the match body may extend past endIndex toward the end of the buffer.
         val match = regex.find(input, startIndex) ?: return null
-        if (match.range.first > endIndex || match.range.last + 1 > endIndex) return null
+        val matchStart = match.range.first
+        if (matchStart < startIndex) return null
+        if (startIndex < endIndex) {
+            if (matchStart >= endIndex) return null
+        } else if (matchStart != startIndex || match.range.last + 1 != startIndex) {
+            return null
+        }
 
         return OpenCodeTextMateRegexContiguousAnchorSupport.enforceContiguousAnchor(
             pattern = effectivePattern,
@@ -115,18 +321,60 @@ data class TextMateLinesTokenizationResult(
     val tokens: List<TextMateScopeToken>,
     val state: TextMateLineState,
     val diagnostics: List<MarkdownDiagnostic>,
+    val cancelled: Boolean = false,
 )
 
-class OpenCodeTextMateNativeTokenizer(
+class OpenCodeTextMateNativeTokenizer private constructor(
     private val regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
-) : OpenCodeTextMateTokenizer {
-    private val resolvedRulesCache = mutableMapOf<ResolvedRulesCacheKey, List<ResolvedTextMateRule>>()
+    private val metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+    private val sharedState: SharedState,
+    private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+) : OpenCodeTextMateTokenizer,
+    TextMateCacheTrimmable {
+    constructor(
+        regexBackend: OpenCodeTextMateRegexBackend = KotlinRegexTextMateRegexBackend,
+        metricsSink: OpenCodeTextMateMetricsSink = NoOpOpenCodeTextMateMetricsSink,
+        cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+    ) : this(regexBackend, metricsSink, SharedState(cacheCoordinator), cacheCoordinator)
+
+    // Job-local prepared buffers for the active physical line.
+    private var activeLineBuffer: PreparedTextMateLineBuffer? = null
+    private var activeBoundaryBuffer: PreparedTextMateLineBuffer? = null
+
+    override fun trimCaches(level: MemoryPressure) {
+        sharedState.trimCaches(level)
+        (regexBackend as? TextMateCacheTrimmable)?.trimCaches(level)
+    }
 
     override fun tokenize(
         grammar: TextMateGrammarPayload,
         code: String,
         grammarBundle: TextMateGrammarBundle?,
+    ): TextMateTokenizationResult = tokenize(grammar, code, grammarBundle, metricsSink, shouldCancel = { false })
+
+    override fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateTokenizationResult =
+        OpenCodeTextMateNativeTokenizer(
+            regexBackend = regexBackend,
+            metricsSink = metricsSink,
+            sharedState = sharedState,
+            cacheCoordinator = cacheCoordinator,
+        ).tokenize(grammar, code, grammarBundle)
+
+    override fun tokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        metricsSink: OpenCodeTextMateMetricsSink,
+        shouldCancel: () -> Boolean,
     ): TextMateTokenizationResult {
+        if (shouldCancel()) {
+            return TextMateTokenizationResult(tokens = emptyList(), cancelled = true, diagnostics = backendDiagnostics())
+        }
         if (code.isEmpty()) {
             return TextMateTokenizationResult(
                 tokens = emptyList(),
@@ -134,11 +382,32 @@ class OpenCodeTextMateNativeTokenizer(
             )
         }
 
-        val tokenization = tokenizeLines(grammar, code, grammarBundle)
-        return TextMateTokenizationResult(
-            tokens = tokenization.tokens,
-            diagnostics = tokenization.diagnostics,
-        )
+        val startedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+        var outcome = TextMateMetricOutcome.Success
+        return try {
+            val tokenization = tokenizeLines(grammar, code, grammarBundle, shouldCancel = shouldCancel)
+            TextMateTokenizationResult(
+                tokens = tokenization.tokens,
+                diagnostics = tokenization.diagnostics,
+                cancelled = tokenization.cancelled,
+            )
+        } catch (failure: Throwable) {
+            outcome = TextMateMetricOutcome.Failure
+            throw failure
+        } finally {
+            startedAt?.let {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.Tokenize,
+                        outcome = outcome,
+                        durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                        backend = regexBackend.name,
+                        sourceCharacters = code.length,
+                        sourceLines = code.count { character -> character == '\n' } + 1,
+                    ),
+                )
+            }
+        }
     }
 
     fun tokenizeLines(
@@ -146,12 +415,21 @@ class OpenCodeTextMateNativeTokenizer(
         code: String,
         grammarBundle: TextMateGrammarBundle? = null,
         initialState: TextMateLineState = TextMateLineState.Initial,
+        shouldCancel: () -> Boolean = { false },
     ): TextMateLinesTokenizationResult {
         val tokens = mutableListOf<TextMateScopeToken>()
         var state = initialState
         var lineStart = 0
 
         while (lineStart <= code.length) {
+            if (shouldCancel()) {
+                return TextMateLinesTokenizationResult(
+                    tokens = emptyList(),
+                    state = state,
+                    diagnostics = backendDiagnostics(),
+                    cancelled = true,
+                )
+            }
             val lineEnd = code.indexOf('\n', lineStart).let { index -> if (index == -1) code.length else index }
             val line = code.substring(lineStart, lineEnd)
             val nextLineStart = lineEnd + 1
@@ -189,6 +467,332 @@ class OpenCodeTextMateNativeTokenizer(
         )
     }
 
+    fun tokenizeLinesIncremental(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle? = null,
+        plan: TextMateIncrementalReusePlan,
+        session: TextMateIncrementalHighlightSession,
+        shouldCancel: () -> Boolean = { false },
+        metricsSink: OpenCodeTextMateMetricsSink = this.metricsSink,
+    ): TextMateLinesTokenizationResult {
+        if (metricsSink !== this.metricsSink) {
+            return OpenCodeTextMateNativeTokenizer(
+                regexBackend = regexBackend,
+                metricsSink = metricsSink,
+                sharedState = sharedState,
+                cacheCoordinator = cacheCoordinator,
+            ).tokenizeLinesIncremental(
+                grammar = grammar,
+                code = code,
+                grammarBundle = grammarBundle,
+                plan = plan,
+                session = session,
+                shouldCancel = shouldCancel,
+                metricsSink = metricsSink,
+            )
+        }
+        if (code.isEmpty()) {
+            session.mode = TextMateIncrementalMode.ExactSource
+            session.reusedLineCount = 0
+            session.retokenizedLineCount = 0
+            session.suffixReusedLineCount = 0
+            session.produced =
+                IncrementalBlockState(
+                    identity = session.identity,
+                    sourceHash32 = 0,
+                    sourceLength = 0,
+                    source = code,
+                    lines = emptyList(),
+                    intent = session.intent,
+                    revision = session.revision,
+                    estimatedBytes = 128L,
+                )
+            return TextMateLinesTokenizationResult(
+                tokens = emptyList(),
+                state = TextMateLineState.Initial,
+                diagnostics = backendDiagnostics(),
+            )
+        }
+
+        val lines = TextMatePhysicalLines.split(code)
+        val offsets = TextMatePhysicalLines.lineStartOffsets(lines)
+        val checkpoints = mutableListOf<TextMateLineCheckpoint>()
+        val tokens = mutableListOf<TextMateScopeToken>()
+
+        if (plan.mode == TextMateIncrementalMode.ExactSource && plan.previous != null) {
+            plan.previous.lines.forEachIndexed { index, checkpoint ->
+                val lineOffset = offsets.getOrElse(index) { 0 }
+                tokens +=
+                    checkpoint.relativeTokens.map { token ->
+                        token.copy(start = token.start + lineOffset, end = token.end + lineOffset)
+                    }
+            }
+            session.mode = TextMateIncrementalMode.ExactSource
+            session.reusedLineCount = plan.previous.lines.size
+            session.retokenizedLineCount = 0
+            session.suffixReusedLineCount = 0
+            session.produced = plan.previous.copy(revision = session.revision, intent = session.intent)
+            if (metricsSink.isEnabled) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.IncrementalReuse,
+                        outcome = TextMateMetricOutcome.CacheHit,
+                        reusedLineCount = session.reusedLineCount,
+                        retokenizedLineCount = 0,
+                        suffixReusedLineCount = 0,
+                        sourceLines = lines.size,
+                    ),
+                )
+            }
+            return TextMateLinesTokenizationResult(
+                tokens = normalize(tokens, code.length),
+                state =
+                    restoreLineState(plan.previous.lines.lastOrNull()?.outgoing ?: TextMateLineStateSnapshot.Initial, grammar, grammarBundle)
+                        ?: TextMateLineState.Initial,
+                diagnostics = backendDiagnostics(),
+            )
+        }
+
+        checkpoints += plan.reusedPrefix
+        plan.reusedPrefix.forEachIndexed { index, checkpoint ->
+            val lineOffset = offsets.getOrElse(checkpoint.lineIndex) { offsets.getOrElse(index) { 0 } }
+            tokens +=
+                checkpoint.relativeTokens.map { token ->
+                    token.copy(start = token.start + lineOffset, end = token.end + lineOffset)
+                }
+        }
+
+        var state =
+            restoreLineState(plan.incomingAtResume, grammar, grammarBundle)
+                ?: TextMateLineState.Initial
+        var lineIndex = plan.resumeLine
+        var reusedSuffix = 0
+        var retokenized = 0
+        val tokenizeStartedAt = if (metricsSink.isEnabled) TimeSource.Monotonic.markNow() else null
+
+        while (lineIndex < lines.size) {
+            if (shouldCancel()) {
+                return TextMateLinesTokenizationResult(
+                    tokens = emptyList(),
+                    state = state,
+                    diagnostics = backendDiagnostics(),
+                    cancelled = true,
+                )
+            }
+
+            if (session.suffixConvergenceEnabled && plan.previous != null) {
+                val incomingSnapshot =
+                    snapshotLineState(state, grammar, grammarBundle)
+                val previousLine = plan.previous.lines.getOrNull(lineIndex)
+                if (
+                    incomingSnapshot != null &&
+                    previousLine != null &&
+                    previousLine.lineText == lines[lineIndex] &&
+                    previousLine.incomingFingerprint == incomingSnapshot.fingerprint()
+                ) {
+                    val suffix = plan.previous.lines.drop(lineIndex)
+                    var converged = true
+                    for (candidate in suffix) {
+                        if (candidate.lineIndex >= lines.size || candidate.lineText != lines[candidate.lineIndex]) {
+                            converged = false
+                            break
+                        }
+                    }
+                    if (converged && suffix.size == lines.size - lineIndex) {
+                        suffix.forEach { checkpoint ->
+                            val lineOffset = offsets[checkpoint.lineIndex]
+                            tokens +=
+                                checkpoint.relativeTokens.map { token ->
+                                    token.copy(start = token.start + lineOffset, end = token.end + lineOffset)
+                                }
+                            checkpoints += checkpoint
+                        }
+                        reusedSuffix = suffix.size
+                        state =
+                            restoreLineState(suffix.last().outgoing, grammar, grammarBundle)
+                                ?: state
+                        break
+                    }
+                }
+            }
+
+            val line = lines[lineIndex]
+            val lineOffset = offsets[lineIndex]
+            val nextLine = lines.getOrElse(lineIndex + 1) { "" }
+            val boundarySuffix = "\n$nextLine"
+            val incomingSnapshot =
+                snapshotLineState(state, grammar, grammarBundle)
+                    ?: return fallbackFullTokenize(grammar, code, grammarBundle, session, shouldCancel)
+            val lineResult =
+                tokenizeLine(
+                    grammar = grammar,
+                    grammarBundle = grammarBundle,
+                    line = line,
+                    lineOffset = lineOffset,
+                    initialState = state,
+                    boundarySuffix = boundarySuffix,
+                )
+            val relativeTokens =
+                lineResult.tokens.map { token ->
+                    token.copy(start = token.start - lineOffset, end = token.end - lineOffset)
+                }
+            val outgoingSnapshot =
+                snapshotLineState(lineResult.state, grammar, grammarBundle)
+                    ?: return fallbackFullTokenize(grammar, code, grammarBundle, session, shouldCancel)
+            val checkpoint =
+                TextMateLineCheckpoint(
+                    lineIndex = lineIndex,
+                    lineText = line,
+                    lineTextHash32 = line.hashCode(),
+                    incoming = incomingSnapshot,
+                    incomingFingerprint = incomingSnapshot.fingerprint(),
+                    outgoing = outgoingSnapshot,
+                    outgoingFingerprint = outgoingSnapshot.fingerprint(),
+                    relativeTokens = relativeTokens,
+                    estimatedBytes =
+                        estimateCheckpointBytes(
+                            lineText = line,
+                            incoming = incomingSnapshot,
+                            outgoing = outgoingSnapshot,
+                            relativeTokens = relativeTokens,
+                        ),
+                )
+            checkpoints += checkpoint
+            tokens += lineResult.tokens
+            state = lineResult.state
+            retokenized += 1
+            lineIndex += 1
+        }
+        tokenizeStartedAt?.let {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.Tokenize,
+                    outcome = TextMateMetricOutcome.Success,
+                    durationNanoseconds = it.elapsedNow().inWholeNanoseconds,
+                    backend = regexBackend.name,
+                    sourceCharacters = code.length,
+                    sourceLines = lines.size,
+                    reusedLineCount = plan.reusedPrefix.size + reusedSuffix,
+                    retokenizedLineCount = retokenized,
+                    suffixReusedLineCount = reusedSuffix,
+                ),
+            )
+        }
+
+        val reusedPrefixCount = plan.reusedPrefix.size
+        session.mode =
+            when {
+                reusedSuffix > 0 && reusedPrefixCount > 0 -> TextMateIncrementalMode.PrefixSuffix
+                reusedPrefixCount > 0 -> TextMateIncrementalMode.Prefix
+                else -> TextMateIncrementalMode.None
+            }
+        session.reusedLineCount = reusedPrefixCount + reusedSuffix
+        session.retokenizedLineCount = retokenized
+        session.suffixReusedLineCount = reusedSuffix
+        session.produced =
+            IncrementalBlockState(
+                identity = session.identity,
+                sourceHash32 = code.hashCode(),
+                sourceLength = code.length,
+                source = code,
+                lines = checkpoints,
+                intent = session.intent,
+                revision = session.revision,
+                estimatedBytes = estimateBlockBytes(checkpoints),
+            )
+        if (metricsSink.isEnabled) {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.IncrementalReuse,
+                    outcome =
+                        if (session.reusedLineCount > 0) {
+                            TextMateMetricOutcome.CacheHit
+                        } else {
+                            TextMateMetricOutcome.CacheMiss
+                        },
+                    reusedLineCount = session.reusedLineCount,
+                    retokenizedLineCount = session.retokenizedLineCount,
+                    suffixReusedLineCount = session.suffixReusedLineCount,
+                    sourceLines = lines.size,
+                ),
+            )
+        }
+        return TextMateLinesTokenizationResult(
+            tokens = normalize(tokens, code.length),
+            state = state,
+            diagnostics = backendDiagnostics(),
+        )
+    }
+
+    private fun fallbackFullTokenize(
+        grammar: TextMateGrammarPayload,
+        code: String,
+        grammarBundle: TextMateGrammarBundle?,
+        session: TextMateIncrementalHighlightSession,
+        shouldCancel: () -> Boolean,
+    ): TextMateLinesTokenizationResult {
+        val full =
+            tokenizeLines(
+                grammar = grammar,
+                code = code,
+                grammarBundle = grammarBundle,
+                shouldCancel = shouldCancel,
+            )
+        session.mode = TextMateIncrementalMode.None
+        session.reusedLineCount = 0
+        session.retokenizedLineCount = TextMatePhysicalLines.split(code).size
+        session.suffixReusedLineCount = 0
+        session.produced = null
+        return full
+    }
+
+    private fun snapshotLineState(
+        state: TextMateLineState,
+        primary: TextMateGrammarPayload,
+        grammarBundle: TextMateGrammarBundle?,
+    ): TextMateLineStateSnapshot? =
+        TextMateLineStateCodec.snapshot(
+            state = state,
+            resolveGrammarId = { grammar ->
+                when {
+                    grammar === primary.grammar -> primary.grammarId
+                    else -> grammarBundle?.grammarIdFor(grammar)
+                }
+            },
+            resolveRuleId = { grammar, pattern ->
+                val program =
+                    when {
+                        grammar === primary.grammar -> primary.program
+                        else -> grammarBundle?.grammarIdFor(grammar)?.let { id -> grammarBundle.grammarForId(id)?.program }
+                    }
+                program?.ruleIdOf(pattern)
+            },
+        )
+
+    private fun restoreLineState(
+        snapshot: TextMateLineStateSnapshot,
+        primary: TextMateGrammarPayload,
+        grammarBundle: TextMateGrammarBundle?,
+    ): TextMateLineState? =
+        TextMateLineStateCodec.restore(
+            snapshot = snapshot,
+            resolveGrammar = { grammarId ->
+                when {
+                    grammarId == primary.grammarId -> primary.grammar
+                    else -> grammarBundle?.grammarForId(grammarId)?.grammar
+                }
+            },
+            resolvePattern = { grammarId, ruleId ->
+                val program =
+                    when {
+                        grammarId == primary.grammarId -> primary.program
+                        else -> grammarBundle?.grammarForId(grammarId)?.program
+                    }
+                program?.pattern(ruleId)
+            },
+        )
+
     fun tokenizeLine(
         grammar: TextMateGrammarPayload,
         line: String,
@@ -196,6 +800,38 @@ class OpenCodeTextMateNativeTokenizer(
         lineOffset: Int = 0,
         initialState: TextMateLineState = TextMateLineState.Initial,
         boundarySuffix: String = "\n",
+    ): TextMateLineTokenizationResult {
+        val previousLine = activeLineBuffer
+        val previousBoundary = activeBoundaryBuffer
+        activeLineBuffer = PreparedTextMateLineBuffer.prepare(line, metricsSink)
+        activeBoundaryBuffer =
+            if (boundarySuffix.isEmpty()) {
+                null
+            } else {
+                PreparedTextMateLineBuffer.prepare(line + boundarySuffix, metricsSink)
+            }
+        try {
+            return tokenizeLineWithActiveBuffers(
+                grammar = grammar,
+                line = line,
+                grammarBundle = grammarBundle,
+                lineOffset = lineOffset,
+                initialState = initialState,
+                boundarySuffix = boundarySuffix,
+            )
+        } finally {
+            activeLineBuffer = previousLine
+            activeBoundaryBuffer = previousBoundary
+        }
+    }
+
+    private fun tokenizeLineWithActiveBuffers(
+        grammar: TextMateGrammarPayload,
+        line: String,
+        grammarBundle: TextMateGrammarBundle?,
+        lineOffset: Int,
+        initialState: TextMateLineState,
+        boundarySuffix: String,
     ): TextMateLineTokenizationResult {
         val tokens = mutableListOf<TextMateScopeToken>()
         val lineEnd = lineOffset + line.length
@@ -206,7 +842,7 @@ class OpenCodeTextMateNativeTokenizer(
             val openRule = openRules.removeAt(openRules.lastIndex)
             if (openRule.whilePattern != null) {
                 val whileMatch =
-                    regexBackend.find(openRule.whilePattern, line, 0, line.length)
+                    measuredRegexFind(openRule.whilePattern, line, 0, line.length)
                         ?.takeIf { match -> match.start == 0 }
                 if (whileMatch == null) {
                     continue
@@ -412,17 +1048,14 @@ class OpenCodeTextMateNativeTokenizer(
 
         while (cursor < endIndex) {
             val next =
-                rules
-                    .mapNotNull { rule ->
-                        if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
-                            return@mapNotNull null
-                        }
-                        rule.findNext(code, cursor, endIndex, regexBackend, contiguousAnchor)
-                    }
-                    .minWithOrNull(
-                        compareBy<TextMateRuleMatch> { it.match.start }
-                            .thenBy { it.rule.order },
-                    ) ?: break
+                selectEarliestRuleMatch(
+                    rules = rules,
+                    code = code,
+                    cursor = cursor,
+                    endIndex = endIndex,
+                    contiguousAnchor = contiguousAnchor,
+                    emptyContiguousBeginAt = emptyContiguousBeginAt,
+                ) ?: break
 
             if (next.match.start > cursor) {
                 cursor = next.match.start
@@ -549,7 +1182,7 @@ class OpenCodeTextMateNativeTokenizer(
             delimitedContent?.endMatch
                 ?: if (resolvedWhilePattern == null) {
                     resolvedEndPattern?.let { endPattern ->
-                        regexBackend.find(endPattern, code, beginMatch.end, endIndex)
+                        measuredRegexFind(endPattern, code, beginMatch.end, endIndex)
                     }
                 } else {
                     null
@@ -626,16 +1259,33 @@ class OpenCodeTextMateNativeTokenizer(
         baseGrammar: TextMateGrammar,
         baseScopes: List<String>,
     ): List<ResolvedTextMateRule> {
+        val grammarId =
+            grammarBundle?.grammars?.firstOrNull { it.scopeName == grammar.scopeName }?.grammarId?.value
+                ?: grammar.scopeName.hashCode()
         val cacheKey =
             ResolvedRulesCacheKey(
+                grammarId = grammarId,
                 grammarScope = grammar.scopeName,
                 patternsSignature = patternsSignature(patterns),
                 activeIncludes = activeIncludes,
                 baseGrammarScope = baseGrammar.scopeName,
                 baseScopes = baseScopes,
             )
-        resolvedRulesCache[cacheKey]?.let { return it }
+        sharedState.resolvedRulesCache[cacheKey]?.let { cached ->
+            sharedState.touchRulePlan(cacheKey)
+            if (metricsSink.shouldRecord(TextMateMetricStage.RuleResolve)) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.RuleResolve,
+                        outcome = TextMateMetricOutcome.CacheHit,
+                        backend = regexBackend.name,
+                    ),
+                )
+            }
+            return cached
+        }
 
+        val startedAt = TimeSource.Monotonic.markNow()
         val rules = mutableListOf<ResolvedTextMateRule>()
         var order = 0
 
@@ -686,7 +1336,23 @@ class OpenCodeTextMateNativeTokenizer(
         matchingInjections(grammar, baseScopes, InjectionPriority.Right).forEach { injection ->
             addPatterns(grammar, listOf(injection), activeIncludes, emptyList())
         }
-        return rules.also { resolvedRulesCache[cacheKey] = it }
+        return rules.also {
+            sharedState.resolvedRulesCache[cacheKey] = it
+            sharedState.rememberRulePlan(
+                key = cacheKey,
+                estimatedBytes = 64L + it.size * 48L + cacheKey.patternsSignature.length * 2L,
+            )
+            if (metricsSink.shouldRecord(TextMateMetricStage.RuleResolve)) {
+                metricsSink.record(
+                    TextMateMetricEvent(
+                        stage = TextMateMetricStage.RuleResolve,
+                        outcome = TextMateMetricOutcome.CacheMiss,
+                        durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                        backend = regexBackend.name,
+                    ),
+                )
+            }
+        }
     }
 
     private fun patternsSignature(patterns: List<TextMatePattern>): String =
@@ -809,17 +1475,14 @@ class OpenCodeTextMateNativeTokenizer(
 
             val endMatch = findDelimitedEndPattern(endPattern, code, cursor, endIndex)
             val next =
-                rules
-                    .mapNotNull { rule ->
-                        if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
-                            return@mapNotNull null
-                        }
-                        rule.findNext(code, cursor, endIndex, regexBackend, contiguousAnchor)
-                    }
-                    .minWithOrNull(
-                        compareBy<TextMateRuleMatch> { it.match.start }
-                            .thenBy { it.rule.order },
-                    )
+                selectEarliestRuleMatch(
+                    rules = rules,
+                    code = code,
+                    cursor = cursor,
+                    endIndex = endIndex,
+                    contiguousAnchor = contiguousAnchor,
+                    emptyContiguousBeginAt = emptyContiguousBeginAt,
+                )
 
             if (next == null) {
                 if (endMatch != null && endMatch.start == cursor) {
@@ -913,12 +1576,12 @@ class OpenCodeTextMateNativeTokenizer(
         endIndex: Int,
     ): TextMateRegexMatch? {
         if (startIndex > endIndex) return null
-        regexBackend.find(endPattern, code, startIndex, endIndex)?.let { return it }
+        measuredRegexFind(endPattern, code, startIndex, endIndex)?.let { return it }
         if (startIndex == endIndex && endIndex > 0) {
             if (isLineTerminatorEndPattern(endPattern) && !code.substring(0, endIndex).contains('\n')) {
                 return TextMateRegexMatch(endIndex, endIndex)
             }
-            return regexBackend.find(endPattern, code, endIndex - 1, endIndex)
+            return measuredRegexFind(endPattern, code, endIndex - 1, endIndex)
                 ?.takeIf { match -> match.end == endIndex }
         }
         return null
@@ -935,13 +1598,13 @@ class OpenCodeTextMateNativeTokenizer(
         boundarySuffix: String,
     ): TextMateRegexMatch? {
         if (boundarySuffix.isEmpty()) {
-            return regexBackend.find(endPattern, code, startIndex, endIndex)
+            return measuredRegexFind(endPattern, code, startIndex, endIndex)
         }
 
-        val scopedInput = code + boundarySuffix
+        val scopedInput = activeBoundaryBuffer?.source ?: (code + boundarySuffix)
         val searchEnd = endIndex + boundarySuffix.length
         val match =
-            regexBackend.find(
+            measuredRegexFind(
                 pattern = endPattern,
                 input = scopedInput,
                 startIndex = startIndex,
@@ -1013,7 +1676,7 @@ class OpenCodeTextMateNativeTokenizer(
                     )
                 }
             else ->
-                grammarBundle?.grammarForScope(include)?.let { payload ->
+                grammarBundle?.grammarForScope(include, metricsSink)?.let { payload ->
                     IncludedTextMatePattern(
                         grammar = payload.grammar,
                         pattern = TextMatePattern(patterns = payload.grammar.patterns),
@@ -1249,13 +1912,146 @@ class OpenCodeTextMateNativeTokenizer(
             this + scope.split(Regex("\\s+")).filter { scopePart -> scopePart.isNotBlank() }
         }
 
+    private fun measuredRegexFind(
+        pattern: String,
+        input: String,
+        startIndex: Int,
+        endIndex: Int = input.length,
+        contiguousAnchor: Int? = null,
+    ): TextMateRegexMatch? {
+        val buffer = bufferFor(input)
+        if (!metricsSink.shouldRecord(TextMateMetricStage.RegexSearch)) {
+            return regexBackend.find(
+                pattern = pattern,
+                buffer = buffer,
+                startIndex = startIndex,
+                endIndex = endIndex,
+                contiguousAnchor = contiguousAnchor,
+                metricsSink = metricsSink,
+            )
+        }
+        val startedAt = TimeSource.Monotonic.markNow()
+        var outcome = TextMateMetricOutcome.Success
+        return try {
+            regexBackend.find(
+                pattern = pattern,
+                buffer = buffer,
+                startIndex = startIndex,
+                endIndex = endIndex,
+                contiguousAnchor = contiguousAnchor,
+                metricsSink = metricsSink,
+            )
+        } catch (failure: Throwable) {
+            outcome = TextMateMetricOutcome.Failure
+            throw failure
+        } finally {
+            metricsSink.record(
+                TextMateMetricEvent(
+                    stage = TextMateMetricStage.RegexSearch,
+                    outcome = outcome,
+                    durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                    backend = regexBackend.name,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Pick the earliest rule match via the backend's OnigScanner-style
+     * [OpenCodeTextMateRegexBackend.findEarliest] (at-cursor pass, then capped
+     * full scan). Candidate [TextMateRegexScanCandidate.id] matches rule order.
+     */
+    private fun selectEarliestRuleMatch(
+        rules: List<ResolvedTextMateRule>,
+        code: String,
+        cursor: Int,
+        endIndex: Int,
+        contiguousAnchor: Int,
+        emptyContiguousBeginAt: Int?,
+    ): TextMateRuleMatch? {
+        val buffer = bufferFor(code)
+        val candidates = ArrayList<TextMateRegexScanCandidate>(rules.size)
+        val rulesById = ArrayList<ResolvedTextMateRule>(rules.size)
+        for (rule in rules) {
+            if (rule.pattern.begin == "\\G" && emptyContiguousBeginAt == cursor) {
+                continue
+            }
+            val patternText = rule.pattern.match ?: rule.pattern.begin ?: continue
+            val id = candidates.size
+            candidates +=
+                TextMateRegexScanCandidate(
+                    id = id,
+                    pattern = patternText,
+                    contiguousAnchor = contiguousAnchor,
+                )
+            rulesById += rule
+        }
+        if (candidates.isEmpty()) return null
+        val scanned =
+            regexBackend.findEarliest(
+                candidates = candidates,
+                buffer = buffer,
+                startIndex = cursor,
+                endIndex = endIndex,
+                metricsSink = metricsSink,
+            ) ?: return null
+        val rule = rulesById.getOrNull(scanned.id) ?: return null
+        return TextMateRuleMatch(rule = rule, match = scanned.match)
+    }
+
+    private fun bufferFor(input: String): PreparedTextMateLineBuffer {
+        activeLineBuffer?.takeIf { it.source == input }?.let { return it }
+        activeBoundaryBuffer?.takeIf { it.source == input }?.let { return it }
+        return PreparedTextMateLineBuffer.prepare(input, metricsSink)
+    }
+
     private data class ResolvedRulesCacheKey(
+        val grammarId: Int,
         val grammarScope: String,
         val patternsSignature: String,
         val activeIncludes: Set<String>,
         val baseGrammarScope: String,
         val baseScopes: List<String>,
     )
+
+    private class SharedState(
+        private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
+    ) {
+        val resolvedRulesCache = mutableMapOf<ResolvedRulesCacheKey, List<ResolvedTextMateRule>>()
+
+        fun trimCaches(level: MemoryPressure) {
+            when (level) {
+                MemoryPressure.Normal -> Unit
+                MemoryPressure.Moderate,
+                MemoryPressure.Critical,
+                -> {
+                    resolvedRulesCache.keys.toList().forEach { key ->
+                        cacheCoordinator.removeIfUnleased(rulePlanCacheKey(key))
+                    }
+                    resolvedRulesCache.clear()
+                    cacheCoordinator.trim(level)
+                }
+            }
+        }
+
+        fun rememberRulePlan(
+            key: ResolvedRulesCacheKey,
+            estimatedBytes: Long,
+        ) {
+            cacheCoordinator.promote(
+                key = rulePlanCacheKey(key),
+                category = TextMateWeightedCacheCoordinator.Category.RulePlan,
+                estimatedBytes = estimatedBytes,
+            )
+        }
+
+        fun touchRulePlan(key: ResolvedRulesCacheKey) {
+            cacheCoordinator.touch(rulePlanCacheKey(key))
+        }
+
+        private fun rulePlanCacheKey(key: ResolvedRulesCacheKey): String =
+            "rules:${key.grammarId}:${key.patternsSignature}:${key.activeIncludes.hashCode()}:${key.baseScopes.hashCode()}"
+    }
 
     private data class ResolvedTextMateRule(
         val grammar: TextMateGrammar,
@@ -1268,17 +2064,48 @@ class OpenCodeTextMateNativeTokenizer(
             startIndex: Int,
             endIndex: Int,
             regexBackend: OpenCodeTextMateRegexBackend,
+            metricsSink: OpenCodeTextMateMetricsSink,
             contiguousAnchor: Int,
+            buffer: PreparedTextMateLineBuffer,
         ): TextMateRuleMatch? {
             val patternText = pattern.match ?: pattern.begin ?: return null
+            if (!metricsSink.shouldRecord(TextMateMetricStage.RegexSearch)) {
+                val match =
+                    regexBackend.find(
+                        pattern = patternText,
+                        buffer = buffer,
+                        startIndex = startIndex,
+                        endIndex = endIndex,
+                        contiguousAnchor = contiguousAnchor,
+                        metricsSink = metricsSink,
+                    ) ?: return null
+                return TextMateRuleMatch(rule = this, match = match)
+            }
+            val startedAt = TimeSource.Monotonic.markNow()
+            var outcome = TextMateMetricOutcome.Success
             val match =
-                regexBackend.find(
-                    pattern = patternText,
-                    input = code,
-                    startIndex = startIndex,
-                    endIndex = endIndex,
-                    contiguousAnchor = contiguousAnchor,
-                ) ?: return null
+                try {
+                    regexBackend.find(
+                        pattern = patternText,
+                        buffer = buffer,
+                        startIndex = startIndex,
+                        endIndex = endIndex,
+                        contiguousAnchor = contiguousAnchor,
+                        metricsSink = metricsSink,
+                    )
+                } catch (failure: Throwable) {
+                    outcome = TextMateMetricOutcome.Failure
+                    throw failure
+                } finally {
+                    metricsSink.record(
+                        TextMateMetricEvent(
+                            stage = TextMateMetricStage.RegexSearch,
+                            outcome = outcome,
+                            durationNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
+                            backend = regexBackend.name,
+                        ),
+                    )
+                } ?: return null
             return TextMateRuleMatch(rule = this, match = match)
         }
     }

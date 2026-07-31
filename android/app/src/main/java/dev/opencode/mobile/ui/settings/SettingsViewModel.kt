@@ -12,8 +12,12 @@ import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.message.BlockDecorationCache
+import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.theme.ThemeManager
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,6 +34,8 @@ class SettingsViewModel
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val messageRepository: MessageRepository,
+        private val messageContentPreparer: MessageContentPreparer,
+        private val textMateLogbook: TextMateLogbook,
     ) : ViewModel() {
         fun clearAllData() {
             viewModelScope.launch {
@@ -42,6 +48,10 @@ class SettingsViewModel
                 messageRepository.clearMessageCache()
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()
+                MarkdownHighlightPreferences.clear()
+                messageContentPreparer.clearDocumentCache()
+                BlockDecorationCache.clear()
+                textMateLogbook.clear()
             }
         }
 
@@ -55,5 +65,11 @@ class SettingsViewModel
 
         fun setShowSessionListOnHome(enabled: Boolean) {
             HomeDisplayPreferences.updateShowSessionListOnHome(enabled)
+        }
+
+        fun setTextMateEnabled(enabled: Boolean) {
+            MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
+            messageContentPreparer.clearDocumentCache()
+            BlockDecorationCache.clear()
         }
     }

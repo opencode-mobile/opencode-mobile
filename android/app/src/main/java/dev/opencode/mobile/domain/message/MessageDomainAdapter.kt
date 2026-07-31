@@ -1,27 +1,28 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.data.remote.dto.AgentPartSourceDto
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageErrorInfoDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
 import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
-import dev.opencode.mobile.data.remote.dto.AgentPartSourceDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
-import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
+import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class MessageDomainAdapter {
     private val json = Json { ignoreUnknownKeys = true }
+
     fun toMessage(dto: MessageDto): Message {
         val info = dto.info
         val domainParts = parseParts(dto.parts)
@@ -71,12 +72,12 @@ class MessageDomainAdapter {
         return when (dto.type) {
             "text" -> {
                 val text = dto.text ?: return null
-                MessagePart.Text(text = text, isStreaming = false)
+                MessagePart.Text(text = text, isStreaming = false, id = dto.id)
             }
             "tool" -> {
                 val toolName = dto.tool ?: return null
                 val stateDto = parseToolState(dto.state)
-                toToolPart(toolName = toolName, callId = dto.callId, state = stateDto)
+                toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }
             "file" -> toFilePart(dto)
             else -> null
@@ -92,6 +93,7 @@ class MessageDomainAdapter {
         toolName: String,
         callId: String? = null,
         state: MessageToolStateDto?,
+        id: String? = null,
     ): MessagePart.Tool {
         val status = toToolStatus(state?.status)
         return MessagePart.Tool(
@@ -103,6 +105,7 @@ class MessageDomainAdapter {
             input = state?.input,
             output = state?.output,
             metadata = state?.metadata,
+            id = id,
         )
     }
 
@@ -185,8 +188,7 @@ class MessageDomainAdapter {
 
     // MARK: Part parsing
 
-    fun parseParts(dtos: List<MessagePartDto>): List<MessagePart> =
-        dtos.mapNotNull { toMessagePart(it) }
+    fun parseParts(dtos: List<MessagePartDto>): List<MessagePart> = dtos.mapNotNull { toMessagePart(it) }
 
     // MARK: Private
 
@@ -271,7 +273,11 @@ class MessageDomainAdapter {
     private fun toolContextCharacters(part: MessagePartDto): Int {
         if (part.type != "tool") return 0
         val state = parseToolState(part.state) ?: return 0
-        val inputOverhead = state.input?.keys?.size.orZero() * 16
+        val inputOverhead =
+            state.input
+                ?.keys
+                ?.size
+                .orZero() * 16
         return when (state.status) {
             "pending" -> inputOverhead + (state.raw?.length ?: 0)
             "completed" -> inputOverhead + (state.output?.length ?: 0)

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
@@ -28,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,9 +54,9 @@ import dev.opencode.mobile.markdown.isLikelyExpandable
 import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 enum class OpenCodeRenderedMarkdownVariant(
     val wireName: String,
@@ -71,11 +70,25 @@ object OpenCodeRenderedMarkdownDetector {
     fun shouldRender(text: String): Boolean = OpenCodeMarkdownDetector.shouldRender(text)
 }
 
+/** Defer only large *inline* attributed builds; fenced code/diff paint spans sync. */
+private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
+
+/**
+ * Format-always / color-later: never strip prepared spans while streaming.
+ * Structure-only docs already have empty spans; semantic fallback keeps colors.
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun forcePlainStreamingCode(
+    isStreaming: Boolean,
+    codeLength: Int,
+): Boolean = false
+
 @Composable
 fun OpenCodeRenderedMarkdown(
     document: MarkdownDocument,
     variant: OpenCodeRenderedMarkdownVariant,
     modifier: Modifier = Modifier,
+    isStreaming: Boolean = false,
     initialHeight: Dp = 1.dp,
     collapsedMaxHeight: Dp? = null,
     expanded: Boolean = true,
@@ -110,6 +123,7 @@ fun OpenCodeRenderedMarkdown(
             MarkdownBlockView(
                 block = block,
                 variant = variant,
+                isStreaming = isStreaming,
                 onLinkTap = onLinkTap,
             )
         }
@@ -120,6 +134,7 @@ fun OpenCodeRenderedMarkdown(
 private fun MarkdownBlockView(
     block: MarkdownBlock,
     variant: OpenCodeRenderedMarkdownVariant,
+    isStreaming: Boolean,
     onLinkTap: ((String) -> Unit)?,
 ) {
     when (block) {
@@ -169,7 +184,7 @@ private fun MarkdownBlockView(
                     ListRow(marker = "${block.start + index}.", inlines = item.inlines, onLinkTap = onLinkTap)
                 }
             }
-        is MarkdownBlock.CodeBlock -> CodeBlockView(block)
+        is MarkdownBlock.CodeBlock -> CodeBlockView(block, isStreaming = isStreaming)
         is MarkdownBlock.DiffBlock -> DiffBlockView(block)
         is MarkdownBlock.Table -> TableView(block, onLinkTap)
         MarkdownBlock.ThematicBreak ->
@@ -209,10 +224,19 @@ private fun ListRow(
 }
 
 @Composable
-private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
+private fun CodeBlockView(
+    block: MarkdownBlock.CodeBlock,
+    isStreaming: Boolean,
+) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
-    val annotated = rememberCodeAnnotatedString(block.code, block.spans, colors)
+    val annotated =
+        rememberCodeAnnotatedString(
+            code = block.code,
+            spans = block.spans,
+            colors = colors,
+            forcePlain = forcePlainStreamingCode(isStreaming, block.code.length),
+        )
     Box(
         modifier =
             Modifier
@@ -312,7 +336,14 @@ private fun TableRowView(
             ) {
                 MarkdownInlineText(
                     inlines = cell.inlines,
-                    style = if (isHeader) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium) else MaterialTheme.typography.bodyMedium,
+                    style =
+                        if (isHeader) {
+                            MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Medium,
+                            )
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        },
                     onLinkTap = onLinkTap,
                 )
             }
@@ -438,8 +469,7 @@ internal fun buildCodeAnnotatedString(
                 compareBy<CodeSpan> { it.role.stylePriority() }
                     .thenByDescending { it.end - it.start }
                     .thenBy { it.start },
-            )
-            .forEach { span ->
+            ).forEach { span ->
                 val start = span.start.coerceIn(0, code.length)
                 val end = span.end.coerceIn(start, code.length)
                 if (start < end) {
@@ -561,46 +591,40 @@ private fun rememberCodeAnnotatedString(
     code: String,
     spans: List<CodeSpan>,
     colors: CodeColors,
+    forcePlain: Boolean,
 ): AnnotatedString {
-    var annotated by remember(code, spans) { mutableStateOf<AnnotatedString?>(null) }
-    LaunchedEffect(code, spans, colors) {
-        annotated =
-            withContext(Dispatchers.Default) {
-                buildCodeAnnotatedString(code, spans, colors)
-            }
-    }
-    return annotated ?: remember(code) { AnnotatedString(code) }
+    // Spans are prepared in the pipeline — paint on first frame.
+    // Format-always: forcePlain is unused (always false).
+    if (forcePlain) return remember(code) { AnnotatedString(code) }
+    return remember(code, spans, colors) { buildCodeAnnotatedString(code, spans, colors) }
 }
 
 @Composable
 private fun rememberDiffLineAnnotatedStrings(
     lines: List<dev.opencode.mobile.markdown.DiffLine>,
     colors: CodeColors,
-): List<AnnotatedString> {
-    var annotatedLines by remember(lines) { mutableStateOf<List<AnnotatedString>?>(null) }
-    LaunchedEffect(lines, colors) {
-        annotatedLines =
-            withContext(Dispatchers.Default) {
-                lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
-            }
+): List<AnnotatedString> =
+    remember(lines, colors) {
+        lines.map { line -> buildCodeAnnotatedString(line.text, line.spans, colors) }
     }
-    return annotatedLines
-        ?: remember(lines) {
-            lines.map { line -> AnnotatedString(line.text) }
-        }
-}
 
 @Composable
 private fun rememberMarkdownAnnotatedString(
     inlines: List<MarkdownInline>,
     colors: MarkdownTextColors,
 ): AnnotatedString {
-    var annotated by remember(inlines) { mutableStateOf<AnnotatedString?>(null) }
+    val plainText = remember(inlines) { plainTextFromMarkdownInlines(inlines) }
+    if (plainText.length < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
+        return remember(inlines, colors) {
+            buildMarkdownAnnotatedString(inlines, colors)
+        }
+    }
+    var annotated by remember(inlines, colors) { mutableStateOf<AnnotatedString?>(null) }
     LaunchedEffect(inlines, colors) {
         annotated =
             withContext(Dispatchers.Default) {
                 buildMarkdownAnnotatedString(inlines, colors)
             }
     }
-    return annotated ?: remember(inlines) { AnnotatedString(plainTextFromMarkdownInlines(inlines)) }
+    return annotated ?: remember(plainText) { AnnotatedString(plainText) }
 }

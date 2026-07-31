@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import android.util.Log
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.message.ConnectionEpoch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,12 +34,13 @@ class DefaultForegroundEventStream
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
 
-        private val _events = MutableSharedFlow<OpencodeEvent>(extraBufferCapacity = 64)
+        private val _events = MutableSharedFlow<OpencodeEvent>(extraBufferCapacity = 4_096)
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
             if (streamJob?.isActive == true) return
             logI("foreground SSE stream starting")
+            ConnectionEpoch.shared.bump()
             streamJob =
                 scope.launch {
                     var retryAttempt = 0
@@ -67,11 +69,14 @@ class DefaultForegroundEventStream
                                     "server.connected" -> {
                                         markStreamConnected()
                                         retryAttempt = 0
+                                        _events.emit(event)
                                     }
                                     "server.heartbeat" -> Unit
                                     else -> {
                                         markStreamConnected()
-                                        scope.launch { _events.emit(event) }
+                                        // Emit on the read coroutine so order is preserved and
+                                        // we do not spawn one job per delta under burst.
+                                        _events.emit(event)
                                     }
                                 }
                             }
@@ -104,14 +109,15 @@ class DefaultForegroundEventStream
             setConnectionState(EventStreamConnectionState.Idle)
         }
 
-        private fun markStreamConnected() {
+        private suspend fun markStreamConnected() {
             val shouldPublishReconnect = wasConnected && !currentStreamWasConnected && !emittedReconnectForCurrentStream
             if (_connectionState.value != EventStreamConnectionState.Connected) {
                 setConnectionState(EventStreamConnectionState.Connected)
             }
             if (shouldPublishReconnect) {
                 logI("foreground SSE stream reconnected")
-                _events.tryEmit(OpencodeEvent(type = "stream.reconnected"))
+                ConnectionEpoch.shared.bump()
+                _events.emit(OpencodeEvent(type = "stream.reconnected"))
                 emittedReconnectForCurrentStream = true
             }
             currentStreamWasConnected = true

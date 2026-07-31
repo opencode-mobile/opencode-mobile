@@ -3,6 +3,8 @@
 ## Shared planning
 
 - [x] Feature docs and OpenAPI subset (`api/opencode-events.openapi.yaml`)
+- [x] Ordered `message.part.delta`, connect/reconnect, and selective message
+  reconciliation behavior aligned across platforms
 
 ## Design-system
 
@@ -12,21 +14,35 @@
 
 - [x] Events API + domain adapter + `DefaultForegroundEventStream`
 - [x] Hilt module + `ProcessLifecycleOwner` coordinator in `MainActivity`
-- [x] **Live Stores:** `MessageLiveStore`, `SessionStatusLiveStore`, `SessionLiveStore` with `WhileSubscribed(5000)`
-- [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates top-bar status
+- [x] `SessionStatusLiveStore` and `SessionLiveStore` use
+  `WhileSubscribed(5000)`; message observation now uses repository-owned
+  `MessageSync`
+- [x] Home collects session Live Stores; Session Chat observes the message
+  repository display pipeline
+- [x] Ordered SSE fan-out with `server.connected` forwarding and synthetic
+  reconnect signaling
 - [x] Session status on list rows and chat
-- [x] Unit tests (stores + ViewModels)
+- [x] Unit tests (event adapter/parser, sync/store/pipeline, Live Stores, and
+  ViewModels)
 
 ## iOS
 
 - [x] Events API client + domain adapter + stream service
 - [x] Factory registration + `scenePhase` lifecycle in `AppRootView`
-- [x] **Live Stores:** mirrored protocols + `SharedLiveObservation` subscriber lifecycle
-- [x] Home and Session Chat collect Live Stores for data refresh; home observes connection state for the live-updates top-bar status
+- [x] Session/status Live Stores use `SharedLiveObservation`; message observation
+  now uses repository-owned `MessageSync`
+- [x] Home collects session Live Stores; Session Chat observes the message
+  repository display pipeline
+- [x] `server.connected` forwarding and synthetic reconnect signaling match
+  Android
 - [x] Session status on list rows and chat
-- [x] Unit tests
+- [x] Unit tests (event adapter, sync/store/pipeline, Live Stores, and ViewModels)
 
-## Remaining
+## Completed follow-on
 
 - [x] Permission request UI slice implemented under
   [`permission-approval`](../permission-approval/progress.md).
+
+## Remaining work
+
+None for the foreground event-stream slice.

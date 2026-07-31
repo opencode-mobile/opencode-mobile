@@ -9,6 +9,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object SettingsHome : NavKey
 
+@Serializable data object TextMateLogbookHome : NavKey
+
+@Serializable data object TextMateLanguagesHome : NavKey
+
 @Serializable data object ComponentGalleryHome : NavKey
 
 @Serializable data class ComponentGalleryDetail(

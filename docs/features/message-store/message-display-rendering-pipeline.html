@@ -1,0 +1,1222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Message Display &amp; Rendering Pipeline</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f3f5f8;
+      --surface: #ffffff;
+      --surface-raised: #f8fafc;
+      --text: #172033;
+      --muted: #5c687b;
+      --line: #d9e0e9;
+      --line-strong: #bec9d7;
+      --blue: #1768d4;
+      --blue-soft: #eaf2ff;
+      --violet: #6e4bd8;
+      --violet-soft: #f0ecff;
+      --green: #16774a;
+      --green-soft: #e7f7ee;
+      --amber: #956400;
+      --amber-soft: #fff4d8;
+      --red: #a13b2b;
+      --red-soft: #fdecea;
+      --shadow: 0 10px 26px rgb(31 43 61 / 0.07);
+      --radius: 14px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --surface: #151b23;
+        --surface-raised: #1b222c;
+        --text: #edf2f8;
+        --muted: #a7b2c1;
+        --line: #2c3643;
+        --line-strong: #445164;
+        --blue: #77aaff;
+        --blue-soft: #142744;
+        --violet: #b09aff;
+        --violet-soft: #251f43;
+        --green: #73d6a7;
+        --green-soft: #133126;
+        --amber: #f2c66d;
+        --amber-soft: #302612;
+        --red: #ff9d89;
+        --red-soft: #321914;
+        --shadow: 0 12px 28px rgb(0 0 0 / 0.22);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--blue) 9%, transparent), transparent 28rem),
+        radial-gradient(circle at 88% 2%, color-mix(in srgb, var(--violet) 8%, transparent), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: var(--blue);
+      text-underline-offset: 0.15em;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      overflow-wrap: anywhere;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 46px 0 72px;
+    }
+
+    header {
+      max-width: 920px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--blue);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      letter-spacing: -0.02em;
+    }
+
+    h1 {
+      max-width: 780px;
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      line-height: 1.02;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.45rem;
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin: 0 0 7px;
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+
+    p {
+      margin: 6px 0;
+    }
+
+    .lead {
+      max-width: 850px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px 20px;
+      align-items: center;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      gap: 7px;
+      align-items: center;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line));
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-weight: 750;
+    }
+
+    .badge::before {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 28px 0 0;
+    }
+
+    nav a {
+      padding: 6px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--surface) 82%, transparent);
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    nav a:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    section {
+      margin-top: 46px;
+      scroll-margin-top: 20px;
+    }
+
+    .section-lead {
+      max-width: 800px;
+      color: var(--muted);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .card,
+    .panel,
+    table,
+    .lane,
+    .priority-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      min-height: 134px;
+      padding: 17px;
+    }
+
+    .card .label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--blue);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 1rem;
+    }
+
+    .card p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 22px;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 184px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--blue);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .stage:nth-child(2),
+    .stage:nth-child(3) {
+      border-top-color: var(--violet);
+    }
+
+    .stage:nth-child(4),
+    .stage:nth-child(5) {
+      border-top-color: var(--green);
+    }
+
+    .stage:not(:last-child)::after {
+      position: absolute;
+      z-index: 2;
+      top: 49%;
+      right: -15px;
+      width: 10px;
+      height: 10px;
+      border-top: 2px solid var(--line-strong);
+      border-right: 2px solid var(--line-strong);
+      content: "";
+      transform: rotate(45deg);
+    }
+
+    .stage .num {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .stage h3 {
+      margin-top: 8px;
+    }
+
+    .stage ul {
+      margin: 10px 0 0;
+      padding-left: 17px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .stage li {
+      margin: 4px 0;
+    }
+
+    .boundary-note {
+      display: flex;
+      gap: 11px;
+      align-items: flex-start;
+      margin-top: 16px;
+      padding: 13px 15px;
+      border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line));
+      border-radius: 11px;
+      background: var(--blue-soft);
+      color: color-mix(in srgb, var(--text) 82%, var(--blue));
+    }
+
+    .boundary-note strong {
+      flex: none;
+      color: var(--blue);
+    }
+
+    .table-wrap {
+      margin-top: 18px;
+      overflow-x: auto;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      overflow: hidden;
+      box-shadow: none;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-raised);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td:first-child {
+      font-weight: 700;
+    }
+
+    .snapshot-grid,
+    .render-grid,
+    .assessment-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel.blue {
+      border-top: 4px solid var(--blue);
+    }
+
+    .panel.violet {
+      border-top: 4px solid var(--violet);
+    }
+
+    .panel.green {
+      border-top: 4px solid var(--green);
+    }
+
+    .panel.amber {
+      border-top: 4px solid var(--amber);
+    }
+
+    .panel p,
+    .panel li {
+      color: var(--muted);
+    }
+
+    .panel ul,
+    .panel ol {
+      margin: 10px 0 0;
+      padding-left: 19px;
+    }
+
+    .panel li {
+      margin: 6px 0;
+    }
+
+    .rule-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .rule {
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-raised);
+      font-size: 0.87rem;
+    }
+
+    .rule strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--violet);
+    }
+
+    .lanes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .lane {
+      overflow: hidden;
+    }
+
+    .lane-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-raised);
+    }
+
+    .lane.android .lane-head {
+      border-top: 4px solid var(--green);
+    }
+
+    .lane.ios .lane-head {
+      border-top: 4px solid var(--blue);
+    }
+
+    .lane-head p {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .steps {
+      margin: 0;
+      padding: 4px 18px 12px 52px;
+      counter-reset: lane-step;
+      list-style: none;
+    }
+
+    .steps li {
+      position: relative;
+      padding: 13px 0 13px 4px;
+      border-bottom: 1px solid var(--line);
+      counter-increment: lane-step;
+    }
+
+    .steps li:last-child {
+      border-bottom: 0;
+    }
+
+    .steps li::before {
+      position: absolute;
+      top: 12px;
+      left: -36px;
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--blue-soft);
+      color: var(--blue);
+      content: counter(lane-step);
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+
+    .android .steps li::before {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .steps strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .steps span {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .strengths {
+      border-color: color-mix(in srgb, var(--green) 35%, var(--line));
+      background: linear-gradient(145deg, var(--surface), var(--green-soft));
+    }
+
+    .risk {
+      border-color: color-mix(in srgb, var(--amber) 40%, var(--line));
+      background: linear-gradient(145deg, var(--surface), var(--amber-soft));
+    }
+
+    .priority-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .priority-card {
+      position: relative;
+      padding: 18px 18px 18px 64px;
+    }
+
+    .priority {
+      position: absolute;
+      top: 18px;
+      left: 16px;
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+
+    .p1 .priority {
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .p2 .priority {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .p3 .priority {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .priority-card p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .priority-card .outcome {
+      display: block;
+      margin-top: 9px;
+      color: var(--text);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+
+    .invariants {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .invariant {
+      position: relative;
+      padding: 13px 13px 13px 39px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+    }
+
+    .invariant::before {
+      position: absolute;
+      top: 13px;
+      left: 13px;
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--green-soft);
+      color: var(--green);
+      content: "✓";
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 22px;
+      justify-content: space-between;
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 980px) {
+      .summary-grid,
+      .rule-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .architecture {
+        grid-template-columns: 1fr;
+      }
+
+      .stage {
+        min-height: 0;
+      }
+
+      .stage:not(:last-child)::after {
+        top: auto;
+        right: 50%;
+        bottom: -14px;
+        transform: rotate(135deg);
+      }
+    }
+
+    @media (max-width: 720px) {
+      main {
+        width: min(100% - 22px, 1180px);
+        padding-top: 28px;
+      }
+
+      .summary-grid,
+      .snapshot-grid,
+      .render-grid,
+      .assessment-grid,
+      .lanes,
+      .priority-grid,
+      .invariants {
+        grid-template-columns: 1fr;
+      }
+
+      .card {
+        min-height: 0;
+      }
+    }
+
+    @media print {
+      :root {
+        color-scheme: light;
+        --bg: #ffffff;
+        --surface: #ffffff;
+        --surface-raised: #f7f8fa;
+        --text: #111827;
+        --muted: #4b5563;
+        --line: #d1d5db;
+        --shadow: none;
+      }
+
+      body {
+        background: #ffffff;
+      }
+
+      main {
+        width: 100%;
+        padding: 0;
+      }
+
+      nav {
+        display: none;
+      }
+
+      section,
+      .panel,
+      .lane,
+      .priority-card,
+      table {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">OpenCode Mobile · Message Store</p>
+      <h1>Message display &amp; rendering pipeline</h1>
+      <p class="lead">
+        Phases 1–6 shipped architecture from list-shaped
+        <code>DisplayMessage</code> observation through internal
+        <code>DisplayFrame</code> → <code>TimelineFrame</code>, declared-ID
+        hosts, and native SwiftUI/UIKit + Compose pixels. Public observation
+        stays list-shaped; <code>syncHealth</code> is assert-only.
+      </p>
+      <div class="meta">
+        <span class="badge">Implemented</span>
+        <span>Platforms: iOS + Android</span>
+        <span>Updated: 2026-07-27</span>
+        <span>Canonical source:
+          <a href="./message-display-rendering-pipeline.md">Markdown architecture</a>
+        </span>
+      </div>
+      <nav aria-label="Page sections">
+        <a href="#architecture">Architecture</a>
+        <a href="#ownership">State ownership</a>
+        <a href="#rendering">Rendering</a>
+        <a href="#platforms">Platforms</a>
+        <a href="#evaluation">Evaluation</a>
+        <a href="#follow-ups">7b follow-ups</a>
+      </nav>
+    </header>
+
+    <section aria-label="Architecture summary">
+      <div class="summary-grid">
+        <article class="card">
+          <span class="label">Input boundary</span>
+          <strong>Complete display snapshots</strong>
+          <p>The domain publishes prepared messages; views never parse markdown or merge transport events.</p>
+        </article>
+        <article class="card">
+          <span class="label">Presentation seam</span>
+          <strong>Pure projector</strong>
+          <p>Internal <code>DisplayFrame</code> → <code>TimelineFrame</code> with stable <code>blockID</code>s and declared ID sets.</p>
+        </article>
+        <article class="card">
+          <span class="label">Screen model</span>
+          <strong><code>timelineFrame</code> on UiState</strong>
+          <p>Reuse the current frame when composer / session-info / review / command republish.</p>
+        </article>
+        <article class="card">
+          <span class="label">View ownership</span>
+          <strong>Native layout + scroll</strong>
+          <p>List geometry, auto-follow, and deferred native styling stay local to the view layer.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2>Shared architecture</h2>
+      <p class="section-lead">
+        Both apps implement the same conceptual modules with native types and
+        concurrency tools. Interfaces are immutable snapshots and explicit
+        actions—not shared UI framework objects.
+      </p>
+      <div class="architecture" aria-label="Message display architecture flow">
+        <article class="stage">
+          <span class="num">01 · Domain</span>
+          <h3>Prepared snapshot</h3>
+          <ul>
+            <li><code>DisplayMessagePipeline</code></li>
+            <li><code>MessageRepository</code></li>
+            <li><code>DisplayMessageListUpdate</code></li>
+          </ul>
+        </article>
+        <article class="stage">
+          <span class="num">02 · Projection</span>
+          <h3>Timeline region</h3>
+          <ul>
+            <li>Internal <code>DisplayFrame</code></li>
+            <li>Pure projector → <code>TimelineFrame</code></li>
+            <li>Declared ID sets + optimistic inputs</li>
+          </ul>
+        </article>
+        <article class="stage">
+          <span class="num">03 · State</span>
+          <h3>Screen Model</h3>
+          <ul>
+            <li><code>timelineFrame</code> on UiState</li>
+            <li>Reuse frame for non-timeline regions</li>
+            <li>Forward user actions</li>
+          </ul>
+        </article>
+        <article class="stage">
+          <span class="num">04 · View</span>
+          <h3>Timeline view</h3>
+          <ul>
+            <li>Select state and role UI</li>
+            <li>Host stable message rows</li>
+            <li>Own interaction routing</li>
+          </ul>
+        </article>
+        <article class="stage">
+          <span class="num">05 · Native output</span>
+          <h3>Layout + pixels</h3>
+          <ul>
+            <li>Compose or SwiftUI/UIKit</li>
+            <li>Prepared markdown materialization</li>
+            <li>Viewport and auto-follow</li>
+          </ul>
+        </article>
+      </div>
+      <div class="boundary-note">
+        <strong>Hard boundary</strong>
+        <span>No view parses markdown, mutates domain messages, or decides REST/SSE reconciliation.</span>
+      </div>
+    </section>
+
+    <section id="ownership">
+      <h2>State ownership</h2>
+      <p class="section-lead">
+        Each kind of state has one clear owner. Renderer-local and viewport
+        changes never feed back into the domain message pipeline.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>Owner</th>
+              <th>Contract</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Prepared message snapshots</td>
+              <td><code>MessageRepository</code> / <code>DisplayMessagePipeline</code></td>
+              <td>Complete visual snapshot or load failure.</td>
+            </tr>
+            <tr>
+              <td>Timeline state and optimistic rows</td>
+              <td><code>SessionChatTimeline</code></td>
+              <td>Loading, empty, ready, error, refresh, and projected rows.</td>
+            </tr>
+            <tr>
+              <td>Whole-screen state</td>
+              <td><code>SessionChatViewModel</code></td>
+              <td>One immutable state including <code>timelineFrame</code>; reuse frame when non-timeline regions change.</td>
+            </tr>
+            <tr>
+              <td>Scroll and pinned geometry</td>
+              <td>Timeline view / native host</td>
+              <td>View-local position, auto-follow arming, and scroll-to-end visibility.</td>
+            </tr>
+            <tr>
+              <td>Deferred native text styling</td>
+              <td>Markdown renderer / iOS bubble</td>
+              <td>Local paint upgrade without a new row or pipeline publish.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="snapshot-grid">
+        <article class="panel blue">
+          <h3>Coalescible live work</h3>
+          <p>
+            Repository emissions are complete visual snapshots. While
+            projection is busy, an intermediate live snapshot may be replaced
+            by the newest snapshot.
+          </p>
+          <ul>
+            <li>Android: one latest live frame plus <code>Flow.conflate()</code>.</li>
+            <li>iOS: one latest pending observation update.</li>
+          </ul>
+        </article>
+        <article class="panel violet">
+          <h3>Required operations</h3>
+          <p>
+            Explicit load, refresh, and post-send applies cannot be dropped
+            because callers await their state or completion.
+          </p>
+          <ul>
+            <li>Android: required FIFO apply queue.</li>
+            <li>iOS: directly awaited MainActor operations.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="rendering">
+      <h2>Projection and native rendering</h2>
+      <p class="section-lead">
+        The timeline converts prepared domain messages into ordered
+        presentation blocks. The view then selects native design-system
+        components without interpreting transport or markdown syntax.
+      </p>
+      <div class="rule-strip" aria-label="Structural block rules">
+        <div class="rule"><strong>Text</strong>Adjacent parts merge with a newline.</div>
+        <div class="rule"><strong>Attachments</strong>Remain in server part order.</div>
+        <div class="rule"><strong>Tool cards</strong>Assistant-only; supported actions remain native.</div>
+        <div class="rule"><strong>Tool groups</strong>Consecutive read/glob/grep collapse when count ≥ 2.</div>
+      </div>
+
+      <div class="render-grid">
+        <article class="panel green">
+          <h3>Role rendering</h3>
+          <ul>
+            <li><strong>User:</strong> trailing <code>OpenCodeOutgoingMessage</code>.</li>
+            <li><strong>Assistant:</strong> ordered text, attachment, tool-card, and tool-group components.</li>
+            <li><strong>Command/tool/unknown:</strong> conservative fallback bubble.</li>
+            <li>Plain bubbles use tap; markdown bubbles use long press so links remain tappable.</li>
+          </ul>
+        </article>
+        <article class="panel amber">
+          <h3>Prepared markdown boundary</h3>
+          <ul>
+            <li><code>OpenCodeRenderedMarkdown</code> receives an already prepared document.</li>
+            <li>Only <code>http</code> and <code>https</code> links open.</li>
+            <li>Markdown is per text block via <code>BlockDecorationCache</code> (<code>blockID</code> + <code>contentRevision</code>).</li>
+            <li><code>DisplayMessage.renderedMarkdown</code> is a residual sole-text bridge only; no <code>singleTextBlock</code> paint gate.</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Large-content behavior</th>
+              <th>Shared contract</th>
+              <th>iOS addition</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Streaming code fence ≥ 2,000 characters</td>
+              <td>Remain plain monospace until final preparation.</td>
+              <td>No difference.</td>
+            </tr>
+            <tr>
+              <td>Finalized code/diff ≥ 2,000 characters</td>
+              <td>Build native attributed styling away from the UI executor; replace the plain placeholder when ready.</td>
+              <td>Captures the native color palette before detached construction.</td>
+            </tr>
+            <tr>
+              <td>Assistant markdown ≥ 3,000 characters</td>
+              <td>Android hosts the prepared tree normally.</td>
+              <td>Paints plain for one frame plus 32 ms before attaching the markdown tree to protect cell configuration.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="scroll">
+      <h2>Scroll and layout ownership</h2>
+      <p class="section-lead">
+        Auto-follow is a reusable view contract. Pinned geometry only arms or
+        disarms following; while armed, content and viewport changes settle at
+        the exact end.
+      </p>
+      <div class="render-grid">
+        <article class="panel green">
+          <h3>Shared behavior</h3>
+          <ul>
+            <li>Initial ready content snaps to the end without animation.</li>
+            <li>A deliberate user scroll away disarms follow.</li>
+            <li>Append, content growth, and viewport shrink anchor the exact end while armed.</li>
+            <li>The scroll-to-end action re-arms follow.</li>
+            <li>Active dragging and deceleration always beat programmatic correction.</li>
+          </ul>
+        </article>
+        <article class="panel blue">
+          <h3>Native hosts</h3>
+          <ul>
+            <li><strong>Android:</strong> reverse-layout <code>LazyColumn</code>; bottom anchor at layout index <code>0</code>.</li>
+            <li><strong>iOS:</strong> diffable <code>UICollectionView</code>; last message is the visual bottom item.</li>
+            <li>Hosts apply declared <code>inserted</code> / <code>changed</code> / <code>removed</code> / <code>layoutChanged</code> IDs from <code>TimelineFrame</code> (no live-path <code>layoutSignature</code> or list-wide Equatable).</li>
+            <li>Unarmed: capture/restore visible anchor ID+offset. Armed: settle exact end after layout. Drag: user wins (Android newest-immutable; iOS cell-apply coalesce).</li>
+            <li>Short histories remain bottom-aligned.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="platforms">
+      <h2>Platform walkthroughs</h2>
+      <p class="section-lead">
+        The lanes converge on the same product contract while keeping framework
+        and executor choices native.
+      </p>
+      <div class="lanes">
+        <article class="lane android">
+          <div class="lane-head">
+            <h3>Android</h3>
+            <p>StateFlow · worker projection · reverse LazyColumn · Compose</p>
+          </div>
+          <ol class="steps">
+            <li>
+              <strong><code>SessionChatScreen</code></strong>
+              <span>Binds session identity and collects state with lifecycle awareness.</span>
+            </li>
+            <li>
+              <strong><code>SessionChatViewModel</code></strong>
+              <span>Combines region StateFlows into one <code>SessionChatUiState</code>.</span>
+            </li>
+            <li>
+              <strong><code>SessionChatTimeline</code></strong>
+              <span>Observes display snapshots, reconciles optimism, and projects rows on a worker dispatcher.</span>
+            </li>
+            <li>
+              <strong><code>SessionChatTimelineView</code></strong>
+              <span>Selects the timeline state and creates the message-list timeline handle.</span>
+            </li>
+            <li>
+              <strong>Reverse <code>LazyColumn</code></strong>
+              <span>Hosts stable message IDs and role/block components.</span>
+            </li>
+            <li>
+              <strong><code>OpenCodeRenderedMarkdown</code></strong>
+              <span>Materializes prepared blocks and defers large annotation construction.</span>
+            </li>
+          </ol>
+        </article>
+
+        <article class="lane ios">
+          <div class="lane-head">
+            <h3>iOS</h3>
+            <p>Observation · MainActor projection · UICollectionView · SwiftUI/UIKit</p>
+          </div>
+          <ol class="steps">
+            <li>
+              <strong><code>SessionChatView</code></strong>
+              <span>Owns the observable model and starts/stops timeline observation with screen lifecycle.</span>
+            </li>
+            <li>
+              <strong><code>SessionChatViewModel</code></strong>
+              <span>Receives region callbacks and publishes one MainActor UI state.</span>
+            </li>
+            <li>
+              <strong><code>SessionChatTimeline</code></strong>
+              <span>Can warm-open, coalesces live updates, and cooperatively projects rows.</span>
+            </li>
+            <li>
+              <strong><code>SessionChatTimelineView</code></strong>
+              <span>Selects the state and owns <code>TimelineScrollController</code>.</span>
+            </li>
+            <li>
+              <strong><code>MessageListTimelineHost</code></strong>
+              <span>Applies stable-ID diffable snapshots to self-sizing SwiftUI-hosted collection cells.</span>
+            </li>
+            <li>
+              <strong><code>OpenCodeRenderedMarkdown</code></strong>
+              <span>Materializes prepared blocks and defers large native styling or the first large-tree paint.</span>
+            </li>
+          </ol>
+        </article>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Responsibility</th>
+              <th>Android</th>
+              <th>iOS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Observe display snapshots</td>
+              <td><code>Flow.conflate()</code> in timeline region</td>
+              <td>Observation task with one latest pending update</td>
+            </tr>
+            <tr>
+              <td>Structural row projection</td>
+              <td>Worker dispatcher, then <code>StateFlow</code></td>
+              <td>MainActor with cooperative yields</td>
+            </tr>
+            <tr>
+              <td>Required operations</td>
+              <td>FIFO-required apply queue</td>
+              <td>Direct awaited MainActor operation</td>
+            </tr>
+            <tr>
+              <td>Timeline host</td>
+              <td>Reverse <code>LazyColumn</code></td>
+              <td>Diffable <code>UICollectionView</code> with SwiftUI cells</td>
+            </tr>
+            <tr>
+              <td>Native code/diff styling</td>
+              <td><code>Dispatchers.Default</code></td>
+              <td>Detached utility task</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="evaluation">
+      <h2>Evaluation</h2>
+      <div class="assessment-grid">
+        <article class="panel strengths">
+          <h3>What is working well</h3>
+          <ul>
+            <li>Domain preparation stays outside the UI.</li>
+            <li>The timeline is a focused presentation adapter.</li>
+            <li>The Screen Model exposes one state and explicit actions.</li>
+            <li>Rendering remains component-first and platform-native.</li>
+            <li>Viewport state is isolated from message state.</li>
+            <li>Latest-only coalescing exists only at safe complete-snapshot seams.</li>
+          </ul>
+        </article>
+        <article class="panel risk">
+          <h3>Remaining deferred work</h3>
+          <p>
+            Phase 7b ships soak <strong>coverage debt</strong> only. Architecture
+            items (public <code>DisplayFrame</code>, Sync/Pipeline absorption,
+            fingerprint retirement, change-set hint, <code>syncHealth</code> UI)
+            are parked with reopen triggers — see
+            <a href="./message-display-rendering-7b-plan.md">7b plan</a>.
+            Phases 1–6 host/projector work is shipped.
+          </p>
+          <p>
+            Intentional mechanism gaps (warm cache, Android drag
+            newest-immutable) stay in <code>parity-gaps.md</code>.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="follow-ups">
+      <h2>Shipped vs Phase 7b follow-ups</h2>
+      <p class="section-lead">
+        Phases 1–6 shipped per-block Markdown, stable <code>blockID</code>s,
+        pure <code>DisplayFrame</code> → <code>TimelineFrame</code> projectors,
+        declared-ID hosts, and <code>timelineFrame</code> on UiState. Remaining
+        items are Phase <strong>7b</strong>: ship coverage (scenarios 4–7);
+        park architecture with reopen triggers — not unfinished Phase 5/6
+        host work.
+      </p>
+      <div class="priority-grid">
+        <article class="priority-card p1">
+          <span class="priority">Done</span>
+          <h3>Per-block Markdown + stable block IDs</h3>
+          <p>
+            <code>BlockDecorationCache</code> keys decoration by
+            <code>blockID</code> + <code>contentRevision</code>. Sole-text
+            <code>renderedMarkdown</code> is a residual bridge only.
+          </p>
+          <span class="outcome">Outcome: interleaved text blocks can each carry Markdown.</span>
+        </article>
+        <article class="priority-card p1">
+          <span class="priority">Done</span>
+          <h3>Pure projector + declared layout IDs</h3>
+          <p>
+            Pure projector emits <code>contentRevision</code> /
+            <code>layoutRevision</code> and declared ID sets. Hosts apply those
+            sets; no live-path <code>layoutSignature</code> or list-wide Equatable.
+          </p>
+          <span class="outcome">Outcome: one deliberate invalidation contract.</span>
+        </article>
+        <article class="priority-card p1">
+          <span class="priority">7b ship</span>
+          <h3>Soak coverage debt</h3>
+          <p>
+            Move matrix scenarios 4–7 (repeated overflow, parser failure, rapid
+            A→B→A, related pressure) from partial → full. No API shape change.
+          </p>
+          <span class="outcome">Outcome: gate-honest coverage without architecture churn.</span>
+        </article>
+        <article class="priority-card p2">
+          <span class="priority">Parked</span>
+          <h3>Public <code>DisplayFrame</code> observation</h3>
+          <p>
+            Keep list-shaped <code>DisplayMessageListUpdate</code>. Public flip
+            is won’t-do under 7b; reopen only if a second consumer needs frame
+            metadata.
+          </p>
+          <span class="outcome">Outcome: intentional seam; not a temporary bug.</span>
+        </article>
+        <article class="priority-card p2">
+          <span class="priority">Parked</span>
+          <h3>Engine absorption + fingerprint gates</h3>
+          <p>
+            Intentional 3-layer (Engine facade + Sync + Pipeline). Poll
+            fingerprints and unwired change-set hint stay unless cost/bug
+            reopen triggers fire.
+          </p>
+          <span class="outcome">Outcome: no cleanup without a trigger.</span>
+        </article>
+        <article class="priority-card p3">
+          <span class="priority">Parked</span>
+          <h3>Optional MainActor / paint probes / p95 CI</h3>
+          <p>
+            Move iOS projection off MainActor only if measured. Richer paint
+            probes and device p95 CI only if release process requires them.
+          </p>
+          <span class="outcome">Outcome: measurement-driven, not speculative.</span>
+        </article>
+      </div>
+    </section>
+
+    <section id="invariants">
+      <h2>Shared invariants</h2>
+      <div class="invariants">
+        <div class="invariant">Rows are immutable value snapshots.</div>
+        <div class="invariant">Message identity is stable list/cell identity.</div>
+        <div class="invariant">Only complete live snapshots may coalesce.</div>
+        <div class="invariant">Explicit operation completion is never lost.</div>
+        <div class="invariant">Optimistic rows survive quiet live refresh.</div>
+        <div class="invariant">Markdown reuse requires matching identity and source.</div>
+        <div class="invariant">User scroll intent overrides auto-follow.</div>
+        <div class="invariant">Deferred paint never duplicates or reorders rows.</div>
+        <div class="invariant">Both platforms preserve block order and actions.</div>
+      </div>
+    </section>
+
+    <footer>
+      <span>
+        Source of truth:
+        <a href="./message-display-rendering-pipeline.md">message-display-rendering-pipeline.md</a>
+      </span>
+      <span>
+        Upstream:
+        <a href="./assistant-message-pipeline.md">assistant-message-pipeline.md</a>
+      </span>
+      <span>No runtime dependencies · Print-friendly · Light/dark mode</span>
+    </footer>
+  </main>
+</body>
+</html>

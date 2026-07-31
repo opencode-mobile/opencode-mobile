@@ -1,8 +1,8 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
 import dev.opencode.mobile.markdown.MarkdownDocument
-import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 
 data class RenderedMarkdownGalleryMock(
@@ -15,7 +15,7 @@ data class RenderedMarkdownGalleryMock(
 )
 
 object RenderedMarkdownGalleryMocks {
-    private val codeHighlighter = OpenCodeBundledJoniMarkdownHighlighter.default()
+    private val codeHighlighter = OpenCodeSemanticFallbackHighlighter
 
     private val assistantMarkdown =
         """

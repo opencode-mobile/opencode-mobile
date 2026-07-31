@@ -12,7 +12,7 @@ fresh without reinstalling.
   Clear buttons.
 - Clears: connection profile (URL + username) -> password
   (Keychain/EncryptedSharedPreferences) -> worktrees -> imported themes ->
-  in-memory LiveStore caches.
+  in-memory Live Store and message synchronization caches.
 - Disconnects ActiveConnectionManager (app shows "Connect to a server").
 - Stays on Settings screen after clearing.
 - Best-effort per-item clearing; failures are silently swallowed.
@@ -35,8 +35,10 @@ None (all operations are local).
   Data orchestration).
 - `ActiveConnectionManager` -- new `disconnect()` method.
 - `ConnectionSessionCoordinator` -- orchestrates the clearing sequence.
-- `SessionLiveStore`, `SessionStatusLiveStore`, `MessageLiveStore` -- new
-  `clearCache()` method.
+- `SessionLiveStore`, `SessionStatusLiveStore`, `PermissionLiveStore`, and
+  `QuestionLiveStore` -- `clearCache()` methods.
+- `MessageRepository.clearMessageCache()` -- clears the `MessageSync` store and
+  shared observation cache.
 - `ThemeManager` -- new `clearAll()` method re-loads the bundled theme.
 
 ## UI States

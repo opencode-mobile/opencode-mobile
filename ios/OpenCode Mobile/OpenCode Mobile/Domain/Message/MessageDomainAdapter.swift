@@ -50,7 +50,7 @@ struct MessageDomainAdapter: Sendable {
         switch dto.type {
         case "text":
             guard let text = dto.text else { return nil }
-            return .text(TextPart(text: text, isStreaming: false))
+            return .text(TextPart(id: dto.id, text: text, isStreaming: false))
         case "file":
             guard let url = dto.url,
                   let mime = dto.mime?.lowercased(),
@@ -69,18 +69,20 @@ struct MessageDomainAdapter: Sendable {
             )
         case "tool":
             guard let toolName = dto.tool else { return nil }
-            return .tool(toolPart(toolName: toolName, callID: dto.callID, state: dto.state))
+            return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         default:
             return nil
         }
     }
 
     func toolPart(
+        id: String? = nil,
         toolName: String,
         callID: String? = nil,
         state: MessageToolStateDTO?
     ) -> ToolPart {
         ToolPart(
+            id: id,
             toolName: toolName,
             status: toolStatus(from: state?.status),
             title: state?.title.flatMap { $0.isEmpty ? nil : $0 },

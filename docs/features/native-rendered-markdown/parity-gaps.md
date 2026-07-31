@@ -1,5 +1,43 @@
 # Native Rendered Markdown Parity Gaps
 
+## TextMate Developer Logbook
+
+- Status: aligned
+- Area: developer observability
+- Shared intent: one persisted entry per actual finalized TextMate fence
+  attempt, with the same content-free schema, outcomes, UTF-16 counts, stage
+  summaries, retention, clear behavior, and store-health reporting.
+- Current iOS state: each engine result returns the same content-free
+  observation, which is submitted without blocking to a serial Application
+  Support JSONL store; Developer Tools exposes the bounded logbook.
+- Current Android state: each shared engine result returns the same observation,
+  which is submitted without blocking to a serial files-directory JSONL store;
+  Developer Tools exposes the same bounded logbook.
+- Intentional platform difference: only the native storage location and
+  concurrency primitive differ. iOS uses a utility `DispatchQueue` plus lock;
+  Android uses a coroutine writer plus bounded channel.
+- Owner or next action: keep observation schema parity; language toggles and
+  logbook speed bands are aligned on both platforms.
+
+## TextMate Execution And Memory Ownership
+
+- Status: Phases 1–6 closed and aligned; physical Tier B validation remaining
+- Area: architecture and performance
+- Shared intent: both apps should expose the same reusable highlighting-engine
+  contract and share priority, cancellation, cache budgets, quality outcomes,
+  metric names, work limits, and release gates while retaining native regex and
+  executor adapters.
+- Current iOS state: default-on TextMate with allowlist v1; serial KMP/libonig
+  owner; memory/thermal/low-power hooks drive trim and background disablement.
+- Current Android state: default-on TextMate with allowlist v1; single-lane
+  KMP/Joni owner; ComponentCallbacks2 / power-save hooks drive trim and
+  background disablement.
+- Intentional platform difference: regex backend only (Joni vs libonig) and
+  lease disposal (`onig_free` vs JVM GC).
+- Owner or next action: run the remaining physical-device Tier B / full soak
+  checklist in `phase-6-calibration.md` (operator loop + per-language
+  scorecards + logbook pulls) before store release.
+
 ## TextMate Highlighter
 
 - Status: temporary
@@ -8,15 +46,15 @@
   Oniguruma-compatible native backend and Shiki-level breadth.
 - Current iOS state: SwiftUI renderer calls the KMP JSON bridge, which loads
   bundled TextMate grammar resources from the app bundle and tokenizes through
-  the shared TextMate tokenizer with `OpenCodeLibOnigRegexBackend` (libonig via
+  the shared TextMate tokenizer with `OpenCodeLibOnigRegexRuntime` (libonig via
   Kotlin/Native cinterop). Production iOS no longer emits
   `HighlighterBackendFallback` for the regex backend. The hybrid
   `OpenCodeKotlinRegexHybridTextMateBackend` (Kotlin `Regex` shim; deprecated
   typealias `OpenCodeOnigurumaRegexBackend`) remains in `commonMain` for
   regression comparisons only.
-- Current Android state: session chat, component gallery, and the KMP platform
-  provider all resolve the same bundled Joni TextMate highlighter through
-  `OpenCodeBundledJoniMarkdownHighlighter`. JavaScript HttpClient and withCache
+- Current Android state: Session Chat resolves the bundled Joni TextMate
+  highlighter only through the injected engine. Component Gallery uses the
+  stateless semantic fallback. JavaScript HttpClient and withCache
   regression snippets pass Joni and iOS-hybrid backend regression coverage.
   A top-language TextMate pack is bundled with Shiki golden fixtures and smoke
   coverage for the requested Shiki-supported languages, including Java, C#,
@@ -59,17 +97,47 @@
 - Area: performance
 - Shared intent: cold Session Chat open should prepare styled markdown documents
   in roughly interactive time, including large syntax-highlighted code blocks.
-- Current state (2026-06-27): manual **Big Session** cold open is **~2.5 s** on
-  iOS and Android with libonig on iOS, full-history enrichment on both platforms,
-  and no `HighlighterBackendFallback` on the production regex path.
+- Last measured baseline (2026-06-27): manual **Big Session** cold open was
+  **~2.5 s** on iOS and Android with libonig on iOS, all-at-once full-history
+  enrichment on both platforms, and no `HighlighterBackendFallback` on the
+  production regex path.
+- Current implementation (2026-07-31 / OPE-82 + OPE-92): both platforms expose
+  every history row immediately. Histories with at least 4,000
+  markdown-candidate characters publish a format-first scaffold (structure-only
+  when TextMate is on, full semantic when off), then upgrade TextMate colors
+  newest-first in cancellable increments when enabled. A newer live snapshot
+  cancels stale history enrichment. No replacement Big Session measurement has
+  been recorded, so the earlier ~2.5 s result is historical rather than a claim
+  for the staged pipeline.
 - iOS still round-trips through `OpenCodeMarkdownJson.parseMarkdownJson` before
   Swift decodes the render tree; Android calls `OpenCodeMarkdownParser.parse()`
   directly. The JSON bridge is a remaining optimization target, not a blocker
   for Big Session on current hardware.
 - Historical: hybrid regex backend + staged window reached **~27 s** styled
   timeline on the same fixture (2026-06-24 probes).
-- Owner or next action: optional JSON-bridge slimming; code-block virtualization
-  if larger sessions regress. See `docs/features/session-chat/progress.md`.
+- Owner or next action: measure the staged pipeline on a deterministic large
+  fixture; optional JSON-bridge slimming or code-block virtualization if larger
+  sessions still regress. See `docs/features/session-chat/progress.md`.
+
+## Final Native Annotation Construction
+
+- Status: temporary
+- Area: performance
+- Shared intent: applying syntax and inline style spans for a large finalized
+  document must not block scrolling or input after parsing has completed.
+- Current Android state: code, diff, and inline annotated strings at or above
+  2,000 characters are built on `Dispatchers.Default`; Compose shows a plain
+  attributed-string placeholder until the styled value is ready.
+- Current iOS state: code and diff attributed strings at or above 2,000
+  characters are built off the main actor via UIKit colors after a plain
+  placeholder frame (Android parity). Small fences stay synchronous. Timeline
+  applies are deferred while the user is actively scrolling, and scroll-to-end
+  jumps without animation when the remaining distance is large.
+- Reason: OPE-82 moved the Android construction hot path off composition; iOS
+  now mirrors that path for large fences after profiling MainActor hitches on
+  Greeting-scale histories.
+- Owner or next action: none for large code/diff; revisit large inline-only
+  documents if they still hitch without fences.
 
 ## Code Block Layout
 

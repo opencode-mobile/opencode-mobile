@@ -298,6 +298,7 @@ class MessageDomainAdapterTest {
         assertTrue(part is MessagePart.Text)
         assertEquals("Hello", (part as MessagePart.Text).text)
         assertFalse(part.isStreaming)
+        assertEquals("prt-1", part.id)
     }
 
     @Test
@@ -322,6 +323,7 @@ class MessageDomainAdapterTest {
         val tool = part as MessagePart.Tool
         assertEquals("webfetch", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
+        assertEquals("prt-1", tool.id)
         assertEquals("call-1", tool.callId)
         assertNull(tool.title)
         assertNull(tool.error)
@@ -357,7 +359,13 @@ class MessageDomainAdapterTest {
         val tool = adapter.toMessagePart(dto) as MessagePart.Tool
         assertEquals(ToolStatus.Running, tool.status)
         assertEquals("Searching...", tool.title)
-        assertEquals("opencode", tool.input?.get("query")?.jsonPrimitive?.content)
+        assertEquals(
+            "opencode",
+            tool.input
+                ?.get("query")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertEquals("\u23F3 Searching...", adapter.compactToolLabel(tool))
     }
 

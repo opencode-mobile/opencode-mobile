@@ -2,7 +2,7 @@ package dev.opencode.mobile.markdown
 
 /**
  * Temporary Kotlin [Regex] shim used for regression comparisons. Production iOS uses
- * [OpenCodeLibOnigRegexBackend]; Android uses [OpenCodeJoniRegexBackend].
+ * `OpenCodeLibOnigRegexRuntime`; Android uses `OpenCodeJoniRegexRuntime`.
  */
 object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
     override val name: String = "kotlin-regex-hybrid-textmate-bridge"
@@ -11,13 +11,23 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
 
     override fun find(
         pattern: String,
-        input: String,
+        buffer: PreparedTextMateLineBuffer,
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
-    ): TextMateRegexMatch? =
-        specialMatch(pattern, input, startIndex, endIndex, contiguousAnchor)
-            ?: KotlinRegexTextMateRegexBackend.find(pattern, input, startIndex, endIndex, contiguousAnchor)
+        metricsSink: OpenCodeTextMateMetricsSink,
+    ): TextMateRegexMatch? {
+        val input = buffer.source
+        return specialMatch(pattern, input, startIndex, endIndex, contiguousAnchor, metricsSink)
+            ?: KotlinRegexTextMateRegexBackend.find(
+                pattern,
+                buffer,
+                startIndex,
+                endIndex,
+                contiguousAnchor,
+                metricsSink,
+            )
+    }
 
     private fun specialMatch(
         pattern: String,
@@ -25,6 +35,7 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
         startIndex: Int,
         endIndex: Int,
         contiguousAnchor: Int?,
+        metricsSink: OpenCodeTextMateMetricsSink,
     ): TextMateRegexMatch? =
         when {
             pattern == "\\G" ->
@@ -43,35 +54,18 @@ object OpenCodeKotlinRegexHybridTextMateBackend : OpenCodeTextMateRegexBackend {
                     )
                 } else {
                     KotlinRegexTextMateRegexBackend
-                        .find(suffix, input, startIndex, endIndex, contiguousAnchor)
-                        ?.takeIf { it.start == startIndex }
+                        .find(
+                            suffix,
+                            PreparedTextMateLineBuffer.prepare(input, metricsSink),
+                            startIndex,
+                            endIndex,
+                            contiguousAnchor,
+                            metricsSink,
+                        )?.takeIf { it.start == startIndex }
                 }
             }
             else -> null
         }
-
-    private fun anchoredStart(
-        input: String,
-        startIndex: Int,
-        endIndex: Int,
-    ): TextMateRegexMatch? =
-        OpenCodeTextMateRegexContiguousAnchorSupport.contiguousAnchorStartMatch(
-            startIndex = startIndex,
-            endIndex = endIndex,
-            contiguousAnchor = null,
-        )
-
-    private fun anchoredPrefix(
-        suffix: String,
-        input: String,
-        startIndex: Int,
-        endIndex: Int,
-    ): TextMateRegexMatch? {
-        if (suffix.isEmpty()) return anchoredStart(input, startIndex, endIndex)
-        return KotlinRegexTextMateRegexBackend
-            .find(suffix, input, startIndex, endIndex)
-            ?.takeIf { it.start == startIndex }
-    }
 }
 
 @Deprecated(

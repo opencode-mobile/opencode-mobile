@@ -15,6 +15,7 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
+import dev.opencode.mobile.domain.message.SessionMessageEngine
 import javax.inject.Singleton
 
 @Module
@@ -45,18 +46,27 @@ abstract class MessageModule {
         fun provideMessageSync(
             api: MessagesApi,
             adapter: MessageDomainAdapter,
-            store: InMemoryMessageStore,
+            engine: SessionMessageEngine,
             eventStream: ForegroundEventStream,
             liveStoreScope: LiveStoreScope,
+            activeConnectionManager: dev.opencode.mobile.network.ActiveConnectionManager,
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
                     runCatching { api.listMessages(sessionId, directory).map(adapter::toMessage) }
                         .getOrElse { throw adapter.mapError(it) }
                 },
-                store = store,
+                engine = engine,
                 eventStream = eventStream,
                 liveStoreScope = liveStoreScope,
+                connectionProfileIdProvider = {
+                    val connection = activeConnectionManager.current()
+                    if (connection == null) {
+                        "local"
+                    } else {
+                        "${connection.baseUrl.lowercase()}|${connection.username.lowercase()}"
+                    }
+                },
             )
     }
 }

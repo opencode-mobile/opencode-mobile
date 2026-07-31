@@ -72,6 +72,7 @@ struct SessionChatView: View {
                 props: SessionChatTimelineViewProps(
                     timeline: viewModel.uiState.timeline,
                     messages: viewModel.uiState.messages,
+                    timelineFrame: viewModel.uiState.timelineFrame,
                     isRefreshing: viewModel.uiState.isRefreshing,
                     errorMessage: viewModel.uiState.errorMessage,
                     reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
@@ -93,6 +94,16 @@ struct SessionChatView: View {
                             worktree: session.worktree,
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
+                        )
+                    },
+                    onUserScrollDismissKeyboard: {
+                        // Composer UITextView is outside the timeline collection
+                        // view; keyboardDismissMode alone does not resign it.
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
                         )
                     }
                 )
@@ -143,6 +154,7 @@ struct SessionChatView: View {
             composer
         }
         .background(OpenCodeColors.backgroundBase)
+        .keyboardOverlapPadding()
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,
             onRestoreToComposer: { viewModel.restoreComposerText($0) }

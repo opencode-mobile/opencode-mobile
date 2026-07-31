@@ -47,6 +47,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
     func start() {
         stop()
         OpenCodeLog.sse.info("foreground SSE stream starting")
+        _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
         streamTask = Task { @MainActor [weak self] in
@@ -89,6 +90,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         }
         if shouldPublishReconnect {
             OpenCodeLog.sse.info("foreground SSE stream reconnected")
+            _ = ConnectionEpoch.shared.bump()
             publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
             emittedReconnectForCurrentStream = true
         }
@@ -98,10 +100,22 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
 
     @discardableResult
     private func handleStreamEvent(_ event: OpencodeEvent) -> Bool {
-        OpenCodeLog.sse.debug("SSE event type=\(event.type, privacy: .public) session=\(event.sessionID ?? "-", privacy: .public)")
+        switch event.type {
+        case "server.heartbeat":
+            break
+        case "message.part.delta", "message.part.updated", "message.updated", "message.removed", "message.part.removed":
+            OpenCodeLog.sse.info(
+                "SSE event type=\(event.type, privacy: .public) session=\(event.sessionID ?? "-", privacy: .public)"
+            )
+        default:
+            OpenCodeLog.sse.debug(
+                "SSE event type=\(event.type, privacy: .public) session=\(event.sessionID ?? "-", privacy: .public)"
+            )
+        }
         switch event.type {
         case "server.connected":
             markStreamConnected()
+            publish(event)
             return true
         case "server.heartbeat":
             return false

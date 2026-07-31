@@ -56,10 +56,12 @@ internal fun rememberMessageListTimeline(
     messageCount: Int,
     firstMessageId: String?,
     lastMessageId: String?,
-    layoutSignature: Int,
+    layoutAffectingRevision: Long,
     autoFollowEnabled: Boolean,
+    messageIdsChronological: List<String> = emptyList(),
+    growBottomRevision: Long = 0L,
+    listState: LazyListState = rememberLazyListState(),
 ): MessageListTimelineHandle {
-    val listState = rememberLazyListState()
     val density = LocalDensity.current
     val revealThresholdMinPx =
         with(density) { MessageListTimelineDefaults.revealThresholdMin.roundToPx() }
@@ -67,6 +69,9 @@ internal fun rememberMessageListTimeline(
         with(density) { MessageListTimelineDefaults.autoFollowTolerance.roundToPx() }
     val bottomAnchorHeightPx =
         with(density) { MessageListTimelineDefaults.bottomAnchorHeight.roundToPx() }
+    // Unarmed restore needs real chronological IDs; gallery / count-only callers skip.
+    val resolvedMessageIds =
+        messageIdsChronological.takeIf { it.size == messageCount }.orEmpty()
 
     val isPinnedToEnd by remember(
         listState,
@@ -143,8 +148,9 @@ internal fun rememberMessageListTimeline(
         },
     )
 
-    MessageListAutoFollowLayoutSignatureEffect(
-        layoutSignature = layoutSignature,
+    // Armed: declared-ID layout follow → await layout → exact end.
+    MessageListAutoFollowLayoutAffectingEffect(
+        layoutAffectingRevision = layoutAffectingRevision,
         messageCount = messageCount,
         autoFollowEnabled = autoFollowEnabled,
         listState = listState,
@@ -152,6 +158,29 @@ internal fun rememberMessageListTimeline(
         bottomAnchorHeightPx = bottomAnchorHeightPx,
         autoFollowState = autoFollowState,
         scrollController = scrollController,
+    )
+
+    // Armed only: streaming bottom growth without layoutAffecting (no unarmed restore).
+    MessageListAutoFollowGrowBottomEffect(
+        growBottomRevision = growBottomRevision,
+        messageCount = messageCount,
+        autoFollowEnabled = autoFollowEnabled,
+        listState = listState,
+        autoFollowTolerancePx = autoFollowTolerancePx,
+        bottomAnchorHeightPx = bottomAnchorHeightPx,
+        autoFollowState = autoFollowState,
+        scrollController = scrollController,
+    )
+
+    // Unarmed: capture visible anchor ID+offset → restore after layout settles.
+    MessageListUnarmedVisibleAnchorEffect(
+        layoutAffectingRevision = layoutAffectingRevision,
+        messageIdsChronological = resolvedMessageIds,
+        autoFollowEnabled = autoFollowEnabled,
+        listState = listState,
+        autoFollowTolerancePx = autoFollowTolerancePx,
+        bottomAnchorHeightPx = bottomAnchorHeightPx,
+        autoFollowState = autoFollowState,
     )
 
     MessageListAutoFollowAppendEffect(

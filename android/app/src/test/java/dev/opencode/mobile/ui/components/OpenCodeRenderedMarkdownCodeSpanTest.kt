@@ -75,6 +75,22 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
     }
 
     @Test
+    fun streamingNeverForcePlainUnderFormatAlways() {
+        assertEquals(
+            false,
+            forcePlainStreamingCode(isStreaming = true, codeLength = 500),
+        )
+        assertEquals(
+            false,
+            forcePlainStreamingCode(isStreaming = false, codeLength = 5_000),
+        )
+        assertEquals(
+            false,
+            forcePlainStreamingCode(isStreaming = true, codeLength = 50_000),
+        )
+    }
+
+    @Test
     fun pathARolesUseDedicatedSyntaxColorsWhilePlainStaysBody() {
         val code = "count += 1;"
         val colors = testCodeColors()

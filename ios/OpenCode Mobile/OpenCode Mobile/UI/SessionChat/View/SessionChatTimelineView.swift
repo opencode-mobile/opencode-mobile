@@ -4,6 +4,7 @@ import SwiftUI
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
     let messages: [SessionChatRow]
+    let timelineFrame: TimelineFrame
     let isRefreshing: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
@@ -13,10 +14,12 @@ struct SessionChatTimelineViewProps {
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
+    let onUserScrollDismissKeyboard: () -> Void
 
     init(
         timeline: SessionChatTimelineState,
         messages: [SessionChatRow],
+        timelineFrame: TimelineFrame = .empty,
         isRefreshing: Bool,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
@@ -25,10 +28,12 @@ struct SessionChatTimelineViewProps {
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
-        onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in }
+        onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
+        onUserScrollDismissKeyboard: @escaping () -> Void = {}
     ) {
         self.timeline = timeline
         self.messages = messages
+        self.timelineFrame = timelineFrame
         self.isRefreshing = isRefreshing
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
@@ -38,6 +43,7 @@ struct SessionChatTimelineViewProps {
         self.onToolDetailTap = onToolDetailTap
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
+        self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
     }
 }
 
@@ -96,8 +102,10 @@ private struct SessionChatTimelineReadyView: View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: props.messages,
+                applyPacket: .from(props.timelineFrame),
                 scrollController: scrollController,
-                onRefresh: props.onRefresh
+                onRefresh: props.onRefresh,
+                onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard
             ) { message in
                 SessionChatTimelineHostRow(
                     message: message,
@@ -113,6 +121,14 @@ private struct SessionChatTimelineReadyView: View {
             .overlay {
                 if props.isRefreshing {
                     ProgressView()
+                }
+            }
+            .onChange(of: props.timelineFrame.frameRevision) { _, rev in
+                let layoutIDs = props.timelineFrame.layoutAffectingRowIDs
+                if !layoutIDs.isEmpty {
+                    logScroll(
+                        "layoutAffecting count=\(layoutIDs.count) rev=\(rev)"
+                    )
                 }
             }
 
@@ -233,17 +249,19 @@ private struct SessionChatMessageRow: View {
 
 private extension SessionChatRow {
     var outgoingContent: [OpenCodeOutgoingMessageContent] {
-        let content = blocks.enumerated().compactMap { index, block -> OpenCodeOutgoingMessageContent? in
+        let content = blocks.compactMap { block -> OpenCodeOutgoingMessageContent? in
             switch block {
-            case .text(let text):
-                .text(id: String(index), text: text)
-            case .attachment(let file):
+            case .text(let blockID, let text, _):
+                .text(id: blockID, text: text)
+            case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
             case .toolCard, .toolGroup:
                 nil
             }
         }
-        return content.isEmpty ? [.text(id: "message", text: text)] : content
+        return content.isEmpty
+            ? [.text(id: PresentationBlockId.messageFallback(id), text: text)]
+            : content
     }
 }
 
@@ -276,37 +294,52 @@ private struct AssistantMessageContent: View {
 
     private var blocks: [SessionChatTimelineBlock] {
         if message.blocks.isEmpty {
-            return [.text(message.text)]
+            return [
+                .text(
+                    blockID: PresentationBlockId.messageFallback(message.id),
+                    text: message.text,
+                    renderedMarkdown: nil
+                ),
+            ]
         }
         return message.blocks
     }
 
-    private var singleTextBlock: Bool {
-        blocks.filter {
-            if case .text = $0 { return true }
-            return false
-        }.count == 1
+    /// Migration bridge: prefer per-block markdown; fall back to message-root
+    /// only when the block has none and exactly one text block remains.
+    private var textBlockCount: Int {
+        blocks.reduce(0) { count, block in
+            if case .text = block { return count + 1 }
+            return count
+        }
+    }
+
+    private func renderedMarkdown(for blockMarkdown: NativeMarkdownDocument?) -> NativeMarkdownDocument? {
+        if let blockMarkdown { return blockMarkdown }
+        return textBlockCount == 1 ? message.renderedMarkdown : nil
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(blocks, id: \.blockID) { block in
                 switch block {
-                case .text(let text):
+                case .text(_, let text, let blockMarkdown):
+                    let markdown = renderedMarkdown(for: blockMarkdown)
                     AssistantMessageBubble(
                         text: text,
-                        renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil
+                        renderedMarkdown: markdown,
+                        isStreaming: message.isStreaming
                     )
                     .modifier(
                         SessionChatMessageActionsGestureModifier(
-                            renderedMarkdown: singleTextBlock ? message.renderedMarkdown : nil,
+                            renderedMarkdown: markdown,
                             accessibilityLabel: "Assistant message",
                             onOpenMessageActions: onOpenMessageActions
                         )
                     )
-                case .attachment(let file):
+                case .attachment(_, let file):
                     OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
-                case .toolCard(let card):
+                case .toolCard(_, let card):
                     OpenCodeToolCallCard(
                         status: card.status.toolCallCardStatus,
                         title: card.title,
@@ -316,7 +349,7 @@ private struct AssistantMessageContent: View {
                         errorText: card.errorText,
                         action: toolCardAction(for: card)
                     )
-                case .toolGroup(let group):
+                case .toolGroup(_, let group):
                     OpenCodeToolCallCard(
                         status: group.status.toolCallCardStatus,
                         title: group.title,
@@ -356,15 +389,34 @@ private extension FilePart {
 }
 
 private struct AssistantMessageBubble: View {
+    /// Huge markdown trees can stall layout when a doc arrives on an already
+    /// visible plain bubble. Defer ≥3k only in that late-arrival path — not
+    /// when markdown is already prepared on first appear.
+    static let deferredMarkdownCharacterThreshold = 3_000
+
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
+    var isStreaming: Bool = false
+
+    @State private var paintMarkdown: Bool
+
+    init(text: String, renderedMarkdown: NativeMarkdownDocument?, isStreaming: Bool = false) {
+        self.text = text
+        self.renderedMarkdown = renderedMarkdown
+        self.isStreaming = isStreaming
+        // If the pipeline already prepared markdown (including hold-ready open),
+        // paint it immediately. Defer only applies when a doc arrives later on an
+        // already-visible plain bubble (enrich / stream) — see .task below.
+        _paintMarkdown = State(initialValue: renderedMarkdown != nil)
+    }
 
     var body: some View {
         Group {
-            if let renderedMarkdown {
+            if paintMarkdown, let renderedMarkdown {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
-                    variant: .assistantMessage
+                    variant: .assistantMessage,
+                    isStreaming: isStreaming
                 )
             } else {
                 Text(text.isEmpty ? "…" : text)
@@ -379,6 +431,23 @@ private struct AssistantMessageBubble: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+        .task(id: paintTaskID) {
+            guard renderedMarkdown != nil, !paintMarkdown else { return }
+            // Doc arrived after plain paint (enrich while visible). Let the open
+            // frame finish so scroll stays responsive before hosting TextMate trees.
+            guard text.count >= Self.deferredMarkdownCharacterThreshold else {
+                paintMarkdown = true
+                return
+            }
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(32))
+            guard !Task.isCancelled else { return }
+            paintMarkdown = true
+        }
+    }
+
+    private var paintTaskID: String {
+        "\(text.count):\(renderedMarkdown?.sourceHash ?? 0):\(renderedMarkdown?.renderTreeVersion ?? 0)"
     }
 }
 

@@ -15,6 +15,7 @@ internal object OpenCodeTextMateRegexContiguousAnchorSupport {
         contiguousAnchor: Int?,
     ): String {
         if (contiguousAnchor == null || startIndex != contiguousAnchor) return pattern
+        if (!pattern.startsWith("(?<=\\G")) return pattern
         return contiguousLookbehindPrefix.replaceFirst(pattern, "")
     }
 

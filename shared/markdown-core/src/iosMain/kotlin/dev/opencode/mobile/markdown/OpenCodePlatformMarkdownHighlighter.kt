@@ -6,18 +6,29 @@ import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.stringWithContentsOfFile
 
-internal actual fun openCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter = appleMarkdownHighlighter
+internal actual fun defaultOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter =
+    createOpenCodePlatformMarkdownHighlighter()
 
-private val appleMarkdownHighlighter: OpenCodeCodeHighlighter by lazy {
+internal actual fun createOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter {
+        val cacheCoordinator = TextMateWeightedCacheCoordinator()
         val bundle =
             OpenCodeTextMateGrammarBundleLoader
                 .loadBundled(OpenCodeAppleTextMateResourceReader)
                 .bundle
 
-        OpenCodeSyntaxHighlighter(
+        return OpenCodeSyntaxHighlighter(
             grammarBundle = bundle,
-            textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeLibOnigRegexBackend),
+            textMateTokenizer =
+                OpenCodeTextMateNativeTokenizer(
+                    regexBackend = OpenCodeLibOnigRegexRuntime(cacheCoordinator),
+                    cacheCoordinator = cacheCoordinator,
+                ),
         )
+}
+
+object TextMatePackagedLanguageCatalog {
+    fun primaryCanonicalNames(): List<String> =
+        TextMatePackagedLanguages.loadPrimaryCanonicalNames(OpenCodeAppleTextMateResourceReader)
 }
 
 private object OpenCodeAppleTextMateResourceReader : OpenCodeTextMateResourceReader {

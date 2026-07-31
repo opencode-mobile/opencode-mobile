@@ -15,7 +15,7 @@ class DistributedSchedulerReproTest {
         val highlighter =
             OpenCodeSyntaxHighlighter(
                 grammarBundle = bundledGrammarBundle(),
-                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexBackend),
+                textMateTokenizer = OpenCodeTextMateNativeTokenizer(OpenCodeJoniRegexRuntime()),
             )
 
         val document = OpenCodeMarkdownParser.parse(sampleMarkdown(), highlighter)

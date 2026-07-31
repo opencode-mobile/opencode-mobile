@@ -29,6 +29,16 @@ struct EventDomainAdapterTests {
         #expect(event?.sessionID == "ses-1")
     }
 
+    @Test func parseEvent_readsMessagePartDelta() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"message.part.delta","properties":{"sessionID":"ses-1","messageID":"msg-1","partID":"prt-1","field":"text","delta":"Hi"}}}"#
+        )
+        #expect(event?.type == "message.part.delta")
+        #expect(event?.sessionID == "ses-1")
+        #expect(event?.triggersMessageRefresh == true)
+    }
+
     @Test func parseEvent_readsServerConnected() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -107,16 +117,17 @@ final class FakeForegroundEventStream: ForegroundEventStream, @unchecked Sendabl
     }
 
     func start() {
-        connectionState = .connected
-        for continuation in connectionStateContinuations.values {
-            continuation.yield(.connected)
-        }
+        setConnectionState(.connected)
     }
 
     func stop() {
-        connectionState = .idle
+        setConnectionState(.idle)
+    }
+
+    func setConnectionState(_ state: EventStreamConnectionState) {
+        connectionState = state
         for continuation in connectionStateContinuations.values {
-            continuation.yield(.idle)
+            continuation.yield(state)
         }
     }
 

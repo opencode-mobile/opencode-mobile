@@ -1,5 +1,120 @@
 # Session Chat Decisions
 
+## Ship Android region row-reuse (Phase 4)
+
+- Date: 2026-07-28
+- Decision: Implement Android `TimelineProjector.mergeMessageItems` mirroring
+  iOS `reusePrevious` in `SessionChatTimeline.publishDisplayMessages` without
+  waiting for device measurement. Still publish a full message list each frame;
+  reuse object identity for unchanged non-pending rows. Do not reopen parked
+  public `DisplayFrame` observation or introduce a host patch protocol.
+- Reason: Seam was already clear; remaining cost was unproven but the change is
+  small, region-only, and restores cross-platform reuse parity.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: reuse incorrectly keeps a stale row, or pending/insert paths
+  fail to rebuild.
+
+## Defer Phase 4 patch / row-reuse until measured
+
+- Date: 2026-07-28
+- Decision: ~~Do not implement Phase 4 until device acceptance fails or traces
+  show O(n) remapping as a hotspot.~~ **Superseded the same day** by
+  **Ship Android region row-reuse (Phase 4)** after an explicit product choice
+  to implement without waiting on measurement.
+- Reason: Original deferral was a whether-to-ship gate, not an unknown how.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: n/a — superseded.
+
+## Separate content and layout revisions for streaming timeline updates
+
+- Date: 2026-07-28
+- Decision: Session Chat timeline projection must keep two revision planes.
+  `contentRevision` may change every streaming frame; `layoutRevision` changes
+  only when geometry policy says so (structure, real height growth of the
+  newest row, height-changing decoration, streaming→final). Streaming
+  `textLength` alone must not automatically mark a frame layout-affecting.
+  Newest-row streaming growth uses an explicit `GrowBottom` (or equivalent)
+  layout intent: pin if auto-follow is armed; do not run unarmed visible-anchor
+  restore on pure Content updates. Do not animate row height while streaming on
+  either platform. Scroll controllers react to declared layout intents, not
+  every Screen Model republish. Required load / refresh / send applies never
+  coalesce away.
+- Reason: domain display coalescing already bounds SSE publish rate; scroll
+  jank under stream comes from host remeasure / rebind / follow coupling when
+  every length delta is treated as layout-affecting (especially Android
+  `animateContentSize` on the newest reverse-`LazyColumn` row).
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: host-observed GrowBottom under-follows in production, or
+  Instruments shows remaining hitch after Phases 1–3 and Phase 4 patch updates
+  are warranted.
+
+## Use thin TimelineApply classify seam (not host rewrite)
+
+- Date: 2026-07-28
+- Decision: Phase 2 introduces a thin `TimelineApply` / `TimelineApplyKind`
+  classify seam derived from `TimelineFrame` ID sets plus region `isRequired`.
+  Do not rewrite Diffable or Compose invalidation around kinds. Keep
+  `Structure`, `Content`, `GrowBottom`, `Decorate`, and `Required` as a
+  multi-kind set. Partition markdown-only layout bumps into `decorateRowIDs`
+  (streaming end remains Structure). iOS Required applies flush immediately
+  under drag; Decorate stays layout-affecting for follow revisions; Phase 3
+  Android hold pends non-Required kinds (including Decorate) under scroll.
+- Reason: Phase 1 already delivered the scroll-policy split; hosts need kinds
+  for logs and Phase 3 policy without boiling list hosts.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: kinds prove insufficient for further host policy, or Phase 4
+  patch updates need finer invalidation than classify provides.
+
+## Android host latest-wins hold + Session Chat markdown defer
+
+- Date: 2026-07-28
+- Decision: Production Android Session Chat holds `messages` + `timelineFrame`
+  while `LazyListState.isScrollInProgress`, flushing only Required frames
+  immediately (`MessageListTimelineApplyHold`). Large assistant markdown
+  (≥3000 chars) paints plain first, then yield + ~32 ms
+  (`SessionChatMarkdownPaint`). Policy stays view-owned; gallery unchanged;
+  vsync gate stays out.
+- Reason: Match iOS drag pending-apply and large-markdown paint defer without
+  pushing scroll awareness into the Screen Model or region publisher.
+- Plan: [streaming-ui-update-backpressure-plan.md](./streaming-ui-update-backpressure-plan.md)
+- Revisit when: hold drops Structure on settle, Required sticks under fling, or
+  deferred markdown causes a jarring height jump after stream end.
+
+## Suppress iOS self-resize animation + seed row height estimates
+
+- Date: 2026-07-28
+- Decision: Session Chat / Message List host cells use
+  `MessageListTimelineHostCell` to wrap `apply(_:)` and
+  `preferredLayoutAttributesFitting` in disabled CALayer actions so UIKit's
+  default animated self-resize (WWDC22) snaps instead of sliding. Seed
+  compositional `.estimated` height from a per-id last-known height cache with
+  role/length heuristics (`MessageListTimelineHeightEstimating`); keep
+  `selfSizingInvalidation = .enabled` (not including constraints). Do not call
+  `layoutIfNeeded` on pin/apply paths. Escalation (CALayer `action(for:)`, custom
+  layout) only if device still shows visible fall after this slice.
+- Reason: Diffable `animatingDifferences: false` and SwiftUI transaction nil do
+  not wrap UIKit's internal estimate→real frame mutation; flat `estimated(72)`
+  maximized the visible correction.
+- Revisit when: acceptance still shows animated settle, or intrinsic height
+  thrash requires SwiftUI-side stabilization.
+
+## Pin iOS timeline with absolute bottom content offset
+
+- Date: 2026-07-28
+- Decision: Programmatic pin / scroll-to-end / re-pin on iOS
+  `MessageListTimelineHost` always uses
+  `setContentOffset(y: bottomContentOffsetY())` (contentSize − viewport +
+  `adjustedContentInset.bottom`). Do not prefer `scrollToItem(last, .bottom)`.
+  Keep section `bottomContentPadding` as the sole bottom padding; do not bake
+  padding into the last message cell. Do not add a trailing bottom-anchor spacer
+  unless absolute-offset pinning still fails acceptance after estimate retries.
+- Reason: `scrollToItem(.bottom)` targets estimated last-cell frames and lands
+  short of section bottom inset / true scrollable extent, causing short-of-bottom
+  opens and visible estimate→self-size “falling.” OPE-67 already chose absolute
+  bottom offset math.
+- Revisit when: device acceptance still shows short-of-bottom after retries, or
+  a fixed trailing spacer (Android-like anchor) is warranted.
+
 ## Use UIKit-backed virtualized iOS timeline
 
 - Date: 2026-07-20
@@ -181,6 +296,8 @@
 ## Treat cold rich-history loading as a staged performance problem
 
 - Date: 2026-06-24
+- Status: superseded on 2026-07-26 by **Stage large history enrichment without
+  changing history scope** below.
 - Decision: do not publish unstyled raw Markdown merely to shorten the loading
   indicator. Instead, retain native syntax styling and investigate staged
   rendering at the document/block level.
@@ -200,16 +317,71 @@
 - Revisit when: code-block virtualization has been benchmarked against Big
   Session and a representative deterministic fixture is available for CI.
 
+## Stage large history enrichment without changing history scope
+
+- Date: 2026-07-26
+- Ticket: OPE-82
+- Decision: when the initial history contains at least 4,000 markdown-candidate
+  characters, publish the complete message history immediately as native plain
+  text, then enrich markdown-bearing messages newest-first. Yield between
+  enriched snapshots and cancel stale enrichment as soon as a newer live
+  message snapshot arrives. Smaller histories remain an all-at-once prepared
+  publish.
+- Reason: the earlier raw-first experiment still performed one blocking
+  full-history parse before the UI became usable. The staged pipeline keeps
+  every message visible, prioritizes the rows near the initial bottom position,
+  and gives live deltas priority over cold-history decoration.
+- Consequence: this changes presentation readiness, not history scope. Both
+  platforms still expose the full merged history and converge on the same fully
+  rendered result without a manual hydration control.
+- Revisit when: representative device evidence supports changing the 4,000
+  character gate or removing staged enrichment after parser performance
+  improves.
+
 ## Enrich full session history on load (Android parity)
 
 - Date: 2026-06-27
-- Decision: iOS Session Chat enriches the full merged timeline on load, matching
-  Android. Do not gate older messages behind manual hydration.
+- Amended: 2026-07-26 by **Stage large history enrichment without changing
+  history scope** above.
+- Decision: iOS and Android expose the full merged timeline on load. Do not gate
+  older messages behind manual hydration. Large histories may stage markdown
+  presentation after every raw message row is visible.
 - Reason: staged hydration improved cold-open time but diverged product behavior
   and hid history behind an extra action. Optimize performance without splitting
   the visible timeline.
 - Revisit when: a shared virtualization or block-collapse strategy ships on both
   platforms with benchmark evidence.
+
+## Coalesce replaceable live timeline frames
+
+- Date: 2026-07-26
+- Ticket: OPE-82
+- Decision: while timeline transformation or UI publication is busy, live
+  display snapshots may coalesce to the newest available snapshot. Explicit
+  load, refresh, and post-send publications are not replaceable; their state
+  transitions and completion callbacks must run in order. Rebinding or stopping
+  observation cancels pending work from the previous binding.
+- Reason: replaying every token-sized visual snapshot after the server has
+  advanced wastes work and makes the UI lag behind, while dropping an explicit
+  post-send completion can leave the composer stuck in its sending state.
+- Revisit when: the display pipeline publishes structural patches instead of
+  complete snapshots.
+
+## Use distance from the true timeline end for pill visibility
+
+- Date: 2026-07-26
+- Ticket: OPE-82
+- Decision: the scroll-to-end pill appears only after the viewport is farther
+  than the shared near-bottom threshold from the true timeline end. Losing the
+  one-pixel bottom anchor is not sufficient by itself. Distance calculations
+  include the remaining visible portion of the newest row, bottom content
+  padding, and the bottom anchor, including when the newest message is taller
+  than the viewport.
+- Reason: treating an absent anchor as immediately away from the bottom made the
+  Android pill flash during small layout changes and produced incorrect results
+  inside very tall streaming messages. iOS already derives visibility from
+  `UIScrollView` distance from bottom.
+- Revisit when: unread-count semantics replace distance-only pill visibility.
 
 ## Split Timeline and Composer screen regions
 
@@ -311,17 +483,21 @@
 - Decision: Session status observation, SSE connection state, abort, and
   one-shot status refresh lived in `SessionChatStatusBar` on both platforms.
 
-## MessageLiveStore as sole timeline message source
+## Timeline observation stays behind Message Repository
 
 - Date: 2026-06-27
-- Decision: `SessionChatTimeline` subscribes to `MessageLiveStore.observeMessages`
-  on bind/start; it does not call `MessageRepository.listMessages` directly.
-  Pull-to-refresh, post-send reload, and error retry use
-  `MessageLiveStore.refreshMessages`. Initial subscribe failures propagate as
-  `MessageListUpdate.LoadFailed` so the timeline can enter the error state.
-  SSE-driven reconnect reloads keep the last good snapshot on silent failure.
+- Amended: 2026-07-26 by the Message Store refactor.
+- Decision: `SessionChatTimeline` subscribes to
+  `MessageRepository.observeDisplayMessages` on bind/start; it does not call a
+  transport adapter directly. Pull-to-refresh, post-send reload, and error retry
+  use `MessageRepository.refreshDisplayMessages`. `MessageSync` and
+  `DisplayMessagePipeline` remain behind that repository boundary. Initial
+  subscribe failures propagate as `DisplayMessageListUpdate.LoadFailed` so the
+  timeline can enter the error state. SSE-driven reconnect reloads keep the last
+  good snapshot on silent failure.
 - Reason: removes duplicate REST on screen open and the ViewModel-owned message
-  observation loop on iOS; one reactive path from SSE through the live store.
+  observation loop on iOS; one reactive path from SSE through domain
+  synchronization and display preparation.
 - Revisit when: the server exposes push-only history with no REST seed.
 
 ## Derive context usage from best available data

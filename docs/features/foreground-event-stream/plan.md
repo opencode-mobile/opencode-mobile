@@ -10,7 +10,8 @@ After reconnect, state is refreshed from the server.
 - `ForegroundEventStream` domain service wrapping `GET /global/event` SSE.
 - Foreground lifecycle: connect on app foreground, disconnect on background.
 - Reconnect with refresh of session list, statuses, and open chat messages.
-- Session Chat reloads messages on relevant bus events for the bound session.
+- Session Chat incrementally merges relevant message events for the bound
+  session and uses selective authoritative reloads for reconciliation.
 - Home reloads session sections on session lifecycle events.
 - Session status labels on home rows and Session Chat chrome (`Working`, `Retrying`).
 - Screen Model connection states: `idle`, `connecting`, `connected`, `disconnected`, `reconnecting`.
@@ -29,11 +30,21 @@ After reconnect, state is refreshed from the server.
 
 - `GET /global/event` — SSE (`{ payload: { type, properties } }` envelopes).
 - `GET /session/status` — baseline and reconnect status refresh.
-- Existing `GET /session/:id/message` for post-event message reload.
+- Existing `GET /session/:id/message` for initial history, selective
+  reconciliation, reconnect, and the changed-message watchdog.
+
+## Expected Logs
+
+- The foreground stream records connection lifecycle, retry timing, response
+  status, and parsed event type/session ID.
+- `MessageSync` records message synchronization reasons and counts separately.
+- Logs exclude message text, credentials, authorization headers, and full
+  response bodies.
 
 ## Domain Objects
 
-- `OpencodeEvent`, `EventStreamConnectionState`, `ForegroundEventStream`.
+- `OpencodeEvent`, `EventStreamConnectionState`, `ForegroundEventStream`,
+  `MessageSync`, and `InMemoryMessageStore`.
 - Reuses `SessionStatus`, `SessionSummary`, `MessageRepository`, `SessionRepository`.
 
 ## UI States
@@ -43,7 +54,11 @@ After reconnect, state is refreshed from the server.
 
 ## Error States
 
-- Stream transport failure maps to `disconnected` / `reconnecting`; manual home refresh still works.
+- Stream transport failure maps to `disconnected` / `reconnecting`; manual home
+  refresh still works.
+- Message synchronization keeps the last good snapshot when event-driven REST
+  reconciliation fails; a failed idle reconciliation ends local streaming state
+  so the watchdog can recover.
 
 ## Permission Behavior
 

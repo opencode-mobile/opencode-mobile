@@ -4,6 +4,7 @@ import Testing
 import UIKit
 @testable import OpenCode_Mobile
 
+@MainActor
 struct OpenCodeRenderedMarkdownCodeSpanTests {
     @Test func overlappingHttpClientSpansRenderFullSourceText() {
         let code = "HttpClient"
@@ -28,6 +29,78 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         )
 
         #expect(String(output.characters) == code)
+    }
+
+    @Test func attributedCodeCacheIncludesPaletteRevision() {
+        let code = "let"
+        let spans = [NativeCodeSpan(start: 0, end: 3, role: .keyword)]
+        let firstPalette = NativeCodeColorPalette(
+            colors: [.keyword: .red],
+            plain: .black,
+            cacheRevision: 101
+        )
+        let secondPalette = NativeCodeColorPalette(
+            colors: [.keyword: .blue],
+            plain: .black,
+            cacheRevision: 102
+        )
+
+        let first = NativeMarkdownAttributedString.code(code, spans: spans, palette: firstPalette)
+        let second = NativeMarkdownAttributedString.code(code, spans: spans, palette: secondPalette)
+        guard let firstColor = NSAttributedString(first).attribute(
+            .foregroundColor,
+            at: 0,
+            effectiveRange: nil
+        ) as? UIColor,
+            let secondColor = NSAttributedString(second).attribute(
+                .foregroundColor,
+                at: 0,
+                effectiveRange: nil
+            ) as? UIColor
+        else {
+            Issue.record("Expected attributed code colors")
+            return
+        }
+        #expect(hex(firstColor) == "#ff0000")
+        #expect(hex(secondColor) == "#0000ff")
+    }
+
+    @Test func parallelTextMateFirstUsePreservesEveryFenceSource() async {
+        let fixtures = [
+            ("swift", "struct PhaseOne { let value = 1 }"),
+            ("kotlin", "data class PhaseOne(val value: Int)"),
+            ("typescript", "const phaseOne: number = 1"),
+            ("python", "def phase_one():\n    return 1"),
+        ]
+
+        let documents = await withTaskGroup(of: (Int, NativeMarkdownDocument).self) { group in
+            for index in 0..<16 {
+                group.addTask {
+                    let fixture = fixtures[index % fixtures.count]
+                    let markdown = "```\(fixture.0)\n\(fixture.1)\n```"
+                    let document = await highlightedDocument(markdown, ownerKey: "parallel-\(index)")
+                    return (index, document)
+                }
+            }
+
+            var collected: [(Int, NativeMarkdownDocument)] = []
+            for await document in group {
+                collected.append(document)
+            }
+            return collected.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+
+        #expect(documents.count == 16)
+        for (index, document) in documents.enumerated() {
+            let expected = fixtures[index % fixtures.count].1
+            let code =
+                document.blocks.compactMap { block -> String? in
+                    guard case .codeBlock(_, let code, _) = block else { return nil }
+                    return code
+                }.first
+            #expect(code == expected)
+            #expect(!document.diagnostics.contains { $0.kind == "SwiftBridgeFallback" })
+        }
     }
 
     @Test func preparerReusesAnExistingFinalDocumentWithoutComparingRuntimeHashes() async {
@@ -59,7 +132,139 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(prepared.renderedMarkdown?.sourceHash == 17)
     }
 
-    @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() {
+    @Test func preparerDoesNotReuseFinalDocumentWhenTextChanges() async {
+        let document = NativeMarkdownDocument(sourceHash: 17, blocks: [.paragraph([.text("Old")])])
+        let previous =
+            DisplayMessage(
+                message: Message(
+                    id: "message-1",
+                    role: .assistant,
+                    text: "# Old",
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                renderedMarkdown: document
+            )
+
+        let prepared = await MessageContentPreparer.shared.prepareMessage(
+            Message(
+                id: "message-1",
+                role: .assistant,
+                text: "# New",
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            previous: previous
+        )
+
+        #expect(prepared.renderedMarkdown?.sourceHash != 17)
+        guard case .heading(_, let inlines)? = prepared.renderedMarkdown?.blocks.first else {
+            Issue.record("Expected changed markdown to be parsed as a heading")
+            return
+        }
+        guard case .text(let headingText)? = inlines.first else {
+            Issue.record("Expected changed heading text")
+            return
+        }
+        #expect(headingText == "New")
+    }
+
+    @Test func preparerReusesStreamingDocumentAsFinalPlaceholder() async {
+        let document = NativeMarkdownDocument(sourceHash: 99, blocks: [.paragraph([.text("Partial")])])
+        let previous =
+            DisplayMessage(
+                message: Message(
+                    id: "message-1",
+                    role: .assistant,
+                    text: "# Partial",
+                    parts: [.text(TextPart(text: "# Partial", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                renderedMarkdown: document
+            )
+        let prepared = await MessageContentPreparer.shared.prepareMessage(
+            Message(
+                id: "message-1",
+                role: .assistant,
+                text: "# Partial",
+                parts: [.text(TextPart(text: "# Partial", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            previous: previous,
+            mode: .finalPlaceholder
+        )
+
+        #expect(prepared.renderedMarkdown?.sourceHash == 99)
+    }
+
+    @Test func preparerFinalAfterPlaceholderUpgradesStreamingDocument() async {
+        let preferences = MarkdownHighlightPreferences.shared
+        let priorTextMateEnabled = preferences.textMateEnabled
+        preferences.setTextMateEnabled(true)
+        MessageContentPreparer.shared.clearDocumentCache()
+        defer {
+            preferences.setTextMateEnabled(priorTextMateEnabled)
+            MessageContentPreparer.shared.clearDocumentCache()
+        }
+
+        let markdown = "```kotlin\nval answer = 42\n```"
+        let streamingMessage = Message(
+            id: "message-1",
+            role: .assistant,
+            text: markdown,
+            parts: [.text(TextPart(text: markdown, isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let finalMessage = Message(
+            id: "message-1",
+            role: .assistant,
+            text: markdown,
+            parts: [.text(TextPart(text: markdown, isStreaming: false))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+
+        let streaming = await MessageContentPreparer.shared.prepareMessage(
+            streamingMessage,
+            mode: .streaming
+        )
+        #expect(streaming.renderedMarkdown != nil)
+        #expect(streaming.awaitingTextMateUpgrade == false)
+
+        let placeholder = await MessageContentPreparer.shared.prepareMessage(
+            finalMessage,
+            previous: streaming,
+            mode: .finalPlaceholder
+        )
+        #expect(placeholder.awaitingTextMateUpgrade)
+        #expect(placeholder.renderedMarkdown?.sourceHash == streaming.renderedMarkdown?.sourceHash)
+
+        let finalized = await MessageContentPreparer.shared.prepareMessage(
+            finalMessage,
+            previous: placeholder,
+            mode: .final
+        )
+        #expect(finalized.renderedMarkdown != nil)
+        #expect(finalized.awaitingTextMateUpgrade == false)
+        // Streaming uses semantic fallback; Final must clear that diagnostic via TextMate.
+        #expect(
+            streaming.renderedMarkdown?.diagnostics.contains { $0.kind == "HighlighterFallback" } == true
+        )
+        #expect(
+            finalized.renderedMarkdown?.diagnostics.contains { $0.kind == "HighlighterFallback" } != true
+        )
+    }
+
+    @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() async {
         let snippet = """
         // HTTP Client with interceptors, retry logic
         class HttpClient {
@@ -76,13 +281,13 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
           }
         }
         """
-        let document = OpenCodeRenderedMarkdownParser.parse(
+        let document = await highlightedDocument(
             """
             ```javascript
             \(snippet)
             ```
             """,
-            variant: .standalone
+            ownerKey: "http-client"
         )
 
         guard case .codeBlock(_, let code, let spans) = document.blocks.first else {
@@ -102,7 +307,15 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(role(for: "#baseUrl", in: code, spans: spans, occurrence: 1) == .property)
     }
 
-    @Test func javaMainClassCodeBlockUsesWebAlignedTokenRoles() {
+    @Test func javaMainClassCodeBlockUsesWebAlignedTokenRoles() async {
+        let preferences = MarkdownHighlightPreferences.shared
+        let priorEnabled = preferences.isLanguageEnabled("java")
+        preferences.setTextMateEnabled(true)
+        preferences.setLanguageEnabled("java", enabled: true)
+        defer {
+            preferences.setLanguageEnabled("java", enabled: priorEnabled)
+        }
+
         let snippet = """
         public class Main {
             public static void main(String[] args) {
@@ -123,13 +336,13 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             }
         }
         """
-        let document = OpenCodeRenderedMarkdownParser.parse(
+        let document = await highlightedDocument(
             """
             ```java
             \(snippet)
             ```
             """,
-            variant: .standalone
+            ownerKey: "java-main"
         )
 
         guard case .codeBlock(_, let code, let spans) = document.blocks.first else {
@@ -145,6 +358,21 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             spans.contains {
                 $0.role == .string && utf16Text(in: code, start: $0.start, end: $0.end).contains("Division by zero")
             }
+        )
+    }
+
+    @Test func streamingNeverForcePlainUnderFormatAlways() {
+        #expect(
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: true, codeLength: 500)
+                == false
+        )
+        #expect(
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: false, codeLength: 5_000)
+                == false
+        )
+        #expect(
+            OpenCodeRenderedMarkdown.forcePlainStreamingCode(isStreaming: true, codeLength: 50_000)
+                == false
         )
     }
 
@@ -177,6 +405,34 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
             let renderedHex = hex(rendered, traits: darkTraits).lowercased()
             #expect(renderedHex == expectedHex, "Expected role \(role) to resolve token \(token)")
         }
+    }
+
+    private func highlightedDocument(
+        _ markdown: String,
+        ownerKey: String
+    ) async -> NativeMarkdownDocument {
+        let fallback = OpenCodeRenderedMarkdownParser.parse(markdown, textMateEnabled: false)
+        let fences = fallback.textMateFences(
+            ownerKey: ownerKey,
+            revision: TextMateHighlightRevision(value: 1),
+            policyEpoch: 1
+        )
+        var document = fallback
+        for fence in fences {
+            guard let result = try? await KMPTextMateHighlightingEngine.shared.highlight(
+                fence.request(
+                    intent: .interactiveFinal,
+                    messageCharacters: markdown.utf16.count,
+                    fenceCount: fences.count
+                )
+            ) else {
+                continue
+            }
+            if case .attached(let attached) = document.attachingTextMate(fence: fence, result: result) {
+                document = attached
+            }
+        }
+        return document
     }
 }
 
@@ -223,6 +479,11 @@ private func utf16Text(in code: String, start: Int, end: Int) -> String {
 
 private func hex(_ color: Color, traits: UITraitCollection) -> String {
     let resolved = UIColor(color).resolvedColor(with: traits)
+    return hex(resolved)
+}
+
+private func hex(_ color: UIColor) -> String {
+    let resolved = color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
     var red: CGFloat = 0
     var green: CGFloat = 0
     var blue: CGFloat = 0

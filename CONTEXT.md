@@ -117,7 +117,9 @@ is the server-managed conversation for the current project.
 ### Message Repository
 
 The mobile integration layer that reads and sends **messages** for a session
-(list, get one, sync send, and asynchronous prompt send).
+(list, get one, sync send, and asynchronous prompt send). Its read boundary also
+exposes the observed raw and display-message timelines backed by
+`MessageSync`, `InMemoryMessageStore`, and `DisplayMessagePipeline`.
 
 Distinct from a **message**: the repository is app infrastructure; a message is
 a single item in a session timeline.
@@ -189,12 +191,14 @@ Attachment.
 A reactive observation layer above CRUD repositories that keeps screen data fresh
 while the **foreground event stream** is active.
 
-A Live Store listens for relevant server-sent events, applies debounced REST
-refresh policy, and exposes ongoing updates through platform streams (for
-example Kotlin `Flow` or Swift `AsyncStream`). Screen Models collect Live Store
-streams for timelines, session lists, and status labels. Mutations such as
-send, create, and delete still go through repositories directly. Optimistic send
-and quiet refresh merge stay in the Screen Model.
+A Live Store listens for relevant server-sent events, applies refresh policy,
+and exposes ongoing updates through platform streams (for example Kotlin `Flow`
+or Swift `AsyncStream`). Screen Models collect Live Store streams for session
+lists, status labels, permissions, and questions. The message timeline uses the
+equivalent synchronization boundary behind **Message Repository** rather than a
+type named `MessageLiveStore`. Mutations such as send, create, and delete still
+go through repositories directly. Optimistic send and quiet refresh merge stay
+in the Screen Model.
 
 ### message
 

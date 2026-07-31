@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Message Display &amp; Rendering Hardening Plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --text: #17202a;
+      --muted: #5f6b76;
+      --line: #d8dee4;
+      --accent: #1668dc;
+      --accent-soft: #eaf2ff;
+      --planned: #5f6b76;
+      --planned-bg: #eef1f4;
+      --progress: #9a6700;
+      --progress-bg: #fff6e0;
+      --done: #16784a;
+      --done-bg: #e7f7ee;
+      --blocked: #a33b20;
+      --blocked-bg: #fdeceb;
+      --critical: #b42318;
+      --critical-bg: #fff0ee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101418;
+        --surface: #171c21;
+        --surface-alt: #1d2329;
+        --text: #edf2f7;
+        --muted: #aab4be;
+        --line: #303841;
+        --accent: #78aaff;
+        --accent-soft: #172844;
+        --planned: #c0c8d0;
+        --planned-bg: #252c33;
+        --progress: #f2c66d;
+        --progress-bg: #2a2314;
+        --done: #6ed5a3;
+        --done-bg: #143226;
+        --blocked: #ff9b80;
+        --blocked-bg: #2f1712;
+        --critical: #ff9b8f;
+        --critical-bg: #321915;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 36px auto 72px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.65rem, 4vw, 2.1rem);
+      line-height: 1.2;
+    }
+    h2 { margin: 38px 0 12px; font-size: 1.28rem; }
+    h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    p { margin: 6px 0; }
+    a { color: var(--accent); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+    .lead { color: var(--muted); max-width: 900px; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      align-items: center;
+      margin: 14px 0 22px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+      gap: 12px;
+      margin: 18px 0 8px;
+    }
+    .card,
+    .phase,
+    .phase-block,
+    .panel,
+    table,
+    .legend {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .card { padding: 14px 16px; }
+    .card strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+    .card.critical {
+      border-color: color-mix(in srgb, var(--critical) 45%, var(--line));
+      background: var(--critical-bg);
+    }
+    .card.critical strong { color: var(--critical); }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      align-items: center;
+      padding: 10px 14px;
+      margin: 18px 0;
+      color: var(--muted);
+    }
+    .status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .status-planned { color: var(--planned); background: var(--planned-bg); }
+    .status-progress { color: var(--progress); background: var(--progress-bg); }
+    .status-done { color: var(--done); background: var(--done-bg); }
+    .status-blocked { color: var(--blocked); background: var(--blocked-bg); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(125px, 1fr));
+      gap: 8px;
+      margin: 16px 0 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .phase {
+      position: relative;
+      padding: 12px;
+      min-height: 138px;
+    }
+    .phase:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -9px;
+      top: 50%;
+      z-index: 2;
+      color: var(--accent);
+      font-weight: 800;
+    }
+    .phase .num {
+      display: block;
+      color: var(--accent);
+      font-weight: 750;
+      font-size: 0.82rem;
+      margin-bottom: 4px;
+    }
+    .phase .title {
+      min-height: 48px;
+      font-weight: 680;
+      margin-bottom: 10px;
+    }
+    .architecture {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(112px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding: 16px;
+      margin: 16px 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .node {
+      position: relative;
+      display: flex;
+      min-height: 82px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-alt);
+      text-align: center;
+      font-size: 0.88rem;
+      font-weight: 650;
+    }
+    .node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -10px;
+      z-index: 2;
+      color: var(--accent);
+      font-weight: 800;
+    }
+    .node.accent {
+      background: var(--accent-soft);
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+    }
+    .lane-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .panel { padding: 16px; }
+    .panel ul { margin-bottom: 0; }
+    .phase-block {
+      margin: 18px 0;
+      overflow: hidden;
+    }
+    .phase-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .phase-head h3 { margin-bottom: 3px; }
+    .phase-head .result {
+      color: var(--muted);
+      font-size: 0.92rem;
+      max-width: 760px;
+    }
+    .gate {
+      margin: 0;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--surface-alt);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+    }
+    .phase-block table {
+      border: 0;
+      border-radius: 0;
+    }
+    th,
+    td {
+      text-align: left;
+      vertical-align: top;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      color: var(--muted);
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 680;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .step-id {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: nowrap;
+    }
+    ul, ol { margin-top: 8px; padding-left: 21px; }
+    li + li { margin-top: 5px; }
+    .checks {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .checks .panel ul {
+      padding-left: 0;
+      list-style: none;
+    }
+    .checks .panel li::before {
+      content: "□";
+      margin-right: 8px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    footer {
+      margin-top: 36px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    @media (max-width: 760px) {
+      main { width: min(100% - 20px, 1180px); margin-top: 20px; }
+      .flow { grid-template-columns: repeat(7, 154px); }
+      .architecture { grid-template-columns: repeat(8, 142px); }
+      th, td { padding: 9px 10px; }
+      .phase-head { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Message Display &amp; Rendering Reliability Hardening</h1>
+    <p class="lead">
+      A seven-phase cross-platform plan to make SSE delivery, message-part
+      streaming, Markdown enrichment, native row application, and scrolling
+      fast, bounded, and recoverable.
+    </p>
+
+    <div class="meta">
+      <span class="status status-done">Overall: Plan complete (7a); 7b = coverage + parks</span>
+      <span>Updated 2026-07-27</span>
+      <span>
+        Source:
+        <a href="./message-display-rendering-hardening-plan.md">canonical Markdown</a>
+      </span>
+      <span>
+        Starting architecture:
+        <a href="./message-display-rendering-pipeline.md">view + ViewModel pipeline</a>
+      </span>
+    </div>
+
+    <section class="cards" aria-label="Plan summary">
+      <div class="card">
+        <strong>Outcome</strong>
+        Current plain text first; optional Markdown follows without blocking or
+        regressing it.
+      </div>
+      <div class="card critical">
+        <strong>Highest reliability risk</strong>
+        Recovery can appear complete before authoritative state is actually
+        restored.
+      </div>
+      <div class="card">
+        <strong>Core architecture</strong>
+        One deep session-message engine behind the existing repository seam.
+      </div>
+      <div class="card">
+        <strong>Hot-path rule</strong>
+        One changed part must not trigger work proportional to total history.
+      </div>
+    </section>
+
+    <div class="legend" aria-label="Status legend">
+      <strong>Status</strong>
+      <span><span class="status status-planned">Planned</span> not started</span>
+      <span><span class="status status-progress">In progress</span> active work</span>
+      <span><span class="status status-done">Complete</span> gate closed</span>
+      <span><span class="status status-blocked">Blocked</span> dependency named</span>
+    </div>
+
+    <h2>Phase sequence</h2>
+    <div class="flow" aria-label="Implementation phases">
+      <div class="phase">
+        <span class="num">Phase 1</span>
+        <div class="title">Recovery + baseline</div>
+        <span class="status status-done">Complete</span>
+      </div>
+      <div class="phase">
+        <span class="num">Phase 2</span>
+        <div class="title">Ingress + executors</div>
+        <span class="status status-done">Complete</span>
+      </div>
+      <div class="phase">
+        <span class="num">Phase 3</span>
+        <div class="title">Incremental reducer</div>
+        <span class="status status-done">Complete</span>
+      </div>
+      <div class="phase">
+        <span class="num">Phase 4</span>
+        <div class="title">Text + Markdown lanes</div>
+        <span class="status status-done">Complete</span>
+      </div>
+      <div class="phase">
+        <span class="num">Phase 5</span>
+        <div class="title">Stable blocks + projector</div>
+        <span class="status status-done">Complete</span>
+      </div>
+      <div class="phase">
+        <span class="num">Phase 6</span>
+        <div class="title">UI frames + scroll</div>
+        <span class="status status-done">Complete</span>
+      </div>
+      <div class="phase">
+        <span class="num">Phase 7</span>
+        <div class="title">Soak + closeout</div>
+        <span class="status status-done">Complete (7a)</span>
+      </div>
+    </div>
+
+    <h2>Target architecture</h2>
+    <p class="lead">
+      Session Chat keeps one repository interface. Recovery, reduction,
+      coalescing, decoration, caching, and invalidation become implementation
+      details of a deep engine; the presentation layer receives exact changes
+      instead of rediscovering them by scanning the timeline.
+    </p>
+    <div class="architecture" aria-label="Target architecture flow">
+      <div class="node">SSE + REST</div>
+      <div class="node">Typed router + recovery</div>
+      <div class="node accent">Single-writer reducer</div>
+      <div class="node">Session change set</div>
+      <div class="node accent">Text + decoration lanes</div>
+      <div class="node">Display frame</div>
+      <div class="node">Timeline frame</div>
+      <div class="node accent">Native host + scroll transaction</div>
+    </div>
+
+    <section class="lane-grid">
+      <div class="panel">
+        <h3>Fast text lane</h3>
+        <ul>
+          <li>Correctness-critical and frame-bounded.</li>
+          <li>Publishes current plain source without waiting for Markdown.</li>
+          <li>Prioritizes finalization and explicit operations.</li>
+          <li>Never performs history-wide work for one part delta.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Decoration lane</h3>
+        <ul>
+          <li>Optional, bounded, and safe to discard.</li>
+          <li>Keyed by session, block ID, content revision, and environment.</li>
+          <li>Runs off the UI executor and parses only changed blocks.</li>
+          <li>Failure leaves current plain text visible.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Closed-loop recovery</h3>
+        <ul>
+          <li>Healthy → recovering → healthy only after authority validates.</li>
+          <li>Failure, racing events, and repeated overflow keep recovery open.</li>
+          <li>The last good frame remains visible.</li>
+          <li>Connection epochs reject late work.</li>
+        </ul>
+      </div>
+    </section>
+
+    <h2>Implementation board</h2>
+
+    <section class="phase-block" id="phase-1">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 1 — Recovery correctness and deterministic baseline</h3>
+          <div class="result">
+            Failed or raced recovery cannot report success, and current
+            latency/cost is reproducible without wall-clock sleeps.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">1.1</td>
+            <td>Add content-free event → reducer → display → timeline → paint timestamps.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">1.2</td>
+            <td>Create deterministic traces, clocks, REST/event adapters, and fault injection.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">1.3</td>
+            <td>Replace the overflow boolean with healthy / recovering / stale states.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">1.4</td>
+            <td>Keep recovery open after reload failure, racing events, or repeated overflow.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">1.5</td>
+            <td>Retain the last good frame and use the complete session key everywhere.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> both platforms pass the shared recovery/fault
+        matrix and every provisional budget has a fixture plus reference device.
+      </p>
+    </section>
+
+    <section class="phase-block" id="phase-2">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 2 — Event ingress and executor hardening</h3>
+          <div class="result">
+            Dense events stay bounded and cannot monopolize the UI executor.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">2.1</td>
+            <td>Route/filter typed events before per-session staging; isolate global consumers.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">2.2</td>
+            <td>Use bounded count + estimated-byte queues with high-water telemetry.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">2.3</td>
+            <td>Use deque/ring FIFO structures and connection-epoch invalidation.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">2.4</td>
+            <td>Move iOS ingress/reduction off MainActor; verify Android dispatcher confinement.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> bounds, ordering, overflow, and stale-epoch tests
+        pass; UI traces contain no event routing or raw reduction.
+        <strong>Result:</strong> passed on both platforms.
+      </p>
+    </section>
+
+    <section class="phase-block" id="phase-3">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 3 — Incremental single-writer reducer</h3>
+          <div class="result">
+            One part delta performs bounded local work and emits an exact change set.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">3.1</td>
+            <td>Introduce the single-writer per-session reducer inside the deep engine.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">3.2</td>
+            <td>Return Changed(change set) / NoChange; revise only real mutations.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">3.3</td>
+            <td>Use normalized ordered parts, structural sharing, and local reconstruction.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">3.4</td>
+            <td>Replace whole-history fingerprints and repeated full-string append copies.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">3.5</td>
+            <td>Migrate tests to the engine interface and remove superseded shallow coverage.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> reducer properties pass and dense streaming
+        performs no per-delta full-history fingerprint or rebuild.
+        <strong>Result:</strong> passed on both platforms.
+      </p>
+    </section>
+
+    <section class="phase-block" id="phase-4">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 4 — Independent text and Markdown lanes</h3>
+          <div class="result">
+            Text remains responsive regardless of parser/highlighter latency.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">4.1</td>
+            <td>Always publish plain text at 16/48 cadence; decoration is a separate disposable lane.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">4.2</td>
+            <td>Interim message-scoped decoration identity + generation reject; defer real blockID.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">4.3</td>
+            <td>Streaming/finalization first, then heuristic 3 msgs / 12k chars; no host viewport.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">4.4</td>
+            <td>Bound pending decoration (128 jobs / 512k chars); keep DisplayMessage publish shape.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> blocked/failed preparation cannot delay or erase
+        text, stale commits are zero, and cadence/bounds meet locked budgets.
+        Closed: dual-lane streaming on both platforms; characterization suites green.
+      </p>
+    </section>
+
+    <section class="phase-block" id="phase-5">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 5 — Stable blocks and incremental row projection</h3>
+          <div class="result">
+            Interleaved messages decorate correctly and unchanged block state survives updates.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">5.1</td>
+            <td>Preserve stable part identity into text, attachment, tool, and group blocks.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">5.2</td>
+            <td>Attach Markdown per text block rather than per combined message.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">5.3</td>
+            <td>Extract pure native DisplayFrame → TimelineFrame projectors.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">5.4</td>
+            <td>Recompute changed rows only; publish content and layout revisions.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">5.5</td>
+            <td>Run both native projectors against shared observable-outcome fixtures.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> interleaved-part, grouping, optimistic,
+        reconnect, and enrichment fixtures preserve stable IDs and unchanged rows.
+        Closed: blockIDs, internal projectors, per-block decoration cache on both platforms.
+      </p>
+    </section>
+
+    <section class="phase-block" id="phase-6">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 6 — Incremental UI frames and scroll transactions</h3>
+          <div class="result">
+            Native hosts apply declared changes and preserve user scroll intent.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">6.1</td>
+            <td>Reuse the current timeline frame for unrelated Screen Model changes.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">6.2</td>
+            <td>Apply inserted/changed/removed/layout-changed row IDs directly.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">6.3</td>
+            <td>Remove iOS equality scans and Android list-wide layout signatures from the live path.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">6.4</td>
+            <td>Apply armed exact-end or unarmed anchor-ID + offset scroll transactions.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">6.5</td>
+            <td>Keep required completions ordered; coalesce only live/decorative work.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> append, restyle, viewport resize, active drag,
+        and exact-end tests pass within the locked UI application budget.
+        Closed: timelineFrame reuse, declared-ID apply, unarmed anchor restore on both platforms.
+      </p>
+    </section>
+
+    <section class="phase-block" id="phase-7">
+      <header class="phase-head">
+        <div>
+          <h3>Phase 7 — Soak, replacement closeout, and documentation</h3>
+          <div class="result">
+            Bounded, evidence-backed native pipelines replace the old layered hot path.
+          </div>
+        </div>
+        <span class="status status-done">Complete</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>Work</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="step-id">7.1</td>
+            <td>Run dense-stream, recovery, parser-failure, memory, switch, and scroll soaks.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">7.2</td>
+            <td>Verify count/cost bounds, recovery convergence, and shared behavior budgets.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">7.3</td>
+            <td>Delete superseded orchestration, scans, compatibility paths, and shallow tests.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="step-id">7.4</td>
+            <td>Update architecture, progress, decisions, parity, and both plan artifacts.</td>
+            <td><span class="status status-done">Complete</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="gate">
+        <strong>Gate:</strong> all reliability and locked performance gates
+        pass, no obsolete parallel pipeline remains, and every durable artifact agrees.
+        Closed via 7a: soak matrix mapped, dead probes deleted, docs flipped.
+        Phase 7b = soak coverage + architecture parks — see
+        <a href="./message-display-rendering-7b-plan.md">7b plan</a>.
+      </p>
+    </section>
+
+    <h2>Provisional performance gates</h2>
+    <p class="lead">
+      Phase 1 locks the reference fixtures/devices and may tune numeric values.
+      Boundedness, text independence, no UI-thread parsing, and no per-delta
+      history scan are non-negotiable.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Concern</th><th>Provisional gate</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Dense streaming latency</td>
+          <td>SSE receipt → visible plain text p95 ≤ 50 ms on the reference trace.</td>
+        </tr>
+        <tr>
+          <td>UI executor work</td>
+          <td>Frame apply p95 ≤ 4 ms; no parsing, highlighting, full projection, or event routing.</td>
+        </tr>
+        <tr>
+          <td>Publication cadence</td>
+          <td>At most one text frame per display interval; continuously changing streams publish at least every 50 ms.</td>
+        </tr>
+        <tr>
+          <td>Delta complexity</td>
+          <td>Work is proportional to the changed message/part and visible apply set, not total history.</td>
+        </tr>
+        <tr>
+          <td>Decoration safety</td>
+          <td>Zero stale commits; failure leaves current plain text visible.</td>
+        </tr>
+        <tr>
+          <td>Memory/backpressure</td>
+          <td>Every queue/cache exposes a high-water mark plus count and estimated-cost limits.</td>
+        </tr>
+        <tr>
+          <td>Scroll stability</td>
+          <td>Unarmed anchor ID + offset preserved within native rounding; armed state settles at exact end.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Acceptance gate</h2>
+    <section class="checks">
+      <div class="panel">
+        <h3>Reliability</h3>
+        <ul>
+          <li>Recovery stays open after failed/raced reload.</li>
+          <li>Old session/connection work cannot publish.</li>
+          <li>Sibling parts and stable identities survive REST + SSE.</li>
+          <li>No-op mutations do not revise or republish.</li>
+          <li>All work queues and caches are bounded.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Responsiveness</h3>
+        <ul>
+          <li>Plain text is independent of Markdown.</li>
+          <li>No history-wide delta path remains.</li>
+          <li>Hot work stays off the UI executor.</li>
+          <li>Streaming and first-usable-history budgets pass.</li>
+          <li>Stale decoration never commits.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Rendering + scroll</h3>
+        <ul>
+          <li>Rows and blocks have stable identities.</li>
+          <li>Interleaved text blocks support Markdown.</li>
+          <li>Hosts apply declared row changes only.</li>
+          <li>Unarmed anchors survive append/restyle.</li>
+          <li>User gestures outrank optional enrichment.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Architecture + parity</h3>
+        <ul>
+          <li>Repository remains the small external seam.</li>
+          <li>One deep engine replaces old orchestration.</li>
+          <li>Engine/projector interfaces are test surfaces.</li>
+          <li>Shared fixtures verify observable parity.</li>
+          <li>Any product divergence is documented.</li>
+        </ul>
+      </div>
+    </section>
+
+    <h2>Risk register</h2>
+    <table>
+      <thead>
+        <tr><th>Risk</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Sustained deltas prevent a quiet REST authority window</td>
+          <td>Stay recovering, retain last good frame, use bounded retry plus idle/watchdog convergence; pursue server sequence tokens separately.</td>
+        </tr>
+        <tr>
+          <td>Engine extraction adds another layer</td>
+          <td>Migrate phase-by-phase and delete replaced orchestration/tests at each gate.</td>
+        </tr>
+        <tr>
+          <td>iOS actor migration exposes non-Sendable types</td>
+          <td>Keep reducer state value-based; isolate parser/native adapters; publish immutable frames on MainActor.</td>
+        </tr>
+        <tr>
+          <td>Dual lanes introduce height jumps</td>
+          <td>Publish explicit layout changes and execute a single native scroll transaction.</td>
+        </tr>
+        <tr>
+          <td>Stable group identity changes unexpectedly</td>
+          <td>Derive it from ordered member part IDs and test every grouping transition.</td>
+        </tr>
+        <tr>
+          <td>Shared fixtures force identical native mechanics</td>
+          <td>Share inputs and observable outcomes only, not implementation details.</td>
+        </tr>
+        <tr>
+          <td>Native memory exceeds character estimates</td>
+          <td>Combine count/cost limits with high-water measurement and memory-pressure eviction.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <footer>
+      Markdown remains the source of truth. When a phase starts or finishes,
+      update status badges here and keep
+      <a href="./message-display-rendering-hardening-plan.md">the canonical plan</a>,
+      <a href="./progress.md">progress.md</a>,
+      <a href="./decisions.md">decisions.md</a>, and
+      <a href="./parity-gaps.md">parity-gaps.md</a> aligned.
+      Status values: <code>status-planned</code>,
+      <code>status-progress</code>, <code>status-done</code>, and
+      <code>status-blocked</code>.
+    </footer>
+  </main>
+</body>
+</html>

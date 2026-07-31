@@ -1,0 +1,354 @@
+import Foundation
+import Testing
+@testable import OpenCode_Mobile
+
+@Suite struct SessionMessageEngineTests {
+    @Test func partDelta_returnsChangedAndAdvancesRevision() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let before = engine.revision(sessionID: "ses-1")
+        let result = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-1", partID: "prt-1", delta: " world")
+        )
+        guard case .changed(let changeSet) = result else {
+            Issue.record("expected Changed")
+            return
+        }
+        #expect(changeSet.sessionRevision == before + 1)
+        #expect(changeSet.changedMessageIDs == ["msg-1"])
+        #expect(changeSet.changedPartIDsByMessage["msg-1"] == ["prt-1"])
+        #expect(engine.messages(sessionID: "ses-1").first?.text == "Hello world")
+        #expect(engine.shouldPublishLive(changeSet))
+    }
+
+    @Test func partDelta_chunkFlattenEqualsSequentialAppend() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let chunks = [" a", "b", "c", "🚀", "d"]
+        for chunk in chunks {
+            _ = engine.apply(
+                sessionID: "ses-1",
+                patch: .partDelta(messageID: "msg-1", partID: "prt-1", delta: chunk)
+            )
+        }
+        #expect(engine.messages(sessionID: "ses-1").first?.text == "Hello" + chunks.joined())
+        #expect(engine.message(sessionID: "ses-1", messageID: "msg-1")?.text == "Hello" + chunks.joined())
+    }
+
+    @Test func removeUnknownMessage_isNoChange() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let before = engine.revision(sessionID: "ses-1")
+        #expect(engine.apply(sessionID: "ses-1", patch: .removed(messageID: "missing")) == .noChange)
+        #expect(engine.revision(sessionID: "ses-1") == before)
+    }
+
+    @Test func partOrder_preservedAcrossDelta() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "AB",
+                    parts: [
+                        .text(TextPart(id: "prt-a", text: "A", isStreaming: false)),
+                        .tool(ToolPart(id: "prt-tool", toolName: "bash", status: .completed)),
+                        .text(TextPart(id: "prt-b", text: "B", isStreaming: false)),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-1", partID: "prt-b", delta: "!")
+        )
+        let parts = engine.messages(sessionID: "ses-1").first?.parts ?? []
+        #expect(parts.count == 3)
+        guard case .text(let a) = parts[0],
+              case .tool = parts[1],
+              case .text(let b) = parts[2]
+        else {
+            Issue.record("unexpected part order")
+            return
+        }
+        #expect(a.text == "A")
+        #expect(b.text == "B!")
+    }
+
+    /// Store currently always commits `Changed` on a successful part write, even
+    /// when the payload is identical. Phase 3 therefore asserts revision
+    /// monotonicity rather than NoChange for a second identical part.updated.
+    @Test func identicalPartUpdated_stillAdvancesRevision() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let part: [String: AnySendable] = [
+            "id": .string("prt-1"),
+            "messageID": .string("msg-1"),
+            "sessionID": .string("ses-1"),
+            "type": .string("text"),
+            "text": .string("Hello"),
+        ]
+        guard case .changed(let first) = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(part: part, delta: nil)
+        ) else {
+            Issue.record("expected first Changed")
+            return
+        }
+        let afterFirst = engine.revision(sessionID: "ses-1")
+        #expect(first.sessionRevision == afterFirst)
+        guard case .changed(let second) = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(part: part, delta: nil)
+        ) else {
+            Issue.record("expected second Changed (store does not idempotent-dedupe)")
+            return
+        }
+        #expect(second.sessionRevision == afterFirst + 1)
+        #expect(engine.revision(sessionID: "ses-1") == afterFirst + 1)
+        #expect(engine.shouldPublishLive(second))
+    }
+
+    @Test func multipart_preservationAcrossPartUpdate() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "AB",
+                    parts: [
+                        .text(TextPart(id: "prt-a", text: "A", isStreaming: false)),
+                        .tool(ToolPart(id: "prt-tool", toolName: "bash", status: .completed)),
+                        .text(TextPart(id: "prt-b", text: "B", isStreaming: false)),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-b"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("B!"),
+                ],
+                delta: nil
+            )
+        )
+        let rebuilt = engine.message(sessionID: "ses-1", messageID: "msg-1")
+        #expect(rebuilt?.parts.count == 3)
+        guard case .text(let a) = rebuilt?.parts[0],
+              case .tool(let tool) = rebuilt?.parts[1],
+              case .text(let b) = rebuilt?.parts[2]
+        else {
+            Issue.record("multipart order lost")
+            return
+        }
+        #expect(a.text == "A")
+        #expect(tool.toolName == "bash")
+        #expect(b.text == "B!")
+        #expect(rebuilt?.text == "A\nB!")
+    }
+
+    @Test func deletion_removesMessageAndIsLivePublishable() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        let before = engine.revision(sessionID: "ses-1")
+        guard case .changed(let changeSet) = engine.apply(
+            sessionID: "ses-1",
+            patch: .removed(messageID: "msg-1")
+        ) else {
+            Issue.record("expected Changed")
+            return
+        }
+        #expect(changeSet.removedMessageIDs == ["msg-1"])
+        #expect(changeSet.structuralChange)
+        #expect(changeSet.sessionRevision == before + 1)
+        #expect(engine.shouldPublishLive(changeSet))
+        #expect(engine.messages(sessionID: "ses-1").isEmpty)
+        #expect(engine.message(sessionID: "ses-1", messageID: "msg-1") == nil)
+    }
+
+    @Test func revision_monotonicAcrossMixedMutations() {
+        let engine = makeEngine()
+        seedStreamingAssistant(engine)
+        var previous = engine.revision(sessionID: "ses-1")
+        let patches: [MessagePatch] = [
+            .partDelta(messageID: "msg-1", partID: "prt-1", delta: " x"),
+            .partUpdated(
+                part: [
+                    "id": .string("prt-1"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("Hello x"),
+                ],
+                delta: nil
+            ),
+            .partUpdated(
+                part: [
+                    "id": .string("prt-2"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("more"),
+                ],
+                delta: nil
+            ),
+        ]
+        for patch in patches {
+            guard case .changed(let changeSet) = engine.apply(sessionID: "ses-1", patch: patch) else {
+                Issue.record("expected Changed for \(patch)")
+                return
+            }
+            #expect(changeSet.sessionRevision == previous + 1)
+            previous = changeSet.sessionRevision
+        }
+        engine.finishStreamingText(sessionID: "ses-1")
+        let afterFinish = engine.revision(sessionID: "ses-1")
+        #expect(afterFinish >= previous)
+        #expect(engine.hasStreamingText(sessionID: "ses-1") == false)
+        guard case .text(let text) = engine.message(sessionID: "ses-1", messageID: "msg-1")?.parts.first else {
+            Issue.record("expected text part")
+            return
+        }
+        #expect(text.isStreaming == false)
+    }
+
+    @Test func shouldPublishLive_falseForInfoOnlyInsert() {
+        let engine = makeEngine()
+        guard case .changed(let changeSet) = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-2"),
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+            ])
+        ) else {
+            Issue.record("expected Changed")
+            return
+        }
+        #expect(changeSet.insertedMessageIDs == ["msg-2"])
+        #expect(changeSet.structuralChange)
+        #expect(!engine.shouldPublishLive(changeSet))
+    }
+
+    @Test func frameAfterChange_splicesChangedMessageOnly() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-a",
+                    role: .user,
+                    text: "A",
+                    parts: [.text(TextPart(id: "prt-a", text: "A", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                Message(
+                    id: "msg-b",
+                    role: .assistant,
+                    text: "B",
+                    parts: [.text(TextPart(id: "prt-b", text: "B", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        let previous = engine.messages(sessionID: "ses-1")
+        guard case .changed(let changeSet) = engine.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-b", partID: "prt-b", delta: "!")
+        ) else {
+            Issue.record("expected Changed")
+            return
+        }
+        let frame = engine.frameAfterChange(
+            sessionID: "ses-1",
+            changeSet: changeSet,
+            previous: previous
+        )
+        #expect(frame.count == 2)
+        #expect(frame[0].text == "A")
+        #expect(frame[1].text == "B!")
+        #expect(frame[0].id == previous[0].id)
+    }
+
+    @Test func frameAfterChange_fullRebuildOnRemoval() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-a",
+                    role: .user,
+                    text: "A",
+                    parts: [.text(TextPart(id: "prt-a", text: "A", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+                Message(
+                    id: "msg-b",
+                    role: .assistant,
+                    text: "B",
+                    parts: [.text(TextPart(id: "prt-b", text: "B", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        let previous = engine.messages(sessionID: "ses-1")
+        guard case .changed(let changeSet) = engine.apply(
+            sessionID: "ses-1",
+            patch: .removed(messageID: "msg-a")
+        ) else {
+            Issue.record("expected Changed")
+            return
+        }
+        let frame = engine.frameAfterChange(
+            sessionID: "ses-1",
+            changeSet: changeSet,
+            previous: previous
+        )
+        #expect(frame.map(\.id) == ["msg-b"])
+    }
+
+    private func makeEngine() -> SessionMessageEngine {
+        SessionMessageEngine(store: InMemoryMessageStore())
+    }
+
+    private func seedStreamingAssistant(_ engine: SessionMessageEngine) {
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "Hello",
+                    parts: [.text(TextPart(id: "prt-1", text: "Hello", isStreaming: true))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+    }
+}

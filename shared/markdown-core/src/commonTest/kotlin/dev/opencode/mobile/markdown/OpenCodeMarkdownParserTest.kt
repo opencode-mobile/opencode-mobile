@@ -107,7 +107,10 @@ class OpenCodeMarkdownParserTest {
     }
 
     @Test
-    fun markdownCodeBlockCanContainNestedLanguageFences() {
+    fun markdownFenceClosesOnFirstBareFenceLikeCommonMark() {
+        // Match opencode web: an outer ```markdown fence closes at the first
+        // bare closing fence (after nested ```bash), so later content is real
+        // markdown — not one giant markdown CodeBlock.
         val document =
             OpenCodeMarkdownParser.parse(
                 """
@@ -118,22 +121,33 @@ class OpenCodeMarkdownParserTest {
                 curl -X GET /api/users/123
                 ```
 
+                ## Configuration
+
                 ```json
                 {
                   "username": "newuser"
                 }
-                ```
                 ```
 
                 After the sample.
                 """.trimIndent(),
             )
 
-        val code = assertIs<MarkdownBlock.CodeBlock>(document.blocks.first())
-        assertEquals("markdown", code.language)
-        assertTrue(code.code.contains("```bash\ncurl -X GET /api/users/123\n```"))
-        assertTrue(code.code.contains("```json\n{\n  \"username\": \"newuser\"\n}\n```"))
-        val paragraph = assertIs<MarkdownBlock.Paragraph>(document.blocks[1])
+        val markdownSample = assertIs<MarkdownBlock.CodeBlock>(document.blocks[0])
+        assertEquals("markdown", markdownSample.language)
+        assertTrue(markdownSample.code.contains("# Project Documentation"))
+        assertTrue(markdownSample.code.contains("```bash"))
+        assertTrue(markdownSample.code.contains("curl -X GET /api/users/123"))
+        assertFalse(markdownSample.code.contains("## Configuration"))
+
+        val heading = assertIs<MarkdownBlock.Heading>(document.blocks[1])
+        assertEquals(2, heading.level)
+
+        val json = assertIs<MarkdownBlock.CodeBlock>(document.blocks[2])
+        assertEquals("json", json.language)
+        assertTrue(json.code.contains("\"username\""))
+
+        val paragraph = assertIs<MarkdownBlock.Paragraph>(document.blocks[3])
         assertEquals("After the sample.", plainTextFromMarkdownInlines(paragraph.inlines))
     }
 
@@ -190,15 +204,49 @@ class OpenCodeMarkdownParserTest {
                     )
             }
 
-        val streamingHighlighter = openCodeCodeHighlighterForParse(preferred, isStreaming = true)
-        val finalHighlighter = openCodeCodeHighlighterForParse(preferred, isStreaming = false)
+        val streamingHighlighter =
+            openCodeCodeHighlighterForParse(preferred, isStreaming = true, textMateEnabled = true)
+        val finalHighlighter =
+            openCodeCodeHighlighterForParse(preferred, isStreaming = false, textMateEnabled = true)
+        val textMateDisabled =
+            openCodeCodeHighlighterForParse(preferred, isStreaming = false, textMateEnabled = false)
 
         val code = "val answer = 42"
         val streamingResult = streamingHighlighter.highlight("kotlin", code)
         val finalResult = finalHighlighter.highlight("kotlin", code)
+        val disabledResult = textMateDisabled.highlight("kotlin", code)
 
         assertNotEquals(finalResult.spans, streamingResult.spans)
         assertEquals(CodeTokenRole.Keyword, finalResult.spans.single().role)
+        assertEquals(streamingResult.spans, disabledResult.spans)
+
+        val structureOnly =
+            openCodeCodeHighlighterForParse(
+                preferred,
+                isStreaming = true,
+                textMateEnabled = true,
+                structureOnly = true,
+            )
+        val structureResult = structureOnly.highlight("kotlin", code)
+        assertTrue(structureResult.spans.isEmpty())
+        assertEquals(SyntaxHighlightSource.StructureOnly, structureResult.source)
+    }
+
+    @Test
+    fun structureOnlyParseEmitsCodeBlocksWithoutSpans() {
+        val document =
+            OpenCodeMarkdownParser.parse(
+                markdown =
+                    """
+                    ```javascript
+                    const x = 1
+                    ```
+                    """.trimIndent(),
+                structureOnly = true,
+            )
+        val code = document.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+        assertEquals("javascript", code.language)
+        assertTrue(code.spans.isEmpty())
     }
 
     @Test

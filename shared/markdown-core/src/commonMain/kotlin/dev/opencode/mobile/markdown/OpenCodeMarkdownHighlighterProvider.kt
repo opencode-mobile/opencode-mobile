@@ -1,8 +1,10 @@
 package dev.opencode.mobile.markdown
 
-internal expect fun openCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter
+internal expect fun defaultOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter
+
+internal expect fun createOpenCodePlatformMarkdownHighlighter(): OpenCodeCodeHighlighter
 
 internal object OpenCodeMarkdownHighlighterProvider {
     val default: OpenCodeCodeHighlighter
-        get() = openCodePlatformMarkdownHighlighter()
+        get() = defaultOpenCodePlatformMarkdownHighlighter()
 }

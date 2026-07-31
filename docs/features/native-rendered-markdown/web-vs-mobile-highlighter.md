@@ -114,7 +114,7 @@ diagnostic.
 | Top 10 (`javascript`, `typescript`, `python`, `kotlin`, `swift`, `json`, `yaml`, `shell`, `rust`, `go`) | **Yes** — `*-basic` gates pass on Android/Joni and iOS/libonig (2026-07-04) |
 | `diff`, `json`, `yaml`, `css`, `html` (Milestone 0 subset) | Yes (focused oracle, includes overlap with top 10) |
 | Java, C#, popular-language pack | Partial — smoke tests and some fixtures; not full golden gates |
-| Nested markdown fences | Divergent (intentional app parser extension) |
+| Nested markdown fences | Aligned — CommonMark first-fence-wins (no `markdown`/`md` nest depth) |
 | Full broad language set (36+) | Open (broad `@Ignore` Shiki golden gate) |
 | Live web theme colors | Open — semantic roles gated; visual parity is [Path A](./shiki-visual-parity-path-a-plan.md) |
 

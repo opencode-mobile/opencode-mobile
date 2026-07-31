@@ -2,11 +2,43 @@ import Foundation
 
 /// Session Chat presentation units inside one message timeline item.
 /// Built from structured parts with hide rules and lightweight tool chrome.
+/// Every block carries a stable `blockID` derived from server part IDs.
 enum SessionChatTimelineBlock: Equatable, Sendable {
-    case text(String)
-    case attachment(FilePart)
-    case toolCard(SessionChatToolCardBlock)
-    case toolGroup(SessionChatToolGroupBlock)
+    case text(blockID: String, text: String, renderedMarkdown: NativeMarkdownDocument?)
+    case attachment(blockID: String, file: FilePart)
+    case toolCard(blockID: String, card: SessionChatToolCardBlock)
+    case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
+
+    var blockID: String {
+        switch self {
+        case .text(let blockID, _, _):
+            blockID
+        case .attachment(let blockID, _):
+            blockID
+        case .toolCard(let blockID, _):
+            blockID
+        case .toolGroup(let blockID, _):
+            blockID
+        }
+    }
+
+    static func == (lhs: SessionChatTimelineBlock, rhs: SessionChatTimelineBlock) -> Bool {
+        switch (lhs, rhs) {
+        case let (.text(lID, lText, lDoc), .text(rID, rText, rDoc)):
+            lID == rID
+                && lText == rText
+                && lDoc?.sourceHash == rDoc?.sourceHash
+                && lDoc?.renderTreeVersion == rDoc?.renderTreeVersion
+        case let (.attachment(lID, lFile), .attachment(rID, rFile)):
+            lID == rID && lFile == rFile
+        case let (.toolCard(lID, lCard), .toolCard(rID, rCard)):
+            lID == rID && lCard == rCard
+        case let (.toolGroup(lID, lGroup), .toolGroup(rID, rGroup)):
+            lID == rID && lGroup == rGroup
+        default:
+            false
+        }
+    }
 }
 
 struct SessionChatToolCardBlock: Equatable, Sendable {
@@ -63,19 +95,26 @@ struct SessionChatToolGroupBlock: Equatable, Sendable {
 enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep"]
 
-    static func build(role: MessageRole, parts: [MessagePart]) -> [SessionChatTimelineBlock] {
-        guard !parts.isEmpty else { return [] }
+    static func build(role: MessageRole, parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+        guard !parts.isEmpty else { return .ok([]) }
 
         let allowToolCards = role == .assistant
         var blocks: [SessionChatTimelineBlock] = []
-        var pendingText: [String] = []
+        var pendingText: [(id: String, text: String)] = []
 
         func flushText() {
             guard !pendingText.isEmpty else { return }
-            let merged = pendingText.joined(separator: "\n")
+            let merged = pendingText.map(\.text).joined(separator: "\n")
+            let ids = pendingText.map(\.id)
             pendingText.removeAll()
             if !merged.isEmpty {
-                blocks.append(.text(merged))
+                blocks.append(
+                    .text(
+                        blockID: PresentationBlockId.mergedText(ids),
+                        text: merged,
+                        renderedMarkdown: nil
+                    )
+                )
             }
         }
 
@@ -85,12 +124,18 @@ enum SessionChatTimelineBlocks {
             case .text(let textPart):
                 let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty {
-                    pendingText.append(trimmed)
+                    guard let partId = textPart.id else { return .missingPartIds }
+                    pendingText.append((id: partId, text: trimmed))
                 }
                 index += 1
             case .file(let file):
                 flushText()
-                blocks.append(.attachment(file))
+                blocks.append(
+                    .attachment(
+                        blockID: PresentationBlockId.direct(file.id),
+                        file: file
+                    )
+                )
                 index += 1
             case .tool(let tool):
                 guard allowToolCards, isVisibleTool(tool) else {
@@ -110,20 +155,52 @@ enum SessionChatTimelineBlocks {
                         lookAhead += 1
                     }
                     if groupTools.count >= 2 {
-                        blocks.append(.toolGroup(toToolGroup(groupTools)))
+                        guard let group = toToolGroup(groupTools) else { return .missingPartIds }
+                        blocks.append(group)
                         index = lookAhead
                     } else {
-                        blocks.append(.toolCard(toToolCard(tool)))
+                        guard let card = toToolCard(tool) else { return .missingPartIds }
+                        blocks.append(card)
                         index += 1
                     }
                 } else {
-                    blocks.append(.toolCard(toToolCard(tool)))
+                    guard let card = toToolCard(tool) else { return .missingPartIds }
+                    blocks.append(card)
                     index += 1
                 }
             }
         }
         flushText()
-        return blocks
+        return .ok(blocks)
+    }
+
+    /// Convenience for call sites that fall back when identity is incomplete.
+    /// Empty `parts` also falls back (parity with Android): fixtures and REST
+    /// payloads may expose message text without part IDs.
+    static func buildOrFallback(
+        role: MessageRole,
+        parts: [MessagePart],
+        messageId: String,
+        fallbackText: String
+    ) -> [SessionChatTimelineBlock] {
+        func fallbackBlocks() -> [SessionChatTimelineBlock] {
+            let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return [] }
+            return [
+                .text(
+                    blockID: PresentationBlockId.messageFallback(messageId),
+                    text: fallbackText,
+                    renderedMarkdown: nil
+                ),
+            ]
+        }
+
+        switch build(role: role, parts: parts) {
+        case .ok(let blocks):
+            return blocks.isEmpty ? fallbackBlocks() : blocks
+        case .missingPartIds:
+            return fallbackBlocks()
+        }
     }
 
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
@@ -139,18 +216,23 @@ enum SessionChatTimelineBlocks {
         contextToolNames.contains(toolName.lowercased())
     }
 
-    private static func toToolGroup(_ tools: [ToolPart]) -> SessionChatToolGroupBlock {
+    private static func toToolGroup(_ tools: [ToolPart]) -> SessionChatTimelineBlock? {
+        let memberIds = tools.compactMap(\.id)
+        guard memberIds.count == tools.count else { return nil }
         let status = worstStatus(tools.map(\.status))
         let errorText = tools
             .first(where: { $0.status == .error })?
             .error
             .flatMap { $0.isEmpty ? nil : $0 }
-        return SessionChatToolGroupBlock(
-            count: tools.count,
-            status: status,
-            title: contextGroupTitle(tools),
-            subtitle: nil,
-            errorText: errorText
+        return .toolGroup(
+            blockID: PresentationBlockId.toolGroup(memberIds),
+            group: SessionChatToolGroupBlock(
+                count: tools.count,
+                status: status,
+                title: contextGroupTitle(tools),
+                subtitle: nil,
+                errorText: errorText
+            )
         )
     }
 
@@ -189,7 +271,8 @@ enum SessionChatTimelineBlocks {
         return .completed
     }
 
-    private static func toToolCard(_ tool: ToolPart) -> SessionChatToolCardBlock {
+    private static func toToolCard(_ tool: ToolPart) -> SessionChatTimelineBlock? {
+        guard let partId = tool.id else { return nil }
         let name = tool.toolName.lowercased()
         let chrome = specializedChrome(name: name, tool: tool) ?? genericChrome(tool)
         let errorText: String? =
@@ -199,18 +282,21 @@ enum SessionChatTimelineBlocks {
             case .pending, .running, .completed:
                 nil
             }
-        return SessionChatToolCardBlock(
-            toolName: tool.toolName,
-            status: tool.status,
-            title: chrome.title,
-            subtitle: chrome.subtitle,
-            errorText: errorText,
-            additions: chrome.additions,
-            deletions: chrome.deletions,
-            detailText: chrome.detailText,
-            childSessionId: chrome.childSessionId,
-            opensChangesReview: chrome.opensChangesReview,
-            changesInitialFilePath: chrome.changesInitialFilePath
+        return .toolCard(
+            blockID: PresentationBlockId.direct(partId),
+            card: SessionChatToolCardBlock(
+                toolName: tool.toolName,
+                status: tool.status,
+                title: chrome.title,
+                subtitle: chrome.subtitle,
+                errorText: errorText,
+                additions: chrome.additions,
+                deletions: chrome.deletions,
+                detailText: chrome.detailText,
+                childSessionId: chrome.childSessionId,
+                opensChangesReview: chrome.opensChangesReview,
+                changesInitialFilePath: chrome.changesInitialFilePath
+            )
         )
     }
 

@@ -9,14 +9,30 @@ interface MessageStore {
     fun apply(
         sessionId: String,
         patch: MessagePatch,
-    )
+    ): MessageStoreApplyResult
 
     fun messages(sessionId: String): List<Message>
 
-    fun isBaseOnlyMessage(
+    /** True when a REST-seeded message contains a part without a stable server identity. */
+    fun isRestSeededMessage(
         sessionId: String,
         messageId: String,
     ): Boolean
+
+    fun hasStreamingText(sessionId: String): Boolean
+
+    /** Monotonic per-session revision for guarding suspending REST requests. */
+    fun revision(sessionId: String): Long
+
+    /** Atomically replaces the session only when no patch landed after [expectedRevision]. */
+    fun replaceAllIfRevision(
+        sessionId: String,
+        messages: List<Message>,
+        expectedRevision: Long,
+    ): Boolean
+
+    /** Ends cached streaming state after an idle reload failure so polling can recover. */
+    fun finishStreamingText(sessionId: String)
 
     fun clear()
 }
