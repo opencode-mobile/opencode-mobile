@@ -22,7 +22,7 @@ struct TextMateLogbookTests {
         )
 
         let observation = result.observation
-        #expect(observation.outcome == "Unsupported")
+        #expect(observation.outcome == "Fallback")
         #expect(observation.messageCharacters == markdown.utf16.count)
         #expect(observation.fenceCharacters == "secret source".utf16.count)
         #expect(!String(describing: observation).contains("secret source"))

@@ -804,6 +804,22 @@ struct SessionChatTimelineBlocksTests {
         ])
     }
 
+    @Test func buildOrFallback_emptyParts_usesFallbackText() {
+        let blocks = SessionChatTimelineBlocks.buildOrFallback(
+            role: .user,
+            parts: [],
+            messageId: "msg-1",
+            fallbackText: "Hello"
+        )
+        #expect(blocks == [
+            .text(
+                blockID: PresentationBlockId.messageFallback("msg-1"),
+                text: "Hello",
+                renderedMarkdown: nil
+            ),
+        ])
+    }
+
     @Test func build_mergedTextMembershipChange_changesBlockID() {
         let two = okBlocks(parts: [text("a", "Hello"), text("b", "World")])
         let three = okBlocks(parts: [text("a", "Hello"), text("b", "World"), text("c", "!")])

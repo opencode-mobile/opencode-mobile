@@ -175,16 +175,15 @@ enum SessionChatTimelineBlocks {
     }
 
     /// Convenience for call sites that fall back when identity is incomplete.
+    /// Empty `parts` also falls back (parity with Android): fixtures and REST
+    /// payloads may expose message text without part IDs.
     static func buildOrFallback(
         role: MessageRole,
         parts: [MessagePart],
         messageId: String,
         fallbackText: String
     ) -> [SessionChatTimelineBlock] {
-        switch build(role: role, parts: parts) {
-        case .ok(let blocks):
-            return blocks
-        case .missingPartIds:
+        func fallbackBlocks() -> [SessionChatTimelineBlock] {
             let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return [] }
             return [
@@ -194,6 +193,13 @@ enum SessionChatTimelineBlocks {
                     renderedMarkdown: nil
                 ),
             ]
+        }
+
+        switch build(role: role, parts: parts) {
+        case .ok(let blocks):
+            return blocks.isEmpty ? fallbackBlocks() : blocks
+        case .missingPartIds:
+            return fallbackBlocks()
         }
     }
 

@@ -308,6 +308,14 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
     }
 
     @Test func javaMainClassCodeBlockUsesWebAlignedTokenRoles() async {
+        let preferences = MarkdownHighlightPreferences.shared
+        let priorEnabled = preferences.isLanguageEnabled("java")
+        preferences.setTextMateEnabled(true)
+        preferences.setLanguageEnabled("java", enabled: true)
+        defer {
+            preferences.setLanguageEnabled("java", enabled: priorEnabled)
+        }
+
         let snippet = """
         public class Main {
             public static void main(String[] args) {

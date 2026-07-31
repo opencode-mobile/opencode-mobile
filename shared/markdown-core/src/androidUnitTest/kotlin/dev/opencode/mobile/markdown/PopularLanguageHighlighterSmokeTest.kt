@@ -7,37 +7,49 @@ import kotlin.test.assertTrue
 class PopularLanguageHighlighterSmokeTest {
     @Test
     fun bundledTextMateHighlighterSupportsPopularLanguagePack() {
-        val highlighter = bundledJoniHighlighter()
-        popularLanguageFixtureIds.forEach { fixtureId ->
-            val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }
-            assertTrue(
-                highlighter.supportsLanguage(fixture.language),
-                "Expected bundled grammars to support ${fixture.language}",
-            )
-            fixture.aliases.forEach { alias ->
+        withPopularLanguagesForceEnabled {
+            val highlighter = bundledJoniHighlighter()
+            popularLanguageFixtureIds.forEach { fixtureId ->
+                val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }
                 assertTrue(
-                    highlighter.supportsLanguage(alias),
-                    "Expected bundled grammars to support alias $alias for ${fixture.language}",
+                    highlighter.supportsLanguage(fixture.language),
+                    "Expected bundled grammars to support ${fixture.language}",
                 )
+                fixture.aliases.forEach { alias ->
+                    assertTrue(
+                        highlighter.supportsLanguage(alias),
+                        "Expected bundled grammars to support alias $alias for ${fixture.language}",
+                    )
+                }
             }
         }
     }
 
     @Test
     fun bundledTextMateHighlighterEmitsSpansForPopularLanguagePack() {
-        val highlighter = bundledJoniHighlighter()
-        popularLanguageFixtureIds.forEach { fixtureId ->
-            val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }
-            val result = highlighter.highlight(fixture.language, fixture.code)
-            assertTrue(
-                result.spans.isNotEmpty(),
-                "Expected ${fixture.language} to emit syntax spans",
-            )
-            assertFalse(
-                result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterFallback },
-                "Expected ${fixture.language} to use TextMate, not semantic fallback: ${result.diagnostics}",
-            )
+        withPopularLanguagesForceEnabled {
+            val highlighter = bundledJoniHighlighter()
+            popularLanguageFixtureIds.forEach { fixtureId ->
+                val fixture = HighlighterGoldenFixtures.all.single { it.id == fixtureId }
+                val result = highlighter.highlight(fixture.language, fixture.code)
+                assertTrue(
+                    result.spans.isNotEmpty(),
+                    "Expected ${fixture.language} to emit syntax spans",
+                )
+                assertFalse(
+                    result.diagnostics.any { it.kind == MarkdownDiagnosticKind.HighlighterFallback },
+                    "Expected ${fixture.language} to use TextMate, not semantic fallback: ${result.diagnostics}",
+                )
+            }
         }
+    }
+
+    private fun <T> withPopularLanguagesForceEnabled(block: () -> T): T {
+        val languages =
+            popularLanguageFixtureIds
+                .map { fixtureId -> HighlighterGoldenFixtures.all.single { it.id == fixtureId }.language }
+                .toTypedArray()
+        return withForceEnabledTextMateLanguages(*languages, block = block)
     }
 
     private fun bundledJoniHighlighter(): OpenCodeSyntaxHighlighter =

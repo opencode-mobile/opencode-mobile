@@ -49,6 +49,8 @@ struct DisplayMessagePipelineCharacterizationTests {
         }
         #expect(formatFirst)
         #expect(harness.preparer.prepareMessagesInvocations[0].mode == .historyPlainFirst)
+        let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
+        #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
 
         harness.clock.releaseSleep()
@@ -80,6 +82,8 @@ struct DisplayMessagePipelineCharacterizationTests {
                 && collector.emissions[0].first?.renderedMarkdown != nil
         }
         #expect(formatFirst)
+        let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
+        #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
         harness.clock.releaseSleep()
         let enriched = await waitUntil { collector.emissions.count == 2 }
@@ -292,6 +296,8 @@ struct DisplayMessagePipelineCharacterizationTests {
         harness.preparer.holdNextPrepareMessage()
         await harness.source.emit(.messages([largeMarkdownAssistant(id: "history")]))
         _ = await waitUntil { collector.emissions.count == 1 }
+        let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
+        #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
 
         harness.clock.releaseSleep()

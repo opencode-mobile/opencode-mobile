@@ -1,9 +1,21 @@
 package dev.opencode.mobile.markdown
 
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 class OpenCodeBundledJoniMarkdownHighlighterAndroidTest {
+    @BeforeTest
+    fun admitPackagedLanguagesForBundledJoniCoverage() {
+        TextMateLanguageGateRegistry.update(TextMateLanguageGate { _, _ -> true })
+    }
+
+    @AfterTest
+    fun resetLanguageGate() {
+        TextMateLanguageGateRegistry.resetForTests()
+    }
+
     @Test
     fun bundledJoniHighlighterUsesTextMateNotSemanticFallback() {
         val fixture =
