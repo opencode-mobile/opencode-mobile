@@ -10,6 +10,9 @@ where Item.ID == String {
     var applyPacket: MessageListTimelineApplyPacket? = nil
     var scrollController: TimelineScrollController
     var onRefresh: (() async -> Void)?
+    /// Composer sits outside this collection view; `keyboardDismissMode` alone
+    /// does not reliably resign that first responder, so callers resign on drag.
+    var onUserScrollDismissKeyboard: (() -> Void)? = nil
     var horizontalContentPadding: CGFloat = MessageListTimelineDefaults.horizontalContentPadding
     var topContentPadding: CGFloat = MessageListTimelineDefaults.topContentPadding
     var bottomContentPadding: CGFloat = MessageListTimelineDefaults.bottomContentPadding
@@ -26,6 +29,7 @@ where Item.ID == String {
         )
         viewController.scrollController = scrollController
         viewController.onRefresh = onRefresh
+        viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
@@ -43,6 +47,7 @@ where Item.ID == String {
     ) {
         viewController.scrollController = scrollController
         viewController.onRefresh = onRefresh
+        viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         viewController.itemContent = itemContent
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
@@ -65,6 +70,7 @@ final class MessageListTimelineViewController<Item: Identifiable, ItemContent: V
 where Item.ID == String {
     var scrollController: TimelineScrollController?
     var onRefresh: (() async -> Void)?
+    var onUserScrollDismissKeyboard: (() -> Void)?
     var itemContent: (Item) -> ItemContent
 
     private let horizontalContentPadding: CGFloat
@@ -415,6 +421,7 @@ where Item.ID == String {
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        onUserScrollDismissKeyboard?()
         scrollController?.beginUserScrolling()
     }
 
@@ -462,7 +469,7 @@ where Item.ID == String {
         collectionView.alwaysBounceVertical = true
         collectionView.contentInsetAdjustmentBehavior = .automatic
         collectionView.delegate = self
-        collectionView.keyboardDismissMode = .interactive
+        collectionView.keyboardDismissMode = .onDrag
         // Prefer lighter invalidation: including constraints re-measured tall
         // markdown cells aggressively during open and blocked scrolling.
         collectionView.selfSizingInvalidation = .enabled

@@ -95,6 +95,16 @@ struct SessionChatView: View {
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
+                    },
+                    onUserScrollDismissKeyboard: {
+                        // Composer UITextView is outside the timeline collection
+                        // view; keyboardDismissMode alone does not resign it.
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
                     }
                 )
             )
