@@ -199,13 +199,14 @@ document. It materializes paragraphs, headings, quotes, lists, fenced code,
 diffs, tables, links, and thematic breaks with platform-native text/layout
 objects. It never invokes the markdown parser.
 
-Large code and diff styling is plain-first on both platforms:
+Large code and diff **token coloring** may still stage on both platforms:
 
-- while streaming, a code fence of at least 2,000 characters remains plain
-  monospace until final preparation;
+- streaming format-always always attaches code-block chrome when a fence is
+  detectable (OPE-92); disposable semantic color catch-up may still defer for
+  very large streaming fences until Final when TextMate is off;
 - finalized code/diff native attributed text of at least 2,000 characters is
-  constructed away from the UI executor and replaces the plain placeholder
-  when ready; and
+  constructed away from the UI executor and replaces the plain-color
+  placeholder when ready; and
 - on iOS, an assistant message with prepared markdown and at least 3,000
   characters additionally paints plain text for one frame (plus a 32 ms
   settling delay) before hosting the markdown tree. This protects initial

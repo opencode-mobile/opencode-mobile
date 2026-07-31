@@ -84,3 +84,61 @@ struct BlockDecorationCacheTests {
         #expect(cache.count == 0)
     }
 }
+
+@Suite
+struct StreamingTextBlockIdentityTests {
+    @Test func interleavedToolSplitsRunsAndTargetsLastStreamingText() {
+        let message = Message(
+            id: "msg-1",
+            role: .assistant,
+            text: "intro\n```js\nconst x = 1\n```",
+            parts: [
+                .text(TextPart(id: "prt-1", text: "intro", isStreaming: false)),
+                .tool(ToolPart(id: "prt-tool", toolName: "read", status: .completed)),
+                .text(TextPart(id: "prt-2", text: "```js\nconst x = 1\n```", isStreaming: true)),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let target = StreamingTextBlockIdentity.resolveStreaming(message: message)
+        #expect(target?.blockID == PresentationBlockId.mergedText(["prt-2"]))
+        #expect(target?.plain == "```js\nconst x = 1\n```")
+    }
+
+    @Test func invisibleTodoWriteDoesNotSplitMergedStreamingText() {
+        let message = Message(
+            id: "msg-1",
+            role: .assistant,
+            text: "one\ntwo",
+            parts: [
+                .text(TextPart(id: "prt-1", text: "one", isStreaming: false)),
+                .tool(ToolPart(id: "prt-todo", toolName: "todowrite", status: .completed)),
+                .text(TextPart(id: "prt-2", text: "two", isStreaming: true)),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let target = StreamingTextBlockIdentity.resolveStreaming(message: message)
+        #expect(target?.blockID == PresentationBlockId.mergedText(["prt-1", "prt-2"]))
+        #expect(target?.plain == "one\ntwo")
+    }
+
+    @Test func missingPartIdsFallBackToMessageScopedBlock() {
+        let message = Message(
+            id: "msg-1",
+            role: .assistant,
+            text: "hello",
+            parts: [
+                .text(TextPart(id: nil, text: "hello", isStreaming: true)),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let target = StreamingTextBlockIdentity.resolveStreaming(message: message)
+        #expect(target?.blockID == PresentationBlockId.messageFallback("msg-1"))
+        #expect(target?.plain == "hello")
+    }
+}

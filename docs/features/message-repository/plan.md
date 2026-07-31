@@ -78,7 +78,7 @@ slice rather than message transport.
 
 - `OpenCodeOutgoingMessage` for user rows.
 - `OpenCodeRenderedMarkdown` for formatted assistant and outgoing text,
-  including its streaming state and large-content plain-first behavior.
+  including its streaming state and format-always / color-later behavior.
 - Feature-local neutral fallback row for command/tool/unknown roles until their
   dedicated reusable message UI is defined.
 

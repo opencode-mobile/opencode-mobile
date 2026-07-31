@@ -9,12 +9,12 @@ these names — not a dedicated device soak CI.
 Coverage legend: **full** (named outcome covered), **partial** (related
 invariants only), **gap** (no dedicated test found).
 
-## 1. Long-history open (plain-first)
+## 1. Long-history open (format-first scaffold)
 
 | Platform | Coverage | Tests |
 | --- | --- | --- |
-| Android | **full** | `DisplayMessagePipelineCharacterizationTest.largeHistoryPublishesPlainFirstThenAtMostTwoEnrichmentFrames`; `largeSingleMessageHistoryPublishesPlainFirstThenOneViewportEnrichment`; `DisplayMessagePipelinePacingTest.largeHistoryTriggersPlainFirstPublishGate`; `SessionChatViewModelTest.benchmark_loadMessages_longMarkdownHistory` / `loadMessages_enrichesMarkdownBeforeReady` |
-| iOS | **full** | `DisplayMessagePipelineCharacterizationTests.largeHistoryPublishesPlainFirstThenAtMostTwoEnrichmentFrames`; `largeSingleMessageHistoryPublishesPlainFirstThenOneViewportEnrichment`; `DisplayMessagePipelinePacingTests.largeHistoryTriggersPlainFirstPublishGate`; `DisplayMessagePipelineWarmReopenTests.warmReopen_reusesPreparedMarkdownWithoutSecondPlainFirst` |
+| Android | **full** | `DisplayMessagePipelineCharacterizationTest.largeHistoryPublishesFormatFirstThenAtMostTwoEnrichmentFrames`; `largeSingleMessageHistoryPublishesFormatFirstThenOneViewportEnrichment`; `DisplayMessagePipelinePacingTest.largeHistoryTriggersPlainFirstPublishGate`; `SessionChatViewModelTest.benchmark_loadMessages_longMarkdownHistory` / `loadMessages_enrichesMarkdownBeforeReady` |
+| iOS | **full** | `DisplayMessagePipelineCharacterizationTests.largeHistoryPublishesFormatFirstThenAtMostTwoEnrichmentFrames`; `largeSingleMessageHistoryPublishesFormatFirstThenOneViewportEnrichment`; `DisplayMessagePipelinePacingTests.largeHistoryTriggersPlainFirstPublishGate`; `DisplayMessagePipelineWarmReopenTests.warmReopen_reusesPreparedMarkdownWithoutSecondPlainFirst` |
 
 ## 2. Dense stream
 
@@ -82,7 +82,7 @@ Recorded in [parity-gaps.md](./parity-gaps.md):
 
 | Soak name | Android | iOS |
 | --- | --- | --- |
-| 1 Long-history plain-first | full | full |
+| 1 Long-history format-first | full | full |
 | 2 Dense stream | full | full |
 | 3 Reconnect / authority | full | full |
 | 4 Repeated overflow cycles | partial | partial |

@@ -12,7 +12,7 @@ pipeline on iOS and Android while preserving:
 
 - SSE-first initial loading;
 - revision-gated REST replacement;
-- responsive plain-first history;
+- responsive format-first history scaffolds;
 - responsive live streaming;
 - finalized Markdown and syntax highlighting; and
 - the existing `MessageRepository` display-message interface used by Session
@@ -83,7 +83,8 @@ sealed type representing `streaming`, `historyPlainFirst`,
 
 ### Align enrichment behavior
 
-Both platforms publish no more than two enrichment frames after plain-first:
+Both platforms publish no more than two enrichment frames after the
+format-first scaffold:
 the newest viewport batch and the remaining batch.
 
 ### Bound retained work
@@ -177,8 +178,8 @@ Status: **Complete**. Blockers: none.
 4. Preserve newest-first preparation inside a batch.
 5. Confirm timeline apply coalescing does not hide the final fully styled frame.
 
-Expected result: large cold history publishes plain-first, then at most two
-enrichment frames on either platform.
+Expected result: large cold history publishes a format-first scaffold, then at
+most two enrichment frames on either platform.
 
 Android `SessionChatTimeline` already `.conflate()`s the display flow, so a
 busy apply keeps the latest enrichment snapshot (the remaining / fully styled
@@ -240,7 +241,7 @@ Expected result: the documented contract and both native implementations agree.
 | Preparation worker | Detached `userInitiated`; commit on MainActor after generation check | `Dispatchers.Default`; commit in pipeline scope after generation check |
 | Preparation mode | Swift enum | Kotlin sealed type or enum |
 | Enrichment | Retain viewport plus remaining batches | Same two-batch viewport + remaining policy |
-| Warm prepared history | Bounded LRU cache (512k chars / 8 sessions) | No warm cache; plain-first + enrich on reopen (intentional) |
+| Warm prepared history | Bounded LRU cache (512k chars / 8 sessions) | No warm cache; format-first scaffold + enrich on reopen (intentional) |
 | Store atomicity | MainActor confinement | Per-store synchronization |
 | Timeline conversion | Cooperative MainActor yields | Worker structural conversion, then Main publish |
 
@@ -262,8 +263,8 @@ Expected result: the documented contract and both native implementations agree.
   deterministic clock.
 - [x] Snapshot intake continues while preparation is blocked.
 - [x] Large streaming text uses plain text until finalization.
-- [x] Large cold history publishes plain-first before full enrichment.
-- [x] Enrichment publishes at most two frames after plain-first.
+- [x] Large cold history publishes format-first scaffold before full enrichment.
+- [x] Enrichment publishes at most two frames after that scaffold.
 
 ### Boundedness
 

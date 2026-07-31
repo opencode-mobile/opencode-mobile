@@ -101,13 +101,14 @@
   **~2.5 s** on iOS and Android with libonig on iOS, all-at-once full-history
   enrichment on both platforms, and no `HighlighterBackendFallback` on the
   production regex path.
-- Current implementation (2026-07-26 / OPE-82): both platforms expose every
-  history row immediately, but histories with at least 4,000
-  markdown-candidate characters render plain first and enrich newest-first in
-  cancellable increments. A newer live snapshot cancels stale history
-  enrichment. No replacement Big Session measurement has been recorded, so the
-  earlier ~2.5 s result is historical rather than a claim for the staged
-  pipeline.
+- Current implementation (2026-07-31 / OPE-82 + OPE-92): both platforms expose
+  every history row immediately. Histories with at least 4,000
+  markdown-candidate characters publish a format-first scaffold (structure-only
+  when TextMate is on, full semantic when off), then upgrade TextMate colors
+  newest-first in cancellable increments when enabled. A newer live snapshot
+  cancels stale history enrichment. No replacement Big Session measurement has
+  been recorded, so the earlier ~2.5 s result is historical rather than a claim
+  for the staged pipeline.
 - iOS still round-trips through `OpenCodeMarkdownJson.parseMarkdownJson` before
   Swift decodes the render tree; Android calls `OpenCodeMarkdownParser.parse()`
   directly. The JSON bridge is a remaining optimization target, not a blocker

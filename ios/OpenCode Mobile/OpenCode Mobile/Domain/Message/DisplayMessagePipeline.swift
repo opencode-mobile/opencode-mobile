@@ -208,8 +208,15 @@ final class DisplayMessagePipeline {
                             if let previous,
                                previous.text == message.text,
                                previous.renderedMarkdown != nil {
+                                // Preserve upgrade metadata so concurrent streams do not
+                                // clear HistoryPlainFirst / enrichment pending flags.
                                 out.append(
-                                    DisplayMessage(message: message, renderedMarkdown: previous.renderedMarkdown)
+                                    DisplayMessage(
+                                        message: message,
+                                        renderedMarkdown: previous.renderedMarkdown,
+                                        awaitingTextMateUpgrade: previous.awaitingTextMateUpgrade,
+                                        highlightEpoch: previous.highlightEpoch
+                                    )
                                 )
                             } else {
                                 out.append(DisplayMessage(message: message, renderedMarkdown: nil))

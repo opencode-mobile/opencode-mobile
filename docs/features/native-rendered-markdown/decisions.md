@@ -274,15 +274,17 @@
   approximates web chat rendering; first-fence-wins restores that parity.
 - Date: 2026-07-28.
 
-## TextMate Highlighting Is Opt-In Via Settings
+## TextMate Highlighting Preference (Superseded Default)
 
-- Decision: TextMate grammar highlighting runs only when Settings → Developer
-  Tools → **TextMate Highlighting** is enabled. Default is **off**; code fences
-  use the semantic-fallback highlighter instead.
-- Reason: TextMate is the expensive path on open and settle; semantic fallback
-  keeps Session Chat responsive while still coloring common tokens. Power users
-  can opt into full grammar fidelity.
-- Date: 2026-07-28.
+- Decision (historical 2026-07-28): TextMate ran only when Settings → Developer
+  Tools → **TextMate Highlighting** was enabled, with default **off**.
+- Superseded by: [Phase 6 Default Enablement And Provisional Calibration](#phase-6-default-enablement-and-provisional-calibration)
+  (2026-07-29). Unset / first-install preference is now **on**, gated by the
+  shared allowlist; an explicit stored `false` stays off. Semantic fallback
+  remains the path when TextMate is off or a language is not admitted.
+- Reason for original opt-in: TextMate was the expensive path before Phase 3–6
+  scheduling, allowlist, and structure-first scaffolding.
+- Date: 2026-07-28 (default superseded 2026-07-29).
 
 ## Semantic Fallback Tokenization Is Iterative And Bounded
 

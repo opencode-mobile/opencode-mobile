@@ -58,37 +58,41 @@ updates over a short quiet window (~16ms) with a flat max batch age (48ms) so
 tiny SSE deltas batch into fewer UI publishes without intentionally slowing
 down as the reply grows. When streaming ends, the pipeline first emits a
 `final-placeholder` that reuses the last streaming markdown document, then runs
-the full TextMate parse so the UI does not stall 3–9s on the transition. Opening
-a history whose markdown-candidate text is ≥4k chars first publishes a
-`plain-first` frame (no markdown parse) so the timeline becomes ready quickly,
-then enriches markdown newest-first off the critical path. Both platforms
-publish at most twice after plain-first (`enrich-viewport` for the open bottom,
-then `enrich-batch` for older history), using a shared 3-message / 12k-character
-viewport budget. Parse work runs on a
-`userInitiated` worker batch (Android `Dispatchers.Default` equivalent) instead
-of MainActor + utility priority. New live snapshots invalidate enrichment;
-the pipeline generation-gates every completed
-preparation before it mutates caches or publishes. On iOS, `DisplayMessagePipeline` also keeps a
-per-session prepared-markdown cache across leave/reopen. A warm open with a
-complete cache publishes a single `cache-hit` frame with markdown already
-attached (peek + observe), matching Android's LazyColumn feel: visible cells
-configure once, off-screen history configures on scroll, and the UI does not
-wipe then reprint rows. `MessageSync` skips an identical fingerprint republish after
-replaying `SharedLiveObservation.lastValue`, and Session Chat can warm-start
-from in-memory store rows without a loading spinner. On iOS, markdown
-parse must stay `nonisolated`: the target sets `SWIFT_DEFAULT_ACTOR_ISOLATION =
+the full TextMate parse so the UI does not stall 3–9s on the transition. Opening a history whose markdown-candidate text is ≥4k chars first publishes a
+format-first `HistoryPlainFirst` frame (structured markdown scaffold — never
+raw source for detectable markdown; structure-only when TextMate is on, full
+semantic when off) so the timeline becomes Ready quickly, then upgrades TextMate
+colors newest-first off the critical path when enabled. Both platforms publish
+at most two enrichment frames after that scaffold (`enrich-viewport` for the
+open bottom, then `enrich-batch` for older history), using a shared 3-message /
+12k-character viewport budget. Parse work runs on a `userInitiated` worker
+batch (Android `Dispatchers.Default` equivalent) instead of MainActor + utility
+priority. New live snapshots invalidate enrichment; the pipeline
+generation-gates every completed preparation before it mutates caches or
+publishes. On iOS, `DisplayMessagePipeline` also keeps a per-session
+prepared-markdown cache across leave/reopen. A warm open with a complete cache
+publishes a single `cache-hit` frame with markdown already attached (peek +
+observe), matching Android's LazyColumn feel: visible cells configure once,
+off-screen history configures on scroll, and the UI does not wipe then reprint
+rows. `MessageSync` skips an identical fingerprint republish after replaying
+`SharedLiveObservation.lastValue`, and Session Chat can warm-start from
+in-memory store rows without a loading spinner. On iOS, markdown parse must
+stay `nonisolated`: the target sets `SWIFT_DEFAULT_ACTOR_ISOLATION =
 MainActor`, so an unmarked parser would hop TextMate back onto the main thread
-even inside `Task.detached`. Session Chat timelines coalesce-latest
-while apply is in flight (iOS uses a tracked, lifecycle-cancelled apply task
-with `Task.yield`; Android preserves explicit/post-send applies in a FIFO queue
+even inside `Task.detached`. Session Chat timelines coalesce-latest while apply
+is in flight (iOS uses a tracked, lifecycle-cancelled apply task with
+`Task.yield`; Android preserves explicit/post-send applies in a FIFO queue
 while coalescing only callback-free live frames, and `.conflate()` on the
-display observation keeps the latest fully styled enrichment snapshot when apply
-is busy). Large streaming replies (≥8k
-chars) skip markdown preparation and render plain text until the message
-finishes; large streaming code fences (≥2k chars) also render as plain monospace
-until highlight runs on the final frame. Android also constructs large
-finalized annotated strings off the UI thread. See
-[plan.md](./plan.md#where-markdown-runs) for the full data flow.
+display observation keeps the latest fully styled enrichment snapshot when
+apply is busy). Streaming text-lane coalesce always attaches a formatted
+scaffold when markdown is detected (OPE-92); when TextMate is on, streaming
+semantic decoration is skipped and colors arrive on Final. A residual ≥8k
+streaming decoration size gate may still defer disposable color catch-up until
+Final when TextMate is off — it must not leave detectable markdown as
+unprocessed plain source. Android also constructs large finalized annotated
+strings off the UI thread. See [plan.md](./plan.md#where-markdown-runs) and
+the [Streaming fast lane](#streaming-fast-lane) decision for the full data
+flow.
 
 `RenderedMarkdownMapper` in the UI layer is removed.
 
@@ -799,7 +803,7 @@ it (poll/REST full-list fallback remains).
 
 Shared scenario names (both platforms; same observable outcomes):
 
-1. Long-history open (plain-first before decoration)
+1. Long-history open (format-first scaffold before TextMate color enrichment)
 2. Dense stream (bounded progressive plain frames)
 3. Reconnect / authority restore
 4. Repeated overflow → recovering → healthy only after validated replace

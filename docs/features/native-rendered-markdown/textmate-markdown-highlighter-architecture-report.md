@@ -1,10 +1,17 @@
 # TextMate Markdown Highlighter Architecture Report
 
-**Date:** 2026-07-29
-**Implementation status:** Phases 1–6 closed
+**Date:** 2026-07-29 (runtime defaults refreshed 2026-07-31)
+**Implementation status:** Phases 1–6 closed; OPE-92 format-always layered on top
 **Scope:** fenced code blocks in opencode-mobile's native Rendered Markdown path
 **Evidence:** current repository source and tests, TextMate's grammar manual,
 Shiki documentation, and `vscode-textmate` source
+
+> **Note (2026-07-31):** Sections below that still say “TextMate default off”
+> or “streaming stays semantic / plain until Final” are **historical relative to
+> Phase 6 + OPE-92**. Current contract: unset preference defaults **on** behind
+> `TextMateLanguageAllowlist` v1; streaming/history first paint is format-always
+> (structure-only when TextMate on). See `decisions.md` (Format-Always + Phase 6)
+> and `ope-92-structure-first-code-blocks-plan.md`.
 
 ## Executive summary
 
@@ -29,9 +36,11 @@ The architecture is therefore:
 
 The design has three deliberate product boundaries:
 
-- TextMate highlighting is opt-in and disabled by default.
-- streaming messages use a cheaper regex-based semantic fallback and upgrade
-  after finalization;
+- TextMate highlighting defaults **on** for allowlisted languages (Phase 6);
+  Settings remains the kill switch, and unpromoted languages stay semantic
+  unless force-enabled;
+- streaming / history first paint is format-always (structure-only when TextMate
+  is on; full semantic when off), with TextMate colors upgrading later (OPE-92);
 - full Shiki theme fidelity is not carried into the render tree.
 
 The strongest current correctness claim is narrow but concrete: the ten
@@ -69,8 +78,8 @@ enforcement mechanism.
 | Bundled coverage | 62 language entries, 74 grammar JSON resources, about 4.8 MiB |
 | Token output | `TextMateScopeToken(start, end, scopes)` |
 | App render contract | 18 `CodeTokenRole` values |
-| TextMate default | Disabled |
-| Streaming policy | Semantic fallback; final frame is eligible for TextMate |
+| TextMate default | **On** when unset (Phase 6); allowlist v1 gates languages |
+| Streaming policy | Format-always scaffold (structure-only when TextMate on); colors on Final / enrichment (OPE-92) |
 | Exact semantic oracle | Top-10 `*-basic` fixtures on Android and iOS |
 | Broad oracle | Present but ignored |
 | Incremental reuse | State is carried between lines inside one parse; not reused between message revisions |
@@ -203,32 +212,34 @@ The highlighter selector is intentionally simple:
 
 ```mermaid
 flowchart TD
-    A["Parse request"] --> B{"isStreaming?"}
-    B -->|Yes| F["Semantic fallback"]
-    B -->|No| C{"textMateEnabled?"}
-    C -->|No| F
-    C -->|Yes| D["Platform TextMate highlighter"]
-    D --> E{"Grammar found,<br/>tokenization yields semantic spans?"}
-    E -->|Yes| G["Return TextMate-derived spans"]
-    E -->|No| F
-    F --> H["Return regex-derived spans<br/>+ HighlighterFallback"]
+    A["Parse request"] --> B{"structureOnly?"}
+    B -->|Yes| S["Structure-only empty spans"]
+    B -->|No| C{"isStreaming?"}
+    C -->|Yes| F["Semantic fallback"]
+    C -->|No| D{"textMateEnabled and allowlisted?"}
+    D -->|No| F
+    D -->|Yes| E["Platform TextMate highlighter"]
+    E --> G{"Grammar found,<br/>tokenization yields semantic spans?"}
+    G -->|Yes| H["Return TextMate-derived spans"]
+    G -->|No| F
+    F --> I["Return regex-derived spans<br/>+ HighlighterFallback"]
 ```
 
-Both platform preference stores default `textMateEnabled` to `false`. The
-preference is persisted and has an epoch. Changing it clears the preparer's
-document cache, and the epoch prevents already prepared documents from being
-settle-reused under a different highlighting policy.
+Both platform preference stores default `textMateEnabled` to **true** when
+unset (Phase 6). The preference is persisted and has an epoch. Changing it
+clears the preparer's document cache, and the epoch prevents already prepared
+documents from being settle-reused under a different highlighting policy.
+`TextMateLanguageGateRegistry` further admits only allowlisted (or
+force-enabled) languages onto the TextMate path.
 
-While streaming:
+While streaming with TextMate on:
 
-- TextMate is bypassed before the mutable tokenizer is reached;
-- messages of 8,000 or more characters can remain entirely plain until the
-  final parse;
-- code fences of 2,000 or more characters can keep prepared spans but paint
-  plain text for the streaming frame;
-- a final placeholder may temporarily retain streaming fallback spans;
+- the text lane publishes a structure-only scaffold (OPE-92);
+- disposable streaming semantic decoration is skipped so colors do not flash
+  before Final TextMate;
+- a final placeholder may temporarily retain the scaffold;
 - `awaitingTextMateUpgrade` prevents final preparation from treating that
-  placeholder as the finished document.
+  placeholder as the finished colored document.
 
 This turns highlighting into a two-quality pipeline:
 

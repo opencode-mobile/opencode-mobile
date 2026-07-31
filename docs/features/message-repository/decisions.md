@@ -109,9 +109,10 @@ timeline-ready display messages. Streaming snapshots use a short quiet window
 with a fixed maximum batch age, so dense token bursts reduce repaint pressure
 without progressively slowing long replies.
 
-Large histories publish a usable plain-first timeline before markdown
-enrichment. Enrichment proceeds newest-first as cancellable follow-up work; a
-new live snapshot cancels stale enrichment rather than waiting behind it.
-Large live markdown and code remain plain while streaming, and large finalized
-Android annotated strings are built off the UI thread. Final content is still
-enriched once the message stops streaming.
+Large histories publish a usable format-first timeline scaffold before TextMate
+color enrichment. Enrichment proceeds newest-first as cancellable follow-up
+work; a new live snapshot cancels stale enrichment rather than waiting behind
+it. Streaming attaches formatted scaffolds when markdown is detected (OPE-92);
+TextMate colors (or deferred semantic catch-up when TextMate is off) arrive on
+Final / history enrichment. Large finalized Android annotated strings are
+built off the UI thread.

@@ -125,8 +125,8 @@ Preparation uses a closed mode instead of independent boolean flags:
 
 | Mode | Behavior | Updates prepared cache |
 | --- | --- | --- |
-| `streaming` | Prepare the latest streaming snapshot; use plain text above the streaming limit | Yes |
-| `historyPlainFirst` | Publish usable history without starting missing markdown parses | No full replace; merge existing docs only |
+| `streaming` | Prepare the latest streaming snapshot; attach format-always scaffold when markdown is detected | Yes |
+| `historyPlainFirst` | Publish format-first history scaffolds (structure/semantic); defer TextMate color enrichment | No full replace; merge existing docs only |
 | `historyEnrichment` | Prepare missing history markdown newest-first | Yes |
 | `finalPlaceholder` | Reuse the last streaming document when source text still matches | Yes |
 | `final` | Prepare authoritative finalized markdown | Yes |
@@ -139,7 +139,7 @@ The mode is internal to the pipeline. Callers receive only
 
 | State | Input | Action | Next state |
 | --- | --- | --- | --- |
-| `loading` | Initial snapshot | Cache hit, final preparation, or plain-first publish | `stable` or `enriching` |
+| `loading` | Initial snapshot | Cache hit, final preparation, or format-first publish | `stable` or `enriching` |
 | `loading` | Load failure | Cancel pending work and publish `loadFailed` | `failed` |
 | `stable` | Streaming snapshot | Record latest generation and start pacing gate | `streaming` |
 | `streaming` | New streaming snapshot | Replace pending snapshot; reschedule quiet gate | `streaming` |
@@ -201,7 +201,7 @@ flowchart TD
 ```
 
 Both platforms publish at most two enrichment frames after the
-plain-first frame:
+format-first scaffold:
 
 1. the newest messages needed for the initial viewport, constrained by message
    count and character budget; and
@@ -227,13 +227,13 @@ flowchart TD
   Start --> Worker[Prepare streaming mode on CPU worker]
   Worker --> Current{Generation still current?}
   Current -->|no| Drop[Discard]
-  Current -->|yes| Limit{Streaming text at least 8k chars?}
-  Limit -->|yes| Plain[Publish plain text]
-  Limit -->|no| Markdown[Publish streaming markdown]
+  Current -->|yes| Scaffold[Publish format-always scaffold]
 ```
 
 The 16 ms quiet window and 48 ms maximum batch age are pacing defaults, not
-ordering guarantees. The generation check is the ordering guarantee.
+ordering guarantees. The generation check is the ordering guarantee. Disposable
+decoration may still defer for very large streaming fences when TextMate is off;
+the text lane must not leave detectable markdown as unprocessed plain source.
 
 ### Finalization
 

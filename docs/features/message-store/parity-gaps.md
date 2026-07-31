@@ -10,11 +10,11 @@ difference.
 iOS `DisplayMessagePipeline` keeps a prepared-markdown map across leave/reopen,
 keyed by connection profile + directory + session, bounded by a `512_000`-char
 budget and `8` sessions (LRU), and opens with a single `cache-hit` / warm peek
-when complete. Android resets `previousById` per observation and still
-plain-first + enrich on reopen; LazyColumn only recomposes changed visible
-rows, so that path already feels responsive. Product UX should match (instant
-usable chat, no hang, no row-by-row wipe); the caching mechanism may stay
-iOS-only until Android needs it.
+when complete. Android resets `previousById` per observation and still runs
+format-first scaffold + newest-first enrichment on reopen; LazyColumn only
+recomposes changed visible rows, so that path already feels responsive. Product
+UX should match (instant usable chat, no hang, no row-by-row wipe); the caching
+mechanism may stay iOS-only until Android needs it.
 
 The temporary iOS performance gap in final native attributed-string
 construction belongs to the renderer and is tracked in
@@ -34,9 +34,9 @@ mechanisms remain platform-native:
 | Large markdown paint | Large code/diff annotations build off Main; streaming large fences stay plain | Same 2k code/diff behavior, plus a one-frame/32 ms whole-bubble markdown defer at 3k characters |
 
 Both platforms must preserve stable message identity, block ordering, user
-scroll priority, exact-end auto-follow while armed, and plain-first replacement
-without duplicating or reordering a row. The iOS whole-bubble defer is an
-intentional `UICollectionView` cell-host protection, not a product-level
+scroll priority, exact-end auto-follow while armed, and format-first scaffold
+replacement without duplicating or reordering a row. The iOS whole-bubble defer
+is an intentional `UICollectionView` cell-host protection, not a product-level
 loading state or a second display-pipeline publish. Android drag
 newest-immutable vs iOS cell-apply coalesce is an intentional mechanism gap
 (Phase 6 / 7a); revisit only if soak shows product-visible divergence.
@@ -86,10 +86,10 @@ matrix. No Screen Model banner/chip or public-frame `syncHealth` UI in 7a or
 
 Resolved in Phase 4 of [pipeline-hardening-plan.md](./pipeline-hardening-plan.md).
 Both platforms publish at most one newest-viewport enrichment frame (3 messages
-/ 12k character budget) and one remaining-history frame after plain-first.
-Newest-first preparation is preserved inside each batch; generations gate both
-publishes. Android timeline `.conflate()` keeps the latest fully styled
-snapshot when apply is busy.
+/ 12k character budget) and one remaining-history frame after the format-first
+scaffold. Newest-first preparation is preserved inside each batch; generations
+gate both publishes. Android timeline `.conflate()` keeps the latest fully
+styled snapshot when apply is busy.
 
 ## Prepared-work cancellation semantics
 

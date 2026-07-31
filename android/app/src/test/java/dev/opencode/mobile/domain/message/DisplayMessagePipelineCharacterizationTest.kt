@@ -449,6 +449,63 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
+    fun structureFirstStreamingPreservesSiblingAwaitingTextMateUpgrade() =
+        runTest(testDispatcher) {
+            val prior = MarkdownHighlightPreferences.textMateEnabled
+            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            try {
+                val harness = startHarness(holdDelays = true)
+                val history =
+                    (1..5).map { index ->
+                        markdownAssistant(
+                            id = "hist-$index",
+                            text = "# Heading $index\n\n" + "Some prose with `code`. ".repeat(80),
+                        )
+                    }
+                require(
+                    history.sumOf { it.text.length } >=
+                        MessageContentPreparer.HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD,
+                )
+
+                harness.source.emit(MessageListUpdate.Messages(history))
+                advanceUntilIdle()
+
+                val formatFirst =
+                    harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
+                assertTrue(formatFirst.messages.all { it.awaitingTextMateUpgrade })
+                assertTrue(formatFirst.messages.all { it.renderedMarkdown != null })
+
+                harness.emissions.clear()
+                val fenced =
+                    """
+                    ```javascript
+                    const x = 1
+                    ```
+                    """.trimIndent()
+                harness.source.emit(
+                    MessageListUpdate.Messages(history + streamingAssistant("stream-1", fenced)),
+                )
+                advanceUntilIdle()
+                if (harness.delay.hasPending()) {
+                    harness.delay.release()
+                    advanceUntilIdle()
+                }
+
+                val frame =
+                    harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
+                val siblings = frame.messages.filter { it.id.startsWith("hist-") }
+                assertEquals(5, siblings.size)
+                assertTrue(
+                    "structure-first must preserve awaitingTextMateUpgrade on non-streaming siblings",
+                    siblings.all { it.awaitingTextMateUpgrade && it.renderedMarkdown != null },
+                )
+                assertTrue(frame.messages.any { it.id == "stream-1" })
+            } finally {
+                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            }
+        }
+
+    @Test
     fun largeStreamingStillFormatsMarkdownStructure() =
         runTest(testDispatcher) {
             val harness = startHarness()

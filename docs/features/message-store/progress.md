@@ -34,7 +34,7 @@
   [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md),
   with a self-contained status board in
   [message-display-rendering-hardening-plan.html](./message-display-rendering-hardening-plan.html).
-- [x] Hardening Phase 4: independent streaming text lane (always-plain 16/48)
+- [x] Hardening Phase 4: independent streaming text lane (format-always 16/48)
   plus disposable decoration lane with bounded backlog on both platforms.
 - [x] Hardening Phase 5: stable `blockID`s, internal DisplayFrame→TimelineFrame
   projectors, and per-block Markdown via BlockDecorationCache on both platforms.
@@ -42,6 +42,9 @@
   apply, and unarmed visible-anchor restore on both platforms.
 - [x] Hardening Phase 7a: soak matrix mapped, unused probes deleted, architecture
   docs flipped to implemented; Phase 7b deferred.
+- [x] OPE-92 format-always: docs and soak naming updated from plain-source
+  first paint to format-first scaffolds (structure/semantic), with TextMate
+  color enrichment still newest-first when enabled (2026-07-31).
 
 ## Design-system
 

@@ -199,6 +199,7 @@ nonisolated enum StreamingTextBlockIdentity {
         var runs: [[(id: String, text: String, streaming: Bool)]] = []
         var current: [(id: String, text: String, streaming: Bool)] = []
         var sawMissingID = false
+        let allowToolCards = message.role == .assistant
 
         for part in message.parts {
             switch part {
@@ -214,7 +215,14 @@ nonisolated enum StreamingTextBlockIdentity {
                     continue
                 }
                 current.append((partId, trimmed, textPart.isStreaming))
-            default:
+            case .tool(let tool):
+                // Match SessionChatTimelineBlocks: invisible tools do not split text runs.
+                guard allowToolCards, isVisibleToolForDecoration(tool) else { continue }
+                if !current.isEmpty {
+                    runs.append(current)
+                    current = []
+                }
+            case .file:
                 if !current.isEmpty {
                     runs.append(current)
                     current = []
@@ -228,5 +236,15 @@ nonisolated enum StreamingTextBlockIdentity {
             return []
         }
         return runs
+    }
+
+    /// Mirrors SessionChatTimelineBlocks visibility used when flushing text runs.
+    private static func isVisibleToolForDecoration(_ tool: ToolPart) -> Bool {
+        let name = tool.toolName.lowercased()
+        if name == "todowrite" { return false }
+        if name == "question", tool.status == .pending || tool.status == .running {
+            return false
+        }
+        return true
     }
 }

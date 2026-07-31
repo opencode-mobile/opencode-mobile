@@ -424,6 +424,59 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func structureFirstStreamingPreservesSiblingAwaitingTextMateUpgrade() async {
+        let harness = Harness(holdSleep: true)
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+        let preferences = MarkdownHighlightPreferences.shared
+        let prior = preferences.textMateEnabled
+        preferences.setTextMateEnabled(true)
+        defer { preferences.setTextMateEnabled(prior) }
+
+        let history = (1...5).map { index in
+            markdownAssistant(
+                id: "hist-\(index)",
+                text: "# Heading \(index)\n\n" + String(repeating: "Some prose with `code`. ", count: 80)
+            )
+        }
+        precondition(
+            history.reduce(0) { $0 + $1.text.count }
+                >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold
+        )
+
+        await harness.source.emit(.messages(history))
+        let formatFirstReady = await waitUntil {
+            collector.emissions.last?.allSatisfy { $0.awaitingTextMateUpgrade } == true
+        }
+        #expect(formatFirstReady)
+
+        collector.emissions.removeAll()
+        let fenced = """
+        ```javascript
+        const x = 1
+        ```
+        """
+        await harness.source.emit(
+            .messages(history + [streamingAssistant(id: "stream-1", text: fenced)])
+        )
+        if harness.clock.pendingSleep != nil {
+            harness.clock.releaseSleep()
+        }
+        let preserved = await waitUntil {
+            guard let frame = collector.emissions.last else { return false }
+            let siblings = frame.filter { $0.id.hasPrefix("hist-") }
+            return siblings.count == 5
+                && siblings.allSatisfy { $0.awaitingTextMateUpgrade && $0.renderedMarkdown != nil }
+                && frame.contains { $0.id == "stream-1" }
+        }
+        #expect(preserved)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
     @Test func largeStreamingStillFormatsMarkdownStructure() async {
         let harness = Harness()
         let collector = CharacterizationDisplayCollector()

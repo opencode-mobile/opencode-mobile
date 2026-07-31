@@ -3,6 +3,9 @@
 ## Status
 
 - Status: in progress.
+- 2026-07-31: Doc sync — superseded “TextMate default off” decision; current
+  Session Chat / message-store / parity-gap wording now matches format-always
+  scaffolds + Phase 6 default-on allowlist (device smoke / Tier B still open).
 - 2026-07-30: **OPE-92** format-always / color-later — streaming and history
   never leave detectable markdown as plain source; TextMate on → structure-only
   then Final/enrichment colors; TextMate off → full semantic. Plan:
@@ -176,10 +179,11 @@
   uses pre-parsed mock documents.
 - Staged publication: small histories are transformed before their first
   publish. Histories with at least 4,000 markdown-candidate characters publish
-  plain first, then enrich Markdown newest-first and publish at most twice
-  (`enrich-viewport` for the open bottom, then `enrich-batch` for the rest) —
-  never per-bubble UI frames that look like the chat reprinting. Live
-  streaming updates retain transform-before-publish semantics.
+  a format-first scaffold (structure/semantic), then upgrade TextMate colors
+  newest-first and publish at most twice (`enrich-viewport` for the open
+  bottom, then `enrich-batch` for the rest) — never per-bubble UI frames that
+  look like the chat reprinting. Live streaming updates retain
+  transform-before-publish semantics and OPE-92 format-always scaffolds.
 - Outgoing overflow: structural markdown content retains collapse/expand;
   long wrapped inline markdown stays fully visible when no expand control can
   be offered.

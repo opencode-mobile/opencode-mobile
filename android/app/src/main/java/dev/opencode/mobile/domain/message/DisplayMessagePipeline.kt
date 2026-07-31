@@ -110,7 +110,9 @@ class DisplayMessagePipeline(
                                 previous != null &&
                                     previous.text == message.text &&
                                     previous.renderedMarkdown != null ->
-                                    DisplayMessage(message = message, renderedMarkdown = previous.renderedMarkdown)
+                                    // Preserve upgrade metadata so concurrent streams do not
+                                    // clear HistoryPlainFirst / enrichment pending flags.
+                                    previous.copy(message = message)
                                 else -> DisplayMessage(message = message, renderedMarkdown = null)
                             }
                         continue
@@ -550,42 +552,76 @@ internal data class StreamingDecorationTarget(
 
 /**
  * Resolve the streaming text presentation block for decoration.
- * Prefer [PresentationBlockId.mergedText] from streaming text part IDs;
- * fall back to [PresentationBlockId.messageFallback] when IDs are incomplete.
+ *
+ * Matches [SessionChatTimelineBlocks] text-run boundaries: visible tools and
+ * file parts flush a run; invisible tools (e.g. todowrite) do not. Prefer the
+ * last run that still contains streaming text — the active block the user is
+ * watching — then fall back to [PresentationBlockId.messageFallback].
  */
 internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecorationTarget? {
-    val streamingParts =
-        message.parts.filterIsInstance<MessagePart.Text>().filter { it.isStreaming }
-    if (streamingParts.isEmpty()) return null
-    val pieces =
-        streamingParts.mapNotNull { part ->
-            val trimmed = part.text.trim()
-            if (trimmed.isEmpty()) null else part to trimmed
+    if (!messageHasStreamingText(message)) return null
+    val allowToolCards = message.role == MessageRole.Assistant
+    val runs = mutableListOf<List<Pair<MessagePart.Text, String>>>()
+    var current = mutableListOf<Pair<MessagePart.Text, String>>()
+
+    fun flush() {
+        if (current.isEmpty()) return
+        runs += current.toList()
+        current = mutableListOf()
+    }
+
+    for (part in message.parts) {
+        when (part) {
+            is MessagePart.Text -> {
+                val trimmed = part.text.trim()
+                if (trimmed.isEmpty()) continue
+                if (part.id == null) {
+                    flush()
+                    continue
+                }
+                current += part to trimmed
+            }
+            is MessagePart.Tool -> {
+                if (!allowToolCards || !isVisibleToolForStreamingDecoration(part)) continue
+                flush()
+            }
+            is MessagePart.File -> flush()
         }
-    if (pieces.isEmpty()) return null
-    val partIds = pieces.mapNotNull { (part, _) -> part.id }
-    val hasCompleteIds = partIds.size == pieces.size
-    val blockID =
-        if (hasCompleteIds) {
-            PresentationBlockId.mergedText(partIds)
-        } else {
-            PresentationBlockId.messageFallback(message.id)
-        }
-    // Match SessionChatTimelineBlocks: structured merge uses trimmed joins;
-    // incomplete IDs fall back to message.text as the sole block source.
-    val plain =
-        if (hasCompleteIds) {
-            pieces.joinToString("\n") { it.second }
-        } else {
-            message.text
-        }
+    }
+    flush()
+
+    val selected =
+        runs.lastOrNull { run -> run.any { (textPart, _) -> textPart.isStreaming } }
+    if (selected == null) {
+        return StreamingDecorationTarget(
+            blockID = PresentationBlockId.messageFallback(message.id),
+            plain = message.text,
+            textHash = stableMarkdownSourceHash(message.text),
+            textLength = message.text.length,
+            isStreaming = true,
+        )
+    }
+    val partIds = selected.mapNotNull { (textPart, _) -> textPart.id }
+    val plain = selected.joinToString("\n") { it.second }
     return StreamingDecorationTarget(
-        blockID = blockID,
+        blockID = PresentationBlockId.mergedText(partIds),
         plain = plain,
         textHash = stableMarkdownSourceHash(plain),
         textLength = plain.length,
         isStreaming = true,
     )
+}
+
+/** Mirrors [SessionChatTimelineBlocks] visibility used when flushing text runs. */
+private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean {
+    val name = tool.toolName.lowercase()
+    if (name == "todowrite") return false
+    if (name == "question" &&
+        (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running)
+    ) {
+        return false
+    }
+    return true
 }
 
 private fun messageHasSoleTextBlock(message: Message): Boolean {

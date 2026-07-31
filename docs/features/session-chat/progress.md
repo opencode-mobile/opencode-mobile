@@ -24,24 +24,28 @@
   (`MessageListTimelineHostCell`) + per-row height cache / heuristic estimate
   seed (replacing flat `estimated(72)`).
 - **2026-07-28:** Experimental `HOLD_READY_UNTIL_NEWEST_MARKDOWN` /
-  `holdReadyUntilNewestMarkdown`: large histories keep Session Chat on Loading
-  until the newest markdown candidate is enriched (plain-first not published).
-  Flip the flag to `false` to restore immediate plain Ready.
+  `holdReadyUntilNewestMarkdown` (default **false**): when true, large
+  histories keep Session Chat on Loading until the newest markdown candidate is
+  enriched. Production path publishes format-first Ready immediately.
 - **2026-07-28:** Assistant bubbles paint prepared markdown immediately on first
   appear; ≥3k paint-defer remains only for docs that arrive later on an already
   visible plain bubble.
-- **2026-07-28:** Fenced code/diff paint prepared spans on first frame (no
-  plain→colored flash). Streaming fences under 2k chars paint semantic-fallback
-  spans; only larger fences stay plain via `forcePlain`. iOS highlighted Text
-  does not stack `.foregroundStyle` on attributed colors (fixes garbled
-  overlapping glyphs).
+- **2026-07-28:** Fenced code/diff paint prepared structure on first frame (no
+  raw-fence flash). Later superseded for streaming/history by OPE-92
+  format-always (structure-only when TextMate on; full semantic when off).
 - **2026-07-28:** Fixed TextMate upgrade after stream end: `FinalPlaceholder`
   now marks `awaitingTextMateUpgrade`, and `Final` must not settle-reuse that
   streaming-quality document. Pipeline also passes the pre-placeholder snapshot
   into `Final` prepare.
-- **2026-07-28:** TextMate highlighting is Settings → Developer Tools gated
-  (`MarkdownHighlightPreferences`, default **off**). When off, all parses use
-  semantic fallback; toggling bumps `highlightEpoch` and clears prepared caches.
+- **2026-07-28:** TextMate highlighting Settings → Developer Tools gated
+  (`MarkdownHighlightPreferences`). **Default later flipped to on** (Phase 6,
+  2026-07-29) behind the top-ten allowlist; explicit off still uses semantic
+  fallback. Toggling bumps `highlightEpoch` and clears prepared caches.
+- **2026-07-31:** Current Session Chat markdown contract: format-always
+  structure/chrome on streaming and large-history open; TextMate colors upgrade
+  asynchronously when enabled; no raw markdown source for detectable fences.
+  See `../native-rendered-markdown/ope-92-structure-first-code-blocks-plan.md`
+  and `../message-store/decisions.md` (Streaming fast lane).
 
 ## Design System
 
@@ -214,10 +218,12 @@
 - iOS and Android both enrich the full merged timeline on load.
 - Warm revisits remain fast because the in-memory render-document cache is keyed
   by message text.
-- OPE-82 changed large cold histories to plain-first, newest-first incremental
-  enrichment on 2026-07-26. No replacement cold-open measurement has been
-  recorded yet, so the ~2.5 s result above is retained as historical baseline,
-  not claimed for the new staged pipeline.
+- OPE-82 staged large cold histories (plain-first, then newest-first
+  enrichment) on 2026-07-26. OPE-92 (2026-07-30) replaced the plain-source
+  first paint with format-always structure/semantic scaffolds; enrichment still
+  upgrades TextMate colors newest-first when enabled. No replacement cold-open
+  measurement has been recorded yet, so the ~2.5 s result above is retained as
+  historical baseline, not claimed for the staged pipeline.
 
 ### Historical (2026-06-24, hybrid regex backend, staged window)
 
