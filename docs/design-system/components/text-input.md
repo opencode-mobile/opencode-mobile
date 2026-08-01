@@ -50,7 +50,11 @@ content-type behavior. Visual styling is not exposed for feature-level override.
   behavior. Hint maps to the field's placeholder string.
 - Android: Material `OutlinedTextField` provides native focus, keyboard, and
   password transformation behavior. Hint maps to the field's placeholder; no
-  Material floating label is used.
+  Material floating label is used. The control keeps a local `TextFieldValue` so
+  caret/selection survive parent recomposition, and it does not set
+  `contentDescription` when the hint already names the field (that override can
+  hide Paste on empty fields). URL fields use an ASCII keyboard rather than the
+  URI variation for the same reason.
 
 ## Previews
 

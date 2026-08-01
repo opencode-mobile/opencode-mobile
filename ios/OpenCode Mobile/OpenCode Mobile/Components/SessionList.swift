@@ -52,7 +52,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
     }
 }
 
-struct SessionList: View {
+struct SessionList<EmptyContent: View>: View {
     let sessions: [SessionListSession]
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
@@ -61,6 +61,8 @@ struct SessionList: View {
     let onSessionSelected: (SessionListSession) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let showsEmptyContent: Bool
+    let emptyContent: EmptyContent
 
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var dockHeight: CGFloat = 0
@@ -73,7 +75,9 @@ struct SessionList: View {
         onFilterSelected: @escaping (String) -> Void,
         onSessionSelected: @escaping (SessionListSession) -> Void,
         onAddProject: @escaping () -> Void,
-        onNewSession: @escaping () -> Void
+        onNewSession: @escaping () -> Void,
+        showsEmptyContent: Bool = false,
+        @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
         self.sessions = sessions
         self.filterTabs = filterTabs
@@ -83,6 +87,8 @@ struct SessionList: View {
         self.onSessionSelected = onSessionSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.showsEmptyContent = showsEmptyContent
+        self.emptyContent = emptyContent()
     }
 
     private var visibleSessions: [SessionListSession] {
@@ -91,26 +97,33 @@ struct SessionList: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(visibleSessions) { session in
-                        OpenCodeListItem(
-                            title: session.title,
-                            subtitle: compactHomePath(session.subtitle),
-                            status: listItemStatus(session.status),
-                            caption: session.caption.isEmpty ? nil : session.caption,
-                            startDecorator: .letter(session.letter, session.letterAccent),
-                            action: { onSessionSelected(session) }
-                        )
-                        Divider()
-                            .overlay(OpenCodeColors.borderWeakerBase)
-                            .padding(.leading, 60)
+            if visibleSessions.isEmpty, showsEmptyContent {
+                emptyContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                    .background(OpenCodeColors.backgroundBase)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(visibleSessions) { session in
+                            OpenCodeListItem(
+                                title: session.title,
+                                subtitle: compactHomePath(session.subtitle),
+                                status: listItemStatus(session.status),
+                                caption: session.caption.isEmpty ? nil : session.caption,
+                                startDecorator: .letter(session.letter, session.letterAccent),
+                                action: { onSessionSelected(session) }
+                            )
+                            Divider()
+                                .overlay(OpenCodeColors.borderWeakerBase)
+                                .padding(.leading, 60)
+                        }
                     }
+                    Color.clear.frame(height: sessionListFallbackBottomSpacer)
                 }
-                Color.clear.frame(height: sessionListFallbackBottomSpacer)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(OpenCodeColors.backgroundBase)
 
             OpenCodeBottomFade(
                 height: max(dockHeight + OpenCodeBottomFade.overhang, OpenCodeBottomFade.overhang)
@@ -158,7 +171,6 @@ struct SessionList: View {
             OpenCodeListItemStatus(text: "Running", tone: .interactive)
         }
     }
-
 }
 
 private func compactHomePath(_ path: String) -> String {

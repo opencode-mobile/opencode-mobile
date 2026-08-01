@@ -60,14 +60,14 @@ import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalle
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
-import dev.opencode.mobile.ui.connection.ConnectionSetupSheetContent
+import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.root.AppRootState
@@ -84,18 +84,18 @@ import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 fun MainNavigation() {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
-    var connectionSetupVisible by rememberSaveable { mutableStateOf(false) }
     val setupViewModel: ConnectionSetupViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
-
-    fun presentConnectionSetup(initialProfile: ConnectionProfile?) {
-        setupViewModel.configure(initialProfile)
-        connectionSetupVisible = true
-    }
-
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
+
+    fun presentConnectionSetup(initialProfile: ConnectionProfile?) {
+        setupViewModel.configure(initialProfile)
+        if (backStack.lastOrNull() != ConnectionSetupHome) {
+            backStack.add(ConnectionSetupHome)
+        }
+    }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
     val systemDarkTheme = isSystemInDarkTheme()
     val darkTheme =
@@ -147,7 +147,9 @@ fun MainNavigation() {
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onConnectionSetup = {
                                                     setupViewModel.configureFromCurrentProfile()
-                                                    connectionSetupVisible = true
+                                                    if (backStack.lastOrNull() != ConnectionSetupHome) {
+                                                        backStack.add(ConnectionSetupHome)
+                                                    }
                                                 },
                                                 onClearData = settingsViewModel::clearAllData,
                                                 onImportTheme = settingsViewModel::importThemeFromUri,
@@ -157,6 +159,23 @@ fun MainNavigation() {
                                                     settingsViewModel::setShowSessionListOnHome,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
+                                            )
+                                        }
+                                    }
+                                    entry<ConnectionSetupHome> {
+                                        RouteSurface {
+                                            ConnectionSetupScreen(
+                                                uiState = setupUiState,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onBaseUrlChanged = setupViewModel::onBaseUrlChanged,
+                                                onUsernameChanged = setupViewModel::onUsernameChanged,
+                                                onPasswordChanged = setupViewModel::onPasswordChanged,
+                                                onTestConnection = setupViewModel::testConnection,
+                                                onSave = {
+                                                    setupViewModel.saveConnection {
+                                                        backStack.removeLastOrNull()
+                                                    }
+                                                },
                                             )
                                         }
                                     }
@@ -225,6 +244,10 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
+                                                        ComponentGalleryEntryId.ServerAddressInput ->
+                                                            ServerAddressInputGalleryScreen()
+                                                        ComponentGalleryEntryId.EmptyState ->
+                                                            EmptyStateGalleryScreen()
                                                         ComponentGalleryEntryId.ProjectSessionSelector ->
                                                             ProjectSessionSelectorGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
@@ -309,26 +332,6 @@ fun MainNavigation() {
                                     }
                                 },
                         )
-                }
-
-                OpenCodeBottomSheet(
-                    visible = connectionSetupVisible,
-                    title = "Connect to server",
-                    onDismissRequest = { connectionSetupVisible = false },
-                    contentMode = OpenCodeBottomSheetContentMode.Form,
-                ) {
-                    ConnectionSetupSheetContent(
-                        uiState = setupUiState,
-                        onBaseUrlChanged = setupViewModel::onBaseUrlChanged,
-                        onUsernameChanged = setupViewModel::onUsernameChanged,
-                        onPasswordChanged = setupViewModel::onPasswordChanged,
-                        onTestConnection = setupViewModel::testConnection,
-                        onSave = {
-                            setupViewModel.saveConnection {
-                                connectionSetupVisible = false
-                            }
-                        },
-                    )
                 }
             }
         }

@@ -130,18 +130,15 @@ struct ProjectListHomeView: View {
                     }
                 }
             }
-            .openCodeBottomSheet(
-                item: $connectionSetupPresentation,
-                title: "Connect to server",
-                contentMode: .form
-            ) { presentation in
-                ConnectionSetupSheetView(
+            .fullScreenCover(item: $connectionSetupPresentation) { presentation in
+                ConnectionSetupView(
                     viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
                     onDismiss: {
                         connectionSetupPresentation = nil
                         connectionSetupViewModel = nil
                     }
                 )
+                .openCodeTheme()
             }
         }
     }
@@ -271,34 +268,57 @@ struct ProjectListHomeView: View {
                     )
                 },
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
-                onNewSession: { showNewSessionProjectPicker = true }
+                onNewSession: { showNewSessionProjectPicker = true },
+                showsEmptyContent: sections.isEmpty,
+                emptyContent: { NoProjectsEmptyState() }
             )
         } else {
             GeometryReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ProjectSessionSelector(
-                            projects: sections.map(\.projectSessionSelectorProject),
-                            selectedWorktree: focusedWorktree,
-                            createError: createError,
-                            onProjectSelected: { viewModel.focusProject(worktree: $0) },
-                            onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                            onSessionSelected: { project, session in
-                                openSession(
-                                    SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
-                                )
-                            },
-                            onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
-                            onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                if sections.isEmpty {
+                    NoProjectsEmptyState()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(OpenCodeColors.backgroundBase)
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            ProjectSessionSelector(
+                                projects: [],
+                                selectedWorktree: nil,
+                                createError: createError,
+                                onProjectSelected: { _ in },
+                                onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                                onSessionSelected: { _, _ in },
+                                onShowAllSessions: { _ in },
+                                onNewSession: { _ in }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 16)
+                        }
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ProjectSessionSelector(
+                                projects: sections.map(\.projectSessionSelectorProject),
+                                selectedWorktree: focusedWorktree,
+                                createError: createError,
+                                onProjectSelected: { viewModel.focusProject(worktree: $0) },
+                                onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                                onSessionSelected: { project, session in
+                                    openSession(
+                                        SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
+                                    )
+                                },
+                                onShowAllSessions: { viewModel.showSeeAllSessions(worktree: $0) },
+                                onNewSession: { worktree in Task { await viewModel.createSession(in: worktree) } }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 16)
+                        }
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: proxy.size.height,
+                            alignment: .bottom
                         )
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
                     }
-                    .frame(
-                        maxWidth: .infinity,
-                        minHeight: proxy.size.height,
-                        alignment: .bottom
-                    )
+                    .background(OpenCodeColors.backgroundBase)
                 }
             }
             .background(OpenCodeColors.backgroundBase)

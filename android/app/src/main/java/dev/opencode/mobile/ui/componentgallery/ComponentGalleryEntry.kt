@@ -38,6 +38,8 @@ enum class ComponentGalleryEntryId {
     UnifiedDiff,
     Button,
     TextInput,
+    ServerAddressInput,
+    EmptyState,
     ProjectSessionSelector,
     SessionList,
     SessionListDock,
@@ -108,6 +110,18 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.TextInput,
             title = "Text Input",
             description = "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ServerAddressInput,
+            title = "Server Address Input",
+            description = "HTTP/HTTPS prefix plus IP and port field with paste parsing.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.EmptyState,
+            title = "Empty State",
+            description = "Centered title and message for empty screen regions.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(

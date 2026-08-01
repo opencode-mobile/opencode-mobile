@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ConnectionSetupSheetView: View {
+struct ConnectionSetupView: View {
     @Bindable var viewModel: ConnectionSetupViewModel
     let onDismiss: () -> Void
     @State private var urlFocused = false
@@ -8,50 +8,69 @@ struct ConnectionSetupSheetView: View {
     @State private var passwordFocused = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            OpenCodeTextInput(
-                text: $viewModel.baseURL,
-                hint: "Server URL",
-                kind: .url,
-                submitAction: .next,
-                isFocused: $urlFocused,
-                onSubmit: { usernameFocused = true }
-            )
-            OpenCodeTextInput(
-                text: $viewModel.username,
-                hint: "Username",
-                kind: .username,
-                submitAction: .next,
-                isFocused: $usernameFocused,
-                onSubmit: { passwordFocused = true }
-            )
-            OpenCodeTextInput(
-                text: $viewModel.password,
-                hint: "Password",
-                kind: .password,
-                isFocused: $passwordFocused,
-                onSubmit: { passwordFocused = false }
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: "Connect to server",
+                leading: .back(action: onDismiss),
+                showDivider: true
             )
 
-            statusMessage
-
-            OpenCodeButton(variant: .fullWidthText(title: "Test connection")) {
-                Task { await viewModel.testConnection() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    OpenCodeServerAddressInput(
+                        value: $viewModel.baseURL,
+                        hint: "Host",
+                        submitAction: .next,
+                        isFocused: $urlFocused,
+                        onSubmit: { usernameFocused = true }
+                    )
+                    OpenCodeTextInput(
+                        text: $viewModel.username,
+                        hint: "Username",
+                        kind: .username,
+                        submitAction: .next,
+                        isFocused: $usernameFocused,
+                        onSubmit: { passwordFocused = true }
+                    )
+                    OpenCodeTextInput(
+                        text: $viewModel.password,
+                        hint: "Password",
+                        kind: .password,
+                        isFocused: $passwordFocused,
+                        onSubmit: { passwordFocused = false }
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 16)
             }
-            .disabled(viewModel.isTesting || viewModel.isSaving)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scrollDismissesKeyboard(.interactively)
 
-            OpenCodeButton(
-                variant: .fullWidthText(title: "Save"),
-                enabled: viewModel.canSave && !viewModel.isSaving
-            ) {
-                Task {
-                    if await viewModel.saveConnection() {
-                        onDismiss()
+            VStack(alignment: .leading, spacing: 12) {
+                statusMessage
+
+                OpenCodeButton(variant: .fullWidthText(title: "Test connection")) {
+                    Task { await viewModel.testConnection() }
+                }
+                .disabled(viewModel.isTesting || viewModel.isSaving)
+
+                OpenCodeButton(
+                    variant: .fullWidthText(title: "Save"),
+                    enabled: viewModel.canSave && !viewModel.isSaving
+                ) {
+                    Task {
+                        if await viewModel.saveConnection() {
+                            onDismiss()
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
         }
-        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OpenCodeColors.backgroundBase)
         .onChange(of: viewModel.baseURL) { _, _ in viewModel.onFieldChanged() }
         .onChange(of: viewModel.username) { _, _ in viewModel.onFieldChanged() }
         .onChange(of: viewModel.password) { _, _ in viewModel.onFieldChanged() }
@@ -72,28 +91,27 @@ struct ConnectionSetupSheetView: View {
 }
 
 #Preview("Connection Setup Idle") {
-    ConnectionSetupSheetPreview(testOnAppear: false)
+    ConnectionSetupPreview(testOnAppear: false)
         .openCodeTheme()
 }
 
 #Preview("Connection Setup Reachable") {
-    ConnectionSetupSheetPreview(testOnAppear: true)
+    ConnectionSetupPreview(testOnAppear: true)
         .openCodeTheme()
 }
 
-private struct ConnectionSetupSheetPreview: View {
+private struct ConnectionSetupPreview: View {
     @State private var viewModel: ConnectionSetupViewModel
     let testOnAppear: Bool
 
     @MainActor
     init(testOnAppear: Bool) {
-        _viewModel = State(initialValue: ConnectionSetupSheetPreview.makeViewModel())
+        _viewModel = State(initialValue: ConnectionSetupPreview.makeViewModel())
         self.testOnAppear = testOnAppear
     }
 
     var body: some View {
-        ConnectionSetupSheetView(viewModel: viewModel, onDismiss: {})
-            .padding(.vertical, 20)
+        ConnectionSetupView(viewModel: viewModel, onDismiss: {})
             .task {
                 guard testOnAppear, !viewModel.canSave else { return }
                 await viewModel.testConnection()

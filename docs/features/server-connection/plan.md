@@ -8,16 +8,16 @@ connection before saving, and return to edit server details when needed.
 ## In Scope
 
 - One active **Connection Profile** per app install (base URL, username, password).
-- **Connection onboarding** when no profile is saved: message plus **Connect to
-  server** action.
-- **Connection setup** bottom sheet: editable URL, username, and password with
+- **Connection onboarding** when no profile is saved: centered message plus
+  **Connect to server** action on home.
+- **Connection setup** full-screen: editable URL, username, and password with
   dev-friendly defaults; **Test connection** via `GET /global/health`; **Save**
   enabled only after a successful test.
 - Password stored in iOS Keychain and Android Keystore-backed storage; URL and
   username in ordinary preferences.
 - After save, land on project list home with normal probe and load.
-- **Edit connection** from probe-failure UI and top-bar menu; same bottom sheet
-  pre-filled from the active profile.
+- **Edit connection** from probe-failure UI and Settings; same full-screen
+  setup pre-filled from the active profile.
 - Dynamic runtime `ServerConnection` from the saved profile (no hardcoded
   `AppConfig` URL at runtime).
 
@@ -44,15 +44,15 @@ connection before saving, and return to edit server details when needed.
 
 **Root gate:** onboarding (no profile) or project home (profile exists).
 
-**Connection setup sheet:** `idle`, `testing`, `testSucceeded`, `testFailed`,
+**Connection setup screen:** `idle`, `testing`, `testSucceeded`, `testFailed`,
 `saving`.
 
 ## User Actions
 
-- `connectToServerTapped` — open setup sheet from onboarding.
+- `connectToServerTapped` — open setup screen from onboarding.
 - `testConnectionTapped` — probe draft credentials.
 - `saveTapped` — persist profile after successful test.
-- `editConnectionTapped` — open setup sheet from home.
+- `editConnectionTapped` — open setup screen from home or Settings.
 - `retryProbeTapped` — re-run home probe (existing).
 
 ## Error States
@@ -64,10 +64,15 @@ connection before saving, and return to edit server details when needed.
 
 ## Design-System Components
 
-- Reuse `OpenCodeBottomSheet`, `OpenCodeButton`, `OpenCodeTopBar`.
-- Reuse `OpenCodeTextInput` for URL, username, and password entry.
+- Reuse `OpenCodeTopBar`, `OpenCodeButton`, and `OpenCodeServerAddressInput` for
+  server host entry; reuse `OpenCodeTextInput` for username and password.
+- Do not use `OpenCodeBottomSheet` for connection setup itself (temporary
+  full-screen presentation). Scheme picking inside the address input may use
+  `OpenCodeBottomSheet`.
 
 ## Platform Entry Points
 
-- iOS: root gate in `AppRootView`; setup sheet from onboarding and home.
-- Android: root gate in `MainNavigation`; setup sheet from onboarding and home.
+- iOS: root gate in `AppRootView`; full-screen setup from onboarding, probe
+  failure, and Settings.
+- Android: root gate in `MainNavigation`; full-screen setup route from
+  onboarding, probe failure, and Settings.
