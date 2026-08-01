@@ -73,3 +73,18 @@
   contract without component-specific presentation policy.
 - Supersedes: the Android-only `keyboardAware` bottom-sheet option from
   2026-05-27.
+- Status: **Superseded** (2026-08-01) by [Connection setup is temporary full
+  screen](#connection-setup-is-temporary-full-screen).
+
+## Connection setup is temporary full screen
+
+- Date: 2026-08-01
+- Decision: present connection setup as a temporary full-screen flow on both
+  platforms instead of a bottom sheet. Android uses a NavDisplay route; iOS uses
+  a full-screen cover. Both keep `OpenCodeTopBar` back, the same form fields,
+  and Test / Save behavior.
+- Reason: sheet presentation was inconsistent across platforms and still had
+  keyboard and layout bugs; a full screen is a simpler interim contract.
+- Revisit when: a durable modal or settings-embedded connection editor is
+  designed with stable keyboard behavior on both platforms.
+- Supersedes: [Connection setup uses form-mode bottom sheet](#connection-setup-uses-form-mode-bottom-sheet).

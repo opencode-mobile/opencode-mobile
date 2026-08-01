@@ -21,12 +21,16 @@ live status, settings) is owned by the home shell, not this component.
 - Required filter state: `selectedFilterId` plus `onFilterSelected(id)`.
 - Optional content:
   - `createError` string shown at the top of the dock when session create fails.
+  - `emptyContent` composable / view shown centered above the dock when the
+    filtered session list is empty and the caller opts in (for example, connected
+    home with no curated projects).
 - Required callbacks:
   - `onSessionSelected(session)`.
   - `onAddProject()`.
   - `onNewSession()`.
   - `onFilterSelected(id)`.
-- States: default and empty filtered list (dock and filters remain). Loading and
+- States: default and empty filtered list (dock and filters remain; optional
+  caller-supplied empty content may fill the list region). Loading and
   load-error remain owned by the home screen shell. Page chrome is not part of
   this component.
 

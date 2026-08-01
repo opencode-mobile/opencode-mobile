@@ -32,6 +32,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case unifiedDiff
     case button
     case textInput
+    case serverAddressInput
+    case emptyState
     case projectSessionSelector
     case sessionList
     case sessionListDock
@@ -96,6 +98,18 @@ let componentGalleryEntries = [
         id: .textInput,
         title: "Text Input",
         description: "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .serverAddressInput,
+        title: "Server Address Input",
+        description: "HTTP/HTTPS prefix plus IP and port field with paste parsing.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .emptyState,
+        title: "Empty State",
+        description: "Centered title and message for empty screen regions.",
         category: .controls
     ),
     ComponentGalleryEntry(

@@ -194,7 +194,7 @@ final class OpenCode_MobileUITests: XCTestCase {
         app.launch()
 
         openConnectionSetup(in: app)
-        replaceText(in: app.textFields["Server URL"], with: configuration.serverURL, app: app)
+        replaceText(in: app.textFields["Host"], with: configuration.serverURL, app: app)
         replaceText(in: app.textFields["Username"], with: configuration.username, app: app)
         replaceText(in: app.secureTextFields["Password"], with: configuration.password, app: app)
 

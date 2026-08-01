@@ -65,6 +65,7 @@ fun SessionList(
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
+    emptyContent: (@Composable () -> Unit)? = null,
 ) {
     val visibleSessions =
         remember(sessions, selectedFilterId) {
@@ -89,24 +90,36 @@ fun SessionList(
                 .fillMaxSize()
                 .background(background),
     ) {
-        LazyColumn(
-            modifier = Modifier.matchParentSize(),
-            contentPadding = PaddingValues(bottom = listBottomFadeHeight),
-        ) {
-            itemsIndexed(visibleSessions, key = { _, session -> session.id }) { index, session ->
-                OpenCodeListItem(
-                    title = session.title,
-                    subtitle = compactHomePath(session.subtitle),
-                    status = session.status.toListItemStatus(),
-                    caption = session.caption.takeIf { it.isNotEmpty() },
-                    startDecorator = StartDecorator.Letter(session.letter, session.letterAccent),
-                    onClick = { onSessionSelected(session) },
-                )
-                if (index < visibleSessions.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 60.dp),
-                        color = borderWeaker,
+        if (visibleSessions.isEmpty() && emptyContent != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = listBottomFadeHeight),
+                contentAlignment = Alignment.Center,
+            ) {
+                emptyContent()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.matchParentSize(),
+                contentPadding = PaddingValues(bottom = listBottomFadeHeight),
+            ) {
+                itemsIndexed(visibleSessions, key = { _, session -> session.id }) { index, session ->
+                    OpenCodeListItem(
+                        title = session.title,
+                        subtitle = compactHomePath(session.subtitle),
+                        status = session.status.toListItemStatus(),
+                        caption = session.caption.takeIf { it.isNotEmpty() },
+                        startDecorator = StartDecorator.Letter(session.letter, session.letterAccent),
+                        onClick = { onSessionSelected(session) },
                     )
+                    if (index < visibleSessions.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 60.dp),
+                            color = borderWeaker,
+                        )
+                    }
                 }
             }
         }

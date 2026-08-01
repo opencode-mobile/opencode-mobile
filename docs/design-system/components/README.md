@@ -114,6 +114,8 @@ applicable item is complete.
 - `list-group.md`
 - `button.md`
 - `text-input.md`
+- `server-address-input.md`
+- `empty-state.md`
 - `action-pill.md`
 - `composer-suggestion-overlay.md`
 - `review-changes-pill.md`

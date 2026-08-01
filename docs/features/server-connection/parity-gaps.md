@@ -12,5 +12,5 @@
 - Reason: explicit product decision — saved URL matches user input; emulator
   loopback differs from host loopback.
 - Next action: document in manual-test; optional future hint copy in Android
-  setup sheet only.
+  setup screen only.
 - Status: intentional.

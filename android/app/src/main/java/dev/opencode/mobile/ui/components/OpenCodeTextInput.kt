@@ -10,14 +10,24 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
@@ -50,14 +60,48 @@ fun OpenCodeTextInput(
         "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
     }
     val focusManager = LocalFocusManager.current
+    // Keep a local TextFieldValue so selection/cursor survive recomposition when the
+    // parent echoes the same text back. String-only OutlinedTextField can drop the
+    // empty-field text toolbar (Paste) after clearing on some devices.
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
+    }
+    LaunchedEffect(value) {
+        if (value != textFieldValue.text) {
+            textFieldValue =
+                TextFieldValue(
+                    text = value,
+                    selection = TextRange(value.length),
+                )
+        }
+    }
+    val autofillContentType =
+        when (kind) {
+            OpenCodeTextInputKind.Username -> ContentType.Username
+            OpenCodeTextInputKind.Password -> ContentType.Password
+            OpenCodeTextInputKind.Url, OpenCodeTextInputKind.Text -> null
+        }
+    // Do not set contentDescription when the hint/placeholder already names the
+    // field. Overriding TextField semantics with contentDescription creates a
+    // competing node and can hide Paste on empty fields.
+    val explicitAccessibilityLabel = accessibilityLabel?.takeIf { it.isNotBlank() }
+
     Column(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = textFieldValue,
+            onValueChange = { next ->
+                textFieldValue = next
+                if (next.text != value) {
+                    onValueChange(next.text)
+                }
+            },
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .semantics { contentDescription = resolvedAccessibilityLabel },
+                    .semantics {
+                        autofillContentType?.let { contentType = it }
+                        explicitAccessibilityLabel?.let { contentDescription = it }
+                    },
             enabled = enabled,
             singleLine = true,
             placeholder =
@@ -74,23 +118,27 @@ fun OpenCodeTextInput(
             textStyle = MaterialTheme.typography.bodyLarge,
             shape = RoundedCornerShape(8.dp),
             visualTransformation =
-                if (kind ==
-                    OpenCodeTextInputKind.Password
-                ) {
+                if (kind == OpenCodeTextInputKind.Password) {
                     PasswordVisualTransformation()
                 } else {
                     VisualTransformation.None
                 },
             keyboardOptions =
                 KeyboardOptions(
+                    capitalization =
+                        when (kind) {
+                            OpenCodeTextInputKind.Text -> KeyboardCapitalization.Sentences
+                            else -> KeyboardCapitalization.None
+                        },
+                    autoCorrectEnabled = kind == OpenCodeTextInputKind.Text,
                     imeAction = if (submitAction == OpenCodeTextInputSubmitAction.Next) ImeAction.Next else ImeAction.Done,
                     keyboardType =
                         when (kind) {
-                            OpenCodeTextInputKind.Url -> KeyboardType.Uri
+                            // Ascii avoids URI-variation IME quirks that can drop Paste when empty.
+                            OpenCodeTextInputKind.Url -> KeyboardType.Ascii
                             OpenCodeTextInputKind.Password -> KeyboardType.Password
                             OpenCodeTextInputKind.Text, OpenCodeTextInputKind.Username -> KeyboardType.Text
                         },
-                    autoCorrectEnabled = kind == OpenCodeTextInputKind.Text,
                 ),
             keyboardActions =
                 KeyboardActions(

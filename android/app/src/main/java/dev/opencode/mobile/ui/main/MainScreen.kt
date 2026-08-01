@@ -416,7 +416,32 @@ private fun HomeProjectsContent(
             onAddProject = onBrowseProjectsClick,
             onNewSession = onRequestNewSessionProjectPicker,
             modifier = modifier.fillMaxSize(),
+            emptyContent =
+                if (sections.isEmpty()) {
+                    { NoProjectsEmptyState() }
+                } else {
+                    null
+                },
         )
+    } else if (sections.isEmpty()) {
+        Box(modifier = modifier.fillMaxSize()) {
+            NoProjectsEmptyState(modifier = Modifier.align(Alignment.Center))
+            ProjectSessionSelector(
+                projects = emptyList(),
+                selectedWorktree = null,
+                createError = projectSessionCreateError,
+                onProjectSelected = onFocusProject,
+                onBrowseProjects = onBrowseProjectsClick,
+                onSessionSelected = { _, _ -> },
+                onShowAllSessions = onSeeAllSessions,
+                onNewSession = onNewSession,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp),
+            )
+        }
     } else {
         LazyColumn(
             modifier = modifier.fillMaxSize(),

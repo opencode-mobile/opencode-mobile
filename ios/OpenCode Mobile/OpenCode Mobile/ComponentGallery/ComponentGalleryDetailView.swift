@@ -114,6 +114,10 @@ struct ComponentGalleryDetailView: View {
             ButtonGalleryView()
         case .textInput:
             TextInputGalleryView()
+        case .serverAddressInput:
+            ServerAddressInputGalleryView()
+        case .emptyState:
+            EmptyStateGalleryView()
         case .projectSessionSelector:
             ProjectSessionSelectorGalleryView()
         case .sessionList:
