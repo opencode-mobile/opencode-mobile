@@ -114,7 +114,7 @@ class DefaultSessionRepository
             id: String,
             directory: String?,
         ): List<SessionTodo> =
-            runCatching { api.listSessionTodos(id, directory).map(adapter::toTodo) }
+            runCatching { adapter.toTodos(api.listSessionTodos(id, directory)) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun initializeSessionAgents(

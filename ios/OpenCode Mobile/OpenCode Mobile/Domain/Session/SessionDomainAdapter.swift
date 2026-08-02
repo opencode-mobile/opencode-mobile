@@ -37,8 +37,34 @@ struct SessionDomainAdapter: Sendable {
         SessionStatus(sessionID: sessionID, raw: raw)
     }
 
-    func todo(from dto: TodoDTO) -> SessionTodo {
-        SessionTodo(raw: String(describing: dto))
+    func todo(from dto: TodoDTO, position: Int) -> SessionTodo {
+        SessionTodo(
+            position: position,
+            content: dto.content,
+            status: SessionTodoStatus(parsing: dto.status),
+            priority: dto.priority
+        )
+    }
+
+    func todos(from dtos: [TodoDTO]) -> [SessionTodo] {
+        dtos.enumerated().map { todo(from: $0.element, position: $0.offset) }
+    }
+
+    func todos(fromEventProperties properties: [String: AnySendable]?) -> [SessionTodo]? {
+        guard case let .array(items)? = properties?["todos"] else { return nil }
+        return items.enumerated().compactMap { index, item in
+            guard let dict = item.dictionaryValue,
+                  let content = dict["content"]?.stringValue,
+                  let status = dict["status"]?.stringValue,
+                  let priority = dict["priority"]?.stringValue
+            else { return nil }
+            return SessionTodo(
+                position: index,
+                content: content,
+                status: SessionTodoStatus(parsing: status),
+                priority: priority
+            )
+        }
     }
 
     func fileDiff(from dto: FileDiffDTO) -> FileDiff {

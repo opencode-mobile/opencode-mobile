@@ -11,7 +11,7 @@ protocol SessionRepository: Sendable {
     func archiveSession(id: String, directory: String?) async throws -> Session
     func deleteSession(id: String, directory: String?) async throws -> Bool
     func listChildSessions(id: String) async throws -> [Session]
-    func listSessionTodos(id: String) async throws -> [SessionTodo]
+    func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo]
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool
     func forkSession(id: String, atMessageID: String?) async throws -> Session
     func abortSession(id: String, directory: String?) async throws -> Bool
@@ -145,8 +145,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { try await api.listChildSessions(id: id).map(adapter.session) }
     }
 
-    func listSessionTodos(id: String) async throws -> [SessionTodo] {
-        try await run { try await api.listSessionTodos(id: id).map(adapter.todo) }
+    func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] {
+        try await run {
+            adapter.todos(from: try await api.listSessionTodos(id: id, directory: directory))
+        }
     }
 
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool {

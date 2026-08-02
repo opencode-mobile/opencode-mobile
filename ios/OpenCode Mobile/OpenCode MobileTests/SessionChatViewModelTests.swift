@@ -2615,7 +2615,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         return deleteResult
     }
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
-    func listSessionTodos(id: String) async throws -> [SessionTodo] { fatalError() }
+    func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
         forkSessionRequest = ForkRequest(id: id, atMessageID: atMessageID)

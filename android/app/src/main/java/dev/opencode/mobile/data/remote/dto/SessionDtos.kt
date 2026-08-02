@@ -142,7 +142,9 @@ data class QuestionToolDto(
 
 @Serializable
 data class TodoDto(
-    val value: JsonElement? = null,
+    val content: String,
+    val status: String,
+    val priority: String,
 )
 
 @Serializable
