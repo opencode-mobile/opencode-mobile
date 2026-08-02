@@ -50,29 +50,11 @@ time.
 
 ### Connection onboarding
 
-The home empty state shown when no Connection Profile is saved.
+The first-run screen shown when no Connection Profile is saved.
 
 Connection onboarding explains that the app needs an opencode server and offers
 a primary action to open the connection setup flow. It is not shown when a
 profile exists but the server is temporarily unreachable.
-
-It is distinct from **App onboarding**, the one-time first-install pager. After
-App onboarding is completed or skipped, Connection onboarding still appears on
-home until a profile is saved.
-
-### App onboarding
-
-The one-time first-install classic pager that introduces OpenCode Mobile before
-Connection setup.
-
-App onboarding states that the app is an unofficial native client (work in
-progress), recommends connecting via a reachable opencode server (Tailscale
-preferred), summarizes main capabilities, and can open a short **Set up
-opencode serve** guide whose primary action links to the official server docs.
-Skip or Connect marks it completed. It is not shown for probe failure or Edit
-connection.
-
-_Avoid_: treating App onboarding and Connection onboarding as the same screen.
 
 ### Added project
 

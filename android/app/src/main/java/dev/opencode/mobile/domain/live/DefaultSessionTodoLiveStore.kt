@@ -91,6 +91,7 @@ class DefaultSessionTodoLiveStore
                     eventStream.events.collect { event ->
                         when {
                             event.type == "todo.updated" && event.sessionId == key.sessionId -> {
+                                if (!state.isLive) return@collect
                                 adapter.toTodosFromEventProperties(event.rawProperties)?.let { todos ->
                                     replace(state, todos, markCache = true)
                                 }

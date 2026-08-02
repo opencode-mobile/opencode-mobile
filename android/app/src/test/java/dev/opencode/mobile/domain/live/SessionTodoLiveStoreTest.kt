@@ -128,6 +128,55 @@ class SessionTodoLiveStoreTest {
         }
 
     @Test
+    fun todoUpdated_ignoredWhileIdle() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeTodoSessionRepository(
+                    todos = listOf(SessionTodo(0, "A", SessionTodoStatus.Pending, "low")),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(repository, eventStream)
+            val emissions = mutableListOf<List<SessionTodo>>()
+            val job =
+                launch {
+                    store.observeTodos("ses-1", "/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.setLive(true, "ses-1", "/repo")
+            advanceUntilIdle()
+            store.setLive(false, "ses-1", "/repo")
+            advanceUntilIdle()
+            assertTrue(emissions.last().isEmpty())
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "todo.updated",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "todos",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("content", "Stale")
+                                            put("status", "pending")
+                                            put("priority", "low")
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().isEmpty())
+        }
+
+    @Test
     fun ignoresTodoUpdatedForOtherSession() =
         runTest(testDispatcher) {
             val repository = FakeTodoSessionRepository()

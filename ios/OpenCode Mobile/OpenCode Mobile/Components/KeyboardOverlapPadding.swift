@@ -22,27 +22,6 @@ enum KeyboardOverlap {
         (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?
             .doubleValue ?? 0.25
     }
-
-    /// Matches the system keyboard curve, including the private curve (raw value 7)
-    /// that UIKit reports for keyboard frame changes.
-    static func animation(from notification: Notification) -> Animation {
-        let duration = animationDuration(from: notification)
-        let curveValue = (notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?
-            .intValue
-        switch curveValue {
-        case UIView.AnimationCurve.easeInOut.rawValue:
-            return .easeInOut(duration: duration)
-        case UIView.AnimationCurve.easeIn.rawValue:
-            return .easeIn(duration: duration)
-        case UIView.AnimationCurve.easeOut.rawValue:
-            return .easeOut(duration: duration)
-        case UIView.AnimationCurve.linear.rawValue:
-            return .linear(duration: duration)
-        default:
-            // Private keyboard curve — track the keyboard instead of a soft easeOut lag.
-            return .smooth(duration: duration, extraBounce: 0)
-        }
-    }
 }
 
 /// Pads the bottom of `content` by the software-keyboard overlap and opts out of
@@ -65,29 +44,23 @@ struct KeyboardOverlapPaddingModifier: ViewModifier {
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
                 ) { notification in
-                    applyOverlap(
-                        KeyboardOverlap.amount(
-                            from: notification,
-                            in: geometry.frame(in: .global)
-                        ),
-                        animation: KeyboardOverlap.animation(from: notification)
+                    let next = KeyboardOverlap.amount(
+                        from: notification,
+                        in: geometry.frame(in: .global)
                     )
+                    withAnimation(.easeOut(duration: KeyboardOverlap.animationDuration(from: notification))) {
+                        overlap = next
+                    }
                 }
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
                 ) { notification in
-                    // Some dismiss paths omit a usable willChangeFrame end frame.
-                    applyOverlap(0, animation: KeyboardOverlap.animation(from: notification))
+                    withAnimation(.easeOut(duration: KeyboardOverlap.animationDuration(from: notification))) {
+                        overlap = 0
+                    }
                 }
         }
         .ignoresSafeArea(.keyboard)
-    }
-
-    private func applyOverlap(_ next: CGFloat, animation: Animation) {
-        guard next != overlap else { return }
-        withAnimation(animation) {
-            overlap = next
-        }
     }
 }
 

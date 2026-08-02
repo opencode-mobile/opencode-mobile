@@ -38,9 +38,9 @@
 
 ## Remaining Work
 
-- [ ] OPE-95 Session Todo List sync — finish acceptance via OPE-60 PR
-- [ ] OPE-97 Session Todos pill + sheet — device smoke / close acceptance
-- [ ] Parent OPE-60 PR when ready
+- [ ] Device smoke with a live Session Todo List; then close OPE-95 / OPE-97 /
+      OPE-60
+- [ ] Optional: align sheet progress-line spacing/typography (see parity-gaps)
 
 ## Completed
 
@@ -51,3 +51,6 @@
 - [x] Research `docs/research/opencode-session-todos.md` (local research artifact)
 - [x] OPE-95 core sync implementation on iOS and Android
 - [x] OPE-97 pill + sheet chrome on iOS and Android (this branch)
+- [x] Ignore SSE `todo.updated` while idle (keeps idle clear durable)
+- [x] Pill last-positive snapshot on both hosts; strip unrelated onboarding /
+      keyboard / liquid-glass docs from this branch

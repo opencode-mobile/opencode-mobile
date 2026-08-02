@@ -93,6 +93,7 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
         for await event in eventStream.events() {
             guard let handle = handles[key] else { return }
             if event.type == "todo.updated", event.sessionID == key.sessionID {
+                guard handle.isLive else { continue }
                 if let todos = adapter.todos(fromEventProperties: event.rawProperties) {
                     replace(todos: todos, key: key, markCache: true)
                 }

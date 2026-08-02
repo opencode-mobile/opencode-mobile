@@ -103,6 +103,11 @@ private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
     @State private var scrollController = TimelineScrollController()
+    /// Last positive pill values. Kept so a sudden totalCount=0 (abort/idle clear)
+    /// cannot rebuild the pill with an invalid contract if exit animation is added.
+    @State private var sessionTodosPillCompletedCount = 0
+    @State private var sessionTodosPillTotalCount = 1
+    @State private var sessionTodosPillActivePreview: String?
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
@@ -152,11 +157,12 @@ private struct SessionChatTimelineReadyView: View {
 
             if !props.hideFloatStack {
                 VStack(spacing: 8) {
-                    if props.sessionTodosVisible, props.sessionTodoTotalCount > 0 {
+                    let showSessionTodosPill = props.sessionTodosVisible && props.sessionTodoTotalCount > 0
+                    if showSessionTodosPill {
                         OpenCodeSessionTodosPill(
-                            completedCount: props.sessionTodoCompletedCount,
-                            totalCount: props.sessionTodoTotalCount,
-                            activePreview: props.sessionTodoActivePreview,
+                            completedCount: sessionTodosPillCompletedCount,
+                            totalCount: sessionTodosPillTotalCount,
+                            activePreview: sessionTodosPillActivePreview,
                             action: props.onSessionTodosTap
                         )
                     }
@@ -180,6 +186,18 @@ private struct SessionChatTimelineReadyView: View {
                     }
                 }
                 .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
+                .onChange(of: props.sessionTodoTotalCount) { _, total in
+                    refreshSessionTodosPillSnapshot(totalCount: total)
+                }
+                .onChange(of: props.sessionTodoCompletedCount) { _, _ in
+                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+                }
+                .onChange(of: props.sessionTodoActivePreview) { _, _ in
+                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+                }
+                .onAppear {
+                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+                }
             }
         }
         .onAppear {
@@ -193,6 +211,13 @@ private struct SessionChatTimelineReadyView: View {
 
     private func logScroll(_ message: String) {
         OpenCodeLog.sessionChat.debug("scroll \(message, privacy: .public)")
+    }
+
+    private func refreshSessionTodosPillSnapshot(totalCount: Int) {
+        guard totalCount > 0 else { return }
+        sessionTodosPillCompletedCount = props.sessionTodoCompletedCount
+        sessionTodosPillTotalCount = totalCount
+        sessionTodosPillActivePreview = props.sessionTodoActivePreview
     }
 }
 
