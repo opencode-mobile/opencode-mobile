@@ -35,6 +35,7 @@ enum class ComponentGalleryEntryId {
     ComposerSuggestionOverlay,
     ReviewChangesPill,
     SessionTodosPill,
+    SessionTodoItem,
     HunkNavigationPill,
     UnifiedDiff,
     Button,
@@ -243,6 +244,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionTodosPill,
             title = "Session Todos Pill",
             description = "Floating live Session Todo List progress and active preview.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionTodoItem,
+            title = "Session Todo Item",
+            description = "View-only Session Todo status row for the todos sheet.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

@@ -108,6 +108,8 @@ struct ComponentGalleryDetailView: View {
             ReviewChangesPillGalleryView()
         case .sessionTodosPill:
             SessionTodosPillGalleryView()
+        case .sessionTodoItem:
+            SessionTodoItemGalleryView()
         case .hunkNavigationPill:
             HunkNavigationPillGalleryView()
         case .unifiedDiff:

@@ -30,9 +30,10 @@
 
 ## Feature-local sheet status rows
 
-- Decision: Session Todo sheet rows stay feature-local in Session Chat rather
-  than extending `OpenCodeListItem`.
-- Why: Dock semantics need checkbox / indeterminate marks and strikethrough
-  muted labels; List Item status pills and start decorators do not cover that
-  without a one-off API. Promote later if another surface needs the same row.
+- Decision: Session Todo sheet **rows** use design-system
+  `OpenCodeSessionTodoItem` (`docs/design-system/components/session-todo-item.md`).
+  The sheet shell remains `OpenCodeBottomSheet`; progress header stays
+  feature-local in Session Chat.
+- Why: Dock mark / strikethrough semantics needed a reusable tweak surface in
+  the Component Gallery without expanding List Item’s pill/letter API.
 - Ticket: OPE-97.

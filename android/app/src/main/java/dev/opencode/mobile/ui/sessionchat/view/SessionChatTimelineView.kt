@@ -375,12 +375,9 @@ private fun SessionChatMessageRow(
                         } else {
                             null
                         },
-                    onLongClick =
-                        if (message.renderedMarkdown != null) {
-                            { openMessageActions(showsRevertMessage = true) }
-                        } else {
-                            null
-                        },
+                    // Always long-pressable so plain and markdown bubbles match;
+                    // markdown still uses tap only for links (parent onClick stays null).
+                    onLongClick = { openMessageActions(showsRevertMessage = true) },
                 )
 
             MessageRole.Assistant ->

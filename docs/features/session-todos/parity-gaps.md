@@ -1,18 +1,16 @@
 # Session Todos Parity Gaps
 
-## Temporary — sheet row density
+## Temporary — sheet progress header density
 
-- Expected shared intent: Progress-first header + view-only status rows with
-  the same mark/label semantics on both platforms.
-- iOS: sheet body uses `VStack` spacing 12 and `OpenCodeTypography.caption` for
-  the progress line.
-- Android: sheet body uses `spacedBy(4.dp)` and `labelMedium` for the progress
-  line.
-- Affected area: Session Todos sheet content chrome (not status mark meaning).
-- Reason: Native typography/spacing defaults while landing OPE-97; marks and
-  copy rules already match.
-- Next action: Align spacing/type roles in a small follow-up, or promote shared
-  sheet content tokens if reuse grows.
+- Expected shared intent: Progress-first header above Session Todo Item rows.
+- iOS: progress line uses `OpenCodeTypography.caption` with sheet `VStack`
+  spacing 12 before the row list.
+- Android: progress line uses `labelMedium` with bottom padding 4 before rows.
+- Affected area: Session Todos sheet progress header only (rows share
+  `OpenCodeSessionTodoItem`).
+- Reason: Native type roles while landing OPE-97; row chrome is now shared.
+- Next action: Align header spacing/type in a small follow-up if review wants
+  pixel parity.
 - Status: temporary.
 
 ## Intentional — pill exit snapshot host

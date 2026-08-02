@@ -87,9 +87,9 @@ ticket; sync does not add edit actions.
 ## Design-System Components
 
 - Sync ticket: none (no chrome).
-- Chrome ticket: Session Todos Pill is a Component Collection primitive
-  (`docs/design-system/components/session-todos-pill.md`). Sheet status rows are
-  feature-local (see `decisions.md`).
+- Chrome ticket: Session Todos Pill and Session Todo Item are Component
+  Collection primitives (`session-todos-pill.md`, `session-todo-item.md`). Sheet
+  shell is `OpenCodeBottomSheet`; progress header remains feature-local.
 
 ## Child Tickets
 

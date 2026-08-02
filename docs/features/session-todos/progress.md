@@ -13,8 +13,8 @@
 
 - Session Todos Pill added (`OpenCodeSessionTodosPill`) with docs, tokens,
   galleries, and previews on both platforms.
-- Sheet status rows remain feature-local (checkbox / indeterminate /
-  strikethrough dock semantics are not covered by List Item).
+- Session Todo Item added (`OpenCodeSessionTodoItem`) for view-only status rows
+  in the sheet (galleries + docs); sheet shell stays `OpenCodeBottomSheet`.
 
 ## iOS
 

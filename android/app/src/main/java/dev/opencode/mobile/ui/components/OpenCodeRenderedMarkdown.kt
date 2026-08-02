@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,9 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -359,24 +360,14 @@ private fun MarkdownInlineText(
     color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
     onLinkTap: ((String) -> Unit)?,
 ) {
-    val uriHandler = LocalUriHandler.current
     val colors = markdownTextColors()
-    val annotated = rememberMarkdownAnnotatedString(inlines, colors)
-    ClickableText(
+    // LinkAnnotation keeps link taps without ClickableText's full-text pointer
+    // ownership, so parent combinedClickable long-press (message actions) still fires.
+    val annotated = rememberMarkdownAnnotatedString(inlines, colors, onLinkTap)
+    Text(
         text = annotated,
         modifier = modifier,
         style = style.copy(color = color),
-        onClick = { offset ->
-            val annotation = annotated.getStringAnnotations(tag = "url", start = offset, end = offset).firstOrNull()
-            val url = annotation?.item ?: return@ClickableText
-            if (url.startsWith("http://") || url.startsWith("https://")) {
-                if (onLinkTap != null) {
-                    onLinkTap(url)
-                } else {
-                    uriHandler.openUri(url)
-                }
-            }
-        },
     )
 }
 
@@ -403,14 +394,16 @@ private fun markdownTextColors(): MarkdownTextColors =
 private fun buildMarkdownAnnotatedString(
     inlines: List<MarkdownInline>,
     colors: MarkdownTextColors,
+    onLinkTap: ((String) -> Unit)?,
 ): AnnotatedString =
     buildAnnotatedString {
-        appendInlines(inlines, colors)
+        appendInlines(inlines, colors, onLinkTap)
     }
 
 private fun AnnotatedString.Builder.appendInlines(
     inlines: List<MarkdownInline>,
     colors: MarkdownTextColors,
+    onLinkTap: ((String) -> Unit)?,
 ) {
     inlines.forEach { inline ->
         when (inline) {
@@ -427,25 +420,41 @@ private fun AnnotatedString.Builder.appendInlines(
                 }
             is MarkdownInline.Emphasis ->
                 withStyle(SpanStyle(color = colors.emphasis, fontStyle = FontStyle.Italic)) {
-                    appendInlines(inline.children, colors)
+                    appendInlines(inline.children, colors, onLinkTap)
                 }
             is MarkdownInline.Strong ->
                 withStyle(SpanStyle(color = colors.strong, fontWeight = FontWeight.SemiBold)) {
-                    appendInlines(inline.children, colors)
+                    appendInlines(inline.children, colors, onLinkTap)
                 }
             is MarkdownInline.Link -> {
                 val start = length
-                pushStringAnnotation(tag = "url", annotation = inline.destination)
-                withStyle(
+                val destination = inline.destination
+                val openable =
+                    destination.startsWith("http://") || destination.startsWith("https://")
+                val linkStyle =
                     SpanStyle(
                         color = colors.link,
                         textDecoration = TextDecoration.Underline,
-                    ),
-                ) {
-                    appendInlines(inline.children, colors)
+                    )
+                if (openable) {
+                    pushLink(
+                        LinkAnnotation.Url(
+                            url = destination,
+                            styles = TextLinkStyles(style = linkStyle),
+                            linkInteractionListener =
+                                onLinkTap?.let { tap ->
+                                    LinkInteractionListener { tap(destination) }
+                                },
+                        ),
+                    )
+                    appendInlines(inline.children, colors, onLinkTap)
+                    pop()
+                } else {
+                    withStyle(linkStyle) {
+                        appendInlines(inline.children, colors, onLinkTap)
+                    }
                 }
-                pop()
-                if (length == start) append(inline.destination)
+                if (length == start) append(destination)
             }
             is MarkdownInline.ImageAlt ->
                 withStyle(SpanStyle(color = colors.image, fontStyle = FontStyle.Italic)) {
@@ -612,18 +621,19 @@ private fun rememberDiffLineAnnotatedStrings(
 private fun rememberMarkdownAnnotatedString(
     inlines: List<MarkdownInline>,
     colors: MarkdownTextColors,
+    onLinkTap: ((String) -> Unit)?,
 ): AnnotatedString {
     val plainText = remember(inlines) { plainTextFromMarkdownInlines(inlines) }
     if (plainText.length < BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD) {
-        return remember(inlines, colors) {
-            buildMarkdownAnnotatedString(inlines, colors)
+        return remember(inlines, colors, onLinkTap) {
+            buildMarkdownAnnotatedString(inlines, colors, onLinkTap)
         }
     }
-    var annotated by remember(inlines, colors) { mutableStateOf<AnnotatedString?>(null) }
-    LaunchedEffect(inlines, colors) {
+    var annotated by remember(inlines, colors, onLinkTap) { mutableStateOf<AnnotatedString?>(null) }
+    LaunchedEffect(inlines, colors, onLinkTap) {
         annotated =
             withContext(Dispatchers.Default) {
-                buildMarkdownAnnotatedString(inlines, colors)
+                buildMarkdownAnnotatedString(inlines, colors, onLinkTap)
             }
     }
     return annotated ?: remember(plainText) { AnnotatedString(plainText) }
