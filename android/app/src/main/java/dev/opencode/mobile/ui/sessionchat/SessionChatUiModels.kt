@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
+import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
@@ -87,6 +88,12 @@ data class SessionChatUiState(
     val isRefreshing: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
+    val sessionTodos: List<SessionTodo> = emptyList(),
+    val sessionTodosVisible: Boolean = false,
+    val sessionTodosFinished: Boolean = false,
+    val sessionTodoActivePreview: SessionTodo? = null,
+    val sessionTodoCompletedCount: Int = 0,
+    val sessionTodoTotalCount: Int = 0,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,

@@ -119,6 +119,8 @@ applicable item is complete.
 - `action-pill.md`
 - `composer-suggestion-overlay.md`
 - `review-changes-pill.md`
+- `session-todos-pill.md`
+- `session-todo-item.md`
 - `hunk-navigation-pill.md`
 - `unified-diff.md`
 - `project-session-selector.md`

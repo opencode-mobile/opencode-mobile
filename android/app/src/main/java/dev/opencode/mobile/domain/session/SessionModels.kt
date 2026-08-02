@@ -42,9 +42,53 @@ data class SessionStatus(
     val raw: Map<String, String> = emptyMap(),
 )
 
+enum class SessionTodoStatus {
+    Pending,
+    InProgress,
+    Completed,
+    Cancelled,
+    ;
+
+    companion object {
+        fun fromRaw(raw: String): SessionTodoStatus =
+            when (raw.lowercase()) {
+                "in_progress", "in-progress", "inprogress" -> InProgress
+                "completed", "complete", "done" -> Completed
+                "cancelled", "canceled" -> Cancelled
+                else -> Pending
+            }
+    }
+}
+
 data class SessionTodo(
-    val raw: String,
+    /** List order is identity; no server id. */
+    val position: Int,
+    val content: String,
+    val status: SessionTodoStatus,
+    val priority: String,
 )
+
+object SessionTodoList {
+    fun completedCount(todos: List<SessionTodo>): Int = todos.count { it.status == SessionTodoStatus.Completed }
+
+    fun isFinished(todos: List<SessionTodo>): Boolean =
+        todos.isNotEmpty() &&
+            todos.all {
+                it.status == SessionTodoStatus.Completed || it.status == SessionTodoStatus.Cancelled
+            }
+
+    fun activePreview(todos: List<SessionTodo>): SessionTodo? =
+        todos.firstOrNull { it.status == SessionTodoStatus.InProgress }
+            ?: todos.firstOrNull { it.status == SessionTodoStatus.Pending }
+            ?: todos.lastOrNull { it.status == SessionTodoStatus.Completed }
+            ?: todos.firstOrNull()
+
+    /** Visible while live, non-empty, and not fully finished. */
+    fun isVisible(
+        todos: List<SessionTodo>,
+        isLive: Boolean,
+    ): Boolean = isLive && todos.isNotEmpty() && !isFinished(todos)
+}
 
 enum class FileDiffStatus {
     Added,

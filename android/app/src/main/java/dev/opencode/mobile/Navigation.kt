@@ -57,6 +57,8 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGallery
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
@@ -240,6 +242,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ComposerSuggestionOverlay ->
                                                             ComposerSuggestionOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionTodosPill -> SessionTodosPillGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionTodoItem -> SessionTodoItemGalleryScreen()
                                                         ComponentGalleryEntryId.HunkNavigationPill -> HunkNavigationPillGalleryScreen()
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()

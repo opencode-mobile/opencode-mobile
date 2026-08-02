@@ -28,6 +28,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case filterTabs
     case actionPill
     case reviewChangesPill
+    case sessionTodosPill
+    case sessionTodoItem
     case hunkNavigationPill
     case unifiedDiff
     case button
@@ -231,6 +233,18 @@ let componentGalleryEntries = [
         title: "Review Changes Pill",
         description: "Contextual shortcut to files changed by the latest completed turn.",
         category: .diffs
+    ),
+    ComponentGalleryEntry(
+        id: .sessionTodosPill,
+        title: "Session Todos Pill",
+        description: "Floating live Session Todo List progress and active preview.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .sessionTodoItem,
+        title: "Session Todo Item",
+        description: "View-only Session Todo status row for the todos sheet.",
+        category: .session
     ),
     ComponentGalleryEntry(
         id: .unifiedDiff,

@@ -1535,6 +1535,8 @@ private class FakeMessageRepository(
 private class FakeSessionRepository(
     var sessions: List<Session> = emptyList(),
     var statuses: List<SessionStatus> = emptyList(),
+    var todos: List<SessionTodo> = emptyList(),
+    var listTodosCallCount: Int = 0,
     var shouldFailList: Boolean = false,
     var shouldFailStatuses: Boolean = false,
 ) : SessionRepository {
@@ -1583,7 +1585,10 @@ private class FakeSessionRepository(
     override suspend fun listSessionTodos(
         id: String,
         directory: String?,
-    ): List<SessionTodo> = error("unused")
+    ): List<SessionTodo> {
+        listTodosCallCount += 1
+        return todos
+    }
 
     override suspend fun initializeSessionAgents(
         id: String,

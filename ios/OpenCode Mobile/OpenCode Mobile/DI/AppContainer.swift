@@ -260,6 +260,15 @@ extension Container {
         }.singleton
     }
 
+    var sessionTodoLiveStore: Factory<DefaultSessionTodoLiveStore> {
+        self { @MainActor in
+            DefaultSessionTodoLiveStore(
+                sessionRepository: self.sessionRepository(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
     var sessionLiveStore: Factory<DefaultSessionLiveStore> {
         self { @MainActor in
             DefaultSessionLiveStore(
@@ -332,6 +341,7 @@ extension Container {
                 sessionRepository: self.sessionRepository(),
                 permissionLiveStore: self.permissionLiveStore(),
                 questionLiveStore: self.questionLiveStore(),
+                sessionTodoLiveStore: self.sessionTodoLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
@@ -394,6 +404,7 @@ extension Container {
             shared.sessionStatusLiveStore().clearCache()
             shared.permissionLiveStore().clearCache()
             shared.questionLiveStore().clearCache()
+            shared.sessionTodoLiveStore().clearCache()
             shared.messageRepository().clearMessageCache()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()

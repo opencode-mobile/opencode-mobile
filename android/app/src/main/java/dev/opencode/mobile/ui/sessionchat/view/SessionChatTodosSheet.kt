@@ -1,0 +1,97 @@
+package dev.opencode.mobile.ui.sessionchat.view
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.session.SessionTodoStatus
+import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
+import dev.opencode.mobile.ui.components.OpenCodeSessionTodoItem
+import dev.opencode.mobile.ui.components.OpenCodeSessionTodoItemStatus
+
+@Composable
+internal fun SessionChatTodosSheet(
+    visible: Boolean,
+    todos: List<SessionTodo>,
+    completedCount: Int,
+    totalCount: Int,
+    onDismiss: () -> Unit,
+) {
+    OpenCodeBottomSheet(
+        visible = visible,
+        title = "Session todos",
+        onDismissRequest = onDismiss,
+        contentMode = OpenCodeBottomSheetContentMode.ActionList,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            Text(
+                text =
+                    buildAnnotatedString {
+                        withStyle(
+                            SpanStyle(
+                                color = openCodeColor("text-strong"),
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        ) {
+                            append("$completedCount")
+                        }
+                        append(" of ")
+                        withStyle(
+                            SpanStyle(
+                                color = openCodeColor("text-strong"),
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        ) {
+                            append("$totalCount")
+                        }
+                        append(" completed")
+                    },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 4.dp)
+                        .semantics {
+                            contentDescription = "$completedCount of $totalCount completed"
+                        },
+                style = MaterialTheme.typography.labelMedium,
+                color = openCodeColor("text-base"),
+            )
+
+            todos.forEach { todo ->
+                OpenCodeSessionTodoItem(
+                    content = todo.content,
+                    status = todo.status.toSessionTodoItemStatus(),
+                )
+            }
+        }
+    }
+}
+
+private fun SessionTodoStatus.toSessionTodoItemStatus(): OpenCodeSessionTodoItemStatus =
+    when (this) {
+        SessionTodoStatus.Pending -> OpenCodeSessionTodoItemStatus.Pending
+        SessionTodoStatus.InProgress -> OpenCodeSessionTodoItemStatus.InProgress
+        SessionTodoStatus.Completed -> OpenCodeSessionTodoItemStatus.Completed
+        SessionTodoStatus.Cancelled -> OpenCodeSessionTodoItemStatus.Cancelled
+    }

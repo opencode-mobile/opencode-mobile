@@ -42,8 +42,55 @@ struct SessionStatus: Sendable, Equatable {
     let raw: [String: String]
 }
 
-struct SessionTodo: Sendable, Equatable {
-    let raw: String
+enum SessionTodoStatus: Sendable, Equatable {
+    case pending
+    case inProgress
+    case completed
+    case cancelled
+
+    init(parsing raw: String) {
+        switch raw.lowercased() {
+        case "in_progress", "in-progress", "inprogress":
+            self = .inProgress
+        case "completed", "complete", "done":
+            self = .completed
+        case "cancelled", "canceled":
+            self = .cancelled
+        default:
+            self = .pending
+        }
+    }
+}
+
+struct SessionTodo: Sendable, Equatable, Identifiable {
+    /// List order is identity; no server id.
+    var id: Int { position }
+    let position: Int
+    let content: String
+    let status: SessionTodoStatus
+    let priority: String
+}
+
+enum SessionTodoList {
+    static func completedCount(in todos: [SessionTodo]) -> Int {
+        todos.filter { $0.status == .completed }.count
+    }
+
+    static func isFinished(_ todos: [SessionTodo]) -> Bool {
+        !todos.isEmpty && todos.allSatisfy { $0.status == .completed || $0.status == .cancelled }
+    }
+
+    static func activePreview(in todos: [SessionTodo]) -> SessionTodo? {
+        if let inProgress = todos.first(where: { $0.status == .inProgress }) { return inProgress }
+        if let pending = todos.first(where: { $0.status == .pending }) { return pending }
+        if let completed = todos.last(where: { $0.status == .completed }) { return completed }
+        return todos.first
+    }
+
+    /// Visible while live, non-empty, and not fully finished.
+    static func isVisible(todos: [SessionTodo], isLive: Bool) -> Bool {
+        isLive && !todos.isEmpty && !isFinished(todos)
+    }
 }
 
 enum FileDiffStatus: String, Sendable, Equatable {

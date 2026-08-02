@@ -46,6 +46,7 @@ import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
@@ -75,8 +76,14 @@ internal data class SessionChatTimelineViewProps(
     val isRefreshing: Boolean,
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
+    val sessionTodosVisible: Boolean = false,
+    val sessionTodoCompletedCount: Int = 0,
+    val sessionTodoTotalCount: Int = 0,
+    val sessionTodoActivePreview: String? = null,
+    val hideFloatStack: Boolean = false,
     val onRefresh: () -> Unit,
     val onReviewChangesClick: () -> Unit,
+    val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
@@ -129,8 +136,14 @@ internal fun SessionChatTimelineView(
                 timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
                 reviewChangesSummary = props.reviewChangesSummary,
+                sessionTodosVisible = props.sessionTodosVisible,
+                sessionTodoCompletedCount = props.sessionTodoCompletedCount,
+                sessionTodoTotalCount = props.sessionTodoTotalCount,
+                sessionTodoActivePreview = props.sessionTodoActivePreview,
+                hideFloatStack = props.hideFloatStack,
                 onRefresh = props.onRefresh,
                 onReviewChangesClick = props.onReviewChangesClick,
+                onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
                 onChildSessionTap = props.onChildSessionTap,
@@ -148,8 +161,14 @@ private fun SessionChatTimelineReadyView(
     timelineFrame: TimelineFrame?,
     isRefreshing: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
+    sessionTodosVisible: Boolean,
+    sessionTodoCompletedCount: Int,
+    sessionTodoTotalCount: Int,
+    sessionTodoActivePreview: String?,
+    hideFloatStack: Boolean,
     onRefresh: () -> Unit,
     onReviewChangesClick: () -> Unit,
+    onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -229,42 +248,79 @@ private fun SessionChatTimelineReadyView(
             }
         }
 
-        MessageListScrollToEndOverlay(
-            visible = timeline.showScrollToEnd,
-            onClick = {
-                timeline.scrollController.animateToEnd(
-                    messageCount = timeline.messageCount,
-                    tolerancePx = timeline.autoFollowTolerancePx,
-                    bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
-                    autoFollowEnabled = true,
+        if (!hideFloatStack) {
+            val showReviewChanges =
+                ReviewChangesPillVisibility.shouldShow(
+                    summary = reviewChangesSummary,
+                    isPinnedToEnd = timeline.isPinnedToEnd,
+                    showScrollToEnd = timeline.showScrollToEnd,
                 )
-            },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+            Column(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = MessageListTimelineDefaults.scrollToEndPillBottomPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // AnimatedVisibility keeps composing children during exit. When abort
+                // clears todos, totalCount becomes 0 while the fade-out still runs —
+                // keep the last positive snapshot so the pill contract stays valid.
+                val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
+                val sessionTodosPillDisplay =
+                    remember {
+                        object {
+                            var completedCount: Int = 0
+                            var totalCount: Int = 1
+                            var activePreview: String? = null
+                        }
+                    }
+                if (sessionTodoTotalCount > 0) {
+                    sessionTodosPillDisplay.completedCount = sessionTodoCompletedCount
+                    sessionTodosPillDisplay.totalCount = sessionTodoTotalCount
+                    sessionTodosPillDisplay.activePreview = sessionTodoActivePreview
+                }
+                AnimatedVisibility(
+                    visible = showSessionTodosPill,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    OpenCodeSessionTodosPill(
+                        completedCount = sessionTodosPillDisplay.completedCount,
+                        totalCount = sessionTodosPillDisplay.totalCount,
+                        activePreview = sessionTodosPillDisplay.activePreview,
+                        onClick = onSessionTodosClick,
+                    )
+                }
 
-        val showReviewChanges =
-            ReviewChangesPillVisibility.shouldShow(
-                summary = reviewChangesSummary,
-                isPinnedToEnd = timeline.isPinnedToEnd,
-                showScrollToEnd = timeline.showScrollToEnd,
-            )
-        AnimatedVisibility(
-            visible = showReviewChanges,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = MessageListTimelineDefaults.scrollToEndPillBottomPadding),
-        ) {
-            reviewChangesSummary?.let { summary ->
-                OpenCodeReviewChangesPill(
-                    variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                    changedFileCount = summary.fileCount,
-                    additions = summary.additions,
-                    deletions = summary.deletions,
-                    onClick = onReviewChangesClick,
+                MessageListScrollToEndOverlay(
+                    visible = timeline.showScrollToEnd,
+                    onClick = {
+                        timeline.scrollController.animateToEnd(
+                            messageCount = timeline.messageCount,
+                            tolerancePx = timeline.autoFollowTolerancePx,
+                            bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                            autoFollowEnabled = true,
+                        )
+                    },
+                    applyBottomPadding = false,
                 )
+
+                AnimatedVisibility(
+                    visible = showReviewChanges,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    reviewChangesSummary?.let { summary ->
+                        OpenCodeReviewChangesPill(
+                            variant = OpenCodeReviewChangesPillVariant.LatestTurn,
+                            changedFileCount = summary.fileCount,
+                            additions = summary.additions,
+                            deletions = summary.deletions,
+                            onClick = onReviewChangesClick,
+                        )
+                    }
+                }
             }
         }
     }
@@ -319,12 +375,9 @@ private fun SessionChatMessageRow(
                         } else {
                             null
                         },
-                    onLongClick =
-                        if (message.renderedMarkdown != null) {
-                            { openMessageActions(showsRevertMessage = true) }
-                        } else {
-                            null
-                        },
+                    // Always long-pressable so plain and markdown bubbles match;
+                    // markdown still uses tap only for links (parent onClick stays null).
+                    onLongClick = { openMessageActions(showsRevertMessage = true) },
                 )
 
             MessageRole.Assistant ->

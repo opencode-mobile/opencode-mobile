@@ -9,11 +9,13 @@ import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.DefaultPermissionLiveStore
 import dev.opencode.mobile.domain.live.DefaultQuestionLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionTodoLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.live.defaultLiveStoreScope
 import javax.inject.Singleton
 
@@ -35,6 +37,10 @@ abstract class LiveStoreModule {
     @Binds
     @Singleton
     abstract fun bindSessionLiveStore(impl: DefaultSessionLiveStore): SessionLiveStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionTodoLiveStore(impl: DefaultSessionTodoLiveStore): SessionTodoLiveStore
 
     companion object {
         @Provides

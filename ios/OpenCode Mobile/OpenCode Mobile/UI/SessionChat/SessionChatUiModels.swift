@@ -162,6 +162,12 @@ struct SessionChatUiState: Equatable {
     var isRefreshing: Bool = false
     var isAborting: Bool = false
     var sessionStatusLabel: String?
+    var sessionTodos: [SessionTodo] = []
+    var sessionTodosVisible: Bool = false
+    var sessionTodosFinished: Bool = false
+    var sessionTodoActivePreview: SessionTodo?
+    var sessionTodoCompletedCount: Int = 0
+    var sessionTodoTotalCount: Int = 0
     var connectionStatus: SessionConnectionStatus = .offline
     var contextUsageFraction: Double?
     var errorMessage: String?

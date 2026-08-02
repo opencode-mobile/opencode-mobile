@@ -317,6 +317,42 @@ same compact raised geometry.
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px) |
 
+### Session todos pill
+
+Contextual floating entry point for the live Session Todo List. Shares the
+raised capsule language with Action / Review Changes pills and adds a max width
+so the active preview can truncate.
+
+| Token | Value |
+| --- | --- |
+| `sessionTodosPill.minHeight` | 36 (logical px; enforced via vertical padding) |
+| `sessionTodosPill.paddingHorizontal` | 14 (logical px) |
+| `sessionTodosPill.paddingVertical` | 8 (logical px) |
+| `sessionTodosPill.shadowElevation` | 4 (logical px) |
+| `sessionTodosPill.statusDotSize` | 8 (logical px) |
+| `sessionTodosPill.contentSpacing` | 8 (logical px) |
+| `sessionTodosPill.maxWidth` | 320 (logical px) |
+
+### Session todo item
+
+View-only Session Todo row used in the Session Todos sheet (and any future
+Session Todo List surfaces). Status mark geometry is shared; callers own outer
+list insets when embedding in a sheet.
+
+| Token | Value |
+| --- | --- |
+| `sessionTodoItem.mark.size` | 18 (logical px) |
+| `sessionTodoItem.mark.cornerRadius` | 4 (logical px) |
+| `sessionTodoItem.mark.borderWidth` | 1.5 (logical px) |
+| `sessionTodoItem.mark.iconSize` | 12 (logical px) |
+| `sessionTodoItem.mark.indeterminateWidth` | 8 (logical px) |
+| `sessionTodoItem.mark.indeterminateHeight` | 2 (logical px) |
+| `sessionTodoItem.mark.fillOpacity` | 0.15 |
+| `sessionTodoItem.contentSpacing` | 12 (logical px) |
+| `sessionTodoItem.paddingHorizontal` | 20 (logical px) |
+| `sessionTodoItem.paddingVertical` | 10 (logical px) |
+| `sessionTodoItem.pendingContentOpacity` | 0.85 |
+
 ### Hunk navigation pill
 
 Bottom-centered hunk and context control for read-only change review. It shares

@@ -8,8 +8,14 @@ struct SessionChatTimelineViewProps {
     let isRefreshing: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
+    let sessionTodosVisible: Bool
+    let sessionTodoCompletedCount: Int
+    let sessionTodoTotalCount: Int
+    let sessionTodoActivePreview: String?
+    let hideFloatStack: Bool
     let onRefresh: () async -> Void
     let onReviewChangesTap: () -> Void
+    let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -23,8 +29,14 @@ struct SessionChatTimelineViewProps {
         isRefreshing: Bool,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
+        sessionTodosVisible: Bool = false,
+        sessionTodoCompletedCount: Int = 0,
+        sessionTodoTotalCount: Int = 0,
+        sessionTodoActivePreview: String? = nil,
+        hideFloatStack: Bool = false,
         onRefresh: @escaping () async -> Void,
         onReviewChangesTap: @escaping () -> Void,
+        onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
@@ -37,8 +49,14 @@ struct SessionChatTimelineViewProps {
         self.isRefreshing = isRefreshing
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
+        self.sessionTodosVisible = sessionTodosVisible
+        self.sessionTodoCompletedCount = sessionTodoCompletedCount
+        self.sessionTodoTotalCount = sessionTodoTotalCount
+        self.sessionTodoActivePreview = sessionTodoActivePreview
+        self.hideFloatStack = hideFloatStack
         self.onRefresh = onRefresh
         self.onReviewChangesTap = onReviewChangesTap
+        self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
         self.onChildSessionTap = onChildSessionTap
@@ -85,6 +103,11 @@ private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
     @State private var scrollController = TimelineScrollController()
+    /// Last positive pill values. Kept so a sudden totalCount=0 (abort/idle clear)
+    /// cannot rebuild the pill with an invalid contract if exit animation is added.
+    @State private var sessionTodosPillCompletedCount = 0
+    @State private var sessionTodosPillTotalCount = 1
+    @State private var sessionTodosPillActivePreview: String?
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
@@ -132,22 +155,49 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            MessageListScrollToEndOverlay(
-                visible: showScrollToEnd
-            ) {
-                logScroll("pill-click count=\(props.messages.count)")
-                scrollController.scrollToEndAnimated()
-            }
+            if !props.hideFloatStack {
+                VStack(spacing: 8) {
+                    let showSessionTodosPill = props.sessionTodosVisible && props.sessionTodoTotalCount > 0
+                    if showSessionTodosPill {
+                        OpenCodeSessionTodosPill(
+                            completedCount: sessionTodosPillCompletedCount,
+                            totalCount: sessionTodosPillTotalCount,
+                            activePreview: sessionTodosPillActivePreview,
+                            action: props.onSessionTodosTap
+                        )
+                    }
 
-            if showReviewChanges, let summary = props.reviewChangesSummary {
-                OpenCodeReviewChangesPill(
-                    variant: .latestTurn,
-                    changedFileCount: summary.fileCount,
-                    additions: summary.additions,
-                    deletions: summary.deletions,
-                    action: props.onReviewChangesTap
-                )
-                    .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
+                    MessageListScrollToEndOverlay(
+                        visible: showScrollToEnd,
+                        applyBottomPadding: false
+                    ) {
+                        logScroll("pill-click count=\(props.messages.count)")
+                        scrollController.scrollToEndAnimated()
+                    }
+
+                    if showReviewChanges, let summary = props.reviewChangesSummary {
+                        OpenCodeReviewChangesPill(
+                            variant: .latestTurn,
+                            changedFileCount: summary.fileCount,
+                            additions: summary.additions,
+                            deletions: summary.deletions,
+                            action: props.onReviewChangesTap
+                        )
+                    }
+                }
+                .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
+                .onChange(of: props.sessionTodoTotalCount) { _, total in
+                    refreshSessionTodosPillSnapshot(totalCount: total)
+                }
+                .onChange(of: props.sessionTodoCompletedCount) { _, _ in
+                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+                }
+                .onChange(of: props.sessionTodoActivePreview) { _, _ in
+                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+                }
+                .onAppear {
+                    refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+                }
             }
         }
         .onAppear {
@@ -161,6 +211,13 @@ private struct SessionChatTimelineReadyView: View {
 
     private func logScroll(_ message: String) {
         OpenCodeLog.sessionChat.debug("scroll \(message, privacy: .public)")
+    }
+
+    private func refreshSessionTodosPillSnapshot(totalCount: Int) {
+        guard totalCount > 0 else { return }
+        sessionTodosPillCompletedCount = props.sessionTodoCompletedCount
+        sessionTodosPillTotalCount = totalCount
+        sessionTodosPillActivePreview = props.sessionTodoActivePreview
     }
 }
 

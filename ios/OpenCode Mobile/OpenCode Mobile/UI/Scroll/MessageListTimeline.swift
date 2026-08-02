@@ -79,12 +79,16 @@ final class MessageListTimelineRowHeightCache {
 
 struct MessageListScrollToEndOverlay: View {
     let visible: Bool
+    var applyBottomPadding: Bool = true
     let onTap: () -> Void
 
     var body: some View {
         if visible {
             OpenCodeActionPill(variant: .scrollToEnd, action: onTap)
-                .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
+                .padding(
+                    .bottom,
+                    applyBottomPadding ? MessageListTimelineDefaults.scrollToEndPillBottomPadding : 0
+                )
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }

@@ -252,6 +252,7 @@ internal fun MessageListScrollToEndOverlay(
     visible: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    applyBottomPadding: Boolean = true,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -259,7 +260,12 @@ internal fun MessageListScrollToEndOverlay(
         exit = fadeOut(),
         modifier =
             modifier.padding(
-                bottom = MessageListTimelineDefaults.scrollToEndPillBottomPadding,
+                bottom =
+                    if (applyBottomPadding) {
+                        MessageListTimelineDefaults.scrollToEndPillBottomPadding
+                    } else {
+                        0.dp
+                    },
             ),
     ) {
         OpenCodeActionPill(

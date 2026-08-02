@@ -7,9 +7,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -26,6 +28,8 @@ import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
@@ -51,6 +55,7 @@ class SessionChatViewModel
         private val sessionRepository: SessionRepository,
         private val permissionLiveStore: PermissionLiveStore = EmptyPermissionLiveStore,
         private val questionLiveStore: QuestionLiveStore = EmptyQuestionLiveStore,
+        private val sessionTodoLiveStore: SessionTodoLiveStore = EmptySessionTodoLiveStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
         eventDomainAdapter: EventDomainAdapter,
@@ -123,9 +128,12 @@ class SessionChatViewModel
         private var questionError: String? = null
         private var questionTopologyError: String? = null
         private var questionObservationJob: kotlinx.coroutines.Job? = null
+        private var todoObservationJob: kotlinx.coroutines.Job? = null
         private var questionDraftRequestId: String? = null
         private var questionWizardIndex: Int = 0
         private val questionDrafts = mutableMapOf<Int, QuestionAnswerDraft>()
+        private var sessionTodos: List<SessionTodo> = emptyList()
+        private var lastTodoLive: Boolean? = null
         private var lastSnackbarKey: String? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
@@ -184,6 +192,7 @@ class SessionChatViewModel
             commands.bind(sessionId, worktree)
             observePermissions(sessionId, worktree)
             observeQuestions(sessionId, worktree)
+            observeTodos(sessionId, worktree)
             viewModelScope.launch {
                 composer.loadCatalog()
             }
@@ -529,6 +538,20 @@ class SessionChatViewModel
                 }
         }
 
+        private fun observeTodos(
+            sessionId: String,
+            worktree: String,
+        ) {
+            todoObservationJob?.cancel()
+            todoObservationJob =
+                viewModelScope.launch(ioDispatcher) {
+                    sessionTodoLiveStore.observeTodos(sessionId, worktree).collect { todos ->
+                        sessionTodos = todos
+                        publishUiState()
+                    }
+                }
+        }
+
         private fun respondToPermission(
             requestId: String,
             sessionId: String,
@@ -735,6 +758,16 @@ class SessionChatViewModel
             refilterQuestionOrphans()
             val visibleQuestion = visibleQuestionRequest()
             val questionDraft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            val isLive =
+                infoState.sessionStatusLabel != null ||
+                    permissionRequests.isNotEmpty() ||
+                    questionRequests.isNotEmpty()
+            val sessionId = infoState.sessionId.ifEmpty { boundSessionId.orEmpty() }
+            val worktree = boundWorktree
+            if (worktree != null && lastTodoLive != isLive) {
+                lastTodoLive = isLive
+                sessionTodoLiveStore.setLive(isLive, sessionId, worktree)
+            }
             val previous = _uiState.value
             // Reuse the same TimelineFrame + message list when only composer / session-info /
             // review / command republish — avoids O(n) remap solely from those regions.
@@ -787,6 +820,12 @@ class SessionChatViewModel
                 isRefreshing = timelineState.isRefreshing,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = infoState.sessionStatusLabel,
+                sessionTodos = sessionTodos,
+                sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
+                sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),
+                sessionTodoActivePreview = SessionTodoList.activePreview(sessionTodos),
+                sessionTodoCompletedCount = SessionTodoList.completedCount(sessionTodos),
+                sessionTodoTotalCount = sessionTodos.size,
                 connectionStatus = infoState.connectionStatus,
                 contextUsageFraction =
                     sessionInfo.contextUsageFraction(
