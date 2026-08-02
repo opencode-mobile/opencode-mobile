@@ -46,9 +46,8 @@ private struct SessionTodoStatusRow: View {
     let todo: SessionTodo
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             SessionTodoStatusMark(status: todo.status)
-                .padding(.top, 2)
             Text(todo.content)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(labelColor)

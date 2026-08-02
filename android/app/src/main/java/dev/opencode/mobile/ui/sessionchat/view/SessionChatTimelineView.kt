@@ -263,15 +263,32 @@ private fun SessionChatTimelineReadyView(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // AnimatedVisibility keeps composing children during exit. When abort
+                // clears todos, totalCount becomes 0 while the fade-out still runs —
+                // keep the last positive snapshot so the pill contract stays valid.
+                val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
+                val sessionTodosPillDisplay =
+                    remember {
+                        object {
+                            var completedCount: Int = 0
+                            var totalCount: Int = 1
+                            var activePreview: String? = null
+                        }
+                    }
+                if (sessionTodoTotalCount > 0) {
+                    sessionTodosPillDisplay.completedCount = sessionTodoCompletedCount
+                    sessionTodosPillDisplay.totalCount = sessionTodoTotalCount
+                    sessionTodosPillDisplay.activePreview = sessionTodoActivePreview
+                }
                 AnimatedVisibility(
-                    visible = sessionTodosVisible && sessionTodoTotalCount > 0,
+                    visible = showSessionTodosPill,
                     enter = fadeIn(),
                     exit = fadeOut(),
                 ) {
                     OpenCodeSessionTodosPill(
-                        completedCount = sessionTodoCompletedCount,
-                        totalCount = sessionTodoTotalCount,
-                        activePreview = sessionTodoActivePreview,
+                        completedCount = sessionTodosPillDisplay.completedCount,
+                        totalCount = sessionTodosPillDisplay.totalCount,
+                        activePreview = sessionTodosPillDisplay.activePreview,
                         onClick = onSessionTodosClick,
                     )
                 }

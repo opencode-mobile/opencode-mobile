@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — App onboarding (classic pager content)</title>
+    <style>
+      /*
+        PROTOTYPE ONLY — classic pager content for first-install onboarding.
+        Question: What copy and pages should the classic pager carry?
+        Structure locked to classic pager (verdict A). Optional nested setup guide.
+      */
+      :root {
+        --bg: #f7f7f7;
+        --raised: #f3f3f3;
+        --ink: #171717;
+        --text: #6f6f6f;
+        --weak: #8f8f8f;
+        --weaker: #c7c7c7;
+        --border: #dbdbdb;
+        --border-weak: #e8e8e8;
+        --primary: #dcde8d;
+        --phone-w: 390px;
+        --phone-h: 780px;
+        --font: "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font);
+        background: #e8e8e8;
+        color: var(--ink);
+        min-height: 100vh;
+      }
+
+      .banner {
+        background: #1c1c1c;
+        color: #ededed;
+        padding: 10px 16px;
+        font-size: 13px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .banner .tag {
+        background: #fab283;
+        color: #1c1c1c;
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+      }
+
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px 24px 48px;
+      }
+
+      h1 {
+        font-size: 22px;
+        margin: 20px 0 6px;
+        font-weight: 650;
+      }
+
+      .lede {
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.45;
+        margin: 0 0 20px;
+        max-width: 56ch;
+      }
+
+      .state-panel {
+        background: #1c1c1c;
+        color: #a0a0a0;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        margin-bottom: 20px;
+        white-space: pre-wrap;
+      }
+
+      .state-panel strong {
+        color: #ededed;
+      }
+
+      .stage {
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .phone {
+        width: var(--phone-w);
+        height: var(--phone-h);
+        background: var(--bg);
+        border-radius: 36px;
+        border: 10px solid #1c1c1c;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+        overflow: hidden;
+        position: relative;
+        flex-shrink: 0;
+      }
+
+      .phone-status {
+        height: 44px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 0 22px 8px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .screen {
+        height: calc(100% - 44px);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+
+      .notes {
+        flex: 1;
+        min-width: 240px;
+        max-width: 380px;
+      }
+
+      .notes h2 {
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+
+      .notes ol,
+      .notes ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .notes li + li {
+        margin-top: 6px;
+      }
+
+      .btn {
+        appearance: none;
+        border: none;
+        border-radius: 12px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 14px 18px;
+        text-align: center;
+      }
+
+      .btn-primary {
+        background: var(--ink);
+        color: #fff;
+        width: 100%;
+      }
+
+      .btn-soft {
+        background: var(--raised);
+        color: var(--ink);
+        width: 100%;
+      }
+
+      .btn-link {
+        background: none;
+        border: none;
+        color: var(--ink);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        cursor: pointer;
+        padding: 8px 0;
+      }
+
+      .skip {
+        color: var(--weak);
+        font-size: 14px;
+        font-weight: 500;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+      }
+
+      .top {
+        display: flex;
+        justify-content: flex-end;
+        padding: 4px 16px 0;
+      }
+
+      .top.back {
+        justify-content: flex-start;
+      }
+
+      .back-btn {
+        background: none;
+        border: none;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink);
+        cursor: pointer;
+        padding: 8px 4px;
+      }
+
+      .slide {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 8px 28px 0;
+        justify-content: center;
+        gap: 16px;
+        min-height: 0;
+      }
+
+      .art {
+        height: 200px;
+        border-radius: 20px;
+        background: var(--raised);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .art .blob {
+        width: 112px;
+        height: 112px;
+        border-radius: 28px;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 38px;
+        font-weight: 700;
+      }
+
+      .art .badge {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        background: #fff;
+        border: 1px solid var(--border-weak);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .art .chip {
+        position: absolute;
+        background: #fff;
+        border: 1px solid var(--border-weak);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      }
+
+      .title {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        margin: 0;
+      }
+
+      .body {
+        margin: 0;
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .feature-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .feature-list li {
+        background: #fff;
+        border: 1px solid var(--border-weak);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.35;
+        color: var(--ink);
+      }
+
+      .feature-list li span {
+        display: block;
+        color: var(--text);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .callout {
+        background: #fff;
+        border: 1px solid var(--border-weak);
+        border-radius: 14px;
+        padding: 12px 14px;
+      }
+
+      .callout strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+
+      .callout p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.4;
+      }
+
+      .footer {
+        padding: 16px 24px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .dots {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--weaker);
+      }
+
+      .dot.on {
+        background: var(--ink);
+        width: 18px;
+        border-radius: 4px;
+      }
+
+      /* setup guide */
+      .guide {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .guide-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px 24px 20px;
+      }
+
+      .guide-scroll h2 {
+        font-size: 24px;
+        letter-spacing: -0.02em;
+        margin: 4px 0 8px;
+      }
+
+      .guide-scroll .lead {
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.45;
+        margin: 0 0 18px;
+      }
+
+      .guide-step {
+        margin: 0 0 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--border-weak);
+      }
+
+      .guide-step .n {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--weak);
+        margin-bottom: 4px;
+      }
+
+      .guide-step h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+
+      .guide-step p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.45;
+      }
+
+      .guide-step code,
+      .guide-scroll code {
+        font-size: 12px;
+        background: var(--raised);
+        padding: 1px 5px;
+        border-radius: 4px;
+        color: var(--ink);
+      }
+
+      .guide-step pre {
+        margin: 8px 0 0;
+        background: #1c1c1c;
+        color: #ededed;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.45;
+        overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .guide-footer {
+        padding: 12px 24px 28px;
+        border-top: 1px solid var(--border-weak);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      <span
+        ><span class="tag">Prototype</span> Classic pager content — not
+        production</span
+      >
+      <span>Tap through the phone · setup guide via optional CTA</span>
+    </div>
+
+    <div class="page">
+      <h1>Onboarding content — classic pager</h1>
+      <p class="lede">
+        Structure locked to classic pager. Content beats: unofficial client →
+        connect (Tailscale) → main features. Optional nested page for server
+        setup.
+      </p>
+
+      <div class="state-panel" id="statePanel"></div>
+
+      <div class="stage">
+        <div class="phone" id="phone" aria-live="polite"></div>
+        <aside class="notes">
+          <h2>Page map</h2>
+          <ol>
+            <li>
+              <strong>Unofficial client</strong> — native client, WIP; not an
+              official OpenCode product.
+            </li>
+            <li>
+              <strong>Connect to servers</strong> — recommend Tailscale; “Need
+              the server first?” opens the setup guide (no extra copy on this
+              screen).
+            </li>
+            <li>
+              <strong>Main features</strong> — sessions, prompts, permissions,
+              diffs, abort → Connect CTA.
+            </li>
+          </ol>
+          <h2 style="margin-top: 18px">Nested page</h2>
+          <ul>
+            <li>
+              <strong>Set up opencode serve</strong> — short steps (serve,
+              password, Tailscale/reachability, connect). One CTA opens
+              <a href="https://opencode.ai/docs/server/" target="_blank" rel="noopener">opencode.ai/docs/server</a>.
+              Back returns to the pager.
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const SLIDES = [
+        {
+          id: "unofficial",
+          title: "An unofficial\nopencode client",
+          body: "OpenCode Mobile is a native client for opencode sessions — work in progress. It is not an official OpenCode product.",
+          icon: "OC",
+          badge: "Unofficial",
+          chips: [
+            { t: "Native", s: "14% 18%" },
+            { t: "WIP", s: "62% 64%" },
+          ],
+        },
+        {
+          id: "connect",
+          title: "Connect to\nyour servers",
+          body: "Point the app at an opencode server on your machine. We recommend Tailscale so your phone can reach it securely from anywhere.",
+          icon: "⇄",
+          chips: [
+            { t: "Tailscale", s: "14% 16%" },
+            { t: "LAN / VPN / tunnel", s: "52% 64%" },
+          ],
+          setupCta: "Need the server first?",
+        },
+        {
+          id: "features",
+          title: "What you can\ndo from here",
+          body: "",
+          icon: "✦",
+          features: [
+            {
+              t: "Sessions",
+              d: "List, open, create, rename, fork, archive, delete",
+            },
+            { t: "Chat & abort", d: "Send prompts and stop work in flight" },
+            {
+              t: "Permissions",
+              d: "Approve or deny requests (no lasting remember)",
+            },
+            { t: "Changes", d: "Inspect session diffs" },
+            {
+              t: "Live while open",
+              d: "Foreground event stream; refresh after reconnect",
+            },
+          ],
+        },
+      ];
+
+      const state = {
+        screen: "pager", // pager | setup
+        index: 0,
+        lastAction: "load",
+      };
+
+      function renderState() {
+        const slide = SLIDES[state.index];
+        document.getElementById("statePanel").innerHTML =
+          `<strong>screen</strong> ${state.screen}\n` +
+          `<strong>slide</strong> ${state.index + 1}/${SLIDES.length} — ${slide.id}\n` +
+          `<strong>lastAction</strong> ${state.lastAction}\n` +
+          `<strong>exit</strong> Connect to server → Connection setup (stub)`;
+      }
+
+      function phoneShell(inner) {
+        return (
+          `<div class="phone-status"><span>9:41</span><span>●●●</span></div>` +
+          `<div class="screen">${inner}</div>`
+        );
+      }
+
+      function renderPager() {
+        const s = SLIDES[state.index];
+        const last = state.index === SLIDES.length - 1;
+        const chips = (s.chips || [])
+          .map(
+            (c) =>
+              `<span class="chip" style="top:${c.s.split(" ")[0]};left:${c.s.split(" ")[1]}">${c.t}</span>`,
+          )
+          .join("");
+        const dots = SLIDES.map(
+          (_, i) =>
+            `<span class="dot${i === state.index ? " on" : ""}"></span>`,
+        ).join("");
+
+        let middle = "";
+        if (s.features) {
+          middle = `<ul class="feature-list">${s.features
+            .map((f) => `<li><strong>${f.t}</strong><span>${f.d}</span></li>`)
+            .join("")}</ul>`;
+        } else {
+          middle = `<p class="body">${s.body}</p>`;
+          if (s.setupCta) {
+            middle += `<button class="btn-link" type="button" data-act="open-setup">${s.setupCta}</button>`;
+          }
+        }
+
+        document.getElementById("phone").innerHTML = phoneShell(`
+          <div class="top">
+            <button class="skip" type="button" data-act="skip">Skip</button>
+          </div>
+          <div class="slide">
+            <div class="art">
+              ${s.badge ? `<span class="badge">${s.badge}</span>` : ""}
+              <div class="blob">${s.icon}</div>
+              ${chips}
+            </div>
+            <h2 class="title">${s.title.replace(/\n/g, "<br>")}</h2>
+            ${middle}
+          </div>
+          <div class="footer">
+            <div class="dots">${dots}</div>
+            <button class="btn btn-primary" type="button" data-act="${last ? "connect" : "next"}">
+              ${last ? "Connect to server" : "Next"}
+            </button>
+          </div>
+        `);
+      }
+
+      function renderSetup() {
+        document.getElementById("phone").innerHTML = phoneShell(`
+          <div class="guide">
+            <div class="top back">
+              <button class="back-btn" type="button" data-act="close-setup">← Back</button>
+            </div>
+            <div class="guide-scroll">
+              <h2>Set up opencode serve</h2>
+              <p class="lead">The app talks to an opencode server you run. Short path below — full detail in the official docs.</p>
+
+              <div class="guide-step">
+                <div class="n">Step 1</div>
+                <h3>Start the server on your machine</h3>
+                <p>In your project, run the opencode server (headless). Keep it running while you use the phone.</p>
+                <pre>opencode serve</pre>
+              </div>
+
+              <div class="guide-step">
+                <div class="n">Step 2</div>
+                <h3>Require a password</h3>
+                <p>Set <code>OPENCODE_SERVER_PASSWORD</code>. Username defaults to <code>opencode</code> unless you set <code>OPENCODE_SERVER_USERNAME</code>.</p>
+              </div>
+
+              <div class="guide-step">
+                <div class="n">Step 3</div>
+                <h3>Reach it from your phone</h3>
+                <p><strong>Recommended: Tailscale</strong> — install Tailscale on the machine and phone, then use the machine’s Tailscale IP or MagicDNS name as the server URL.</p>
+                <p style="margin-top:8px">Also fine: same LAN, VPN, HTTPS, or another tunnel you manage. The app does not create a relay for you.</p>
+              </div>
+
+              <div class="guide-step" style="border-bottom:none">
+                <div class="n">Step 4</div>
+                <h3>Connect in the app</h3>
+                <p>Enter base URL + password. The app checks <code>GET /global/health</code>, then saves a Connection Profile on this device.</p>
+              </div>
+            </div>
+            <div class="guide-footer">
+              <button class="btn btn-primary" type="button" data-act="open-docs">Open server docs</button>
+            </div>
+          </div>
+        `);
+      }
+
+      function render() {
+        if (state.screen === "setup") renderSetup();
+        else renderPager();
+        renderState();
+      }
+
+      document.getElementById("phone").addEventListener("click", (e) => {
+        const t = e.target.closest("[data-act]");
+        if (!t) return;
+        const act = t.getAttribute("data-act");
+        if (act === "next") {
+          state.index = Math.min(state.index + 1, SLIDES.length - 1);
+          state.lastAction = "next → " + SLIDES[state.index].id;
+        } else if (act === "skip") {
+          state.lastAction = "skip → connect (stub)";
+          alert("Stub: skip → Connection setup");
+        } else if (act === "connect") {
+          state.lastAction = "connect → Connection setup (stub)";
+          alert("Stub: open Connection setup");
+        } else if (act === "open-setup") {
+          state.screen = "setup";
+          state.lastAction = "open setup guide";
+        } else if (act === "close-setup") {
+          state.screen = "pager";
+          state.lastAction = "close setup → slide " + SLIDES[state.index].id;
+        } else if (act === "open-docs") {
+          state.lastAction = "open https://opencode.ai/docs/server/";
+          window.open("https://opencode.ai/docs/server/", "_blank", "noopener");
+        }
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>

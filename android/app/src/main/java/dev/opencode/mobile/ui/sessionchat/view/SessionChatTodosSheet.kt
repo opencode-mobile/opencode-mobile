@@ -113,12 +113,9 @@ private fun SessionTodoStatusRow(todo: SessionTodo) {
                     contentDescription = "${todo.content}, $statusLabel"
                 },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        SessionTodoStatusMark(
-            status = todo.status,
-            modifier = Modifier.padding(top = 2.dp),
-        )
+        SessionTodoStatusMark(status = todo.status)
         Text(
             text = todo.content,
             modifier =

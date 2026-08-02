@@ -32,11 +32,34 @@ final class KeyboardOverlapTests: XCTestCase {
         XCTAssertEqual(KeyboardOverlap.animationDuration(from: notification), 0.25)
     }
 
-    private func makeKeyboardNotification(frame: CGRect) -> Notification {
-        Notification(
+    func testAnimationUsesSmoothCurveForPrivateKeyboardCurve() {
+        let notification = makeKeyboardNotification(
+            frame: CGRect(x: 0, y: 500, width: 390, height: 300),
+            duration: 0.35,
+            curve: 7
+        )
+        _ = KeyboardOverlap.animation(from: notification)
+        XCTAssertEqual(KeyboardOverlap.animationDuration(from: notification), 0.35)
+    }
+
+    private func makeKeyboardNotification(
+        frame: CGRect,
+        duration: Double? = nil,
+        curve: Int? = nil
+    ) -> Notification {
+        var userInfo: [AnyHashable: Any] = [
+            UIResponder.keyboardFrameEndUserInfoKey: NSValue(cgRect: frame),
+        ]
+        if let duration {
+            userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] = NSNumber(value: duration)
+        }
+        if let curve {
+            userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] = NSNumber(value: curve)
+        }
+        return Notification(
             name: UIResponder.keyboardWillChangeFrameNotification,
             object: nil,
-            userInfo: [UIResponder.keyboardFrameEndUserInfoKey: NSValue(cgRect: frame)]
+            userInfo: userInfo
         )
     }
 }
