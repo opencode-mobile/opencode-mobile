@@ -7,6 +7,7 @@
 - Prototype C (pill + sheet) accepted; chrome is OPE-97.
 - Feature plan, decisions, parity gaps, OPE-95 task plan, and durable
   prototype verdict live under this directory.
+- Local integration branch: `feature/ope-60-session-todos` (OPE-96 + OPE-95).
 
 ## Design System
 
@@ -14,19 +15,20 @@
 
 ## iOS
 
-- Status: in progress — Session Todo List sync (OPE-95) on
-  `feature/ope-95-session-todo-list-sync` (not yet on `main`).
-- Done on that branch: real `SessionTodo` models, DTO + adapter mapping,
-  `SessionTodoLiveStore`, Session Chat UI fields, mapping unit tests.
-- Remaining for OPE-95: close acceptance / land the branch.
+- Status: in progress — Session Todo List sync (OPE-95) merged onto
+  `feature/ope-60-session-todos` (not yet on `main`).
+- Done: real `SessionTodo` / status models, DTO + adapter mapping,
+  `SessionTodoLiveStore` (GET on live, SSE replace, idle clear), Session Chat
+  UI state fields (items / visible / preview / N/M), mapping unit tests.
+- Remaining for OPE-95: close acceptance / smoke on device with a live session.
 
 ## Android
 
-- Status: in progress — Session Todo List sync (OPE-95) on
-  `feature/ope-95-session-todo-list-sync` (not yet on `main`).
-- Done on that branch: real models/DTO/adapter, `DefaultSessionTodoLiveStore`,
-  Session Chat fields, mapping + live-store unit tests.
-- Remaining for OPE-95: close acceptance / land the branch.
+- Status: in progress — Session Todo List sync (OPE-95) merged onto
+  `feature/ope-60-session-todos` (not yet on `main`).
+- Done: real models/DTO/adapter, `DefaultSessionTodoLiveStore`, Session Chat
+  fields, mapping + live-store unit tests.
+- Remaining for OPE-95: close acceptance / smoke on device with a live session.
 
 ## Blockers
 
@@ -35,7 +37,7 @@
 
 ## Remaining Work
 
-- [ ] OPE-95 Session Todo List sync — finish acceptance and merge
+- [ ] OPE-95 Session Todo List sync — finish acceptance and merge via OPE-60
 - [ ] OPE-97 Session Todos pill + sheet in Session Chat
 
 ## Completed
@@ -45,3 +47,4 @@
 - [x] Prototype C verdict (throwaway branch `prototype/ope-60-session-todos-ui`)
 - [x] Domain terms in `CONTEXT.md`
 - [x] Research `docs/research/opencode-session-todos.md` (local research artifact)
+- [x] OPE-95 core sync implementation on iOS and Android (on OPE-60 branch)

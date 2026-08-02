@@ -383,7 +383,17 @@ components:
       additionalProperties: true
     Todo:
       type: object
-      additionalProperties: true
+      required: [content, status, priority]
+      additionalProperties: false
+      properties:
+        content:
+          type: string
+        status:
+          type: string
+          description: pending | in_progress | completed | cancelled
+        priority:
+          type: string
+          description: high | medium | low
     FileDiff:
       type: object
       additionalProperties: true

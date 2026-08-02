@@ -127,7 +127,11 @@ struct QuestionToolDTO: Codable, Sendable {
     let callID: String
 }
 
-struct TodoDTO: Codable, Sendable {}
+struct TodoDTO: Codable, Sendable {
+    let content: String
+    let status: String
+    let priority: String
+}
 
 struct FileDiffDTO: Decodable, Sendable {
     let file: String

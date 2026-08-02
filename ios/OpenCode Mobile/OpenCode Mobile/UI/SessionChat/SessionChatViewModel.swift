@@ -19,8 +19,10 @@ final class SessionChatViewModel {
     private let sessionRepository: any SessionRepository
     private let permissionLiveStore: any PermissionLiveStore
     private let questionLiveStore: any QuestionLiveStore
+    private let sessionTodoLiveStore: any SessionTodoLiveStore
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
+    private var todoTask: Task<Void, Never>?
     private var permissionSessions: [Session] = []
     private var permissionRequests: [PermissionRequest] = []
     private var permissionSubmittingID: String?
@@ -34,6 +36,8 @@ final class SessionChatViewModel {
     private var questionDraftRequestID: String?
     private var questionWizardIndex = 0
     private var questionDrafts: [Int: QuestionAnswerDraft] = [:]
+    private var sessionTodos: [SessionTodo] = []
+    private var lastTodoLive: Bool?
     private var lastSnackbarKey: String?
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
@@ -49,6 +53,7 @@ final class SessionChatViewModel {
         sessionRepository: any SessionRepository,
         permissionLiveStore: (any PermissionLiveStore)? = nil,
         questionLiveStore: (any QuestionLiveStore)? = nil,
+        sessionTodoLiveStore: (any SessionTodoLiveStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
@@ -62,6 +67,7 @@ final class SessionChatViewModel {
         self.sessionRepository = sessionRepository
         self.permissionLiveStore = permissionLiveStore ?? EmptyPermissionLiveStore()
         self.questionLiveStore = questionLiveStore ?? EmptyQuestionLiveStore()
+        self.sessionTodoLiveStore = sessionTodoLiveStore ?? EmptySessionTodoLiveStore()
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -115,6 +121,7 @@ final class SessionChatViewModel {
         timeline.startObserving()
         startPermissionObservation()
         startQuestionObservation()
+        startTodoObservation()
     }
 
     func loadMessages() async {
@@ -420,6 +427,16 @@ final class SessionChatViewModel {
         }
     }
 
+    private func startTodoObservation() {
+        todoTask?.cancel()
+        todoTask = Task {
+            for await todos in sessionTodoLiveStore.observeTodos(sessionID: sessionID, directory: worktree) {
+                sessionTodos = todos
+                publishUiState()
+            }
+        }
+    }
+
     private func respondToPermission(
         requestID: String,
         sessionID: String,
@@ -598,6 +615,8 @@ final class SessionChatViewModel {
         sessionInfo.stopObserving()
         permissionTask?.cancel()
         questionTask?.cancel()
+        todoTask?.cancel()
+        sessionTodoLiveStore.setLive(false, sessionID: sessionID, directory: worktree)
         reviewChanges.stop()
     }
 
@@ -617,6 +636,14 @@ final class SessionChatViewModel {
         let timelineState = timeline.state
         let composerState = composer.state
         let infoState = sessionInfo.state
+        let isLive =
+            infoState.sessionStatusLabel != nil
+            || !permissionRequests.isEmpty
+            || !questionRequests.isEmpty
+        if lastTodoLive != isLive {
+            lastTodoLive = isLive
+            sessionTodoLiveStore.setLive(isLive, sessionID: sessionID, directory: worktree)
+        }
         composer.tryApplyInitialSelection(
             timelineState: timelineState,
             historyHints: timeline.modelSelectionHistoryHints()
@@ -668,6 +695,11 @@ final class SessionChatViewModel {
             isRefreshing: timelineState.isRefreshing,
             isAborting: composerState.isAborting,
             sessionStatusLabel: infoState.sessionStatusLabel,
+            sessionTodos: sessionTodos,
+            sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
+            sessionTodoActivePreview: SessionTodoList.activePreview(in: sessionTodos),
+            sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
+            sessionTodoTotalCount: sessionTodos.count,
             connectionStatus: infoState.connectionStatus,
             contextUsageFraction: sessionInfo.contextUsageFraction(
                 messages: timelineState.messages,

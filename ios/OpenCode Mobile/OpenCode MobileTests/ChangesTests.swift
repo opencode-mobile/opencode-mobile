@@ -316,7 +316,7 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
     func archiveSession(id: String, directory: String?) async throws -> Session { fatalError() }
     func deleteSession(id: String, directory: String?) async throws -> Bool { false }
     func listChildSessions(id: String) async throws -> [Session] { [] }
-    func listSessionTodos(id: String) async throws -> [SessionTodo] { [] }
+    func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { [] }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { false }
     func forkSession(id: String, atMessageID: String?) async throws -> Session { fatalError() }
     func abortSession(id: String, directory: String?) async throws -> Bool { false }

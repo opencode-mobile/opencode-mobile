@@ -12,7 +12,12 @@ import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.time.Instant
 import java.time.ZoneId
@@ -65,7 +70,36 @@ class SessionDomainAdapter {
             raw = dto.mapValues { (_, value) -> value.jsonPrimitive.content },
         )
 
-    fun toTodo(dto: TodoDto): SessionTodo = SessionTodo(raw = dto.value.toString())
+    fun toTodo(
+        dto: TodoDto,
+        position: Int,
+    ): SessionTodo =
+        SessionTodo(
+            position = position,
+            content = dto.content,
+            status = SessionTodoStatus.fromRaw(dto.status),
+            priority = dto.priority,
+        )
+
+    fun toTodos(dtos: List<TodoDto>): List<SessionTodo> =
+        dtos.mapIndexed { index, dto -> toTodo(dto, index) }
+
+    fun toTodosFromEventProperties(properties: JsonObject?): List<SessionTodo>? {
+        val todosElement = properties?.get("todos") ?: return null
+        val array = todosElement.jsonArrayOrNull() ?: return null
+        return array.mapIndexedNotNull { index, element ->
+            val obj = element.jsonObjectOrNull() ?: return@mapIndexedNotNull null
+            val content = obj.stringOrNull("content") ?: return@mapIndexedNotNull null
+            val status = obj.stringOrNull("status") ?: return@mapIndexedNotNull null
+            val priority = obj.stringOrNull("priority") ?: return@mapIndexedNotNull null
+            SessionTodo(
+                position = index,
+                content = content,
+                status = SessionTodoStatus.fromRaw(status),
+                priority = priority,
+            )
+        }
+    }
 
     fun toFileDiff(dto: FileDiffDto): FileDiff =
         FileDiff(
@@ -178,3 +212,9 @@ class SessionDomainAdapter {
         )
     }
 }
+
+private fun JsonElement.jsonArrayOrNull(): JsonArray? = runCatching { jsonArray }.getOrNull()
+
+private fun JsonElement.jsonObjectOrNull(): JsonObject? = runCatching { jsonObject }.getOrNull()
+
+private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
