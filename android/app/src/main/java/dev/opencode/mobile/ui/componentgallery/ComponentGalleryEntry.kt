@@ -34,6 +34,7 @@ enum class ComponentGalleryEntryId {
     ActionPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
+    SessionTodosPill,
     HunkNavigationPill,
     UnifiedDiff,
     Button,
@@ -237,6 +238,12 @@ val ComponentGalleryEntries =
             title = "Review Changes Pill",
             description = "Contextual shortcut to files changed by the latest completed turn.",
             category = ComponentGalleryCategory.Diffs,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionTodosPill,
+            title = "Session Todos Pill",
+            description = "Floating live Session Todo List progress and active preview.",
+            category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.UnifiedDiff,

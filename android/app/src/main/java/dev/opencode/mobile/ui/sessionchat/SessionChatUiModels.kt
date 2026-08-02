@@ -90,6 +90,7 @@ data class SessionChatUiState(
     val sessionStatusLabel: String? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),
     val sessionTodosVisible: Boolean = false,
+    val sessionTodosFinished: Boolean = false,
     val sessionTodoActivePreview: SessionTodo? = null,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,

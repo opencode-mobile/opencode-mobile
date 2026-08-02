@@ -317,6 +317,22 @@ same compact raised geometry.
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px) |
 
+### Session todos pill
+
+Contextual floating entry point for the live Session Todo List. Shares the
+raised capsule language with Action / Review Changes pills and adds a max width
+so the active preview can truncate.
+
+| Token | Value |
+| --- | --- |
+| `sessionTodosPill.minHeight` | 36 (logical px; enforced via vertical padding) |
+| `sessionTodosPill.paddingHorizontal` | 14 (logical px) |
+| `sessionTodosPill.paddingVertical` | 8 (logical px) |
+| `sessionTodosPill.shadowElevation` | 4 (logical px) |
+| `sessionTodosPill.statusDotSize` | 8 (logical px) |
+| `sessionTodosPill.contentSpacing` | 8 (logical px) |
+| `sessionTodosPill.maxWidth` | 320 (logical px) |
+
 ### Hunk navigation pill
 
 Bottom-centered hunk and context control for read-only change review. It shares

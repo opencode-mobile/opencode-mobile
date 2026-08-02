@@ -164,6 +164,7 @@ struct SessionChatUiState: Equatable {
     var sessionStatusLabel: String?
     var sessionTodos: [SessionTodo] = []
     var sessionTodosVisible: Bool = false
+    var sessionTodosFinished: Bool = false
     var sessionTodoActivePreview: SessionTodo?
     var sessionTodoCompletedCount: Int = 0
     var sessionTodoTotalCount: Int = 0

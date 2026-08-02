@@ -8,8 +8,14 @@ struct SessionChatTimelineViewProps {
     let isRefreshing: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
+    let sessionTodosVisible: Bool
+    let sessionTodoCompletedCount: Int
+    let sessionTodoTotalCount: Int
+    let sessionTodoActivePreview: String?
+    let hideFloatStack: Bool
     let onRefresh: () async -> Void
     let onReviewChangesTap: () -> Void
+    let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -23,8 +29,14 @@ struct SessionChatTimelineViewProps {
         isRefreshing: Bool,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
+        sessionTodosVisible: Bool = false,
+        sessionTodoCompletedCount: Int = 0,
+        sessionTodoTotalCount: Int = 0,
+        sessionTodoActivePreview: String? = nil,
+        hideFloatStack: Bool = false,
         onRefresh: @escaping () async -> Void,
         onReviewChangesTap: @escaping () -> Void,
+        onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
@@ -37,8 +49,14 @@ struct SessionChatTimelineViewProps {
         self.isRefreshing = isRefreshing
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
+        self.sessionTodosVisible = sessionTodosVisible
+        self.sessionTodoCompletedCount = sessionTodoCompletedCount
+        self.sessionTodoTotalCount = sessionTodoTotalCount
+        self.sessionTodoActivePreview = sessionTodoActivePreview
+        self.hideFloatStack = hideFloatStack
         self.onRefresh = onRefresh
         self.onReviewChangesTap = onReviewChangesTap
+        self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
         self.onChildSessionTap = onChildSessionTap
@@ -132,22 +150,36 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            MessageListScrollToEndOverlay(
-                visible: showScrollToEnd
-            ) {
-                logScroll("pill-click count=\(props.messages.count)")
-                scrollController.scrollToEndAnimated()
-            }
+            if !props.hideFloatStack {
+                VStack(spacing: 8) {
+                    if props.sessionTodosVisible, props.sessionTodoTotalCount > 0 {
+                        OpenCodeSessionTodosPill(
+                            completedCount: props.sessionTodoCompletedCount,
+                            totalCount: props.sessionTodoTotalCount,
+                            activePreview: props.sessionTodoActivePreview,
+                            action: props.onSessionTodosTap
+                        )
+                    }
 
-            if showReviewChanges, let summary = props.reviewChangesSummary {
-                OpenCodeReviewChangesPill(
-                    variant: .latestTurn,
-                    changedFileCount: summary.fileCount,
-                    additions: summary.additions,
-                    deletions: summary.deletions,
-                    action: props.onReviewChangesTap
-                )
-                    .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
+                    MessageListScrollToEndOverlay(
+                        visible: showScrollToEnd,
+                        applyBottomPadding: false
+                    ) {
+                        logScroll("pill-click count=\(props.messages.count)")
+                        scrollController.scrollToEndAnimated()
+                    }
+
+                    if showReviewChanges, let summary = props.reviewChangesSummary {
+                        OpenCodeReviewChangesPill(
+                            variant: .latestTurn,
+                            changedFileCount: summary.fileCount,
+                            additions: summary.additions,
+                            deletions: summary.deletions,
+                            action: props.onReviewChangesTap
+                        )
+                    }
+                }
+                .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
             }
         }
         .onAppear {

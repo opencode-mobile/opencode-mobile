@@ -27,3 +27,12 @@
 - Why: Grilled against upstream dock semantics and mobile float-stack constraints;
   avoids Tasks / Plan / Checklist confusion.
 - Ticket: OPE-60 / OPE-96.
+
+## Feature-local sheet status rows
+
+- Decision: Session Todo sheet rows stay feature-local in Session Chat rather
+  than extending `OpenCodeListItem`.
+- Why: Dock semantics need checkbox / indeterminate marks and strikethrough
+  muted labels; List Item status pills and start decorators do not cover that
+  without a one-off API. Promote later if another surface needs the same row.
+- Ticket: OPE-97.

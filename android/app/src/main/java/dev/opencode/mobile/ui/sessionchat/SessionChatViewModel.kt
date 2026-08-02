@@ -822,6 +822,7 @@ class SessionChatViewModel
                 sessionStatusLabel = infoState.sessionStatusLabel,
                 sessionTodos = sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
+                sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),
                 sessionTodoActivePreview = SessionTodoList.activePreview(sessionTodos),
                 sessionTodoCompletedCount = SessionTodoList.completedCount(sessionTodos),
                 sessionTodoTotalCount = sessionTodos.size,

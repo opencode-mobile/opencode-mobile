@@ -21,6 +21,9 @@ struct SessionChatView: View {
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var showSessionTodosSheet = false
+    @State private var holdingFinishedTodos = false
+    @State private var finishedHoldTask: Task<Void, Never>?
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -76,9 +79,18 @@ struct SessionChatView: View {
                     isRefreshing: viewModel.uiState.isRefreshing,
                     errorMessage: viewModel.uiState.errorMessage,
                     reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
+                    sessionTodosVisible: sessionTodosPillVisible,
+                    sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
+                    sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
+                    sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
+                    hideFloatStack: showSessionTodosSheet,
                     onRefresh: { await viewModel.refreshMessages() },
                     onReviewChangesTap: {
                         changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
+                    },
+                    onSessionTodosTap: {
+                        guard !blocksSessionTodosSheet else { return }
+                        showSessionTodosSheet = true
                     },
                     onMessageActionsTap: { messageActionsTarget = $0 },
                     onToolDetailTap: { toolDetailTarget = $0 },
@@ -160,6 +172,12 @@ struct SessionChatView: View {
             onRestoreToComposer: { viewModel.restoreComposerText($0) }
         )
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
+        .sessionChatTodosSheet(
+            isPresented: $showSessionTodosSheet,
+            todos: viewModel.uiState.sessionTodos,
+            completedCount: viewModel.uiState.sessionTodoCompletedCount,
+            totalCount: max(viewModel.uiState.sessionTodoTotalCount, 1)
+        )
         .sessionChatPickerSheet(
             activePicker: $activePicker,
             activeModelProviderID: $activeModelProviderID,
@@ -247,6 +265,22 @@ struct SessionChatView: View {
         .onChange(of: viewModel.uiState.shouldLeaveSession) { _, shouldLeave in
             if shouldLeave {
                 leaveSession()
+            }
+        }
+        .onChange(of: viewModel.uiState.permissionRequest?.id) { _, _ in
+            dismissSessionTodosSheetIfBlocked()
+        }
+        .onChange(of: viewModel.uiState.questionRequest?.id) { _, _ in
+            dismissSessionTodosSheetIfBlocked()
+        }
+        .onChange(of: viewModel.uiState.sessionTodosFinished) { _, finished in
+            updateFinishedTodosHold(finished: finished)
+        }
+        .onChange(of: viewModel.uiState.sessionTodos.isEmpty) { _, isEmpty in
+            if isEmpty {
+                finishedHoldTask?.cancel()
+                holdingFinishedTodos = false
+                showSessionTodosSheet = false
             }
         }
         .onChange(of: selectedPhotoItems) { _, items in
@@ -338,6 +372,35 @@ struct SessionChatView: View {
                 childSessionTarget = target
                 viewModel.consumePendingSessionReplace()
             }
+        }
+    }
+
+    private var blocksSessionTodosSheet: Bool {
+        viewModel.uiState.permissionRequest != nil || viewModel.uiState.questionRequest != nil
+    }
+
+    private var sessionTodosPillVisible: Bool {
+        viewModel.uiState.sessionTodosVisible || holdingFinishedTodos
+    }
+
+    private func dismissSessionTodosSheetIfBlocked() {
+        if blocksSessionTodosSheet {
+            showSessionTodosSheet = false
+        }
+    }
+
+    private func updateFinishedTodosHold(finished: Bool) {
+        finishedHoldTask?.cancel()
+        guard finished, !viewModel.uiState.sessionTodos.isEmpty else {
+            holdingFinishedTodos = false
+            return
+        }
+        holdingFinishedTodos = true
+        finishedHoldTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard !Task.isCancelled else { return }
+            holdingFinishedTodos = false
+            showSessionTodosSheet = false
         }
     }
 

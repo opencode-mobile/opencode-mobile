@@ -87,9 +87,9 @@ ticket; sync does not add edit actions.
 ## Design-System Components
 
 - Sync ticket: none (no chrome).
-- Chrome ticket: classify pill/sheet primitives when implementing UI; prefer
-  existing Component Collection pieces, then design-system workflow, then
-  feature-local only with a recorded reason.
+- Chrome ticket: Session Todos Pill is a Component Collection primitive
+  (`docs/design-system/components/session-todos-pill.md`). Sheet status rows are
+  feature-local (see `decisions.md`).
 
 ## Child Tickets
 

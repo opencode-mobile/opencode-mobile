@@ -61,7 +61,9 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -95,8 +97,35 @@ fun SessionChatScreen(
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
+    var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
+    var holdingFinishedTodos by remember { mutableStateOf(false) }
     val lifecycleActionsEnabled = !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
+
+    val blocksSessionTodosSheet = uiState.permissionRequest != null || uiState.questionRequest != null
+    val sessionTodosPillVisible = uiState.sessionTodosVisible || holdingFinishedTodos
+
+    LaunchedEffect(uiState.permissionRequest?.id, uiState.questionRequest?.id) {
+        if (blocksSessionTodosSheet) {
+            showSessionTodosSheet = false
+        }
+    }
+
+    LaunchedEffect(uiState.sessionTodosFinished, uiState.sessionTodos.isEmpty()) {
+        if (uiState.sessionTodos.isEmpty()) {
+            holdingFinishedTodos = false
+            showSessionTodosSheet = false
+            return@LaunchedEffect
+        }
+        if (uiState.sessionTodosFinished) {
+            holdingFinishedTodos = true
+            delay(1_500)
+            holdingFinishedTodos = false
+            showSessionTodosSheet = false
+        } else {
+            holdingFinishedTodos = false
+        }
+    }
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
         if (uris.isEmpty()) return
@@ -263,9 +292,19 @@ fun SessionChatScreen(
                             isRefreshing = uiState.isRefreshing,
                             errorMessage = uiState.errorMessage,
                             reviewChangesSummary = uiState.reviewChangesSummary,
+                            sessionTodosVisible = sessionTodosPillVisible,
+                            sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
+                            sessionTodoTotalCount = uiState.sessionTodoTotalCount,
+                            sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
+                            hideFloatStack = showSessionTodosSheet,
                             onRefresh = viewModel::refreshMessages,
                             onReviewChangesClick = {
                                 uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
+                            },
+                            onSessionTodosClick = {
+                                if (!blocksSessionTodosSheet) {
+                                    showSessionTodosSheet = true
+                                }
                             },
                             onMessageActionsTap = { messageActionsTarget = it },
                             onToolDetailTap = { toolDetailTarget = it },
@@ -475,6 +514,14 @@ fun SessionChatScreen(
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
             onDismiss = { toolDetailTarget = null },
+        )
+
+        SessionChatTodosSheet(
+            visible = showSessionTodosSheet,
+            todos = uiState.sessionTodos,
+            completedCount = uiState.sessionTodoCompletedCount,
+            totalCount = maxOf(uiState.sessionTodoTotalCount, 1),
+            onDismiss = { showSessionTodosSheet = false },
         )
 
         OpenCodeBottomSheet(
