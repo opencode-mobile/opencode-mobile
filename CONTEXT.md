@@ -81,6 +81,52 @@ sessions, rename sessions, archive sessions, delete sessions, fork sessions,
 inspect their messages, send prompts, abort active work, review diffs, and
 respond to permission requests.
 
+### Session Todo List
+
+The agent-owned, view-only task list for one **session**.
+
+The model maintains the list while working; the mobile client reads it and does
+not let the user check off or edit items in v1. The Session Todo List is the
+only user-facing surface for that data: `todowrite` tool parts stay hidden in
+the Session Chat timeline. The client loads the list with `GET` when the session
+becomes live, applies SSE `todo.updated` as a full-list replace, clears the
+local cache when the session goes idle, and force-refetches on the next live
+turn.
+
+On mobile, the compact Session Todos entry is a floating pill over Session Chat
+(above the composer). It sits above the existing Scroll-to-end / Changes float
+band; while the Session Todo List sheet is open, that whole float stack is
+hidden. A pending permission request takes priority over the Session Todo List
+sheet: the sheet is dismissed or not opened while the user must approve or deny;
+the pill may remain visible under the live visibility rule. The pill is visible
+only while the session is live — busy or blocked on a permission/question — and
+the list is non-empty and not fully finished. When every item is completed or
+cancelled while still live, the pill stays briefly visible then closes; when
+the session becomes idle, the client clears its local list cache so stale items
+do not reopen on the next visit.
+
+The pill preview line prefers the first `in_progress` Session Todo, else the
+first `pending`, else the last `completed`, else the first item. Progress on
+the pill is `N/M` where `N` is the count of `completed` items and `M` is the
+total list length; `cancelled` does not increment `N` but still counts as
+finished for hide/close.
+_Avoid_: Tasks, Plan, Checklist, user todo list.
+
+### Session Todo
+
+One item in a **Session Todo List**.
+
+It has a brief description, a status (`pending`, `in_progress`, `completed`, or
+`cancelled`), and a priority. List order is identity; there is no separate
+server id per item. Mobile v1 does not show or sort by priority.
+
+In the Session Todo List sheet, the header is progress-first (“N of M
+completed”), matching the pill’s completed-count / total rule. Status rows are
+view-only: checked when completed, indeterminate when in progress,
+strikethrough and muted when completed or cancelled, and slightly weaker when
+pending — same semantics as the desktop dock, with native chrome.
+_Avoid_: task, checklist item (as product terms).
+
 ### archive
 
 A session lifecycle action that removes a session from the active list while
