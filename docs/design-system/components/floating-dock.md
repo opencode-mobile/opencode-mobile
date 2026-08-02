@@ -19,8 +19,8 @@ above the home indicator / navigation bar.
 
 ## Token Usage
 
-- Semantic tokens: `surface.raised` underlay (iOS underlay opacity `0.92` under
-  glass); `background.base` is not used by the dock fill.
+- Semantic tokens: shared Floating Chrome recipe (`surface.raised` underlay;
+  see `floating-chrome.md`).
 - Component tokens: continuous corner radius 26pt/dp.
 - Typography roles: not owned by the surface.
 
@@ -28,15 +28,15 @@ above the home indicator / navigation bar.
 
 The dock is a presentational surface. Callers own padding of outer insets
 (horizontal float and bottom safe-area / nav-bar padding). Content is clipped to
-the continuous rounded rect.
+the continuous rounded rect. Materials come from `OpenCodeFloatingChrome` /
+`openCodeFloatingChrome`.
 
 ## Platform Notes
 
-- iOS: iOS 26+ uses `glassEffect` on a continuous rounded rect with
-  `surface-raised-base` underlay at 0.92 opacity; below iOS 26 uses
-  `.regularMaterial`.
-- Android: Material 3 `Surface` with raised fill at 0.95 alpha, light tonal and
-  shadow elevation (no system Liquid Glass).
+- iOS: uses shared floating chrome (iOS 26+ glass + underlay; material fallback).
+  Dock owns outer float insets `16` / `4` and inner content padding `12`.
+- Android: uses shared floating chrome (raised Surface stand-in). Outer float
+  insets remain caller-owned; dock owns inner content padding `12`.
 
 ## Review Surfaces
 
@@ -46,5 +46,4 @@ needed for surface-only review.
 ## Parity And Divergence
 
 Intentional material difference: iOS Liquid Glass vs Android raised Surface.
-Documented in `../divergences.md` and the liquid-glass-home-list feature
-parity-gaps while promoting.
+Documented in `../divergences.md` and `floating-chrome.md`.

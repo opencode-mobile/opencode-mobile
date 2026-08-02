@@ -189,9 +189,10 @@ struct OpenCodeSessionComposer: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 26))
+        .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
+        .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
         .overlay(
-            RoundedRectangle(cornerRadius: 26)
+            RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous)
                 .stroke(outlineColor, lineWidth: 1)
         )
         .padding(.horizontal, 12)
@@ -476,6 +477,8 @@ struct OpenCodeSessionComposer: View {
         case .question: "question"
         }
     }
+
+    private static let shellCornerRadius: CGFloat = 26
 
     private static func questionSelectionDecorator(selected: Bool) -> StartDecorator {
         .icon(

@@ -44,12 +44,12 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
 
 ## Token Usage
 
-- Shell tokens: `surface-base`, `border-weaker-base`, `text-strong`, and
-  `text-base`.
+- Shell tokens: Floating Chrome materials (`surface.raised` / glass; see
+  `floating-chrome.md`), `border-weaker-base`, `text-strong`, and `text-base`.
 - Status/action tokens: `warning`, `error`, and `button-primary-base`.
-- Shared shell geometry: 26 logical-pixel corner radius, 12 logical-pixel
-  content padding, 12 logical-pixel screen gutters, 10 logical-pixel bottom
-  inset, and 10 logical-pixel row spacing.
+- Shared shell geometry: 26 logical-pixel continuous corner radius, 12
+  logical-pixel content padding, 12 logical-pixel screen gutters, 10
+  logical-pixel bottom inset, and 10 logical-pixel row spacing.
 - Prompt text, permission copy, and question copy use the same additional 4
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.
@@ -112,7 +112,8 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   still reporting caret/selection changes back through `textChanged`; the
   representable applies caret placement only when `selectionRevision`
   changes, matching Android's revision-gated selection updates. Question custom
-  text uses `OpenCodeTextInput`.
+  text uses `OpenCodeTextInput`. Shell fill uses shared
+  `openCodeFloatingChrome` (iOS 26+ Liquid Glass + underlay; material fallback).
 - Android uses Compose selection, live-region semantics, and progress
   primitives. Prompt mention spans render through a `VisualTransformation` on
   `BasicTextField` (not `AnnotatedString` on `TextFieldValue`) so
@@ -120,10 +121,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   and selection sync from Screen Model values only when `selectionRevision`
   changes. Question custom text uses `OpenCodeTextInput`. Its fixed screen
   gutter and bottom inset sit outside the animated content boundary.
-  `AnimatedContent` coordinates the crossfade and `SizeTransform`; the
-  background and outline wrap that boundary so the shell redraws at each
-  intermediate height instead of revealing already-switched content inside a
-  lagging container.
+  `AnimatedContent` coordinates the crossfade and `SizeTransform`; shared
+  `OpenCodeFloatingChrome` (raised Surface) and the outline wrap that boundary
+  so the shell redraws at each intermediate height instead of revealing
+  already-switched content inside a lagging container.
 - Native progress indicators may differ while preserving shared state behavior.
 
 ## Review Surfaces
@@ -149,24 +150,23 @@ resize motion can be reviewed in a realistic Session Chat placement.
 
 - Public API and applicable states: complete (`prompt`, `permission`,
   `question`), including the `openCommands` prompt action (OPE-58).
-- Token and typography mapping: complete. Question selection hints use
-  `text-base` on both platforms; question shell outline stays neutral. The
-  Commands action reuses `iconCircle` geometry via the new `iconCircleText`
-  button variant; no new tokens.
-- iOS and Android implementations: complete for the shared question-request
-  composer state, including radio selection chrome and custom-answer field
-  visibility. Complete for the `[+] [/] … [send]` prompt action row (OPE-58);
-  the Commands sheet itself is feature-local, not part of this component.
-- Gallery entries and previews: complete for question single, wizard,
-  multi-select, custom, submitting, and error scenarios on both platforms.
-  Complete for logging `openCommands` in the action log.
-- Parity and divergences: complete; none known for this component update.
-- Automated checks: complete for compile on iOS simulator and Android
-  `compileDebugKotlin`. Session Chat wiring remains OPE-66 (question/permission)
-  and OPE-58 (Commands sheet).
+- Token and typography mapping: complete. Shell materials use Floating Chrome
+  (`floating-chrome.md`); question selection hints use `text-base`; question
+  shell outline stays neutral. The Commands action reuses `iconCircle` geometry
+  via `iconCircleText`; no new tokens for OPE-99 shell materials.
+- iOS and Android implementations: complete for shared question-request composer
+  state and for Floating Chrome shell materials (OPE-99). Control-level glass on
+  IconCircles remains out of scope for this slice.
+- Gallery entries and previews: complete for question / permission / prompt
+  scenarios; materials are reviewable on the existing Session Composer gallery
+  entry (edge-to-edge).
+- Parity and divergences: intentional glass vs raised Surface via Floating
+  Chrome; see `../divergences.md`.
+- Automated checks: compile on iOS simulator and Android `compileDebugKotlin`
+  for OPE-99 materials.
 
 ## Parity And Divergence
 
-No intentional divergence is defined. Temporary differences belong in
-`docs/features/question-request/parity-gaps.md` or
-`docs/features/permission-approval/parity-gaps.md` for the owning feature.
+Intentional Floating Chrome material difference (iOS Liquid Glass vs Android
+raised Surface) is documented in `../divergences.md`. Temporary feature
+mismatches belong in `docs/features/composer-liquid-glass/parity-gaps.md`.

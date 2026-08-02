@@ -25,25 +25,19 @@ fun ComposerSuggestionOverlayGalleryScreen(modifier: Modifier = Modifier) {
         )
         OpenCodeComposerSuggestionOverlay(
             items =
-                listOf(
+                (1..8).map { index ->
                     OpenCodeComposerSuggestionItem(
-                        id = "init",
-                        title = "/init",
-                        subtitle = "Create AGENTS.md",
-                    ),
-                    OpenCodeComposerSuggestionItem(
-                        id = "skill",
-                        title = "/my-skill",
-                        subtitle = "A skill",
-                        badge = "skill",
-                    ),
-                    OpenCodeComposerSuggestionItem(
-                        id = "mcp",
-                        title = "/mcp-prompt",
-                        subtitle = "From MCP",
-                        badge = "mcp",
-                    ),
-                ),
+                        id = "cmd-$index",
+                        title = "/command-$index",
+                        subtitle = "Description $index",
+                        badge =
+                            when {
+                                index % 3 == 0 -> "skill"
+                                index % 2 == 0 -> "mcp"
+                                else -> null
+                            },
+                    )
+                },
             onSelect = {},
         )
 

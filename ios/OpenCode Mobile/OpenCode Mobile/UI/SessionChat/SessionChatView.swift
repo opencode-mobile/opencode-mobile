@@ -122,46 +122,51 @@ struct SessionChatView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .bottom) {
-                if viewModel.uiState.permissionRequest == nil, viewModel.uiState.questionRequest == nil {
-                    if viewModel.uiState.atSuggestionsVisible {
-                        OpenCodeComposerSuggestionOverlay(
-                            items: viewModel.uiState.atSuggestions.map { suggestion in
-                                OpenCodeComposerSuggestionItem(
-                                    id: suggestion.id,
-                                    title: suggestion.title,
-                                    subtitle: suggestion.subtitle
-                                )
-                            },
-                            emptyMessage: "No agents",
-                            onSelect: { item in
-                                viewModel.selectAtSuggestion(agentName: item.id)
-                            }
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                    } else if viewModel.uiState.slashSuggestionsVisible {
-                        OpenCodeComposerSuggestionOverlay(
-                            items: viewModel.uiState.slashSuggestions.map { suggestion in
-                                OpenCodeComposerSuggestionItem(
-                                    id: suggestion.id,
-                                    title: suggestion.title,
-                                    subtitle: suggestion.subtitle,
-                                    badge: suggestion.badge
-                                )
-                            },
-                            emptyMessage: "No commands",
-                            onSelect: { item in
-                                viewModel.selectSlashSuggestion(commandName: item.id)
-                            }
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
+                // ZStack keeps suggestions and snackbar independently bottom-anchored.
+                // A bare ViewBuilder tuple lays out like a VStack, which parks the
+                // suggestion panel at the top of the timeline instead of above the composer.
+                ZStack(alignment: .bottom) {
+                    OpenCodeSnackbarHost(
+                        message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
+                        onDismissed: { viewModel.consumeSnackbar() }
+                    )
+                    if viewModel.uiState.permissionRequest == nil, viewModel.uiState.questionRequest == nil {
+                        if viewModel.uiState.atSuggestionsVisible {
+                            OpenCodeComposerSuggestionOverlay(
+                                items: viewModel.uiState.atSuggestions.map { suggestion in
+                                    OpenCodeComposerSuggestionItem(
+                                        id: suggestion.id,
+                                        title: suggestion.title,
+                                        subtitle: suggestion.subtitle
+                                    )
+                                },
+                                emptyMessage: "No agents",
+                                onSelect: { item in
+                                    viewModel.selectAtSuggestion(agentName: item.id)
+                                }
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 4)
+                        } else if viewModel.uiState.slashSuggestionsVisible {
+                            OpenCodeComposerSuggestionOverlay(
+                                items: viewModel.uiState.slashSuggestions.map { suggestion in
+                                    OpenCodeComposerSuggestionItem(
+                                        id: suggestion.id,
+                                        title: suggestion.title,
+                                        subtitle: suggestion.subtitle,
+                                        badge: suggestion.badge
+                                    )
+                                },
+                                emptyMessage: "No commands",
+                                onSelect: { item in
+                                    viewModel.selectSlashSuggestion(commandName: item.id)
+                                }
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 4)
+                        }
                     }
                 }
-                OpenCodeSnackbarHost(
-                    message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
-                    onDismissed: { viewModel.consumeSnackbar() }
-                )
             }
             composer
         }

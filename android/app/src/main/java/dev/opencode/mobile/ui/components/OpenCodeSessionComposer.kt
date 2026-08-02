@@ -7,8 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -195,62 +194,73 @@ fun OpenCodeSessionComposer(
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
+    val shellShape = RoundedCornerShape(OpenCodeFloatingChromeCornerRadius)
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
-                .padding(bottom = 10.dp)
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(26.dp))
-                .border(1.dp, outlineColor, RoundedCornerShape(26.dp))
-                .padding(horizontal = 12.dp, vertical = 12.dp)
-                .then(
-                    if (announceBlocking) {
-                        Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-                    } else {
-                        Modifier
-                    },
-                ),
+                .padding(bottom = 10.dp),
     ) {
-        AnimatedContent(
-            targetState = state,
+        OpenCodeFloatingChrome(
             modifier = Modifier.fillMaxWidth(),
-            transitionSpec = {
-                (
-                    fadeIn(
-                        animationSpec = tween(durationMillis = 120, delayMillis = 80),
-                    ) togetherWith
-                        fadeOut(
-                            animationSpec = tween(durationMillis = 80),
+            shape = shellShape,
+            border = BorderStroke(1.dp, outlineColor),
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                        .then(
+                            if (announceBlocking) {
+                                Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                            } else {
+                                Modifier
+                            },
+                        ),
+            ) {
+                AnimatedContent(
+                    targetState = state,
+                    modifier = Modifier.fillMaxWidth(),
+                    transitionSpec = {
+                        (
+                            fadeIn(
+                                animationSpec = tween(durationMillis = 120, delayMillis = 80),
+                            ) togetherWith
+                                fadeOut(
+                                    animationSpec = tween(durationMillis = 80),
+                                )
+                        ).using(
+                            SizeTransform(clip = true) { _, _ ->
+                                tween(durationMillis = 240)
+                            },
                         )
-                ).using(
-                    SizeTransform(clip = true) { _, _ ->
-                        tween(durationMillis = 240)
                     },
-                )
-            },
-            contentKey = { it::class },
-            label = "composer-content",
-        ) { state ->
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when (state) {
-                    is OpenCodeSessionComposerState.Prompt ->
-                        PromptEntryContent(
-                            state = state,
-                            onAction = onAction,
-                        )
+                    contentKey = { it::class },
+                    label = "composer-content",
+                ) { state ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        when (state) {
+                            is OpenCodeSessionComposerState.Prompt ->
+                                PromptEntryContent(
+                                    state = state,
+                                    onAction = onAction,
+                                )
 
-                    is OpenCodeSessionComposerState.Permission ->
-                        PermissionApprovalContent(
-                            state = state,
-                            onAction = onAction,
-                        )
+                            is OpenCodeSessionComposerState.Permission ->
+                                PermissionApprovalContent(
+                                    state = state,
+                                    onAction = onAction,
+                                )
 
-                    is OpenCodeSessionComposerState.Question ->
-                        QuestionRequestContent(
-                            state = state,
-                            onAction = onAction,
-                        )
+                            is OpenCodeSessionComposerState.Question ->
+                                QuestionRequestContent(
+                                    state = state,
+                                    onAction = onAction,
+                                )
+                        }
+                    }
                 }
             }
         }

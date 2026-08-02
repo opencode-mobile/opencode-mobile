@@ -44,20 +44,16 @@ struct KeyboardOverlapPaddingModifier: ViewModifier {
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
                 ) { notification in
-                    let next = KeyboardOverlap.amount(
+                    // Instant snap — keyboard-matched animation felt laggy; revisit later.
+                    overlap = KeyboardOverlap.amount(
                         from: notification,
                         in: geometry.frame(in: .global)
                     )
-                    withAnimation(.easeOut(duration: KeyboardOverlap.animationDuration(from: notification))) {
-                        overlap = next
-                    }
                 }
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
-                ) { notification in
-                    withAnimation(.easeOut(duration: KeyboardOverlap.animationDuration(from: notification))) {
-                        overlap = 0
-                    }
+                ) { _ in
+                    overlap = 0
                 }
         }
         .ignoresSafeArea(.keyboard)
