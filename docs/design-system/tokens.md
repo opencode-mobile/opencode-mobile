@@ -472,7 +472,8 @@ single-line title, and compact trailing actions.
 | `topBar.paddingHorizontal` | 12 (logical px) |
 | `topBar.paddingVertical` | 12 (logical px) |
 | `topBar.itemSpacing` | 8 (logical px) |
-| `topBar.titleSpacing` | 12 (logical px) |
+| `topBar.titleSpacing` | 12 (logical px) after a leading control |
+| `topBar.titleEdgeInsetWhenNoLeading` | 18 (logical px) from screen edge to title when leading is `none` |
 | `topBar.titleBlockHeight` | 48 (logical px) |
 | `topBar.subtitleSpacing` | 0 (logical px) |
 | `topBar.dividerThickness` | 1 (logical px) |

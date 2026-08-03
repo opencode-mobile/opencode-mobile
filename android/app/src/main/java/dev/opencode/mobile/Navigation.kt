@@ -159,6 +159,10 @@ fun MainNavigation() {
                                                 showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
                                                 onShowSessionListOnHomeChange =
                                                     settingsViewModel::setShowSessionListOnHome,
+                                                hideUserDirectoryPrefix =
+                                                    HomeDisplayPreferences.hideUserDirectoryPrefix,
+                                                onHideUserDirectoryPrefixChange =
+                                                    settingsViewModel::setHideUserDirectoryPrefix,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                             )

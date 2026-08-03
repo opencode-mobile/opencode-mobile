@@ -85,6 +85,25 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
+                        title: "Hide User Directory",
+                        subtitle: "Show ~/Projects/… instead of /Users/you/Projects/…",
+                        style: .card,
+                        startDecorator: .icon(.folder, accessibilityLabel: "Hide User Directory"),
+                        trailing: {
+                            Toggle(
+                                "Hide User Directory",
+                                isOn: Binding(
+                                    get: { homeDisplayPreferences.hideUserDirectoryPrefix },
+                                    set: { homeDisplayPreferences.setHideUserDirectoryPrefix($0) }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Import Theme",
                         subtitle: "Custom OpenCode OC-2 JSON file",
                         style: .card,

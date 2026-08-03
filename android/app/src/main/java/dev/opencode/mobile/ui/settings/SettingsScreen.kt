@@ -51,6 +51,8 @@ fun SettingsScreen(
     onApplyPreset: (String) -> Unit,
     showSessionListOnHome: Boolean,
     onShowSessionListOnHomeChange: (Boolean) -> Unit,
+    hideUserDirectoryPrefix: Boolean,
+    onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -120,6 +122,20 @@ fun SettingsScreen(
                     Switch(
                         checked = showSessionListOnHome,
                         onCheckedChange = onShowSessionListOnHomeChange,
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "Hide User Directory",
+                subtitle = "Show ~/Projects/… instead of /Users/you/Projects/…",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Hide User Directory"),
+                trailing = {
+                    Switch(
+                        checked = hideUserDirectoryPrefix,
+                        onCheckedChange = onHideUserDirectoryPrefixChange,
                     )
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -274,6 +290,8 @@ private fun SettingsScreenLightPreview() {
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
             onShowSessionListOnHomeChange = {},
+            hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
+            onHideUserDirectoryPrefixChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
         )
@@ -295,6 +313,8 @@ private fun SettingsScreenDarkPreview() {
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
             onShowSessionListOnHomeChange = {},
+            hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
+            onHideUserDirectoryPrefixChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
         )

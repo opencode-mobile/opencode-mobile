@@ -70,6 +70,10 @@ class SettingsViewModel
             HomeDisplayPreferences.updateShowSessionListOnHome(enabled)
         }
 
+        fun setHideUserDirectoryPrefix(enabled: Boolean) {
+            HomeDisplayPreferences.updateHideUserDirectoryPrefix(enabled)
+        }
+
         fun setTextMateEnabled(enabled: Boolean) {
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
             messageContentPreparer.clearDocumentCache()

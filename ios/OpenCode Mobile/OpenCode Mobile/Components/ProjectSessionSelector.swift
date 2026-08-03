@@ -57,6 +57,8 @@ struct ProjectSessionSelector: View {
     let onShowAllSessions: (String) -> Void
     let onNewSession: (String) -> Void
 
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+
     private let horizontalSpacing: CGFloat = 12
 
     private var selectedProject: ProjectSessionSelectorProject? {
@@ -116,7 +118,10 @@ struct ProjectSessionSelector: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Text(compactHomePath(project.pathSubtitle))
+            Text(compactHomePath(
+                project.pathSubtitle,
+                hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+            ))
                 .font(OpenCodeTypography.code)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .lineLimit(1)
@@ -192,6 +197,8 @@ private struct ProjectSessionSelectorTile: View {
     let selected: Bool
     let action: () -> Void
 
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
@@ -208,7 +215,9 @@ private struct ProjectSessionSelectorTile: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(project.displayName), \(compactHomePath(project.pathSubtitle))")
+        .accessibilityLabel(
+            "\(project.displayName), \(compactHomePath(project.pathSubtitle, hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix))"
+        )
         .accessibilityValue(selected ? "Selected" : "Not selected")
     }
 }
@@ -236,13 +245,31 @@ private struct AddProjectSessionSelectorTile: View {
     }
 }
 
-private func compactHomePath(_ path: String) -> String {
+private func compactHomePath(_ path: String, hideUserDirectoryPrefix: Bool) -> String {
     let home = NSHomeDirectory()
     if path == home { return "~" }
     if path.hasPrefix(home + "/") {
         return "~" + path.dropFirst(home.count)
     }
+    guard hideUserDirectoryPrefix else { return path }
+    if let remoteHome = remoteUnixHomePrefix(path) {
+        if path == remoteHome { return "~" }
+        if path.hasPrefix(remoteHome + "/") {
+            return "~" + path.dropFirst(remoteHome.count)
+        }
+    }
     return path
+}
+
+/// `/Users/<name>` or `/home/<name>` prefix when the path is a remote server worktree.
+private func remoteUnixHomePrefix(_ path: String) -> String? {
+    let parts = path.split(separator: "/", maxSplits: 3, omittingEmptySubsequences: false)
+    guard parts.count >= 3, parts[0].isEmpty else { return nil }
+    let root = parts[1]
+    guard root == "Users" || root == "home" else { return nil }
+    let user = parts[2]
+    guard !user.isEmpty else { return nil }
+    return "/\(root)/\(user)"
 }
 
 #Preview("Project Session Selector") {

@@ -5,6 +5,8 @@ private let topBarHorizontalPadding: CGFloat = 12
 private let topBarVerticalPadding: CGFloat = 12
 private let topBarItemSpacing: CGFloat = 8
 private let topBarTitleSpacing: CGFloat = 12
+/// Screen-edge inset for the title when leading is `.none`.
+private let topBarTitleEdgeInsetWhenNoLeading: CGFloat = 18
 private let topBarSubtitleSpacing: CGFloat = 0
 private let topBarTitleBlockHeight: CGFloat = 48
 private let topBarIconButtonSize: CGFloat = 40
@@ -65,7 +67,7 @@ struct OpenCodeTopBar: View {
 
                 titleContent
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, hasLeadingControl ? topBarTitleSpacing : 0)
+                    .padding(.leading, titleStartPadding)
 
                 trailingContent
             }
@@ -91,6 +93,13 @@ struct OpenCodeTopBar: View {
     private var hasLeadingControl: Bool {
         if case .none = leading { return false }
         return true
+    }
+
+    private var titleStartPadding: CGFloat {
+        if hasLeadingControl {
+            return topBarTitleSpacing
+        }
+        return max(0, topBarTitleEdgeInsetWhenNoLeading - topBarHorizontalPadding)
     }
 
     @ViewBuilder

@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -169,10 +170,27 @@ private fun SessionListStatus.toListItemStatus(): OpenCodeListItemStatus =
 
 private fun compactHomePath(path: String): String {
     val home = System.getProperty("user.home").orEmpty()
-    if (home.isEmpty()) return path
-    if (path == home) return "~"
-    if (path.startsWith("$home/")) return "~" + path.removePrefix(home)
+    if (home.isNotEmpty()) {
+        if (path == home) return "~"
+        if (path.startsWith("$home/")) return "~" + path.removePrefix(home)
+    }
+    if (!HomeDisplayPreferences.hideUserDirectoryPrefix) return path
+    remoteUnixHomePrefix(path)?.let { remoteHome ->
+        if (path == remoteHome) return "~"
+        if (path.startsWith("$remoteHome/")) return "~" + path.removePrefix(remoteHome)
+    }
     return path
+}
+
+/** `/Users/<name>` or `/home/<name>` prefix when the path is a remote server worktree. */
+private fun remoteUnixHomePrefix(path: String): String? {
+    val parts = path.split('/', limit = 4)
+    if (parts.size < 3 || parts[0].isNotEmpty()) return null
+    val root = parts[1]
+    if (root != "Users" && root != "home") return null
+    val user = parts[2]
+    if (user.isEmpty()) return null
+    return "/$root/$user"
 }
 
 @Preview(showBackground = true)
