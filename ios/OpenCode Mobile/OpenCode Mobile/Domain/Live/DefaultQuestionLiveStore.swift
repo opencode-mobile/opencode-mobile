@@ -26,7 +26,8 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
             guard event.type == "question.asked" ||
                 event.type == "question.replied" ||
                 event.type == "question.rejected" ||
-                event.type == "stream.reconnected"
+                event.type == "stream.reconnected" ||
+                event.type == "server.connected"
             else { continue }
             if let requests = try? await sessionRepository.listPendingQuestions(directory: directory) { yield(requests) }
         }

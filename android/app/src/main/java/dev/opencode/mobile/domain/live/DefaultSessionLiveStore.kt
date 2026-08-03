@@ -50,7 +50,10 @@ class DefaultSessionLiveStore
                 loadSessions()?.let { send(it) }
 
                 merge(
-                    eventStream.events.filter { it.type == "stream.reconnected" }.map { },
+                    eventStream.events
+                        .filter {
+                            it.type == "stream.reconnected" || it.type == "server.connected"
+                        }.map { },
                     eventStream.events.filter { it.triggersHomeRefresh }.map { },
                 ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
                     .collect {

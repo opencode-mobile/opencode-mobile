@@ -99,7 +99,9 @@ final class DefaultSessionTodoLiveStore: SessionTodoLiveStore {
                 }
                 continue
             }
-            if event.type == "stream.reconnected", handle.isLive {
+            if handle.isLive,
+               event.type == "stream.reconnected" || event.type == "server.connected"
+            {
                 await fetch(key: key, force: true)
             }
         }

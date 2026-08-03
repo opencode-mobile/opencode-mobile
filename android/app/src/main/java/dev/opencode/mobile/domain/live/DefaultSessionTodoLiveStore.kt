@@ -96,7 +96,8 @@ class DefaultSessionTodoLiveStore
                                     replace(state, todos, markCache = true)
                                 }
                             }
-                            event.type == "stream.reconnected" && state.isLive -> {
+                            (event.type == "stream.reconnected" || event.type == "server.connected") &&
+                                state.isLive -> {
                                 fetch(key, state, force = true)
                             }
                         }

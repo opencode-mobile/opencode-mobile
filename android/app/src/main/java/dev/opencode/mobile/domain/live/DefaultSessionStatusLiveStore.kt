@@ -55,7 +55,10 @@ class DefaultSessionStatusLiveStore
                 send(loadStatuses())
 
                 merge(
-                    eventStream.events.filter { it.type == "stream.reconnected" }.map { },
+                    eventStream.events
+                        .filter {
+                            it.type == "stream.reconnected" || it.type == "server.connected"
+                        }.map { },
                     eventStream.events.filter { it.triggersStatusRefresh }.map { },
                 ).debounce(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
                     .collect {
