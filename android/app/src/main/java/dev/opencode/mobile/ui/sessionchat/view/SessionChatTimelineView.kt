@@ -1,9 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.components.OpenCodeActionPill
+import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
@@ -52,7 +51,6 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
-import dev.opencode.mobile.ui.scroll.MessageListScrollToEndOverlay
 import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
 import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
@@ -265,80 +263,64 @@ private fun SessionChatTimelineReadyView(
         }
 
         if (!hideFloatStack) {
+            // Primary (nearest composer): Scroll XOR Review. Secondary above: Todos.
+            // Compose only visible pills so spacedBy never reserves gaps for ghosts
+            // (empty AnimatedVisibility + spacedBy lifted Scroll ~8dp with no Todos).
+            val showScrollToEnd = timeline.showScrollToEnd
             val showReviewChanges =
                 ReviewChangesPillVisibility.shouldShow(
                     summary = reviewChangesSummary,
                     isPinnedToEnd = timeline.isPinnedToEnd,
-                    showScrollToEnd = timeline.showScrollToEnd,
+                    showScrollToEnd = showScrollToEnd,
                 )
-            Column(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(
-                            bottom =
-                                MessageListTimelineDefaults.scrollToEndPillBottomPadding +
-                                    bottomOverlayInset,
-                        ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // AnimatedVisibility keeps composing children during exit. When abort
-                // clears todos, totalCount becomes 0 while the fade-out still runs —
-                // keep the last positive snapshot so the pill contract stays valid.
-                val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
-                val sessionTodosPillDisplay =
-                    remember {
-                        object {
-                            var completedCount: Int = 0
-                            var totalCount: Int = 1
-                            var activePreview: String? = null
-                        }
+            val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
+            val showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
+            if (showFloatStack) {
+                Column(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(
+                                bottom =
+                                    MessageListTimelineDefaults.scrollToEndPillBottomPadding +
+                                        bottomOverlayInset,
+                            ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (showSessionTodosPill) {
+                        OpenCodeSessionTodosPill(
+                            completedCount = sessionTodoCompletedCount,
+                            totalCount = sessionTodoTotalCount,
+                            activePreview = sessionTodoActivePreview,
+                            onClick = onSessionTodosClick,
+                        )
                     }
-                if (sessionTodoTotalCount > 0) {
-                    sessionTodosPillDisplay.completedCount = sessionTodoCompletedCount
-                    sessionTodosPillDisplay.totalCount = sessionTodoTotalCount
-                    sessionTodosPillDisplay.activePreview = sessionTodoActivePreview
-                }
-                AnimatedVisibility(
-                    visible = showSessionTodosPill,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    OpenCodeSessionTodosPill(
-                        completedCount = sessionTodosPillDisplay.completedCount,
-                        totalCount = sessionTodosPillDisplay.totalCount,
-                        activePreview = sessionTodosPillDisplay.activePreview,
-                        onClick = onSessionTodosClick,
-                    )
-                }
 
-                MessageListScrollToEndOverlay(
-                    visible = timeline.showScrollToEnd,
-                    onClick = {
-                        timeline.scrollController.animateToEnd(
-                            messageCount = timeline.messageCount,
-                            tolerancePx = timeline.autoFollowTolerancePx,
-                            bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
-                            autoFollowEnabled = true,
+                    if (showScrollToEnd) {
+                        OpenCodeActionPill(
+                            variant = OpenCodeActionPillVariant.ScrollToEnd,
+                            onClick = {
+                                timeline.scrollController.animateToEnd(
+                                    messageCount = timeline.messageCount,
+                                    tolerancePx = timeline.autoFollowTolerancePx,
+                                    bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                                    autoFollowEnabled = true,
+                                )
+                            },
                         )
-                    },
-                    applyBottomPadding = false,
-                )
+                    }
 
-                AnimatedVisibility(
-                    visible = showReviewChanges,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    reviewChangesSummary?.let { summary ->
-                        OpenCodeReviewChangesPill(
-                            variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                            changedFileCount = summary.fileCount,
-                            additions = summary.additions,
-                            deletions = summary.deletions,
-                            onClick = onReviewChangesClick,
-                        )
+                    if (showReviewChanges) {
+                        reviewChangesSummary?.let { summary ->
+                            OpenCodeReviewChangesPill(
+                                variant = OpenCodeReviewChangesPillVariant.LatestTurn,
+                                changedFileCount = summary.fileCount,
+                                additions = summary.additions,
+                                deletions = summary.deletions,
+                                onClick = onReviewChangesClick,
+                            )
+                        }
                     }
                 }
             }
