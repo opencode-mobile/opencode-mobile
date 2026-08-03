@@ -28,6 +28,12 @@ class InMemoryMessageStore
         /** Pending text delta pieces keyed by session → "messageId\\upartId". */
         private val deltaChunks = ConcurrentHashMap<String, MutableMap<String, MutableList<String>>>()
 
+        /**
+         * How many characters of the current base text have been matched by late
+         * replay deltas after a snapshot, keyed like [deltaChunks].
+         */
+        private val absorbedReplayChars = ConcurrentHashMap<String, MutableMap<String, Int>>()
+
         @Synchronized
         override fun replaceAll(
             sessionId: String,
@@ -46,6 +52,7 @@ class InMemoryMessageStore
             partOrders[sessionId]!!.clear()
             ignoredPartIds[sessionId]!!.clear()
             deltaChunks[sessionId]!!.clear()
+            absorbedReplayChars[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
             seedPartIdentities(sessionId, messages)
@@ -185,6 +192,7 @@ class InMemoryMessageStore
             baseMessages.clear()
             revisions.clear()
             deltaChunks.clear()
+            absorbedReplayChars.clear()
         }
 
         private fun applyInfoUpdated(
@@ -271,7 +279,8 @@ class InMemoryMessageStore
             if (ignoredPartIds[sessionId]?.get(messageId)?.contains(partId) == true) return null
             val msgParts = partsCaches[sessionId]?.get(messageId) ?: return null
             val existing = msgParts[partId] as? MessagePart.Text ?: return null
-            appendChunk(sessionId, messageId, partId, delta)
+            val appended = appendChunk(sessionId, messageId, partId, existing.text, delta)
+            if (!appended) return null
             val wasStreaming = existing.isStreaming
             if (!wasStreaming) {
                 msgParts[partId] = existing.copy(isStreaming = true)
@@ -298,6 +307,7 @@ class InMemoryMessageStore
             ignoredPartIds[sessionId]?.remove(messageId)
             messageOrders[sessionId]?.removeAll { it == messageId }
             deltaChunks[sessionId]?.keys?.removeAll { it.startsWith("$messageId\u0000") }
+            absorbedReplayChars[sessionId]?.keys?.removeAll { it.startsWith("$messageId\u0000") }
             return SessionChangeSet(
                 sessionRevision = 0,
                 removedMessageIds = setOf(messageId),
@@ -333,6 +343,7 @@ class InMemoryMessageStore
             ignoredPartIds.getOrPut(sessionId) { mutableMapOf() }
             messageOrders.getOrPut(sessionId) { mutableListOf() }
             deltaChunks.getOrPut(sessionId) { mutableMapOf() }
+            absorbedReplayChars.getOrPut(sessionId) { mutableMapOf() }
         }
 
         private fun bumpRevision(sessionId: String) {
@@ -344,15 +355,44 @@ class InMemoryMessageStore
             partId: String?,
         ): String? = partId?.let { "$messageId\u0000$it" }
 
+        /**
+         * Appends a delta chunk, absorbing late replay deltas already covered by a
+         * snapshot base. Returns whether any new characters were stored.
+         */
         private fun appendChunk(
             sessionId: String,
             messageId: String,
             partId: String,
+            baseText: String,
             delta: String,
-        ) {
-            val key = chunkKey(messageId, partId) ?: return
+        ): Boolean {
+            val key = chunkKey(messageId, partId) ?: return false
             ensureCaches(sessionId)
-            deltaChunks[sessionId]!!.getOrPut(key) { mutableListOf() }.add(delta)
+            val chunks = deltaChunks[sessionId]!!.getOrPut(key) { mutableListOf() }
+
+            if (chunks.isEmpty() && baseText.isNotEmpty() && delta.isNotEmpty()) {
+                val absorbedMap = absorbedReplayChars[sessionId]!!
+                val absorbed = absorbedMap[key] ?: 0
+                if (absorbed < baseText.length) {
+                    val unmatched = baseText.substring(absorbed)
+                    if (unmatched.startsWith(delta)) {
+                        absorbedMap[key] = absorbed + delta.length
+                        return false
+                    }
+                    if (delta.startsWith(unmatched)) {
+                        absorbedMap[key] = baseText.length
+                        val overflow = delta.substring(unmatched.length)
+                        if (overflow.isEmpty()) return false
+                        chunks.add(overflow)
+                        return true
+                    }
+                    // Not a replay of the snapshot — stop absorbing and append.
+                    absorbedMap[key] = baseText.length
+                }
+            }
+
+            chunks.add(delta)
+            return true
         }
 
         private fun clearChunks(
@@ -362,6 +402,8 @@ class InMemoryMessageStore
         ) {
             val key = chunkKey(messageId, partId) ?: return
             deltaChunks[sessionId]?.remove(key)
+            // Reset so delayed deltas that replay the new snapshot can be absorbed.
+            absorbedReplayChars[sessionId]?.put(key, 0)
         }
 
         private fun hasChunks(
@@ -408,7 +450,7 @@ class InMemoryMessageStore
                         id = partId,
                     )
                 if (partId != null) {
-                    appendChunk(sessionId, messageId, partId, delta)
+                    appendChunk(sessionId, messageId, partId, baseText, delta)
                 }
                 return textPart
             }
