@@ -16,6 +16,10 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     /// Pending text delta pieces keyed by session → "messageID\0partID".
     private var deltaChunks: [String: [String: [String]]] = [:]
 
+    /// How many characters of the current base text have been matched by late
+    /// replay deltas after a snapshot, keyed like `deltaChunks`.
+    private var absorbedReplayChars: [String: [String: Int]] = [:]
+
     func replaceAll(sessionID: String, messages: [Message]) {
         lock.lock()
         defer { lock.unlock() }
@@ -29,6 +33,7 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
         partOrder[sessionID] = [:]
         ignoredPartIDs[sessionID] = [:]
         deltaChunks[sessionID] = [:]
+        absorbedReplayChars[sessionID] = [:]
         messageOrder[sessionID] = messages.map(\.id)
         baseMessages[sessionID] = messages
         seedPartIdentities(sessionID: sessionID, messages: messages)
@@ -197,6 +202,7 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
         baseMessages.removeAll()
         revisions.removeAll()
         deltaChunks.removeAll()
+        absorbedReplayChars.removeAll()
     }
 
     private func applyInfoUpdated(sessionID: String, infoDict: [String: AnySendable]) -> SessionChangeSet? {
@@ -299,7 +305,14 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     ) -> SessionChangeSet? {
         if ignoredPartIDs[sessionID]?[messageID]?.contains(partID) == true { return nil }
         guard case .text(let existing)? = partsCache[sessionID]?[messageID]?[partID] else { return nil }
-        appendChunk(sessionID: sessionID, messageID: messageID, partID: partID, delta: delta)
+        let appended = appendChunk(
+            sessionID: sessionID,
+            messageID: messageID,
+            partID: partID,
+            baseText: existing.text,
+            delta: delta
+        )
+        guard appended else { return nil }
         let wasStreaming = existing.isStreaming
         if !wasStreaming {
             partsCache[sessionID]?[messageID]?[partID] =
@@ -325,6 +338,7 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
         messageOrder[sessionID]?.removeAll { $0 == messageID }
         let prefix = "\(messageID)\u{0000}"
         deltaChunks[sessionID] = deltaChunks[sessionID]?.filter { !$0.key.hasPrefix(prefix) }
+        absorbedReplayChars[sessionID] = absorbedReplayChars[sessionID]?.filter { !$0.key.hasPrefix(prefix) }
         return SessionChangeSet(
             sessionRevision: 0,
             removedMessageIDs: [messageID],
@@ -356,6 +370,7 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
         if ignoredPartIDs[sessionID] == nil { ignoredPartIDs[sessionID] = [:] }
         if messageOrder[sessionID] == nil { messageOrder[sessionID] = [] }
         if deltaChunks[sessionID] == nil { deltaChunks[sessionID] = [:] }
+        if absorbedReplayChars[sessionID] == nil { absorbedReplayChars[sessionID] = [:] }
     }
 
     private func bumpRevision(sessionID: String) {
@@ -367,19 +382,58 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
         return "\(messageID)\u{0000}\(partID)"
     }
 
-    private func appendChunk(sessionID: String, messageID: String, partID: String, delta: String) {
-        guard let key = chunkKey(messageID: messageID, partID: partID) else { return }
+    /// Appends a delta chunk, absorbing late replay deltas already covered by a
+    /// snapshot base. Returns whether any new characters were stored.
+    @discardableResult
+    private func appendChunk(
+        sessionID: String,
+        messageID: String,
+        partID: String,
+        baseText: String,
+        delta: String
+    ) -> Bool {
+        guard let key = chunkKey(messageID: messageID, partID: partID) else { return false }
         ensureCaches(sessionID: sessionID)
         var sessionChunks = deltaChunks[sessionID] ?? [:]
         var chunks = sessionChunks[key] ?? []
+
+        if chunks.isEmpty, !baseText.isEmpty, !delta.isEmpty {
+            var sessionAbsorbed = absorbedReplayChars[sessionID] ?? [:]
+            let absorbed = sessionAbsorbed[key] ?? 0
+            if absorbed < baseText.count {
+                let unmatched = baseText.dropFirst(absorbed)
+                if unmatched.hasPrefix(delta) {
+                    sessionAbsorbed[key] = absorbed + delta.count
+                    absorbedReplayChars[sessionID] = sessionAbsorbed
+                    return false
+                }
+                if delta.hasPrefix(unmatched) {
+                    sessionAbsorbed[key] = baseText.count
+                    absorbedReplayChars[sessionID] = sessionAbsorbed
+                    let overflow = String(delta.dropFirst(unmatched.count))
+                    guard !overflow.isEmpty else { return false }
+                    chunks.append(overflow)
+                    sessionChunks[key] = chunks
+                    deltaChunks[sessionID] = sessionChunks
+                    return true
+                }
+                // Not a replay of the snapshot — stop absorbing and append.
+                sessionAbsorbed[key] = baseText.count
+                absorbedReplayChars[sessionID] = sessionAbsorbed
+            }
+        }
+
         chunks.append(delta)
         sessionChunks[key] = chunks
         deltaChunks[sessionID] = sessionChunks
+        return true
     }
 
     private func clearChunks(sessionID: String, messageID: String, partID: String?) {
         guard let key = chunkKey(messageID: messageID, partID: partID) else { return }
         deltaChunks[sessionID]?.removeValue(forKey: key)
+        // Reset so delayed deltas that replay the new snapshot can be absorbed.
+        absorbedReplayChars[sessionID]?[key] = 0
     }
 
     private func hasChunks(sessionID: String, messageID: String, partID: String?) -> Bool {
@@ -421,7 +475,13 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
             let partID = partDTO.id
             let textPart = TextPart(id: partID, text: existingText, isStreaming: true)
             if let partID {
-                appendChunk(sessionID: sessionID, messageID: messageID, partID: partID, delta: delta)
+                appendChunk(
+                    sessionID: sessionID,
+                    messageID: messageID,
+                    partID: partID,
+                    baseText: existingText,
+                    delta: delta
+                )
             }
             return .text(textPart)
         }

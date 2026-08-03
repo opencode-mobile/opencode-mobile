@@ -11,6 +11,7 @@ struct TextMateLanguagesView: View {
     @State private var preferences = MarkdownHighlightPreferences.shared
     @State private var languages: [String] = []
     @State private var refreshToken = 0
+    @State private var menuExpanded = false
 
     private var promoted: [String] {
         languages.filter { promotedTextMateLanguages.contains($0) }
@@ -20,23 +21,37 @@ struct TextMateLanguagesView: View {
         languages.filter { !promotedTextMateLanguages.contains($0) }
     }
 
+    private var overflowMenuEntries: [OpenCodeOverflowMenuEntry] {
+        [
+            OpenCodeOverflowMenuEntry(title: "Reset", icon: nil) {
+                resetLanguages()
+            },
+            OpenCodeOverflowMenuEntry(title: "Select all", icon: nil) {
+                selectAllLanguages()
+            },
+        ]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "TextMate Languages",
-                leading: .back(action: { dismiss() }),
-                showDivider: true
-            )
+            OpenCodeTopBarOverflowHost(
+                isPresented: $menuExpanded,
+                entries: overflowMenuEntries
+            ) {
+                OpenCodeTopBar(
+                    title: "TextMate Languages",
+                    leading: .back(action: { dismiss() }),
+                    actions: [
+                        .icon(.moreVert, accessibilityLabel: "More options") {
+                            menuExpanded = true
+                        },
+                    ],
+                    showDivider: true
+                )
+            }
 
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    Text("Applies when TextMate Highlighting is on.")
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-
                     sectionHeader("Promoted")
                     ForEach(promoted, id: \.self) { language in
                         languageRow(language, promoted: true)
@@ -60,6 +75,24 @@ struct TextMateLanguagesView: View {
     private func loadLanguages() {
         let loaded = TextMatePackagedLanguageCatalog.shared.primaryCanonicalNames()
         languages = loaded.isEmpty ? promotedTextMateLanguages.sorted() : Array(loaded)
+    }
+
+    private func resetLanguages() {
+        preferences.resetLanguageOverrides()
+        clearCachesAndRefresh()
+    }
+
+    private func selectAllLanguages() {
+        for language in languages {
+            preferences.setLanguageEnabled(language, enabled: true)
+        }
+        clearCachesAndRefresh()
+    }
+
+    private func clearCachesAndRefresh() {
+        MessageContentPreparer.shared.clearDocumentCache()
+        BlockDecorationCache.shared.clear()
+        refreshToken += 1
     }
 
     @ViewBuilder

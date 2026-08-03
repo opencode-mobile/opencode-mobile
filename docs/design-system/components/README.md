@@ -108,6 +108,7 @@ applicable item is complete.
 - `filter-tabs.md`
 - `filter-chip.md`
 - `floating-dock.md`
+- `floating-chrome.md`
 - `session-list-dock.md`
 - `bottom-fade.md`
 - `list-item.md`

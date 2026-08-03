@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct OpenCodeComposerSuggestionItem: Identifiable, Equatable, Hashable {
     let id: String
@@ -51,22 +50,37 @@ struct OpenCodeComposerSuggestionOverlay: View {
                         }
                     }
                 }
-                .frame(maxHeight: Self.maxHeight)
+                // Hug content first, then clamp so >4 rows scroll inside a
+                // bottom-anchored panel (frame-then-fixedSize reports full list height).
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxHeight: Self.maxListHeight, alignment: .top)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .openCodeFloatingChrome(cornerRadius: Self.cornerRadius)
         .overlay {
-            RoundedRectangle(cornerRadius: Self.cornerRadius)
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
-        .animation(.easeInOut(duration: 0.15), value: items.count)
+        // Filtering while typing `/` or `@` must snap — no height/list morph.
+        .transaction { $0.animation = nil }
     }
 
     private static let cornerRadius: CGFloat = 12
-    private static let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.4
+    /// Visible rows before the list scrolls (subtitle-budgeted row height).
+    private static let visibleItemLimit = 4
+    private static let rowVerticalPadding: CGFloat = 20 // 10 top + 10 bottom
+    private static let titleLineHeight: CGFloat = 22 // body 16pt
+    private static let rowInternalSpacing: CGFloat = 2
+    private static let subtitleLineHeight: CGFloat = 18 // bodySecondary 14pt
+    private static var estimatedRowHeight: CGFloat {
+        rowVerticalPadding + titleLineHeight + rowInternalSpacing + subtitleLineHeight
+    }
+
+    private static var maxListHeight: CGFloat {
+        estimatedRowHeight * CGFloat(visibleItemLimit)
+    }
 }
 
 private struct ComposerSuggestionRow: View {
@@ -132,6 +146,22 @@ private struct ComposerSuggestionRow: View {
                 badge: "skill"
             ),
         ],
+        onSelect: { _ in }
+    )
+    .padding()
+    .openCodeTheme()
+}
+
+#Preview("Scrollable") {
+    OpenCodeComposerSuggestionOverlay(
+        items: (1 ... 8).map { index in
+            OpenCodeComposerSuggestionItem(
+                id: "cmd-\(index)",
+                title: "/command-\(index)",
+                subtitle: "Description \(index)",
+                badge: index.isMultiple(of: 3) ? "skill" : nil
+            )
+        },
         onSelect: { _ in }
     )
     .padding()

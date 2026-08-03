@@ -105,6 +105,18 @@ final class MarkdownHighlightPreferences {
         bumpEpoch()
     }
 
+    /// Restores promoted-on / experimental-off defaults without changing TextMate on/off.
+    func resetLanguageOverrides() {
+        let changed = !disabledLanguages.isEmpty || !forceEnabledLanguages.isEmpty
+        guard changed else { return }
+        disabledLanguages = []
+        forceEnabledLanguages = []
+        defaults.removeObject(forKey: StorageKeys.disabledLanguages)
+        defaults.removeObject(forKey: StorageKeys.forceEnabledLanguages)
+        publishGate()
+        bumpEpoch()
+    }
+
     func clear() {
         defaults.removeObject(forKey: StorageKeys.textMateEnabled)
         defaults.removeObject(forKey: StorageKeys.disabledLanguages)

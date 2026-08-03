@@ -12,18 +12,20 @@ dock.
 ## Public API
 
 - Variants: default capsule chip.
-- States: default (unselected), selected. Pressed is in-bounds scale/opacity
-  feedback (no out-of-bounds glass bloom). Disabled, loading, error, and empty
-  are not applicable.
+- States: default (unselected), selected. Pressed uses interactive glass on
+  iOS 26+ (system press treatment). Disabled, loading, error, and empty are
+  not applicable.
 - Required content: `title`, `selected`, `action`.
 - Optional content: `count` (omit badge when null).
 
 ## Token Usage
 
-- Semantic tokens: `text.strong` / `text.weaker` labels; neutral count badge fill
-  from primary/text at low opacity; selected fill uses primary at low opacity
-  or raised surface fallback.
-- Typography roles: `type.button` title; caption-scale count.
+- Semantic tokens: `text.strong` for title and count label in both selected and
+  unselected; count badge fill uses primary/text at fixed low opacity (`0.10`).
+  Selected chip background uses primary at low opacity or raised surface /
+  regular glass; unselected uses clear / transparent fill.
+- Typography roles: `type.button` title; caption-scale count. Weight does not
+  change with selection.
 
 ## Behavior
 
@@ -32,15 +34,18 @@ trait. Count badge is monospaced digits with min widths for 1/2/3+ digit counts.
 
 ## Platform Notes
 
-- iOS: iOS 26+ selected uses non-interactive regular glass capsule; unselected
-  uses clear glass. Below iOS 26 selected uses raised surface + weak border.
-- Android: selected fill + border; unselected transparent fill + weaker border
-  (Material stand-in for glass chips).
+- iOS: iOS 26+ selected uses interactive regular glass capsule with fill;
+  unselected uses interactive clear glass. Label and count colors stay the same.
+  Below iOS 26 selected uses raised surface + weak border; unselected uses a
+  light stroke so press feedback still reads.
+- Android: selected fill vs transparent unselected fill; label, count, and
+  border treatment stay constant (Material stand-in for glass chips).
 
 ## Review Surfaces
 
 Session List gallery (chips in dock). Filter Tabs gallery remains the review
-surface for the standalone tab row.
+surface for the standalone tab row. Session Composer / Choice Badge gallery
+cover glass **Choice Badge** pickers (related chrome, separate component).
 
 ## Parity And Divergence
 

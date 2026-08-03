@@ -140,6 +140,7 @@ private fun OpenCodeOverflowMenuPanel(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val reservesIconColumn = entries.any { it.icon != null }
     Surface(
         modifier =
             modifier
@@ -161,6 +162,7 @@ private fun OpenCodeOverflowMenuPanel(
             entries.forEach { entry ->
                 OverflowMenuEntryRow(
                     entry = entry,
+                    reservesIconColumn = reservesIconColumn,
                     onDismissRequest = onDismissRequest,
                 )
             }
@@ -171,6 +173,7 @@ private fun OpenCodeOverflowMenuPanel(
 @Composable
 private fun OverflowMenuEntryRow(
     entry: OpenCodeOverflowMenuEntry,
+    reservesIconColumn: Boolean,
     onDismissRequest: () -> Unit,
 ) {
     val contentColor =
@@ -209,19 +212,24 @@ private fun OverflowMenuEntryRow(
                     } ?: Modifier,
                 ).then(if (entry.enabled) Modifier else Modifier.alpha(0.7f)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(OverflowMenuEntryIconSpacing),
+        horizontalArrangement =
+            Arrangement.spacedBy(
+                if (reservesIconColumn) OverflowMenuEntryIconSpacing else 0.dp,
+            ),
     ) {
-        Box(
-            modifier = Modifier.size(OverflowMenuEntryIconSize),
-            contentAlignment = Alignment.Center,
-        ) {
-            entry.icon?.let { icon ->
-                Icon(
-                    imageVector = icon,
-                    contentDescription = entry.contentDescription,
-                    modifier = Modifier.size(OverflowMenuEntryIconSize),
-                    tint = iconColor,
-                )
+        if (reservesIconColumn) {
+            Box(
+                modifier = Modifier.size(OverflowMenuEntryIconSize),
+                contentAlignment = Alignment.Center,
+            ) {
+                entry.icon?.let { icon ->
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = entry.contentDescription,
+                        modifier = Modifier.size(OverflowMenuEntryIconSize),
+                        tint = iconColor,
+                    )
+                }
             }
         }
         Text(

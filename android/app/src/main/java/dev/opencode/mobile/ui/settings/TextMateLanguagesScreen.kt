@@ -31,8 +31,11 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import javax.inject.Inject
@@ -70,6 +73,22 @@ class TextMateLanguagesViewModel
             enabled: Boolean,
         ) {
             MarkdownHighlightPreferences.setLanguageEnabled(language, enabled)
+            clearCaches()
+        }
+
+        fun resetLanguages() {
+            MarkdownHighlightPreferences.resetLanguageOverrides()
+            clearCaches()
+        }
+
+        fun selectAllLanguages() {
+            packagedLanguages.forEach { language ->
+                MarkdownHighlightPreferences.setLanguageEnabled(language, enabled = true)
+            }
+            clearCaches()
+        }
+
+        private fun clearCaches() {
             messageContentPreparer.clearDocumentCache()
             BlockDecorationCache.clear()
         }
@@ -92,6 +111,14 @@ fun TextMateLanguagesRoute(
             viewModel.setLanguageEnabled(language, enabled)
             revision += 1
         },
+        onReset = {
+            viewModel.resetLanguages()
+            revision += 1
+        },
+        onSelectAll = {
+            viewModel.selectAllLanguages()
+            revision += 1
+        },
     )
 }
 
@@ -100,15 +127,44 @@ fun TextMateLanguagesScreen(
     rows: List<TextMateLanguageRow>,
     onNavigateBack: () -> Unit,
     onLanguageEnabledChange: (String, Boolean) -> Unit,
+    onReset: () -> Unit = {},
+    onSelectAll: () -> Unit = {},
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     val promoted = rows.filter { it.promoted }
     val experimental = rows.filterNot { it.promoted }
     Column(modifier = Modifier.fillMaxSize()) {
-        OpenCodeTopBar(
-            title = "TextMate Languages",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
-            showDivider = true,
-        )
+        OpenCodeTopBarOverflowHost(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            entries =
+                listOf(
+                    OpenCodeOverflowMenuEntry(
+                        title = "Reset",
+                        icon = null,
+                        onClick = onReset,
+                    ),
+                    OpenCodeOverflowMenuEntry(
+                        title = "Select all",
+                        icon = null,
+                        onClick = onSelectAll,
+                    ),
+                ),
+        ) {
+            OpenCodeTopBar(
+                title = "TextMate Languages",
+                leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+                actions =
+                    listOf(
+                        OpenCodeTopBarAction.Icon(
+                            imageVector = OpenCodeIcons.MoreVert,
+                            contentDescription = "More options",
+                            onClick = { menuExpanded = true },
+                        ),
+                    ),
+                showDivider = true,
+            )
+        }
         Column(
             modifier =
                 Modifier
@@ -117,12 +173,6 @@ fun TextMateLanguagesScreen(
                     .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "Applies when TextMate Highlighting is on.",
-                style = MaterialTheme.typography.bodySmall,
-                color = openCodeColor("textBase"),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
             SectionHeader(title = "Promoted")
             promoted.forEach { row ->
                 LanguageToggleRow(row = row, onLanguageEnabledChange = onLanguageEnabledChange)

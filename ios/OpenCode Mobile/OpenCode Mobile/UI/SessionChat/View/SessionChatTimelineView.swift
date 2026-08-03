@@ -13,6 +13,8 @@ struct SessionChatTimelineViewProps {
     let sessionTodoTotalCount: Int
     let sessionTodoActivePreview: String?
     let hideFloatStack: Bool
+    /// Extra bottom inset so the timeline can scroll under a floating composer.
+    let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
     let onReviewChangesTap: () -> Void
     let onSessionTodosTap: () -> Void
@@ -34,6 +36,7 @@ struct SessionChatTimelineViewProps {
         sessionTodoTotalCount: Int = 0,
         sessionTodoActivePreview: String? = nil,
         hideFloatStack: Bool = false,
+        bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
         onReviewChangesTap: @escaping () -> Void,
         onSessionTodosTap: @escaping () -> Void = {},
@@ -54,6 +57,7 @@ struct SessionChatTimelineViewProps {
         self.sessionTodoTotalCount = sessionTodoTotalCount
         self.sessionTodoActivePreview = sessionTodoActivePreview
         self.hideFloatStack = hideFloatStack
+        self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
         self.onReviewChangesTap = onReviewChangesTap
         self.onSessionTodosTap = onSessionTodosTap
@@ -128,7 +132,9 @@ private struct SessionChatTimelineReadyView: View {
                 applyPacket: .from(props.timelineFrame),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
-                onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard
+                onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
+                bottomContentPadding: 0,
+                bottomOverlayInset: props.bottomOverlayInset
             ) { message in
                 SessionChatTimelineHostRow(
                     message: message,
@@ -185,7 +191,10 @@ private struct SessionChatTimelineReadyView: View {
                         )
                     }
                 }
-                .padding(.bottom, MessageListTimelineDefaults.scrollToEndPillBottomPadding)
+                .padding(
+                    .bottom,
+                    MessageListTimelineDefaults.scrollToEndPillBottomPadding + props.bottomOverlayInset
+                )
                 .onChange(of: props.sessionTodoTotalCount) { _, total in
                     refreshSessionTodosPillSnapshot(totalCount: total)
                 }

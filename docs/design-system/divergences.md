@@ -184,19 +184,23 @@ implementation belong in the feature's `parity-gaps.md`.
 - Review trigger: revisit if product design requires identical enter/exit motion
   or a shared modal host abstraction.
 
-## Floating dock materials (Liquid Glass vs raised Surface)
+## Floating chrome materials (Liquid Glass vs raised Surface)
 
 - Status: intentional
 - Area: component
-- Shared intent: Session List home chrome uses a floating bottom dock, dense
-  rows, and the same bottom-fade geometry (`background.base` `0 → 0.7 → 0.7`,
-  top = dock top + 16, solid to screen edge) with equivalent filter and action
-  affordances.
-- iOS behavior: iOS 26+ `glassEffect` / glass button styles on dock, chips, and
-  key controls with `surface-raised-base` underlay at 0.92 opacity; material
-  fallbacks below iOS 26.
-- Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light elevation)
-  and bordered CTAs as a glass-like stand-in; no system Liquid Glass API.
+- Shared intent: Floating Dock, Session Chat Composer shell, and composer
+  suggestion overlays share one floating chrome family (materials via
+  `OpenCodeFloatingChrome` / `openCodeFloatingChrome`) with equivalent layout
+  affordances per surface. Session List home also uses dense rows and bottom-fade
+  geometry (`background.base` `0 → 0.7 → 0.7`, top = dock top + 16, solid to
+  screen edge).
+- iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
+  0.92 opacity on floating chrome; glass button styles on dock CTAs / chips /
+  key home controls; material fallbacks below iOS 26. Composer IconCircles stay
+  non-glass in the OPE-99 shell-only slice.
+- Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
+  elevation) and bordered CTAs as a glass-like stand-in; no system Liquid Glass
+  API.
 - Reason: Android has no Liquid Glass equivalent; layout and product actions stay
   aligned while materials remain platform-native.
 - Review trigger: if Android gains a system glass material API or product asks

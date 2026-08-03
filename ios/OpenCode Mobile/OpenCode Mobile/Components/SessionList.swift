@@ -66,6 +66,7 @@ struct SessionList<EmptyContent: View>: View {
 
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var dockHeight: CGFloat = 0
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     init(
         sessions: [SessionListSession],
@@ -108,7 +109,10 @@ struct SessionList<EmptyContent: View>: View {
                         ForEach(visibleSessions) { session in
                             OpenCodeListItem(
                                 title: session.title,
-                                subtitle: compactHomePath(session.subtitle),
+                                subtitle: compactHomePath(
+                                    session.subtitle,
+                                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+                                ),
                                 status: listItemStatus(session.status),
                                 caption: session.caption.isEmpty ? nil : session.caption,
                                 startDecorator: .letter(session.letter, session.letterAccent),
@@ -173,13 +177,31 @@ struct SessionList<EmptyContent: View>: View {
     }
 }
 
-private func compactHomePath(_ path: String) -> String {
+private func compactHomePath(_ path: String, hideUserDirectoryPrefix: Bool) -> String {
     let home = NSHomeDirectory()
     if path == home { return "~" }
     if path.hasPrefix(home + "/") {
         return "~" + path.dropFirst(home.count)
     }
+    guard hideUserDirectoryPrefix else { return path }
+    if let remoteHome = remoteUnixHomePrefix(path) {
+        if path == remoteHome { return "~" }
+        if path.hasPrefix(remoteHome + "/") {
+            return "~" + path.dropFirst(remoteHome.count)
+        }
+    }
     return path
+}
+
+/// `/Users/<name>` or `/home/<name>` prefix when the path is a remote server worktree.
+private func remoteUnixHomePrefix(_ path: String) -> String? {
+    let parts = path.split(separator: "/", maxSplits: 3, omittingEmptySubsequences: false)
+    guard parts.count >= 3, parts[0].isEmpty else { return nil }
+    let root = parts[1]
+    guard root == "Users" || root == "home" else { return nil }
+    let user = parts[2]
+    guard !user.isEmpty else { return nil }
+    return "/\(root)/\(user)"
 }
 
 extension Array where Element == SessionListSession {

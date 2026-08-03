@@ -29,6 +29,9 @@ private val TopBarHorizontalPadding = 12.dp
 private val TopBarVerticalPadding = 12.dp
 private val TopBarItemSpacing = 8.dp
 private val TopBarTitleSpacing = 12.dp
+
+/** Screen-edge inset for the title when leading is None. */
+private val TopBarTitleEdgeInsetWhenNoLeading = 18.dp
 private val TopBarSubtitleSpacing = 0.dp
 private val TopBarTitleBlockHeight = 48.dp
 
@@ -104,6 +107,12 @@ fun OpenCodeTopBar(
             LeadingControl(leading = leading)
 
             if (resolvedTitle != null) {
+                val titleStartPadding =
+                    if (leading == OpenCodeTopBarLeading.None) {
+                        (TopBarTitleEdgeInsetWhenNoLeading - TopBarHorizontalPadding).coerceAtLeast(0.dp)
+                    } else {
+                        TopBarTitleSpacing
+                    }
                 TopBarTitleBlock(
                     title = resolvedTitle,
                     subtitle = resolvedSubtitle,
@@ -111,7 +120,7 @@ fun OpenCodeTopBar(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .padding(start = if (leading == OpenCodeTopBarLeading.None) 0.dp else TopBarTitleSpacing),
+                            .padding(start = titleStartPadding),
                 )
             } else {
                 Spacer(modifier = Modifier.weight(1f))

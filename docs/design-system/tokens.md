@@ -258,16 +258,20 @@ badge without revisiting the design-system docs.
 
 ### Choice badge
 
-Interactive pill used for gallery controls and similar compact selectors.
-Geometry is shared across platforms; fills map to semantic surfaces as
-documented in `docs/design-system/components/choice-badge.md`.
+Interactive pill used for gallery controls, Session Composer model / mode /
+thinking-effort pickers (glass variant), and similar compact selectors.
+Standard geometry is shared across platforms; glass variant uses capsule
+geometry aligned with Filter Chip. Fills map to semantic surfaces as documented
+in `docs/design-system/components/choice-badge.md`.
 
 | Token | Value |
 | --- | --- |
-| `choiceBadge.cornerRadius` | 16 (logical px; capsule when height is smaller) |
-| `choiceBadge.minHeight` | 32 (logical px; enforced via vertical padding) |
+| `choiceBadge.cornerRadius` | 16 (logical px; standard variant) |
+| `choiceBadge.minHeight` | 32 (logical px; standard; glass uses 36) |
 | `choiceBadge.paddingHorizontal` | 12 (logical px) |
 | `choiceBadge.paddingVertical` | 8 (logical px) |
+| `choiceBadge.glass.cornerRadius` | capsule (fully rounded) |
+| `choiceBadge.glass.minHeight` | 36 (logical px) |
 
 ### Filter tabs
 
@@ -422,7 +426,9 @@ shared `interactive` and `error` semantic tokens.
 ### Session composer
 
 Persistent Session Chat interaction surface that switches between prompt entry
-and permission approval without changing its ownership boundary.
+and permission approval without changing its ownership boundary. Shell fill uses
+shared Floating Chrome (`surface.raised` / platform glass or raised Surface),
+not opaque `surface-base`.
 
 | Token | Value |
 | --- | --- |
@@ -440,6 +446,21 @@ and permission approval without changing its ownership boundary.
 | `sessionComposer.motion.incomingFadeDelay` | 80 ms |
 | `sessionComposer.motion.incomingFadeDuration` | 120 ms |
 
+### Composer suggestion overlay
+
+Composer-anchored `/` and `@` suggestion panel above Session Chat composer.
+
+| Token | Value |
+| --- | --- |
+| `composerSuggestionOverlay.cornerRadius` | 12 (logical px) |
+| `composerSuggestionOverlay.visibleItemLimit` | 4 |
+| `composerSuggestionOverlay.rowPaddingVertical` | 10 (logical px each side) |
+| `composerSuggestionOverlay.rowInternalSpacing` | 2 (logical px) |
+
+Max list height = `visibleItemLimit` × estimated subtitle-row height (title +
+description line heights + paddings/spacing). Fewer than 4 rows hug content;
+beyond 4 rows the list scrolls inside the panel.
+
 ### Top bar
 
 Reusable page-level navigation bar with an optional leading navigation affordance,
@@ -451,7 +472,8 @@ single-line title, and compact trailing actions.
 | `topBar.paddingHorizontal` | 12 (logical px) |
 | `topBar.paddingVertical` | 12 (logical px) |
 | `topBar.itemSpacing` | 8 (logical px) |
-| `topBar.titleSpacing` | 12 (logical px) |
+| `topBar.titleSpacing` | 12 (logical px) after a leading control |
+| `topBar.titleEdgeInsetWhenNoLeading` | 18 (logical px) from screen edge to title when leading is `none` |
 | `topBar.titleBlockHeight` | 48 (logical px) |
 | `topBar.subtitleSpacing` | 0 (logical px) |
 | `topBar.dividerThickness` | 1 (logical px) |

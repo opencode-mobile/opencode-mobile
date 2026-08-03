@@ -44,7 +44,8 @@ may use a text label in this version.
   `color.border.subtle`, `color.icon.strong`.
 - Component tokens: `topBar.minHeight`, `topBar.paddingHorizontal`,
   `topBar.paddingVertical`, `topBar.itemSpacing`, `topBar.titleSpacing`,
-  `topBar.titleBlockHeight`, `topBar.subtitleSpacing`, `topBar.dividerThickness`.
+  `topBar.titleEdgeInsetWhenNoLeading`, `topBar.titleBlockHeight`,
+  `topBar.subtitleSpacing`, `topBar.dividerThickness`.
 - Typography roles:
   - `type.title` for the top-bar title.
   - `type.caption` for the optional subtitle.
@@ -57,6 +58,8 @@ adds separation when the screen needs stronger chrome; **divider is off by
 default**.
 
 The title is **start-aligned** on both platforms (after any leading control).
+When leading is `none`, the title starts at
+`topBar.titleEdgeInsetWhenNoLeading` (18) from the screen edge.
 
 The title block always reserves `topBar.titleBlockHeight`, whether the second
 line uses plain `subtitle` text, a `subtitleAccessory`, or both. A one-line title

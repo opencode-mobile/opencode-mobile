@@ -189,13 +189,14 @@ struct OpenCodeSessionComposer: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 26))
+        .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
+        .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
         .overlay(
-            RoundedRectangle(cornerRadius: 26)
+            RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous)
                 .stroke(outlineColor, lineWidth: 1)
         )
         .padding(.horizontal, 12)
-        .padding(.bottom, 10)
+        .padding(.bottom, 4)
         .animation(.easeInOut(duration: 0.24), value: contentKind)
     }
 
@@ -225,15 +226,7 @@ struct OpenCodeSessionComposer: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: prompt.selectedModelLabel, selected: false, action: { onAction(.selectModel) })
-                    OpenCodeChoiceBadge(label: prompt.selectedModeLabel, selected: false, action: { onAction(.selectMode) })
-                    if prompt.showVariant {
-                        OpenCodeChoiceBadge(label: prompt.selectedVariantLabel, selected: false, action: { onAction(.selectVariant) })
-                    }
-                }
-            }
+            pickerChipsRow(prompt)
 
             HStack {
                 HStack(spacing: 8) {
@@ -271,6 +264,45 @@ struct OpenCodeSessionComposer: View {
                     )
                 }
             }
+    }
+
+    /// Horizontal model / mode / variant chips. Scrolls only when the row is
+    /// wider than the composer — bounce is size-based so a fitting row does not
+    /// rubber-band.
+    @ViewBuilder
+    private func pickerChipsRow(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            let chips = HStack(spacing: 8) {
+                OpenCodeChoiceBadge(
+                    label: prompt.selectedModelLabel,
+                    selected: false,
+                    variant: .glass,
+                    action: { onAction(.selectModel) }
+                )
+                OpenCodeChoiceBadge(
+                    label: prompt.selectedModeLabel,
+                    selected: false,
+                    variant: .glass,
+                    action: { onAction(.selectMode) }
+                )
+                if prompt.showVariant {
+                    OpenCodeChoiceBadge(
+                        label: prompt.selectedVariantLabel,
+                        selected: false,
+                        variant: .glass,
+                        action: { onAction(.selectVariant) }
+                    )
+                }
+            }
+            if #available(iOS 26, *) {
+                GlassEffectContainer(spacing: 8) {
+                    chips
+                }
+            } else {
+                chips
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 
     @ViewBuilder
@@ -476,6 +508,8 @@ struct OpenCodeSessionComposer: View {
         case .question: "question"
         }
     }
+
+    private static let shellCornerRadius: CGFloat = 26
 
     private static func questionSelectionDecorator(selected: Bool) -> StartDecorator {
         .icon(

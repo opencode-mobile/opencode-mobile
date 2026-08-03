@@ -12,12 +12,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -34,6 +32,18 @@ data class OpenCodeComposerSuggestionItem(
     val badge: String? = null,
 )
 
+/** Visible suggestion rows before the overlay list scrolls. */
+private const val ComposerSuggestionVisibleItemLimit = 4
+
+/**
+ * Subtitle-budgeted row height: vertical padding 20 + bodyLarge 24 + spacing 2 +
+ * bodyMedium 20.
+ */
+private val ComposerSuggestionEstimatedRowHeight = 66.dp
+
+private val ComposerSuggestionMaxListHeight =
+    ComposerSuggestionEstimatedRowHeight * ComposerSuggestionVisibleItemLimit
+
 @Composable
 fun OpenCodeComposerSuggestionOverlay(
     items: List<OpenCodeComposerSuggestionItem>,
@@ -41,14 +51,11 @@ fun OpenCodeComposerSuggestionOverlay(
     modifier: Modifier = Modifier,
     emptyMessage: String? = null,
 ) {
-    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.4f).dp
-    Surface(
+    val shape = RoundedCornerShape(12.dp)
+    OpenCodeFloatingChrome(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
+        shape = shape,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
     ) {
         if (items.isEmpty()) {
             Text(
@@ -61,7 +68,7 @@ fun OpenCodeComposerSuggestionOverlay(
             Column(
                 modifier =
                     Modifier
-                        .heightIn(max = maxHeight)
+                        .heightIn(max = ComposerSuggestionMaxListHeight)
                         .verticalScroll(rememberScrollState()),
             ) {
                 items.forEach { item ->
@@ -149,6 +156,26 @@ private fun OpenCodeComposerSuggestionOverlayPreview() {
                         badge = "skill",
                     ),
                 ),
+            onSelect = {},
+            modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeComposerSuggestionOverlayScrollablePreview() {
+    OpenCodeTheme {
+        OpenCodeComposerSuggestionOverlay(
+            items =
+                (1..8).map { index ->
+                    OpenCodeComposerSuggestionItem(
+                        id = "cmd-$index",
+                        title = "/command-$index",
+                        subtitle = "Description $index",
+                        badge = if (index % 3 == 0) "skill" else null,
+                    )
+                },
             onSelect = {},
             modifier = Modifier.padding(16.dp),
         )

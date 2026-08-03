@@ -56,6 +56,10 @@
   (pops the navigation stack), overflow menu, and optional bottom divider.
 - Session status bar shows only the context-usage ring when token and
   model-limit data are available.
+- **2026-08-03:** Session status bar is temporarily hidden on the Session screen
+  (iOS + Android). Component and gallery remain; Session context stays available
+  from the overflow menu. Flip `showsSessionStatusBar` /
+  `ShowsSessionStatusBar` to restore.
 - **2026-07-07 / OPE-31:** Moved foreground SSE connection state from
   `OpenCodeSessionStatusBar` into the Session screen two-line top bar.
 - Session status bar is promoted to the shared Component Collection as

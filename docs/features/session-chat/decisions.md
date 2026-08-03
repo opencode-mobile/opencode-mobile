@@ -500,6 +500,17 @@
   synchronization and display preparation.
 - Revisit when: the server exposes push-only history with no REST seed.
 
+## Hide Session status bar until it has more than context usage
+
+- Date: 2026-08-03
+- Decision: Keep `OpenCodeSessionStatusBar` implemented and in the Component
+  Gallery, but hide it on the Session Chat screen on both platforms for now.
+- Reason: the bar currently only surfaces context usage, which is not worth a
+  dedicated chrome row by itself. Session context remains reachable from the
+  overflow menu.
+- Revisit when: the status bar gains additional useful session chrome (or
+  context usage moves to a denser placement).
+
 ## Derive context usage from best available data
 
 - Date: 2026-06-01

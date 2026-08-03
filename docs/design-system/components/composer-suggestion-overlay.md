@@ -33,22 +33,29 @@ Each suggestion uses an **internal row**, not `OpenCodeListItem`:
 
 ## Token Usage
 
-- Semantic tokens: `surface-base` and `border-weaker-base` for the panel (same
-  shell as Session Composer); `text-strong` for the title; `text-weak` for the
+- Semantic tokens: Floating Chrome materials (`surface.raised` / glass; see
+  `floating-chrome.md`) and `border-weaker-base` for the panel (same shell
+  family as Session Composer); `text-strong` for the title; `text-weak` for the
   bracketed source label and description.
 - Typography roles: `type.body` for both the bracketed source label and title;
   `type.bodySecondary` for the description.
-- Geometry: panel matching composer fill (no raised elevation/shadow); height
-  hugs the current suggestion rows up to a max of ~40% of screen height;
-  internal row padding (not list-item chrome).
+- Geometry: panel matching composer chrome family at corner radius 12;
+  height hugs the current suggestion rows up to a max of **4 visible items**;
+  additional items scroll inside the panel. Max height is budgeted for
+  subtitle rows (title + description) so slash-command lists do not clip.
+  Internal row padding (not list-item chrome).
 
 ## Behavior
 
 - Callers float the panel over the timeline, anchored to the bottom edge above
   the Session Chat composer. It must not take layout height from the timeline
-  (overlay, not a stacked sibling that pushes content).
-- Panel height follows the filtered result count (and empty-state message).
-  Scrollable only when content would exceed the max height.
+  (overlay, not a stacked sibling that pushes content). The panel’s bottom edge
+  stays flush above the composer with keyboard open or closed; do not center it
+  in the timeline.
+- Panel height follows the filtered result count up to 4 rows (and empty-state
+  message). Scrollable only when content would exceed that visible limit.
+  Filtering while typing updates the list instantly (no height or item morph
+  animation).
 - Selecting an item invokes `onSelect` for that item; the caller updates
   composer text and closes the overlay.
 - Empty state shows the provided empty message without inventing catalog errors.
@@ -59,14 +66,14 @@ and description.
 ## Platform Notes
 
 - iOS: float over the timeline via `.overlay(alignment: .bottom)` above the
-  composer; `surface-base` fill + border (same as composer); private row view
-  inside the overlay file. Use `frame(maxHeight:)` plus
-  `fixedSize(horizontal:false, vertical:true)` so `ScrollView` hugs row
-  content instead of expanding to the max when few rows are shown.
+  composer; shared `openCodeFloatingChrome` + border; private row view inside
+  the overlay file. Use `frame(maxHeight:)` capped at 4 subtitle-budgeted rows
+  plus `fixedSize(horizontal:false, vertical:true)` so `ScrollView` hugs when
+  fewer rows are shown.
 - Android: float over the timeline in a `Box` (`Alignment.BottomCenter`) above
-  the composer; `colorScheme.surface` fill + outline (same as composer), no
-  tonal/shadow elevation; private row composable inside the overlay file. Use
-  `heightIn(max = …)` so the column wraps content until the max.
+  the composer; shared `OpenCodeFloatingChrome` + outline border; private row
+  composable inside the overlay file. Use `heightIn(max = 4 × estimated row)`
+  so the column wraps until the visible limit, then scrolls.
 
 ## Review Surfaces
 
@@ -76,4 +83,6 @@ and description.
 
 ## Parity And Divergence
 
-None intentional.
+Intentional Floating Chrome material difference (iOS Liquid Glass vs Android
+raised Surface) matches Session Composer / Floating Dock; see
+`../divergences.md`.

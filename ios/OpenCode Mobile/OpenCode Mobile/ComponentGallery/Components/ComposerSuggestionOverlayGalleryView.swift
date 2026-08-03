@@ -54,25 +54,14 @@ struct ComposerSuggestionOverlayGalleryView: View {
     private var items: [OpenCodeComposerSuggestionItem] {
         switch scenario {
         case .populated:
-            [
+            (1 ... 8).map { index in
                 OpenCodeComposerSuggestionItem(
-                    id: "init",
-                    title: "/init",
-                    subtitle: "Create AGENTS.md"
-                ),
-                OpenCodeComposerSuggestionItem(
-                    id: "my-skill",
-                    title: "/my-skill",
-                    subtitle: "A skill",
-                    badge: "skill"
-                ),
-                OpenCodeComposerSuggestionItem(
-                    id: "mcp-tool",
-                    title: "/mcp-tool",
-                    subtitle: "An MCP command",
-                    badge: "mcp"
-                ),
-            ]
+                    id: "cmd-\(index)",
+                    title: "/command-\(index)",
+                    subtitle: "Description \(index)",
+                    badge: index.isMultiple(of: 3) ? "skill" : (index.isMultiple(of: 2) ? "mcp" : nil)
+                )
+            }
         case .empty:
             []
         }
