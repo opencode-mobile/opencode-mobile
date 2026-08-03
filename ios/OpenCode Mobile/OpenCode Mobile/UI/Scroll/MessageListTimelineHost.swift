@@ -16,6 +16,10 @@ where Item.ID == String {
     var horizontalContentPadding: CGFloat = MessageListTimelineDefaults.horizontalContentPadding
     var topContentPadding: CGFloat = MessageListTimelineDefaults.topContentPadding
     var bottomContentPadding: CGFloat = MessageListTimelineDefaults.bottomContentPadding
+    /// Extra scroll clearance under floating chrome (composer). Applied via the
+    /// host VC's `additionalSafeAreaInsets.bottom` so `adjustedContentInset`
+    /// grows and end-pin can clear the overlay.
+    var bottomOverlayInset: CGFloat = 0
     var interItemSpacing: CGFloat = MessageListTimelineDefaults.messageSpacing
     @ViewBuilder var itemContent: (Item) -> ItemContent
 
@@ -25,6 +29,7 @@ where Item.ID == String {
             horizontalContentPadding: horizontalContentPadding,
             topContentPadding: topContentPadding,
             bottomContentPadding: bottomContentPadding,
+            bottomOverlayInset: bottomOverlayInset,
             interItemSpacing: interItemSpacing
         )
         viewController.scrollController = scrollController
@@ -49,6 +54,7 @@ where Item.ID == String {
         viewController.onRefresh = onRefresh
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         viewController.itemContent = itemContent
+        viewController.updateBottomOverlayInset(bottomOverlayInset)
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
@@ -76,6 +82,7 @@ where Item.ID == String {
     private let horizontalContentPadding: CGFloat
     private let topContentPadding: CGFloat
     private let bottomContentPadding: CGFloat
+    private var bottomOverlayInset: CGFloat
     private let interItemSpacing: CGFloat
 
     private var collectionView: UICollectionView!
@@ -111,12 +118,14 @@ where Item.ID == String {
         horizontalContentPadding: CGFloat,
         topContentPadding: CGFloat,
         bottomContentPadding: CGFloat,
+        bottomOverlayInset: CGFloat,
         interItemSpacing: CGFloat
     ) {
         self.itemContent = itemContent
         self.horizontalContentPadding = horizontalContentPadding
         self.topContentPadding = topContentPadding
         self.bottomContentPadding = bottomContentPadding
+        self.bottomOverlayInset = bottomOverlayInset
         self.interItemSpacing = interItemSpacing
         super.init(nibName: nil, bundle: nil)
     }
@@ -126,6 +135,38 @@ where Item.ID == String {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Floating Session Chat composer clearance. Uses `additionalSafeAreaInsets`
+    /// so `adjustedContentInset.bottom` grows and end-pin / manual scroll can
+    /// park the newest message above the chrome. Section footers and
+    /// `contentInset.bottom` alone did not expand scroll range here (LLDB).
+    func updateBottomOverlayInset(_ value: CGFloat) {
+        let inset = max(0, value)
+        guard abs(bottomOverlayInset - inset) > 0.5 else {
+            applyBottomOverlaySafeArea(repinIfNeeded: false)
+            return
+        }
+        bottomOverlayInset = inset
+        applyBottomOverlaySafeArea(repinIfNeeded: true)
+    }
+
+    private func applyBottomOverlaySafeArea(repinIfNeeded: Bool) {
+        guard isViewLoaded else { return }
+        let inset = bottomOverlayInset
+        if abs(additionalSafeAreaInsets.bottom - inset) > 0.5 {
+            var safe = additionalSafeAreaInsets
+            safe.bottom = inset
+            additionalSafeAreaInsets = safe
+        }
+        updateBottomAlignmentInset()
+        guard repinIfNeeded, scrollController?.isPinnedToEnd == true else { return }
+        performScrollToEnd(animated: false)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.scrollController?.isPinnedToEnd == true else { return }
+            self.pinToBottomWithoutAnimation()
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
@@ -133,6 +174,7 @@ where Item.ID == String {
         configureDataSource()
         updateRefreshControlAvailability()
         observeContentSize()
+        applyBottomOverlaySafeArea(repinIfNeeded: false)
     }
 
     func updateRefreshControlAvailability() {

@@ -19,13 +19,31 @@
   composer.
 - **Date:** 2026-08-02
 
-## Session Chat bottom fade deferred
+## Timeline scrolls under floating composer
 
-- **Decision:** Do not add a home-list-style bottom fade under the composer in
-  this slice. Leave timeline edge/outsets as today.
-- **Why:** Ship shell materials first, then evaluate contrast with message
-  bubbles as a follow-up.
+- **Decision:** Session Chat matches home Session List floating chrome behavior:
+  the timeline fills behind the composer; mid-scroll messages pass under the
+  glass; when pinned to the newest message, that message parks **above** the
+  composer (readable). Timeline bottom inset equals measured composer-stack
+  height + **16** end-pin gap (same token as bottom-fade overhang). Do **not**
+  also add the default timeline bottom content padding (`12`) on top — that
+  stacked to 28 and felt too open. On iOS, apply clearance via the timeline
+  host’s `additionalSafeAreaInsets.bottom` (composer + 16, 168pt fallback
+  before measure) with section bottom padding `0` for Session Chat.
+- **Why:** Semi-transparent composer only reads as glass while scrolling if
+  content can travel behind it; end-pin must keep the latest message clear of
+  the chrome without a large empty band above the shell.
 - **Date:** 2026-08-02
+
+## Session Chat bottom fade (home parity)
+
+- **Decision:** Use `OpenCodeBottomFade` under the floating composer
+  (`composer-stack height + 16` overhang), between timeline and composer in
+  z-order — same component and opacity stops as home Session List.
+- **Why:** Softens messages as they approach/pass under the glass so the
+  underlap matches home instead of a hard cut against empty background.
+- **Date:** 2026-08-02
+  (replaces the earlier deferral of Session Chat bottom fade.)
 
 ## Control chrome stays shell-only
 

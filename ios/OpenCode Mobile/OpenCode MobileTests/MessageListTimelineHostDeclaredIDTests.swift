@@ -14,6 +14,7 @@ struct MessageListTimelineHostDeclaredIDTests {
             horizontalContentPadding: 0,
             topContentPadding: 0,
             bottomContentPadding: 0,
+            bottomOverlayInset: 0,
             interItemSpacing: 0
         )
         controller.loadViewIfNeeded()
@@ -73,6 +74,7 @@ struct MessageListTimelineHostDeclaredIDTests {
             horizontalContentPadding: 0,
             topContentPadding: 0,
             bottomContentPadding: 0,
+            bottomOverlayInset: 0,
             interItemSpacing: 0
         )
         controller.loadViewIfNeeded()
@@ -106,6 +108,7 @@ struct MessageListTimelineHostDeclaredIDTests {
             horizontalContentPadding: 0,
             topContentPadding: 0,
             bottomContentPadding: 0,
+            bottomOverlayInset: 0,
             interItemSpacing: 0
         )
         controller.loadViewIfNeeded()

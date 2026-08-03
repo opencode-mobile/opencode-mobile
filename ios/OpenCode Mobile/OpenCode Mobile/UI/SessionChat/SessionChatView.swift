@@ -24,6 +24,8 @@ struct SessionChatView: View {
     @State private var showSessionTodosSheet = false
     @State private var holdingFinishedTodos = false
     @State private var finishedHoldTask: Task<Void, Never>?
+    /// Measured floating composer stack height (composer + optional suggestions).
+    @State private var composerOverlayHeight: CGFloat = 0
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -71,65 +73,72 @@ struct SessionChatView: View {
                     .padding(.bottom, 8)
             }
 
-            SessionChatTimelineView(
-                props: SessionChatTimelineViewProps(
-                    timeline: viewModel.uiState.timeline,
-                    messages: viewModel.uiState.messages,
-                    timelineFrame: viewModel.uiState.timelineFrame,
-                    isRefreshing: viewModel.uiState.isRefreshing,
-                    errorMessage: viewModel.uiState.errorMessage,
-                    reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
-                    sessionTodosVisible: sessionTodosPillVisible,
-                    sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
-                    sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
-                    sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
-                    hideFloatStack: showSessionTodosSheet,
-                    onRefresh: { await viewModel.refreshMessages() },
-                    onReviewChangesTap: {
-                        changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
-                    },
-                    onSessionTodosTap: {
-                        guard !blocksSessionTodosSheet else { return }
-                        showSessionTodosSheet = true
-                    },
-                    onMessageActionsTap: { messageActionsTarget = $0 },
-                    onToolDetailTap: { toolDetailTarget = $0 },
-                    onChildSessionTap: { sessionID, title in
-                        childSessionTarget = ChildSessionNavigationTarget(
-                            sessionID: sessionID,
-                            sessionTitle: title,
-                            worktree: session.worktree
-                        )
-                    },
-                    onChangesReviewTap: { assistantMessageID, initialFilePath in
-                        changesTarget = viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: session.worktree,
-                            assistantMessageID: assistantMessageID,
-                            initialFilePath: initialFilePath
-                        )
-                    },
-                    onUserScrollDismissKeyboard: {
-                        // Composer UITextView is outside the timeline collection
-                        // view; keyboardDismissMode alone does not resign it.
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil,
-                            from: nil,
-                            for: nil
-                        )
-                    }
-                )
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .bottom) {
-                // ZStack keeps suggestions and snackbar independently bottom-anchored.
-                // A bare ViewBuilder tuple lays out like a VStack, which parks the
-                // suggestion panel at the top of the timeline instead of above the composer.
-                ZStack(alignment: .bottom) {
-                    OpenCodeSnackbarHost(
-                        message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
-                        onDismissed: { viewModel.consumeSnackbar() }
+            ZStack(alignment: .bottom) {
+                SessionChatTimelineView(
+                    props: SessionChatTimelineViewProps(
+                        timeline: viewModel.uiState.timeline,
+                        messages: viewModel.uiState.messages,
+                        timelineFrame: viewModel.uiState.timelineFrame,
+                        isRefreshing: viewModel.uiState.isRefreshing,
+                        errorMessage: viewModel.uiState.errorMessage,
+                        reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
+                        sessionTodosVisible: sessionTodosPillVisible,
+                        sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
+                        sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
+                        sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
+                        hideFloatStack: showSessionTodosSheet,
+                        // Clearance is composer + 16 end-pin gap (section bottom is 0).
+                        bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight),
+                        onRefresh: { await viewModel.refreshMessages() },
+                        onReviewChangesTap: {
+                            changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
+                        },
+                        onSessionTodosTap: {
+                            guard !blocksSessionTodosSheet else { return }
+                            showSessionTodosSheet = true
+                        },
+                        onMessageActionsTap: { messageActionsTarget = $0 },
+                        onToolDetailTap: { toolDetailTarget = $0 },
+                        onChildSessionTap: { sessionID, title in
+                            childSessionTarget = ChildSessionNavigationTarget(
+                                sessionID: sessionID,
+                                sessionTitle: title,
+                                worktree: session.worktree
+                            )
+                        },
+                        onChangesReviewTap: { assistantMessageID, initialFilePath in
+                            changesTarget = viewModel.uiState.fileChangeNavigationTarget(
+                                worktree: session.worktree,
+                                assistantMessageID: assistantMessageID,
+                                initialFilePath: initialFilePath
+                            )
+                        },
+                        onUserScrollDismissKeyboard: {
+                            // Composer UITextView is outside the timeline collection
+                            // view; keyboardDismissMode alone does not resign it.
+                            UIApplication.shared.sendAction(
+                                #selector(UIResponder.resignFirstResponder),
+                                to: nil,
+                                from: nil,
+                                for: nil
+                            )
+                        }
                     )
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                OpenCodeBottomFade(
+                    height: sessionChatTimelineBottomInset(composerOverlayHeight)
+                )
+                .allowsHitTesting(false)
+
+                OpenCodeSnackbarHost(
+                    message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
+                    onDismissed: { viewModel.consumeSnackbar() }
+                )
+                .padding(.bottom, max(composerOverlayHeight, 168))
+
+                VStack(spacing: 0) {
                     if viewModel.uiState.permissionRequest == nil, viewModel.uiState.questionRequest == nil {
                         if viewModel.uiState.atSuggestionsVisible {
                             OpenCodeComposerSuggestionOverlay(
@@ -166,9 +175,23 @@ struct SessionChatView: View {
                             .padding(.bottom, 4)
                         }
                     }
+                    composer
+                }
+                // Match home SessionList dock measurement — preference keys from a
+                // background GeometryReader were staying at 0, so timeline clearance
+                // never applied (LLDB: adjustedContentInset all zero, no footer).
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear { composerOverlayHeight = geometry.size.height }
+                            .onChange(of: geometry.size.height) { _, height in
+                                guard abs(composerOverlayHeight - height) > 0.5 else { return }
+                                composerOverlayHeight = height
+                            }
+                    }
                 }
             }
-            composer
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .keyboardOverlapPadding()
@@ -682,6 +705,13 @@ struct SessionChatView: View {
     private func attachmentPresentation(_ attachment: Attachment) -> OpenCodeAttachmentPresentation {
         AttachmentPresentationMapper.presentation(from: attachment)
     }
+}
+
+private func sessionChatTimelineBottomInset(_ composerOverlayHeight: CGFloat) -> CGFloat {
+    // Home list uses a fixed scroll spacer; keep a fallback so the first frame
+    // before GeometryReader measures still clears the floating composer.
+    let height = composerOverlayHeight > 0 ? composerOverlayHeight : 168
+    return height + OpenCodeBottomFade.overhang
 }
 
 private extension SessionConnectionStatus {

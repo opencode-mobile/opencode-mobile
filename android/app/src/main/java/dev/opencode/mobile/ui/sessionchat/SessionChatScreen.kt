@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,7 +22,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -30,6 +33,8 @@ import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.OpenCodeBottomFade
+import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeDialog
@@ -99,6 +104,15 @@ fun SessionChatScreen(
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
+    var composerOverlayHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val composerOverlayHeight = with(density) { composerOverlayHeightPx.toDp() }
+    val timelineBottomInset =
+        if (composerOverlayHeight > 0.dp) {
+            composerOverlayHeight + OpenCodeBottomFadeOverhang
+        } else {
+            0.dp
+        }
     val lifecycleActionsEnabled = !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
 
@@ -297,6 +311,9 @@ fun SessionChatScreen(
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
+                            // End-pin gap is the 16 overhang inside timelineBottomInset
+                            // (composer + 16) — not an extra 12 on top.
+                            bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
                             onReviewChangesClick = {
                                 uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
@@ -329,180 +346,204 @@ fun SessionChatScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                if (uiState.permissionRequest == null && uiState.questionRequest == null) {
-                    when {
-                        uiState.atSuggestionsVisible ->
-                            OpenCodeComposerSuggestionOverlay(
-                                items =
-                                    uiState.atSuggestions.map { suggestion ->
-                                        OpenCodeComposerSuggestionItem(
-                                            id = suggestion.id,
-                                            title = suggestion.title,
-                                            subtitle = suggestion.subtitle,
-                                        )
-                                    },
-                                onSelect = { item ->
-                                    viewModel.selectAtSuggestion(item.id)
-                                },
-                                emptyMessage = "No agents",
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                            )
-                        uiState.slashSuggestionsVisible ->
-                            OpenCodeComposerSuggestionOverlay(
-                                items =
-                                    uiState.slashSuggestions.map { suggestion ->
-                                        OpenCodeComposerSuggestionItem(
-                                            id = suggestion.id,
-                                            title = suggestion.title,
-                                            subtitle = suggestion.subtitle,
-                                            badge = suggestion.badge,
-                                        )
-                                    },
-                                onSelect = { item ->
-                                    viewModel.selectSlashSuggestion(item.id)
-                                },
-                                emptyMessage = "No commands",
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                            )
-                    }
+                if (timelineBottomInset > 0.dp) {
+                    OpenCodeBottomFade(
+                        height = timelineBottomInset,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
+
                 OpenCodeSnackbarHost(
                     message = uiState.snackbar?.toOpenCodeSnackbarMessage(),
                     onDismissed = viewModel::consumeSnackbar,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = composerOverlayHeight),
                 )
-            }
 
-            val composerState =
-                uiState.permissionRequest?.let { request ->
-                    OpenCodeSessionComposerState.Permission(
-                        requestId = request.id,
-                        sessionId = request.sessionId,
-                        permission = request.permission,
-                        patterns = request.patterns,
-                        queueCount = uiState.permissionQueueCount,
-                        submitting = uiState.permissionSubmitting,
-                        errorMessage = uiState.permissionErrorMessage,
-                    )
-                } ?: uiState.questionRequest?.let { request ->
-                    val question = request.questions.getOrNull(uiState.questionWizardIndex)
-                    val questionCount = request.questions.size.coerceAtLeast(1)
-                    val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
-                    val answered =
-                        if (uiState.questionCustomSelected) {
-                            uiState.questionCustomText.isNotBlank()
-                        } else {
-                            uiState.questionSelectedLabels.isNotEmpty()
-                        }
-                    val submitting = uiState.questionSubmitting
-                    OpenCodeSessionComposerState.Question(
-                        requestId = request.id,
-                        sessionId = request.sessionId,
-                        questionIndex = index,
-                        questionCount = questionCount,
-                        header = question?.header.orEmpty(),
-                        question = question?.question.orEmpty(),
-                        options =
-                            question?.options.orEmpty().map { option ->
-                                OpenCodeSessionComposerState.QuestionOption(
-                                    label = option.label,
-                                    description = option.description,
-                                )
+                Column(
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coordinates ->
+                                val height = coordinates.size.height
+                                if (height != composerOverlayHeightPx) {
+                                    composerOverlayHeightPx = height
+                                }
                             },
-                        multiple = question?.multiple == true,
-                        customAllowed = question?.custom != false,
-                        selectedLabels = uiState.questionSelectedLabels,
-                        customText = uiState.questionCustomText,
-                        customSelected = uiState.questionCustomSelected,
-                        backEnabled = index > 0 && !submitting,
-                        nextEnabled = answered && index < questionCount - 1 && !submitting,
-                        submitEnabled = answered && index == questionCount - 1 && !submitting,
-                        submitting = submitting,
-                        errorMessage = uiState.questionErrorMessage,
-                    )
-                } ?: OpenCodeSessionComposerState.Prompt(
-                    text = uiState.composer.text,
-                    mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
-                    selectionStart = uiState.composer.cursor,
-                    selectionEnd = uiState.composer.cursor,
-                    selectionRevision = uiState.composer.selectionRevision,
-                    attachments =
-                        uiState.composer.attachments.map(AttachmentPresentationMapper::from),
-                    selectedModelLabel = uiState.composer.selectedModelLabel,
-                    selectedModeLabel = uiState.composer.selectedMode,
-                    selectedVariantLabel = uiState.composer.selectedVariantLabel,
-                    showVariant = uiState.composer.canSelectVariant,
-                    sendEnabled =
-                        uiState.composer.canSend &&
-                            uiState.composer.selectedModel != null &&
-                            uiState.composer.isModelSelectionReady &&
-                            !uiState.isSending,
-                    attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
-                    showStop = uiState.sessionStatusLabel != null,
-                    stopEnabled = !uiState.isAborting,
-                )
-            OpenCodeSessionComposer(
-                state = composerState,
-                onAction = { action ->
-                    when (action) {
-                        is OpenCodeSessionComposerAction.TextChanged ->
-                            viewModel.updateComposerText(action.text, action.selectionStart)
-                        OpenCodeSessionComposerAction.SelectModel -> {
-                            if (uiState.composer.modelOptions.isEmpty()) {
-                                viewModel.retryModelCatalog()
-                                return@OpenCodeSessionComposer
-                            }
-                            activeModelProviderId =
-                                uiState.composer.selectedModel
-                                    ?.option
-                                    ?.providerId
-                            activePicker = ComposerPickerKind.Model
+                ) {
+                    if (uiState.permissionRequest == null && uiState.questionRequest == null) {
+                        when {
+                            uiState.atSuggestionsVisible ->
+                                OpenCodeComposerSuggestionOverlay(
+                                    items =
+                                        uiState.atSuggestions.map { suggestion ->
+                                            OpenCodeComposerSuggestionItem(
+                                                id = suggestion.id,
+                                                title = suggestion.title,
+                                                subtitle = suggestion.subtitle,
+                                            )
+                                        },
+                                    onSelect = { item ->
+                                        viewModel.selectAtSuggestion(item.id)
+                                    },
+                                    emptyMessage = "No agents",
+                                    modifier =
+                                        Modifier
+                                            .padding(horizontal = 12.dp)
+                                            .padding(bottom = 4.dp),
+                                )
+                            uiState.slashSuggestionsVisible ->
+                                OpenCodeComposerSuggestionOverlay(
+                                    items =
+                                        uiState.slashSuggestions.map { suggestion ->
+                                            OpenCodeComposerSuggestionItem(
+                                                id = suggestion.id,
+                                                title = suggestion.title,
+                                                subtitle = suggestion.subtitle,
+                                                badge = suggestion.badge,
+                                            )
+                                        },
+                                    onSelect = { item ->
+                                        viewModel.selectSlashSuggestion(item.id)
+                                    },
+                                    emptyMessage = "No commands",
+                                    modifier =
+                                        Modifier
+                                            .padding(horizontal = 12.dp)
+                                            .padding(bottom = 4.dp),
+                                )
                         }
-                        OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
-                        OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
-                        OpenCodeSessionComposerAction.OpenCommands -> viewModel.openCommands()
-                        OpenCodeSessionComposerAction.Attach -> {
-                            val photos = uiState.composer.canAttachPhotos
-                            val files = uiState.composer.canAttachFiles
-                            when {
-                                photos && files -> showAttachmentSource = true
-                                photos ->
-                                    photoPicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                    )
-                                files -> documentPicker.launch(arrayOf("*/*"))
-                            }
-                        }
-                        is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
-                        OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
-                        OpenCodeSessionComposerAction.Stop -> viewModel.abort()
-                        is OpenCodeSessionComposerAction.AllowPermissionOnce ->
-                            viewModel.allowPermissionOnce(action.requestId, action.sessionId)
-                        is OpenCodeSessionComposerAction.DenyPermission ->
-                            viewModel.denyPermission(action.requestId, action.sessionId)
-                        is OpenCodeSessionComposerAction.ToggleQuestionOption ->
-                            viewModel.toggleQuestionOption(action.requestId, action.sessionId, action.label)
-                        is OpenCodeSessionComposerAction.ToggleQuestionCustom ->
-                            viewModel.toggleQuestionCustom(action.requestId, action.sessionId)
-                        is OpenCodeSessionComposerAction.QuestionCustomTextChanged ->
-                            viewModel.updateQuestionCustomText(action.requestId, action.sessionId, action.text)
-                        is OpenCodeSessionComposerAction.QuestionBack ->
-                            viewModel.questionBack(action.requestId, action.sessionId)
-                        is OpenCodeSessionComposerAction.QuestionNext ->
-                            viewModel.questionNext(action.requestId, action.sessionId)
-                        is OpenCodeSessionComposerAction.SubmitQuestion ->
-                            viewModel.submitQuestion(action.requestId, action.sessionId)
-                        is OpenCodeSessionComposerAction.DismissQuestion ->
-                            viewModel.dismissQuestion(action.requestId, action.sessionId)
                     }
-                },
-            )
+
+                    val composerState =
+                        uiState.permissionRequest?.let { request ->
+                            OpenCodeSessionComposerState.Permission(
+                                requestId = request.id,
+                                sessionId = request.sessionId,
+                                permission = request.permission,
+                                patterns = request.patterns,
+                                queueCount = uiState.permissionQueueCount,
+                                submitting = uiState.permissionSubmitting,
+                                errorMessage = uiState.permissionErrorMessage,
+                            )
+                        } ?: uiState.questionRequest?.let { request ->
+                            val question = request.questions.getOrNull(uiState.questionWizardIndex)
+                            val questionCount = request.questions.size.coerceAtLeast(1)
+                            val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
+                            val answered =
+                                if (uiState.questionCustomSelected) {
+                                    uiState.questionCustomText.isNotBlank()
+                                } else {
+                                    uiState.questionSelectedLabels.isNotEmpty()
+                                }
+                            val submitting = uiState.questionSubmitting
+                            OpenCodeSessionComposerState.Question(
+                                requestId = request.id,
+                                sessionId = request.sessionId,
+                                questionIndex = index,
+                                questionCount = questionCount,
+                                header = question?.header.orEmpty(),
+                                question = question?.question.orEmpty(),
+                                options =
+                                    question?.options.orEmpty().map { option ->
+                                        OpenCodeSessionComposerState.QuestionOption(
+                                            label = option.label,
+                                            description = option.description,
+                                        )
+                                    },
+                                multiple = question?.multiple == true,
+                                customAllowed = question?.custom != false,
+                                selectedLabels = uiState.questionSelectedLabels,
+                                customText = uiState.questionCustomText,
+                                customSelected = uiState.questionCustomSelected,
+                                backEnabled = index > 0 && !submitting,
+                                nextEnabled = answered && index < questionCount - 1 && !submitting,
+                                submitEnabled = answered && index == questionCount - 1 && !submitting,
+                                submitting = submitting,
+                                errorMessage = uiState.questionErrorMessage,
+                            )
+                        } ?: OpenCodeSessionComposerState.Prompt(
+                            text = uiState.composer.text,
+                            mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
+                            selectionStart = uiState.composer.cursor,
+                            selectionEnd = uiState.composer.cursor,
+                            selectionRevision = uiState.composer.selectionRevision,
+                            attachments =
+                                uiState.composer.attachments.map(AttachmentPresentationMapper::from),
+                            selectedModelLabel = uiState.composer.selectedModelLabel,
+                            selectedModeLabel = uiState.composer.selectedMode,
+                            selectedVariantLabel = uiState.composer.selectedVariantLabel,
+                            showVariant = uiState.composer.canSelectVariant,
+                            sendEnabled =
+                                uiState.composer.canSend &&
+                                    uiState.composer.selectedModel != null &&
+                                    uiState.composer.isModelSelectionReady &&
+                                    !uiState.isSending,
+                            attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
+                            showStop = uiState.sessionStatusLabel != null,
+                            stopEnabled = !uiState.isAborting,
+                        )
+                    OpenCodeSessionComposer(
+                        state = composerState,
+                        onAction = { action ->
+                            when (action) {
+                                is OpenCodeSessionComposerAction.TextChanged ->
+                                    viewModel.updateComposerText(action.text, action.selectionStart)
+                                OpenCodeSessionComposerAction.SelectModel -> {
+                                    if (uiState.composer.modelOptions.isEmpty()) {
+                                        viewModel.retryModelCatalog()
+                                        return@OpenCodeSessionComposer
+                                    }
+                                    activeModelProviderId =
+                                        uiState.composer.selectedModel
+                                            ?.option
+                                            ?.providerId
+                                    activePicker = ComposerPickerKind.Model
+                                }
+                                OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
+                                OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
+                                OpenCodeSessionComposerAction.OpenCommands -> viewModel.openCommands()
+                                OpenCodeSessionComposerAction.Attach -> {
+                                    val photos = uiState.composer.canAttachPhotos
+                                    val files = uiState.composer.canAttachFiles
+                                    when {
+                                        photos && files -> showAttachmentSource = true
+                                        photos ->
+                                            photoPicker.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                            )
+                                        files -> documentPicker.launch(arrayOf("*/*"))
+                                    }
+                                }
+                                is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
+                                OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
+                                OpenCodeSessionComposerAction.Stop -> viewModel.abort()
+                                is OpenCodeSessionComposerAction.AllowPermissionOnce ->
+                                    viewModel.allowPermissionOnce(action.requestId, action.sessionId)
+                                is OpenCodeSessionComposerAction.DenyPermission ->
+                                    viewModel.denyPermission(action.requestId, action.sessionId)
+                                is OpenCodeSessionComposerAction.ToggleQuestionOption ->
+                                    viewModel.toggleQuestionOption(action.requestId, action.sessionId, action.label)
+                                is OpenCodeSessionComposerAction.ToggleQuestionCustom ->
+                                    viewModel.toggleQuestionCustom(action.requestId, action.sessionId)
+                                is OpenCodeSessionComposerAction.QuestionCustomTextChanged ->
+                                    viewModel.updateQuestionCustomText(action.requestId, action.sessionId, action.text)
+                                is OpenCodeSessionComposerAction.QuestionBack ->
+                                    viewModel.questionBack(action.requestId, action.sessionId)
+                                is OpenCodeSessionComposerAction.QuestionNext ->
+                                    viewModel.questionNext(action.requestId, action.sessionId)
+                                is OpenCodeSessionComposerAction.SubmitQuestion ->
+                                    viewModel.submitQuestion(action.requestId, action.sessionId)
+                                is OpenCodeSessionComposerAction.DismissQuestion ->
+                                    viewModel.dismissQuestion(action.requestId, action.sessionId)
+                            }
+                        },
+                    )
+                }
+            }
         }
 
         SessionChatMessageActionsSheet(

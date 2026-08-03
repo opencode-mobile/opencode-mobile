@@ -11,6 +11,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -81,6 +83,8 @@ internal data class SessionChatTimelineViewProps(
     val sessionTodoTotalCount: Int = 0,
     val sessionTodoActivePreview: String? = null,
     val hideFloatStack: Boolean = false,
+    /** Extra bottom inset so the timeline can scroll under a floating composer. */
+    val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
     val onReviewChangesClick: () -> Unit,
     val onSessionTodosClick: () -> Unit = {},
@@ -141,6 +145,7 @@ internal fun SessionChatTimelineView(
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
                 sessionTodoActivePreview = props.sessionTodoActivePreview,
                 hideFloatStack = props.hideFloatStack,
+                bottomOverlayInset = props.bottomOverlayInset,
                 onRefresh = props.onRefresh,
                 onReviewChangesClick = props.onReviewChangesClick,
                 onSessionTodosClick = props.onSessionTodosClick,
@@ -166,6 +171,7 @@ private fun SessionChatTimelineReadyView(
     sessionTodoTotalCount: Int,
     sessionTodoActivePreview: String?,
     hideFloatStack: Boolean,
+    bottomOverlayInset: Dp,
     onRefresh: () -> Unit,
     onReviewChangesClick: () -> Unit,
     onSessionTodosClick: () -> Unit,
@@ -231,6 +237,16 @@ private fun SessionChatTimelineReadyView(
                 items = committedMessages,
                 bottomAnchorKey = SESSION_CHAT_BOTTOM_ANCHOR_KEY,
                 modifier = Modifier.fillMaxSize(),
+                contentPadding =
+                    PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 12.dp,
+                        // reverseLayout: bottom padding is beforeContent (visual bottom).
+                        // Overlay inset is composer height + 16 end-pin gap — do not also
+                        // add the default 12 or the resting gap becomes 28.
+                        bottom = bottomOverlayInset,
+                    ),
                 key = { message -> message.id },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
@@ -259,7 +275,11 @@ private fun SessionChatTimelineReadyView(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = MessageListTimelineDefaults.scrollToEndPillBottomPadding),
+                        .padding(
+                            bottom =
+                                MessageListTimelineDefaults.scrollToEndPillBottomPadding +
+                                    bottomOverlayInset,
+                        ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {

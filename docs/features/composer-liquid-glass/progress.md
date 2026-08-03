@@ -20,13 +20,20 @@
 
 - Status: composer shell + suggestion overlay use floating chrome; gutters
   unchanged; continuous radius 26 on composer.
-- Checks: iOS simulator build green.
+- Timeline scrolls under the floating composer stack with home-list bottom fade;
+  end clearance is composer height + **16** only (no extra 12 content padding) so
+  the resting gap above the shell is 16. iOS uses `additionalSafeAreaInsets`
+  with Session Chat section bottom `0`; Android LazyColumn bottom padding is the
+  overlay inset alone.
+- Checks: spacing tweak after LLDB clearance fix.
 
 ## Android
 
 - Status: composer shell + suggestion overlay use floating chrome; gutters
   unchanged; Floating Dock refactored onto shared helper.
-- Checks: `compileDebugKotlin` green.
+- Timeline scrolls under the floating composer stack with matching bottom fade /
+  inset (composer + 16 overhang).
+- Checks: `compileDebugKotlin` green after fade parity.
 
 ## Blockers
 
@@ -35,7 +42,7 @@
 ## Remaining Work
 
 - [ ] Manual gallery / Session Chat visual review (light + dark, permission
-      outline on glass)
+      outline on glass, messages visible under composer while scrolling)
 - [ ] PR open + merge
 
 ## Completed
@@ -45,6 +52,7 @@
 - [x] iOS composer materials
 - [x] Android composer materials
 - [x] Suggestion overlay shell alignment (same family)
-- [x] Parity / divergence docs (bottom fade deferred by decision)
-- [x] Platform compile checks (iOS sim + Android `compileDebugKotlin`)
+- [x] Cap suggestion list at 4 rows; snap filter updates; bottom-anchor overlay
+- [x] Float composer over timeline so messages show through glass
+- [x] Parity / divergence docs (bottom fade still deferred)
 - [x] Restore `plan.md` onto branch; Linear In Progress
