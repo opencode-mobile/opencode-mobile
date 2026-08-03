@@ -269,29 +269,33 @@ struct ProjectListHomeView: View {
                 },
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
                 onNewSession: { showNewSessionProjectPicker = true },
+                onRefresh: { await viewModel.pullToRefresh() },
                 showsEmptyContent: sections.isEmpty,
                 emptyContent: { NoProjectsEmptyState() }
             )
         } else {
             GeometryReader { proxy in
                 if sections.isEmpty {
-                    NoProjectsEmptyState()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(OpenCodeColors.backgroundBase)
-                        .safeAreaInset(edge: .bottom, spacing: 0) {
-                            ProjectSessionSelector(
-                                projects: [],
-                                selectedWorktree: nil,
-                                createError: createError,
-                                onProjectSelected: { _ in },
-                                onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
-                                onSessionSelected: { _, _ in },
-                                onShowAllSessions: { _ in },
-                                onNewSession: { _ in }
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 16)
-                        }
+                    ScrollView {
+                        NoProjectsEmptyState()
+                            .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                    }
+                    .background(OpenCodeColors.backgroundBase)
+                    .refreshable { await viewModel.pullToRefresh() }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        ProjectSessionSelector(
+                            projects: [],
+                            selectedWorktree: nil,
+                            createError: createError,
+                            onProjectSelected: { _ in },
+                            onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
+                            onSessionSelected: { _, _ in },
+                            onShowAllSessions: { _ in },
+                            onNewSession: { _ in }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
                 } else {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 16) {
@@ -319,6 +323,7 @@ struct ProjectListHomeView: View {
                         )
                     }
                     .background(OpenCodeColors.backgroundBase)
+                    .refreshable { await viewModel.pullToRefresh() }
                 }
             }
             .background(OpenCodeColors.backgroundBase)

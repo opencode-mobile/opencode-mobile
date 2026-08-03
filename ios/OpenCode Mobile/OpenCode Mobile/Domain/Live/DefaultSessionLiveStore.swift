@@ -30,7 +30,10 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         var refreshTask: Task<Void, Never>?
         defer { refreshTask?.cancel() }
         for await event in eventStream.events() {
-            guard event.type == "stream.reconnected" || event.triggersHomeRefresh else { continue }
+            guard event.type == "stream.reconnected"
+                || event.type == "server.connected"
+                || event.triggersHomeRefresh
+            else { continue }
             refreshTask?.cancel()
             refreshTask = Task {
                 try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.sessionDebounceMs))

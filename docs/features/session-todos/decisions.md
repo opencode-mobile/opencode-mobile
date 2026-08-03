@@ -37,3 +37,16 @@
 - Why: Dock mark / strikethrough semantics needed a reusable tweak surface in
   the Component Gallery without expanding List Item’s pill/letter API.
 - Ticket: OPE-97.
+
+## Float-stack slots and layout ghosts
+
+- Decision: Session Chat float stack is at most two pills:
+  - **Primary** (nearest composer): Scroll to end **XOR** Review changes.
+  - **Secondary** (above primary): Session Todos when live / finished hold.
+  Compose **only visible** pills. Shared bottom inset once
+  (`scrollToEndPillBottomPadding + composer overlay`); spacing only between
+  real siblings. Do not leave zero-height animation hosts in a spaced column.
+- Why: Android `AnimatedVisibility` + `spacedBy` reserved ~8dp under Scroll to
+  end even with no Todos pill, shifting its resting position. Primary baseline
+  must stay fixed when secondary toggles off.
+- Ticket: OPE-106.

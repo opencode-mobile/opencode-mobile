@@ -35,6 +35,10 @@ extension Array where Element == Session {
     func activeSessions() -> [Session] {
         filter { !$0.isArchived }
     }
+
+    func rootSessions() -> [Session] {
+        filter { $0.parentID == nil }
+    }
 }
 
 struct SessionStatus: Sendable, Equatable {

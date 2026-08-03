@@ -29,7 +29,12 @@ class DefaultPermissionLiveStore @Inject constructor(
                 }
                 refresh()
                 eventStream.events
-                    .filter { it.type == "permission.asked" || it.type == "permission.replied" || it.type == "stream.reconnected" }
+                    .filter {
+                        it.type == "permission.asked" ||
+                            it.type == "permission.replied" ||
+                            it.type == "stream.reconnected" ||
+                            it.type == "server.connected"
+                    }
                     .collect { refresh() }
             }.shareIn(liveStoreScope.coroutineScope, SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS), replay = 1)
         }

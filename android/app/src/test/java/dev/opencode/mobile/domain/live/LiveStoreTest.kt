@@ -1365,6 +1365,36 @@ class SessionStatusLiveStoreTest {
             assertEquals("idle", emissions.last()["ses-1"]?.raw?.get("type"))
         }
 
+    @Test
+    fun observeStatuses_refreshesOnServerConnectedAfterBackgroundResume() =
+        runTest(testDispatcher) {
+            // Background stop() clears wasConnected, so cold foreground start() does not
+            // emit stream.reconnected — only server.connected. Status must still reload
+            // so a session that finished while backgrounded does not stay "busy".
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+
+            repository.statuses = emptyList()
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(2, emissions.size)
+            assertEquals(emptyMap<String, SessionStatus>(), emissions.last())
+        }
+
     private fun createStatusStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,

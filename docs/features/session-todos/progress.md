@@ -39,6 +39,7 @@
 
 - [ ] Device smoke with a live Session Todo List; then close OPE-97
 - [ ] Optional: align sheet progress-line spacing/typography (see parity-gaps)
+- [ ] OPE-106 device check: Scroll to end baseline with/without Todos pill
 
 ## Completed
 
@@ -53,3 +54,5 @@
 - [x] Ignore SSE `todo.updated` while idle (keeps idle clear durable)
 - [x] Pill last-positive snapshot on both hosts; strip unrelated onboarding /
       keyboard / liquid-glass docs from this branch
+- [x] OPE-106 float stack: only visible pills; Scroll XOR Review primary;
+      Todos secondary; no spacedBy layout ghosts (Android + iOS)

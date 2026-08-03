@@ -35,7 +35,8 @@ constructor(
                         it.type == "question.asked" ||
                             it.type == "question.replied" ||
                             it.type == "question.rejected" ||
-                            it.type == "stream.reconnected"
+                            it.type == "stream.reconnected" ||
+                            it.type == "server.connected"
                     }.collect { refresh() }
             }.shareIn(
                 liveStoreScope.coroutineScope,

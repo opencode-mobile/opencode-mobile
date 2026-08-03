@@ -61,6 +61,7 @@ struct SessionList<EmptyContent: View>: View {
     let onSessionSelected: (SessionListSession) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onRefresh: (() async -> Void)?
     let showsEmptyContent: Bool
     let emptyContent: EmptyContent
 
@@ -77,6 +78,7 @@ struct SessionList<EmptyContent: View>: View {
         onSessionSelected: @escaping (SessionListSession) -> Void,
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
+        onRefresh: (() async -> Void)? = nil,
         showsEmptyContent: Bool = false,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
@@ -88,6 +90,7 @@ struct SessionList<EmptyContent: View>: View {
         self.onSessionSelected = onSessionSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onRefresh = onRefresh
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
     }
@@ -99,10 +102,14 @@ struct SessionList<EmptyContent: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if visibleSessions.isEmpty, showsEmptyContent {
-                emptyContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
-                    .background(OpenCodeColors.backgroundBase)
+                ScrollView {
+                    emptyContent
+                        .frame(maxWidth: .infinity, minHeight: 420)
+                        .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -127,6 +134,7 @@ struct SessionList<EmptyContent: View>: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
             }
 
             OpenCodeBottomFade(
@@ -210,6 +218,18 @@ extension Array where Element == SessionListSession {
             return self
         }
         return filter { $0.worktree == selectedFilterId }
+    }
+}
+
+private struct SessionListRefreshableModifier: ViewModifier {
+    let onRefresh: (() async -> Void)?
+
+    func body(content: Content) -> some View {
+        if let onRefresh {
+            content.refreshable { await onRefresh() }
+        } else {
+            content
+        }
     }
 }
 

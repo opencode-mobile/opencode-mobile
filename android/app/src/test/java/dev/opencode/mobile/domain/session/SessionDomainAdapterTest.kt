@@ -51,4 +51,12 @@ class SessionDomainAdapterTest {
 
         assertEquals(listOf(active), listOf(active, archived).activeSessions())
     }
+
+    @Test
+    fun rootSessionsExcludesChildSessions() {
+        val root = Session(id = "root", title = "Root")
+        val child = Session(id = "child", title = "Child", parentId = "root")
+
+        assertEquals(listOf(root), listOf(root, child).rootSessions())
+    }
 }

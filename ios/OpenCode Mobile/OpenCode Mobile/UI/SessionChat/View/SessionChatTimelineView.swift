@@ -162,39 +162,45 @@ private struct SessionChatTimelineReadyView: View {
             }
 
             if !props.hideFloatStack {
-                VStack(spacing: 8) {
-                    let showSessionTodosPill = props.sessionTodosVisible && props.sessionTodoTotalCount > 0
-                    if showSessionTodosPill {
-                        OpenCodeSessionTodosPill(
-                            completedCount: sessionTodosPillCompletedCount,
-                            totalCount: sessionTodosPillTotalCount,
-                            activePreview: sessionTodosPillActivePreview,
-                            action: props.onSessionTodosTap
-                        )
-                    }
+                // Primary (nearest composer): Scroll XOR Review. Secondary above: Todos.
+                // Only present children so spacing never reserves room for hidden pills.
+                let showSessionTodosPill = props.sessionTodosVisible && props.sessionTodoTotalCount > 0
+                let showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
+                Group {
+                    if showFloatStack {
+                        VStack(spacing: 8) {
+                            if showSessionTodosPill {
+                                OpenCodeSessionTodosPill(
+                                    completedCount: sessionTodosPillCompletedCount,
+                                    totalCount: sessionTodosPillTotalCount,
+                                    activePreview: sessionTodosPillActivePreview,
+                                    action: props.onSessionTodosTap
+                                )
+                            }
 
-                    MessageListScrollToEndOverlay(
-                        visible: showScrollToEnd,
-                        applyBottomPadding: false
-                    ) {
-                        logScroll("pill-click count=\(props.messages.count)")
-                        scrollController.scrollToEndAnimated()
-                    }
+                            if showScrollToEnd {
+                                OpenCodeActionPill(variant: .scrollToEnd) {
+                                    logScroll("pill-click count=\(props.messages.count)")
+                                    scrollController.scrollToEndAnimated()
+                                }
+                            }
 
-                    if showReviewChanges, let summary = props.reviewChangesSummary {
-                        OpenCodeReviewChangesPill(
-                            variant: .latestTurn,
-                            changedFileCount: summary.fileCount,
-                            additions: summary.additions,
-                            deletions: summary.deletions,
-                            action: props.onReviewChangesTap
+                            if showReviewChanges, let summary = props.reviewChangesSummary {
+                                OpenCodeReviewChangesPill(
+                                    variant: .latestTurn,
+                                    changedFileCount: summary.fileCount,
+                                    additions: summary.additions,
+                                    deletions: summary.deletions,
+                                    action: props.onReviewChangesTap
+                                )
+                            }
+                        }
+                        .padding(
+                            .bottom,
+                            MessageListTimelineDefaults.scrollToEndPillBottomPadding + props.bottomOverlayInset
                         )
                     }
                 }
-                .padding(
-                    .bottom,
-                    MessageListTimelineDefaults.scrollToEndPillBottomPadding + props.bottomOverlayInset
-                )
                 .onChange(of: props.sessionTodoTotalCount) { _, total in
                     refreshSessionTodosPillSnapshot(totalCount: total)
                 }

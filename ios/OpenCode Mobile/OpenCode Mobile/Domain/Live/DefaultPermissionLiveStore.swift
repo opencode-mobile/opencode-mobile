@@ -23,7 +23,11 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
     private func runLoop(directory: String, yield: @escaping ([PermissionRequest]) -> Void) async {
         if let requests = try? await sessionRepository.listPendingPermissions(directory: directory) { yield(requests) }
         for await event in eventStream.events() {
-            guard event.type == "permission.asked" || event.type == "permission.replied" || event.type == "stream.reconnected" else { continue }
+            guard event.type == "permission.asked"
+                || event.type == "permission.replied"
+                || event.type == "stream.reconnected"
+                || event.type == "server.connected"
+            else { continue }
             if let requests = try? await sessionRepository.listPendingPermissions(directory: directory) { yield(requests) }
         }
     }

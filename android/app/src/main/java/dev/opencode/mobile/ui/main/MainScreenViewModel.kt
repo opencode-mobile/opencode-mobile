@@ -24,6 +24,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
+import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -61,6 +62,8 @@ class MainScreenViewModel
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
+        private val _isRefreshing = MutableStateFlow(false)
+        val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
         val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
             foregroundEventStream.connectionState
                 .stateIn(
@@ -91,6 +94,26 @@ class MainScreenViewModel
 
         fun refresh() {
             viewModelScope.launch { runHomeLoad() }
+        }
+
+        /** Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner. */
+        fun pullToRefresh() {
+            when (_uiState.value) {
+                is MainScreenUiState.Loaded,
+                is MainScreenUiState.Empty,
+                -> {
+                    viewModelScope.launch {
+                        if (_isRefreshing.value) return@launch
+                        _isRefreshing.value = true
+                        try {
+                            runHomeLoad(skipProbe = true, preserveContent = true)
+                        } finally {
+                            _isRefreshing.value = false
+                        }
+                    }
+                }
+                else -> Unit
+            }
         }
 
         fun retryProbe() {
@@ -243,52 +266,74 @@ class MainScreenViewModel
             }
         }
 
-        private suspend fun runHomeLoad(skipProbe: Boolean = false) {
+        private suspend fun runHomeLoad(
+            skipProbe: Boolean = false,
+            preserveContent: Boolean = false,
+        ) {
             if (activeConnectionManager.current() == null) {
                 _uiState.value = MainScreenUiState.Disconnected
                 return
             }
             if (!skipProbe) {
-                _uiState.value = MainScreenUiState.Probing
+                if (!preserveContent) {
+                    _uiState.value = MainScreenUiState.Probing
+                }
                 try {
                     projectRepository.probeServer()
                 } catch (error: ServerProbeError) {
+                    if (preserveContent) return
                     stopLiveObservations()
                     _uiState.value = MainScreenUiState.ProbeFailed(probeErrorMessage(error))
                     return
                 } catch (error: Throwable) {
+                    if (preserveContent) return
                     stopLiveObservations()
                     _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to reach the server")
                     return
                 }
             }
 
-            _uiState.value = MainScreenUiState.Loading
+            val previous = _uiState.value
+            if (!preserveContent) {
+                _uiState.value = MainScreenUiState.Loading
+            }
             try {
                 val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
 
                 if (worktrees.isEmpty()) {
                     stopLiveObservations()
                     homeFocusedWorktree = null
-                    _uiState.value = MainScreenUiState.Empty()
+                    _uiState.value =
+                        when {
+                            preserveContent && previous is MainScreenUiState.Empty -> previous
+                            else -> MainScreenUiState.Empty()
+                        }
                     return
                 }
 
                 val sections = loadProjectSections(worktrees)
                 val focusedWorktree = resolvedFocusedWorktree(sections)
                 homeFocusedWorktree = focusedWorktree
-                _uiState.value =
-                    if (sections.isEmpty()) {
-                        stopLiveObservations()
-                        MainScreenUiState.Empty()
-                    } else {
-                        MainScreenUiState.Loaded(sections = sections, focusedWorktree = focusedWorktree)
-                    }
                 requestedFocusWorktree = null
-                if (_uiState.value is MainScreenUiState.Loaded) {
-                    startLiveObservations(worktrees)
+                if (sections.isEmpty()) {
+                    stopLiveObservations()
+                    _uiState.value =
+                        when {
+                            preserveContent && previous is MainScreenUiState.Empty -> previous
+                            else -> MainScreenUiState.Empty()
+                        }
+                    return
                 }
+                _uiState.value =
+                    when {
+                        preserveContent && previous is MainScreenUiState.Loaded ->
+                            previous.copy(sections = sections, focusedWorktree = focusedWorktree)
+                        else ->
+                            MainScreenUiState.Loaded(sections = sections, focusedWorktree = focusedWorktree)
+                    }
+                startLiveObservations(worktrees)
             } catch (error: Throwable) {
+                if (preserveContent) return
                 stopLiveObservations()
                 _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
             }
@@ -323,6 +368,7 @@ class MainScreenViewModel
                 sessionRepository
                     .listSessions(directory = worktree)
                     .activeSessions()
+                    .rootSessions()
                     .sortedByDescending { it.updatedAtEpochMs ?: 0L }
             val statusBySessionId =
                 runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
@@ -489,6 +535,7 @@ class MainScreenViewModel
             val summaries =
                 sessions
                     .activeSessions()
+                    .rootSessions()
                     .sortedByDescending { it.updatedAtEpochMs ?: 0L }
                     .map { session ->
                         sessionDomainAdapter.toSessionSummary(

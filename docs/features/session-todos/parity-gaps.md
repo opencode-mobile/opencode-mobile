@@ -16,12 +16,12 @@
 ## Intentional — pill exit snapshot host
 
 - Expected shared intent: Never construct `OpenCodeSessionTodosPill` with
-  `totalCount == 0`.
-- iOS: Plain conditional show; last-positive snapshot kept for safety if exit
-  animation is added later.
-- Android: `AnimatedVisibility` exit keeps composing during fade-out, so a
-  remembered last-positive snapshot is required when abort/idle clears count
-  mid-animation.
+  `totalCount == 0`. Hide with plain conditionals (no layout ghosts).
+- iOS: Plain `if`; last-positive snapshot kept for safety if exit animation
+  is added later.
+- Android: Plain `if` (OPE-106); no exit fade on the float stack so no
+  mid-animation zero-total construction.
 - Affected area: Session Chat float stack.
-- Reason: Platform animation host difference.
-- Status: intentional (same contract, different host need).
+- Reason: Prefer stable primary baseline over exit fades; both platforms now
+  omit absent pills from the stack.
+- Status: intentional (shared host model after OPE-106).
