@@ -26,6 +26,7 @@ struct SessionChatView: View {
     @State private var finishedHoldTask: Task<Void, Never>?
     /// Measured floating composer stack height (composer + optional suggestions).
     @State private var composerOverlayHeight: CGFloat = 0
+    @State private var bottomSafeAreaInset: CGFloat = 0
 
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
@@ -39,6 +40,9 @@ struct SessionChatView: View {
     }
 
     private let session: SessionListItem
+
+    /// Temporarily off: bar currently only shows context usage.
+    private static let showsSessionStatusBar = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,10 +63,14 @@ struct SessionChatView: View {
                 )
             }
 
-            OpenCodeSessionStatusBar(
-                contextUsageFraction: viewModel.uiState.contextUsageFraction,
-                onContextClick: { showSessionContext = true }
-            )
+            // Hidden for now: status bar currently only shows context usage.
+            // Session context remains available from the overflow menu.
+            if Self.showsSessionStatusBar {
+                OpenCodeSessionStatusBar(
+                    contextUsageFraction: viewModel.uiState.contextUsageFraction,
+                    onContextClick: { showSessionContext = true }
+                )
+            }
 
             if let notice = viewModel.uiState.composer.modelNotice {
                 Text(notice)
@@ -128,8 +136,10 @@ struct SessionChatView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 OpenCodeBottomFade(
-                    height: sessionChatTimelineBottomInset(composerOverlayHeight)
+                    height: sessionChatTimelineBottomInset(composerOverlayHeight) + bottomSafeAreaInset
                 )
+                .offset(y: bottomSafeAreaInset)
+                .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
 
                 OpenCodeSnackbarHost(
@@ -194,6 +204,15 @@ struct SessionChatView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { bottomSafeAreaInset = geometry.safeAreaInsets.bottom }
+                    .onChange(of: geometry.safeAreaInsets.bottom) { _, inset in
+                        bottomSafeAreaInset = inset
+                    }
+            }
+        }
         .keyboardOverlapPadding()
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,

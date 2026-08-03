@@ -35,10 +35,9 @@ fun OpenCodeFilterChip(
     count: Int? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
-    val textBase = openCodeColor("text-base")
-    val textWeaker = openCodeColor("text-weaker")
     val borderWeak = openCodeColor("border-weak-base")
-    val labelColor = if (selected) textStrong else textWeaker
+    // Selected vs unselected differs by chip background only — label and count
+    // badge colors stay constant.
     val fill =
         if (selected) {
             textStrong.copy(alpha = 0.14f)
@@ -53,8 +52,8 @@ fun OpenCodeFilterChip(
                 .clip(ChipShape)
                 .background(fill)
                 .border(
-                    width = if (selected) 1.5.dp else 1.dp,
-                    color = if (selected) borderWeak else borderWeak.copy(alpha = 0.55f),
+                    width = 1.dp,
+                    color = borderWeak.copy(alpha = 0.55f),
                     shape = ChipShape,
                 )
                 .clickable(role = Role.Button, onClick = onClick)
@@ -65,23 +64,20 @@ fun OpenCodeFilterChip(
     ) {
         Text(
             text = title,
-            color = labelColor,
-            style =
-                MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                ),
+            color = textStrong,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal),
             maxLines = 1,
         )
         if (count != null) {
             Text(
                 text = count.toString(),
-                color = if (selected) textStrong else textBase,
+                color = textStrong,
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 modifier =
                     Modifier
                         .clip(ChipShape)
-                        .background(textStrong.copy(alpha = if (selected) 0.16f else 0.06f))
+                        .background(textStrong.copy(alpha = 0.10f))
                         .padding(
                             horizontal = if (count >= 10) 8.dp else 6.dp,
                             vertical = 2.dp,

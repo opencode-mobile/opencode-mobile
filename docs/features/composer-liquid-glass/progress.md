@@ -20,6 +20,9 @@
 
 - Status: composer shell + suggestion overlay use floating chrome; gutters
   unchanged; continuous radius 26 on composer.
+- Model / mode / thinking-effort pickers use `OpenCodeChoiceBadge` glass
+  variant + `GlassEffectContainer`. Chip row uses size-based horizontal bounce
+  so it only scrolls when chips overflow.
 - Timeline scrolls under the floating composer stack with home-list bottom fade;
   end clearance is composer height + **16** only (no extra 12 content padding) so
   the resting gap above the shell is 16. iOS uses `additionalSafeAreaInsets`
@@ -31,6 +34,9 @@
 
 - Status: composer shell + suggestion overlay use floating chrome; gutters
   unchanged; Floating Dock refactored onto shared helper.
+- Model / mode / thinking-effort pickers use `OpenCodeChoiceBadge` glass
+  variant (home-dock-aligned capsule chrome). Chip row enables horizontal
+  scroll only when measured content exceeds composer width.
 - Timeline scrolls under the floating composer stack with matching bottom fade /
   inset (composer + 16 overhang).
 - Checks: `compileDebugKotlin` green after fade parity.

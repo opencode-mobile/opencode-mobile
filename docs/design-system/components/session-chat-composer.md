@@ -48,8 +48,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   `floating-chrome.md`), `border-weaker-base`, `text-strong`, and `text-base`.
 - Status/action tokens: `warning`, `error`, and `button-primary-base`.
 - Shared shell geometry: 26 logical-pixel continuous corner radius, 12
-  logical-pixel content padding, 12 logical-pixel screen gutters, 10
-  logical-pixel bottom inset, and 10 logical-pixel row spacing.
+  logical-pixel content padding, 12 logical-pixel screen gutters, 4
+  logical-pixel bottom inset (Floating Dock parity), and 10 logical-pixel row
+  spacing.
 - Prompt text, permission copy, and question copy use the same additional 4
   logical-pixel horizontal and vertical inset. Permission and question actions
   occupy the same leading and trailing positions as the attach and send actions.
@@ -66,6 +67,9 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   chips above the prompt input at 6–8 logical-pixel spacing. Attach is disabled
   when the selected model cannot accept image or PDF input; the feature owns
   that gate and passes `attachEnabled` into the composer.
+- Model, mode, and thinking-effort (variant) pickers use `OpenCodeChoiceBadge`
+  **glass** variant in the **unselected** (clear / clickable) chrome — they open
+  pickers rather than toggling a selected peer in-row.
 - The prompt action row is `[+] [/] … [send]`: Attach `IconCircle`, then a
   Commands `IconCircleText("/")` action at 8 logical-pixel spacing, a flexible
   gap, then stop (when active) and send. Commands opens a feature-owned

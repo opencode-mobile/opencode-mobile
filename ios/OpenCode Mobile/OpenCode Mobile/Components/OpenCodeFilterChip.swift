@@ -17,21 +17,21 @@ struct OpenCodeFilterChip: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(OpenCodeTypography.button.weight(selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 if let count {
                     Text("\(count)")
                         .font(OpenCodeTypography.caption.weight(.semibold))
-                        .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
+                        .foregroundStyle(OpenCodeColors.textStrong)
                         .monospacedDigit()
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, count >= 10 ? 8 : 6)
                         .frame(minWidth: countBadgeMinWidth(count), minHeight: 22)
                         .background(
-                            OpenCodeColors.textStrong.opacity(selected ? 0.16 : 0.06),
+                            OpenCodeColors.textStrong.opacity(0.10),
                             in: Capsule()
                         )
                 }
@@ -83,10 +83,10 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
             if selected {
                 content
                     .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
-                    .glassEffect(.regular, in: .capsule)
+                    .glassEffect(.regular.interactive(), in: .capsule)
             } else {
                 content
-                    .glassEffect(.clear, in: .capsule)
+                    .glassEffect(.clear.interactive(), in: .capsule)
             }
         } else if selected {
             content
@@ -97,6 +97,11 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
                 )
         } else {
             content
+                .background(OpenCodeColors.surfaceRaisedBase.opacity(0.001), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                )
         }
     }
 }

@@ -283,10 +283,14 @@ fun SessionChatScreen(
                     showDivider = true,
                 )
             }
-            SessionStatusBar(
-                contextUsageFraction = uiState.contextUsageFraction,
-                onContextClick = onSessionContextClick,
-            )
+            // Hidden for now: status bar currently only shows context usage.
+            // Session context remains available from the overflow menu.
+            if (ShowsSessionStatusBar) {
+                SessionStatusBar(
+                    contextUsageFraction = uiState.contextUsageFraction,
+                    onContextClick = onSessionContextClick,
+                )
+            }
             uiState.composer.modelNotice?.let { notice ->
                 Text(
                     text = notice,
@@ -720,6 +724,9 @@ private fun SessionStatusBar(
         modifier = modifier,
     )
 }
+
+/** Temporarily off: bar currently only shows context usage. */
+private const val ShowsSessionStatusBar = false
 
 private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
     when (this) {

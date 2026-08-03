@@ -107,6 +107,17 @@ object MarkdownHighlightPreferences {
         epoch += 1
     }
 
+    /** Restores promoted-on / experimental-off defaults without changing TextMate on/off. */
+    fun resetLanguageOverrides() {
+        val changed = disabledLanguages.isNotEmpty() || forceEnabledLanguages.isNotEmpty()
+        if (!changed) return
+        disabledLanguages = emptySet()
+        forceEnabledLanguages = emptySet()
+        persistLanguageOverrides()
+        publishGate()
+        epoch += 1
+    }
+
     fun clear() {
         prefs()
             ?.edit()

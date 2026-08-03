@@ -258,16 +258,20 @@ badge without revisiting the design-system docs.
 
 ### Choice badge
 
-Interactive pill used for gallery controls and similar compact selectors.
-Geometry is shared across platforms; fills map to semantic surfaces as
-documented in `docs/design-system/components/choice-badge.md`.
+Interactive pill used for gallery controls, Session Composer model / mode /
+thinking-effort pickers (glass variant), and similar compact selectors.
+Standard geometry is shared across platforms; glass variant uses capsule
+geometry aligned with Filter Chip. Fills map to semantic surfaces as documented
+in `docs/design-system/components/choice-badge.md`.
 
 | Token | Value |
 | --- | --- |
-| `choiceBadge.cornerRadius` | 16 (logical px; capsule when height is smaller) |
-| `choiceBadge.minHeight` | 32 (logical px; enforced via vertical padding) |
+| `choiceBadge.cornerRadius` | 16 (logical px; standard variant) |
+| `choiceBadge.minHeight` | 32 (logical px; standard; glass uses 36) |
 | `choiceBadge.paddingHorizontal` | 12 (logical px) |
 | `choiceBadge.paddingVertical` | 8 (logical px) |
+| `choiceBadge.glass.cornerRadius` | capsule (fully rounded) |
+| `choiceBadge.glass.minHeight` | 36 (logical px) |
 
 ### Filter tabs
 

@@ -104,10 +104,11 @@ Default plan recommendation: (1) shared chrome helper.
 
 Accepted answers are recorded in `decisions.md`. Summary:
 
-1. **Outer gutters:** keep composer `12` / bottom `10`.
+1. **Outer gutters:** horizontal `12`; bottom `4` (Floating Dock parity).
 2. **Suggestion overlay:** match glass / raised shell family.
 3. **Session Chat bottom fade:** deferred.
-4. **Control chrome:** shell-only.
+4. **Control chrome:** model / mode / variant use Choice Badge **glass**
+   variant; IconCircles remain existing button chrome.
 5. **Chrome strategy:** extract shared floating chrome helper.
 
 ## Acceptance (checkable)

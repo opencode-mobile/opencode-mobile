@@ -667,6 +667,67 @@ struct MessageSyncTests {
         #expect(collector.latest()?.first(where: { $0.id == "msg-2" })?.text == "Live")
     }
 
+    @Test func partUpdatedSnapshot_thenDuplicateDeltas_shouldNotDoubleText() {
+        // Repro shape from Session Chat flash (sim 2026-08-03): streamed
+        // chars hit 28 while final REST text was 14 ("Test received." × 2).
+        // Server emits part.updated with the full snapshot so far, then delayed
+        // deltas that were already covered by that snapshot can still arrive.
+        let store = InMemoryMessageStore()
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-2"),
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+            ])
+        )
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(part: [
+                "id": .string("prt-1"),
+                "messageID": .string("msg-2"),
+                "sessionID": .string("ses-1"),
+                "type": .string("text"),
+                "text": .string(""),
+            ], delta: nil)
+        )
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: "Test")
+        )
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: " received.")
+        )
+        #expect(store.messages(sessionID: "ses-1").first(where: { $0.id == "msg-2" })?.text == "Test received.")
+
+        // Authoritative snapshot of the same content (clears chunks).
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(part: [
+                "id": .string("prt-1"),
+                "messageID": .string("msg-2"),
+                "sessionID": .string("ses-1"),
+                "type": .string("text"),
+                "text": .string("Test received."),
+            ], delta: nil)
+        )
+        #expect(store.messages(sessionID: "ses-1").first(where: { $0.id == "msg-2" })?.text == "Test received.")
+
+        // Late duplicate deltas already covered by the snapshot.
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: "Test")
+        )
+        _ = store.apply(
+            sessionID: "ses-1",
+            patch: .partDelta(messageID: "msg-2", partID: "prt-1", delta: " received.")
+        )
+
+        let text = store.messages(sessionID: "ses-1").first(where: { $0.id == "msg-2" })?.text
+        #expect(text == "Test received.")
+    }
+
     @Test func replaceAll_clearsStreamingAndMakesRestAuthoritative() async {
         let store = InMemoryMessageStore()
         _ = store.apply(

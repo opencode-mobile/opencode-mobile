@@ -1,14 +1,16 @@
 # Composer Liquid Glass Decisions
 
-## Outer gutters stay composer-local
+## Outer gutters match Floating Dock bottom
 
-- **Decision:** Keep composer outer gutters at content padding `12` and bottom
-  `10`. Do not align to Floating Dock float insets (`16` horizontal) in this
-  slice.
-- **Why:** Materials first; changing gutters would retune timeline outsets,
-  suggestion overlay anchoring, and keyboard lift geometry without improving
-  the glass family match.
-- **Date:** 2026-08-02
+- **Decision:** Session Composer outer horizontal gutters stay at content
+  padding `12`. Bottom outer inset is `4` — same as Floating Dock — so Session
+  Chat sits as low as home. Session Chat bottom fade also extends into the
+  home-indicator safe area like home Session List (`offset` +
+  `ignoresSafeArea`).
+- **Why:** The previous composer bottom `10` read as extra empty band under the
+  shell versus the home dock.
+- **Date:** 2026-08-03
+  (revises the earlier keep-bottom-10 gutters decision.)
 
 ## Suggestion overlay matches shell family
 
@@ -45,15 +47,28 @@
 - **Date:** 2026-08-02
   (replaces the earlier deferral of Session Chat bottom fade.)
 
-## Control chrome stays shell-only
+## Control chrome: glass Choice Badge for pickers
 
-- **Decision:** Apply Liquid Glass / raised materials to the outer composer
-  shell only. Do not apply iOS 26 glass button styles to composer IconCircles
-  or compact actions in this slice.
-- **Why:** Matches the home dock’s primary visual win (floating surface) without
-  expanding control styling scope; revisit if the shell still reads flat next
-  to the dock.
-- **Date:** 2026-08-02
+- **Decision:** Session Composer model, mode, and thinking-effort (variant)
+  pickers use `OpenCodeChoiceBadge` **glass** variant in the **unselected**
+  (clear / clickable) state. IconCircle attach / commands / send / stop stay on
+  existing button chrome for this slice. Do not reuse `OpenCodeFilterChip`
+  here — Filter Chip owns count badges and dock filter semantics.
+- **Why:** Choice Badge is the composer’s selection control; a glass variant
+  keeps one component API while matching home glass language. Filter Chip stays
+  for dock filters with optional counts.
+- **Date:** 2026-08-03
+  (revises the earlier shell-only control decision for these three pickers.)
+
+## Picker chip row scrolls only on overflow
+
+- **Decision:** The model / mode / thinking-effort chip row is horizontally
+  scrollable only when content is wider than the composer. iOS uses
+  `scrollBounceBehavior(.basedOnSize)`; Android enables `horizontalScroll`
+  only after measuring content wider than the container.
+- **Why:** A always-on horizontal ScrollView rubber-bands / captures drag when
+  three short chips already fit.
+- **Date:** 2026-08-03
 
 ## Shared floating chrome helper
 
