@@ -69,6 +69,8 @@ enum ProjectListHomeState: Equatable {
 @Observable
 final class ProjectListHomeViewModel {
     private(set) var state: ProjectListHomeState = .probing
+    /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
+    private(set) var isRefreshing = false
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
     private(set) var isAddProjectPresented = false
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
@@ -144,6 +146,19 @@ final class ProjectListHomeViewModel {
 
     func refresh() async {
         await runHomeLoad()
+    }
+
+    /// Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner.
+    func pullToRefresh() async {
+        switch state {
+        case .loaded, .empty:
+            guard !isRefreshing else { return }
+            isRefreshing = true
+            defer { isRefreshing = false }
+            await runHomeLoad(skipProbe: true, preserveContent: true)
+        default:
+            break
+        }
     }
 
     func retryProbe() async {
@@ -314,44 +329,81 @@ final class ProjectListHomeViewModel {
         pendingSessionOpen = nil
     }
 
-    private func runHomeLoad(skipProbe: Bool = false) async {
+    private func runHomeLoad(skipProbe: Bool = false, preserveContent: Bool = false) async {
         guard activeConnectionManager.connection != nil else {
             stopLiveObservations()
             state = .disconnected
             return
         }
         if !skipProbe {
-            state = .probing
+            if !preserveContent {
+                state = .probing
+            }
             do {
                 try await projectRepository.probeServer()
             } catch let error as ServerProbeError {
+                if preserveContent { return }
                 stopLiveObservations()
                 state = .probeFailed(error.localizedDescription)
                 return
             } catch {
+                if preserveContent { return }
                 stopLiveObservations()
                 state = .probeFailed(error.localizedDescription)
                 return
             }
         }
 
-        state = .loading
+        let previous = state
+        if !preserveContent {
+            state = .loading
+        }
         do {
             let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
 
             if worktrees.isEmpty {
                 stopLiveObservations()
                 homeFocusedWorktree = nil
-                state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+                if case let .empty(showAdd, navigator, createError) = previous, preserveContent {
+                    state = .empty(
+                        showAddProjectSheet: showAdd,
+                        navigator: navigator,
+                        projectSessionCreateError: createError
+                    )
+                } else {
+                    state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+                }
                 return
             }
 
             let sections = await loadSections(worktrees: worktrees)
             let focusedWorktree = resolvedFocusedWorktree(in: sections)
             homeFocusedWorktree = focusedWorktree
-            state = sections.isEmpty
-                ? .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
-                : .loaded(
+            requestedFocusWorktree = nil
+            if sections.isEmpty {
+                stopLiveObservations()
+                if case let .empty(showAdd, navigator, createError) = previous, preserveContent {
+                    state = .empty(
+                        showAddProjectSheet: showAdd,
+                        navigator: navigator,
+                        projectSessionCreateError: createError
+                    )
+                } else {
+                    state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+                }
+                return
+            }
+            if case let .loaded(_, showAdd, navigator, seeAll, _, createError) = previous, preserveContent {
+                state = .loaded(
+                    sections: sections,
+                    showAddProjectSheet: showAdd,
+                    navigator: navigator,
+                    seeAllSessions: seeAll,
+                    focusedWorktree: focusedWorktree,
+                    projectSessionCreateError: createError
+                )
+            } else {
+                state = .loaded(
                     sections: sections,
                     showAddProjectSheet: false,
                     navigator: nil,
@@ -359,13 +411,10 @@ final class ProjectListHomeViewModel {
                     focusedWorktree: focusedWorktree,
                     projectSessionCreateError: nil
                 )
-            requestedFocusWorktree = nil
-            if case .loaded = state {
-                startLiveObservations(worktrees: worktrees)
-            } else {
-                stopLiveObservations()
             }
+            startLiveObservations(worktrees: worktrees)
         } catch {
+            if preserveContent { return }
             stopLiveObservations()
             state = .probeFailed(error.localizedDescription)
         }
@@ -392,6 +441,7 @@ final class ProjectListHomeViewModel {
             let sessions =
                 try await sessionRepository.listSessions(directory: worktree)
                     .activeSessions()
+                    .rootSessions()
                     .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
             let statusBySessionID =
                 Dictionary(
@@ -582,6 +632,7 @@ final class ProjectListHomeViewModel {
         let items =
             sessions
                 .activeSessions()
+                .rootSessions()
                 .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
                 .map { session in
                     sessionAdapter.listItem(

@@ -44,6 +44,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -456,6 +457,35 @@ class MainScreenViewModelTest {
             val target = (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession
             assertEquals("created", target?.sessionId)
             assertEquals("gpt-4", selectionStore.loadSession(identity, "/repo", "created")?.modelId)
+        }
+
+    @Test
+    fun pullToRefresh_keepsLoadedContentWithoutFullScreenLoading() =
+        runTest(testDispatcher) {
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "1", title = "Session 1", updatedAtEpochMs = 1L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = sessionsByWorktree,
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+            val before = viewModel.uiState.value as MainScreenUiState.Loaded
+            val listCallsBefore = sessionRepository.listSessionsCallCount
+
+            viewModel.pullToRefresh()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.isRefreshing.value)
+            val after = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(before.focusedWorktree, after.focusedWorktree)
+            assertEquals(before.sections.single().worktree, after.sections.single().worktree)
+            assertTrue(sessionRepository.listSessionsCallCount > listCallsBefore)
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
         }
 
     @Test

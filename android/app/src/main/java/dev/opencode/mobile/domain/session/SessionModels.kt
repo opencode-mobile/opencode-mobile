@@ -29,6 +29,8 @@ data class SessionRevert(
 
 fun List<Session>.activeSessions(): List<Session> = filterNot { it.isArchived }
 
+fun List<Session>.rootSessions(): List<Session> = filter { it.parentId == null }
+
 data class SessionSummary(
     val id: String,
     val title: String,
