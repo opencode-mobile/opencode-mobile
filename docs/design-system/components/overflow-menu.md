@@ -6,8 +6,11 @@ Provide a compact anchored popup menu for secondary page actions that should sta
 near the top bar without crowding trailing icon slots. Use it when a screen needs
 a `moreVert` overflow affordance with a short list of tappable actions.
 
-Each entry reserves a leading icon slot and shows a single-line label. The slot
-may contain an icon or remain empty for aligned selection rows. Prefer
+Each entry shows a single-line label. Leading icons are optional. When **any**
+entry in the menu has an icon, every row reserves the standard icon slot so
+mixed and selection menus stay aligned (empty slot when an entry omits its
+icon). When **no** entry has an icon, the icon column and its spacing are
+omitted entirely so text-only menus sit flush to the entry padding. Prefer
 `OpenCodeBottomSheet` when the action list needs a title, close affordance, or
 many entries with scrolling.
 
@@ -19,8 +22,9 @@ many entries with scrolling.
   - entries: enabled, disabled; optional destructive emphasis.
 - Required content: entry `title` and `onClick` handler.
 - Optional content:
-  - leading icon; omitting it preserves the standard icon slot so mixed icon
-    and no-icon rows stay aligned.
+  - leading icon. Omitting icons on every entry collapses the icon column.
+    Omitting the icon on only some entries keeps the reserved slot so rows stay
+    aligned with icon entries (for example selected/unselected check rows).
   - entry accessibility label when the title alone is insufficient.
   - `destructive` (default false) — uses semantic error text/icon color when
     enabled so irreversible actions such as Delete read as destructive.
@@ -59,7 +63,8 @@ Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
 describes the action. Selection menus use the catalog check icon for the
 selected row and an empty reserved slot for unselected rows; the selected state
 remains available to assistive technology through the entry accessibility
-label rather than visible label suffixes.
+label rather than visible label suffixes. Pure text menus (every `icon` null)
+do not reserve that column.
 
 ## Platform Notes
 

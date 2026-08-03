@@ -204,6 +204,10 @@ private struct OpenCodeOverflowMenuPanel: View {
     let entries: [OpenCodeOverflowMenuEntry]
     let onEntrySelected: () -> Void
 
+    private var reservesIconColumn: Bool {
+        entries.contains { $0.icon != nil }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(entries) { entry in
@@ -212,18 +216,20 @@ private struct OpenCodeOverflowMenuPanel: View {
                     entry.action()
                     onEntrySelected()
                 } label: {
-                    HStack(spacing: overflowMenuEntryIconSpacing) {
-                        Group {
-                            if let icon = entry.icon {
-                                OpenCodeIconImage(icon: icon)
-                            } else {
-                                Color.clear
+                    HStack(spacing: reservesIconColumn ? overflowMenuEntryIconSpacing : 0) {
+                        if reservesIconColumn {
+                            Group {
+                                if let icon = entry.icon {
+                                    OpenCodeIconImage(icon: icon)
+                                } else {
+                                    Color.clear
+                                }
                             }
+                            .font(.system(size: overflowMenuEntryIconSize, weight: .regular))
+                            .frame(width: overflowMenuEntryIconSize, height: overflowMenuEntryIconSize)
+                            .foregroundStyle(overflowEntryIconColor(entry))
+                            .accessibilityHidden(true)
                         }
-                        .font(.system(size: overflowMenuEntryIconSize, weight: .regular))
-                        .frame(width: overflowMenuEntryIconSize, height: overflowMenuEntryIconSize)
-                        .foregroundStyle(overflowEntryIconColor(entry))
-                        .accessibilityHidden(true)
                         Text(entry.title)
                             .font(OpenCodeTypography.body)
                             .foregroundStyle(overflowEntryTextColor(entry))
