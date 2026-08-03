@@ -52,13 +52,6 @@ struct TextMateLanguagesView: View {
 
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    Text("Applies when TextMate Highlighting is on.")
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-
                     sectionHeader("Promoted")
                     ForEach(promoted, id: \.self) { language in
                         languageRow(language, promoted: true)

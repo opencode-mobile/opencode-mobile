@@ -173,12 +173,6 @@ fun TextMateLanguagesScreen(
                     .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "Applies when TextMate Highlighting is on.",
-                style = MaterialTheme.typography.bodySmall,
-                color = openCodeColor("textBase"),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
             SectionHeader(title = "Promoted")
             promoted.forEach { row ->
                 LanguageToggleRow(row = row, onLanguageEnabledChange = onLanguageEnabledChange)
