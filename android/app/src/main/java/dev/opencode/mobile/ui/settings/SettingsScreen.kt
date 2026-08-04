@@ -44,6 +44,7 @@ fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
     onTextMateLanguagesClick: () -> Unit,
     onTextMateLogbookClick: () -> Unit,
+    onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
     onClearData: () -> Unit,
@@ -205,6 +206,15 @@ fun SettingsScreen(
             )
 
             OpenCodeListItem(
+                title = "Diagnostic Logs",
+                subtitle = "Share a redacted rolling runtime log window",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Diagnostic Logs"),
+                onClick = onDiagnosticLogsClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
                 title = "Clear All Data",
                 subtitle = "Remove connection, cache, and imported themes",
                 style = OpenCodeListItemStyle.Card,
@@ -283,6 +293,7 @@ private fun SettingsScreenLightPreview() {
             onComponentGalleryClick = {},
             onTextMateLanguagesClick = {},
             onTextMateLogbookClick = {},
+            onDiagnosticLogsClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
@@ -306,6 +317,7 @@ private fun SettingsScreenDarkPreview() {
             onComponentGalleryClick = {},
             onTextMateLanguagesClick = {},
             onTextMateLogbookClick = {},
+            onDiagnosticLogsClick = {},
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},

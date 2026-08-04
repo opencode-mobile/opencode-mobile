@@ -1,0 +1,177 @@
+import Foundation
+
+nonisolated enum DiagnosticLogArea: String, Codable, Sendable, CaseIterable {
+    case sse
+    case permission
+    case question
+    case session
+}
+
+nonisolated enum DiagnosticLogLevel: String, Codable, Sendable, CaseIterable {
+    case debug
+    case info
+    case warning
+    case error
+}
+
+nonisolated struct DiagnosticLogEntry: Identifiable, Codable, Hashable, Sendable {
+    let id: UUID
+    let timestampEpochMilliseconds: Int64
+    let area: DiagnosticLogArea
+    let level: DiagnosticLogLevel
+    let message: String
+
+    init(
+        id: UUID = UUID(),
+        timestampEpochMilliseconds: Int64,
+        area: DiagnosticLogArea,
+        level: DiagnosticLogLevel,
+        message: String
+    ) {
+        self.id = id
+        self.timestampEpochMilliseconds = timestampEpochMilliseconds
+        self.area = area
+        self.level = level
+        self.message = message
+    }
+}
+
+nonisolated struct DiagnosticLogSnapshot: Sendable {
+    let entries: [DiagnosticLogEntry]
+    let droppedBySoftCap: Int
+    let windowMinutes: Int
+    let softCap: Int
+}
+
+nonisolated enum DiagnosticLogRedactor: Sendable {
+    static let maxMessageLength = 500
+
+    private static let patterns: [(NSRegularExpression, String)] = {
+        let specs: [(String, String)] = [
+            (#"(?i)\bBasic\s+[A-Za-z0-9+/=_-]+"#, "Basic [REDACTED]"),
+            (#"(?i)\bBearer\s+\S+"#, "Bearer [REDACTED]"),
+            (#"(?i)(password\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
+            (#"(?i)(token\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
+            (#"(?i)(authorization\s*[=:]\s*).+"#, "$1[REDACTED]"),
+            (#"(?i)(OPENCODE_SERVER_PASSWORD\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
+        ]
+        return specs.compactMap { pattern, template in
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+            return (regex, template)
+        }
+    }()
+
+    static func redact(_ message: String) -> String {
+        var result = message
+        for (regex, template) in patterns {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                options: [],
+                range: NSRange(result.startIndex..<result.endIndex, in: result),
+                withTemplate: template
+            )
+        }
+        if result.count > maxMessageLength {
+            let end = result.index(result.startIndex, offsetBy: maxMessageLength)
+            result = String(result[..<end]) + "…"
+        }
+        return result
+    }
+}
+
+nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
+    static let shared = DiagnosticLogBuffer()
+
+    static let windowMilliseconds: Int64 = 5 * 60 * 1_000
+    static let softCap = 2_000
+    static let windowMinutes = 5
+
+    private let lock = NSLock()
+    private var entries: [DiagnosticLogEntry] = []
+    private var droppedBySoftCap = 0
+    private let clock: () -> Int64
+
+    init(clock: @escaping () -> Int64 = {
+        Int64(Date().timeIntervalSince1970 * 1_000)
+    }) {
+        self.clock = clock
+    }
+
+    func append(area: DiagnosticLogArea, level: DiagnosticLogLevel, message: String) {
+        let entry = DiagnosticLogEntry(
+            timestampEpochMilliseconds: clock(),
+            area: area,
+            level: level,
+            message: DiagnosticLogRedactor.redact(message)
+        )
+        lock.lock()
+        defer { lock.unlock() }
+        entries.append(entry)
+        evictLocked(now: entry.timestampEpochMilliseconds)
+    }
+
+    func snapshot() -> DiagnosticLogSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = clock()
+        evictLocked(now: now)
+        return DiagnosticLogSnapshot(
+            entries: entries,
+            droppedBySoftCap: droppedBySoftCap,
+            windowMinutes: Self.windowMinutes,
+            softCap: Self.softCap
+        )
+    }
+
+    func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.removeAll(keepingCapacity: true)
+        droppedBySoftCap = 0
+    }
+
+    func exportJSONL() throws -> Data {
+        let snapshot = snapshot()
+        var lines: [String] = [
+            try jsonObjectLine([
+                "type": "meta",
+                "schemaVersion": 1,
+                "windowMinutes": snapshot.windowMinutes,
+                "softCap": snapshot.softCap,
+                "droppedBySoftCap": snapshot.droppedBySoftCap,
+                "entryCount": snapshot.entries.count,
+                "exportedAtEpochMilliseconds": clock(),
+            ]),
+        ]
+        for entry in snapshot.entries {
+            lines.append(
+                try jsonObjectLine([
+                    "type": "entry",
+                    "id": entry.id.uuidString,
+                    "timestampEpochMilliseconds": entry.timestampEpochMilliseconds,
+                    "area": entry.area.rawValue,
+                    "level": entry.level.rawValue,
+                    "message": entry.message,
+                ])
+            )
+        }
+        return Data((lines.joined(separator: "\n") + "\n").utf8)
+    }
+
+    private func evictLocked(now: Int64) {
+        let cutoff = now - Self.windowMilliseconds
+        entries.removeAll { $0.timestampEpochMilliseconds < cutoff }
+        while entries.count > Self.softCap {
+            entries.removeFirst()
+            droppedBySoftCap += 1
+        }
+    }
+
+    private func jsonObjectLine(_ object: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        guard let line = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileWriteInapplicableStringEncoding)
+        }
+        return line
+    }
+}

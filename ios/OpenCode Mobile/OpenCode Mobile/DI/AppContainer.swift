@@ -412,6 +412,7 @@ extension Container {
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
             await TextMateLogbook.shared.clear()
+            DiagnosticLogBuffer.shared.clear()
         }
     }
 }

@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -279,6 +281,10 @@ class SessionInfo(
                             logD(
                                 "live status session=$sessionId type=${status?.raw?.get("type") ?: "-"}",
                             )
+                            DiagnosticLog.debug(
+                                DiagnosticLogArea.Session,
+                                "live status session=$sessionId type=${status?.raw?.get("type") ?: "-"}",
+                            )
                             _state.update {
                                 it.copy(
                                     sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
@@ -291,6 +297,10 @@ class SessionInfo(
                         foregroundEventStream.connectionState.collect { connectionState ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
                             logD("live connection session=$sessionId state=$connectionState")
+                            DiagnosticLog.debug(
+                                DiagnosticLogArea.Session,
+                                "live connection session=$sessionId state=$connectionState",
+                            )
                             _state.update {
                                 it.copy(connectionStatus = connectionState.toSessionConnectionStatus())
                             }
@@ -329,6 +339,7 @@ class SessionInfo(
         boundSessionTitle = update.title
         _state.update { it.copy(sessionTitle = update.title) }
         logI("session.updated title session=$sessionId title=${update.title}")
+        DiagnosticLog.info(DiagnosticLogArea.Session, "session.updated title session=$sessionId")
     }
 
     private fun modelLimit(

@@ -213,6 +213,10 @@ final class SessionInfo {
             OpenCodeLog.sessionChat.debug(
                 "live status session=\(self.state.sessionID, privacy: .public) type=\(status?.raw["type"] ?? "-", privacy: .public)"
             )
+            DiagnosticLog.debug(
+                .session,
+                "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
+            )
             state.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
             state.hasResolvedSessionStatus = true
             notifyChange()
@@ -226,6 +230,7 @@ final class SessionInfo {
             OpenCodeLog.sessionChat.debug(
                 "live connection session=\(self.state.sessionID, privacy: .public) state=\(String(describing: connectionState), privacy: .public)"
             )
+            DiagnosticLog.debug(.session, "live connection session=\(state.sessionID) state=\(connectionState)")
             state.connectionStatus = SessionConnectionStatus(connectionState: connectionState)
             notifyChange()
         }
@@ -262,6 +267,7 @@ final class SessionInfo {
         OpenCodeLog.sessionChat.info(
             "session.updated title session=\(self.state.sessionID, privacy: .public) title=\(update.title, privacy: .public)"
         )
+        DiagnosticLog.info(.session, "session.updated title session=\(state.sessionID)")
     }
 
     private func renameErrorMessage(_ error: Error) -> String {

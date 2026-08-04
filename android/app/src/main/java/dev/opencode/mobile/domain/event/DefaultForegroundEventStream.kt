@@ -1,7 +1,8 @@
 package dev.opencode.mobile.domain.event
 
-import android.util.Log
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,7 @@ class DefaultForegroundEventStream
     constructor(
         private val eventsApi: EventsApi,
         private val eventDomainAdapter: EventDomainAdapter,
+        private val diagnosticLogger: DiagnosticLogger,
     ) : ForegroundEventStream {
         private val scope = CoroutineScope(SupervisorJob())
         private var streamJob: Job? = null
@@ -39,7 +41,7 @@ class DefaultForegroundEventStream
 
         override fun start() {
             if (streamJob?.isActive == true) return
-            logI("foreground SSE stream starting")
+            diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream starting")
             ConnectionEpoch.shared.bump()
             streamJob =
                 scope.launch {
@@ -53,7 +55,10 @@ class DefaultForegroundEventStream
                         try {
                             eventsApi.streamGlobalEvents(
                                 onHTTPResponse = { statusCode ->
-                                    logI("GET /global/event opened status=$statusCode")
+                                    diagnosticLogger.info(
+                                        DiagnosticLogArea.Sse,
+                                        "GET /global/event opened status=$statusCode",
+                                    )
                                     markStreamConnected()
                                     retryAttempt = 0
                                 },
@@ -61,10 +66,13 @@ class DefaultForegroundEventStream
                                 val event =
                                     eventDomainAdapter.parseEvent(dataLine)
                                         ?: run {
-                                            logW("SSE event parse failed")
+                                            diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE event parse failed")
                                             return@streamGlobalEvents
                                         }
-                                logD("SSE event type=${event.type} session=${event.sessionId ?: "-"}")
+                                diagnosticLogger.debug(
+                                    DiagnosticLogArea.Sse,
+                                    "SSE event type=${event.type} session=${event.sessionId ?: "-"}",
+                                )
                                 when (event.type) {
                                     "server.connected" -> {
                                         markStreamConnected()
@@ -85,7 +93,11 @@ class DefaultForegroundEventStream
                             setConnectionState(EventStreamConnectionState.Idle)
                             return@launch
                         } catch (throwable: Throwable) {
-                            logW("foreground SSE stream failed", throwable)
+                            diagnosticLogger.warning(
+                                DiagnosticLogArea.Sse,
+                                "foreground SSE stream failed",
+                                throwable,
+                            )
                             setConnectionState(
                                 if (wasConnected) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Disconnected,
                             )
@@ -93,14 +105,14 @@ class DefaultForegroundEventStream
 
                         retryAttempt += 1
                         val backoffMs = (1_000L * retryAttempt).coerceAtMost(10_000L)
-                        logD("foreground SSE retry in ${backoffMs}ms")
+                        diagnosticLogger.debug(DiagnosticLogArea.Sse, "foreground SSE retry in ${backoffMs}ms")
                         delay(backoffMs)
                     }
                 }
         }
 
         override fun stop() {
-            logI("foreground SSE stream stopping")
+            diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
             streamJob?.cancel()
             streamJob = null
             wasConnected = false
@@ -115,7 +127,7 @@ class DefaultForegroundEventStream
                 setConnectionState(EventStreamConnectionState.Connected)
             }
             if (shouldPublishReconnect) {
-                logI("foreground SSE stream reconnected")
+                diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream reconnected")
                 ConnectionEpoch.shared.bump()
                 _events.emit(OpencodeEvent(type = "stream.reconnected"))
                 emittedReconnectForCurrentStream = true
@@ -126,33 +138,11 @@ class DefaultForegroundEventStream
 
         private fun setConnectionState(state: EventStreamConnectionState) {
             if (_connectionState.value != state) {
-                logD("foreground SSE state ${_connectionState.value} -> $state")
+                diagnosticLogger.debug(
+                    DiagnosticLogArea.Sse,
+                    "foreground SSE state ${_connectionState.value} -> $state",
+                )
             }
             _connectionState.value = state
-        }
-
-        private fun logI(message: String) {
-            runCatching { Log.i(TAG, message) }
-        }
-
-        private fun logD(message: String) {
-            runCatching { Log.d(TAG, message) }
-        }
-
-        private fun logW(
-            message: String,
-            throwable: Throwable? = null,
-        ) {
-            runCatching {
-                if (throwable == null) {
-                    Log.w(TAG, message)
-                } else {
-                    Log.w(TAG, message, throwable)
-                }
-            }
-        }
-
-        private companion object {
-            private const val TAG = "OpencodeSse"
         }
     }

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -15,37 +17,52 @@ import javax.inject.Singleton
 
 @Singleton
 class DefaultQuestionLiveStore
-@Inject
-constructor(
-    private val sessionRepository: SessionRepository,
-    private val eventStream: ForegroundEventStream,
-    private val liveStoreScope: LiveStoreScope,
-) : QuestionLiveStore {
-    private val cache = ConcurrentHashMap<String, SharedFlow<List<QuestionRequest>>>()
+    @Inject
+    constructor(
+        private val sessionRepository: SessionRepository,
+        private val eventStream: ForegroundEventStream,
+        private val liveStoreScope: LiveStoreScope,
+        private val diagnosticLogger: DiagnosticLogger,
+    ) : QuestionLiveStore {
+        private val cache = ConcurrentHashMap<String, SharedFlow<List<QuestionRequest>>>()
 
-    override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> =
-        cache.getOrPut(directory) {
-            channelFlow {
-                suspend fun refresh() {
-                    runCatching { sessionRepository.listPendingQuestions(directory) }.onSuccess { send(it) }
-                }
-                refresh()
-                eventStream.events
-                    .filter {
-                        it.type == "question.asked" ||
-                            it.type == "question.replied" ||
-                            it.type == "question.rejected" ||
-                            it.type == "stream.reconnected" ||
-                            it.type == "server.connected"
-                    }.collect { refresh() }
-            }.shareIn(
-                liveStoreScope.coroutineScope,
-                SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                replay = 1,
-            )
+        override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> =
+            cache.getOrPut(directory) {
+                channelFlow {
+                    suspend fun refresh(trigger: String) {
+                        runCatching { sessionRepository.listPendingQuestions(directory) }
+                            .onSuccess { requests ->
+                                diagnosticLogger.info(
+                                    DiagnosticLogArea.Question,
+                                    "question refresh trigger=$trigger count=${requests.size}",
+                                )
+                                send(requests)
+                            }
+                            .onFailure {
+                                diagnosticLogger.warning(
+                                    DiagnosticLogArea.Question,
+                                    "question refresh failed trigger=$trigger",
+                                    it,
+                                )
+                            }
+                    }
+                    refresh("initial")
+                    eventStream.events
+                        .filter {
+                            it.type == "question.asked" ||
+                                it.type == "question.replied" ||
+                                it.type == "question.rejected" ||
+                                it.type == "stream.reconnected" ||
+                                it.type == "server.connected"
+                        }.collect { refresh(it.type) }
+                }.shareIn(
+                    liveStoreScope.coroutineScope,
+                    SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                    replay = 1,
+                )
+            }
+
+        override fun clearCache() {
+            cache.clear()
         }
-
-    override fun clearCache() {
-        cache.clear()
     }
-}

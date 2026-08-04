@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 @MainActor
 final class DefaultForegroundEventStream: ForegroundEventStream {
@@ -46,7 +45,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
 
     func start() {
         stop()
-        OpenCodeLog.sse.info("foreground SSE stream starting")
+        DiagnosticLog.info(.sse, "foreground SSE stream starting")
         _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
@@ -57,7 +56,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
 
     func stop() {
         if streamTask != nil || connectionState != .idle {
-            OpenCodeLog.sse.info("foreground SSE stream stopping")
+            DiagnosticLog.info(.sse, "foreground SSE stream stopping")
         }
         streamTask?.cancel()
         streamTask = nil
@@ -75,7 +74,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
 
     private func applyConnectionState(_ state: EventStreamConnectionState) {
         if connectionState != state {
-            OpenCodeLog.sse.debug("foreground SSE state \(String(describing: self.connectionState), privacy: .public) -> \(String(describing: state), privacy: .public)")
+            DiagnosticLog.debug(.sse, "foreground SSE state \(connectionState) -> \(state)")
         }
         connectionState = state
         for continuation in connectionStateContinuations.values {
@@ -89,7 +88,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
             applyConnectionState(.connected)
         }
         if shouldPublishReconnect {
-            OpenCodeLog.sse.info("foreground SSE stream reconnected")
+            DiagnosticLog.info(.sse, "foreground SSE stream reconnected")
             _ = ConnectionEpoch.shared.bump()
             publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
             emittedReconnectForCurrentStream = true
@@ -104,13 +103,9 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         case "server.heartbeat":
             break
         case "message.part.delta", "message.part.updated", "message.updated", "message.removed", "message.part.removed":
-            OpenCodeLog.sse.info(
-                "SSE event type=\(event.type, privacy: .public) session=\(event.sessionID ?? "-", privacy: .public)"
-            )
+            DiagnosticLog.info(.sse, "SSE event type=\(event.type) session=\(event.sessionID ?? "-")")
         default:
-            OpenCodeLog.sse.debug(
-                "SSE event type=\(event.type, privacy: .public) session=\(event.sessionID ?? "-", privacy: .public)"
-            )
+            DiagnosticLog.debug(.sse, "SSE event type=\(event.type) session=\(event.sessionID ?? "-")")
         }
         switch event.type {
         case "server.connected":
@@ -138,7 +133,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
             do {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
-                        OpenCodeLog.sse.info("GET /global/event opened status=\(statusCode)")
+                        DiagnosticLog.info(.sse, "GET /global/event opened status=\(statusCode)")
                         await MainActor.run { [weak self] in
                             guard let self else { return }
                             markStreamConnected()
@@ -147,7 +142,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
                     },
                     onDataLine: { [adapter] dataLine in
                         guard let event = adapter.parseEvent(dataLine: dataLine) else {
-                            OpenCodeLog.sse.warning("SSE event parse failed")
+                            DiagnosticLog.warning(.sse, "SSE event parse failed")
                             return
                         }
                         let shouldResetRetry = await MainActor.run { [weak self] in
@@ -167,7 +162,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
                 }
                 return
             } catch {
-                OpenCodeLog.sse.warning("foreground SSE stream failed error=\(String(describing: error), privacy: .public)")
+                DiagnosticLog.warning(.sse, "foreground SSE stream failed error=\(String(describing: error))")
                 await MainActor.run {
                     applyConnectionState(wasConnected ? .reconnecting : .disconnected)
                 }
@@ -175,7 +170,7 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
 
             retryAttempt += 1
             let backoffMs = min(10_000, 1_000 * retryAttempt)
-            OpenCodeLog.sse.debug("foreground SSE retry in \(backoffMs)ms")
+            DiagnosticLog.debug(.sse, "foreground SSE retry in \(backoffMs)ms")
             try? await Task.sleep(for: .milliseconds(backoffMs))
         }
     }
