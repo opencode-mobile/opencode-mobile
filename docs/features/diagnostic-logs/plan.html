@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diagnostic Logs — Plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f5;
+      --fg: #1a1a1a;
+      --muted: #5c5c5c;
+      --card: #ffffff;
+      --border: #d9d9d4;
+      --accent: #0b6e4f;
+      --warn: #8a5a00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --fg: #f0f0f0;
+        --muted: #a8a8a8;
+        --card: #1c1c1c;
+        --border: #333;
+        --accent: #3ecf8e;
+        --warn: #e0b15a;
+      }
+    }
+    body {
+      margin: 0;
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.35rem; }
+    h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
+    p, li { color: var(--fg); }
+    .muted { color: var(--muted); }
+    .cards { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+    }
+    .card strong { display: block; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.35rem; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.7rem; text-align: left; vertical-align: top; }
+    th { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .flow { display: grid; gap: 0.5rem; }
+    .step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+    }
+    .step span { color: var(--accent); font-weight: 600; margin-right: 0.4rem; }
+    a { color: var(--accent); }
+    code { font-size: 0.92em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Diagnostic Logs</h1>
+    <p class="muted">OPE-104 · <code>docs/features/diagnostic-logs/</code> · companion to <code>plan.md</code></p>
+
+    <div class="cards" style="margin-top: 1.25rem;">
+      <div class="card"><strong>Goal</strong>Share a redacted 5-minute diagnostic window from Settings without adb/Xcode.</div>
+      <div class="card"><strong>Window</strong>5 minutes primary · silent 2,000-entry soft cap.</div>
+      <div class="card"><strong>Export</strong><code>.jsonl</code> via system share sheet · Clear with confirmation.</div>
+      <div class="card"><strong>Status</strong>Planning complete · implementation not started.</div>
+    </div>
+
+    <h2>Architecture</h2>
+    <div class="flow">
+      <div class="step"><span>1</span> Domain / SSE / permission / session emit via app logging facade</div>
+      <div class="step"><span>2</span> Dual-write → platform sink + <code>DiagnosticLogBuffer</code></div>
+      <div class="step"><span>3</span> Redact on write · evict by age (5m) then soft entry cap</div>
+      <div class="step"><span>4</span> Settings → Developer Tools → Share / Clear</div>
+    </div>
+
+    <h2>Phases</h2>
+    <table>
+      <thead><tr><th>#</th><th>Phase</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Spec</td><td>Plan + decisions locked</td></tr>
+        <tr><td>2</td><td>Core buffer</td><td>Facade, buffer, redaction tests on iOS + Android</td></tr>
+        <tr><td>3</td><td>Instrumentation</td><td>SSE / permission / question / session high-value paths</td></tr>
+        <tr><td>4</td><td>Settings UI</td><td>Share <code>.jsonl</code> + Clear</td></tr>
+        <tr><td>5</td><td>Validation</td><td>Stuck-session QA + parity check</td></tr>
+      </tbody>
+    </table>
+
+    <h2>In / Out</h2>
+    <table>
+      <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>In-process buffer · hard redaction · Developer Tools share/clear · iOS/Android parity</td>
+          <td>logcat/<code>os_log</code> scrape · crash upload · remote telemetry · disk persistence · TextMate merge</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Acceptance gates</h2>
+    <ul>
+      <li>Export covers last ~5 minutes of always-on areas without secrets or message bodies.</li>
+      <li>Stuck session / pending permission case shows discriminating evidence (SSE, permission refresh, status).</li>
+      <li>Soft-cap truncation, if any, is visible in export metadata.</li>
+      <li>iOS and Android expose the same Settings actions and conceptual fields.</li>
+    </ul>
+
+    <p class="muted" style="margin-top: 2rem;">Source of truth: <code>plan.md</code> and <code>decisions.md</code>.</p>
+  </main>
+</body>
+</html>

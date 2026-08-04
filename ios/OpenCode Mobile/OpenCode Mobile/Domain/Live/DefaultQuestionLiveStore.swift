@@ -21,7 +21,7 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
     }
 
     private func runLoop(directory: String, yield: @escaping ([QuestionRequest]) -> Void) async {
-        if let requests = try? await sessionRepository.listPendingQuestions(directory: directory) { yield(requests) }
+        await refresh(directory: directory, trigger: "initial", yield: yield)
         for await event in eventStream.events() {
             guard event.type == "question.asked" ||
                 event.type == "question.replied" ||
@@ -29,7 +29,21 @@ final class DefaultQuestionLiveStore: QuestionLiveStore {
                 event.type == "stream.reconnected" ||
                 event.type == "server.connected"
             else { continue }
-            if let requests = try? await sessionRepository.listPendingQuestions(directory: directory) { yield(requests) }
+            await refresh(directory: directory, trigger: event.type, yield: yield)
+        }
+    }
+
+    private func refresh(
+        directory: String,
+        trigger: String,
+        yield: @escaping ([QuestionRequest]) -> Void
+    ) async {
+        do {
+            let requests = try await sessionRepository.listPendingQuestions(directory: directory)
+            DiagnosticLog.info(.question, "question refresh trigger=\(trigger) count=\(requests.count)")
+            yield(requests)
+        } catch {
+            DiagnosticLog.warning(.question, "question refresh failed trigger=\(trigger)")
         }
     }
 

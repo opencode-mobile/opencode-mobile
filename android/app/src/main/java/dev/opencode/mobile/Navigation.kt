@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
@@ -79,6 +80,8 @@ import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
+import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
+import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 
@@ -146,6 +149,7 @@ fun MainNavigation() {
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
                                                 onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
                                                 onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
+                                                onDiagnosticLogsClick = { backStack.add(DiagnosticLogsHome) },
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onConnectionSetup = {
                                                     setupViewModel.configureFromCurrentProfile()
@@ -201,6 +205,25 @@ fun MainNavigation() {
                                                 onNavigateBack = { backStack.removeLastOrNull() },
                                                 onRefresh = logbookViewModel::refresh,
                                                 onClear = logbookViewModel::clear,
+                                            )
+                                        }
+                                    }
+                                    entry<DiagnosticLogsHome> {
+                                        RouteSurface {
+                                            val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
+                                            val diagnosticLogsState by
+                                                diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
+                                            val context = LocalContext.current
+                                            DiagnosticLogsScreen(
+                                                state = diagnosticLogsState,
+                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onShareViaApps = {
+                                                    diagnosticLogsViewModel.shareViaApps { intent ->
+                                                        context.startActivity(intent)
+                                                    }
+                                                },
+                                                onSaveToUri = diagnosticLogsViewModel::saveToUri,
+                                                onClear = diagnosticLogsViewModel::clear,
                                             )
                                         }
                                     }

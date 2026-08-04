@@ -24,6 +24,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showComponentGallery = false
     @State private var showTextMateLogbook = false
+    @State private var showDiagnosticLogs = false
     @State private var showTextMateLanguages = false
     @State private var showClearConfirmation = false
     @State private var showThemePicker = false
@@ -184,6 +185,15 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
+                        title: "Diagnostic Logs",
+                        subtitle: "Share a redacted rolling runtime log window",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "Diagnostic Logs"),
+                        action: { showDiagnosticLogs = true }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Clear All Data",
                         subtitle: "Remove connection, cache, and imported themes",
                         style: .card,
@@ -205,6 +215,9 @@ struct SettingsView: View {
         }
         .navigationDestination(isPresented: $showTextMateLogbook) {
             TextMateLogbookView()
+        }
+        .navigationDestination(isPresented: $showDiagnosticLogs) {
+            DiagnosticLogsView()
         }
         .openCodeBottomSheet(
             isPresented: $showThemePicker,
