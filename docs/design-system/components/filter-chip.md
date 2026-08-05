@@ -63,7 +63,8 @@ catalog icon with frame/padding — not `.font` — per [`../icons.md`](../icons
 Session List gallery (chips in dock). Filter Tabs gallery remains the review
 surface for the standalone tab row. Session Composer / Choice Badge gallery
 cover glass **Choice Badge** pickers (related chrome, separate component).
-SwiftUI `#Preview("Filter Chip")` includes a removable chip.
+SwiftUI `#Preview("Filter Chip")` and Android `@Preview` on
+`OpenCodeFilterChip` include a removable selected chip.
 
 ## Parity And Divergence
 

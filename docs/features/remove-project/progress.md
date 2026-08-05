@@ -8,24 +8,24 @@
 
 ## Design System
 
-- [ ] Filter Chip removable (`×`) variant + `onRemove`
-- [ ] Session List Dock `onRemoveProject(worktree)` wiring
-- [ ] Dialog destructive-primary option
-- [ ] Gallery entries + previews
+- [x] Filter Chip removable (`×`) variant + `onRemove`
+- [x] Session List Dock `onRemoveProject(worktree)` wiring
+- [x] Dialog destructive-primary option
+- [x] Gallery entries + previews
 
 ## iOS
 
-- [ ] `removeWorktree` on `ConnectionProfileStore` / `UserDefaultsConnectionProfileStore`
-- [ ] `ProjectListHomeViewModel.removeProject(worktree)` + confirm state
-- [ ] Dock chips × + confirm dialog in `ProjectListHomeView`/`SessionList`
-- [ ] Unit tests
+- [x] `removeWorktree` on `ConnectionProfileStore` / `UserDefaultsConnectionProfileStore`
+- [x] `ProjectListHomeViewModel.removeProject(worktree)` + confirm state
+- [x] Dock chips × + confirm dialog in `ProjectListHomeView`/`SessionList`
+- [x] Unit tests
 
 ## Android
 
-- [ ] `removeWorktree` on `ConnectionProfileStore` / `DataStoreConnectionProfileStore`
-- [ ] `MainScreenViewModel.removeProject(worktree)` + confirm state
-- [ ] Dock chips × + confirm dialog in `MainScreen`/`SessionList`
-- [ ] Unit tests
+- [x] `removeWorktree` on `ConnectionProfileStore` / `DataStoreConnectionProfileStore`
+- [x] `MainScreenViewModel.removeProject(worktree)` + confirm state
+- [x] Dock chips × + confirm dialog in `MainScreen`/`SessionList`
+- [x] Unit tests
 
 ## Blockers
 
@@ -33,4 +33,4 @@
 
 ## Remaining Work
 
-- Full implementation and checks per plan.
+- None for the planned slice.

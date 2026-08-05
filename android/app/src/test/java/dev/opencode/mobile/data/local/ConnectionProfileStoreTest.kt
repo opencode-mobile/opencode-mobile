@@ -41,6 +41,17 @@ class ConnectionProfileStoreTest {
             store.setAddedWorktrees(server, listOf("/one", "/two", "/one"))
             assertEquals(listOf("/one", "/two"), store.addedWorktrees(server))
         }
+
+    @Test
+    fun removeWorktree_dropsMatchingPath() =
+        runTest {
+            val store = InMemoryConnectionProfileStore()
+            store.setAddedWorktrees(server, listOf("/repo/a", "/repo/b", "/repo/c"))
+            store.removeWorktree(server, "/repo/b")
+            assertEquals(listOf("/repo/a", "/repo/c"), store.addedWorktrees(server))
+            store.removeWorktree(server, "/missing")
+            assertEquals(listOf("/repo/a", "/repo/c"), store.addedWorktrees(server))
+        }
 }
 
 /** Test double mirroring store semantics without DataStore. */

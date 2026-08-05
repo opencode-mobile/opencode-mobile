@@ -125,6 +125,69 @@ struct ProjectListHomeViewModelTests {
         #expect(focusedWorktree == "/two")
     }
 
+    @Test func requestRemoveProject_setsPendingRemoval() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one", "/two"])
+        )
+        await viewModel.refresh()
+        viewModel.requestRemoveProject(worktree: "/one")
+        #expect(viewModel.pendingProjectRemoval?.worktree == "/one")
+        #expect(viewModel.pendingProjectRemoval?.displayName == "one")
+    }
+
+    @Test func dismissProjectRemoval_clearsPending() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        viewModel.requestRemoveProject(worktree: "/one")
+        viewModel.dismissProjectRemoval()
+        #expect(viewModel.pendingProjectRemoval == nil)
+    }
+
+    @Test func confirmRemoveProject_dropsWorktreeAndShowsSnackbar() async {
+        let store = FakeConnectionProfileStore(initial: ["/one", "/two"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        viewModel.requestRemoveProject(worktree: "/one")
+        await viewModel.confirmRemoveProject()
+
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/two"])
+        #expect(viewModel.pendingProjectRemoval == nil)
+        guard case let .loaded(sections, _, _, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.map(\.worktree) == ["/two"])
+        #expect(viewModel.removalSnackbar?.text == "Removed \"one\" from home")
+
+        viewModel.consumeProjectRemovalSnackbar()
+        #expect(viewModel.removalSnackbar == nil)
+    }
+
+    @Test func confirmRemoveProject_lastProject_showsEmpty() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        viewModel.requestRemoveProject(worktree: "/one")
+        await viewModel.confirmRemoveProject()
+
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").isEmpty)
+        guard case .empty = viewModel.state else {
+            Issue.record("Expected empty")
+            return
+        }
+        #expect(viewModel.removalSnackbar?.text == "Removed \"one\" from home")
+    }
+
     @Test func showAddProjectSheet_startsAtHomeAndListsDirectories() async {
         let filesystem = FakeFilesystemRepository(
             paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),

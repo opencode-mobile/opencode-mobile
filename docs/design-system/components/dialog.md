@@ -23,17 +23,23 @@ Prefer `OpenCodeBottomSheet` for multi-entry action lists. Prefer
   - selected: not applicable.
 - Required content:
   - `title`
-  - primary option (`title`, action)
-  - secondary option (`title`, action)
+  - primary option (`title`, action; optional `enabled`, optional `destructive`)
+  - secondary option (`title`, action; optional `enabled`)
 - Optional content:
   - `subtitle` supporting copy under the title
   - single `OpenCodeTextInput` configuration (hint or accessibility label,
     value binding, kind, enabled, error message)
 
 Options are ordered secondary then primary in the action row (for example Cancel
-then Save). Primary uses high-contrast button treatment; secondary uses
-low-contrast treatment. Both map to `OpenCodeButton` `fullWidthText` and share
-the row equally.
+then Save). Primary uses high-contrast button treatment by default; when
+`destructive` is true on the primary option, primary maps to
+`OpenCodeButton` contrast `destructive` (error-emphasized confirm). Secondary
+uses low-contrast treatment. Both map to `OpenCodeButton` `fullWidthText` and
+share the row equally.
+
+Primary option API: `title`, `action`, optional `enabled` (default true),
+optional `destructive` (default false). Use `destructive` for irreversible or
+hard-to-undo confirms such as Remove / Delete / Clear.
 
 ## Token Usage
 
@@ -77,7 +83,7 @@ wire the field's done action to the primary option.
 ## Review Surfaces
 
 - iOS Component Gallery: Dialog entry with controls for subtitle presence, text
-  field presence, and option enabled state.
+  field presence, option enabled state, and destructive primary.
 - Android Component Gallery: Dialog entry with the same controls.
 
 ## Completion Ledger

@@ -26,7 +26,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -121,6 +123,22 @@ fun OpenCodeFilterChip(
                         .background(textStrong.copy(alpha = 0.10f))
                         .clickable(role = Role.Button, onClick = onRemove)
                         .padding(ChipRemoveIconInset),
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Filter Chip Removable")
+@Composable
+private fun OpenCodeFilterChipRemovablePreview() {
+    OpenCodeTheme(darkTheme = true) {
+        Box(modifier = Modifier.padding(16.dp)) {
+            OpenCodeFilterChip(
+                title = "opencode-mobile",
+                count = 3,
+                selected = true,
+                onClick = {},
+                onRemove = {},
             )
         }
     }

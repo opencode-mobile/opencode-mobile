@@ -38,6 +38,16 @@ struct ConnectionProfileStoreTests {
         #expect(await store.addedWorktrees(serverBaseURL: server) == ["/one", "/two", "/three"])
     }
 
+    @Test func removeWorktree_dropsMatchingPath() async {
+        let defaults = isolatedDefaults()
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+        await store.setAddedWorktrees(serverBaseURL: server, worktrees: ["/a", "/b", "/c"])
+        await store.removeWorktree(serverBaseURL: server, worktree: "/b")
+        #expect(await store.addedWorktrees(serverBaseURL: server) == ["/a", "/c"])
+        await store.removeWorktree(serverBaseURL: server, worktree: "/missing")
+        #expect(await store.addedWorktrees(serverBaseURL: server) == ["/a", "/c"])
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suite = "ConnectionProfileStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
