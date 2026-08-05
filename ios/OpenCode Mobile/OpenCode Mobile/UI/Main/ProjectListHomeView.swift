@@ -346,6 +346,7 @@ struct SessionListItem: Identifiable, Hashable {
     let statusLabel: String?
     let updatedAtLabel: String?
     let updatedAtEpochMs: Int64?
+    let isReady: Bool
 
     init(
         id: String,
@@ -353,7 +354,8 @@ struct SessionListItem: Identifiable, Hashable {
         worktree: String,
         statusLabel: String? = nil,
         updatedAtLabel: String? = nil,
-        updatedAtEpochMs: Int64? = nil
+        updatedAtEpochMs: Int64? = nil,
+        isReady: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -361,6 +363,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.statusLabel = statusLabel
         self.updatedAtLabel = updatedAtLabel
         self.updatedAtEpochMs = updatedAtEpochMs
+        self.isReady = isReady
     }
 }
 
@@ -388,12 +391,13 @@ private extension SessionListItem {
         )
     }
 
-    func sessionListStatus() -> SessionListStatus {
+    func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
+        _ = hasPendingPermission // Reserved for a future home Needs approval pill.
         switch statusLabel {
         case "Working", "Retrying":
-            .running
+            return SessionListStatus.running
         default:
-            .idle
+            return isReady ? SessionListStatus.ready : SessionListStatus.idle
         }
     }
 }
@@ -478,6 +482,10 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
         sessionRepository: PreviewSessionRepository(),
         eventStream: previewEventStream
     )
+    let sessionReadyStore = DefaultSessionReadyStore(
+        sessionStatusLiveStore: sessionStatusLiveStore,
+        eventStream: previewEventStream
+    )
     return ProjectListHomeViewModel(
         projectRepository: PreviewProjectRepository(),
         filesystemRepository: PreviewFilesystemRepository(),
@@ -486,6 +494,7 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
         activeConnectionManager: manager,
         sessionLiveStore: sessionLiveStore,
         sessionStatusLiveStore: sessionStatusLiveStore,
+        sessionReadyStore: sessionReadyStore,
         foregroundEventStream: previewEventStream,
         connectionSessionCoordinator: coordinator
     )

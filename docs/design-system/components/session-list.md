@@ -13,7 +13,7 @@ live status, settings) is owned by the home shell, not this component.
 - Models:
   - `SessionListSession`: `id`, `title`, `worktree`, `letter`, `letterAccent`,
     `subtitle`, `status`, `caption`.
-  - `SessionListStatus`: `idle` | `running`.
+  - `SessionListStatus`: `idle` | `running` | `ready`.
   - `SessionListFilterTab`: `id`, `title`, `count`. Use id `all` for the
     cross-project tab; other ids match `SessionListSession.worktree`.
 - Required content: ordered `sessions` (may be empty) and ordered `filterTabs`
@@ -47,9 +47,10 @@ live status, settings) is owned by the home shell, not this component.
 
 ## Behavior
 
-The component is stateless for data. Callers own sorting, captions, Idle/Running
-mapping, filter models/selection, add-project and new-session flows, and page
-chrome.
+The component is stateless for data. Callers own sorting, captions, and
+Idle/Running/Ready mapping (Running outranks Ready; Ready uses pill text
+**Ready** with `success` tone), filter models/selection, add-project and
+new-session flows, and page chrome.
 
 Layout:
 
@@ -72,7 +73,7 @@ sessions whose `worktree` equals the selected filter id are shown.
 
 ## Review Surfaces
 
-Both Component Galleries include a realistic mixed Idle/Running sample with
+Both Component Galleries include a realistic mixed Idle/Running/Ready sample with
 filters and dock actions. Light and dark use the shared gallery theme control.
 Edge-to-edge fade is judged full-bleed in the gallery detail. Top bar chrome is
 reviewed via Top Bar gallery / home shell, not this entry.

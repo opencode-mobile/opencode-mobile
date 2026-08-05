@@ -22,14 +22,20 @@ struct SessionDomainAdapter: Sendable {
         SessionRevert(messageID: dto.messageID, partID: dto.partID, snapshot: dto.snapshot, diff: dto.diff)
     }
 
-    func listItem(from session: Session, worktree: String, statusLabel: String? = nil) -> SessionListItem {
+    func listItem(
+        from session: Session,
+        worktree: String,
+        statusLabel: String? = nil,
+        isReady: Bool = false
+    ) -> SessionListItem {
         SessionListItem(
             id: session.id,
             title: session.title,
             worktree: worktree,
             statusLabel: statusLabel,
             updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel),
-            updatedAtEpochMs: session.updatedAtEpochMs
+            updatedAtEpochMs: session.updatedAtEpochMs,
+            isReady: isReady
         )
     }
 

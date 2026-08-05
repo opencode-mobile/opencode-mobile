@@ -84,6 +84,7 @@ final class ProjectListHomeViewModel {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver?
     private let sessionLiveStore: any SessionLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
+    private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
@@ -95,6 +96,7 @@ final class ProjectListHomeViewModel {
     private var liveObservationTasks: [Task<Void, Never>] = []
     private var liveSessionsByWorktree: [String: [Session]] = [:]
     private var liveStatusesByWorktree: [String: [String: SessionStatus]] = [:]
+    private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
     private var requestedFocusWorktree: String?
     private var homeFocusedWorktree: String?
 
@@ -106,6 +108,7 @@ final class ProjectListHomeViewModel {
         activeConnectionManager: ActiveConnectionManager,
         sessionLiveStore: any SessionLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
+        sessionReadyStore: any SessionReadyStore,
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
@@ -117,11 +120,13 @@ final class ProjectListHomeViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.sessionLiveStore = sessionLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
+        self.sessionReadyStore = sessionReadyStore
         self.foregroundEventStream = foregroundEventStream
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
+                self?.sessionReadyStore.clearCache()
                 await self?.refresh()
             }
         }
@@ -597,6 +602,7 @@ final class ProjectListHomeViewModel {
         liveObservationTasks = []
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
+        liveReadyIdsByWorktree = [:]
     }
 
     private func observeWorktree(_ worktree: String) async {
@@ -613,19 +619,27 @@ final class ProjectListHomeViewModel {
                     self.applyLiveUpdate(worktree: worktree)
                 }
             }
+            group.addTask { @MainActor in
+                for await readyIds in self.sessionReadyStore.observeReadyIds(directory: worktree) {
+                    self.liveReadyIdsByWorktree[worktree] = readyIds
+                    self.applyLiveUpdate(worktree: worktree)
+                }
+            }
         }
     }
 
     private func applyLiveUpdate(worktree: String) {
         guard let sessions = liveSessionsByWorktree[worktree] else { return }
         let statuses = liveStatusesByWorktree[worktree] ?? [:]
-        updateSectionFromLiveData(worktree: worktree, sessions: sessions, statuses: statuses)
+        let readyIds = liveReadyIdsByWorktree[worktree] ?? []
+        updateSectionFromLiveData(worktree: worktree, sessions: sessions, statuses: statuses, readyIds: readyIds)
     }
 
     private func updateSectionFromLiveData(
         worktree: String,
         sessions: [Session],
-        statuses: [String: SessionStatus]
+        statuses: [String: SessionStatus],
+        readyIds: Set<String>
     ) {
         guard case let .loaded(sections, showAdd, navigator, seeAll, focused, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
@@ -638,7 +652,8 @@ final class ProjectListHomeViewModel {
                     sessionAdapter.listItem(
                         from: session,
                         worktree: worktree,
-                        statusLabel: statuses[session.id].flatMap(eventAdapter.statusLabel)
+                        statusLabel: statuses[session.id].flatMap(eventAdapter.statusLabel),
+                        isReady: readyIds.contains(session.id)
                     )
                 }
         let updatedSection = ProjectSectionItem(

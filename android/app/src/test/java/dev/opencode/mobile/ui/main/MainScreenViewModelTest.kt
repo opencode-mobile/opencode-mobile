@@ -8,8 +8,11 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.SessionReadyClock
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -554,6 +557,14 @@ class MainScreenViewModelTest {
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
         val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope)
+        val sessionReadyStore =
+            DefaultSessionReadyStore(
+                sessionStatusLiveStore,
+                eventStream,
+                liveStoreScope,
+                InMemorySessionReadyPersistence(),
+                SessionReadyClock { System.currentTimeMillis() },
+            )
         return MainScreenViewModel(
             projectRepository = projectRepository,
             filesystemRepository = filesystemRepository,
@@ -563,6 +574,7 @@ class MainScreenViewModelTest {
             eventDomainAdapter = EventDomainAdapter(json),
             sessionLiveStore = sessionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
+            sessionReadyStore = sessionReadyStore,
             foregroundEventStream = eventStream,
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,

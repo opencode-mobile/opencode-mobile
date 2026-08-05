@@ -32,6 +32,7 @@ private val SessionListFallbackBottomSpacer = 168.dp
 enum class SessionListStatus {
     Idle,
     Running,
+    Ready,
 }
 
 data class SessionListSession(
@@ -166,6 +167,8 @@ private fun SessionListStatus.toListItemStatus(): OpenCodeListItemStatus =
             OpenCodeListItemStatus(text = "Idle", tone = OpenCodeListItemStatusTone.Info)
         SessionListStatus.Running ->
             OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive)
+        SessionListStatus.Ready ->
+            OpenCodeListItemStatus(text = "Ready", tone = OpenCodeListItemStatusTone.Success)
     }
 
 private fun compactHomePath(path: String): String {

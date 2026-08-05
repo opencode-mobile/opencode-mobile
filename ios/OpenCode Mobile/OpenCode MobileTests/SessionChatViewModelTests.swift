@@ -1915,6 +1915,7 @@ struct SessionChatViewModelTests {
             sessionRepository: sessionRepository,
             permissionLiveStore: permissionLiveStore,
             questionLiveStore: questionLiveStore,
+            sessionReadyStore: EmptySessionReadyStore(),
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
