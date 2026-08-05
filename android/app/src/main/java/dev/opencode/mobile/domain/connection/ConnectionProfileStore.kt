@@ -12,6 +12,11 @@ interface ConnectionProfileStore {
         worktree: String,
     )
 
+    suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    )
+
     suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,

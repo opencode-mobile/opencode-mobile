@@ -38,7 +38,11 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeDialog
+import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
@@ -67,10 +71,12 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val liveUpdatesConnectionState by viewModel.liveUpdatesConnectionState.collectAsStateWithLifecycle()
+    val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     MainScreen(
         uiState = state,
         isRefreshing = isRefreshing,
         liveUpdatesConnectionState = liveUpdatesConnectionState,
+        removalSnackbar = removalSnackbar,
         onSettingsClick = onSettingsClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
@@ -88,6 +94,10 @@ fun MainScreen(
         onDismissSeeAll = viewModel::dismissSeeAllSessions,
         onNewSession = viewModel::createSession,
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
+        onRemoveProject = viewModel::requestRemoveProject,
+        onConfirmRemoveProject = viewModel::confirmRemoveProject,
+        onDismissProjectRemoval = viewModel::dismissProjectRemoval,
+        onConsumeProjectRemovalSnackbar = viewModel::consumeProjectRemovalSnackbar,
         modifier = modifier,
     )
 }
@@ -97,6 +107,7 @@ fun MainScreen(
 internal fun MainScreen(
     uiState: MainScreenUiState,
     liveUpdatesConnectionState: EventStreamConnectionState,
+    removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
@@ -114,6 +125,10 @@ internal fun MainScreen(
     onDismissSeeAll: () -> Unit,
     onNewSession: (String) -> Unit,
     onConsumePendingOpenSession: () -> Unit,
+    onRemoveProject: (String) -> Unit,
+    onConfirmRemoveProject: () -> Unit,
+    onDismissProjectRemoval: () -> Unit,
+    onConsumeProjectRemovalSnackbar: () -> Unit,
     modifier: Modifier = Modifier,
     isRefreshing: Boolean = false,
 ) {
@@ -218,12 +233,41 @@ internal fun MainScreen(
                         onSeeAllSessions = onSeeAllSessions,
                         onNewSession = onNewSession,
                         onRequestNewSessionProjectPicker = { showNewSessionProjectPicker = true },
+                        onRemoveProject = onRemoveProject,
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
+
+        OpenCodeSnackbarHost(
+            message = removalSnackbar,
+            onDismissed = onConsumeProjectRemovalSnackbar,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
+
+    val pendingProjectRemoval = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval
+    OpenCodeDialog(
+        visible = pendingProjectRemoval != null,
+        title = "Remove from home?",
+        subtitle =
+            pendingProjectRemoval?.let { removal ->
+                "Remove \"${removal.displayName}\" from home? Its sessions stay on the server."
+            },
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Remove",
+                destructive = true,
+                onClick = onConfirmRemoveProject,
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                onClick = onDismissProjectRemoval,
+            ),
+        onDismissRequest = onDismissProjectRemoval,
+    )
 
     if (showAddSheet) {
         val navigator = addNavigator ?: AddProjectNavigatorUi.empty()
@@ -396,6 +440,7 @@ private fun HomeProjectsContent(
     onSeeAllSessions: (String) -> Unit,
     onNewSession: (String) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
+    onRemoveProject: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val showSessionList = HomeDisplayPreferences.showSessionListOnHome
@@ -433,6 +478,7 @@ private fun HomeProjectsContent(
                 },
                 onAddProject = onBrowseProjectsClick,
                 onNewSession = onRequestNewSessionProjectPicker,
+                onRemoveProject = onRemoveProject,
                 modifier = Modifier.fillMaxSize(),
                 emptyContent =
                     if (sections.isEmpty()) {
@@ -608,6 +654,7 @@ fun MainScreenPreview() {
                 ),
             liveUpdatesConnectionState = EventStreamConnectionState.Connected,
             isRefreshing = false,
+            removalSnackbar = null,
             onSettingsClick = {},
             onSessionClick = {},
             onEditConnection = {},
@@ -625,6 +672,10 @@ fun MainScreenPreview() {
             onDismissSeeAll = {},
             onNewSession = {},
             onConsumePendingOpenSession = {},
+            onRemoveProject = {},
+            onConfirmRemoveProject = {},
+            onDismissProjectRemoval = {},
+            onConsumeProjectRemovalSnackbar = {},
         )
     }
 }

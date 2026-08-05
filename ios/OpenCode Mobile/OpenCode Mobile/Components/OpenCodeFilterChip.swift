@@ -1,48 +1,78 @@
 import SwiftUI
 
 struct OpenCodeFilterChip: View {
+    /// Shared height for the count pill and remove circle so they align.
+    private static let metaSize: CGFloat = 20
+    /// Inset for the close glyph inside the remove circle (matches Android).
+    private static let removeIconInset: CGFloat = 4
+
     let title: String
     let count: Int?
     let selected: Bool
     let action: () -> Void
+    let removeAction: (() -> Void)?
 
-    init(title: String, count: Int? = nil, selected: Bool, action: @escaping () -> Void) {
+    init(
+        title: String,
+        count: Int? = nil,
+        selected: Bool,
+        action: @escaping () -> Void,
+        removeAction: (() -> Void)? = nil
+    ) {
         self.title = title
         self.count = count
         self.selected = selected
         self.action = action
+        self.removeAction = removeAction
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                if let count {
-                    Text("\(count)")
-                        .font(OpenCodeTypography.caption.weight(.semibold))
+        HStack(spacing: 4) {
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(OpenCodeTypography.button)
                         .foregroundStyle(OpenCodeColors.textStrong)
-                        .monospacedDigit()
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, count >= 10 ? 8 : 6)
-                        .frame(minWidth: countBadgeMinWidth(count), minHeight: 22)
-                        .background(
-                            OpenCodeColors.textStrong.opacity(0.10),
-                            in: Capsule()
-                        )
+                    if let count {
+                        Text("\(count)")
+                            .font(OpenCodeTypography.caption.weight(.semibold))
+                            .foregroundStyle(OpenCodeColors.textStrong)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, count >= 10 ? 8 : 6)
+                            .frame(minWidth: countBadgeMinWidth(count), minHeight: Self.metaSize, maxHeight: Self.metaSize)
+                            .background(
+                                OpenCodeColors.textStrong.opacity(0.10),
+                                in: Capsule()
+                            )
+                    }
                 }
+                .contentShape(Capsule())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(minHeight: 36)
-            .fixedSize(horizontal: true, vertical: false)
-            .contentShape(Capsule())
+            .buttonStyle(OpenCodeFilterChipPressStyle())
+
+            if let removeAction {
+                Button(action: removeAction) {
+                    OpenCodeIconImage(icon: .close)
+                        .padding(Self.removeIconInset)
+                        .foregroundStyle(OpenCodeColors.textStrong.opacity(0.85))
+                        .frame(width: Self.metaSize, height: Self.metaSize)
+                        .background(OpenCodeColors.textStrong.opacity(0.10), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(title)")
+            }
         }
-        .buttonStyle(OpenCodeFilterChipPressStyle())
+        .padding(.leading, 12)
+        .padding(.trailing, removeAction == nil ? 12 : 6)
+        .padding(.vertical, 8)
+        .frame(minHeight: 36)
+        .fixedSize(horizontal: true, vertical: false)
+        .contentShape(Capsule())
         .modifier(OpenCodeFilterChipChrome(selected: selected))
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -58,7 +88,7 @@ struct OpenCodeFilterChip: View {
 
     private func countBadgeMinWidth(_ count: Int) -> CGFloat {
         switch count {
-        case 0 ..< 10: 22
+        case 0 ..< 10: Self.metaSize
         case 10 ..< 100: 28
         case 100 ..< 1000: 36
         default: 44
@@ -70,8 +100,8 @@ private struct OpenCodeFilterChipPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(.smooth(duration: 0.18), value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -83,10 +113,12 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
             if selected {
                 content
                     .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    // Non-interactive glass: `.interactive()` adds a loud lens press;
+                    // press feedback stays on OpenCodeFilterChipPressStyle.
+                    .glassEffect(.regular, in: .capsule)
             } else {
                 content
-                    .glassEffect(.clear.interactive(), in: .capsule)
+                    .glassEffect(.clear, in: .capsule)
             }
         } else if selected {
             content
@@ -110,7 +142,13 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
 #Preview("Filter Chip") {
     HStack {
         OpenCodeFilterChip(title: "All", count: 4, selected: true, action: {})
-        OpenCodeFilterChip(title: "opencode-mobile", count: 2, selected: false, action: {})
+        OpenCodeFilterChip(
+            title: "opencode-mobile",
+            count: 2,
+            selected: true,
+            action: {},
+            removeAction: {}
+        )
     }
     .padding()
     .openCodeTheme()

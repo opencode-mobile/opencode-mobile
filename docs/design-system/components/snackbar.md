@@ -46,6 +46,10 @@ timeline full-screen error empty state when messages cannot load at all.
 
 - Android: Material 3 `SnackbarHost` / `Snackbar` wrapped by
   `OpenCodeSnackbarHost`, with variant colors mapped to OpenCode theme tokens.
+  Material's `Snackbar(snackbarData)` already applies a **12** logical-pixel
+  outer inset; the host only adds the **4** logical-pixel delta so total screen
+  margins match `snackbar.screenMargin*` (**16**), matching iOS. The snackbar
+  fills the width inside those margins.
 - iOS: SwiftUI overlay toast (`OpenCodeSnackbarHost`) with matching geometry,
   tokens, and auto-dismiss timer.
 

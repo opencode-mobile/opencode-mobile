@@ -25,6 +25,9 @@ private val OpenCodeSnackbarCornerRadius = 8.dp
 private val OpenCodeSnackbarScreenMarginHorizontal = 16.dp
 private val OpenCodeSnackbarScreenMarginBottom = 16.dp
 
+/** Outer inset Material's `Snackbar(snackbarData)` applies; host padding is the delta to tokens. */
+private val OpenCodeSnackbarMaterialOuterInset = 12.dp
+
 enum class OpenCodeSnackbarVariant {
     Default,
     Error,
@@ -65,8 +68,10 @@ fun OpenCodeSnackbarHost(
             modifier
                 .fillMaxWidth()
                 .padding(
-                    horizontal = OpenCodeSnackbarScreenMarginHorizontal,
-                    vertical = OpenCodeSnackbarScreenMarginBottom,
+                    horizontal = OpenCodeSnackbarScreenMarginHorizontal - OpenCodeSnackbarMaterialOuterInset,
+                )
+                .padding(
+                    bottom = OpenCodeSnackbarScreenMarginBottom - OpenCodeSnackbarMaterialOuterInset,
                 ),
     ) { data ->
         val variant = message?.variant ?: OpenCodeSnackbarVariant.Default
@@ -82,6 +87,7 @@ fun OpenCodeSnackbarHost(
             }
         Snackbar(
             snackbarData = data,
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(OpenCodeSnackbarCornerRadius),
             containerColor = containerColor,
             contentColor = contentColor,

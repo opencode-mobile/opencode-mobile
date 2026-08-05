@@ -40,6 +40,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
             onFilterSelected = { selectedFilterId = it },
             onAddProject = {},
             onNewSession = {},
+            onRemoveProject = { selectedFilterId = SessionListFilterTab.ALL_ID },
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)

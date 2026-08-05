@@ -181,6 +181,79 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun requestRemoveProject_setsPendingRemoval() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one", "/two")),
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.requestRemoveProject("/one")
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/one", loaded.pendingProjectRemoval?.worktree)
+            assertEquals("one", loaded.pendingProjectRemoval?.displayName)
+        }
+
+    @Test
+    fun dismissProjectRemoval_clearsPending() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    sessionsByWorktree = mapOf("/one" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.requestRemoveProject("/one")
+            viewModel.dismissProjectRemoval()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertNull(loaded.pendingProjectRemoval)
+        }
+
+    @Test
+    fun confirmRemoveProject_dropsWorktreeAndShowsSnackbar() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one", "/two"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/two" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.requestRemoveProject("/one")
+            viewModel.confirmRemoveProject()
+            advanceUntilIdle()
+
+            assertEquals(listOf("/two"), store.added(serverUrl))
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertNull(loaded.pendingProjectRemoval)
+            assertEquals(listOf("/two"), loaded.sections.map { it.worktree })
+            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text)
+
+            viewModel.consumeProjectRemovalSnackbar()
+            assertNull(viewModel.removalSnackbar.value)
+        }
+
+    @Test
+    fun confirmRemoveProject_lastProject_showsEmpty() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList()),
+                )
+            advanceUntilIdle()
+            viewModel.requestRemoveProject("/one")
+            viewModel.confirmRemoveProject()
+            advanceUntilIdle()
+
+            assertEquals(emptyList<String>(), store.added(serverUrl))
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Empty)
+            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text)
+        }
+
+    @Test
     fun showAddProjectSheet_startsAtHomeAndListsDirectories() =
         runTest(testDispatcher) {
             val filesystem =
@@ -766,6 +839,13 @@ private class FakeConnectionProfileStore(
         if (worktree !in current) {
             data[serverBaseUrl] = current + worktree
         }
+    }
+
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {
+        data[serverBaseUrl] = data[serverBaseUrl].orEmpty().filterNot { it == worktree }
     }
 
     override suspend fun setAddedWorktrees(

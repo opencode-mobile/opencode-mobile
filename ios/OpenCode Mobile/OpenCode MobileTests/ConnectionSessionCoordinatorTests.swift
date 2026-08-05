@@ -98,6 +98,8 @@ private final class InMemoryConnectionProfileStore: ConnectionProfileStore, @unc
 
     func addWorktree(serverBaseURL: String, worktree: String) async {}
 
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
+
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
 
     func clearAll() async {}

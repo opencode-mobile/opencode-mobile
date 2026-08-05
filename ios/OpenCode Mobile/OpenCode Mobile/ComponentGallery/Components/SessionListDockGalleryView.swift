@@ -26,7 +26,8 @@ struct SessionListDockGalleryView: View {
                 createError: showCreateError ? "Could not create session. Try again." : nil,
                 onFilterSelected: { selectedFilterId = $0 },
                 onAddProject: {},
-                onNewSession: {}
+                onNewSession: {},
+                onRemoveProject: { _ in selectedFilterId = SessionListFilterTab.allId }
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

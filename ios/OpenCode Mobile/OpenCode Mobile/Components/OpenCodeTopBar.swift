@@ -243,8 +243,7 @@ struct OpenCodeTopBar: View {
     ) -> some View {
         if #available(iOS 26, *) {
             Button(action: action) {
-                OpenCodeIconImage(icon: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                OpenCodeIconImage(icon: icon, size: 18)
                     .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .frame(width: topBarIconButtonSize, height: topBarIconButtonSize)
                     .contentShape(Circle())

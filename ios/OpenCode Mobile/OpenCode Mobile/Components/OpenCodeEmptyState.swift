@@ -16,8 +16,7 @@ struct OpenCodeEmptyState: View {
     var body: some View {
         VStack(spacing: 0) {
             if let icon {
-                OpenCodeIconImage(icon: icon)
-                    .frame(width: 40, height: 40)
+                OpenCodeIconImage(icon: icon, size: 40)
                     .foregroundStyle(OpenCodeColors.textBase)
                 Spacer().frame(height: 16)
             }

@@ -109,14 +109,8 @@ private struct OpenCodeSessionTodoItemMark: View {
 
             switch status {
             case .completed, .cancelled:
-                // Asset-catalog template icons need resizable+fit; `.font` only
-                // sizes SF Symbols and left the check optically oversized on iOS.
-                Image(OpenCodeIcon.check.rawValue)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
+                OpenCodeIconImage(icon: .check, size: Self.iconSize)
                     .foregroundStyle(OpenCodeColors.textInteractiveBase)
-                    .frame(width: Self.iconSize, height: Self.iconSize)
             case .inProgress:
                 Capsule()
                     .fill(OpenCodeColors.textInteractiveBase)

@@ -220,13 +220,15 @@ private struct OpenCodeOverflowMenuPanel: View {
                         if reservesIconColumn {
                             Group {
                                 if let icon = entry.icon {
-                                    OpenCodeIconImage(icon: icon)
+                                    OpenCodeIconImage(icon: icon, size: overflowMenuEntryIconSize)
                                 } else {
                                     Color.clear
+                                        .frame(
+                                            width: overflowMenuEntryIconSize,
+                                            height: overflowMenuEntryIconSize
+                                        )
                                 }
                             }
-                            .font(.system(size: overflowMenuEntryIconSize, weight: .regular))
-                            .frame(width: overflowMenuEntryIconSize, height: overflowMenuEntryIconSize)
                             .foregroundStyle(overflowEntryIconColor(entry))
                             .accessibilityHidden(true)
                         }

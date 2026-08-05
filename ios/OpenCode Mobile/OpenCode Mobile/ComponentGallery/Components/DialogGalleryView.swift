@@ -5,6 +5,7 @@ struct DialogGalleryView: View {
     @State private var showsSubtitle = true
     @State private var showsTextField = false
     @State private var optionsEnabled = true
+    @State private var destructivePrimary = true
     @State private var draftTitle = "Importing icons"
 
     var body: some View {
@@ -30,6 +31,11 @@ struct DialogGalleryView: View {
                         selected: optionsEnabled,
                         action: { optionsEnabled.toggle() }
                     )
+                    OpenCodeChoiceBadge(
+                        label: "Destructive",
+                        selected: destructivePrimary && !showsTextField,
+                        action: { destructivePrimary.toggle() }
+                    )
                 }
             }
 
@@ -46,6 +52,7 @@ struct DialogGalleryView: View {
             primaryOption: OpenCodeDialogOption(
                 title: showsTextField ? "Save" : "Clear",
                 enabled: optionsEnabled,
+                destructive: destructivePrimary && !showsTextField,
                 action: { isPresented = false }
             ),
             secondaryOption: OpenCodeDialogOption(

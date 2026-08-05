@@ -144,6 +144,7 @@ private struct PreviewConnectionProfileStore: ConnectionProfileStore {
     func saveProfile(_ profile: ConnectionProfile) async {}
     func addedWorktrees(serverBaseURL: String) async -> [String] { [] }
     func addWorktree(serverBaseURL: String, worktree: String) async {}
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async {}
 }

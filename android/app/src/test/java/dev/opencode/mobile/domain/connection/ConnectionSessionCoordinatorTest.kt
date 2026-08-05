@@ -139,6 +139,11 @@ private class FakeConnectionProfileStore : ConnectionProfileStore {
         worktree: String,
     ) = Unit
 
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) = Unit
+
     override suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,

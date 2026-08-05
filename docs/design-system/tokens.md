@@ -293,6 +293,16 @@ to semantic surfaces as documented in
 | `filterTabs.row.paddingVertical` | 8 (logical px) |
 | `filterTabs.tab.borderWidth` | 1.5 (logical px; selected capsule stroke) |
 
+### Filter chip
+
+Single capsule filter used inside docks and related chrome. Geometry aligns with
+filter-tabs density; remove is optional.
+
+| Token | Value |
+| --- | --- |
+| `filterChip.metaSize` | 20 (logical px; count pill min height and remove circle) |
+| `filterChip.remove.iconInset` | 4 (logical px; padding inside remove circle on both platforms) |
+
 ### Action pill
 
 Compact floating pill for contextual overlay actions such as scroll-to-end in

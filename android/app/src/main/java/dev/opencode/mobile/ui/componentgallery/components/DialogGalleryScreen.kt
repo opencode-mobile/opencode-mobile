@@ -26,6 +26,7 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
     var showsSubtitle by rememberSaveable { mutableStateOf(true) }
     var showsTextField by rememberSaveable { mutableStateOf(false) }
     var optionsEnabled by rememberSaveable { mutableStateOf(true) }
+    var destructivePrimary by rememberSaveable { mutableStateOf(true) }
     var draftTitle by rememberSaveable { mutableStateOf("Importing icons") }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -51,6 +52,11 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
                     selected = optionsEnabled,
                     onClick = { optionsEnabled = !optionsEnabled },
                 )
+                OpenCodeChoiceBadge(
+                    label = "Destructive",
+                    selected = destructivePrimary && !showsTextField,
+                    onClick = { destructivePrimary = !destructivePrimary },
+                )
             }
         }
 
@@ -73,6 +79,7 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeDialogOption(
                 title = if (showsTextField) "Save" else "Clear",
                 enabled = optionsEnabled,
+                destructive = destructivePrimary && !showsTextField,
                 onClick = { visible = false },
             ),
         secondaryOption =

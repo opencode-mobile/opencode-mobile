@@ -12,8 +12,7 @@ struct IconsGalleryView: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(OpenCodeIcon.allCases, id: \.self) { icon in
                     VStack(spacing: 6) {
-                        OpenCodeIconImage(icon: icon)
-                            .font(.system(size: 24))
+                        OpenCodeIconImage(icon: icon, size: 24)
                             .foregroundStyle(OpenCodeColors.iconBase)
                             .frame(width: 32, height: 32)
                         Text(icon.rawValue.replacingOccurrences(of: "md_", with: ""))

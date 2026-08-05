@@ -11,6 +11,7 @@ enum OpenCodeButtonVariant {
 enum OpenCodeButtonContrast {
     case high
     case low
+    case destructive
 }
 
 enum OpenCodeButtonSize {
@@ -57,13 +58,11 @@ struct OpenCodeButton: View {
             Text(title)
                 .font(OpenCodeTypography.button)
         case let .iconSquare(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon)
-                .font(.system(size: 18, weight: .semibold))
+            OpenCodeIconImage(icon: icon, size: 18)
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircle(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon)
-                .font(.system(size: 18, weight: .semibold))
+            OpenCodeIconImage(icon: icon, size: 18)
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircleText(text, accessibilityLabel):
@@ -171,19 +170,31 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     private var foregroundColor: Color {
         if !enabled { return OpenCodeColors.textBase }
-        return contrast == .low ? OpenCodeColors.textStrong : OpenCodeColors.surfaceBase
+        switch contrast {
+        case .low: return OpenCodeColors.textStrong
+        case .destructive: return OpenCodeColors.surfaceBase
+        case .high: return OpenCodeColors.surfaceBase
+        }
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
         if !enabled { return OpenCodeColors.surfaceRaisedBase }
         if isPressed { return OpenCodeColors.textBase }
-        return contrast == .low ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.textStrong
+        switch contrast {
+        case .low: return OpenCodeColors.surfaceRaisedBase
+        case .destructive: return OpenCodeColors.error
+        case .high: return OpenCodeColors.textStrong
+        }
     }
 
     private func borderColor(isPressed: Bool) -> Color {
         if !enabled { return OpenCodeColors.borderWeakerBase }
         if isPressed { return OpenCodeColors.textBase }
-        return contrast == .low ? OpenCodeColors.borderWeakerBase : OpenCodeColors.textStrong
+        switch contrast {
+        case .low: return OpenCodeColors.borderWeakerBase
+        case .destructive: return OpenCodeColors.error
+        case .high: return OpenCodeColors.textStrong
+        }
     }
 }
 

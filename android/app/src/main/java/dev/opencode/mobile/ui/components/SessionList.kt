@@ -74,6 +74,7 @@ fun SessionList(
     modifier: Modifier = Modifier,
     createError: String? = null,
     emptyContent: (@Composable () -> Unit)? = null,
+    onRemoveProject: ((String) -> Unit)? = null,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -179,6 +180,7 @@ fun SessionList(
             onFilterSelected = onFilterSelected,
             onAddProject = onAddProject,
             onNewSession = onNewSession,
+            onRemoveProject = onRemoveProject,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)

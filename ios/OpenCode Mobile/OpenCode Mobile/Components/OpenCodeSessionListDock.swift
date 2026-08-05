@@ -7,6 +7,7 @@ struct OpenCodeSessionListDock: View {
     let onFilterSelected: (String) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onRemoveProject: ((String) -> Void)?
 
     init(
         filterTabs: [SessionListFilterTab],
@@ -14,7 +15,8 @@ struct OpenCodeSessionListDock: View {
         createError: String? = nil,
         onFilterSelected: @escaping (String) -> Void,
         onAddProject: @escaping () -> Void,
-        onNewSession: @escaping () -> Void
+        onNewSession: @escaping () -> Void,
+        onRemoveProject: ((String) -> Void)? = nil
     ) {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
@@ -22,6 +24,7 @@ struct OpenCodeSessionListDock: View {
         self.onFilterSelected = onFilterSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onRemoveProject = onRemoveProject
     }
 
     var body: some View {
@@ -34,15 +37,25 @@ struct OpenCodeSessionListDock: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    filterChipsRow
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        filterChipsRow
+                    }
+                    .onChange(of: selectedFilterId) { _, id in
+                        // Yield so selection chrome (e.g. remove ×) can widen the chip first.
+                        Task { @MainActor in
+                            await Task.yield()
+                            withAnimation(.smooth(duration: 0.22)) {
+                                proxy.scrollTo(id)
+                            }
+                        }
+                    }
                 }
 
                 HStack(spacing: 8) {
                     if #available(iOS 26, *) {
                         Button(action: onAddProject) {
-                            OpenCodeIconImage(icon: .createNewFolder)
-                                .font(.system(size: 18, weight: .semibold))
+                            OpenCodeIconImage(icon: .createNewFolder, size: 18)
                                 .foregroundStyle(OpenCodeColors.textStrong)
                                 .frame(width: 36, height: 36)
                         }
@@ -89,8 +102,13 @@ struct OpenCodeSessionListDock: View {
                     title: tab.title,
                     count: tab.count,
                     selected: tab.id == selectedFilterId,
-                    action: { onFilterSelected(tab.id) }
+                    action: { onFilterSelected(tab.id) },
+                    removeAction: tab.id != SessionListFilterTab.allId
+                        && tab.id == selectedFilterId
+                        ? onRemoveProject.map { remove in { remove(tab.id) } }
+                        : nil
                 )
+                .id(tab.id)
             }
         }
         if #available(iOS 26, *) {

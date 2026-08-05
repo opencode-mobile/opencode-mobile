@@ -46,7 +46,9 @@ outline only.
 
 ## Platform Notes
 
-- iOS: static `HStack` row (no `Button`); mark is an 18pt rounded square.
+- iOS: static `HStack` row (no `Button`); mark is an 18pt rounded square. The
+  check glyph uses `OpenCodeIconImage(icon:size:)` (12pt) so asset-catalog
+  sizing matches Android — not `.font`.
 - Android: non-clickable `Row`; same mark geometry via Compose.
 
 ## Review Surfaces

@@ -55,6 +55,19 @@ class DataStoreConnectionProfileStore
             }
         }
 
+        override suspend fun removeWorktree(
+            serverBaseUrl: String,
+            worktree: String,
+        ) {
+            context.connectionProfileDataStore.edit { prefs ->
+                val key = stringPreferencesKey(normalizeBaseUrl(serverBaseUrl))
+                val current = decodeWorktrees(prefs[key]).toMutableList()
+                if (current.remove(worktree)) {
+                    prefs[key] = json.encodeToString(current)
+                }
+            }
+        }
+
         private fun decodeWorktrees(raw: String?): List<String> {
             if (raw.isNullOrBlank()) return emptyList()
             return runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())

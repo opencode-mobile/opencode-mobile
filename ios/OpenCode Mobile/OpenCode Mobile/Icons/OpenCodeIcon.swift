@@ -35,11 +35,25 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     var accessibilityIdentifier: String { rawValue }
 }
 
+/// Material catalog icon rendered as a template asset.
+///
+/// Size with `size:` or an outer `.frame`. Do **not** use `.font` — asset-catalog
+/// templates ignore font the way SF Symbols do not, which previously left
+/// glyphs optically oversized (edge-to-edge in tight chrome).
 struct OpenCodeIconImage: View {
     let icon: OpenCodeIcon
+    private let explicitSize: CGFloat?
+
+    init(icon: OpenCodeIcon, size: CGFloat? = nil) {
+        self.icon = icon
+        self.explicitSize = size
+    }
 
     var body: some View {
         Image(icon.rawValue)
             .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: explicitSize, height: explicitSize)
     }
 }

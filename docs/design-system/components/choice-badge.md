@@ -46,10 +46,11 @@ pattern).
 ## Platform Notes
 
 - iOS standard: `Button` with plain style and rounded-rectangle stroke/fill.
-- iOS glass (iOS 26+): selected uses interactive regular glass capsule with
-  low-opacity strong fill; unselected uses interactive clear glass. Label color
-  does not change with selection. Below iOS 26 selected uses raised surface +
-  weak border; unselected uses a light stroke (Filter Chip fallback).
+- iOS glass (iOS 26+): selected uses regular (non-interactive) glass capsule with
+  low-opacity strong fill; unselected uses clear glass. Press uses subtle
+  scale/opacity — not `.glassEffect(...interactive())`. Label color does not
+  change with selection. Below iOS 26 selected uses raised surface + weak
+  border; unselected uses a light stroke (Filter Chip fallback).
 - Android standard: `Surface` with `Modifier.clickable` and outline stroke.
 - Android glass: selected fill vs transparent unselected fill; label and border
   stay constant (Material stand-in, same recipe as Filter Chip).

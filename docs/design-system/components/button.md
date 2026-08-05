@@ -16,7 +16,7 @@ icon-only button needs.
   - `iconCircleText(text)` - fixed **40x40** circular action with a short text
     glyph (e.g. `/`) instead of a catalog icon, for actions with no suitable
     icon.
-- Contrast: `high` (default) or `low`.
+- Contrast: `high` (default), `low`, or `destructive`.
 - States: `enabled`, `disabled`.
 - Required content:
   - text title for text variants;
@@ -51,6 +51,12 @@ Low contrast buttons are for secondary actions that should remain available
 without competing with a primary action. They use `color.surface.secondary` for
 the fill, primary or strong content color for text/icons, and
 `color.border.subtle` for the border.
+
+Destructive contrast is for irreversible or hard-to-undo confirms (often as a
+dialog primary). It uses semantic error fill with contrasting label text so
+Remove / Delete / Clear read as destructive without inventing a separate button
+variant. Map: Android `MaterialTheme.colorScheme.error` /
+`onError`; iOS `OpenCodeColors.error` fill with `surfaceBase` label.
 
 Disabled state stays muted, blocks interaction, and overrides contrast.
 
