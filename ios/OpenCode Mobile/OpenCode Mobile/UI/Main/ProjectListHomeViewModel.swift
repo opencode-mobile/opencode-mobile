@@ -45,6 +45,11 @@ struct SeeAllSessionsSheetState: Equatable, Identifiable {
     let sessions: [SessionListItem]
 }
 
+struct ProjectRemovalItem: Equatable {
+    let worktree: String
+    let displayName: String
+}
+
 enum ProjectListHomeState: Equatable {
     case disconnected
     case probing
@@ -75,6 +80,8 @@ final class ProjectListHomeViewModel {
     private(set) var isAddProjectPresented = false
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
     private(set) var seeAllSessionsSheet: SeeAllSessionsSheetState?
+    private(set) var pendingProjectRemoval: ProjectRemovalItem?
+    private(set) var removalSnackbar: OpenCodeSnackbarMessage?
     private let projectRepository: any ProjectRepository
     private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
@@ -332,6 +339,29 @@ final class ProjectListHomeViewModel {
 
     func consumePendingSessionOpen() {
         pendingSessionOpen = nil
+    }
+
+    func requestRemoveProject(worktree: String) {
+        guard case let .loaded(sections, _, _, _, _, _) = state,
+              let section = sections.first(where: { $0.worktree == worktree })
+        else { return }
+        pendingProjectRemoval = ProjectRemovalItem(worktree: worktree, displayName: section.displayName)
+    }
+
+    func dismissProjectRemoval() {
+        pendingProjectRemoval = nil
+    }
+
+    func confirmRemoveProject() async {
+        guard let pending = pendingProjectRemoval else { return }
+        await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
+        dismissProjectRemoval()
+        await runHomeLoad(skipProbe: true)
+        removalSnackbar = OpenCodeSnackbarMessage(text: "Removed \"\(pending.displayName)\" from home")
+    }
+
+    func consumeProjectRemovalSnackbar() {
+        removalSnackbar = nil
     }
 
     private func runHomeLoad(skipProbe: Bool = false, preserveContent: Bool = false) async {

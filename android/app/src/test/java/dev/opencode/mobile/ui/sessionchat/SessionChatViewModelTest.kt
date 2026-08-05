@@ -2814,6 +2814,11 @@ private class FakeConnectionProfileStore : dev.opencode.mobile.domain.connection
         worktree: String,
     ) = Unit
 
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) = Unit
+
     override suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,

@@ -44,6 +44,7 @@ fun OpenCodeSessionListDock(
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
+    onRemoveProject: ((String) -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
     val borderWeak = openCodeColor("border-weak-base")
@@ -78,6 +79,12 @@ fun OpenCodeSessionListDock(
                         count = tab.count,
                         selected = tab.id == selectedFilterId,
                         onClick = { onFilterSelected(tab.id) },
+                        onRemove =
+                            if (tab.id != SessionListFilterTab.ALL_ID) {
+                                onRemoveProject?.let { remove -> { remove(tab.id) } }
+                            } else {
+                                null
+                            },
                     )
                 }
             }

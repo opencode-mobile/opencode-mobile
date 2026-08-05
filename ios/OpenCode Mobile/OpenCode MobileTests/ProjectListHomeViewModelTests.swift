@@ -498,6 +498,10 @@ private final class FakeConnectionProfileStore: ConnectionProfileStore, @uncheck
         if !added.contains(worktree) { added.append(worktree) }
     }
 
+    func removeWorktree(serverBaseURL: String, worktree: String) async {
+        added.removeAll { $0 == worktree }
+    }
+
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {
         var seen = Set<String>()
         added = worktrees.filter { seen.insert($0).inserted }

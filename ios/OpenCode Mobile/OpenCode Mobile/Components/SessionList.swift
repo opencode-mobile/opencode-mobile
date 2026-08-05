@@ -73,6 +73,7 @@ struct SessionList<EmptyContent: View>: View {
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onRefresh: (() async -> Void)?
+    let onRemoveProject: ((String) -> Void)?
     let showsEmptyContent: Bool
     let emptyContent: EmptyContent
 
@@ -90,6 +91,7 @@ struct SessionList<EmptyContent: View>: View {
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
         onRefresh: (() async -> Void)? = nil,
+        onRemoveProject: ((String) -> Void)? = nil,
         showsEmptyContent: Bool = false,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
@@ -102,6 +104,7 @@ struct SessionList<EmptyContent: View>: View {
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onRefresh = onRefresh
+        self.onRemoveProject = onRemoveProject
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
     }
@@ -163,7 +166,8 @@ struct SessionList<EmptyContent: View>: View {
                 createError: createError,
                 onFilterSelected: onFilterSelected,
                 onAddProject: onAddProject,
-                onNewSession: onNewSession
+                onNewSession: onNewSession,
+                onRemoveProject: onRemoveProject
             )
             .background {
                 GeometryReader { geometry in

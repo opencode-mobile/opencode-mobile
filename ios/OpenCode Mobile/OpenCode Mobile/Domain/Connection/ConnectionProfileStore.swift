@@ -5,6 +5,7 @@ protocol ConnectionProfileStore: Sendable {
     func saveProfile(_ profile: ConnectionProfile) async
     func addedWorktrees(serverBaseURL: String) async -> [String]
     func addWorktree(serverBaseURL: String, worktree: String) async
+    func removeWorktree(serverBaseURL: String, worktree: String) async
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async
     func clearAll() async
 }
@@ -53,6 +54,12 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         var current = await addedWorktrees(serverBaseURL: serverBaseURL)
         guard !current.contains(worktree) else { return }
         current.append(worktree)
+        await setAddedWorktrees(serverBaseURL: serverBaseURL, worktrees: current)
+    }
+
+    func removeWorktree(serverBaseURL: String, worktree: String) async {
+        var current = await addedWorktrees(serverBaseURL: serverBaseURL)
+        current.removeAll { $0 == worktree }
         await setAddedWorktrees(serverBaseURL: serverBaseURL, worktrees: current)
     }
 

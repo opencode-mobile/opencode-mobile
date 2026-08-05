@@ -32,6 +32,12 @@ struct ProjectListHomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
+            .overlay(alignment: .bottom) {
+                OpenCodeSnackbarHost(
+                    message: viewModel.removalSnackbar,
+                    onDismissed: { viewModel.consumeProjectRemovalSnackbar() }
+                )
+            }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView(onConnectionSetup: presentConnectionSetup)
             }
@@ -140,7 +146,38 @@ struct ProjectListHomeView: View {
                 )
                 .openCodeTheme()
             }
+            .openCodeDialog(
+                isPresented: projectRemovalBinding,
+                title: "Remove from home?",
+                subtitle: pendingProjectRemoval.map {
+                    "Remove \"\($0.displayName)\" from home? Its sessions stay on the server."
+                },
+                primaryOption: OpenCodeDialogOption(
+                    title: "Remove",
+                    destructive: true
+                ) {
+                    Task { await viewModel.confirmRemoveProject() }
+                },
+                secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                    viewModel.dismissProjectRemoval()
+                }
+            )
         }
+    }
+
+    private var projectRemovalBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.pendingProjectRemoval != nil },
+            set: { visible in
+                if !visible {
+                    viewModel.dismissProjectRemoval()
+                }
+            }
+        )
+    }
+
+    private var pendingProjectRemoval: ProjectRemovalItem? {
+        viewModel.pendingProjectRemoval
     }
 
     private var newSessionPickerProjects: [(worktree: String, displayName: String)] {
@@ -270,6 +307,7 @@ struct ProjectListHomeView: View {
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
                 onNewSession: { showNewSessionProjectPicker = true },
                 onRefresh: { await viewModel.pullToRefresh() },
+                onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
                 showsEmptyContent: sections.isEmpty,
                 emptyContent: { NoProjectsEmptyState() }
             )
@@ -526,6 +564,7 @@ private struct PreviewConnectionProfileStore: ConnectionProfileStore {
     func saveProfile(_ profile: ConnectionProfile) async {}
     func addedWorktrees(serverBaseURL: String) async -> [String] { ["/demo"] }
     func addWorktree(serverBaseURL: String, worktree: String) async {}
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async {}
 }

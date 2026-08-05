@@ -14,11 +14,13 @@ private let dialogPresentationDuration: TimeInterval = 0.2
 struct OpenCodeDialogOption {
     let title: String
     let enabled: Bool
+    let destructive: Bool
     let action: () -> Void
 
-    init(title: String, enabled: Bool = true, action: @escaping () -> Void) {
+    init(title: String, enabled: Bool = true, destructive: Bool = false, action: @escaping () -> Void) {
         self.title = title
         self.enabled = enabled
+        self.destructive = destructive
         self.action = action
     }
 }
@@ -263,7 +265,7 @@ private struct OpenCodeDialogCard: View {
                 OpenCodeButton(
                     variant: .fullWidthText(title: primaryOption.title),
                     enabled: primaryOption.enabled,
-                    contrast: .high,
+                    contrast: primaryOption.destructive ? .destructive : .high,
                     action: primaryOption.action
                 )
                 .frame(maxWidth: .infinity)

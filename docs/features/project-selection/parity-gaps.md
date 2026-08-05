@@ -10,7 +10,9 @@
 ## No remove project
 
 - **Intent:** User can curate added projects.
-- **Status:** Temporary (v1 add-only).
+- **Status:** Resolved — removal ships in Session List home mode via
+  [Remove Project From Home](../remove-project/plan.md) (OPE-108); Project
+  Session Selector affordance still out of scope there.
 
 ## iOS home section order (fixed)
 

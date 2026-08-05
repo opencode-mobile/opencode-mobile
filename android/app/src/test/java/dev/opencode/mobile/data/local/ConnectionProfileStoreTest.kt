@@ -74,6 +74,14 @@ private class InMemoryConnectionProfileStore(
         }
     }
 
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {
+        val key = normalize(serverBaseUrl)
+        data[key] = data[key].orEmpty().filterNot { it == worktree }
+    }
+
     override suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,

@@ -61,6 +61,7 @@ sealed interface OpenCodeButtonVariant {
 enum class OpenCodeButtonContrast {
     High,
     Low,
+    Destructive,
 }
 
 enum class OpenCodeButtonSize {
@@ -81,18 +82,21 @@ fun OpenCodeButton(
         when {
             !enabled -> MaterialTheme.colorScheme.surfaceVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
+            contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.onSurface
         }
     val borderColor =
         when {
             !enabled -> MaterialTheme.colorScheme.outlineVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
+            contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
             else -> MaterialTheme.colorScheme.onSurface
         }
     val contentColor =
         when {
             !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
             contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
+            contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.onError
             else -> MaterialTheme.colorScheme.surface
         }
 

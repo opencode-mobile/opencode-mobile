@@ -768,6 +768,13 @@ private class FakeConnectionProfileStore(
         }
     }
 
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {
+        data[serverBaseUrl] = data[serverBaseUrl].orEmpty().filterNot { it == worktree }
+    }
+
     override suspend fun setAddedWorktrees(
         serverBaseUrl: String,
         worktrees: List<String>,

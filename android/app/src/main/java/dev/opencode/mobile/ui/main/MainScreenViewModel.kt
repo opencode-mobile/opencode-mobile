@@ -30,6 +30,7 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -66,6 +67,8 @@ class MainScreenViewModel
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
         private val _isRefreshing = MutableStateFlow(false)
         val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+        private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
+        val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
         val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
             foregroundEventStream.connectionState
                 .stateIn(
@@ -267,6 +270,50 @@ class MainScreenViewModel
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
             }
+        }
+
+        fun requestRemoveProject(worktree: String) {
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) {
+                    val section = state.sections.firstOrNull { it.worktree == worktree }
+                    if (section != null) {
+                        state.copy(
+                            pendingProjectRemoval =
+                                ProjectRemovalUi(
+                                    worktree = worktree,
+                                    displayName = section.displayName,
+                                ),
+                        )
+                    } else {
+                        state
+                    }
+                } else {
+                    state
+                }
+            }
+        }
+
+        fun dismissProjectRemoval() {
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.copy(pendingProjectRemoval = null) else state
+            }
+        }
+
+        fun confirmRemoveProject() {
+            val pending = (_uiState.value as? MainScreenUiState.Loaded)?.pendingProjectRemoval ?: return
+            viewModelScope.launch {
+                runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, pending.worktree) }
+                dismissProjectRemoval()
+                runHomeLoad(skipProbe = true)
+                _removalSnackbar.value =
+                    OpenCodeSnackbarMessage(
+                        text = "Removed \"${pending.displayName}\" from home",
+                    )
+            }
+        }
+
+        fun consumeProjectRemovalSnackbar() {
+            _removalSnackbar.value = null
         }
 
         private suspend fun runHomeLoad(
@@ -618,8 +665,14 @@ sealed interface MainScreenUiState {
         val pendingOpenSession: SessionOpenTarget? = null,
         val focusedWorktree: String? = null,
         val projectSessionCreateError: String? = null,
+        val pendingProjectRemoval: ProjectRemovalUi? = null,
     ) : MainScreenUiState
 }
+
+data class ProjectRemovalUi(
+    val worktree: String,
+    val displayName: String,
+)
 
 data class ProjectSectionUi(
     val worktree: String,

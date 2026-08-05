@@ -30,6 +30,7 @@ private val DialogOptionSpacing = 8.dp
 data class OpenCodeDialogOption(
     val title: String,
     val enabled: Boolean = true,
+    val destructive: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -133,7 +134,12 @@ fun OpenCodeDialog(
                         variant = OpenCodeButtonVariant.FullWidthText(primaryOption.title),
                         onClick = primaryOption.onClick,
                         enabled = primaryOption.enabled,
-                        contrast = OpenCodeButtonContrast.High,
+                        contrast =
+                            if (primaryOption.destructive) {
+                                OpenCodeButtonContrast.Destructive
+                            } else {
+                                OpenCodeButtonContrast.High
+                            },
                         modifier = Modifier.weight(1f),
                     )
                 }

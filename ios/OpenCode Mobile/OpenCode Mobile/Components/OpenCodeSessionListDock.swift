@@ -7,6 +7,7 @@ struct OpenCodeSessionListDock: View {
     let onFilterSelected: (String) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
+    let onRemoveProject: ((String) -> Void)?
 
     init(
         filterTabs: [SessionListFilterTab],
@@ -14,7 +15,8 @@ struct OpenCodeSessionListDock: View {
         createError: String? = nil,
         onFilterSelected: @escaping (String) -> Void,
         onAddProject: @escaping () -> Void,
-        onNewSession: @escaping () -> Void
+        onNewSession: @escaping () -> Void,
+        onRemoveProject: ((String) -> Void)? = nil
     ) {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
@@ -22,6 +24,7 @@ struct OpenCodeSessionListDock: View {
         self.onFilterSelected = onFilterSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
+        self.onRemoveProject = onRemoveProject
     }
 
     var body: some View {
@@ -89,7 +92,10 @@ struct OpenCodeSessionListDock: View {
                     title: tab.title,
                     count: tab.count,
                     selected: tab.id == selectedFilterId,
-                    action: { onFilterSelected(tab.id) }
+                    action: { onFilterSelected(tab.id) },
+                    removeAction: tab.id == SessionListFilterTab.allId
+                        ? nil
+                        : onRemoveProject.map { remove in { remove(tab.id) } }
                 )
             }
         }

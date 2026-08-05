@@ -1,48 +1,76 @@
 import SwiftUI
 
 struct OpenCodeFilterChip: View {
+    /// Shared height for the count pill and remove circle so they align.
+    private static let metaSize: CGFloat = 20
+
     let title: String
     let count: Int?
     let selected: Bool
     let action: () -> Void
+    let removeAction: (() -> Void)?
 
-    init(title: String, count: Int? = nil, selected: Bool, action: @escaping () -> Void) {
+    init(
+        title: String,
+        count: Int? = nil,
+        selected: Bool,
+        action: @escaping () -> Void,
+        removeAction: (() -> Void)? = nil
+    ) {
         self.title = title
         self.count = count
         self.selected = selected
         self.action = action
+        self.removeAction = removeAction
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                if let count {
-                    Text("\(count)")
-                        .font(OpenCodeTypography.caption.weight(.semibold))
+        HStack(spacing: 4) {
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(OpenCodeTypography.button)
                         .foregroundStyle(OpenCodeColors.textStrong)
-                        .monospacedDigit()
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, count >= 10 ? 8 : 6)
-                        .frame(minWidth: countBadgeMinWidth(count), minHeight: 22)
-                        .background(
-                            OpenCodeColors.textStrong.opacity(0.10),
-                            in: Capsule()
-                        )
+                    if let count {
+                        Text("\(count)")
+                            .font(OpenCodeTypography.caption.weight(.semibold))
+                            .foregroundStyle(OpenCodeColors.textStrong)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, count >= 10 ? 8 : 6)
+                            .frame(minWidth: countBadgeMinWidth(count), height: Self.metaSize)
+                            .background(
+                                OpenCodeColors.textStrong.opacity(0.10),
+                                in: Capsule()
+                            )
+                    }
                 }
+                .contentShape(Capsule())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(minHeight: 36)
-            .fixedSize(horizontal: true, vertical: false)
-            .contentShape(Capsule())
+            .buttonStyle(OpenCodeFilterChipPressStyle())
+
+            if let removeAction {
+                Button(action: removeAction) {
+                    OpenCodeIconImage(icon: .close)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(OpenCodeColors.textStrong.opacity(0.85))
+                        .frame(width: Self.metaSize, height: Self.metaSize)
+                        .background(OpenCodeColors.textStrong.opacity(0.10), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(title)")
+            }
         }
-        .buttonStyle(OpenCodeFilterChipPressStyle())
+        .padding(.leading, 12)
+        .padding(.trailing, removeAction == nil ? 12 : 6)
+        .padding(.vertical, 8)
+        .frame(minHeight: 36)
+        .fixedSize(horizontal: true, vertical: false)
+        .contentShape(Capsule())
         .modifier(OpenCodeFilterChipChrome(selected: selected))
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -58,7 +86,7 @@ struct OpenCodeFilterChip: View {
 
     private func countBadgeMinWidth(_ count: Int) -> CGFloat {
         switch count {
-        case 0 ..< 10: 22
+        case 0 ..< 10: Self.metaSize
         case 10 ..< 100: 28
         case 100 ..< 1000: 36
         default: 44
