@@ -12,11 +12,13 @@ live status, settings) is owned by the home shell, not this component.
 
 - Models:
   - `SessionListSession`: `id`, `title`, `worktree`, `letter`, `letterAccent`,
-    `subtitle`, `status`, `caption`.
+    `subtitle`, `status`, `caption`, optional `updatedAtEpochMs` (used for home
+    time-ladder grouping and within-section sort).
   - `SessionListStatus`: `idle` | `running` | `ready`.
   - `SessionListFilterTab`: `id`, `title`, `count`. Use id `all` for the
     cross-project tab; other ids match `SessionListSession.worktree`.
-- Required content: ordered `sessions` (may be empty) and ordered `filterTabs`
+- Required content: `sessions` (may be empty; order before filter is not
+  significant — the list filters then groups) and ordered `filterTabs`
   (at least **All** when filters are shown).
 - Required filter state: `selectedFilterId` plus `onFilterSelected(id)`.
 - Optional content:
@@ -47,10 +49,15 @@ live status, settings) is owned by the home shell, not this component.
 
 ## Behavior
 
-The component is stateless for data. Callers own sorting, captions, and
+The component is stateless for session payloads. Callers own captions and
 Idle/Running/Ready mapping (Running outranks Ready; Ready uses pill text
 **Ready** with `success` tone), filter models/selection, add-project and
 new-session flows, and page chrome.
+
+Session List applies the selected project filter, then groups via
+`HomeSessionLadder` using `updatedAtEpochMs`, Running/Ready attention, and
+`HomeDisplayPreferences.recentWindowHours`. Within each section, rows sort by
+`updatedAtEpochMs` descending.
 
 Layout:
 

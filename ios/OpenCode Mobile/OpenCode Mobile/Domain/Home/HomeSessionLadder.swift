@@ -38,7 +38,20 @@ enum HomeSessionLadder {
         if allowedWindowHours.contains(hours) {
             return hours
         }
-        return allowedWindowHours.min(by: { abs($0 - hours) < abs($1 - hours) }) ?? defaultWindowHours
+        // Nearest allowed; ties prefer closer to default 4, then the larger value.
+        return allowedWindowHours.min { lhs, rhs in
+            let lhsDistance = abs(lhs - hours)
+            let rhsDistance = abs(rhs - hours)
+            if lhsDistance != rhsDistance {
+                return lhsDistance < rhsDistance
+            }
+            let lhsToDefault = abs(lhs - defaultWindowHours)
+            let rhsToDefault = abs(rhs - defaultWindowHours)
+            if lhsToDefault != rhsToDefault {
+                return lhsToDefault < rhsToDefault
+            }
+            return lhs > rhs
+        } ?? defaultWindowHours
     }
 
     static func formatWindowHoursLabel(_ hours: Int) -> String {

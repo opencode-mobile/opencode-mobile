@@ -34,6 +34,16 @@ class HomeSessionLadderTest {
     }
 
     @Test
+    fun sanitizeWindowHours_tiePrefersCloserToDefaultThenLarger() {
+        // Midpoint 3 is equidistant from 2 and 4 → prefer 4 (closer to default).
+        assertEquals(4, HomeSessionLadder.sanitizeWindowHours(3))
+        // Midpoint 6 is equidistant from 4 and 8 → prefer 4 (closer to default).
+        assertEquals(4, HomeSessionLadder.sanitizeWindowHours(6))
+        // Midpoint 10 is equidistant from 8 and 12 → prefer 8 (closer to default).
+        assertEquals(8, HomeSessionLadder.sanitizeWindowHours(10))
+    }
+
+    @Test
     fun group_putsRunningAndReadyInRecentEvenWhenOld() {
         val sessions =
             listOf(

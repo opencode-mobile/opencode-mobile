@@ -36,6 +36,15 @@ struct HomeSessionLadderTests {
         #expect(HomeSessionLadder.sanitizeWindowHours(100) == 24)
     }
 
+    @Test func sanitizeWindowHours_tiePrefersCloserToDefaultThenLarger() {
+        // Midpoint 3 is equidistant from 2 and 4 → prefer 4 (closer to default).
+        #expect(HomeSessionLadder.sanitizeWindowHours(3) == 4)
+        // Midpoint 6 is equidistant from 4 and 8 → prefer 4 (closer to default).
+        #expect(HomeSessionLadder.sanitizeWindowHours(6) == 4)
+        // Midpoint 10 is equidistant from 8 and 12 → prefer 8 (closer to default).
+        #expect(HomeSessionLadder.sanitizeWindowHours(10) == 8)
+    }
+
     @Test func group_putsRunningAndReadyInRecentEvenWhenOld() {
         let sessions = [
             Item(id: "old-ready", updatedAtEpochMs: now - 3 * 86_400_000, attention: true),

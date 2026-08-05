@@ -32,7 +32,12 @@ object HomeSessionLadder {
 
     fun sanitizeWindowHours(hours: Int): Int {
         if (hours in ALLOWED_WINDOW_HOURS) return hours
-        return ALLOWED_WINDOW_HOURS.minBy { abs(it - hours) }
+        // Nearest allowed; ties prefer closer to default 4, then the larger value.
+        return ALLOWED_WINDOW_HOURS.minWith(
+            compareBy<Int> { abs(it - hours) }
+                .thenBy { abs(it - DEFAULT_WINDOW_HOURS) }
+                .thenByDescending { it },
+        )
     }
 
     fun formatWindowHoursLabel(hours: Int): String {
