@@ -22,6 +22,27 @@ implementation belong in the feature's `parity-gaps.md`.
 
 ## Current Divergences
 
+## `type.body` line density
+
+- Status: intentional
+- Area: typography
+- Shared intent: Session Chat agent prose (plain assistant text and rendered
+  markdown body) uses `type.body` at 16pt/sp so long replies are less dense than
+  `type.bodySecondary` (14).
+- iOS behavior: `OpenCodeTypography.body` stays 16pt with the platform default
+  line height; Session Chat / `OpenCodeRenderedMarkdown` prose applies an extra
+  `+4pt` line spacing only on those paths.
+- Android behavior: `type.body` maps to Material `bodyLarge` with a global
+  **26sp** line height (~1.6×), so every `bodyLarge` consumer inherits the
+  looser leading.
+- Reason: Android line height is owned by the type role mapping; iOS has no
+  equivalent global body line-height token without changing `OpenCodeTypography`
+  for all screens, so chat/markdown apply spacing locally. Shared contract and
+  mapping table live in [`typography.md`](typography.md).
+- Review trigger: if iOS gains a shared body line-height on `OpenCodeTypography`,
+  or Android scopes 26sp leading to Session Chat only, revisit and collapse this
+  divergence.
+
 ## Letter badge colors
 
 - Status: intentional
