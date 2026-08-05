@@ -43,8 +43,7 @@ struct OpenCodeAttachmentChip: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(attachment.filename), \(attachment.variant.label)")
             Button(action: { onRemove(attachment.id) }) {
-                OpenCodeIconImage(icon: .close)
-                    .frame(width: 20, height: 20)
+                OpenCodeIconImage(icon: .close, size: 20)
                     .foregroundStyle(OpenCodeColors.iconStrongBase)
             }
             .buttonStyle(.plain)
@@ -67,8 +66,7 @@ struct OpenCodeAttachmentChip: View {
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
         } else {
-            OpenCodeIconImage(icon: .description)
-                .frame(width: size, height: size)
+            OpenCodeIconImage(icon: .description, size: size)
                 .foregroundStyle(OpenCodeColors.iconBase)
         }
     }
@@ -86,8 +84,7 @@ struct OpenCodeMessageAttachment: View {
                     .frame(width: 52, height: 52)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
-                OpenCodeIconImage(icon: .description)
-                    .frame(width: 32, height: 32)
+                OpenCodeIconImage(icon: .description, size: 32)
                     .foregroundStyle(OpenCodeColors.iconBase)
             }
             VStack(alignment: .leading, spacing: 2) {

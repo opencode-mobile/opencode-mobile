@@ -6,8 +6,7 @@ struct ListGroupGalleryView: View {
     var body: some View {
         OpenCodeListGroup(files, id: \.self) { path in
             OpenCodeListItem(title: path, trailing: {
-                OpenCodeIconImage(icon: .chevronRight)
-                    .frame(width: 20, height: 20)
+                OpenCodeIconImage(icon: .chevronRight, size: 20)
             })
         }
     }

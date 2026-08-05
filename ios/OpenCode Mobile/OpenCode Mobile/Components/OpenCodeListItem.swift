@@ -259,10 +259,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             }
             .accessibilityHidden(true)
         case let .icon(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon)
-                .font(.system(size: listItemIconDecoratorSize))
+            OpenCodeIconImage(icon: icon, size: listItemIconDecoratorSize)
                 .foregroundStyle(OpenCodeColors.iconBase)
-                .frame(width: listItemIconDecoratorSize, height: listItemIconDecoratorSize)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")
         }

@@ -58,13 +58,11 @@ struct OpenCodeButton: View {
             Text(title)
                 .font(OpenCodeTypography.button)
         case let .iconSquare(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon)
-                .font(.system(size: 18, weight: .semibold))
+            OpenCodeIconImage(icon: icon, size: 18)
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircle(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon)
-                .font(.system(size: 18, weight: .semibold))
+            OpenCodeIconImage(icon: icon, size: 18)
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircleText(text, accessibilityLabel):

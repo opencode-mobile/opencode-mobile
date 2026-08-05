@@ -3,12 +3,23 @@
 ## × on chips wins the flow prototype
 
 - Date: 2026-08-05
-- Decision: the only removal affordance shipped is a **×** on every project
-  filter chip in the Session List dock. Tap × → confirm dialog → remove.
+- Decision: the only removal affordance shipped is a **×** on project filter
+  chips in the Session List dock. Tap × → confirm dialog → remove.
 - Reason: prototype iteration 2 explored dock overflow (A, hard no), chip
   long-press (B, scrapped), × on chips (C), manage mode (D), and drag-to-remove
-  (E). C is the only clearly reasonable UI — always visible, direct, and the
-  confirm dialog guards accidental taps.
+  (E). C is the only clearly reasonable UI — direct, and the confirm dialog
+  guards accidental taps.
+
+## × only on the selected project chip
+
+- Date: 2026-08-05
+- Decision: show the remove **×** only on the **selected** project chip (never
+  on **All**, never on unselected project chips). Selecting a project both
+  filters the list and reveals ×; deselecting (switching filter) hides it.
+- Reason: always-visible × on every chip was too easy to misclick while
+  scrolling or switching filters. Selected-only keeps a one-tap remove path
+  without manage mode, while making remove a deliberate second step after
+  selecting the project.
 
 ## Session List mode only
 

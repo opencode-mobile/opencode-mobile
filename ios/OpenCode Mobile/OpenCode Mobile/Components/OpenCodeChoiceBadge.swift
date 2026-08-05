@@ -102,8 +102,8 @@ private struct OpenCodeChoiceBadgeGlassPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(.smooth(duration: 0.18), value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -115,10 +115,12 @@ private struct OpenCodeChoiceBadgeGlassChrome: ViewModifier {
             if selected {
                 content
                     .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    // Non-interactive glass: `.interactive()` adds a loud lens press;
+                    // press feedback stays on OpenCodeChoiceBadgeGlassPressStyle.
+                    .glassEffect(.regular, in: .capsule)
             } else {
                 content
-                    .glassEffect(.clear.interactive(), in: .capsule)
+                    .glassEffect(.clear, in: .capsule)
             }
         } else if selected {
             content

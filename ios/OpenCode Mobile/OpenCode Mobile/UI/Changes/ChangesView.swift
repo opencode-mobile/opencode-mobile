@@ -190,8 +190,7 @@ struct ChangesView: View {
                 Text("−\(file.deletions)")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.diffDelete)
-                OpenCodeIconImage(icon: .chevronRight)
-                    .frame(width: 20, height: 20)
+                OpenCodeIconImage(icon: .chevronRight, size: 20)
             }
         })
         .accessibilityElement(children: .ignore)

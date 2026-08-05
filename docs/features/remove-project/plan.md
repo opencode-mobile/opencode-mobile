@@ -9,7 +9,8 @@ projects the user still wants to see — the inverse of Add Project.
 
 ## In Scope
 
-- **×** on every project filter chip in the Session List dock (not on **All**).
+- **×** on the **selected** project filter chip in the Session List dock (not on
+  **All**, not on unselected project chips). Select a project first to reveal ×.
 - Tap **×** → confirm dialog (*"Remove "X" from home? Its sessions stay on the
   server."*) → **Remove** (destructive-primary) / **Cancel**.
 - Removing a project drops its sessions from the time ladder and returns the
@@ -73,8 +74,9 @@ projects the user still wants to see — the inverse of Add Project.
 
 - **Filter Chip** — extended with a removable (`×`) variant + `onRemove`:
   existing component, extended (design-system workflow).
-- **Session List Dock** — passes `onRemoveProject(worktree)` per project chip:
-  existing component, extended.
+- **Session List Dock** — passes `onRemoveProject(worktree)` only for the
+  **selected** project chip (not All, not unselected): existing component,
+  extended.
 - **Dialog** — primary option gains a `destructive` variant for the Remove
   button: existing component, extended.
 - **Snackbar** — existing, reused for the confirmation toast.

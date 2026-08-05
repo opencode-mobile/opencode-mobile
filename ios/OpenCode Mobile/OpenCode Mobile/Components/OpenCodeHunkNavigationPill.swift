@@ -45,8 +45,7 @@ struct OpenCodeHunkNavigationPill: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            OpenCodeIconImage(icon: icon)
-                .frame(width: Self.iconSize, height: Self.iconSize)
+            OpenCodeIconImage(icon: icon, size: Self.iconSize)
                 .foregroundStyle(enabled ? OpenCodeColors.iconStrongBase : OpenCodeColors.iconWeakBase)
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())

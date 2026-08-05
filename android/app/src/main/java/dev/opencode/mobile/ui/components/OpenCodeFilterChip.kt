@@ -32,6 +32,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ChipShape = RoundedCornerShape(999.dp)
 private val ChipMetaSize = 20.dp
+private val ChipRemoveIconInset = 4.dp
 
 @Composable
 fun OpenCodeFilterChip(
@@ -119,7 +120,7 @@ fun OpenCodeFilterChip(
                         .clip(CircleShape)
                         .background(textStrong.copy(alpha = 0.10f))
                         .clickable(role = Role.Button, onClick = onRemove)
-                        .padding(4.dp),
+                        .padding(ChipRemoveIconInset),
             )
         }
     }

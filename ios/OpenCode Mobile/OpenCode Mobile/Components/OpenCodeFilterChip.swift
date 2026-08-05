@@ -3,6 +3,8 @@ import SwiftUI
 struct OpenCodeFilterChip: View {
     /// Shared height for the count pill and remove circle so they align.
     private static let metaSize: CGFloat = 20
+    /// Inset for the close glyph inside the remove circle (matches Android).
+    private static let removeIconInset: CGFloat = 4
 
     let title: String
     let count: Int?
@@ -55,7 +57,7 @@ struct OpenCodeFilterChip: View {
             if let removeAction {
                 Button(action: removeAction) {
                     OpenCodeIconImage(icon: .close)
-                        .font(.system(size: 11, weight: .semibold))
+                        .padding(Self.removeIconInset)
                         .foregroundStyle(OpenCodeColors.textStrong.opacity(0.85))
                         .frame(width: Self.metaSize, height: Self.metaSize)
                         .background(OpenCodeColors.textStrong.opacity(0.10), in: Circle())
@@ -98,8 +100,8 @@ private struct OpenCodeFilterChipPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(.smooth(duration: 0.18), value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -111,10 +113,12 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
             if selected {
                 content
                     .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    // Non-interactive glass: `.interactive()` adds a loud lens press;
+                    // press feedback stays on OpenCodeFilterChipPressStyle.
+                    .glassEffect(.regular, in: .capsule)
             } else {
                 content
-                    .glassEffect(.clear.interactive(), in: .capsule)
+                    .glassEffect(.clear, in: .capsule)
             }
         } else if selected {
             content
@@ -138,7 +142,13 @@ private struct OpenCodeFilterChipChrome: ViewModifier {
 #Preview("Filter Chip") {
     HStack {
         OpenCodeFilterChip(title: "All", count: 4, selected: true, action: {})
-        OpenCodeFilterChip(title: "opencode-mobile", count: 2, selected: false, action: {})
+        OpenCodeFilterChip(
+            title: "opencode-mobile",
+            count: 2,
+            selected: true,
+            action: {},
+            removeAction: {}
+        )
     }
     .padding()
     .openCodeTheme()

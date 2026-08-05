@@ -196,7 +196,9 @@ implementation belong in the feature's `parity-gaps.md`.
   screen edge).
 - iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
   0.92 opacity on floating chrome; glass button styles on dock CTAs / chips /
-  key home controls; material fallbacks below iOS 26. Composer IconCircles stay
+  key home controls; material fallbacks below iOS 26. Capsule chips and Choice
+  Badge glass use **non-interactive** `glassEffect` plus subtle scale/opacity
+  press — not `.interactive()` lens feedback. Composer IconCircles stay
   non-glass in the OPE-99 shell-only slice.
 - Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
   elevation) and bordered CTAs as a glass-like stand-in; no system Liquid Glass

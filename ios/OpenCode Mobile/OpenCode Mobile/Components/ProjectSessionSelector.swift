@@ -108,8 +108,7 @@ struct ProjectSessionSelector: View {
     private func projectHeader(_ project: ProjectSessionSelectorProject) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                OpenCodeIconImage(icon: .folder)
-                    .font(.system(size: 18, weight: .semibold))
+                OpenCodeIconImage(icon: .folder, size: 18)
                     .foregroundStyle(OpenCodeColors.iconBase)
                     .accessibilityHidden(true)
                 Text(project.displayName)
@@ -227,8 +226,7 @@ private struct AddProjectSessionSelectorTile: View {
 
     var body: some View {
         Button(action: action) {
-            OpenCodeIconImage(icon: .add)
-                .font(.system(size: 22, weight: .bold))
+            OpenCodeIconImage(icon: .add, size: 22)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(width: 48, height: 48)
                 .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))

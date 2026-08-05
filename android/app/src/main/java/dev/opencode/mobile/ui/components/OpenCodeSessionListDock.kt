@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,17 +78,30 @@ fun OpenCodeSessionListDock(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 filterTabs.forEach { tab ->
+                    val selected = tab.id == selectedFilterId
+                    val showRemove =
+                        tab.id != SessionListFilterTab.ALL_ID &&
+                            selected &&
+                            onRemoveProject != null
+                    val bringIntoViewRequester = remember(tab.id) { BringIntoViewRequester() }
+                    // Re-run when × appears so the widened selected chip stays fully visible.
+                    LaunchedEffect(selected, showRemove) {
+                        if (selected) {
+                            bringIntoViewRequester.bringIntoView()
+                        }
+                    }
                     OpenCodeFilterChip(
                         title = tab.title,
                         count = tab.count,
-                        selected = tab.id == selectedFilterId,
+                        selected = selected,
                         onClick = { onFilterSelected(tab.id) },
                         onRemove =
-                            if (tab.id != SessionListFilterTab.ALL_ID) {
+                            if (showRemove) {
                                 onRemoveProject?.let { remove -> { remove(tab.id) } }
                             } else {
                                 null
                             },
+                        modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
                     )
                 }
             }

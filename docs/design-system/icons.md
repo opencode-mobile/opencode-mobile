@@ -26,6 +26,26 @@ Each entry maps to:
 Use `OpenCodeIconImage(icon:)` on iOS for template-rendered icons that follow
 `OpenCodeColors.iconDefault` / `iconStrong` tints.
 
+### iOS sizing (required)
+
+`OpenCodeIconImage` is an asset-catalog template, not an SF Symbol.
+**Size with `size:` or an outer `.frame` — never `.font`.** `.font` only scales
+SF Symbols; on catalog assets it is ignored, so glyphs draw at intrinsic size
+and look edge-to-edge inside tight chrome (remove circles, status marks).
+
+```swift
+// Explicit glyph size
+OpenCodeIconImage(icon: .close, size: 18)
+
+// Fill proposed size after padding (matches Android Icon + padding)
+OpenCodeIconImage(icon: .close)
+    .padding(4)
+    .frame(width: 20, height: 20)
+```
+
+Android `Icon(..., Modifier.size(n).padding(inset))` is the corresponding
+pattern when a glyph sits inside circular chrome smaller than a button.
+
 ## Product usage
 
 Some catalog icons have a stable product meaning beyond gallery samples:

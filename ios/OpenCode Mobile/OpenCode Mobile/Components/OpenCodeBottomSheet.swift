@@ -532,8 +532,7 @@ private struct BottomSheetEntryDecoration: View {
         case .none:
             EmptyView()
         case let .icon(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon)
-                .font(.system(size: bottomSheetEntryIconSize, weight: .medium))
+            OpenCodeIconImage(icon: icon, size: bottomSheetEntryIconSize)
                 .foregroundStyle(enabled ? OpenCodeColors.iconBase : OpenCodeColors.textWeaker)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
                 .accessibilityHidden(accessibilityLabel == nil)

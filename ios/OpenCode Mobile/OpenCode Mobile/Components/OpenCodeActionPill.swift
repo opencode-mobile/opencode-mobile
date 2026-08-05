@@ -31,8 +31,7 @@ struct OpenCodeActionPill: View {
     private var labelContent: some View {
         HStack(spacing: Self.iconSpacing) {
             if let icon {
-                OpenCodeIconImage(icon: icon)
-                    .font(.system(size: Self.iconSize, weight: .semibold))
+                OpenCodeIconImage(icon: icon, size: Self.iconSize)
             }
             Text(label)
                 .font(OpenCodeTypography.button)
