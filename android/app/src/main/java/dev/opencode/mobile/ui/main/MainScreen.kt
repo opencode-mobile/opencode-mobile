@@ -532,6 +532,7 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
                 subtitle = section.pathSubtitle,
                 status = session.toSessionListStatus(),
                 caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+                updatedAtEpochMs = session.updatedAtEpochMs,
             )
         }
 

@@ -9,6 +9,7 @@ sealed class StartDecorator {
     data class Letter(
         val character: Char,
         val accent: LetterAccent,
+        val statusDot: OpenCodeListItemStatusTone? = null,
     ) : StartDecorator()
 
     data class Icon(

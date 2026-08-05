@@ -27,49 +27,56 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     )
 }
 
-private val sessionListGallerySamples =
-    listOf(
-        SessionListSession(
-            id = "session-1",
-            title = "Refactor Navigation",
-            worktree = "/Users/demo/opencode-mobile",
-            letter = 'O',
-            letterAccent = LetterAccent.Violet,
-            subtitle = "/Users/demo/opencode-mobile",
-            status = SessionListStatus.Running,
-            caption = "now",
-        ),
-        SessionListSession(
-            id = "session-2",
-            title = "Bug: Header Clipping",
-            worktree = "/Users/demo/playground",
-            letter = 'P',
-            letterAccent = LetterAccent.Teal,
-            subtitle = "/Users/demo/playground",
-            status = SessionListStatus.Idle,
-            caption = "14m ago",
-        ),
-        SessionListSession(
-            id = "session-3",
-            title = "Add Dark Mode Assets",
-            worktree = "/Users/demo/opencode-mobile",
-            letter = 'O',
-            letterAccent = LetterAccent.Violet,
-            subtitle = "/Users/demo/opencode-mobile",
-            status = SessionListStatus.Ready,
-            caption = "3h ago",
-        ),
-        SessionListSession(
-            id = "session-4",
-            title = "Review Session List",
-            worktree = "/Users/demo/api-client",
-            letter = 'A',
-            letterAccent = LetterAccent.Amber,
-            subtitle = "/Users/demo/api-client",
-            status = SessionListStatus.Running,
-            caption = "2d ago",
-        ),
-    )
+private val sessionListGallerySamples: List<SessionListSession>
+    get() {
+        val now = System.currentTimeMillis()
+        return listOf(
+            SessionListSession(
+                id = "session-1",
+                title = "Refactor Navigation",
+                worktree = "/Users/demo/opencode-mobile",
+                letter = 'O',
+                letterAccent = LetterAccent.Violet,
+                subtitle = "/Users/demo/opencode-mobile",
+                status = SessionListStatus.Running,
+                caption = "now",
+                updatedAtEpochMs = now,
+            ),
+            SessionListSession(
+                id = "session-2",
+                title = "Bug: Header Clipping",
+                worktree = "/Users/demo/playground",
+                letter = 'P',
+                letterAccent = LetterAccent.Teal,
+                subtitle = "/Users/demo/playground",
+                status = SessionListStatus.Idle,
+                caption = "14m ago",
+                updatedAtEpochMs = now - 14 * 60_000L,
+            ),
+            SessionListSession(
+                id = "session-3",
+                title = "Add Dark Mode Assets",
+                worktree = "/Users/demo/opencode-mobile",
+                letter = 'O',
+                letterAccent = LetterAccent.Violet,
+                subtitle = "/Users/demo/opencode-mobile",
+                status = SessionListStatus.Ready,
+                caption = "3h ago",
+                updatedAtEpochMs = now - 3 * 3_600_000L,
+            ),
+            SessionListSession(
+                id = "session-4",
+                title = "Review Session List",
+                worktree = "/Users/demo/api-client",
+                letter = 'A',
+                letterAccent = LetterAccent.Amber,
+                subtitle = "/Users/demo/api-client",
+                status = SessionListStatus.Running,
+                caption = "2d ago",
+                updatedAtEpochMs = now - 2 * 86_400_000L,
+            ),
+        )
+    }
 
 private val sessionListGalleryFilterTabs =
     listOf(

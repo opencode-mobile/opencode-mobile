@@ -55,7 +55,10 @@ new-session flows, and page chrome.
 Layout:
 
 1. Scrolling `OpenCodeListItem` rows (letter badge, title, compact path, trailing
-   caption + status pill) with leading-inset dividers.
+   caption + status pill) with leading-inset dividers. Home ladders group as
+   Recent → day → week; **Recent** uses a plain section header (same language as
+   day/week) and letter-badge **status dots** (bottom-trailing). Day/week rows
+   omit the dot.
 2. Bottom fade under the dock (`background.base` `0 → 0.7 → 0.7`; top = dock top
    + 16; bottom = physical screen edge).
 3. `OpenCodeSessionListDock`: optional create error, horizontal filter chips, Add

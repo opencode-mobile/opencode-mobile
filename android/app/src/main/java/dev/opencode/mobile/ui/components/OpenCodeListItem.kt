@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +47,7 @@ import dev.opencode.mobile.theme.openCodeColor
 
 private val ListItemLetterBadgeSize = 32.dp
 private val ListItemLetterGlyphSize = 14.sp
+private val ListItemLetterStatusDotSize = 10.dp
 private val ListItemIconDecoratorSize = 24.dp
 private val ListItemCornerRadius = 8.dp
 private val ListItemVerticalPadding = 12.dp
@@ -232,12 +236,12 @@ private fun ListItemMetaColumn(
                 style = MaterialTheme.typography.labelMedium,
                 textAlign = TextAlign.End,
                 maxLines = 1,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(end = 2.dp),
             )
         }
         if (status != null) {
             val foreground = if (enabled) status.tone.foreground() else textWeaker
-            val background = if (enabled) status.tone.background(surfaceRaised) else surfaceRaised
+            val background = if (enabled) status.tone.background() else surfaceRaised
             Text(
                 text = status.text,
                 color = foreground,
@@ -264,17 +268,17 @@ private fun OpenCodeListItemStatusTone.foreground(): Color =
         OpenCodeListItemStatusTone.Success -> openCodeColor("success")
         OpenCodeListItemStatusTone.Warning -> openCodeColor("warning")
         OpenCodeListItemStatusTone.Error -> openCodeColor("error")
-        OpenCodeListItemStatusTone.Info -> openCodeColor("text-weaker")
+        OpenCodeListItemStatusTone.Info -> openCodeColor("text-base")
     }
 
 @Composable
-private fun OpenCodeListItemStatusTone.background(surfaceRaised: Color): Color =
+private fun OpenCodeListItemStatusTone.background(): Color =
     when (this) {
         OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Success -> openCodeColor("success").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Warning -> openCodeColor("warning").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Error -> openCodeColor("error").copy(alpha = 0.12f)
-        OpenCodeListItemStatusTone.Info -> surfaceRaised
+        OpenCodeListItemStatusTone.Info -> openCodeColor("text-strong").copy(alpha = 0.10f)
     }
 
 @Composable
@@ -291,24 +295,44 @@ private fun ListItemStartDecoration(
     when (decorator) {
         is StartDecorator.Letter -> {
             val (fill, tint) = decorator.accent.badgeColors(dark)
+            val backgroundBase = openCodeColor("background-base")
             Box(
                 modifier =
                     Modifier
                         .size(ListItemLetterBadgeSize)
-                        .clip(CircleShape)
-                        .background(fill)
-                        .semantics { hideFromAccessibility() }
                         .then(emphasize),
-                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = normalizedBadgeLetter(decorator.character),
-                    fontSize = ListItemLetterGlyphSize,
-                    fontWeight = FontWeight.Bold,
-                    color = tint,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                )
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(fill)
+                            .semantics { hideFromAccessibility() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = normalizedBadgeLetter(decorator.character),
+                        fontSize = ListItemLetterGlyphSize,
+                        fontWeight = FontWeight.Bold,
+                        color = tint,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
+                decorator.statusDot?.let { tone ->
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 1.dp, y = 1.dp)
+                                .size(ListItemLetterStatusDotSize)
+                                .border(2.dp, backgroundBase, CircleShape)
+                                .clip(CircleShape)
+                                .background(tone.foreground())
+                                .semantics { hideFromAccessibility() },
+                    )
+                }
             }
         }
         is StartDecorator.Icon -> {

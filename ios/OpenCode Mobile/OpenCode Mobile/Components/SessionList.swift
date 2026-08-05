@@ -6,6 +6,13 @@ enum SessionListStatus: Hashable {
     case idle
     case running
     case ready
+
+    var isAttention: Bool {
+        switch self {
+        case .running, .ready: true
+        case .idle: false
+        }
+    }
 }
 
 struct SessionListSession: Identifiable, Hashable {
@@ -17,6 +24,7 @@ struct SessionListSession: Identifiable, Hashable {
     let subtitle: String
     let status: SessionListStatus
     let caption: String
+    let updatedAtEpochMs: Int64?
 
     init(
         id: String,
@@ -26,7 +34,8 @@ struct SessionListSession: Identifiable, Hashable {
         letterAccent: LetterAccent,
         subtitle: String,
         status: SessionListStatus,
-        caption: String
+        caption: String,
+        updatedAtEpochMs: Int64? = nil
     ) {
         self.id = id
         self.title = title
@@ -36,6 +45,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.subtitle = subtitle
         self.status = status
         self.caption = caption
+        self.updatedAtEpochMs = updatedAtEpochMs
     }
 }
 
@@ -100,6 +110,16 @@ struct SessionList<EmptyContent: View>: View {
         sessions.visibleForFilter(selectedFilterId)
     }
 
+    private var ladderSections: [HomeSessionLadderSection<SessionListSession>] {
+        HomeSessionLadder.group(
+            sessions: visibleSessions,
+            updatedAtEpochMs: \.updatedAtEpochMs,
+            isAttention: \.status.isAttention,
+            recentWindowHours: homeDisplayPreferences.recentWindowHours,
+            nowEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             if visibleSessions.isEmpty, showsEmptyContent {
@@ -113,22 +133,14 @@ struct SessionList<EmptyContent: View>: View {
                 .modifier(SessionListRefreshableModifier(onRefresh: onRefresh))
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(visibleSessions) { session in
-                            OpenCodeListItem(
-                                title: session.title,
-                                subtitle: compactHomePath(
-                                    session.subtitle,
-                                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-                                ),
-                                status: listItemStatus(session.status),
-                                caption: session.caption.isEmpty ? nil : session.caption,
-                                startDecorator: .letter(session.letter, session.letterAccent),
-                                action: { onSessionSelected(session) }
-                            )
-                            Divider()
-                                .overlay(OpenCodeColors.borderWeakerBase)
-                                .padding(.leading, 60)
+                    LazyVStack(spacing: 0, pinnedViews: []) {
+                        ForEach(ladderSections, id: \.id) { section in
+                            switch section.kind {
+                            case .recent:
+                                recentStack(section)
+                            case .day, .week:
+                                dayOrWeekSection(section)
+                            }
                         }
                     }
                     Color.clear.frame(height: sessionListFallbackBottomSpacer)
@@ -174,6 +186,66 @@ struct SessionList<EmptyContent: View>: View {
                     }
             }
         }
+    }
+
+    @ViewBuilder
+    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
+        Text("RECENT")
+            .font(OpenCodeTypography.caption.weight(.semibold))
+            .foregroundStyle(OpenCodeColors.textBase)
+            .tracking(0.5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
+        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
+            sessionRow(session, showStatusDot: true)
+            if index < section.items.count - 1 {
+                Divider()
+                    .overlay(OpenCodeColors.borderWeakerBase)
+                    .padding(.leading, 60)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
+        Text(section.title.uppercased())
+            .font(OpenCodeTypography.caption.weight(.semibold))
+            .foregroundStyle(OpenCodeColors.textBase)
+            .tracking(0.5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 6)
+
+        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
+            sessionRow(session, showStatusDot: false)
+            if index < section.items.count - 1 {
+                Divider()
+                    .overlay(OpenCodeColors.borderWeakerBase)
+                    .padding(.leading, 60)
+            }
+        }
+    }
+
+    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
+        OpenCodeListItem(
+            title: session.title,
+            subtitle: compactHomePath(
+                session.subtitle,
+                hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+            ),
+            status: listItemStatus(session.status),
+            caption: session.caption.isEmpty ? nil : session.caption,
+            startDecorator: .letter(
+                session.letter,
+                session.letterAccent,
+                statusDot: showStatusDot ? listItemStatus(session.status).tone : nil
+            ),
+            action: { onSessionSelected(session) }
+        )
     }
 
     private func listItemStatus(_ status: SessionListStatus) -> OpenCodeListItemStatus {
@@ -248,7 +320,8 @@ private struct SessionListRefreshableModifier: ViewModifier {
                 letterAccent: .violet,
                 subtitle: "/Users/demo/opencode-mobile",
                 status: .running,
-                caption: "now"
+                caption: "now",
+                updatedAtEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
             ),
             SessionListSession(
                 id: "2",
@@ -258,7 +331,8 @@ private struct SessionListRefreshableModifier: ViewModifier {
                 letterAccent: .teal,
                 subtitle: "/Users/demo/playground",
                 status: .idle,
-                caption: "14m ago"
+                caption: "14m ago",
+                updatedAtEpochMs: Int64(Date().timeIntervalSince1970 * 1000) - 14 * 60_000
             ),
         ],
         filterTabs: [

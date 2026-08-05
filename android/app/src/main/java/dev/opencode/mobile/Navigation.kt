@@ -167,6 +167,9 @@ fun MainNavigation() {
                                                     HomeDisplayPreferences.hideUserDirectoryPrefix,
                                                 onHideUserDirectoryPrefixChange =
                                                     settingsViewModel::setHideUserDirectoryPrefix,
+                                                recentWindowHours = HomeDisplayPreferences.recentWindowHours,
+                                                onRecentWindowHoursChange =
+                                                    settingsViewModel::setRecentWindowHours,
                                                 textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                 onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                             )
