@@ -3,6 +3,13 @@
 ## Status
 
 - Status: in progress.
+- Ticket: [OPE-109](https://linear.app/opencode-mobile/issue/OPE-109/rendered-markdown-desktop-visual-polish)
+  (parent [OPE-16](https://linear.app/opencode-mobile/issue/OPE-16/native-rendered-markdown)).
+  Branch: `feature/ope-109-rendered-markdown-desktop-visual-polish`.
+- 2026-08-05: **OPE-109** desktop visual polish — inline code bg/weight, bare
+  URL autolink, link/quote token chrome, list marker column sizing, shared
+  table column widths + expand-to-container, Android streaming layout
+  fingerprint + user-only apply hold, table equal-height via SubcomposeLayout.
 - 2026-07-31: Doc sync — superseded “TextMate default off” decision; current
   Session Chat / message-store / parity-gap wording now matches format-always
   scaffolds + Phase 6 default-on allowlist (device smoke / Tier B still open).

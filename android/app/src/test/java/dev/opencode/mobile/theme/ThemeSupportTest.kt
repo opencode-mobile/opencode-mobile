@@ -79,6 +79,38 @@ class ThemeSupportTest {
     assertEquals(dark["text-strong"], dark["syntax-punctuation"])
   }
 
+  @Test
+  fun resolverProvidesDesktopAlignedInlineCodeBackground() {
+    val theme = sampleTheme(id = "inline-code")
+
+    val light = ThemeResolver.resolve(theme.light, isDark = false)
+    val dark = ThemeResolver.resolve(theme.dark, isDark = true)
+
+    assertEquals("#00000014", light["markdown-code-bg"])
+    assertEquals("#FFFFFF14", dark["markdown-code-bg"])
+    assertEquals(light["text-strong"], light["markdown-code-text"])
+    assertEquals(dark["text-strong"], dark["markdown-code-text"])
+  }
+
+  @Test
+  fun resolverUsesNeutralChromeForLinksAndQuotes() {
+    val theme = sampleTheme(id = "link-quote")
+
+    val light = ThemeResolver.resolve(theme.light, isDark = false)
+    val dark = ThemeResolver.resolve(theme.dark, isDark = true)
+
+    assertEquals(light["text-strong"], light["markdown-link-text"])
+    assertEquals(dark["text-strong"], dark["markdown-link-text"])
+    assertEquals(light["text-strong"], light["markdown-link-underline"])
+    assertEquals(dark["text-strong"], dark["markdown-link-underline"])
+    assertTrue(light["markdown-link-text"] != light["interactive"])
+    assertTrue(dark["markdown-link-text"] != dark["interactive"])
+    assertEquals(light["border-weak-base"], light["markdown-quote-bar"])
+    assertEquals(dark["border-weak-base"], dark["markdown-quote-bar"])
+    assertTrue(light["markdown-quote-bar"] != light["interactive"])
+    assertTrue(dark["markdown-quote-bar"] != dark["interactive"])
+  }
+
   private fun incompletePalette(): PaletteSeeds =
     PaletteSeeds(
       neutral = "#111111",

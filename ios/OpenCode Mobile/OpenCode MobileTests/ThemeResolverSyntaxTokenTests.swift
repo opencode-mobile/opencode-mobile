@@ -14,6 +14,32 @@ struct ThemeResolverSyntaxTokenTests {
         #expect(dark["syntax-punctuation"] == dark["text-strong"])
     }
 
+    @Test func resolverProvidesDesktopAlignedInlineCodeBackground() {
+        let light = ThemeResolver.resolve(variant: testVariant(), isDark: false)
+        let dark = ThemeResolver.resolve(variant: testVariant(), isDark: true)
+
+        #expect(light["markdown-code-bg"] == "#00000014")
+        #expect(dark["markdown-code-bg"] == "#FFFFFF14")
+        #expect(light["markdown-code-text"] == light["text-strong"])
+        #expect(dark["markdown-code-text"] == dark["text-strong"])
+    }
+
+    @Test func resolverUsesNeutralChromeForLinksAndQuotes() {
+        let light = ThemeResolver.resolve(variant: testVariant(), isDark: false)
+        let dark = ThemeResolver.resolve(variant: testVariant(), isDark: true)
+
+        #expect(light["markdown-link-text"] == light["text-strong"])
+        #expect(dark["markdown-link-text"] == dark["text-strong"])
+        #expect(light["markdown-link-underline"] == light["text-strong"])
+        #expect(dark["markdown-link-underline"] == dark["text-strong"])
+        #expect(light["markdown-link-text"] != light["interactive"])
+        #expect(dark["markdown-link-text"] != dark["interactive"])
+        #expect(light["markdown-quote-bar"] == light["border-weak-base"])
+        #expect(dark["markdown-quote-bar"] == dark["border-weak-base"])
+        #expect(light["markdown-quote-bar"] != light["interactive"])
+        #expect(dark["markdown-quote-bar"] != dark["interactive"])
+    }
+
     @Test func resolverKeepsPresetOverridesForPathASyntaxTokens() {
         let resolved = ThemeResolver.resolve(
             variant: testVariant(

@@ -5,8 +5,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,6 +43,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
@@ -50,6 +55,7 @@ import dev.opencode.mobile.markdown.DiffLineKind
 import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
+import dev.opencode.mobile.markdown.MarkdownTableRow
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.isLikelyExpandable
 import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
@@ -155,14 +161,17 @@ private fun MarkdownBlockView(
             )
         is MarkdownBlock.BlockQuote ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(
                     modifier =
                         Modifier
                             .width(3.dp)
-                            .height(26.dp)
+                            .fillMaxHeight()
                             .background(openCodeColor("markdown-quote-bar"), RoundedCornerShape(2.dp)),
                 )
                 MarkdownInlineText(
@@ -174,17 +183,17 @@ private fun MarkdownBlockView(
                 )
             }
         is MarkdownBlock.BulletList ->
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                block.items.forEach { item ->
-                    ListRow(marker = "•", inlines = item.inlines, onLinkTap = onLinkTap)
-                }
-            }
+            MarkdownList(
+                markers = List(block.items.size) { "•" },
+                items = block.items.map { it.inlines },
+                onLinkTap = onLinkTap,
+            )
         is MarkdownBlock.OrderedList ->
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                block.items.forEachIndexed { index, item ->
-                    ListRow(marker = "${block.start + index}.", inlines = item.inlines, onLinkTap = onLinkTap)
-                }
-            }
+            MarkdownList(
+                markers = List(block.items.size) { index -> "${block.start + index}." },
+                items = block.items.map { it.inlines },
+                onLinkTap = onLinkTap,
+            )
         is MarkdownBlock.CodeBlock -> CodeBlockView(block, isStreaming = isStreaming)
         is MarkdownBlock.DiffBlock -> DiffBlockView(block)
         is MarkdownBlock.Table -> TableView(block, onLinkTap)
@@ -200,8 +209,42 @@ private fun MarkdownBlockView(
 }
 
 @Composable
+private fun MarkdownList(
+    markers: List<String>,
+    items: List<List<MarkdownInline>>,
+    onLinkTap: ((String) -> Unit)?,
+) {
+    val style = MaterialTheme.typography.bodyMedium
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val markerWidth =
+        remember(markers, style, density) {
+            if (markers.isEmpty()) {
+                16.dp
+            } else {
+                val maxPx =
+                    markers.maxOf { marker ->
+                        textMeasurer.measure(text = AnnotatedString(marker), style = style).size.width
+                    }
+                with(density) { maxPx.toDp() }.coerceAtLeast(16.dp)
+            }
+        }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        markers.forEachIndexed { index, marker ->
+            ListRow(
+                marker = marker,
+                markerWidth = markerWidth,
+                inlines = items[index],
+                onLinkTap = onLinkTap,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ListRow(
     marker: String,
+    markerWidth: Dp,
     inlines: List<MarkdownInline>,
     onLinkTap: ((String) -> Unit)?,
 ) {
@@ -213,7 +256,8 @@ private fun ListRow(
             text = marker,
             style = MaterialTheme.typography.bodyMedium,
             color = openCodeColor("markdown-list-marker"),
-            modifier = Modifier.width(24.dp),
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(markerWidth),
         )
         MarkdownInlineText(
             inlines = inlines,
@@ -299,44 +343,94 @@ private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
     }
 }
 
+private val TableCellMinWidth = 112.dp
+private val TableCellHorizontalPadding = 10.dp
+
 @Composable
 private fun TableView(
     block: MarkdownBlock.Table,
     onLinkTap: ((String) -> Unit)?,
 ) {
-    val scrollState = rememberScrollState()
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp)),
-    ) {
-        TableRowView(block.header, isHeader = true, onLinkTap = onLinkTap)
-        block.rows.forEach { row ->
-            TableRowView(row, isHeader = false, onLinkTap = onLinkTap)
+    val allRows = remember(block) { listOf(block.header) + block.rows }
+    val columnCount = remember(allRows) { allRows.maxOfOrNull { it.cells.size } ?: 0 }
+    val style = MaterialTheme.typography.bodyMedium
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val preferredWidths =
+        remember(allRows, columnCount, style, density) {
+            if (columnCount == 0) {
+                emptyList()
+            } else {
+                val horizontalPaddingPx = with(density) { (TableCellHorizontalPadding * 2).roundToPx() }
+                val minPx = with(density) { TableCellMinWidth.roundToPx() }
+                List(columnCount) { column ->
+                    val contentPx =
+                        allRows.maxOf { row ->
+                            val inlines = row.cells.getOrNull(column)?.inlines.orEmpty()
+                            val plain = plainTextFromMarkdownInlines(inlines)
+                            textMeasurer.measure(text = AnnotatedString(plain), style = style).size.width
+                        }
+                    with(density) {
+                        maxOf(minPx, contentPx + horizontalPaddingPx).toDp()
+                    }
+                }
+            }
+        }
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val available = maxWidth
+        val preferredTotal = preferredWidths.fold(0.dp) { acc, width -> acc + width }
+        val columnWidths =
+            if (preferredWidths.isEmpty() || preferredTotal >= available) {
+                preferredWidths
+            } else {
+                val share = (available - preferredTotal) / preferredWidths.size
+                preferredWidths.map { it + share }
+            }
+        val needsScroll = preferredTotal > available
+        val scrollState = rememberScrollState()
+        // Avoid IntrinsicSize here: nested intrinsic measurement inside LazyList is
+        // far more expensive than a one-row equal-height Layout during streaming.
+        Column(
+            modifier =
+                Modifier
+                    .then(if (needsScroll) Modifier.horizontalScroll(scrollState) else Modifier)
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp)),
+        ) {
+            TableRowView(block.header, columnWidths = columnWidths, isHeader = true, onLinkTap = onLinkTap)
+            block.rows.forEach { row ->
+                TableRowView(row, columnWidths = columnWidths, isHeader = false, onLinkTap = onLinkTap)
+            }
         }
     }
 }
 
 @Composable
 private fun TableRowView(
-    row: dev.opencode.mobile.markdown.MarkdownTableRow,
+    row: MarkdownTableRow,
+    columnWidths: List<Dp>,
     isHeader: Boolean,
     onLinkTap: ((String) -> Unit)?,
 ) {
-    Row {
-        row.cells.forEach { cell ->
+    EqualHeightRow {
+        columnWidths.forEachIndexed { index, width ->
+            val inlines = row.cells.getOrNull(index)?.inlines.orEmpty()
             Box(
                 modifier =
                     Modifier
-                        .widthIn(min = 112.dp, max = 220.dp)
+                        .width(width)
                         .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-                        .background(if (isHeader) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .background(
+                            if (isHeader) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            },
+                        )
+                        .padding(horizontal = TableCellHorizontalPadding, vertical = 8.dp),
             ) {
                 MarkdownInlineText(
-                    inlines = cell.inlines,
+                    inlines = inlines,
                     style =
                         if (isHeader) {
                             MaterialTheme.typography.bodyMedium.copy(
@@ -350,6 +444,54 @@ private fun TableRowView(
             }
         }
     }
+}
+
+/**
+ * Equal-height cells without [IntrinsicSize] (costly in LazyList) and without
+ * measuring the same [Measurable] twice (illegal in Compose Layout).
+ * Two [SubcomposeLayout] slots: probe natural heights, then remasure to max.
+ */
+@Composable
+private fun EqualHeightRow(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    androidx.compose.ui.layout.SubcomposeLayout(modifier = modifier) { constraints ->
+        val loose = constraints.copy(minHeight = 0)
+        val firstPass =
+            subcompose(EqualHeightRowSlot.Probe) { content() }.map { it.measure(loose) }
+        val rowHeight =
+            firstPass
+                .maxOfOrNull { it.height }
+                ?.coerceIn(constraints.minHeight, constraints.maxHeight)
+                ?: 0
+        val placeables =
+            subcompose(EqualHeightRowSlot.Final) { content() }.mapIndexed { index, measurable ->
+                val first = firstPass[index]
+                measurable.measure(
+                    androidx.compose.ui.unit.Constraints.fixed(
+                        width = first.width,
+                        height = rowHeight,
+                    ),
+                )
+            }
+        val width =
+            placeables
+                .sumOf { it.width }
+                .coerceIn(constraints.minWidth, constraints.maxWidth)
+        layout(width, rowHeight) {
+            var x = 0
+            placeables.forEach { placeable ->
+                placeable.placeRelative(x, 0)
+                x += placeable.width
+            }
+        }
+    }
+}
+
+private enum class EqualHeightRowSlot {
+    Probe,
+    Final,
 }
 
 @Composable
@@ -414,9 +556,14 @@ private fun AnnotatedString.Builder.appendInlines(
                         color = colors.codeText,
                         background = colors.codeBackground,
                         fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
                     ),
                 ) {
+                    // Native attributed backgrounds have no CSS padding; side spaces
+                    // approximate desktop `padding: 2px 4px` horizontal inset.
+                    append('\u2009')
                     append(inline.code)
+                    append('\u2009')
                 }
             is MarkdownInline.Emphasis ->
                 withStyle(SpanStyle(color = colors.emphasis, fontStyle = FontStyle.Italic)) {
@@ -434,6 +581,7 @@ private fun AnnotatedString.Builder.appendInlines(
                 val linkStyle =
                     SpanStyle(
                         color = colors.link,
+                        fontWeight = FontWeight.Bold,
                         textDecoration = TextDecoration.Underline,
                     )
                 if (openable) {

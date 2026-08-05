@@ -35,6 +35,13 @@ surfaces, not for general web content.
 
 The component renders a safe GFM subset: paragraphs, headings, emphasis, links,
 lists, blockquotes, inline code, fenced code, tables, and fenced `diff` blocks.
+Bare `http(s)` URLs and `<https://…>` autolinks are promoted to the same link
+nodes as `[label](url)`. Links use bold + underline on `markdown-link-*` (body
+strong), not interactive accent. Blockquote bars use muted `markdown-quote-bar`
+(`border-weak-base`). Inline backtick code uses monospace medium weight plus
+`markdown-code-text` / `markdown-code-bg`, aligned with desktop session-ui chrome
+(tinted chip; native attributed strings approximate horizontal padding with thin
+spaces and omit desktop radius).
 Chat callers should mount it whenever markdown markers exist, including simple
 inline code, emphasis, and links. Messages with no markdown markers stay on the
 plain native text path.
@@ -71,11 +78,13 @@ visible rather than losing content below the collapsed height.
   It consumes `OpenCodeMarkdownCore.parseMarkdownJson` and decodes the shared
   render tree into Swift structs. Message preparation and document caching run
   outside the UI actor; rendering remains SwiftUI-owned. Code blocks render
-  their complete source, matching Android.
+  their complete source, matching Android. List markers share one column width
+  (sized to the widest marker, trailing-aligned) so item text lines up.
 - Android: implemented with Compose text, stacks, scroll views, and attributed
   strings consuming `shared/markdown-core` directly. Large finalized
   attributed strings are prepared on a background dispatcher before Compose
-  replaces the temporary plain representation.
+  replaces the temporary plain representation. List marker columns match iOS
+  (measure widest marker, end-aligned).
 
 ## Previews
 
@@ -85,7 +94,9 @@ visible rather than losing content below the collapsed height.
 - Default: highlighted TypeScript code, a native table, and a multi-language
   syntax sweep covering Kotlin, Swift, TypeScript, Python, JSON, Shell, and YAML.
 - Rich content: blockquote, ordered list, emphasis, link, safe image-alt label,
-  and thematic break.
+  and thematic break. Tables share one measured width per column across all
+  rows so vertical borders stay aligned, then expand those columns to fill the
+  available width when content is narrower than the container.
 - Diff: fenced session-chat patch with added and deleted lines.
 - Streaming: same content re-rendered through native chat updates.
 - Empty: native placeholder remains the caller's responsibility.

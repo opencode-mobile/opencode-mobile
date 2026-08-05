@@ -258,9 +258,12 @@ object TimelineProjector {
 
     private fun blockLayoutFingerprint(block: SessionChatTimelineBlock): String =
         when (block) {
-            // Text length is content-only while streaming; GrowBottom declares height growth.
+            // Include sourceHash + renderTreeVersion so streaming structure growth
+            // and TextMate paint bumps layoutRevision like iOS — not only GrowBottom.
             is SessionChatTimelineBlock.Text ->
-                "t:${block.blockID}:${block.renderedMarkdown != null}"
+                "t:${block.blockID}:${block.renderedMarkdown != null}:" +
+                    "${block.renderedMarkdown?.sourceHash ?: 0}:" +
+                    "${block.renderedMarkdown?.renderTreeVersion ?: 0}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
             is SessionChatTimelineBlock.ToolCard ->
@@ -358,8 +361,9 @@ object TimelineProjector {
     }
 
     /**
-     * Layout bump caused only by markdown presence/sourceHash while streaming flag and
-     * non-markdown structure stay the same. Streaming end is Structure, not Decorate.
+     * Layout bump caused only by markdown presence/sourceHash/renderTreeVersion
+     * while streaming flag and non-markdown structure stay the same. Streaming
+     * end is Structure, not Decorate.
      */
     internal fun isMarkdownOnlyLayoutChange(
         prior: TimelineRow,
@@ -407,6 +411,8 @@ object TimelineProjector {
                     append(block.renderedMarkdown != null)
                     append(':')
                     append(block.renderedMarkdown?.sourceHash ?: 0)
+                    append(':')
+                    append(block.renderedMarkdown?.renderTreeVersion ?: 0)
                     append('|')
                 }
             }

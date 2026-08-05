@@ -6,36 +6,38 @@ import org.junit.Test
 
 class MessageListTimelineApplyHoldTest {
     @Test
-    fun shouldHold_scrollInProgress_nonRequired_holds() {
+    fun shouldHold_userScroll_nonRequired_holds() {
         assertTrue(
             MessageListTimelineApplyHold.shouldHold(
-                isScrollInProgress = true,
+                isUserScrollInProgress = true,
                 isRequired = false,
             ),
         )
     }
 
     @Test
-    fun shouldHold_scrollInProgress_required_flushes() {
+    fun shouldHold_userScroll_required_flushes() {
         assertFalse(
             MessageListTimelineApplyHold.shouldHold(
-                isScrollInProgress = true,
+                isUserScrollInProgress = true,
                 isRequired = true,
             ),
         )
     }
 
     @Test
-    fun shouldHold_idle_commits() {
+    fun shouldHold_idleOrProgrammatic_commits() {
+        // Idle and programmatic auto-follow both report false here so streaming
+        // frames keep applying (unlike listState.isScrollInProgress).
         assertFalse(
             MessageListTimelineApplyHold.shouldHold(
-                isScrollInProgress = false,
+                isUserScrollInProgress = false,
                 isRequired = false,
             ),
         )
         assertFalse(
             MessageListTimelineApplyHold.shouldHold(
-                isScrollInProgress = false,
+                isUserScrollInProgress = false,
                 isRequired = true,
             ),
         )

@@ -83,12 +83,16 @@ struct ThemeResolver {
         tokens["markdown-h1"] = textStrong(ink: ink, isDark: isDark)
         tokens["markdown-h2"] = textStrong(ink: ink, isDark: isDark)
         tokens["markdown-h3"] = textStrong(ink: ink, isDark: isDark)
-        tokens["markdown-link-text"] = interactive
-        tokens["markdown-link-underline"] = interactive
+        // Links use body-strong + bold/underline chrome, not interactive accent.
+        tokens["markdown-link-text"] = textStrong(ink: ink, isDark: isDark)
+        tokens["markdown-link-underline"] = textStrong(ink: ink, isDark: isDark)
         tokens["markdown-code-text"] = textStrong(ink: ink, isDark: isDark)
-        tokens["markdown-code-bg"] = isDark ? "#FFFFFF14" : "#0000000A"
+        // Match desktop session-ui: color-mix(text, 8%, transparent). Native
+        // attributed backgrounds have no CSS padding, so keep the same 8% tint.
+        tokens["markdown-code-bg"] = isDark ? "#FFFFFF14" : "#00000014"
         tokens["markdown-quote-text"] = mix(ink, neutral, isDark ? 0.42 : 0.45)
-        tokens["markdown-quote-bar"] = interactive
+        // Quote bar matches desktop muted border, not interactive accent.
+        tokens["markdown-quote-bar"] = tokens["border-weak-base"]!
         tokens["markdown-list-marker"] = mix(ink, neutral, isDark ? 0.42 : 0.45)
         tokens["markdown-image"] = mix(ink, neutral, isDark ? 0.58 : 0.62)
         tokens["markdown-hr"] = mix(neutral, ink, isDark ? 0.03 : 0.07)
