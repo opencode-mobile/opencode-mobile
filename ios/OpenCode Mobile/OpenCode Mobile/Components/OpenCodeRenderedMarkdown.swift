@@ -65,34 +65,36 @@ struct OpenCodeRenderedMarkdown: View {
             onLinkTap(url)
             return .handled
         })
+        // Keep link chrome on markdown-link tokens instead of the system accent tint.
+        .tint(OpenCodeColors.markdownLinkText)
     }
 
     @ViewBuilder
     private func blockView(_ block: NativeMarkdownBlock) -> some View {
         switch block {
         case .paragraph(let inlines):
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong, lineSpacing: 4)
         case .heading(let level, let inlines):
             inlineText(inlines, font: headingFont(level), color: headingColor(level))
         case .blockquote(let inlines):
-            HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(OpenCodeColors.markdownQuoteBar)
-                    .frame(width: 3, height: 26)
-                inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.markdownQuoteText)
-            }
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.markdownQuoteText, lineSpacing: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 13)
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(OpenCodeColors.markdownQuoteBar)
+                        .frame(width: 3)
+                }
         case .bulletList(let items):
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(items.indices, id: \.self) { index in
-                    listRow(marker: "•", inlines: items[index])
-                }
-            }
+            markdownList(
+                markers: Array(repeating: "•", count: items.count),
+                items: items
+            )
         case .orderedList(let start, let items):
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(items.indices, id: \.self) { index in
-                    listRow(marker: "\(start + index).", inlines: items[index])
-                }
-            }
+            markdownList(
+                markers: items.indices.map { "\(start + $0)." },
+                items: items
+            )
         case .codeBlock(_, let code, let spans):
             codeBlock(code: code, spans: spans)
         case .diffBlock(let lines):
@@ -106,22 +108,49 @@ struct OpenCodeRenderedMarkdown: View {
         }
     }
 
-    private func listRow(marker: String, inlines: [NativeMarkdownInline]) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(marker)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.markdownListMarker)
-                .frame(width: 24, alignment: .leading)
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
+    private func markdownList(
+        markers: [String],
+        items: [[NativeMarkdownInline]]
+    ) -> some View {
+        let widestMarker = markers.max(by: { $0.count < $1.count }) ?? "•"
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(items.indices, id: \.self) { index in
+                listRow(
+                    marker: markers[index],
+                    widestMarker: widestMarker,
+                    inlines: items[index]
+                )
+            }
         }
+    }
+
+    private func listRow(
+        marker: String,
+        widestMarker: String,
+        inlines: [NativeMarkdownInline]
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(widestMarker)
+                .font(OpenCodeTypography.body.monospacedDigit())
+                .hidden()
+                .overlay(alignment: .trailing) {
+                    Text(marker)
+                        .font(OpenCodeTypography.body.monospacedDigit())
+                        .foregroundStyle(OpenCodeColors.markdownListMarker)
+                }
+                .accessibilityHidden(true)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong, lineSpacing: 4)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func inlineText(
         _ inlines: [NativeMarkdownInline],
         font: Font,
-        color: Color
+        color: Color,
+        lineSpacing: CGFloat = 0
     ) -> some View {
-        InlineMarkdownText(inlines: inlines, font: font, color: color)
+        InlineMarkdownText(inlines: inlines, font: font, color: color, lineSpacing: lineSpacing)
     }
 
     @ViewBuilder
@@ -161,37 +190,57 @@ struct OpenCodeRenderedMarkdown: View {
         header: [[NativeMarkdownInline]],
         rows: [[[NativeMarkdownInline]]]
     ) -> some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                tableRow(header, isHeader: true)
-                ForEach(rows.indices, id: \.self) { index in
-                    tableRow(rows[index], isHeader: false)
-                }
+        let allRows = [header] + rows
+        let columnCount = allRows.map(\.count).max() ?? 0
+        let preferredWidths = Self.tableColumnWidths(rows: allRows, columnCount: columnCount)
+        return MarkdownTableLayout(preferredWidths: preferredWidths) { availableWidths in
+            tableRow(header, columnWidths: availableWidths, isHeader: true)
+            ForEach(rows.indices, id: \.self) { index in
+                tableRow(rows[index], columnWidths: availableWidths, isHeader: false)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
-            )
         }
     }
 
     private func tableRow(
         _ row: [[NativeMarkdownInline]],
+        columnWidths: [CGFloat],
         isHeader: Bool
     ) -> some View {
         HStack(spacing: 0) {
-            ForEach(row.indices, id: \.self) { index in
+            ForEach(columnWidths.indices, id: \.self) { index in
+                let inlines = index < row.count ? row[index] : []
                 inlineText(
-                    row[index],
+                    inlines,
                     font: isHeader ? OpenCodeTypography.bodySecondary.weight(.medium) : OpenCodeTypography.bodySecondary,
                     color: OpenCodeColors.textStrong
                 )
-                .frame(minWidth: 112, maxWidth: 220, alignment: .leading)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, Self.tableCellHorizontalPadding)
                 .padding(.vertical, 8)
+                .frame(width: columnWidths[index], alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
                 .background(isHeader ? OpenCodeColors.surfaceRaisedBase : OpenCodeColors.surfaceBase)
                 .border(OpenCodeColors.borderWeakerBase, width: 0.5)
             }
+        }
+    }
+
+    private static let tableCellMinWidth: CGFloat = 112
+    private static let tableCellHorizontalPadding: CGFloat = 10
+
+    private static func tableColumnWidths(
+        rows: [[[NativeMarkdownInline]]],
+        columnCount: Int
+    ) -> [CGFloat] {
+        let font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        return (0..<columnCount).map { column in
+            let contentWidth =
+                rows.map { row -> CGFloat in
+                    guard column < row.count else { return 0 }
+                    let plain = NativeMarkdownAttributedString.plainText(from: row[column])
+                    return (plain as NSString).size(withAttributes: [.font: font]).width
+                }
+                .max() ?? 0
+            return max(tableCellMinWidth, contentWidth + tableCellHorizontalPadding * 2)
         }
     }
 
@@ -421,16 +470,33 @@ enum NativeMarkdownAttributedString {
             case .text(let value):
                 output.append(styled(value, font: font, color: color))
             case .code(let value):
-                output.append(styled(value, font: OpenCodeTypography.code, color: OpenCodeColors.markdownCodeText))
+                // Native attributed backgrounds have no CSS padding; side spaces
+                // approximate desktop `padding: 2px 4px` horizontal inset.
+                var code = AttributedString("\u{2009}\(value)\u{2009}")
+                code.font = OpenCodeTypography.code.weight(.medium)
+                code.foregroundColor = OpenCodeColors.markdownCodeText
+                code.backgroundColor = OpenCodeColors.markdownCodeBackground
+                output.append(code)
             case .emphasis(let children):
                 append(children, into: &output, font: font.italic(), color: OpenCodeColors.markdownEm)
             case .strong(let children):
                 append(children, into: &output, font: font.weight(.semibold), color: OpenCodeColors.markdownStrong)
             case .link(let destination, let children):
                 var linkText = AttributedString()
-                append(children, into: &linkText, font: font, color: OpenCodeColors.markdownLinkText)
-                if let url = URL(string: destination) {
+                append(
+                    children,
+                    into: &linkText,
+                    font: font.weight(.bold),
+                    color: OpenCodeColors.markdownLinkText
+                )
+                let underline = Text.LineStyle(pattern: .solid, color: OpenCodeColors.markdownLinkUnderline)
+                linkText.underlineStyle = underline
+                if let url = URL(string: destination),
+                   url.scheme == "http" || url.scheme == "https" {
                     linkText.link = url
+                    // Re-assert chrome after `.link`; SwiftUI may otherwise tint accent.
+                    linkText.foregroundColor = OpenCodeColors.markdownLinkText
+                    linkText.underlineStyle = underline
                 }
                 output.append(linkText)
             case .imageAlt(let alt):
@@ -580,13 +646,61 @@ struct NativeCodeColorPalette: Sendable {
     }
 }
 
+private struct MarkdownTableLayout<Content: View>: View {
+    let preferredWidths: [CGFloat]
+    @ViewBuilder let content: ([CGFloat]) -> Content
+
+    @State private var containerWidth: CGFloat = 0
+
+    private var columnWidths: [CGFloat] {
+        Self.expandedWidths(preferred: preferredWidths, available: containerWidth)
+    }
+
+    private var needsHorizontalScroll: Bool {
+        guard containerWidth > 0, !preferredWidths.isEmpty else { return false }
+        return preferredWidths.reduce(0, +) > containerWidth + 1
+    }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: needsHorizontalScroll) {
+            VStack(alignment: .leading, spacing: 0) {
+                content(columnWidths)
+            }
+            .frame(minWidth: containerWidth > 0 ? containerWidth : nil, alignment: .leading)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+            )
+        }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { containerWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, width in
+                        containerWidth = width
+                    }
+            }
+        }
+    }
+
+    private static func expandedWidths(preferred: [CGFloat], available: CGFloat) -> [CGFloat] {
+        guard !preferred.isEmpty, available > 0 else { return preferred }
+        let total = preferred.reduce(0, +)
+        guard total < available else { return preferred }
+        let share = (available - total) / CGFloat(preferred.count)
+        return preferred.map { $0 + share }
+    }
+}
+
 private struct InlineMarkdownText: View {
     let inlines: [NativeMarkdownInline]
     let font: Font
     let color: Color
+    var lineSpacing: CGFloat = 0
 
     var body: some View {
         Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
+            .lineSpacing(lineSpacing)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

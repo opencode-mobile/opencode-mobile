@@ -21,8 +21,54 @@ class OpenCodeMarkdownParserTest {
         assertTrue(OpenCodeMarkdownDetector.shouldRender("Use `inline code` here."))
         assertTrue(OpenCodeMarkdownDetector.shouldRender("Read [the docs](https://example.com)."))
         assertTrue(OpenCodeMarkdownDetector.shouldRender("This is **important**."))
+        assertTrue(OpenCodeMarkdownDetector.shouldRender("See https://example.com/docs for details."))
+        assertTrue(OpenCodeMarkdownDetector.shouldRender("Open <https://example.com>."))
         assertFalse(OpenCodeMarkdownDetector.shouldRender("Plain text stays native."))
         assertFalse(OpenCodeMarkdownDetector.shouldRender("First paragraph.\n\nSecond paragraph."))
+    }
+
+    @Test
+    fun parsesBareAndAngleBracketAutolinks() {
+        val document =
+            OpenCodeMarkdownParser.parse(
+                "Visit https://example.com/path. Also <https://opencode.ai> and [docs](https://docs.example).",
+            )
+        val paragraph = assertIs<MarkdownBlock.Paragraph>(document.blocks.single())
+        val links = paragraph.inlines.filterIsInstance<MarkdownInline.Link>()
+        assertEquals(3, links.size)
+        assertEquals("https://example.com/path", links[0].destination)
+        assertEquals(
+            listOf(MarkdownInline.Text("https://example.com/path")),
+            links[0].children,
+        )
+        assertEquals("https://opencode.ai", links[1].destination)
+        assertEquals("https://docs.example", links[2].destination)
+        assertEquals(listOf(MarkdownInline.Text("docs")), links[2].children)
+    }
+
+    @Test
+    fun bareAutolinkDoesNotConsumeTrailingSentencePunctuation() {
+        val document = OpenCodeMarkdownParser.parse("Go to https://example.com.")
+        val paragraph = assertIs<MarkdownBlock.Paragraph>(document.blocks.single())
+        assertEquals(
+            listOf(
+                MarkdownInline.Text("Go to "),
+                MarkdownInline.Link(
+                    destination = "https://example.com",
+                    children = listOf(MarkdownInline.Text("https://example.com")),
+                ),
+                MarkdownInline.Text("."),
+            ),
+            paragraph.inlines,
+        )
+    }
+
+    @Test
+    fun bareAutolinkIsSkippedInsideInlineCode() {
+        val document = OpenCodeMarkdownParser.parse("Use `https://example.com` as-is.")
+        val paragraph = assertIs<MarkdownBlock.Paragraph>(document.blocks.single())
+        assertTrue(paragraph.inlines.none { it is MarkdownInline.Link })
+        assertTrue(paragraph.inlines.any { it is MarkdownInline.Code && it.code == "https://example.com" })
     }
 
     @Test

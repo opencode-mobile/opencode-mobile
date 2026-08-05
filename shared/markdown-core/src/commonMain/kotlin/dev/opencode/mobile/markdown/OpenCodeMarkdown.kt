@@ -266,7 +266,7 @@ object OpenCodeMarkdownDetector {
     private val inlinePattern =
         Regex(
             pattern =
-                """(`[^`]+`)|(!?\[[^]]+]\([^)]+\))|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|((^|[^\*])\*[^*\n]+\*($|[^\*]))|((^|[^_])_[^_\n]+_($|[^_]))""",
+                """(`[^`]+`)|(!?\[[^]]+]\([^)]+\))|(https?://\S+)|(<(https?://[^>\s]+)>)|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|((^|[^\*])\*[^*\n]+\*($|[^\*]))|((^|[^_])_[^_\n]+_($|[^_]))""",
         )
 
     fun shouldRender(text: String): Boolean = blockPattern.containsMatchIn(text) || inlinePattern.containsMatchIn(text)
@@ -696,6 +696,22 @@ object OpenCodeMarkdownParser {
                         index += 1
                     }
                 }
+                text[index] == '<' && looksLikeAngleAutolink(text, index) -> {
+                    val close = text.indexOf('>', index + 1)
+                    if (close > index + 1) {
+                        val destination = text.substring(index + 1, close)
+                        flushText()
+                        inlines +=
+                            MarkdownInline.Link(
+                                destination = destination,
+                                children = listOf(MarkdownInline.Text(destination)),
+                            )
+                        index = close + 1
+                    } else {
+                        buffer.append(text[index])
+                        index += 1
+                    }
+                }
                 text[index] == '[' -> {
                     val closeLabel = text.indexOf("](", index + 1)
                     val closeUrl = if (closeLabel >= 0) text.indexOf(')', closeLabel + 2) else -1
@@ -708,6 +724,21 @@ object OpenCodeMarkdownParser {
                                 children = parseInlines(text.substring(index + 1, closeLabel)).inlines,
                             )
                         index = closeUrl + 1
+                    } else {
+                        buffer.append(text[index])
+                        index += 1
+                    }
+                }
+                looksLikeBareAutolink(text, index) -> {
+                    val match = matchBareAutolink(text, index)
+                    if (match != null) {
+                        flushText()
+                        inlines +=
+                            MarkdownInline.Link(
+                                destination = match.url,
+                                children = listOf(MarkdownInline.Text(match.url)),
+                            )
+                        index = match.endIndex
                     } else {
                         buffer.append(text[index])
                         index += 1
@@ -772,12 +803,58 @@ object OpenCodeMarkdownParser {
     private val tableSeparatorRegex = Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""")
     private val rawHtmlRegex = Regex("""</?[A-Za-z][^>]*>""")
     private const val MAX_LOGBOOK_LANGUAGE_LENGTH = 64
+    private val autolinkTrailingPunctuation = setOf('.', ',', ';', ':', '!', '?', ')', ']', '}', '>', '\'', '"')
 
     private fun String.closesFence(marker: String): Boolean {
         val trimmed = trim()
         return trimmed.length >= marker.length && trimmed.all { char -> char == marker.first() }
     }
 
+    private fun looksLikeAngleAutolink(
+        text: String,
+        index: Int,
+    ): Boolean =
+        text.startsWith("<http://", index, ignoreCase = true) ||
+            text.startsWith("<https://", index, ignoreCase = true)
+
+    private fun looksLikeBareAutolink(
+        text: String,
+        index: Int,
+    ): Boolean {
+        if (index > 0) {
+            val previous = text[index - 1]
+            if (previous.isLetterOrDigit() || previous == '/' || previous == '_' || previous == '-') {
+                return false
+            }
+        }
+        return text.startsWith("http://", index, ignoreCase = true) ||
+            text.startsWith("https://", index, ignoreCase = true)
+    }
+
+    private fun matchBareAutolink(
+        text: String,
+        start: Int,
+    ): BareAutolinkMatch? {
+        var end = start
+        while (end < text.length) {
+            val char = text[end]
+            if (char.isWhitespace() || char == '`' || char == '<' || char == '>') break
+            end += 1
+        }
+        var urlEnd = end
+        while (urlEnd > start && text[urlEnd - 1] in autolinkTrailingPunctuation) {
+            urlEnd -= 1
+        }
+        val url = text.substring(start, urlEnd)
+        val schemeSeparator = url.indexOf("://")
+        if (schemeSeparator < 0 || schemeSeparator + 3 >= url.length) return null
+        return BareAutolinkMatch(url = url, endIndex = urlEnd)
+    }
+
+    private data class BareAutolinkMatch(
+        val url: String,
+        val endIndex: Int,
+    )
 }
 
 fun MarkdownDocument.isLikelyExpandable(): Boolean {

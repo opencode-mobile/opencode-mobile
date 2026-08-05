@@ -185,12 +185,12 @@ rendering.
 | `markdown-h1` | Heading 1 text |
 | `markdown-h2` | Heading 2 text |
 | `markdown-h3` | Heading 3 text |
-| `markdown-link-text` | Link text |
-| `markdown-link-underline` | Link underline |
+| `markdown-link-text` | Link text (body strong; not interactive accent) |
+| `markdown-link-underline` | Link underline (matches link text) |
 | `markdown-code-text` | Inline code text |
-| `markdown-code-bg` | Inline code background |
+| `markdown-code-bg` | Inline code background (ink/white at ~8% alpha, matching desktop `color-mix` tint) |
 | `markdown-quote-text` | Blockquote text |
-| `markdown-quote-bar` | Blockquote bar |
+| `markdown-quote-bar` | Blockquote bar (muted border; not interactive accent) |
 | `markdown-list-marker` | List bullet/number |
 | `markdown-image` | Image label/title |
 | `markdown-hr` | Horizontal rule |

@@ -493,6 +493,7 @@ private struct AssistantMessageBubble: View {
             } else {
                 Text(text.isEmpty ? "…" : text)
                     .font(OpenCodeTypography.body)
+                    .lineSpacing(4)
                     .foregroundStyle(OpenCodeColors.textStrong)
             }
         }

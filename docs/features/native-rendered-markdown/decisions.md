@@ -392,6 +392,26 @@
   limiting rendering to block markdown only.
 - Date: 2026-06-20.
 
+## Bare URLs Autolink Like Explicit Markdown Links
+
+- Decision: bare `http://` / `https://` URLs and angle-bracket `<https://…>`
+  forms become `MarkdownInline.Link` nodes in `shared/markdown-core`, and the
+  detector treats them as renderable inline markdown.
+- Reason: assistants often emit plain URLs without `[label](url)` wrapping;
+  those should still be tappable on both platforms without platform-local
+  linkify.
+- Date: 2026-08-05.
+
+## Link And Quote Chrome Avoid Interactive Accent
+
+- Decision: `markdown-link-text` / `markdown-link-underline` resolve to
+  `text-strong`, and renderers use bold + underline. `markdown-quote-bar`
+  resolves to `border-weak-base` instead of interactive.
+- Reason: accent blue made links and quote bars feel like controls rather than
+  readable prose chrome; body-strong + bold/underline (and muted quote bars)
+  stay visible without stealing attention.
+- Date: 2026-08-05.
+
 ## TextMate Gate Stays Explicit
 
 - Decision: semantic fallback highlighting is allowed only as scaffold and must

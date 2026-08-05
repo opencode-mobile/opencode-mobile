@@ -21,6 +21,8 @@ class OpenCodeRenderedMarkdownDetectorTest {
         assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("Use `inline code` here."))
         assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("Read [the docs](https://example.com)."))
         assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("This is **important**."))
+        assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("See https://example.com/docs for details."))
+        assertTrue(OpenCodeRenderedMarkdownDetector.shouldRender("Open <https://example.com>."))
         assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("First paragraph.\n\nSecond paragraph."))
         assertFalse(OpenCodeRenderedMarkdownDetector.shouldRender("Plain text stays native."))
     }

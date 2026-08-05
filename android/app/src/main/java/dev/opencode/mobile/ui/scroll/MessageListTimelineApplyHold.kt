@@ -6,14 +6,20 @@ package dev.opencode.mobile.ui.scroll
  *
  * Required frames flush immediately under scroll; other kinds may pend.
  * View-owned only (not Screen Model).
+ *
+ * Only **user-initiated** scroll should hold. Programmatic auto-follow
+ * (`LazyListState.isScrollInProgress` during pin-to-end) must keep applying
+ * streaming frames, matching iOS (`isDragging` / `isDecelerating` /
+ * `isUserScrolling` only).
  */
 internal object MessageListTimelineApplyHold {
     /**
-     * Hold incoming messages + timelineFrame when the list is scrolling and the
-     * frame is not Required. Null frames are treated as non-Required.
+     * Hold incoming messages + timelineFrame when a user scroll gesture is
+     * active (or still decelerating from one) and the frame is not Required.
+     * Null frames are treated as non-Required.
      */
     fun shouldHold(
-        isScrollInProgress: Boolean,
+        isUserScrollInProgress: Boolean,
         isRequired: Boolean,
-    ): Boolean = isScrollInProgress && !isRequired
+    ): Boolean = isUserScrollInProgress && !isRequired
 }

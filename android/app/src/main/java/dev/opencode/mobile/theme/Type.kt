@@ -37,7 +37,8 @@ val Typography =
                 fontFamily = FontFamily.Default,
                 fontWeight = FontWeight.Normal,
                 fontSize = 16.sp,
-                lineHeight = 24.sp,
+                // ~1.6× size: agent prose reads less dense than Material's 24sp default.
+                lineHeight = 26.sp,
                 letterSpacing = 0.sp,
             ),
         bodyMedium =

@@ -86,12 +86,16 @@ object ThemeResolver {
         tokens["markdown-h1"] = textStrong(ink, isDark)
         tokens["markdown-h2"] = textStrong(ink, isDark)
         tokens["markdown-h3"] = textStrong(ink, isDark)
-        tokens["markdown-link-text"] = interactive
-        tokens["markdown-link-underline"] = interactive
+        // Links use body-strong + bold/underline chrome, not interactive accent.
+        tokens["markdown-link-text"] = textStrong(ink, isDark)
+        tokens["markdown-link-underline"] = textStrong(ink, isDark)
         tokens["markdown-code-text"] = textStrong(ink, isDark)
-        tokens["markdown-code-bg"] = if (isDark) "#FFFFFF14" else "#0000000A"
+        // Match desktop session-ui: color-mix(text, 8%, transparent). Native
+        // attributed backgrounds have no CSS padding, so keep the same 8% tint.
+        tokens["markdown-code-bg"] = if (isDark) "#FFFFFF14" else "#00000014"
         tokens["markdown-quote-text"] = mix(ink, neutral, if (isDark) 0.42f else 0.45f)
-        tokens["markdown-quote-bar"] = interactive
+        // Quote bar matches desktop muted border, not interactive accent.
+        tokens["markdown-quote-bar"] = tokens.getValue("border-weak-base")
         tokens["markdown-list-marker"] = mix(ink, neutral, if (isDark) 0.42f else 0.45f)
         tokens["markdown-image"] = mix(ink, neutral, if (isDark) 0.58f else 0.62f)
         tokens["markdown-hr"] = mix(neutral, ink, if (isDark) 0.03f else 0.07f)

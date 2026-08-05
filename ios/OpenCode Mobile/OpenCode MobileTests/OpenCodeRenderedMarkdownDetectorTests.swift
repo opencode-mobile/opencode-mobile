@@ -16,6 +16,8 @@ struct OpenCodeRenderedMarkdownDetectorTests {
         #expect(OpenCodeRenderedMarkdownDetector.shouldRender("Use `inline code` here."))
         #expect(OpenCodeRenderedMarkdownDetector.shouldRender("Read [the docs](https://example.com)."))
         #expect(OpenCodeRenderedMarkdownDetector.shouldRender("This is **important**."))
+        #expect(OpenCodeRenderedMarkdownDetector.shouldRender("See https://example.com/docs for details."))
+        #expect(OpenCodeRenderedMarkdownDetector.shouldRender("Open <https://example.com>."))
         #expect(!OpenCodeRenderedMarkdownDetector.shouldRender("First paragraph.\n\nSecond paragraph."))
         #expect(!OpenCodeRenderedMarkdownDetector.shouldRender("Plain text stays native."))
     }
