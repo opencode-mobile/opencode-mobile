@@ -177,6 +177,25 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(reloaded.latest.contains("ses-1"))
     }
 
+    func testReadySurvivesLaterBusyUntilFocus() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        store.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "idle")])
+        await ready.waitUntil { $0.contains("ses-1") }
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.contains("ses-1"))
+    }
+
     func testReadyExpiresAfterTTL() async {
         let statusStore = FakeReadyStatusStore()
         let eventStream = FakeForegroundEventStream()

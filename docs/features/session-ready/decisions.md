@@ -38,6 +38,15 @@ must match these locks.
 - **Rejected:** Persist Ready only; rebuild from `session.time.updated`.
 - **Supersedes:** process-local Ready/watched; Ready-only persistence.
 
+## Persist with SharedPreferences / UserDefaults
+
+- **Decision:** Store the Ready/watched snapshot in Android SharedPreferences and
+  iOS UserDefaults (JSON blob), not Room / SwiftData.
+- **Why:** Small ephemeral cue set with a TTL; sync load on store init matches
+  the LiveStore singleton shape. Peers already use preferences-style stores for
+  similar non-relational app state.
+- **Rejected:** Room / SwiftData for this blob (overkill for a TTL cue map).
+
 ## Pill tone is `success`
 
 - **Decision:** Session List maps `SessionListStatus.ready` → pill text

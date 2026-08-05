@@ -8,6 +8,8 @@ Ticket: [OPE-105](https://linear.app/opencode-mobile/issue/OPE-105/session-ready
   manual smoke and PR.
 - Product contract and decisions locked in `plan.md` / `decisions.md`.
 - Docs directory: `docs/features/session-ready/`.
+- Review follow-up: removed accidental OPE-107 home-activity docs from this
+  branch; aligned plan/parity docs with persist+watched catch-up.
 
 ## Design System
 

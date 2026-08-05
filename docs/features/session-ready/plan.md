@@ -140,13 +140,14 @@ scattering watched/Ready flags across home and Session Chat ViewModels.
 2. Ready is set only when a **watched** session transitions to idle (status
    `type` idle / non-busy) while it is **not** the focused Session Chat session.
 3. Watched is **one-shot per turn**: consumed when idle is handled (Ready set or
-   suppressed because focused). Watched is process-local only.
+   suppressed because focused). Watched and Ready both persist across launch
+   with a **24h TTL**.
 4. Watch starts only from `notifyPromptSent` **or** from observing `busy` /
    `retry` for the **currently focused** session (not from home-only status
-   observation).
-5. Ready persists across launch with a **24h TTL** from ready-at time.
-   `clearCache()` and open-session focus still clear immediately. Clear on Clear
-   Data and on Connection Profile save/apply.
+   observation), including focused `session.status` SSE and leave-while-busy.
+5. On relaunch, restored watches catch up to Ready if the session is already
+   idle. `clearCache()` and open-session focus still clear immediately. Clear on
+   Clear Data and on Connection Profile save/apply.
 6. Directory-scoped observation matches other LiveStores.
 7. Ready is not cleared when a Ready session becomes busy/retry again; Running
    mapping hides it until focus.
@@ -160,9 +161,10 @@ scattering watched/Ready flags across home and Session Chat ViewModels.
 - On idle for watched + not focused → add to ready, remove from watched.
 - On idle for watched + focused → remove from watched, do not set Ready.
 - On `setFocusedSession(id)` → remove `id` from ready.
-- Do not subscribe to a parallel third event architecture; status refresh already
-  covers `session.status` / `session.idle` via
-  `DefaultSessionStatusLiveStore`.
+- Also observe focused `session.status` / watched `session.idle` on
+  `ForegroundEventStream` so busy→idle is not lost to status-map debounce
+  coalescing (see decisions).
+- Persist Ready + watched; restore and catch up on launch.
 
 **Depth / leverage / locality:** Callers learn four methods; watch/idle/focus
 interplay, one-shot watch, and Ready emission live in one place. Home and chat
@@ -250,8 +252,11 @@ optimistic).
 
 ### Persistence and Connection Profile scoping
 
-- Persist Ready entries (id + directory + ready-at) locally; restore on launch;
-  expire after **24 hours**. Watched stays in-memory only.
+- Persist Ready **and** watched entries (id + directory + timestamp) locally;
+  restore on launch; expire after **24 hours**. Restored watches catch up to
+  Ready when the session is already idle after relaunch.
+- Android: SharedPreferences; iOS: UserDefaults (small cue blob; not Room /
+  SwiftData).
 - Scope observations by `directory` (worktree), matching LiveStore norms.
 - Call `clearCache()` on Clear Data (next to other LiveStores) **and** on
   Connection Profile save/apply (`profileSaved`), so Ready cannot leak across
