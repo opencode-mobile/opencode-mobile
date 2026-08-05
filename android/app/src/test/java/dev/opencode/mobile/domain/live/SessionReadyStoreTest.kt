@@ -203,14 +203,83 @@ class SessionReadyStoreTest {
             assertEquals(emptySet<String>(), store.observeReadyIds("/repo").first())
         }
 
+    @Test
+    fun readySurvivesRestartViaPersistence() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val persistence = InMemorySessionReadyPersistence()
+            val first = createStore(statusStore, persistence = persistence)
+            first.observeReadyIds("/repo").first()
+            first.notifyPromptSent("ses-1", "/repo")
+            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            advanceUntilIdle()
+            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            advanceUntilIdle()
+
+            val second = createStore(FakeReadyStatusStore(), persistence = persistence)
+            assertTrue(second.observeReadyIds("/repo").first().contains("ses-1"))
+        }
+
+    @Test
+    fun watchedSurvivesRestart_thenIdleCatchUp_setsReady() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val persistence = InMemorySessionReadyPersistence()
+            val first = createStore(statusStore, persistence = persistence)
+            first.observeReadyIds("/repo").first()
+            first.notifyPromptSent("ses-1", "/repo")
+            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            advanceUntilIdle()
+            // Kill before idle: only watched is persisted.
+
+            val statusStore2 = FakeReadyStatusStore()
+            val second = createStore(statusStore2, persistence = persistence)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    second.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            // Catch-up: session already idle after restart.
+            statusStore2.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().contains("ses-1"))
+        }
+
+    @Test
+    fun readyExpiresAfterTtl() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val persistence = InMemorySessionReadyPersistence()
+            var now = 1_000_000L
+            val clock = SessionReadyClock { now }
+            val first = createStore(statusStore, persistence = persistence, clock = clock)
+            first.observeReadyIds("/repo").first()
+            first.notifyPromptSent("ses-1", "/repo")
+            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            advanceUntilIdle()
+            statusStore.emit("/repo", mapOf("ses-1" to status("idle")))
+            advanceUntilIdle()
+
+            now += DefaultSessionReadyStore.READY_TTL_MS
+            val second = createStore(FakeReadyStatusStore(), persistence = persistence, clock = clock)
+            assertEquals(emptySet<String>(), second.observeReadyIds("/repo").first())
+        }
+
     private fun createStore(
         statusStore: SessionStatusLiveStore,
         eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
+        persistence: SessionReadyPersistence = InMemorySessionReadyPersistence(),
+        clock: SessionReadyClock = SessionReadyClock { System.currentTimeMillis() },
     ): DefaultSessionReadyStore =
         DefaultSessionReadyStore(
             sessionStatusLiveStore = statusStore,
             eventStream = eventStream,
             liveStoreScope = LiveStoreScope(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + testDispatcher)),
+            persistence = persistence,
+            clock = clock,
         )
 
     private fun status(type: String): SessionStatus = SessionStatus(sessionId = "ses-1", raw = mapOf("type" to type))

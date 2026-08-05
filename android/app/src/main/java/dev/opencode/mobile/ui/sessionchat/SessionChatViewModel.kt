@@ -202,6 +202,10 @@ class SessionChatViewModel
             }
         }
 
+        fun clearSessionReadyFocus() {
+            sessionReadyStore.setFocusedSession(null)
+        }
+
         fun loadMessages() {
             timeline.loadMessages()
         }
@@ -912,7 +916,7 @@ class SessionChatViewModel
         }
 
         override fun onCleared() {
-            sessionReadyStore.setFocusedSession(null)
+            clearSessionReadyFocus()
             super.onCleared()
         }
 

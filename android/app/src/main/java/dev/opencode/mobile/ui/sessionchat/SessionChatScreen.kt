@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +93,13 @@ fun SessionChatScreen(
 
     LaunchedEffect(sessionId, sessionTitle, worktree) {
         viewModel.bind(sessionId, sessionTitle, worktree)
+    }
+    // Nav keeps the chat ViewModel on the back stack; clear Ready focus when the
+    // screen leaves composition (parity with iOS stopObserving onDisappear).
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.clearSessionReadyFocus()
+        }
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

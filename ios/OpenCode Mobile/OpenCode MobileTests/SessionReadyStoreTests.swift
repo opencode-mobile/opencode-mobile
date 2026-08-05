@@ -113,6 +113,106 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(ready.latest.isEmpty)
     }
 
+    func testReadySurvivesRestartViaPersistence() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let persistence = InMemorySessionReadyPersistence()
+        let first = DefaultSessionReadyStore(
+            sessionStatusLiveStore: statusStore,
+            eventStream: eventStream,
+            persistence: persistence
+        )
+        let ready = ReadyCollector(store: first, directory: "/repo")
+        await ready.waitForSubscription()
+
+        first.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "idle")])
+        await ready.waitUntil { $0.contains("ses-1") }
+        ready.cancel()
+
+        let second = DefaultSessionReadyStore(
+            sessionStatusLiveStore: FakeReadyStatusStore(),
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        let reloaded = ReadyCollector(store: second, directory: "/repo")
+        await reloaded.waitForSubscription()
+        await reloaded.waitUntil { $0.contains("ses-1") }
+        reloaded.cancel()
+
+        XCTAssertTrue(reloaded.latest.contains("ses-1"))
+    }
+
+    func testWatchedSurvivesRestart_thenIdleCatchUp_setsReady() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let persistence = InMemorySessionReadyPersistence()
+        let first = DefaultSessionReadyStore(
+            sessionStatusLiveStore: statusStore,
+            eventStream: eventStream,
+            persistence: persistence
+        )
+        let ready = ReadyCollector(store: first, directory: "/repo")
+        await ready.waitForSubscription()
+
+        first.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        ready.cancel()
+
+        let statusStore2 = FakeReadyStatusStore()
+        let second = DefaultSessionReadyStore(
+            sessionStatusLiveStore: statusStore2,
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        let reloaded = ReadyCollector(store: second, directory: "/repo")
+        await reloaded.waitForSubscription()
+        statusStore2.emit(directory: "/repo", statuses: [:])
+        await reloaded.waitUntil { $0.contains("ses-1") }
+        reloaded.cancel()
+
+        XCTAssertTrue(reloaded.latest.contains("ses-1"))
+    }
+
+    func testReadyExpiresAfterTTL() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let persistence = InMemorySessionReadyPersistence()
+        let clock = MutableSessionReadyClock(nowEpochMsValue: 1_000_000)
+        let first = DefaultSessionReadyStore(
+            sessionStatusLiveStore: statusStore,
+            eventStream: eventStream,
+            persistence: persistence,
+            clock: clock
+        )
+        let ready = ReadyCollector(store: first, directory: "/repo")
+        await ready.waitForSubscription()
+
+        first.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "idle")])
+        await ready.waitUntil { $0.contains("ses-1") }
+        ready.cancel()
+
+        clock.nowEpochMsValue += DefaultSessionReadyStore.readyTTLMs
+        let second = DefaultSessionReadyStore(
+            sessionStatusLiveStore: FakeReadyStatusStore(),
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence,
+            clock: clock
+        )
+        let reloaded = ReadyCollector(store: second, directory: "/repo")
+        await reloaded.waitForSubscription()
+        await settle()
+        reloaded.cancel()
+
+        XCTAssertTrue(reloaded.latest.isEmpty)
+    }
+
     private func status(type: String) -> SessionStatus {
         SessionStatus(sessionID: "ses-1", raw: ["type": type])
     }

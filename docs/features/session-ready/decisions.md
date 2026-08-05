@@ -23,15 +23,20 @@ must match these locks.
 - **Rejected:** Watch on any foreground status observation; watch-on-send only
   (misses “opened chat mid-turn, left while still Working”).
 
-## Ready and watched are process-local
+## Ready and watched persist across restart with 24h TTL
 
-- **Decision:** Do not persist watched or Ready across process death or cold
-  start. Memory only; `clearCache()` on Clear Data and Connection Profile
-  change.
-- **Why:** Product forbids cold-start backlog and accepts missed idle while
-  backgrounded. Persisting Ready would resurrect cues the user may have already
-  handled on desktop.
-- **Rejected:** Persist Ready ids only; rebuild from `session.time.updated`.
+- **Decision:** Persist Ready **and** watched entries (session id, directory,
+  timestamp) on device. Restore on launch. Auto-expire each entry **24 hours**
+  after it was set. On restore, if a watched session is already idle (or absent
+  from the busy status map), set Ready (catch-up for process death mid-turn).
+  Opening Session Chat, Clear Data, and Connection Profile apply still clear
+  immediately.
+- **Why:** Users kill the app while waiting; Ready-only persistence misses that
+  case because idle never ran on the dead process. Android log evidence:
+  `watch started` → `focus cleared` → process killed → no `idle handled` / no
+  `session_ready` prefs; iOS (alive) got `outcome=ready`.
+- **Rejected:** Persist Ready only; rebuild from `session.time.updated`.
+- **Supersedes:** process-local Ready/watched; Ready-only persistence.
 
 ## Pill tone is `success`
 
@@ -130,7 +135,18 @@ must match these locks.
   home but does not clear those stores today — Ready still needs an explicit
   clear on profile apply for product isolation.
 
-## Watch also arms from live `session.status` while focused
+## Android Session Chat focus clears on screen dispose
+
+- **Decision:** Android calls `setFocusedSession(null)` from
+  `SessionChatScreen` `DisposableEffect`/`onDispose` (and still from
+  `onCleared`), not only when the ViewModel is destroyed.
+- **Why:** Navigation keeps the chat ViewModel on the back stack after
+  returning home, so `onCleared` never ran and idle was treated as
+  `suppressed-open` while the user was already on home. iOS already clears on
+  `stopObserving`/`onDisappear`.
+- **Evidence:** Android log `idle handled outcome=suppressed-open` after prompt
+  watch, with no prior focus-clear, while iOS logged `outcome=ready` for the
+  same turn.
 
 - **Decision:** While Session Chat is focused, a `session.status` SSE for that
   session starts a watch immediately (before debounced status-map reload).
@@ -143,8 +159,8 @@ must match these locks.
 
 - **Decision:** OPE-105 description Solution / Remaining / Implementation
   Decisions use **focused Session Chat** watch wording, deferred needs-approval
-  shipping, `success` tone, process-local Ready, and design-system before home
-  mapping. Keep triage label `ready-for-agent`; do not set In Progress until
-  implementation starts.
+  shipping, `success` tone, Ready persistence with 24h TTL, and design-system
+  before home mapping. Keep triage label `ready-for-agent`; do not set In
+  Progress until implementation starts.
 - **Why:** Agent work needs one contract. Early ticket “foreground-connected”
   busy watch is superseded by the focused-chat lock.

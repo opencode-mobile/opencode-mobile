@@ -16,6 +16,9 @@ desktop/TUI-only work.
 - On transition to idle for a watched session that is **not** focused in Session
   Chat → set Ready.
 - Opening Session Chat for that session → clear Ready.
+- Persist Ready **and** watched across process death / cold start; expire each
+  entry **24 hours** after it was set. Restored watches catch up to Ready if
+  the session is already idle after relaunch.
 - Map Ready into the home Session List trailing status pill with product copy
   **Ready**.
 - Row display priority: needs approval (when present) > Running (Working /
@@ -28,7 +31,7 @@ desktop/TUI-only work.
 
 - Server or cross-client unread / last-visited sync.
 - Ready from `session.time.updated` / last-visit heuristics.
-- Cold-start rebuild of Ready from history.
+- Rebuilding Ready from server history (only restore previously set local Ready).
 - Unread counts, app-icon badges, push.
 - Auto-sort Ready rows to the top.
 - Letter-badge dots / title weight.
@@ -131,17 +134,19 @@ scattering watched/Ready flags across home and Session Chat ViewModels.
 
 **Invariants** (part of the interface):
 
-1. Ready is never rebuilt from history, `session.time.updated`, or process
-   launch.
+1. Ready is never rebuilt from history or `session.time.updated`. Previously
+   set Ready entries are restored from device persistence until cleared or
+   expired.
 2. Ready is set only when a **watched** session transitions to idle (status
    `type` idle / non-busy) while it is **not** the focused Session Chat session.
 3. Watched is **one-shot per turn**: consumed when idle is handled (Ready set or
-   suppressed because focused).
+   suppressed because focused). Watched is process-local only.
 4. Watch starts only from `notifyPromptSent` **or** from observing `busy` /
    `retry` for the **currently focused** session (not from home-only status
    observation).
-5. Process-local memory only; `clearCache()` must leave no Ready/watched
-   residue. Clear on Clear Data and on Connection Profile save/apply.
+5. Ready persists across launch with a **24h TTL** from ready-at time.
+   `clearCache()` and open-session focus still clear immediately. Clear on Clear
+   Data and on Connection Profile save/apply.
 6. Directory-scoped observation matches other LiveStores.
 7. Ready is not cleared when a Ready session becomes busy/retry again; Running
    mapping hides it until focus.
@@ -189,11 +194,12 @@ SessionStatusLiveStore  ──statuses──►  SessionReadyStore  ──ready 
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Quiet: clearCache / launch
+  [*] --> Quiet: clearCache
+  [*] --> Ready: restore persisted\n(under 24h TTL)
   Quiet --> Watched: notifyPromptSent\nor focused busy/retry
   Watched --> Ready: idle AND not focused
   Watched --> Quiet: idle AND focused\n(consume watch, no Ready)
-  Ready --> Quiet: setFocusedSession(that id)\nor clearCache
+  Ready --> Quiet: setFocusedSession(that id)\nor clearCache\nor 24h TTL
   Ready --> Ready: busy/retry again\n(Ready stays; Running hides)
   Ready --> Watched: notifyPromptSent\nor focused busy/retry\n(new turn; Ready stays until focus)
 ```
@@ -244,7 +250,8 @@ optimistic).
 
 ### Persistence and Connection Profile scoping
 
-- **In-memory only** for watched and Ready (locked in decisions).
+- Persist Ready entries (id + directory + ready-at) locally; restore on launch;
+  expire after **24 hours**. Watched stays in-memory only.
 - Scope observations by `directory` (worktree), matching LiveStore norms.
 - Call `clearCache()` on Clear Data (next to other LiveStores) **and** on
   Connection Profile save/apply (`profileSaved`), so Ready cannot leak across
@@ -264,7 +271,8 @@ identical watch triggers, Ready rules, pill copy/tone, and tests.
 | Scatter flags in ViewModels | Home sets Ready; chat clears | Shallow; duplicated state machine; hard to test consistently |
 | Extend `SessionStatusLiveStore` | Piggyback Ready on status store | Couples unrelated concerns; widens status interface |
 | Watch on any home-observed busy | Literal early ticket wording | Noisy Ready for desktop/TUI while home is open |
-| Persist Ready across launch | Survive process death | Conflicts with no cold-start backlog |
+| Persist Ready across launch | Survive process death | **Chosen:** device persist + 24h TTL; not a history rebuild |
+| Rebuild from `session.time.updated` | Catch missed idle | Noisy; conflicts with desktop-quiet |
 
 ### Test surface
 
@@ -278,6 +286,7 @@ Cross the `SessionReadyStore` seam (same as callers):
 - Running mapping suppresses Ready display when both present.
 - Ready survives later busy until focus (Ready set unchanged on busy).
 - `clearCache` empties Ready.
+- Ready survives process restart via persistence; expires after 24h TTL.
 - Home mapper: Working/Retrying > Ready > idle.
 
 Prior art: `LiveStoreTest` / `SessionTodoLiveStoreTest`,

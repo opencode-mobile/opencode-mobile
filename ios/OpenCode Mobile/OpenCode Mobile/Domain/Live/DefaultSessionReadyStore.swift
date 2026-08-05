@@ -3,18 +3,32 @@ import OSLog
 
 @MainActor
 final class DefaultSessionReadyStore: SessionReadyStore {
+    static let readyTTLMs: Double = 24 * 60 * 60 * 1000
+
     private final class DirectoryHandle {
         var continuations: [UUID: AsyncStream<Set<String>>.Continuation] = [:]
         var statusTask: Task<Void, Never>?
         var previousTypes: [String: String?] = [:]
     }
 
+    private struct ReadyRecord {
+        var directory: String
+        var readyAtEpochMs: Double
+    }
+
+    private struct WatchRecord {
+        var directory: String
+        var watchedAtEpochMs: Double
+    }
+
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let eventStream: any ForegroundEventStream
+    private let persistence: any SessionReadyPersistence
+    private let clock: any SessionReadyClock
     private let logger = Logger(subsystem: "dev.opencode.mobile", category: "SessionReadyStore")
 
-    private var watched: [String: String] = [:]
-    private var ready: [String: String] = [:]
+    private var watched: [String: WatchRecord] = [:]
+    private var ready: [String: ReadyRecord] = [:]
     private var focusedSessionID: String?
     private var focusedDirectory: String?
     private var handles: [String: DirectoryHandle] = [:]
@@ -22,10 +36,20 @@ final class DefaultSessionReadyStore: SessionReadyStore {
 
     init(
         sessionStatusLiveStore: any SessionStatusLiveStore,
-        eventStream: any ForegroundEventStream
+        eventStream: any ForegroundEventStream,
+        persistence: any SessionReadyPersistence = InMemorySessionReadyPersistence(),
+        clock: any SessionReadyClock = SystemSessionReadyClock()
     ) {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.eventStream = eventStream
+        self.persistence = persistence
+        self.clock = clock
+        loadPersisted()
+        for directory in Set(watched.values.map(\.directory)) {
+            let handle = handles[directory] ?? DirectoryHandle()
+            handles[directory] = handle
+            ensureStatusObservation(directory: directory, handle: handle)
+        }
         eventTask = Task { [weak self] in
             guard let self else { return }
             for await event in self.eventStream.events() {
@@ -35,6 +59,10 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     }
 
     func observeReadyIds(directory: String) -> AsyncStream<Set<String>> {
+        let pruned = pruneExpired()
+        for dir in pruned {
+            publishReady(directory: dir, prune: false)
+        }
         let handle = handles[directory] ?? DirectoryHandle()
         handles[directory] = handle
         ensureStatusObservation(directory: directory, handle: handle)
@@ -56,8 +84,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     }
 
     func notifyPromptSent(sessionID: String, directory: String) {
-        watched[sessionID] = directory
-        logger.info("watch started reason=prompt session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)")
+        startWatch(sessionID: sessionID, directory: directory, reason: "prompt")
         let handle = handles[directory] ?? DirectoryHandle()
         handles[directory] = handle
         ensureStatusObservation(directory: directory, handle: handle)
@@ -67,24 +94,26 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         if sessionID == nil {
             if let priorID = focusedSessionID, let priorDirectory = focusedDirectory {
                 let type = handles[priorDirectory]?.previousTypes[priorID] ?? nil
-                if type.isBusyOrRetry, watched[priorID] != priorDirectory {
-                    watched[priorID] = priorDirectory
-                    logger.info(
-                        "watch started reason=leave-while-busy session=\(priorID, privacy: .public) directory=\(priorDirectory, privacy: .public)"
-                    )
+                if type.isBusyOrRetry {
+                    startWatch(sessionID: priorID, directory: priorDirectory, reason: "leave-while-busy")
                 }
             }
+            let priorID = focusedSessionID
             focusedSessionID = nil
             focusedDirectory = nil
+            if let priorID {
+                logger.info("focus cleared session=\(priorID, privacy: .public)")
+            }
             return
         }
 
         guard let sessionID else { return }
         focusedSessionID = sessionID
         focusedDirectory = directory
-        if let readyDirectory = ready.removeValue(forKey: sessionID) {
+        if let readyRecord = ready.removeValue(forKey: sessionID) {
             logger.info("ready cleared on focus session=\(sessionID, privacy: .public)")
-            publishReady(directory: readyDirectory)
+            persistState()
+            publishReady(directory: readyRecord.directory)
         }
         if let directory {
             let handle = handles[directory] ?? DirectoryHandle()
@@ -98,9 +127,10 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         ready.removeAll()
         focusedSessionID = nil
         focusedDirectory = nil
+        persistState()
         for (directory, handle) in handles {
             handle.previousTypes.removeAll()
-            publishReady(directory: directory, handle: handle)
+            publishReady(directory: directory, handle: handle, prune: false)
         }
         logger.info("clearCache")
     }
@@ -110,17 +140,12 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         switch type {
         case "session.status":
             guard sessionID == focusedSessionID, let directory = focusedDirectory else { return }
-            if watched[sessionID] != directory {
-                watched[sessionID] = directory
-                logger.info(
-                    "watch started reason=focused-status-event session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
-                )
-            }
+            startWatch(sessionID: sessionID, directory: directory, reason: "focused-status-event")
             let handle = handles[directory] ?? DirectoryHandle()
             handles[directory] = handle
             ensureStatusObservation(directory: directory, handle: handle)
         case "session.idle":
-            guard let directory = watched[sessionID] else { return }
+            guard let directory = watched[sessionID]?.directory else { return }
             _ = handleIdle(sessionID: sessionID, directory: directory, markPreviousIdle: true)
         default:
             break
@@ -138,8 +163,13 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     }
 
     private func onStatuses(directory: String, statuses: [String: SessionStatus]) {
+        let pruned = pruneExpired()
+        for dir in pruned where dir != directory {
+            publishReady(directory: dir, prune: false)
+        }
         guard let handle = handles[directory] else { return }
-        let sessionIDs = Set(handle.previousTypes.keys).union(statuses.keys)
+        let watchedIDs = Set(watched.compactMap { id, record in record.directory == directory ? id : nil })
+        let sessionIDs = Set(handle.previousTypes.keys).union(statuses.keys).union(watchedIDs)
         var readyChanged = false
 
         for sessionID in sessionIDs {
@@ -147,28 +177,29 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             let prev = handle.previousTypes[sessionID] ?? nil
             let isBusy = type.isBusyOrRetry
             let wasBusy = prev.isBusyOrRetry
+            let firstSighting = watched[sessionID]?.directory == directory &&
+                !handle.previousTypes.keys.contains(sessionID)
 
             if sessionID == focusedSessionID,
                directory == focusedDirectory,
                isBusy
             {
-                if watched[sessionID] != directory {
-                    watched[sessionID] = directory
-                    logger.info(
-                        "watch started reason=focused-busy session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
-                    )
-                }
+                startWatch(sessionID: sessionID, directory: directory, reason: "focused-busy")
             }
 
-            if watched[sessionID] == directory, wasBusy, !isBusy {
-                if handleIdle(sessionID: sessionID, directory: directory, markPreviousIdle: false) {
-                    readyChanged = true
+            if watched[sessionID]?.directory == directory {
+                let becameIdle = wasBusy && !isBusy
+                let restoredAlreadyIdle = firstSighting && !isBusy
+                if becameIdle || restoredAlreadyIdle {
+                    if handleIdle(sessionID: sessionID, directory: directory, markPreviousIdle: false) {
+                        readyChanged = true
+                    }
                 }
             }
 
             if statuses[sessionID] != nil {
                 handle.previousTypes[sessionID] = type
-            } else {
+            } else if handle.previousTypes[sessionID] != nil {
                 handle.previousTypes.removeValue(forKey: sessionID)
             }
         }
@@ -179,8 +210,19 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     }
 
     @discardableResult
+    private func startWatch(sessionID: String, directory: String, reason: String) -> Bool {
+        if watched[sessionID]?.directory == directory { return false }
+        watched[sessionID] = WatchRecord(directory: directory, watchedAtEpochMs: clock.nowEpochMs())
+        logger.info(
+            "watch started reason=\(reason, privacy: .public) session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
+        )
+        persistState()
+        return true
+    }
+
+    @discardableResult
     private func handleIdle(sessionID: String, directory: String, markPreviousIdle: Bool) -> Bool {
-        guard watched[sessionID] == directory else { return false }
+        guard watched[sessionID]?.directory == directory else { return false }
         watched.removeValue(forKey: sessionID)
         if markPreviousIdle {
             let handle = handles[directory] ?? DirectoryHandle()
@@ -188,24 +230,111 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             handle.previousTypes[sessionID] = "idle"
         }
         if sessionID == focusedSessionID {
+            persistState()
             logger.info(
                 "idle handled outcome=suppressed-open session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
             )
             return false
         }
-        ready[sessionID] = directory
+        ready[sessionID] = ReadyRecord(directory: directory, readyAtEpochMs: clock.nowEpochMs())
         logger.info(
             "idle handled outcome=ready session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
         )
+        persistState()
         publishReady(directory: directory)
         return true
     }
 
-    private func readyIds(for directory: String) -> Set<String> {
-        Set(ready.compactMap { id, dir in dir == directory ? id : nil })
+    private func loadPersisted() {
+        let now = clock.nowEpochMs()
+        let state = persistence.load()
+        var pruned = false
+        for entry in state.ready {
+            if now - entry.atEpochMs >= Self.readyTTLMs {
+                pruned = true
+                continue
+            }
+            ready[entry.sessionID] = ReadyRecord(
+                directory: entry.directory,
+                readyAtEpochMs: entry.atEpochMs
+            )
+        }
+        for entry in state.watched {
+            if now - entry.atEpochMs >= Self.readyTTLMs {
+                pruned = true
+                continue
+            }
+            if ready[entry.sessionID] != nil { continue }
+            watched[entry.sessionID] = WatchRecord(
+                directory: entry.directory,
+                watchedAtEpochMs: entry.atEpochMs
+            )
+        }
+        if pruned || !ready.isEmpty || !watched.isEmpty {
+            persistState()
+        }
+        if !ready.isEmpty {
+            logger.info("loaded persisted ready count=\(self.ready.count, privacy: .public)")
+        }
+        if !watched.isEmpty {
+            logger.info("loaded persisted watched count=\(self.watched.count, privacy: .public)")
+        }
     }
 
-    private func publishReady(directory: String?, handle: DirectoryHandle? = nil) {
+    @discardableResult
+    private func pruneExpired() -> Set<String> {
+        let now = clock.nowEpochMs()
+        let expiredReady = ready.filter { now - $0.value.readyAtEpochMs >= Self.readyTTLMs }.map(\.key)
+        let expiredWatched = watched.filter { now - $0.value.watchedAtEpochMs >= Self.readyTTLMs }.map(\.key)
+        guard !expiredReady.isEmpty || !expiredWatched.isEmpty else { return [] }
+        var directories = Set<String>()
+        for sessionID in expiredReady {
+            if let record = ready.removeValue(forKey: sessionID) {
+                directories.insert(record.directory)
+                logger.info("ready expired session=\(sessionID, privacy: .public)")
+            }
+        }
+        for sessionID in expiredWatched {
+            if let record = watched.removeValue(forKey: sessionID) {
+                directories.insert(record.directory)
+                logger.info("watch expired session=\(sessionID, privacy: .public)")
+            }
+        }
+        persistState()
+        return directories
+    }
+
+    private func persistState() {
+        let state = SessionReadyPersistedState(
+            ready: ready.map { sessionID, record in
+                SessionReadyPersistedEntry(
+                    sessionID: sessionID,
+                    directory: record.directory,
+                    atEpochMs: record.readyAtEpochMs
+                )
+            },
+            watched: watched.map { sessionID, record in
+                SessionReadyPersistedEntry(
+                    sessionID: sessionID,
+                    directory: record.directory,
+                    atEpochMs: record.watchedAtEpochMs
+                )
+            }
+        )
+        persistence.save(state)
+    }
+
+    private func readyIds(for directory: String) -> Set<String> {
+        Set(ready.compactMap { id, record in record.directory == directory ? id : nil })
+    }
+
+    private func publishReady(directory: String?, handle: DirectoryHandle? = nil, prune: Bool = true) {
+        if prune {
+            let pruned = pruneExpired()
+            for dir in pruned where dir != directory {
+                publishReady(directory: dir, prune: false)
+            }
+        }
         if let directory {
             let target = handle ?? handles[directory]
             let ids = readyIds(for: directory)

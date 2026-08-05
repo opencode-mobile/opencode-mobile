@@ -22,6 +22,9 @@ Ticket: [OPE-105](https://linear.app/opencode-mobile/issue/OPE-105/session-ready
 - `SessionReadyStore` / `DefaultSessionReadyStore`; AppContainer DI; Clear Data
   + profile-apply `clearCache`; Session Chat focus/send hooks; home Ready
   observation + composite mapping.
+- Persist Ready (UserDefaults) with 24h TTL; restore on launch.
+- Also persist **watched** and catch up to Ready after relaunch if the session
+  is already idle (covers kill-while-waiting).
 
 ## Android
 
@@ -29,6 +32,12 @@ Ticket: [OPE-105](https://linear.app/opencode-mobile/issue/OPE-105/session-ready
 - `SessionReadyStore` / `DefaultSessionReadyStore`; LiveStoreModule; Clear Data
   + profile-apply `clearCache`; Session Chat bind/`onCleared`/send hooks; home
   Ready observation + composite mapping.
+- Fix: clear Ready focus from `SessionChatScreen` `onDispose` so leaving chat
+  while the ViewModel stays on the nav back stack still unfocuses (was stuck
+  `suppressed-open` → idle pill instead of Ready).
+- Persist Ready (SharedPreferences) with 24h TTL; restore on launch.
+- Also persist **watched** and catch up to Ready after relaunch if the session
+  is already idle (covers kill-while-waiting).
 
 ## Blockers
 
@@ -38,7 +47,7 @@ Ticket: [OPE-105](https://linear.app/opencode-mobile/issue/OPE-105/session-ready
 
 - [x] Design-system: `SessionListStatus.ready` + session-list docs/galleries
 - [x] Domain: `SessionReadyStore` (watched + Ready + focus; Ready survives later
-      busy until focus)
+      busy until focus; Ready persists across restart with 24h TTL)
 - [x] Session Chat: `notifyPromptSent` on send accepted; `setFocusedSession`
 - [x] Home: observe Ready ids; composite mapping Running > Ready > idle
 - [x] Clear Data + Connection Profile apply: `clearCache()`
