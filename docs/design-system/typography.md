@@ -58,7 +58,7 @@ intentionally deferred so they can be added once across both platforms.
 | `type.display` | `displaySmall`, 28sp, medium | 28pt, medium |
 | `type.title` | `titleLarge`, 20sp, medium | 20pt, medium |
 | `type.heading` | `titleMedium`, 16sp, medium | 16pt, medium |
-| `type.body` | `bodyLarge`, 16sp, regular | 16pt, regular |
+| `type.body` | `bodyLarge`, 16sp, regular, 26sp line | 16pt, regular (+4pt line spacing in Session Chat / rendered-markdown prose) |
 | `type.bodySecondary` | `bodyMedium`, 14sp, regular | 14pt, regular |
 | `type.caption` | `bodySmall`, 13sp, regular | 13pt, regular |
 | `type.code` | `CodeTextStyle`, 14sp, monospace | 14pt, monospaced |
@@ -66,4 +66,6 @@ intentionally deferred so they can be added once across both platforms.
 
 These sizes keep the web extraction's compact feel where it is readable on
 mobile, while allowing native body text to remain slightly larger than the
-desktop web UI.
+desktop web UI. Session Chat agent prose uses `type.body` (not
+`type.bodySecondary`); Android `bodyLarge` line height is 26sp (~1.6×) and iOS
+adds 4pt line spacing on assistant/markdown body so long replies are less dense.

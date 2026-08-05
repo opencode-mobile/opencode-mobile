@@ -28,8 +28,9 @@ surfaces, not for general web content.
   `syntax-operator`, punctuation → `syntax-punctuation`).
 - Component tokens: `outgoingMessage.*` when composed inside
   `OpenCodeOutgoingMessage`.
-- Typography roles: `type.body`, `type.bodySecondary`, `type.caption`,
-  `type.code`, `type.heading`.
+- Typography roles: `type.body` for assistant/outgoing prose (paragraphs, lists,
+  quotes), `type.bodySecondary` for table cells, `type.caption`, `type.code`,
+  `type.heading`.
 
 ## Behavior
 

@@ -148,7 +148,7 @@ private fun MarkdownBlockView(
         is MarkdownBlock.Paragraph ->
             MarkdownInlineText(
                 inlines = block.inlines,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 onLinkTap = onLinkTap,
             )
         is MarkdownBlock.Heading ->
@@ -176,7 +176,7 @@ private fun MarkdownBlockView(
                 )
                 MarkdownInlineText(
                     inlines = block.inlines,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = openCodeColor("markdown-quote-text"),
                     onLinkTap = onLinkTap,
                     modifier = Modifier.weight(1f),
@@ -214,7 +214,7 @@ private fun MarkdownList(
     items: List<List<MarkdownInline>>,
     onLinkTap: ((String) -> Unit)?,
 ) {
-    val style = MaterialTheme.typography.bodyMedium
+    val style = MaterialTheme.typography.bodyLarge
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val markerWidth =
@@ -254,14 +254,14 @@ private fun ListRow(
     ) {
         Text(
             text = marker,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = openCodeColor("markdown-list-marker"),
             textAlign = TextAlign.End,
             modifier = Modifier.width(markerWidth),
         )
         MarkdownInlineText(
             inlines = inlines,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             onLinkTap = onLinkTap,
             modifier = Modifier.weight(1f),
         )
@@ -725,7 +725,7 @@ private fun headingStyle(level: Int): TextStyle =
     when (level) {
         1 -> MaterialTheme.typography.titleLarge
         2 -> MaterialTheme.typography.titleMedium
-        else -> MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+        else -> MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
     }
 
 @Composable

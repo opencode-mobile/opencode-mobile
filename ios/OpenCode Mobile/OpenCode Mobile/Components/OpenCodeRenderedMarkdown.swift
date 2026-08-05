@@ -73,11 +73,11 @@ struct OpenCodeRenderedMarkdown: View {
     private func blockView(_ block: NativeMarkdownBlock) -> some View {
         switch block {
         case .paragraph(let inlines):
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong, lineSpacing: 4)
         case .heading(let level, let inlines):
             inlineText(inlines, font: headingFont(level), color: headingColor(level))
         case .blockquote(let inlines):
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.markdownQuoteText)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.markdownQuoteText, lineSpacing: 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 13)
                 .overlay(alignment: .leading) {
@@ -139,7 +139,7 @@ struct OpenCodeRenderedMarkdown: View {
                         .foregroundStyle(OpenCodeColors.markdownListMarker)
                 }
                 .accessibilityHidden(true)
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong)
+            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong, lineSpacing: 4)
         }
         .accessibilityElement(children: .combine)
     }
@@ -147,9 +147,10 @@ struct OpenCodeRenderedMarkdown: View {
     private func inlineText(
         _ inlines: [NativeMarkdownInline],
         font: Font,
-        color: Color
+        color: Color,
+        lineSpacing: CGFloat = 0
     ) -> some View {
-        InlineMarkdownText(inlines: inlines, font: font, color: color)
+        InlineMarkdownText(inlines: inlines, font: font, color: color, lineSpacing: lineSpacing)
     }
 
     @ViewBuilder
@@ -695,9 +696,11 @@ private struct InlineMarkdownText: View {
     let inlines: [NativeMarkdownInline]
     let font: Font
     let color: Color
+    var lineSpacing: CGFloat = 0
 
     var body: some View {
         Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
+            .lineSpacing(lineSpacing)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

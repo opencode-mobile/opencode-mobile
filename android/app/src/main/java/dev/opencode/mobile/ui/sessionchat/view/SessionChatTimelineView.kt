@@ -615,7 +615,7 @@ private fun AssistantMessageBubble(
             Text(
                 text = text.ifBlank { "…" },
                 modifier = bubbleModifier,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
     }
