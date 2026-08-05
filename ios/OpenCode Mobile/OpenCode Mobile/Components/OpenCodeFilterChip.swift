@@ -41,7 +41,7 @@ struct OpenCodeFilterChip: View {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                             .padding(.horizontal, count >= 10 ? 8 : 6)
-                            .frame(minWidth: countBadgeMinWidth(count), height: Self.metaSize)
+                            .frame(minWidth: countBadgeMinWidth(count), minHeight: Self.metaSize, maxHeight: Self.metaSize)
                             .background(
                                 OpenCodeColors.textStrong.opacity(0.10),
                                 in: Capsule()

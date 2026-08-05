@@ -27,7 +27,7 @@ struct SessionListDockGalleryView: View {
                 onFilterSelected: { selectedFilterId = $0 },
                 onAddProject: {},
                 onNewSession: {},
-                onRemoveProject: { selectedFilterId = SessionListFilterTab.allId }
+                onRemoveProject: { _ in selectedFilterId = SessionListFilterTab.allId }
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
