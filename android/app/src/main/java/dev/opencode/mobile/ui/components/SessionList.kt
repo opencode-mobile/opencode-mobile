@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,9 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.domain.home.HomeSessionLadder
+import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -44,6 +49,7 @@ data class SessionListSession(
     val subtitle: String,
     val status: SessionListStatus,
     val caption: String,
+    val updatedAtEpochMs: Long? = null,
 )
 
 data class SessionListFilterTab(
@@ -69,9 +75,20 @@ fun SessionList(
     createError: String? = null,
     emptyContent: (@Composable () -> Unit)? = null,
 ) {
+    val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
         remember(sessions, selectedFilterId) {
             sessions.visibleForFilter(selectedFilterId)
+        }
+    val ladderSections =
+        remember(visibleSessions, recentWindowHours) {
+            HomeSessionLadder.group(
+                sessions = visibleSessions,
+                updatedAtEpochMs = { it.updatedAtEpochMs },
+                isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Ready },
+                recentWindowHours = recentWindowHours,
+                nowEpochMs = System.currentTimeMillis(),
+            )
         }
 
     val background = openCodeColor("background-base")
@@ -107,20 +124,44 @@ fun SessionList(
                 modifier = Modifier.matchParentSize(),
                 contentPadding = PaddingValues(bottom = listBottomFadeHeight),
             ) {
-                itemsIndexed(visibleSessions, key = { _, session -> session.id }) { index, session ->
-                    OpenCodeListItem(
-                        title = session.title,
-                        subtitle = compactHomePath(session.subtitle),
-                        status = session.status.toListItemStatus(),
-                        caption = session.caption.takeIf { it.isNotEmpty() },
-                        startDecorator = StartDecorator.Letter(session.letter, session.letterAccent),
-                        onClick = { onSessionSelected(session) },
-                    )
-                    if (index < visibleSessions.lastIndex) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 60.dp),
-                            color = borderWeaker,
-                        )
+                ladderSections.forEach { section ->
+                    when (section.kind) {
+                        HomeSessionLadderKind.Recent -> {
+                            item(key = "header-${section.id}") {
+                                SessionListSectionHeader(title = "Recent")
+                            }
+                            itemsIndexed(
+                                section.items,
+                                key = { _, session -> "${section.id}-${session.id}" },
+                            ) { index, session ->
+                                SessionListRow(
+                                    session = session,
+                                    showStatusDot = true,
+                                    showDivider = index < section.items.lastIndex,
+                                    borderWeaker = borderWeaker,
+                                    onSessionSelected = onSessionSelected,
+                                )
+                            }
+                        }
+                        HomeSessionLadderKind.Day,
+                        HomeSessionLadderKind.Week,
+                        -> {
+                            item(key = "header-${section.id}") {
+                                SessionListSectionHeader(title = section.title)
+                            }
+                            itemsIndexed(
+                                section.items,
+                                key = { _, session -> "${section.id}-${session.id}" },
+                            ) { index, session ->
+                                SessionListRow(
+                                    session = session,
+                                    showStatusDot = false,
+                                    showDivider = index < section.items.lastIndex,
+                                    borderWeaker = borderWeaker,
+                                    onSessionSelected = onSessionSelected,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -150,6 +191,51 @@ fun SessionList(
                     }
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun SessionListSectionHeader(title: String) {
+    Text(
+        text = title.uppercase(),
+        color = openCodeColor("text-base"),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.5.sp,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
+private fun SessionListRow(
+    session: SessionListSession,
+    showStatusDot: Boolean,
+    showDivider: Boolean,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    onSessionSelected: (SessionListSession) -> Unit,
+) {
+    val status = session.status.toListItemStatus()
+    OpenCodeListItem(
+        title = session.title,
+        subtitle = compactHomePath(session.subtitle),
+        status = status,
+        caption = session.caption.takeIf { it.isNotEmpty() },
+        startDecorator =
+            StartDecorator.Letter(
+                character = session.letter,
+                accent = session.letterAccent,
+                statusDot = if (showStatusDot) status.tone else null,
+            ),
+        onClick = { onSessionSelected(session) },
+    )
+    if (showDivider) {
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 60.dp),
+            color = borderWeaker,
         )
     }
 }
@@ -212,6 +298,7 @@ private fun SessionListPreview() {
                         subtitle = "/Users/demo/opencode-mobile",
                         status = SessionListStatus.Running,
                         caption = "now",
+                        updatedAtEpochMs = System.currentTimeMillis(),
                     ),
                     SessionListSession(
                         id = "2",
@@ -222,6 +309,7 @@ private fun SessionListPreview() {
                         subtitle = "/Users/demo/playground",
                         status = SessionListStatus.Idle,
                         caption = "14m ago",
+                        updatedAtEpochMs = System.currentTimeMillis() - 14 * 60_000L,
                     ),
                 ),
             filterTabs =

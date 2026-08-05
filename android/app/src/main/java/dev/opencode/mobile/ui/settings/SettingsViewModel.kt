@@ -80,6 +80,10 @@ class SettingsViewModel
             HomeDisplayPreferences.updateHideUserDirectoryPrefix(enabled)
         }
 
+        fun setRecentWindowHours(hours: Int) {
+            HomeDisplayPreferences.updateRecentWindowHours(hours)
+        }
+
         fun setTextMateEnabled(enabled: Boolean) {
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
             messageContentPreparer.clearDocumentCache()

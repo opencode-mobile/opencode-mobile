@@ -29,7 +29,11 @@ trailing meta (caption above a status pill).
 - **Start decorator** (`none` by default):
   - **`none`**: no leading visual.
   - **`letter`**: one uppercase character in a **32×32** circle; callers choose a
-    **`LetterAccent`**. Glyph is **14pt** bold rounded.
+    **`LetterAccent`**. Glyph is **14pt** bold rounded. Optional **`statusDot`**
+    (`OpenCodeListItemStatusTone`) draws a **10pt** filled circle at the
+    bottom-trailing corner of the badge, ringed with `background-base` so it
+    sits on the circle edge. Omit the dot when status is only shown elsewhere
+    (or not at all).
   - **`icon`**: **24×24** Material catalog icon.
 
 ## Token Usage
@@ -53,7 +57,8 @@ When `status` and/or `caption` are set, they form a trailing meta column
 edge. Custom `trailing` content (chevrons, etc.) sits after that column.
 
 Status pill fill uses a low-alpha tone wash for interactive/success/warning/error
-and `surface.raised` for info/idle-style tones.
+and a low-alpha `text-strong` wash for info/idle (label uses `text-base`) so Idle
+reads as a real pill without an accent color.
 
 ## Platform Notes
 

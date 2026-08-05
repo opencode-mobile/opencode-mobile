@@ -12,11 +12,13 @@ live status, settings) is owned by the home shell, not this component.
 
 - Models:
   - `SessionListSession`: `id`, `title`, `worktree`, `letter`, `letterAccent`,
-    `subtitle`, `status`, `caption`.
+    `subtitle`, `status`, `caption`, optional `updatedAtEpochMs` (used for home
+    time-ladder grouping and within-section sort).
   - `SessionListStatus`: `idle` | `running` | `ready`.
   - `SessionListFilterTab`: `id`, `title`, `count`. Use id `all` for the
     cross-project tab; other ids match `SessionListSession.worktree`.
-- Required content: ordered `sessions` (may be empty) and ordered `filterTabs`
+- Required content: `sessions` (may be empty; order before filter is not
+  significant — the list filters then groups) and ordered `filterTabs`
   (at least **All** when filters are shown).
 - Required filter state: `selectedFilterId` plus `onFilterSelected(id)`.
 - Optional content:
@@ -47,15 +49,23 @@ live status, settings) is owned by the home shell, not this component.
 
 ## Behavior
 
-The component is stateless for data. Callers own sorting, captions, and
+The component is stateless for session payloads. Callers own captions and
 Idle/Running/Ready mapping (Running outranks Ready; Ready uses pill text
 **Ready** with `success` tone), filter models/selection, add-project and
 new-session flows, and page chrome.
 
+Session List applies the selected project filter, then groups via
+`HomeSessionLadder` using `updatedAtEpochMs`, Running/Ready attention, and
+`HomeDisplayPreferences.recentWindowHours`. Within each section, rows sort by
+`updatedAtEpochMs` descending.
+
 Layout:
 
 1. Scrolling `OpenCodeListItem` rows (letter badge, title, compact path, trailing
-   caption + status pill) with leading-inset dividers.
+   caption + status pill) with leading-inset dividers. Home ladders group as
+   Recent → day → week; **Recent** uses a plain section header (same language as
+   day/week) and letter-badge **status dots** (bottom-trailing). Day/week rows
+   omit the dot.
 2. Bottom fade under the dock (`background.base` `0 → 0.7 → 0.7`; top = dock top
    + 16; bottom = physical screen edge).
 3. `OpenCodeSessionListDock`: optional create error, horizontal filter chips, Add

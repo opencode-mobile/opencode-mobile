@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
@@ -54,12 +55,15 @@ fun SettingsScreen(
     onShowSessionListOnHomeChange: (Boolean) -> Unit,
     hideUserDirectoryPrefix: Boolean,
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
+    recentWindowHours: Int,
+    onRecentWindowHoursChange: (Int) -> Unit,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
     var showThemePicker by remember { mutableStateOf(false) }
+    var showRecentWindowPicker by remember { mutableStateOf(false) }
     val currentTheme = ThemeManager.currentTheme
     val themeImportError = ThemeManager.loadError
     val presets =
@@ -139,6 +143,15 @@ fun SettingsScreen(
                         onCheckedChange = onHideUserDirectoryPrefixChange,
                     )
                 },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "Recent Window",
+                subtitle = HomeSessionLadder.formatWindowHoursLabel(recentWindowHours),
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Recent Window"),
+                onClick = { showRecentWindowPicker = true },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -247,6 +260,34 @@ fun SettingsScreen(
         }
     }
 
+    OpenCodeBottomSheet(
+        visible = showRecentWindowPicker,
+        title = "Recent Window",
+        onDismissRequest = { showRecentWindowPicker = false },
+    ) {
+        Text(
+            text = "Sessions stay in Recent while Running or Ready, or when updated within this window.",
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor("text-base"),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        HomeSessionLadder.ALLOWED_WINDOW_HOURS.forEach { hours ->
+            OpenCodeBottomSheetEntry(
+                title = HomeSessionLadder.formatWindowHoursLabel(hours),
+                endDecorator =
+                    if (hours == recentWindowHours) {
+                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                    } else {
+                        BottomSheetEntryDecorator.None
+                    },
+                onClick = {
+                    onRecentWindowHoursChange(hours)
+                    showRecentWindowPicker = false
+                },
+            )
+        }
+    }
+
     OpenCodeDialog(
         visible = showClearConfirmation,
         title = "Clear all data?",
@@ -303,6 +344,8 @@ private fun SettingsScreenLightPreview() {
             onShowSessionListOnHomeChange = {},
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
+            recentWindowHours = HomeDisplayPreferences.recentWindowHours,
+            onRecentWindowHoursChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
         )
@@ -327,6 +370,8 @@ private fun SettingsScreenDarkPreview() {
             onShowSessionListOnHomeChange = {},
             hideUserDirectoryPrefix = HomeDisplayPreferences.hideUserDirectoryPrefix,
             onHideUserDirectoryPrefixChange = {},
+            recentWindowHours = HomeDisplayPreferences.recentWindowHours,
+            onRecentWindowHoursChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
         )

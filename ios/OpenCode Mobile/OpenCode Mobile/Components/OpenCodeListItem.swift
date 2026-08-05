@@ -3,6 +3,7 @@ import SwiftUI
 private let listItemCornerRadius: CGFloat = 8
 private let listItemLetterBadgeSize: CGFloat = 32
 private let listItemLetterGlyphSize: CGFloat = 14
+private let listItemLetterStatusDotSize: CGFloat = 10
 private let listItemIconDecoratorSize: CGFloat = 24
 private let listItemVerticalPadding: CGFloat = 12
 private let listItemTitleSubtitleSpacing: CGFloat = 2
@@ -150,6 +151,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 2)
             }
             if let status {
                 Text(status.text)
@@ -196,7 +198,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         case .error:
             return OpenCodeColors.error
         case .info:
-            return OpenCodeColors.textWeaker
+            return OpenCodeColors.textBase
         }
     }
 
@@ -212,7 +214,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         case .error:
             return OpenCodeColors.error.opacity(0.12)
         case .info:
-            return OpenCodeColors.surfaceRaisedBase
+            return OpenCodeColors.textStrong.opacity(0.10)
         }
     }
 
@@ -235,13 +237,27 @@ struct OpenCodeListItem<Trailing: View>: View {
         switch startDecorator {
         case .none:
             EmptyView()
-        case let .letter(character, accent):
-            Text(normalizedBadgeLetter(character))
-                .font(.system(size: listItemLetterGlyphSize, weight: .bold, design: .rounded))
-                .foregroundStyle(accent.badgeTint)
-                .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
-                .background(accent.badgeFill, in: Circle())
-                .accessibilityHidden(true)
+        case let .letter(character, accent, statusDot):
+            ZStack(alignment: .bottomTrailing) {
+                Text(normalizedBadgeLetter(character))
+                    .font(.system(size: listItemLetterGlyphSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(accent.badgeTint)
+                    .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
+                    .background(accent.badgeFill, in: Circle())
+
+                if let statusDot {
+                    Circle()
+                        .fill(statusForeground(statusDot))
+                        .frame(width: listItemLetterStatusDotSize, height: listItemLetterStatusDotSize)
+                        .overlay(
+                            Circle()
+                                .stroke(OpenCodeColors.backgroundBase, lineWidth: 2)
+                        )
+                        .offset(x: 1, y: 1)
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityHidden(true)
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon)
                 .font(.system(size: listItemIconDecoratorSize))

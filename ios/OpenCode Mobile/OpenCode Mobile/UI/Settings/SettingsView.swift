@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var showTextMateLanguages = false
     @State private var showClearConfirmation = false
     @State private var showThemePicker = false
+    @State private var showRecentWindowPicker = false
     @State private var showThemeImporter = false
     @State private var importError: String?
     @State private var themeManager = ThemeManager.shared
@@ -101,6 +102,17 @@ struct SettingsView: View {
                             .labelsHidden()
                             .tint(OpenCodeColors.interactive)
                         }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "Recent Window",
+                        subtitle: HomeSessionLadder.formatWindowHoursLabel(
+                            homeDisplayPreferences.recentWindowHours
+                        ),
+                        style: .card,
+                        startDecorator: .icon(.list, accessibilityLabel: "Recent Window"),
+                        action: { showRecentWindowPicker = true }
                     )
                     .padding(.horizontal, 16)
 
@@ -236,6 +248,32 @@ struct SettingsView: View {
                     }
                 )
                 .id(preset.id)
+            }
+        }
+        .openCodeBottomSheet(
+            isPresented: $showRecentWindowPicker,
+            title: "Recent Window",
+            scrollTargetID: "hours-\(homeDisplayPreferences.recentWindowHours)"
+        ) {
+            Text("Sessions stay in Recent while Running or Ready, or when updated within this window.")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+            ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
+                OpenCodeBottomSheetEntry(
+                    title: HomeSessionLadder.formatWindowHoursLabel(hours),
+                    endDecorator: hours == homeDisplayPreferences.recentWindowHours
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        homeDisplayPreferences.setRecentWindowHours(hours)
+                        showRecentWindowPicker = false
+                    }
+                )
+                .id("hours-\(hours)")
             }
         }
         .fileImporter(

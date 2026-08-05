@@ -416,7 +416,8 @@ private extension Array where Element == ProjectSectionItem {
                         letterAccent: section.letterAccent,
                         subtitle: section.pathSubtitle,
                         status: session.sessionListStatus(),
-                        caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
+                        caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
+                        updatedAtEpochMs: session.updatedAtEpochMs
                     )
                 )
             }
