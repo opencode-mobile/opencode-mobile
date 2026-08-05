@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
+import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.message.BlockDecorationCache
@@ -36,6 +37,7 @@ class SettingsViewModel
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val sessionTodoLiveStore: SessionTodoLiveStore,
+        private val sessionReadyStore: SessionReadyStore,
         private val messageRepository: MessageRepository,
         private val messageContentPreparer: MessageContentPreparer,
         private val textMateLogbook: TextMateLogbook,
@@ -50,6 +52,7 @@ class SettingsViewModel
                 sessionLiveStore.clearCache()
                 sessionStatusLiveStore.clearCache()
                 sessionTodoLiveStore.clearCache()
+                sessionReadyStore.clearCache()
                 messageRepository.clearMessageCache()
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()

@@ -269,6 +269,15 @@ extension Container {
         }.singleton
     }
 
+    var sessionReadyStore: Factory<DefaultSessionReadyStore> {
+        self { @MainActor in
+            DefaultSessionReadyStore(
+                sessionStatusLiveStore: self.sessionStatusLiveStore(),
+                eventStream: self.foregroundEventStream()
+            )
+        }.singleton
+    }
+
     var sessionLiveStore: Factory<DefaultSessionLiveStore> {
         self { @MainActor in
             DefaultSessionLiveStore(
@@ -318,6 +327,7 @@ extension Container {
                 activeConnectionManager: self.activeConnectionManager(),
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
+                sessionReadyStore: self.sessionReadyStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
@@ -342,6 +352,7 @@ extension Container {
                 permissionLiveStore: self.permissionLiveStore(),
                 questionLiveStore: self.questionLiveStore(),
                 sessionTodoLiveStore: self.sessionTodoLiveStore(),
+                sessionReadyStore: self.sessionReadyStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
@@ -405,6 +416,7 @@ extension Container {
             shared.permissionLiveStore().clearCache()
             shared.questionLiveStore().clearCache()
             shared.sessionTodoLiveStore().clearCache()
+            shared.sessionReadyStore().clearCache()
             shared.messageRepository().clearMessageCache()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()

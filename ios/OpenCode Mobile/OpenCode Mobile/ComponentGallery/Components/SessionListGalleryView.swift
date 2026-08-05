@@ -44,7 +44,7 @@ private let sessionListGallerySamples: [SessionListSession] = [
         letter: "O",
         letterAccent: .violet,
         subtitle: "/Users/demo/opencode-mobile",
-        status: .idle,
+        status: .ready,
         caption: "3h ago"
     ),
     SessionListSession(

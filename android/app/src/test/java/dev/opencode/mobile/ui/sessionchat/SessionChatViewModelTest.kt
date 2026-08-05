@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
+import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
@@ -2664,6 +2665,7 @@ class SessionChatViewModelTest {
             sessionRepository = sessionRepository,
             permissionLiveStore = permissionLiveStore,
             questionLiveStore = questionLiveStore,
+            sessionReadyStore = EmptySessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(json),

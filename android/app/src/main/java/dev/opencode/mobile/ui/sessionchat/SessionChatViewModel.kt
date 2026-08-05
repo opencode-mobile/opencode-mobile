@@ -7,9 +7,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
+import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.agent.AgentRepository
@@ -56,6 +58,7 @@ class SessionChatViewModel
         private val permissionLiveStore: PermissionLiveStore = EmptyPermissionLiveStore,
         private val questionLiveStore: QuestionLiveStore = EmptyQuestionLiveStore,
         private val sessionTodoLiveStore: SessionTodoLiveStore = EmptySessionTodoLiveStore,
+        private val sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
         eventDomainAdapter: EventDomainAdapter,
@@ -180,6 +183,7 @@ class SessionChatViewModel
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
+            sessionReadyStore.setFocusedSession(sessionId, worktree)
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -374,6 +378,7 @@ class SessionChatViewModel
                 worktree = worktree,
                 onOptimisticRows = { rows -> timeline.beginOptimisticSend(rows) },
                 onSendAccepted = {
+                    sessionReadyStore.notifyPromptSent(sessionId, worktree)
                     sessionInfo.refreshStatus()
                     timeline.reloadAfterSend(
                         onComplete = { composer.clearSending() },
@@ -904,6 +909,11 @@ class SessionChatViewModel
                     },
                 id = snackbarSequence,
             )
+        }
+
+        override fun onCleared() {
+            sessionReadyStore.setFocusedSession(null)
+            super.onCleared()
         }
 
         private fun logI(message: String) {

@@ -551,10 +551,11 @@ private fun List<ProjectSectionUi>.toSessionListFilterTabs(sessionCount: Int): L
             )
         }
 
-private fun SessionSummary.toSessionListStatus(): SessionListStatus =
+@Suppress("UNUSED_PARAMETER")
+private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
     when (statusLabel) {
         "Working", "Retrying" -> SessionListStatus.Running
-        else -> SessionListStatus.Idle
+        else -> if (isReady) SessionListStatus.Ready else SessionListStatus.Idle
     }
 
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =

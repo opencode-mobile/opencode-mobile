@@ -20,6 +20,7 @@ final class SessionChatViewModel {
     private let permissionLiveStore: any PermissionLiveStore
     private let questionLiveStore: any QuestionLiveStore
     private let sessionTodoLiveStore: any SessionTodoLiveStore
+    private let sessionReadyStore: any SessionReadyStore
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
@@ -54,6 +55,7 @@ final class SessionChatViewModel {
         permissionLiveStore: (any PermissionLiveStore)? = nil,
         questionLiveStore: (any QuestionLiveStore)? = nil,
         sessionTodoLiveStore: (any SessionTodoLiveStore)? = nil,
+        sessionReadyStore: (any SessionReadyStore)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
@@ -68,6 +70,7 @@ final class SessionChatViewModel {
         self.permissionLiveStore = permissionLiveStore ?? EmptyPermissionLiveStore()
         self.questionLiveStore = questionLiveStore ?? EmptyQuestionLiveStore()
         self.sessionTodoLiveStore = sessionTodoLiveStore ?? EmptySessionTodoLiveStore()
+        self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -117,6 +120,7 @@ final class SessionChatViewModel {
 
     func startObserving() {
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
+        sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
         sessionInfo.startObserving()
         timeline.startObserving()
         startPermissionObservation()
@@ -302,6 +306,7 @@ final class SessionChatViewModel {
             },
             onSendAccepted: { [weak self] in
                 guard let self else { return }
+                self.sessionReadyStore.notifyPromptSent(sessionID: self.sessionID, directory: self.worktree)
                 await self.sessionInfo.refreshStatus()
                 await self.timeline.reloadAfterSend(
                     onComplete: { [weak self] in self?.composer.clearSending() },
@@ -617,6 +622,7 @@ final class SessionChatViewModel {
         questionTask?.cancel()
         todoTask?.cancel()
         sessionTodoLiveStore.setLive(false, sessionID: sessionID, directory: worktree)
+        sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
         reviewChanges.stop()
     }
 

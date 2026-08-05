@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
+import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
@@ -55,6 +56,7 @@ class MainScreenViewModel
         private val eventDomainAdapter: EventDomainAdapter,
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
+        private val sessionReadyStore: SessionReadyStore,
         private val foregroundEventStream: ForegroundEventStream,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
@@ -82,6 +84,7 @@ class MainScreenViewModel
             refresh()
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
+                    sessionReadyStore.clearCache()
                     refresh()
                 }
             }
@@ -511,10 +514,11 @@ class MainScreenViewModel
                         combine(
                             sessionLiveStore.observeSessions(worktree),
                             sessionStatusLiveStore.observeStatuses(worktree),
-                        ) { sessions, statuses ->
-                            sessions to statuses
-                        }.collect { (sessions, statuses) ->
-                            updateSectionFromLiveData(worktree, sessions, statuses)
+                            sessionReadyStore.observeReadyIds(worktree),
+                        ) { sessions, statuses, readyIds ->
+                            Triple(sessions, statuses, readyIds)
+                        }.collect { (sessions, statuses, readyIds) ->
+                            updateSectionFromLiveData(worktree, sessions, statuses, readyIds)
                         }
                     }
                 }
@@ -529,6 +533,7 @@ class MainScreenViewModel
             worktree: String,
             sessions: List<Session>,
             statuses: Map<String, SessionStatus>,
+            readyIds: Set<String>,
         ) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
@@ -541,6 +546,7 @@ class MainScreenViewModel
                         sessionDomainAdapter.toSessionSummary(
                             session,
                             statusLabel = statuses[session.id]?.let(eventDomainAdapter::statusLabel),
+                            isReady = session.id in readyIds,
                         )
                     }
             val updatedSection =

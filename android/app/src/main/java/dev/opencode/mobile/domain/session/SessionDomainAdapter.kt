@@ -52,6 +52,7 @@ class SessionDomainAdapter {
     fun toSessionSummary(
         session: Session,
         statusLabel: String? = null,
+        isReady: Boolean = false,
     ): SessionSummary =
         SessionSummary(
             id = session.id,
@@ -59,6 +60,7 @@ class SessionDomainAdapter {
             statusLabel = statusLabel,
             updatedAtLabel = session.updatedAtEpochMs?.let(::updatedAtLabel),
             updatedAtEpochMs = session.updatedAtEpochMs,
+            isReady = isReady,
         )
 
     fun toSessionStatus(

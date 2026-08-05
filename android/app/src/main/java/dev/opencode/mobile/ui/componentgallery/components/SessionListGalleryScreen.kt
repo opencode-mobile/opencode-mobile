@@ -56,7 +56,7 @@ private val sessionListGallerySamples =
             letter = 'O',
             letterAccent = LetterAccent.Violet,
             subtitle = "/Users/demo/opencode-mobile",
-            status = SessionListStatus.Idle,
+            status = SessionListStatus.Ready,
             caption = "3h ago",
         ),
         SessionListSession(

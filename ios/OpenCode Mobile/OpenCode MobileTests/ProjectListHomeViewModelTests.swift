@@ -337,6 +337,10 @@ private func makeViewModel(
         sessionRepository: sessionRepository,
         eventStream: eventStream
     )
+    let sessionReadyStore = DefaultSessionReadyStore(
+        sessionStatusLiveStore: sessionStatusLiveStore,
+        eventStream: eventStream
+    )
     return ProjectListHomeViewModel(
         projectRepository: projectRepository,
         filesystemRepository: filesystemRepository,
@@ -345,6 +349,7 @@ private func makeViewModel(
         activeConnectionManager: manager,
         sessionLiveStore: sessionLiveStore,
         sessionStatusLiveStore: sessionStatusLiveStore,
+        sessionReadyStore: sessionReadyStore,
         foregroundEventStream: eventStream,
         connectionSessionCoordinator: coordinator,
         newSessionModelSelectionResolver: newSessionModelSelectionResolver

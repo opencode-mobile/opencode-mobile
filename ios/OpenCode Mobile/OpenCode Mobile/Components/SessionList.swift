@@ -5,6 +5,7 @@ private let sessionListFallbackBottomSpacer: CGFloat = 168
 enum SessionListStatus: Hashable {
     case idle
     case running
+    case ready
 }
 
 struct SessionListSession: Identifiable, Hashable {
@@ -181,6 +182,8 @@ struct SessionList<EmptyContent: View>: View {
             OpenCodeListItemStatus(text: "Idle", tone: .info)
         case .running:
             OpenCodeListItemStatus(text: "Running", tone: .interactive)
+        case .ready:
+            OpenCodeListItemStatus(text: "Ready", tone: .success)
         }
     }
 }
