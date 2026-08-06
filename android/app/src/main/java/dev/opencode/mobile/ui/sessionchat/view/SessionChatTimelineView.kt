@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +51,7 @@ import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
 import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
@@ -103,12 +103,12 @@ internal fun SessionChatTimelineView(
     modifier: Modifier = Modifier,
 ) {
     when (props.timeline) {
-        SessionChatTimelineState.Loading -> Box(
-            modifier = modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator()
-        }
+        SessionChatTimelineState.Loading -> OpenCodeStatusStack(
+            title = "Loading messages",
+            subtitle = "Fetching timeline…",
+            testTag = "sessionChatLoading",
+            modifier = modifier.fillMaxSize(),
+        )
 
         SessionChatTimelineState.Error -> Box(
             modifier = modifier
@@ -236,6 +236,7 @@ private fun SessionChatTimelineReadyView(
 
     val apply = committedFrame?.let(TimelineApply::classify)
     val layoutAffectingRevision = apply?.layoutAffectingRevision ?: 0L
+    val structureAffectingRevision = apply?.structureAffectingRevision ?: 0L
     val growBottomRevision = apply?.growBottomRevision ?: 0L
     val messageIds = remember(committedMessages) { committedMessages.map { it.id } }
     val timeline =
@@ -244,6 +245,7 @@ private fun SessionChatTimelineReadyView(
             firstMessageId = committedMessages.firstOrNull()?.id,
             lastMessageId = committedMessages.lastOrNull()?.id,
             layoutAffectingRevision = layoutAffectingRevision,
+            structureAffectingRevision = structureAffectingRevision,
             growBottomRevision = growBottomRevision,
             autoFollowEnabled = true,
             messageIdsChronological = messageIds,

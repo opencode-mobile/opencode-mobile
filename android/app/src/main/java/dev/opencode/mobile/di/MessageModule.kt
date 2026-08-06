@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.SessionMessageEngine
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import javax.inject.Singleton
 
 @Module
@@ -50,6 +51,7 @@ abstract class MessageModule {
             eventStream: ForegroundEventStream,
             liveStoreScope: LiveStoreScope,
             activeConnectionManager: dev.opencode.mobile.network.ActiveConnectionManager,
+            sessionCache: SessionCache,
         ): MessageSync =
             MessageSync(
                 listMessages = { sessionId, directory ->
@@ -67,6 +69,7 @@ abstract class MessageModule {
                         "${connection.baseUrl.lowercase()}|${connection.username.lowercase()}"
                     }
                 },
+                sessionCache = sessionCache,
             )
     }
 }

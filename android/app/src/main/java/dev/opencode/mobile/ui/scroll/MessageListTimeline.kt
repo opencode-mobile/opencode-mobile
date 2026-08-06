@@ -59,6 +59,7 @@ internal fun rememberMessageListTimeline(
     layoutAffectingRevision: Long,
     autoFollowEnabled: Boolean,
     messageIdsChronological: List<String> = emptyList(),
+    structureAffectingRevision: Long = layoutAffectingRevision,
     growBottomRevision: Long = 0L,
     listState: LazyListState = rememberLazyListState(),
 ): MessageListTimelineHandle {
@@ -148,9 +149,11 @@ internal fun rememberMessageListTimeline(
         },
     )
 
-    // Armed: declared-ID layout follow → await layout → exact end.
+    // Armed: declared-ID structure follow → await layout → exact end.
+    // Decorate-only (TextMate / slash collapse) uses layoutAffectingRevision for
+    // unarmed restore only — not armed re-scroll.
     MessageListAutoFollowLayoutAffectingEffect(
-        layoutAffectingRevision = layoutAffectingRevision,
+        layoutAffectingRevision = structureAffectingRevision,
         messageCount = messageCount,
         autoFollowEnabled = autoFollowEnabled,
         listState = listState,

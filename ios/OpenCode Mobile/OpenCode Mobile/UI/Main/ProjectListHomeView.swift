@@ -10,9 +10,11 @@ struct ProjectListHomeView: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var showNewSessionProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
+    private let presentConnectionSetupOnAppear: Bool
 
-    init(viewModel: ProjectListHomeViewModel) {
+    init(viewModel: ProjectListHomeViewModel, presentConnectionSetupOnAppear: Bool = false) {
         _viewModel = State(initialValue: viewModel)
+        self.presentConnectionSetupOnAppear = presentConnectionSetupOnAppear
     }
 
     var body: some View {
@@ -45,6 +47,9 @@ struct ProjectListHomeView: View {
                 SessionChatView(session: session)
             }
             .task {
+                if presentConnectionSetupOnAppear {
+                    presentConnectionSetup()
+                }
                 await viewModel.refresh()
             }
             .onChange(of: viewModel.pendingSessionOpen?.id) { _, _ in
@@ -243,9 +248,11 @@ struct ProjectListHomeView: View {
     private var content: some View {
         switch viewModel.state {
         case .probing, .loading:
-            Spacer()
-            ProgressView()
-            Spacer()
+            OpenCodeStatusStack(
+                title: "Loading sessions",
+                subtitle: "Checking server…",
+                accessibilityIdentifier: "homeLoading"
+            )
         case .disconnected:
             ConnectionOnboardingView(onConnectClick: presentConnectionSetup)
         case let .probeFailed(message):
@@ -519,7 +526,8 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
     )
     let sessionLiveStore = DefaultSessionLiveStore(
         sessionRepository: PreviewSessionRepository(),
-        eventStream: previewEventStream
+        eventStream: previewEventStream,
+        sessionCache: NoOpSessionCache.shared
     )
     let sessionReadyStore = DefaultSessionReadyStore(
         sessionStatusLiveStore: sessionStatusLiveStore,

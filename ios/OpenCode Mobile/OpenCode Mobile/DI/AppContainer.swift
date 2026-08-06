@@ -102,6 +102,40 @@ extension Container {
         self { InMemoryMessageStore() }.singleton
     }
 
+    var sessionCacheStore: Factory<any SessionCacheStore> {
+        self {
+            do {
+                let container = try SwiftDataSessionCacheStore.makePersistentContainer()
+                return SwiftDataSessionCacheStore(container: container)
+            } catch {
+                print("SessionCache: persistent SwiftData store failed (\(error)); using in-memory fallback")
+                do {
+                    let container = try SwiftDataSessionCacheStore.makeInMemoryContainer()
+                    return SwiftDataSessionCacheStore(container: container)
+                } catch {
+                    print("SessionCache: in-memory SwiftData store failed (\(error)); using InMemorySessionCacheStore")
+                    return InMemorySessionCacheStore()
+                }
+            }
+        }.singleton
+    }
+
+    var sessionCache: Factory<any SessionCache> {
+        self {
+            let manager = self.activeConnectionManager()
+            return DefaultSessionCache(
+                store: self.sessionCacheStore(),
+                connectionIdProvider: {
+                    guard let connection = manager.connection else { return nil }
+                    return CacheUrlNormalizer.connectionId(
+                        baseURL: connection.baseURL.absoluteString,
+                        username: connection.username
+                    )
+                }
+            )
+        }.singleton
+    }
+
     var sessionMessageEngine: Factory<SessionMessageEngine> {
         self { SessionMessageEngine(store: self.messageStore()) }.singleton
     }
@@ -127,7 +161,8 @@ extension Container {
                         baseURL: connection.baseURL.absoluteString,
                         username: connection.username
                     )
-                }
+                },
+                sessionCache: self.sessionCache()
             )
         }.singleton
     }
@@ -283,7 +318,8 @@ extension Container {
         self { @MainActor in
             DefaultSessionLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
+                eventStream: self.foregroundEventStream(),
+                sessionCache: self.sessionCache()
             )
         }.singleton
     }
@@ -304,7 +340,8 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
-                foregroundEventStream: self.foregroundEventStream()
+                foregroundEventStream: self.foregroundEventStream(),
+                appOnboardingPreferences: AppOnboardingPreferences.shared
             )
         }
     }
@@ -334,7 +371,8 @@ extension Container {
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
-                )
+                ),
+                sessionCache: self.sessionCache()
             )
         }
     }
@@ -419,13 +457,26 @@ extension Container {
             shared.sessionTodoLiveStore().clearCache()
             shared.sessionReadyStore().clearCache()
             shared.messageRepository().clearMessageCache()
+            await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
             MarkdownHighlightPreferences.shared.clear()
+            AppOnboardingPreferences.shared.clear()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
             await TextMateLogbook.shared.clear()
             DiagnosticLogBuffer.shared.clear()
         }
+    }
+
+    @MainActor
+    static func refreshSessionCacheSizeLabel() async -> String {
+        let bytes = await shared.sessionCache().estimatedSizeBytes()
+        return SessionCacheSizeFormatter.format(bytes: bytes)
+    }
+
+    @MainActor
+    static func clearSessionCache() async {
+        await shared.sessionCache().clearAll()
     }
 }

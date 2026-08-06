@@ -81,6 +81,7 @@ sealed interface OpenCodeSessionComposerState {
         val queuePosition: Int = 1,
         val queueCount: Int = 1,
         val submitting: Boolean = false,
+        val actionsEnabled: Boolean = true,
         val errorMessage: String? = null,
     ) : OpenCodeSessionComposerState
 
@@ -510,7 +511,7 @@ private fun PermissionApprovalContent(
             onClick = {
                 onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
             },
-            enabled = !state.submitting,
+            enabled = state.actionsEnabled && !state.submitting,
             contrast = OpenCodeButtonContrast.Low,
         )
         Spacer(Modifier.weight(1f))
@@ -522,7 +523,7 @@ private fun PermissionApprovalContent(
             onClick = {
                 onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
             },
-            enabled = !state.submitting,
+            enabled = state.actionsEnabled && !state.submitting,
         )
     }
 }

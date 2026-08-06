@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,9 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onConnectionSetup: () -> Unit,
     onClearData: () -> Unit,
+    onClearSessionCache: () -> Unit,
+    sessionCacheSizeLabel: String,
+    onRefreshSessionCacheSize: () -> Unit,
     onImportTheme: (android.net.Uri) -> Unit,
     onApplyPreset: (String) -> Unit,
     showSessionListOnHome: Boolean,
@@ -62,6 +66,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
+    var showClearSessionCacheConfirmation by remember { mutableStateOf(false) }
     var showThemePicker by remember { mutableStateOf(false) }
     var showRecentWindowPicker by remember { mutableStateOf(false) }
     val currentTheme = ThemeManager.currentTheme
@@ -70,6 +75,10 @@ fun SettingsScreen(
         ThemeManager.availablePresets().ifEmpty {
             listOf(ThemePreset(id = "oc-2", name = "OC-2"))
         }
+
+    LaunchedEffect(Unit) {
+        onRefreshSessionCacheSize()
+    }
 
     val themeImportLauncher =
         rememberLauncherForActivityResult(
@@ -174,6 +183,25 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
+
+            SectionHeader(title = "Session Cache")
+
+            OpenCodeListItem(
+                title = "Size",
+                subtitle = sessionCacheSizeLabel,
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Archive, "Session Cache Size"),
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            OpenCodeListItem(
+                title = "Clear Session Cache",
+                subtitle = "Remove cached sessions and messages",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear Session Cache"),
+                onClick = { showClearSessionCacheConfirmation = true },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
 
             SectionHeader(title = "Developer Tools")
 
@@ -289,6 +317,26 @@ fun SettingsScreen(
     }
 
     OpenCodeDialog(
+        visible = showClearSessionCacheConfirmation,
+        title = "Clear session cache?",
+        subtitle = "Removes cached sessions and messages. Your connection and credentials stay.",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Clear",
+                onClick = {
+                    showClearSessionCacheConfirmation = false
+                    onClearSessionCache()
+                },
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                onClick = { showClearSessionCacheConfirmation = false },
+            ),
+        onDismissRequest = { showClearSessionCacheConfirmation = false },
+    )
+
+    OpenCodeDialog(
         visible = showClearConfirmation,
         title = "Clear all data?",
         subtitle = "This cannot be undone.",
@@ -338,6 +386,9 @@ private fun SettingsScreenLightPreview() {
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
+            onClearSessionCache = {},
+            sessionCacheSizeLabel = "Empty",
+            onRefreshSessionCacheSize = {},
             onImportTheme = {},
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
@@ -364,6 +415,9 @@ private fun SettingsScreenDarkPreview() {
             onNavigateBack = {},
             onConnectionSetup = {},
             onClearData = {},
+            onClearSessionCache = {},
+            sessionCacheSizeLabel = "Empty",
+            onRefreshSessionCacheSize = {},
             onImportTheme = {},
             onApplyPreset = {},
             showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,

@@ -275,6 +275,11 @@ where Item.ID == String {
         }
 
         let layoutAffecting = resolvedPacket.layoutAffectingRowIDs
+        let structureAffecting = resolvedPacket.structureAffectingRowIDs
+        let isDecorateOnly =
+            !layoutAffecting.isEmpty
+            && structureAffecting.isEmpty
+            && resolvedPacket.grewBottomRowIDs.isEmpty
         let shouldCaptureUnarmedAnchor =
             hasCompletedInitialScroll
             && !isSettlingInitialLoad
@@ -330,7 +335,9 @@ where Item.ID == String {
                     self.isSettlingInitialLoad
                     && self.hasCompletedInitialScroll
                     && self.orderedIDs.count == previousCount
-                if shouldStayPinned, visibleAnchor == nil, !isReconfigureOnly, !skipPinDuringSettle {
+                if shouldStayPinned, visibleAnchor == nil, !isReconfigureOnly, !skipPinDuringSettle,
+                   !isDecorateOnly
+                {
                     self.pinToBottomWithoutAnimation()
                 } else {
                     // Do not force layoutIfNeeded while reading history — enrich
@@ -350,8 +357,8 @@ where Item.ID == String {
 
                 if self.orderedIDs.count != previousCount {
                     self.scrollController?.updateMessageCount(self.orderedIDs.count)
-                } else if !layoutAffecting.isEmpty {
-                    // Declared layout growth with stable count (plain→decorated).
+                } else if !structureAffecting.isEmpty {
+                    // Declared structure growth with stable count — not decorate-only.
                     self.scrollController?.notifyContentGrew()
                 }
             }

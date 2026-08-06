@@ -73,10 +73,12 @@ class DisplayMessagePipelineCharacterizationTest {
             harness.source.emit(MessageListUpdate.Messages(history))
 
             assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.first().mode)
-            // Format-always: first frame already has structured markdown.
-            assertEquals(1, harness.emissions.size)
-            val formatFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
-            assertTrue(formatFirst.messages.all { it.renderedMarkdown != null })
+            // Newest-first HistoryPlainFirst: newest message frame, then remaining history.
+            assertEquals(2, harness.emissions.size)
+            val newestFirst = harness.emissions[0] as DisplayMessageListUpdate.Messages
+            assertTrue(newestFirst.messages.last().renderedMarkdown != null)
+            val formatRest = harness.emissions[1] as DisplayMessageListUpdate.Messages
+            assertTrue(formatRest.messages.all { it.renderedMarkdown != null })
             assertEquals(48L, harness.delay.pendingMs())
             harness.delay.release()
             advanceUntilIdle()
@@ -84,9 +86,9 @@ class DisplayMessagePipelineCharacterizationTest {
             val enrichmentFrames =
                 harness.emissions
                     .filterIsInstance<DisplayMessageListUpdate.Messages>()
-                    .drop(1)
+                    .drop(2)
             assertTrue(
-                "expected at most two enrichment frames after format-first, got ${enrichmentFrames.size}",
+                "expected at most two enrichment frames after plain-first, got ${enrichmentFrames.size}",
                 enrichmentFrames.size <= 2,
             )
 
@@ -104,8 +106,9 @@ class DisplayMessagePipelineCharacterizationTest {
             val large = largeMarkdownAssistant("msg-1")
             harness.source.emit(MessageListUpdate.Messages(listOf(large)))
 
-            assertEquals(1, harness.emissions.size)
-            val formatFirst = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            // Newest-first publishes the single message, then the remaining plain-first pass.
+            assertEquals(2, harness.emissions.size)
+            val formatFirst = harness.emissions.last() as DisplayMessageListUpdate.Messages
             assertTrue(formatFirst.messages.single().renderedMarkdown != null)
             assertEquals(48L, harness.delay.pendingMs())
             harness.delay.release()
@@ -114,7 +117,7 @@ class DisplayMessagePipelineCharacterizationTest {
             val enrichmentFrames =
                 harness.emissions
                     .filterIsInstance<DisplayMessageListUpdate.Messages>()
-                    .drop(1)
+                    .drop(2)
             assertEquals(1, enrichmentFrames.size)
             assertTrue(enrichmentFrames.single().messages.single().renderedMarkdown != null)
         }
@@ -310,11 +313,12 @@ class DisplayMessagePipelineCharacterizationTest {
             }
 
             val large = largeMarkdownAssistant("history")
-            harness.preparer.holdNextPrepareMessage()
             harness.source.emit(MessageListUpdate.Messages(listOf(large)))
-            assertEquals(1, harness.emissions.size)
+            // Newest-first publishes plain-first before enrichment is scheduled.
+            assertEquals(2, harness.emissions.size)
             assertEquals(48L, harness.delay.pendingMs())
 
+            harness.preparer.holdNextPrepareMessage()
             harness.delay.release()
             assertTrue(harness.preparer.hasPendingPrepareMessageHold())
 

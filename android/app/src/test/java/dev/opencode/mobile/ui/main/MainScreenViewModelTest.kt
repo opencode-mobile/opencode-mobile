@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
@@ -30,6 +31,7 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -360,8 +362,8 @@ class MainScreenViewModelTest {
             assertEquals("/two", loaded.focusedWorktree)
             assertEquals(listOf("/one", "/two"), store.added(serverUrl))
             // Already-added path skips GET /project/current validation before reload.
-            assertTrue(projectRepository.validatedDirectories.none { it == null })
-            assertEquals(setOf("/one", "/two"), projectRepository.validatedDirectories.toSet())
+            // Disk-first home paints from Session Cache and does not revalidate directories.
+            assertTrue(projectRepository.validatedDirectories.isEmpty())
         }
 
     @Test
@@ -602,7 +604,10 @@ class MainScreenViewModelTest {
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
         bootWorktree: String = "/boot/project",
         sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
-        eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
+        eventStream: FakeForegroundEventStream =
+            FakeForegroundEventStream().also {
+                it.setConnectionState(EventStreamConnectionState.Connected)
+            },
         sessionRepository: FakeSessionRepository = FakeSessionRepository(sessionsByWorktree.toMutableMap()),
         selectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         projectRepository: FakeProjectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
@@ -629,7 +634,7 @@ class MainScreenViewModelTest {
             )
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
         val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
-        val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope)
+        val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope, NoOpSessionCache)
         val sessionReadyStore =
             DefaultSessionReadyStore(
                 sessionStatusLiveStore,
@@ -656,6 +661,7 @@ class MainScreenViewModelTest {
                     selectionStore,
                     modelRepository,
                 ),
+            sessionCache = NoOpSessionCache,
         )
     }
 }

@@ -11,15 +11,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -65,6 +64,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGaller
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
@@ -73,6 +73,8 @@ import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScree
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
@@ -89,9 +91,12 @@ import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 fun MainNavigation() {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
+    val presentConnectionSetupAfterOnboarding by
+        rootViewModel.presentConnectionSetup.collectAsStateWithLifecycle()
     val setupViewModel: ConnectionSetupViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
+    val sessionCacheSizeLabel by settingsViewModel.sessionCacheSizeLabel.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
 
@@ -99,6 +104,13 @@ fun MainNavigation() {
         setupViewModel.configure(initialProfile)
         if (backStack.lastOrNull() != ConnectionSetupHome) {
             backStack.add(ConnectionSetupHome)
+        }
+    }
+
+    LaunchedEffect(rootState, presentConnectionSetupAfterOnboarding) {
+        if (rootState == AppRootState.Home && presentConnectionSetupAfterOnboarding) {
+            presentConnectionSetup(initialProfile = null)
+            rootViewModel.consumePresentConnectionSetup()
         }
     }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
@@ -115,7 +127,25 @@ fun MainNavigation() {
             Box(modifier = Modifier.fillMaxSize()) {
                 when (rootState) {
                     AppRootState.Loading ->
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                        OpenCodeStatusStack(
+                            title = "Loading sessions",
+                            subtitle = "Checking server…",
+                            testTag = "appRootLoading",
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    AppRootState.AppOnboarding ->
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .systemBarsPadding()
+                                    .displayCutoutPadding(),
+                        ) {
+                            AppOnboardingScreen(
+                                onSkip = { rootViewModel.completeAppOnboarding(openConnectionSetup = false) },
+                                onConnect = { rootViewModel.completeAppOnboarding(openConnectionSetup = true) },
+                            )
+                        }
                     AppRootState.Home ->
                         NavDisplay(
                             modifier =
@@ -158,6 +188,9 @@ fun MainNavigation() {
                                                     }
                                                 },
                                                 onClearData = settingsViewModel::clearAllData,
+                                                onClearSessionCache = settingsViewModel::clearSessionCache,
+                                                sessionCacheSizeLabel = sessionCacheSizeLabel,
+                                                onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
                                                 onImportTheme = settingsViewModel::importThemeFromUri,
                                                 onApplyPreset = settingsViewModel::applyPreset,
                                                 showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,
@@ -282,6 +315,8 @@ fun MainNavigation() {
                                                             ServerAddressInputGalleryScreen()
                                                         ComponentGalleryEntryId.EmptyState ->
                                                             EmptyStateGalleryScreen()
+                                                        ComponentGalleryEntryId.StatusStack ->
+                                                            StatusStackGalleryScreen()
                                                         ComponentGalleryEntryId.ProjectSessionSelector ->
                                                             ProjectSessionSelectorGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->

@@ -21,6 +21,7 @@ final class SessionChatViewModel {
     private let questionLiveStore: any QuestionLiveStore
     private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
+    private let foregroundEventStream: any ForegroundEventStream
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
@@ -71,6 +72,7 @@ final class SessionChatViewModel {
         self.questionLiveStore = questionLiveStore ?? EmptyQuestionLiveStore()
         self.sessionTodoLiveStore = sessionTodoLiveStore ?? EmptySessionTodoLiveStore()
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
+        self.foregroundEventStream = foregroundEventStream
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -221,8 +223,10 @@ final class SessionChatViewModel {
     func runClientSlashAction(_ action: ClientSlashAction) {
         switch action {
         case .new:
+            guard isConnectionLive else { return }
             commands.runNew()
         case .fork:
+            guard isConnectionLive else { return }
             commands.openForkDialog(currentTitle: uiState.sessionTitle)
         case .undo:
             commands.runUndo(
@@ -259,6 +263,7 @@ final class SessionChatViewModel {
     }
 
     func confirmFork() {
+        guard isConnectionLive else { return }
         commands.confirmFork()
     }
 
@@ -298,10 +303,12 @@ final class SessionChatViewModel {
     }
 
     func confirmRenameSession() async {
+        guard isConnectionLive else { return }
         await sessionInfo.confirmRenameSession()
     }
 
     func sendPrompt() async {
+        guard isConnectionLive else { return }
         guard permissionRequests.isEmpty, questionRequests.isEmpty else { return }
         await composer.sendPrompt(
             sessionID: sessionID,
@@ -325,6 +332,7 @@ final class SessionChatViewModel {
     }
 
     func abortSession() async {
+        guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
     }
 
@@ -451,6 +459,7 @@ final class SessionChatViewModel {
         sessionID: String,
         decision: PermissionDecision
     ) async {
+        guard isConnectionLive else { return }
         guard let request = permissionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
               permissionSubmittingID == nil else { return }
         permissionSubmittingID = request.id
@@ -580,6 +589,12 @@ final class SessionChatViewModel {
         } else {
             questionWizardIndex = min(max(questionWizardIndex, 0), max(0, visible.questions.count - 1))
         }
+    }
+
+    private var isConnectionLive: Bool {
+        // Prefer the live event-stream state over SessionInfo's mirrored status so
+        // mutations are not blocked while connection observation is still catching up.
+        foregroundEventStream.connectionState == .connected
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {
@@ -712,6 +727,7 @@ final class SessionChatViewModel {
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
             sessionTodoTotalCount: sessionTodos.count,
             connectionStatus: infoState.connectionStatus,
+            messagesFromCache: timelineState.messagesFromCache,
             contextUsageFraction: sessionInfo.contextUsageFraction(
                 messages: timelineState.messages,
                 modelOptions: composerState.composer.modelOptions,

@@ -12,7 +12,7 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("hi")]))
+        await harness.source.emit(.messages([plainAssistant("hi")], isFromCache: false))
         let published = await waitUntil { collector.emissions.count == 1 }
         #expect(published)
         #expect(collector.emissions.count == 1)
@@ -42,10 +42,12 @@ struct DisplayMessagePipelineCharacterizationTests {
                 >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold
         )
 
-        await harness.source.emit(.messages(history))
+        await harness.source.emit(.messages(history, isFromCache: false))
+        // Newest-first HistoryPlainFirst: newest message frame, then remaining history.
         let formatFirst = await waitUntil {
-            collector.emissions.count == 1
-                && collector.emissions[0].allSatisfy { $0.renderedMarkdown != nil }
+            collector.emissions.count == 2
+                && collector.emissions[0].last?.renderedMarkdown != nil
+                && collector.emissions[1].allSatisfy { $0.renderedMarkdown != nil }
         }
         #expect(formatFirst)
         #expect(harness.preparer.prepareMessagesInvocations[0].mode == .historyPlainFirst)
@@ -55,12 +57,12 @@ struct DisplayMessagePipelineCharacterizationTests {
 
         harness.clock.releaseSleep()
         let enriched = await waitUntil {
-            collector.emissions.count >= 2
+            collector.emissions.count >= 3
                 && collector.emissions.last?.allSatisfy { $0.renderedMarkdown != nil } == true
         }
         #expect(enriched)
 
-        let enrichmentFrames = Array(collector.emissions.dropFirst())
+        let enrichmentFrames = Array(collector.emissions.dropFirst(2))
         #expect(enrichmentFrames.count <= 2)
         #expect(enrichmentFrames.last?.count == 5)
         #expect(enrichmentFrames.last?.allSatisfy { $0.renderedMarkdown != nil } == true)
@@ -76,17 +78,18 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([largeMarkdownAssistant(id: "msg-1")]))
+        await harness.source.emit(.messages([largeMarkdownAssistant(id: "msg-1")], isFromCache: false))
+        // Newest-first publishes the single message, then the remaining plain-first pass.
         let formatFirst = await waitUntil {
-            collector.emissions.count == 1
-                && collector.emissions[0].first?.renderedMarkdown != nil
+            collector.emissions.count == 2
+                && collector.emissions.last?.first?.renderedMarkdown != nil
         }
         #expect(formatFirst)
         let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
         #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
         harness.clock.releaseSleep()
-        let enriched = await waitUntil { collector.emissions.count == 2 }
+        let enriched = await waitUntil { collector.emissions.count >= 3 }
         #expect(enriched)
         #expect(collector.emissions.last?.first?.renderedMarkdown != nil)
 
@@ -101,12 +104,12 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
         harness.preparer.prepareMessagesInvocations.removeAll()
 
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hello")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hello")], isFromCache: false))
         let waiting = await waitUntil { harness.clock.pendingSleep != nil }
         #expect(waiting)
         #expect(collector.emissions.isEmpty)
@@ -129,17 +132,17 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
 
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "A")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "A")], isFromCache: false))
         _ = await waitUntil { harness.clock.pendingSleep != nil }
         harness.clock.releaseSleep()
         _ = await waitUntil { collector.emissions.count == 1 }
 
         harness.clock.advance(by: streamingPrepareMaxBatchDuration)
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "AB")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "AB")], isFromCache: false))
         let published = await waitUntil { collector.emissions.count == 2 }
         #expect(published)
         #expect(collector.emissions[1].first?.text == "AB")
@@ -155,12 +158,12 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hi")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hi")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
         harness.preparer.prepareMessagesInvocations.removeAll()
 
-        await harness.source.emit(.messages([finalAssistant(id: "msg-1", text: "# Hi")]))
+        await harness.source.emit(.messages([finalAssistant(id: "msg-1", text: "# Hi")], isFromCache: false))
         let published = await waitUntil { collector.emissions.count == 2 }
         #expect(published)
         #expect(
@@ -179,11 +182,11 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
 
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "pending")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "pending")], isFromCache: false))
         _ = await waitUntil { harness.clock.pendingSleep != nil }
         #expect(collector.emissions.isEmpty)
 
@@ -210,11 +213,11 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
 
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "flush-me")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "flush-me")], isFromCache: false))
         _ = await waitUntil { harness.clock.pendingSleep != nil }
         #expect(collector.emissions.isEmpty)
 
@@ -234,12 +237,12 @@ struct DisplayMessagePipelineCharacterizationTests {
         }
 
         harness.preparer.holdNextPrepareMessages()
-        await harness.source.emit(.messages([plainAssistant("one")]))
+        await harness.source.emit(.messages([plainAssistant("one")], isFromCache: false))
         let held = await waitUntil { harness.preparer.hasPendingPrepareMessagesHold }
         #expect(held)
         #expect(collector.emissions.isEmpty)
 
-        await harness.source.emit(.messages([plainAssistant("two")]))
+        await harness.source.emit(.messages([plainAssistant("two")], isFromCache: false))
         let published = await waitUntil { collector.emissions.count == 1 }
         #expect(published)
         #expect(collector.emissions[0].first?.text == "two")
@@ -264,11 +267,11 @@ struct DisplayMessagePipelineCharacterizationTests {
             }
 
             harness.preparer.holdNextPrepareMessages()
-            await harness.source.emit(.messages([plainAssistant("stale-\(index)")]))
+            await harness.source.emit(.messages([plainAssistant("stale-\(index)")], isFromCache: false))
             #expect(await waitUntil { harness.preparer.hasPendingPrepareMessagesHold })
 
             let currentText = "current-\(index)"
-            await harness.source.emit(.messages([plainAssistant(currentText)]))
+            await harness.source.emit(.messages([plainAssistant(currentText)], isFromCache: false))
             #expect(await waitUntil { collector.emissions.last?.first?.text == currentText })
             let emissionCount = collector.emissions.count
 
@@ -293,19 +296,22 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        harness.preparer.holdNextPrepareMessage()
-        await harness.source.emit(.messages([largeMarkdownAssistant(id: "history")]))
-        _ = await waitUntil { collector.emissions.count == 1 }
+        await harness.source.emit(.messages([largeMarkdownAssistant(id: "history")], isFromCache: false))
+        // Newest-first publishes plain-first before enrichment is scheduled.
+        let plainFirst = await waitUntil { collector.emissions.count == 2 }
+        #expect(plainFirst)
         let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
         #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
 
+        // Hold the enrichment prepare (not plain-first) after the 48ms gate is parked.
+        harness.preparer.holdNextPrepareMessage()
         harness.clock.releaseSleep()
         let held = await waitUntil { harness.preparer.hasPendingPrepareMessageHold }
         #expect(held)
 
-        await harness.source.emit(.messages([streamingAssistant(id: "live", text: "token")]))
-        let livePublished = await waitUntil { collector.emissions.count >= 2 }
+        await harness.source.emit(.messages([streamingAssistant(id: "live", text: "token")], isFromCache: false))
+        let livePublished = await waitUntil { collector.emissions.count >= 3 }
         #expect(livePublished)
         let emissionsBeforeRelease = collector.emissions.count
 
@@ -329,12 +335,12 @@ struct DisplayMessagePipelineCharacterizationTests {
         }
 
         harness.preparer.holdNextPrepareMessages()
-        await harness.source.emit(.messages([plainAssistant("one")]))
+        await harness.source.emit(.messages([plainAssistant("one")], isFromCache: false))
         let held = await waitUntil { harness.preparer.hasPendingPrepareMessagesHold }
         #expect(held)
         #expect(collector.emissions.isEmpty)
 
-        await harness.source.emit(.messages([plainAssistant("two")]))
+        await harness.source.emit(.messages([plainAssistant("two")], isFromCache: false))
         let published = await waitUntil { collector.emissions.count == 1 }
         #expect(published)
         #expect(collector.emissions[0].first?.text == "two")
@@ -354,13 +360,13 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
         harness.preparer.prepareMessagesInvocations.removeAll()
 
         harness.preparer.holdNextPrepareMessages()
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello")], isFromCache: false))
         _ = await waitUntil { harness.clock.pendingSleep != nil }
         #expect(collector.emissions.isEmpty)
 
@@ -373,7 +379,7 @@ struct DisplayMessagePipelineCharacterizationTests {
         #expect(collector.emissions[0].first?.renderedMarkdown != nil)
 
         harness.clock.advance(by: streamingPrepareMaxBatchDuration)
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello world")]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello world")], isFromCache: false))
         let secondPlain = await waitUntil { collector.emissions.count == 2 }
         #expect(secondPlain)
         #expect(collector.emissions[1].first?.text == "# Hello world")
@@ -402,12 +408,12 @@ struct DisplayMessagePipelineCharacterizationTests {
         ```
         """
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
 
         harness.preparer.holdNextPrepareMessages()
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: fenced)]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: fenced)], isFromCache: false))
         _ = await waitUntil { harness.clock.pendingSleep != nil }
         harness.clock.releaseSleep()
         let published = await waitUntil { collector.emissions.count == 1 }
@@ -446,7 +452,7 @@ struct DisplayMessagePipelineCharacterizationTests {
                 >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold
         )
 
-        await harness.source.emit(.messages(history))
+        await harness.source.emit(.messages(history, isFromCache: false))
         let formatFirstReady = await waitUntil {
             collector.emissions.last?.allSatisfy { $0.awaitingTextMateUpgrade } == true
         }
@@ -459,7 +465,7 @@ struct DisplayMessagePipelineCharacterizationTests {
         ```
         """
         await harness.source.emit(
-            .messages(history + [streamingAssistant(id: "stream-1", text: fenced)])
+            .messages(history + [streamingAssistant(id: "stream-1", text: fenced)], isFromCache: false)
         )
         if harness.clock.pendingSleep != nil {
             harness.clock.releaseSleep()
@@ -492,7 +498,7 @@ struct DisplayMessagePipelineCharacterizationTests {
             repeating: "x",
             count: MessageContentPreparer.streamingPlainTextCharacterThreshold
         )
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: largeText)]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: largeText)], isFromCache: false))
         let streamed = await waitUntil { collector.emissions.count >= 1 }
         #expect(streamed)
         #expect(collector.emissions.contains { frame in
@@ -518,14 +524,14 @@ struct DisplayMessagePipelineCharacterizationTests {
             repeating: "x",
             count: MessageContentPreparer.streamingPlainTextCharacterThreshold
         )
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: largeText)]))
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: largeText)], isFromCache: false))
         let streamed = await waitUntil { collector.emissions.count >= 1 }
         #expect(streamed)
         #expect(harness.preparer.prepareMessagesInvocations.allSatisfy { $0.mode != .streaming })
 
         collector.emissions.removeAll()
         harness.preparer.prepareMessagesInvocations.removeAll()
-        await harness.source.emit(.messages([finalAssistant(id: "msg-1", text: largeText)]))
+        await harness.source.emit(.messages([finalAssistant(id: "msg-1", text: largeText)], isFromCache: false))
         let finalized = await waitUntil { collector.emissions.count == 2 }
         #expect(finalized)
         #expect(
@@ -546,7 +552,7 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        await harness.source.emit(.messages([plainAssistant("seed")]))
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
         _ = await waitUntil { collector.emissions.count == 1 }
         collector.emissions.removeAll()
 
@@ -555,7 +561,7 @@ struct DisplayMessagePipelineCharacterizationTests {
 
         for count in 1 ... 8 {
             let text = String(repeating: "x", count: count)
-            await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: text)]))
+            await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: text)], isFromCache: false))
             try? await Task.sleep(for: .milliseconds(5))
         }
 
@@ -579,6 +585,8 @@ private final class Harness {
     let pipeline: DisplayMessagePipeline
 
     init(holdSleep: Bool = false) {
+        // Enrichment frames only publish when plain-first left rows awaiting TextMate.
+        MarkdownHighlightPreferences.shared.setTextMateEnabled(true)
         let clock = ControllablePipelineClock(holdSleep: holdSleep)
         self.clock = clock
         self.pipeline = DisplayMessagePipeline(
@@ -907,7 +915,7 @@ private final class CharacterizationDisplayCollector: @unchecked Sendable {
     func collect(_ stream: AsyncStream<DisplayMessageListUpdate>) async {
         for await update in stream {
             switch update {
-            case .messages(let messages):
+            case .messages(let messages, let isFromCache):
                 lock.lock()
                 _emissions.append(messages)
                 lock.unlock()

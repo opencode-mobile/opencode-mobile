@@ -1883,6 +1883,8 @@ struct SessionChatViewModelTests {
         questionLiveStore: (any QuestionLiveStore)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
+        // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
+        eventStream.setConnectionState(.connected)
         let sessionRepository = sessionRepository ?? FakeChatSessionRepository()
         let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
             sessionRepository: sessionRepository,
@@ -2082,10 +2084,10 @@ private final class FakeObservingMessageRepository: MessageRepository, @unchecke
                     switch update {
                     case .loadFailed(let error):
                         continuation.yield(.loadFailed(error))
-                    case .messages(let messages):
+                    case .messages(let messages, let isFromCache):
                         let prepared = await MessageContentPreparer.shared.prepareMessages(messages, previousByID: previousByID)
                         previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
-                        continuation.yield(.messages(prepared))
+                        continuation.yield(.messages(prepared, isFromCache: false))
                     }
                 }
                 continuation.finish()
@@ -2123,7 +2125,7 @@ private final class FakeObservingMessageRepository: MessageRepository, @unchecke
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 
     func emit(_ messages: [Message]) {
-        publish?(.messages(messages))
+        publish?(.messages(messages, isFromCache: false))
     }
 
     func emitLoadFailed(_ error: Error) {
@@ -2178,7 +2180,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
                 do {
                     let messages = try await listMessages(sessionID: sessionID, directory: directory)
                     let prepared = await MessageContentPreparer.shared.prepareMessages(messages)
-                    continuation.yield(.messages(prepared))
+                    continuation.yield(.messages(prepared, isFromCache: false))
                 } catch {
                     continuation.yield(.loadFailed(error))
                 }

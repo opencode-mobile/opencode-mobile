@@ -26,6 +26,9 @@ data class TimelineApply(
     val layoutAffectingRevision: Long
         get() = frame.layoutAffectingRevision()
 
+    val structureAffectingRevision: Long
+        get() = frame.structureAffectingRevision()
+
     val growBottomRevision: Long
         get() = frame.growBottomRevision()
 

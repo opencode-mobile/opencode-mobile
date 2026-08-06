@@ -60,7 +60,17 @@ class DisplayMessagePipeline(
             var lastPublishedAt: kotlin.time.TimeMark? = null
             // True while coalescing a live streaming reply (including in-flight prepare).
             var isStreamingSession = false
+            var sourceIsFromCache = false
             val decorationBacklog = DecorationBacklog()
+
+            suspend fun emitDisplayMessages(messages: List<DisplayMessage>) {
+                send(
+                    DisplayMessageListUpdate.Messages(
+                        messages = messages,
+                        isFromCache = sourceIsFromCache,
+                    ),
+                )
+            }
 
             fun invalidateInFlightWork() {
                 debounceJob?.cancel()
@@ -223,7 +233,7 @@ class DisplayMessagePipeline(
                             if (!commitPrepared(job.generation, merged, MessagePreparationMode.Streaming)) {
                                 continue
                             }
-                            send(DisplayMessageListUpdate.Messages(merged))
+                            emitDisplayMessages(merged)
                         }
                         decorationJob = null
                     }
@@ -264,7 +274,7 @@ class DisplayMessagePipeline(
                 previousById = frame.associateBy { it.id }
                 lastPublishedMessages = messages
                 lastPublishedAt = timeSource.markNow()
-                send(DisplayMessageListUpdate.Messages(frame))
+                emitDisplayMessages(frame)
                 scheduleStreamingDecoration(generation, messages)
             }
 
@@ -315,7 +325,7 @@ class DisplayMessagePipeline(
                             return@launch
                         }
                         lastPublishedMessages = messages
-                        send(DisplayMessageListUpdate.Messages(placeholder))
+                        emitDisplayMessages(placeholder)
 
                         val finalized =
                             contentPreparer.prepareMessages(
@@ -329,7 +339,7 @@ class DisplayMessagePipeline(
                         if (!isActive || !isCurrent(generation)) return@launch
                         if (!commitPrepared(generation, finalized, MessagePreparationMode.Final)) return@launch
                         lastPublishedMessages = messages
-                        send(DisplayMessageListUpdate.Messages(finalized))
+                        emitDisplayMessages(finalized)
                     }
             }
 
@@ -367,7 +377,7 @@ class DisplayMessagePipeline(
                             previousById = byId.toMap()
                             lastPublishedMessages = messages
                             lastPublishedAt = timeSource.markNow()
-                            send(DisplayMessageListUpdate.Messages(messages.map { byId.getValue(it.id) }))
+                            emitDisplayMessages(messages.map { byId.getValue(it.id) })
                         }
 
                         // Newest first: open settles near the bottom, so enrich what the
@@ -444,7 +454,76 @@ class DisplayMessagePipeline(
                         lastPublishedMessages = messages
                         // Format-first history is publishable; do not hold Ready on
                         // unprocessed plain while TextMate enrichment catches up.
-                        send(DisplayMessageListUpdate.Messages(prepared))
+                        emitDisplayMessages(prepared)
+                        onCommitted?.invoke()
+                    }
+            }
+
+            /**
+             * HistoryPlainFirst newest-first: format the bottom message first and
+             * publish immediately, then fill the rest of history.
+             */
+            fun schedulePlainFirstNewestFirst(
+                generation: Long,
+                messages: List<Message>,
+                onCommitted: (() -> Unit)? = null,
+            ) {
+                prepareJob?.cancel()
+                prepareJob =
+                    launch {
+                        val byId =
+                            messages
+                                .associate { message ->
+                                    val previous = previousById[message.id]?.takeIf { it.text == message.text }
+                                    message.id to (
+                                        previous
+                                            ?: DisplayMessage(message = message, renderedMarkdown = null)
+                                    )
+                                }.toMutableMap()
+
+                        suspend fun publish(label: String) {
+                            if (!isCurrent(generation)) return
+                            val frame = messages.map { byId.getValue(it.id) }
+                            if (!commitPrepared(generation, frame, MessagePreparationMode.HistoryPlainFirst)) {
+                                return
+                            }
+                            lastPublishedMessages = messages
+                            lastPublishedAt = timeSource.markNow()
+                            emitDisplayMessages(frame)
+                        }
+
+                        // Phase 1: newest markdown message only — what the open
+                        // viewport shows — then publish before older history.
+                        val newestMarkdown =
+                            messages.asReversed().firstOrNull {
+                                OpenCodeMarkdownDetector.shouldRender(it.text)
+                            }
+                        if (newestMarkdown != null) {
+                            val prepared =
+                                contentPreparer.prepareMessage(
+                                    message = newestMarkdown,
+                                    previous = byId[newestMarkdown.id],
+                                    mode = MessagePreparationMode.HistoryPlainFirst,
+                                )
+                            if (!isActive || !isCurrent(generation)) return@launch
+                            byId[newestMarkdown.id] = prepared
+                            previousById = previousById + (newestMarkdown.id to prepared)
+                            publish("plain-first-newest")
+                        }
+
+                        // Phase 2: remaining HistoryPlainFirst (reuses newest).
+                        val phase2 =
+                            contentPreparer.prepareMessages(
+                                messages,
+                                byId,
+                                MessagePreparationMode.HistoryPlainFirst,
+                            )
+                        if (!isActive || !isCurrent(generation)) return@launch
+                        for (display in phase2) {
+                            byId[display.id] = display
+                        }
+                        previousById = byId.toMap()
+                        publish("plain-first-rest")
                         onCommitted?.invoke()
                     }
             }
@@ -462,6 +541,7 @@ class DisplayMessagePipeline(
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
                         is MessageListUpdate.Messages -> {
+                            sourceIsFromCache = update.isFromCache
                             if (hasStreamingDelta(update.messages)) {
                                 // Coalesce streaming tokens into pendingMessages. Do not bump
                                 // generation on every delta — decoration stays generation-gated
@@ -499,11 +579,16 @@ class DisplayMessagePipeline(
                                 val hadStreamingPrevious = previousById.values.any { it.isStreaming }
                                 if (hadStreamingPrevious) {
                                     scheduleFinalization(generation, update.messages)
-                                } else if (shouldPlainFirstHistoryPublish(update.messages, previousById)) {
-                                    schedulePrepare(
+                                } else if (sourceIsFromCache ||
+                                    shouldPlainFirstHistoryPublish(update.messages, previousById)
+                                ) {
+                                    // Newest-first HistoryPlainFirst: format the open
+                                    // viewport (last message) before older history.
+                                    // Skip null-markdown flash. REST fingerprint-unchanged
+                                    // keeps TextMate enrich from being cancelled.
+                                    schedulePlainFirstNewestFirst(
                                         generation = generation,
                                         messages = update.messages,
-                                        mode = MessagePreparationMode.HistoryPlainFirst,
                                         onCommitted = {
                                             if (isCurrent(generation)) {
                                                 enrichHistoryInBackground(generation, update.messages)
@@ -649,4 +734,22 @@ internal fun shouldPlainFirstHistoryPublish(
         }
     }
     return false
+}
+
+/** Newest markdown-bearing message ids for the open viewport (bottom of chat). */
+internal fun newestMarkdownViewportIds(
+    messages: List<Message>,
+    maxCount: Int = MessageContentPreparer.HISTORY_ENRICH_VIEWPORT_MESSAGE_COUNT,
+    charBudget: Int = MessageContentPreparer.HISTORY_ENRICH_VIEWPORT_CHARACTER_BUDGET,
+): Set<String> {
+    if (messages.isEmpty() || maxCount <= 0) return emptySet()
+    val ids = LinkedHashSet<String>()
+    var remainingChars = charBudget
+    for (message in messages.asReversed()) {
+        if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
+        ids += message.id
+        remainingChars -= message.text.length
+        if (ids.size >= maxCount || remainingChars <= 0) break
+    }
+    return ids
 }

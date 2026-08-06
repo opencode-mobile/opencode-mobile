@@ -246,6 +246,22 @@ type named `MessageLiveStore`. Mutations such as send, create, and delete still
 go through repositories directly. Optimistic send and quiet refresh merge stay
 in the Screen Model.
 
+### Session Cache
+
+Durable on-disk snapshots of server session data scoped to a Connection Profile
+connection id (`baseUrl|username`) and an added project worktree.
+
+Holds (1) last-known session list metadata per worktree and (2) domain message
+history for sessions the user has opened in Session Chat. Read on cold start for
+stale-while-revalidate; written after successful refresh and on debounced /
+flushed updates while a session is open. **Live Store** and **MessageSync**
+remain the in-memory reactive layers; **InMemoryMessageStore** remains the
+working set during an active chat. Distinct from the composer
+model-selection preference store (`SessionModelSelectionStore`).
+_Avoid_: treating Session Cache as a second live source of truth; persisting
+prepared markdown or DisplayMessage rows; conflating with model-selection
+“session cache”.
+
 ### message
 
 A user, assistant, or tool-related item inside a session.

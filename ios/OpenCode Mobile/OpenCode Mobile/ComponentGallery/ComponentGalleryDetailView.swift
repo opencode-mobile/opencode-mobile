@@ -122,6 +122,8 @@ struct ComponentGalleryDetailView: View {
             ServerAddressInputGalleryView()
         case .emptyState:
             EmptyStateGalleryView()
+        case .statusStack:
+            StatusStackGalleryView()
         case .projectSessionSelector:
             ProjectSessionSelectorGalleryView()
         case .sessionList:

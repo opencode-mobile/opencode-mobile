@@ -49,13 +49,14 @@ class SessionChatTimeline(
         serverCommands = commands
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        if (wasEmpty && commands.isNotEmpty() && lastLoadedMessages.isNotEmpty()) {
+        if (wasEmpty && commands.isNotEmpty() && lastLoadedDisplayMessages.isNotEmpty()) {
             applyLoadedDisplayMessages(
-                displayMessages = lastLoadedMessages.map { DisplayMessage(it) },
+                displayMessages = lastLoadedDisplayMessages,
                 sourceSessionId = sessionId,
                 sourceWorktree = worktree,
                 fromQuietRefresh = true,
                 source = "commands-ready",
+                messagesFromCache = _state.value.messagesFromCache,
             )
         }
     }
@@ -73,6 +74,7 @@ class SessionChatTimeline(
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
     private var pendingBaselineSignatures: Map<String, String> = emptyMap()
     private var lastLoadedMessages: List<Message> = emptyList()
+    private var lastLoadedDisplayMessages: List<DisplayMessage> = emptyList()
     private var lastTimelineFrame: TimelineFrame? = null
     private var nextFrameRevision: Long = 1L
 
@@ -91,6 +93,7 @@ class SessionChatTimeline(
         pendingOptimisticRows = emptyList()
         pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
+        lastLoadedDisplayMessages = emptyList()
         lastTimelineFrame = null
         nextFrameRevision = 1L
         BlockDecorationCache.clear()
@@ -372,6 +375,7 @@ class SessionChatTimeline(
                                     sourceWorktree = worktree,
                                     fromQuietRefresh = true,
                                     source = "display-pipeline",
+                                    messagesFromCache = update.isFromCache,
                                 )
                             }
                         }
@@ -386,6 +390,7 @@ class SessionChatTimeline(
         isRefreshing: Boolean = false,
         fromQuietRefresh: Boolean = false,
         source: String,
+        messagesFromCache: Boolean = false,
         onPublished: (() -> Unit)? = null,
     ) {
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
@@ -401,6 +406,7 @@ class SessionChatTimeline(
                 isRefreshing = isRefreshing,
                 fromQuietRefresh = fromQuietRefresh,
                 source = source,
+                messagesFromCache = messagesFromCache,
                 onPublished = onPublished,
             )
         if (fromQuietRefresh && onPublished == null) {
@@ -440,6 +446,7 @@ class SessionChatTimeline(
         val isRefreshing: Boolean,
         val fromQuietRefresh: Boolean,
         val source: String,
+        val messagesFromCache: Boolean,
         val onPublished: (() -> Unit)?,
     )
 
@@ -453,6 +460,7 @@ class SessionChatTimeline(
         val onPublished = pending.onPublished
 
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
+        lastLoadedDisplayMessages = displayMessages
         lastLoadedMessages = displayMessages.map { it.message }
         val stateSnapshot = _state.value
         val previousById = stateSnapshot.messages.associateBy { it.id }
@@ -530,6 +538,7 @@ class SessionChatTimeline(
                 messages = merged,
                 timelineFrame = stamped,
                 isRefreshing = isRefreshing,
+                messagesFromCache = pending.messagesFromCache,
                 errorMessage =
                     if (fromQuietRefresh) {
                         if (merged.isNotEmpty() && state.timeline == SessionChatTimelineState.Error) {

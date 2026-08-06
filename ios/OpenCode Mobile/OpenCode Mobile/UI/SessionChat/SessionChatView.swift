@@ -258,8 +258,10 @@ struct SessionChatView: View {
         }
         .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
             ForEach(viewModel.uiState.visibleClientSlashActions, id: \.rawValue) { action in
+                let requiresLive = action == .new || action == .fork
                 OpenCodeBottomSheetEntry(
                     title: action.rowTitle,
+                    enabled: !requiresLive || viewModel.uiState.connectionStatus == .live,
                     action: { viewModel.runClientSlashAction(action) }
                 )
             }
@@ -360,7 +362,8 @@ struct SessionChatView: View {
             title: "Rename session",
             primaryOption: OpenCodeDialogOption(
                 title: "Save",
-                enabled: !viewModel.uiState.rename.isSubmitting
+                enabled: !viewModel.uiState.rename.isSubmitting &&
+                    viewModel.uiState.connectionStatus == .live
             ) {
                 Task { await viewModel.confirmRenameSession() }
             },
@@ -384,7 +387,8 @@ struct SessionChatView: View {
             title: "Fork session",
             primaryOption: OpenCodeDialogOption(
                 title: "Fork",
-                enabled: !viewModel.uiState.forkSubmitting
+                enabled: !viewModel.uiState.forkSubmitting &&
+                    viewModel.uiState.connectionStatus == .live
             ) {
                 viewModel.confirmFork()
             },
@@ -599,6 +603,7 @@ struct SessionChatView: View {
                     patterns: request.patterns,
                     queueCount: viewModel.uiState.permissionQueueCount,
                     submitting: viewModel.uiState.permissionSubmitting,
+                    actionsEnabled: viewModel.uiState.connectionStatus == .live,
                     errorMessage: viewModel.uiState.permissionErrorMessage
                 )
             )
@@ -655,10 +660,12 @@ struct SessionChatView: View {
                         composer.hasSendableContent &&
                         composer.selectedModel != nil &&
                         composer.isModelSelectionReady &&
-                        !isSending,
+                        !isSending &&
+                        viewModel.uiState.connectionStatus == .live,
                     attachEnabled: composer.canAttach && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
-                    stopEnabled: !viewModel.uiState.isAborting
+                    stopEnabled: !viewModel.uiState.isAborting &&
+                        viewModel.uiState.connectionStatus == .live
                 )
             )
         }

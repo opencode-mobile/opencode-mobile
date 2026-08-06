@@ -42,6 +42,7 @@ enum class ComponentGalleryEntryId {
     TextInput,
     ServerAddressInput,
     EmptyState,
+    StatusStack,
     ProjectSessionSelector,
     SessionList,
     SessionListDock,
@@ -124,6 +125,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.EmptyState,
             title = "Empty State",
             description = "Centered title and message for empty screen regions.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.StatusStack,
+            title = "Status Stack",
+            description = "Centered mid-well indeterminate status for first content load.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
