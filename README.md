@@ -117,3 +117,4 @@ In scope: session list/control, messages, async prompts, foreground event stream
 Out of scope for v1: cross-platform frameworks, app-managed tunnels, push notifications, multi-project switching, mobile shell execution, and full IDE-style file editing.
 
 See [AGENTS.md](AGENTS.md) for the full boundary.
+# ci probe 2026-08-06T22:05:16Z
