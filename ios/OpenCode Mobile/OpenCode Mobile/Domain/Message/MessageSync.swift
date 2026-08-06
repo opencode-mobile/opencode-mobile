@@ -13,6 +13,7 @@ final class MessageSync: @unchecked Sendable {
     private let connectionProfileIDProvider: @Sendable () -> String
     private let recoveryDelay: @Sendable (Int) async -> Void
     private let connectionEpoch: ConnectionEpoch
+    private let sessionCache: any SessionCache
     private let lock = NSLock()
 
     private var observationCache: [MessageSessionKey: SharedLiveObservation<MessageListUpdate>] = [:]
@@ -20,6 +21,7 @@ final class MessageSync: @unchecked Sendable {
     private var lastPublishedFrame: [String: [Message]] = [:]
     private var lastPublishedRevision: [String: UInt64] = [:]
     private var healthByKey: [MessageSessionKey: MessageSyncHealth] = [:]
+    private var messageCacheHandles: [MessageSessionKey: any SessionMessageCacheHandle] = [:]
 
     init(
         listMessages: @escaping MessageListFetcher,
@@ -32,7 +34,8 @@ final class MessageSync: @unchecked Sendable {
         recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
         },
-        connectionEpoch: ConnectionEpoch = .shared
+        connectionEpoch: ConnectionEpoch = .shared,
+        sessionCache: any SessionCache = NoOpSessionCache.shared
     ) {
         self.listMessages = listMessages
         self.store = store
@@ -43,6 +46,7 @@ final class MessageSync: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.recoveryDelay = recoveryDelay
         self.connectionEpoch = connectionEpoch
+        self.sessionCache = sessionCache
     }
 
     /// Convenience for call sites that still construct an in-memory store.
@@ -57,7 +61,8 @@ final class MessageSync: @unchecked Sendable {
         recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
         },
-        connectionEpoch: ConnectionEpoch = .shared
+        connectionEpoch: ConnectionEpoch = .shared,
+        sessionCache: any SessionCache = NoOpSessionCache.shared
     ) {
         self.init(
             listMessages: listMessages,
@@ -68,7 +73,8 @@ final class MessageSync: @unchecked Sendable {
             eventStagingByteCapacity: eventStagingByteCapacity,
             connectionProfileIDProvider: connectionProfileIDProvider,
             recoveryDelay: recoveryDelay,
-            connectionEpoch: connectionEpoch
+            connectionEpoch: connectionEpoch,
+            sessionCache: sessionCache
         )
     }
 
@@ -166,6 +172,7 @@ final class MessageSync: @unchecked Sendable {
             capacity: eventStagingCapacity,
             byteCapacity: eventStagingByteCapacity
         )
+        let cacheHandle = openMessageCacheHandle(for: key)
         let producer = Task { [eventStream] in
             for await event in await eventStream.events() {
                 staging.enqueue(event, sessionID: key.sessionID, epoch: observationEpoch.current)
@@ -196,9 +203,11 @@ final class MessageSync: @unchecked Sendable {
             producer.cancel()
             connectionWatcher.cancel()
             staging.finish()
+            closeMessageCacheHandle(for: key)
         }
 
-        let publishMessages: @Sendable ([Message]) -> Void = { [weak self] messages in
+        var emittedSeed = false
+        let publishMessages: @Sendable ([Message], Bool) -> Void = { [weak self] messages, isFromCache in
             guard let self else { return }
             guard self.connectionEpoch.current() == observationEpoch.current else { return }
             self.setPublishedFrame(
@@ -206,15 +215,29 @@ final class MessageSync: @unchecked Sendable {
                 revision: self.store.revision(sessionID: key.storeSlot),
                 for: key.storeSlot
             )
-            yield(.messages(messages))
+            if !isFromCache {
+                cacheHandle.note(messages: messages)
+            }
+            yield(.messages(messages, isFromCache: isFromCache))
             // Fingerprint remains the poll / REST authority comparison only.
             self.setFingerprint(self.messageFingerprint(messages), for: key.storeSlot)
             MessagePipelineProbe.emit(.displayFramePublished)
         }
 
-        // Warm reopen already replayed SharedLiveObservation.lastValue. Skip an
-        // identical REST republish so DisplayMessagePipeline does not cancel
-        // in-flight enrich / plain-first and start over on the MainActor.
+        if let seeded = await cacheHandle.seed() {
+            let seedRevision = store.revision(sessionID: key.storeSlot)
+            _ = store.replaceAllIfRevision(
+                sessionID: key.storeSlot,
+                messages: seeded,
+                expectedRevision: seedRevision
+            )
+            let seededMerged = store.messages(sessionID: key.storeSlot)
+            emittedSeed = true
+            publishMessages(seededMerged, true)
+        }
+
+        // Skip an identical REST republish after cache seed or warm replay so
+        // DisplayMessagePipeline does not cancel in-flight enrich / plain-first.
         let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         do {
@@ -230,7 +253,7 @@ final class MessageSync: @unchecked Sendable {
                     staging: staging,
                     observationEpoch: observationEpoch,
                     reason: .overflow,
-                    publishMessages: publishMessages
+                    publishMessages: { publishMessages($0, false) }
                 )
             } else {
                 _ = store.replaceAllIfRevision(
@@ -244,7 +267,10 @@ final class MessageSync: @unchecked Sendable {
                 setFingerprint(fingerprint, for: key.storeSlot)
                 setHealth(.healthy, for: key)
                 if fingerprintBeforeReload != fingerprint {
-                    publishMessages(merged)
+                    publishMessages(merged, false)
+                } else if emittedSeed {
+                    // Confirm disk without a second UI paint.
+                    cacheHandle.note(messages: merged)
                 }
             }
         } catch {
@@ -255,7 +281,7 @@ final class MessageSync: @unchecked Sendable {
                     staging: staging,
                     observationEpoch: observationEpoch,
                     reason: .overflow,
-                    publishMessages: publishMessages
+                    publishMessages: { publishMessages($0, false) }
                 )
             } else if fingerprint(for: key.storeSlot) != nil {
                 setHealth(.recovering(.reloadFailed), for: key)
@@ -264,7 +290,7 @@ final class MessageSync: @unchecked Sendable {
                     staging: staging,
                     observationEpoch: observationEpoch,
                     reason: .reloadFailed,
-                    publishMessages: publishMessages
+                    publishMessages: { publishMessages($0, false) }
                 )
             } else {
                 yield(.loadFailed(error))
@@ -275,15 +301,33 @@ final class MessageSync: @unchecked Sendable {
             key: key,
             staging: staging,
             observationEpoch: observationEpoch,
-            publishMessages: publishMessages
+            publishMessages: { publishMessages($0, false) }
         )
         async let pollLoop: Void = runTimelinePollLoop(
             key: key,
             staging: staging,
             observationEpoch: observationEpoch,
-            publishMessages: publishMessages
+            publishMessages: { publishMessages($0, false) }
         )
         _ = await (eventLoop, pollLoop)
+    }
+
+    private func openMessageCacheHandle(for key: MessageSessionKey) -> any SessionMessageCacheHandle {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = messageCacheHandles[key] {
+            return existing
+        }
+        let handle = sessionCache.openMessages(sessionID: key.sessionID, worktree: key.directory)
+        messageCacheHandles[key] = handle
+        return handle
+    }
+
+    private func closeMessageCacheHandle(for key: MessageSessionKey) {
+        lock.lock()
+        let handle = messageCacheHandles.removeValue(forKey: key)
+        lock.unlock()
+        handle?.close()
     }
 
     private func performClosedLoopRecovery(

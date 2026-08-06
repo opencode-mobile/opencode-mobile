@@ -43,6 +43,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
@@ -194,9 +195,12 @@ internal fun MainScreen(
                 MainScreenUiState.Probing,
                 MainScreenUiState.Loading,
                 -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    OpenCodeStatusStack(
+                        title = "Loading sessions",
+                        subtitle = "Checking server…",
+                        testTag = "homeLoading",
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
                 is MainScreenUiState.ProbeFailed -> {
                     ProbeFailedContent(

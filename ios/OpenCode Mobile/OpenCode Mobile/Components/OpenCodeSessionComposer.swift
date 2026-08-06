@@ -58,6 +58,7 @@ enum OpenCodeSessionComposerState {
         let queuePosition: Int
         let queueCount: Int
         let submitting: Bool
+        let actionsEnabled: Bool
         let errorMessage: String?
 
         init(
@@ -68,6 +69,7 @@ enum OpenCodeSessionComposerState {
             queuePosition: Int = 1,
             queueCount: Int = 1,
             submitting: Bool = false,
+            actionsEnabled: Bool = true,
             errorMessage: String? = nil
         ) {
             self.requestID = requestID
@@ -77,6 +79,7 @@ enum OpenCodeSessionComposerState {
             self.queuePosition = queuePosition
             self.queueCount = queueCount
             self.submitting = submitting
+            self.actionsEnabled = actionsEnabled
             self.errorMessage = errorMessage
         }
     }
@@ -334,7 +337,7 @@ struct OpenCodeSessionComposer: View {
         HStack {
             OpenCodeButton(
                 variant: .compactText(title: "Deny"),
-                enabled: !permission.submitting,
+                enabled: permission.actionsEnabled && !permission.submitting,
                 contrast: .low,
                 action: {
                     onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
@@ -346,7 +349,7 @@ struct OpenCodeSessionComposer: View {
             }
             OpenCodeButton(
                 variant: .compactText(title: "Allow once"),
-                enabled: !permission.submitting,
+                enabled: permission.actionsEnabled && !permission.submitting,
                 action: {
                     onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
                 }

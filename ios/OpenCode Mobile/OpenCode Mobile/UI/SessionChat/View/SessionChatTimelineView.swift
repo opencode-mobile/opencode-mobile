@@ -76,10 +76,11 @@ struct SessionChatTimelineView: View {
         Group {
             switch props.timeline {
             case .loading:
-                Spacer()
-                ProgressView()
-                    .accessibilityIdentifier("sessionChatLoading")
-                Spacer()
+                OpenCodeStatusStack(
+                    title: "Loading messages",
+                    subtitle: "Fetching timeline…",
+                    accessibilityIdentifier: "sessionChatLoading"
+                )
             case .empty:
                 Spacer()
                 Text("No messages yet. Send a prompt to start.")

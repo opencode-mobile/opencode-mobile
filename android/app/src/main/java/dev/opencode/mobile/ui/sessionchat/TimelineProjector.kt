@@ -57,6 +57,15 @@ data class TimelineFrame(
     fun layoutAffectingRevision(): Long =
         if (layoutAffectingRowIDs().isEmpty()) 0L else frameRevision
 
+    /**
+     * Armed auto-follow key for inserts / non-decorate layout changes.
+     * Decorate-only frames return `0` so TextMate / slash collapse paint does not re-scroll.
+     */
+    fun structureAffectingRevision(): Long {
+        val structureIds = insertedRowIDs + (layoutChangedRowIDs - decorateRowIDs)
+        return if (structureIds.isEmpty()) 0L else frameRevision
+    }
+
     /** Armed-only pin key for streaming bottom growth (not unarmed restore). */
     fun growBottomRevision(): Long =
         if (grewBottomRowIDs.isEmpty()) 0L else frameRevision

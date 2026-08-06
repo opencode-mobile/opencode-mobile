@@ -398,7 +398,8 @@ private func makeViewModel(
     )
     let sessionLiveStore = DefaultSessionLiveStore(
         sessionRepository: sessionRepository,
-        eventStream: eventStream
+        eventStream: eventStream,
+        sessionCache: NoOpSessionCache.shared
     )
     let sessionReadyStore = DefaultSessionReadyStore(
         sessionStatusLiveStore: sessionStatusLiveStore,

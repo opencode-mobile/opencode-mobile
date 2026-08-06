@@ -27,6 +27,8 @@ struct SettingsView: View {
     @State private var showDiagnosticLogs = false
     @State private var showTextMateLanguages = false
     @State private var showClearConfirmation = false
+    @State private var showClearSessionCacheConfirmation = false
+    @State private var sessionCacheSizeLabel = "Empty"
     @State private var showThemePicker = false
     @State private var showRecentWindowPicker = false
     @State private var showThemeImporter = false
@@ -143,6 +145,25 @@ struct SettingsView: View {
                             .padding(.horizontal, 16)
                             .padding(.top, 4)
                     }
+
+                    SectionHeader(title: "Session Cache")
+
+                    OpenCodeListItem(
+                        title: "Size",
+                        subtitle: sessionCacheSizeLabel,
+                        style: .card,
+                        startDecorator: .icon(.archive, accessibilityLabel: "Session Cache Size")
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "Clear Session Cache",
+                        subtitle: "Remove cached sessions and messages",
+                        style: .card,
+                        startDecorator: .icon(.close, accessibilityLabel: "Clear Session Cache"),
+                        action: { showClearSessionCacheConfirmation = true }
+                    )
+                    .padding(.horizontal, 16)
 
                     SectionHeader(title: "Developer Tools")
 
@@ -283,12 +304,33 @@ struct SettingsView: View {
         ) { result in
             handleThemeImport(result)
         }
+        .task {
+            sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+        }
+        .openCodeDialog(
+            isPresented: $showClearSessionCacheConfirmation,
+            title: "Clear session cache?",
+            subtitle: "Removes cached sessions and messages. Your connection and credentials stay.",
+            primaryOption: OpenCodeDialogOption(title: "Clear") {
+                Task {
+                    await Container.clearSessionCache()
+                    sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+                }
+                showClearSessionCacheConfirmation = false
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                showClearSessionCacheConfirmation = false
+            }
+        )
         .openCodeDialog(
             isPresented: $showClearConfirmation,
             title: "Clear all data?",
             subtitle: "This cannot be undone.",
             primaryOption: OpenCodeDialogOption(title: "Clear") {
                 Container.clearAllData()
+                Task {
+                    sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+                }
                 showClearConfirmation = false
             },
             secondaryOption: OpenCodeDialogOption(title: "Cancel") {

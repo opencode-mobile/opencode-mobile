@@ -439,6 +439,7 @@ fun SessionChatScreen(
                                 patterns = request.patterns,
                                 queueCount = uiState.permissionQueueCount,
                                 submitting = uiState.permissionSubmitting,
+                                actionsEnabled = uiState.connectionStatus == SessionConnectionStatus.Live,
                                 errorMessage = uiState.permissionErrorMessage,
                             )
                         } ?: uiState.questionRequest?.let { request ->
@@ -493,10 +494,13 @@ fun SessionChatScreen(
                                 uiState.composer.canSend &&
                                     uiState.composer.selectedModel != null &&
                                     uiState.composer.isModelSelectionReady &&
-                                    !uiState.isSending,
+                                    !uiState.isSending &&
+                                    uiState.connectionStatus == SessionConnectionStatus.Live,
                             attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
                             showStop = uiState.sessionStatusLabel != null,
-                            stopEnabled = !uiState.isAborting,
+                            stopEnabled =
+                                !uiState.isAborting &&
+                                    uiState.connectionStatus == SessionConnectionStatus.Live,
                         )
                     OpenCodeSessionComposer(
                         state = composerState,
@@ -642,7 +646,9 @@ fun SessionChatScreen(
             primaryOption =
                 OpenCodeDialogOption(
                     title = "Save",
-                    enabled = !uiState.rename.isSubmitting,
+                    enabled =
+                        !uiState.rename.isSubmitting &&
+                            uiState.connectionStatus == SessionConnectionStatus.Live,
                     onClick = viewModel::confirmRenameSession,
                 ),
             secondaryOption =
@@ -672,8 +678,12 @@ fun SessionChatScreen(
             onDismissRequest = viewModel::dismissCommands,
         ) {
             uiState.visibleClientSlashActions.forEach { action ->
+                val requiresLive =
+                    action == ClientSlashAction.New || action == ClientSlashAction.Fork
                 OpenCodeBottomSheetEntry(
                     title = action.rowTitle,
+                    enabled =
+                        !requiresLive || uiState.connectionStatus == SessionConnectionStatus.Live,
                     onClick = { viewModel.runClientSlashAction(action) },
                 )
             }
@@ -685,7 +695,9 @@ fun SessionChatScreen(
             primaryOption =
                 OpenCodeDialogOption(
                     title = "Fork",
-                    enabled = !uiState.forkSubmitting,
+                    enabled =
+                        !uiState.forkSubmitting &&
+                            uiState.connectionStatus == SessionConnectionStatus.Live,
                     onClick = viewModel::confirmFork,
                 ),
             secondaryOption =

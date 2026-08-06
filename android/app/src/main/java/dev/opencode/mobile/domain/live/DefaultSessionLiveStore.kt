@@ -1,8 +1,8 @@
 package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.event.ForegroundEventStream
-import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -25,16 +25,18 @@ class DefaultSessionLiveStore
         private val sessionRepository: SessionRepository,
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
+        private val sessionCache: SessionCache,
     ) : SessionLiveStore {
-        private val cache = ConcurrentHashMap<String, SharedFlow<List<Session>>>()
+        private val cache = ConcurrentHashMap<String, SharedFlow<SessionListSnapshot>>()
 
         override fun clearCache() {
             cache.clear()
         }
 
-        override fun observeSessions(directory: String): Flow<List<Session>> = cache.getOrPut(directory) { buildSharedFlow(directory) }
+        override fun observeSessions(directory: String): Flow<SessionListSnapshot> =
+            cache.getOrPut(directory) { buildSharedFlow(directory) }
 
-        private fun buildSharedFlow(directory: String): SharedFlow<List<Session>> =
+        private fun buildSharedFlow(directory: String): SharedFlow<SessionListSnapshot> =
             buildSessionFlow(directory)
                 .shareIn(
                     scope = liveStoreScope.coroutineScope,
@@ -42,12 +44,22 @@ class DefaultSessionLiveStore
                     replay = 1,
                 )
 
-        private fun buildSessionFlow(directory: String): Flow<List<Session>> =
+        private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
-                suspend fun loadSessions(): List<Session>? =
-                    runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
+                suspend fun refreshFromNetwork(): Boolean {
+                    val sessions =
+                        runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
+                            ?: return false
+                    sessionCache.rememberSessions(directory, sessions)
+                    send(SessionListSnapshot(sessions = sessions, isFromCache = false))
+                    return true
+                }
 
-                loadSessions()?.let { send(it) }
+                sessionCache.seedSessions(directory)?.let { seeded ->
+                    send(SessionListSnapshot(sessions = seeded, isFromCache = true))
+                }
+
+                refreshFromNetwork()
 
                 merge(
                     eventStream.events
@@ -57,7 +69,7 @@ class DefaultSessionLiveStore
                     eventStream.events.filter { it.triggersHomeRefresh }.map { },
                 ).debounce(LiveStoreRefreshPolicy.SESSION_DEBOUNCE_MS)
                     .collect {
-                        loadSessions()?.let { send(it) }
+                        refreshFromNetwork()
                     }
             }
     }

@@ -248,9 +248,11 @@ struct ProjectListHomeView: View {
     private var content: some View {
         switch viewModel.state {
         case .probing, .loading:
-            Spacer()
-            ProgressView()
-            Spacer()
+            OpenCodeStatusStack(
+                title: "Loading sessions",
+                subtitle: "Checking server…",
+                accessibilityIdentifier: "homeLoading"
+            )
         case .disconnected:
             ConnectionOnboardingView(onConnectClick: presentConnectionSetup)
         case let .probeFailed(message):
@@ -524,7 +526,8 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
     )
     let sessionLiveStore = DefaultSessionLiveStore(
         sessionRepository: PreviewSessionRepository(),
-        eventStream: previewEventStream
+        eventStream: previewEventStream,
+        sessionCache: NoOpSessionCache.shared
     )
     let sessionReadyStore = DefaultSessionReadyStore(
         sessionStatusLiveStore: sessionStatusLiveStore,

@@ -148,11 +148,16 @@ final class DisplayMessagePipeline {
                 var lastPublishedAt: Duration?
                 /// True while coalescing a live streaming reply (including in-flight prepare).
                 var isStreamingSession = false
+                var sourceIsFromCache = false
                 let decorationBacklog = DecorationBacklog()
                 if !previousByID.isEmpty {
                     OpenCodeLog.messageContent.info(
                         "displayCache hit session=\(sessionID, privacy: .public) count=\(previousByID.count)"
                     )
+                }
+
+                func emitDisplayMessages(_ messages: [DisplayMessage]) {
+                    continuation.yield(.messages(messages, isFromCache: sourceIsFromCache))
                 }
 
                 func invalidateInFlightWork() {
@@ -321,7 +326,7 @@ final class DisplayMessagePipeline {
                             OpenCodeLog.messageContent.info(
                                 "displayPublish reason=streaming-decoration generation=\(job.generation)"
                             )
-                            continuation.yield(.messages(merged))
+                            emitDisplayMessages(merged)
                         }
                     }
                 }
@@ -361,7 +366,7 @@ final class DisplayMessagePipeline {
                     OpenCodeLog.messageContent.info(
                         "displayPublish reason=streaming-structure-first chars=\(streamingMessageCharCount(messages)) generation=\(generation)"
                     )
-                    continuation.yield(.messages(frame))
+                    emitDisplayMessages(frame)
                     scheduleStreamingDecoration(generation: generation, messages: messages)
                 }
 
@@ -423,7 +428,76 @@ final class DisplayMessagePipeline {
                         OpenCodeLog.messageContent.info(
                             "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
                         )
-                        continuation.yield(.messages(prepared))
+                        emitDisplayMessages(prepared)
+                        onCommitted?()
+                    }
+                }
+
+                @MainActor
+                func schedulePlainFirstNewestFirst(
+                    generation: UInt64,
+                    messages: [Message],
+                    reason: String,
+                    onCommitted: (() -> Void)? = nil
+                ) {
+                    prepareTask?.cancel()
+                    prepareTask = Task { @MainActor in
+                        var byID = Dictionary(
+                            uniqueKeysWithValues: messages.map { message in
+                                (
+                                    message.id,
+                                    previousByID[message.id].flatMap { cached in
+                                        cached.text == message.text ? cached : nil
+                                    } ?? DisplayMessage(message: message, renderedMarkdown: nil)
+                                )
+                            }
+                        )
+
+                        @MainActor
+                        func publish(label: String) {
+                            guard isCurrent(generation) else { return }
+                            let frame = messages.map { byID[$0.id]! }
+                            guard commitPrepared(
+                                generation: generation,
+                                prepared: frame,
+                                mode: .historyPlainFirst
+                            ) else { return }
+                            lastPublishedMessages = messages
+                            lastPublishedAt = clock.now
+                            OpenCodeLog.messageContent.info(
+                                "displayPublish reason=\(reason, privacy: .public)-\(label, privacy: .public) generation=\(generation)"
+                            )
+                            emitDisplayMessages(frame)
+                        }
+
+                        // Phase 1: newest markdown message only, then publish.
+                        if let newest = messages.reversed().first(where: {
+                            OpenCodeRenderedMarkdownDetector.shouldRender($0.text)
+                        }) {
+                            let prepared = await contentPreparer.prepareMessage(
+                                newest,
+                                previous: byID[newest.id],
+                                mode: .historyPlainFirst
+                            )
+                            guard !Task.isCancelled, isCurrent(generation) else { return }
+                            byID[newest.id] = prepared
+                            previousByID[newest.id] = prepared
+                            preparedHistoryCache.setMessages(previousByID, for: cacheKey)
+                            publish(label: "newest")
+                        }
+
+                        let phase2 = await contentPreparer.prepareMessages(
+                            messages,
+                            previousByID: byID,
+                            mode: .historyPlainFirst
+                        )
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+                        for display in phase2 {
+                            byID[display.id] = display
+                        }
+                        previousByID = byID
+                        preparedHistoryCache.setMessages(previousByID, for: cacheKey)
+                        publish(label: "rest")
                         onCommitted?()
                     }
                 }
@@ -448,7 +522,7 @@ final class DisplayMessagePipeline {
                         OpenCodeLog.messageContent.info(
                             "displayPublish reason=final-placeholder generation=\(generation)"
                         )
-                        continuation.yield(.messages(placeholder))
+                        emitDisplayMessages(placeholder)
 
                         let finalized = await contentPreparer.prepareMessages(
                             messages,
@@ -468,7 +542,7 @@ final class DisplayMessagePipeline {
                         OpenCodeLog.messageContent.info(
                             "displayPublish reason=final generation=\(generation)"
                         )
-                        continuation.yield(.messages(finalized))
+                        emitDisplayMessages(finalized)
                     }
                 }
 
@@ -511,7 +585,7 @@ final class DisplayMessagePipeline {
                             OpenCodeLog.messageContent.info(
                                 "displayPublish reason=\(reason, privacy: .public) count=\(count) generation=\(generation)"
                             )
-                            continuation.yield(.messages(snapshot))
+                            emitDisplayMessages(snapshot)
                         }
 
                         for message in messages.reversed() {
@@ -582,7 +656,8 @@ final class DisplayMessagePipeline {
                         lastPublishedMessages = nil
                         isStreamingSession = false
                         continuation.yield(.loadFailed(error))
-                    case .messages(let messages):
+                    case .messages(let messages, let isFromCache):
+                        sourceIsFromCache = isFromCache
                         if messagesContainStreamingText(messages) {
                             // Coalesce streaming tokens into `pendingMessages`. Do not bump
                             // generation on every delta — decoration stays generation-gated
@@ -622,21 +697,25 @@ final class DisplayMessagePipeline {
                             if hadStreamingPrevious {
                                 scheduleFinalization(generation: generation, messages: messages)
                             } else if hasCompleteMarkdownCache {
+                                // Warm prepared markdown: one Final paint.
                                 schedulePrepare(
                                     generation: generation,
                                     messages: messages,
                                     reason: "cache-hit",
                                     mode: .final
                                 )
-                            } else if shouldPlainFirstHistoryPublish(
-                                messages: messages,
-                                previousByID: previousByID
-                            ) {
-                                schedulePrepare(
+                            } else if sourceIsFromCache ||
+                                shouldPlainFirstHistoryPublish(
+                                    messages: messages,
+                                    previousByID: previousByID
+                                )
+                            {
+                                // Newest-first HistoryPlainFirst: format the open
+                                // viewport before older history. No null-markdown flash.
+                                schedulePlainFirstNewestFirst(
                                     generation: generation,
                                     messages: messages,
-                                    reason: "plain-first",
-                                    mode: .historyPlainFirst,
+                                    reason: sourceIsFromCache ? "cache-seed-plain-first" : "plain-first",
                                     onCommitted: {
                                         guard isCurrent(generation) else { return }
                                         enrichHistoryInBackground(
@@ -698,6 +777,24 @@ func shouldPlainFirstHistoryPublish(
         }
     }
     return false
+}
+
+/// Newest markdown-bearing message ids for the open viewport (bottom of chat).
+func newestMarkdownViewportIDs(
+    messages: [Message],
+    maxCount: Int = MessageContentPreparer.historyEnrichViewportMessageCount,
+    charBudget: Int = MessageContentPreparer.historyEnrichViewportCharacterBudget
+) -> Set<String> {
+    guard !messages.isEmpty, maxCount > 0 else { return [] }
+    var ids = Set<String>()
+    var remainingChars = charBudget
+    for message in messages.reversed() {
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+        ids.insert(message.id)
+        remainingChars -= message.text.count
+        if ids.count >= maxCount || remainingChars <= 0 { break }
+    }
+    return ids
 }
 
 func hasCompletePreparedMarkdownCache(

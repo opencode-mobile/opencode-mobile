@@ -77,8 +77,11 @@ struct AppRootView: View {
         Group {
             switch rootViewModel.state {
             case .loading:
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                OpenCodeStatusStack(
+                    title: "Loading sessions",
+                    subtitle: "Checking server…",
+                    accessibilityIdentifier: "appRootLoading"
+                )
             case .appOnboarding:
                 AppOnboardingView(
                     onSkip: { rootViewModel.completeAppOnboarding(presentConnectionSetup: false) },
