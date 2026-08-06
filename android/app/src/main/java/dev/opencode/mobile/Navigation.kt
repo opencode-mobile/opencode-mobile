@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
@@ -29,6 +31,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
@@ -65,6 +68,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGaller
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
@@ -116,7 +120,15 @@ fun MainNavigation() {
             Box(modifier = Modifier.fillMaxSize()) {
                 when (rootState) {
                     AppRootState.Loading ->
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                        CircularProgressIndicator(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.Center)
+                                    .size(32.dp),
+                            color = openCodeColor("text-base"),
+                            trackColor = openCodeColor("border-weaker-base"),
+                            strokeWidth = 2.5.dp,
+                        )
                     AppRootState.Home ->
                         NavDisplay(
                             modifier =
@@ -286,6 +298,8 @@ fun MainNavigation() {
                                                             ServerAddressInputGalleryScreen()
                                                         ComponentGalleryEntryId.EmptyState ->
                                                             EmptyStateGalleryScreen()
+                                                        ComponentGalleryEntryId.StatusStack ->
+                                                            StatusStackGalleryScreen()
                                                         ComponentGalleryEntryId.ProjectSessionSelector ->
                                                             ProjectSessionSelectorGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->

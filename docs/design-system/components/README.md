@@ -117,6 +117,7 @@ applicable item is complete.
 - `text-input.md`
 - `server-address-input.md`
 - `empty-state.md`
+- `status-stack.md`
 - `action-pill.md`
 - `composer-suggestion-overlay.md`
 - `review-changes-pill.md`

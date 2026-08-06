@@ -36,6 +36,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case textInput
     case serverAddressInput
     case emptyState
+    case statusStack
     case projectSessionSelector
     case sessionList
     case sessionListDock
@@ -112,6 +113,12 @@ let componentGalleryEntries = [
         id: .emptyState,
         title: "Empty State",
         description: "Centered title and message for empty screen regions.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .statusStack,
+        title: "Status Stack",
+        description: "Centered mid-well indeterminate status for first content load.",
         category: .controls
     ),
     ComponentGalleryEntry(
