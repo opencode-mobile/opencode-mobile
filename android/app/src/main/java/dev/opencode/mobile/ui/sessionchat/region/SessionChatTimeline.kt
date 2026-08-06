@@ -644,8 +644,9 @@ class SessionChatTimeline(
         val renderedMarkdown =
             matchingMarkdown(
                 candidate =
-                    display.renderedMarkdown
-                        ?: previous?.takeIf { it.text == message.text }?.renderedMarkdown,
+                    display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
+                        display.isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
+                    },
                 message = message,
                 blocks = blocksWithCache,
             )

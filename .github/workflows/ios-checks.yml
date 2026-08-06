@@ -3,6 +3,11 @@ name: iOS Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # Fallback while pull_request delivery is unreliable: feature-branch pushes
+  # still run Checks. Ignore main so merges don't double-bill with other workflows.
+  push:
+    branches-ignore:
+      - main
   workflow_dispatch:
     inputs:
       run_markdown_core_ios_tests:

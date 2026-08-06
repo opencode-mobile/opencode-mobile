@@ -2697,7 +2697,11 @@ class SessionChatViewModelTest {
                     store = sessionModelSelectionStore,
                     modelRepository = modelRepository,
                 ),
-        ).apply { ioDispatcher = testDispatcher }
+        ).apply {
+            ioDispatcher = testDispatcher
+            // Mutations (send/rename/fork/new) require Live; default fakes start Connected.
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+        }
     }
 
     private fun longMarkdownHistory(): List<Message> =
