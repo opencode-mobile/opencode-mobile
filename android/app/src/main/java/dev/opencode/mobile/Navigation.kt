@@ -10,9 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -20,10 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
@@ -31,7 +27,6 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.theme.OpenCodeTheme
-import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
@@ -77,6 +72,7 @@ import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScree
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
@@ -120,14 +116,11 @@ fun MainNavigation() {
             Box(modifier = Modifier.fillMaxSize()) {
                 when (rootState) {
                     AppRootState.Loading ->
-                        CircularProgressIndicator(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.Center)
-                                    .size(32.dp),
-                            color = openCodeColor("text-base"),
-                            trackColor = openCodeColor("border-weaker-base"),
-                            strokeWidth = 2.5.dp,
+                        OpenCodeStatusStack(
+                            title = "Loading sessions",
+                            subtitle = "Checking server…",
+                            testTag = "appRootLoading",
+                            modifier = Modifier.fillMaxSize(),
                         )
                     AppRootState.Home ->
                         NavDisplay(

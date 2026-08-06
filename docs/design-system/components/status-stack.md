@@ -3,9 +3,9 @@
 ## Intent
 
 `OpenCodeStatusStack` is the centered mid-well indeterminate status for a screen
-region waiting on first content. Use it for Home probing/loading and Session
-Chat timeline loading. Do not use it for soft refresh overlays, empty
-instructional states, composer busy, or AppRoot bootstrap before chrome exists.
+region waiting on first content. Use it for AppRoot bootstrap, Home
+probing/loading, and Session Chat timeline loading. Do not use it for soft
+refresh overlays, empty instructional states, or composer busy.
 
 ## Public API
 

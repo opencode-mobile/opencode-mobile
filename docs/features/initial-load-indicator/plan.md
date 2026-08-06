@@ -8,16 +8,17 @@ for first content, instead of a tinted system spinner or a blank well.
 ## In scope
 
 - Design-system `OpenCodeStatusStack` on iOS and Android (gallery + previews).
+- AppRoot / Navigation bootstrap uses Status Stack with Home cold-start copy
+  `Loading sessions` / `Checking server…` (avoids accent-tinted system spinner).
 - Home `Probing` / `Loading` content well uses Status Stack with locked copy
   `Loading sessions` / `Checking server…`.
 - Session Chat timeline `Loading` uses Status Stack with locked copy
   `Loading messages` / `Fetching timeline…`.
 - Preserve iOS UITest id `sessionChatLoading`; add Android `sessionChatLoading`
-  test tag; optional Home `homeLoading`.
+  test tag; optional Home `homeLoading` and AppRoot `appRootLoading`.
 
 ## Out of scope
 
-- AppRoot / Navigation profile bootstrap spinner.
 - Pull-to-refresh overlays, add-project navigator, composer busy, Changes,
   Session Context, Settings logs.
 - Disk-first skip of Home Probing/Loading (OPE-27 paint path; coordinate only).

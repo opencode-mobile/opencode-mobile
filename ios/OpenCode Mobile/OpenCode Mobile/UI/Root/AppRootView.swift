@@ -55,11 +55,11 @@ struct AppRootView: View {
         Group {
             switch rootViewModel.state {
             case .loading:
-                ProgressView()
-                    .controlSize(.regular)
-                    .tint(OpenCodeColors.textBase)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Loading")
+                OpenCodeStatusStack(
+                    title: "Loading sessions",
+                    subtitle: "Checking server…",
+                    accessibilityIdentifier: "appRootLoading"
+                )
             case .home:
                 ProjectListHomeView(viewModel: Container.makeProjectListHomeViewModel())
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

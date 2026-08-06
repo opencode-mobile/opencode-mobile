@@ -16,12 +16,14 @@
 
 - [x] Home Probing/Loading → Status Stack
 - [x] Session Chat Loading → Status Stack (`sessionChatLoading`)
+- [x] AppRoot Loading → Status Stack (`appRootLoading`)
 - [x] Simulator build succeeded
 
 ## Android
 
 - [x] Home Probing/Loading → Status Stack
 - [x] Session Chat Loading → Status Stack (`sessionChatLoading` testTag)
+- [x] Navigation AppRoot Loading → Status Stack (`appRootLoading`)
 - [x] `:app:compileDebugKotlin` succeeded
 
 ## Blockers

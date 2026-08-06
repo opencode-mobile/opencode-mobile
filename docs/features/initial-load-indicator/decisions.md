@@ -25,3 +25,13 @@ structure/plain frame; it must not reintroduce a wait for Final markdown.
 pass the locked pairs from the verdict. No Home/Session enum on the component.
 
 **Why:** Keeps the Component Collection reusable without API churn.
+
+## AppRoot bootstrap uses Status Stack
+
+**Decision:** AppRoot / Navigation `Loading` uses `OpenCodeStatusStack` with the
+same Home cold-start copy (`Loading sessions` / `Checking server…`), not an
+ad-hoc tinted system spinner.
+
+**Why:** Cold start often paints disk-first Home immediately, so AppRoot was the
+only visible spinner and still used accent blue. One component owns all
+first-paint loading chrome.
