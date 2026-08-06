@@ -297,8 +297,14 @@ class SessionChatViewModel
 
         fun runClientSlashAction(action: ClientSlashAction) {
             when (action) {
-                ClientSlashAction.New -> commands.runNew()
-                ClientSlashAction.Fork -> commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
+                ClientSlashAction.New -> {
+                    if (!isConnectionLive()) return
+                    commands.runNew()
+                }
+                ClientSlashAction.Fork -> {
+                    if (!isConnectionLive()) return
+                    commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
+                }
                 ClientSlashAction.Undo ->
                     commands.runUndo(
                         isBusy = sessionInfo.state.value.sessionStatusLabel != null,
@@ -332,6 +338,7 @@ class SessionChatViewModel
         }
 
         fun confirmFork() {
+            if (!isConnectionLive()) return
             commands.confirmFork()
         }
 
@@ -377,10 +384,12 @@ class SessionChatViewModel
         }
 
         fun confirmRenameSession() {
+            if (!isConnectionLive()) return
             sessionInfo.confirmRenameSession()
         }
 
         fun sendPrompt() {
+            if (!isConnectionLive()) return
             if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) return
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
@@ -403,6 +412,7 @@ class SessionChatViewModel
         }
 
         fun abort() {
+            if (!isConnectionLive()) return
             composer.abort()
         }
 
@@ -573,6 +583,7 @@ class SessionChatViewModel
             sessionId: String,
             decision: PermissionDecision,
         ) {
+            if (!isConnectionLive()) return
             val request =
                 permissionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId }
                     ?: return
@@ -719,6 +730,9 @@ class SessionChatViewModel
                 questionWizardIndex = questionWizardIndex.coerceIn(0, (visible.questions.size - 1).coerceAtLeast(0))
             }
         }
+
+        private fun isConnectionLive(): Boolean =
+            sessionInfo.state.value.connectionStatus == SessionConnectionStatus.Live
 
         private fun visibleQuestionRequest(): QuestionRequest? =
             if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()

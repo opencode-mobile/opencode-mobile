@@ -95,6 +95,22 @@
 - Reason: Old MessageSync patches and `CachedMessagePayload` codecs are stale.
 - Revisit when: N/A (one-time migration choice).
 
+## Composer and mutation gate when not Live
+
+- Date: 2026-08-06
+- Decision: Disable server mutations when `connectionStatus != Live`
+  (Offline or Connecting). Do not OR `messagesFromCache` /
+  `sessionsFromCache`. Phase 4 blocks send, abort, rename, permission reply,
+  fork, and new session. Allow local/admin offline: remove project, Clear
+  Session Cache, Clear All Data, and composer draft/model pick. Stale chrome is
+  existing connection status only — no cache subtitle/banner; no reconnect toast
+  when `isFromCache` flips false.
+- Reason: Mutations need the server; `*FromCache` is true during healthy SWR
+  seed and must not block Live. Locked “reuse connection chrome; no new
+  components.”
+- Revisit when: users confuse Connecting+cache with live data, or offline
+  queues land.
+
 ## Settings size label format
 
 - Date: 2026-08-06

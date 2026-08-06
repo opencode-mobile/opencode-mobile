@@ -315,6 +315,10 @@ final class ProjectListHomeViewModel {
     }
 
     func createSession(in worktree: String) async {
+        guard liveUpdatesConnectionState == .connected else {
+            setProjectSessionCreateError("Reconnect to create a session")
+            return
+        }
         setProjectSessionCreateError(nil)
         do {
             let profile = activeConnectionManager.currentProfile()

@@ -237,6 +237,10 @@ class MainScreenViewModel
         }
 
         fun createSession(worktree: String) {
+            if (liveUpdatesConnectionState.value != EventStreamConnectionState.Connected) {
+                setProjectSessionCreateError("Reconnect to create a session")
+                return
+            }
             viewModelScope.launch {
                 clearProjectSessionCreateError()
                 val profile = activeConnectionManager.currentProfile()

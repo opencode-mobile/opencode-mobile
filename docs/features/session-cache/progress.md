@@ -30,7 +30,7 @@
 - [x] Unit tests (`DefaultSessionCacheTest`)
 - [x] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
 - [x] Worktree purge + Clear All Data + Settings Session Cache section
-- [ ] Composer disabled when offline
+- [x] Composer / mutations gated when `connectionStatus != Live`
 
 ## iOS
 
@@ -39,7 +39,7 @@
 - [x] Unit tests (`DefaultSessionCacheTests`, 6/6)
 - [x] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
 - [x] Worktree purge + Clear All Data + Settings Session Cache section
-- [ ] Composer disabled when offline
+- [x] Composer / mutations gated when `connectionStatus != Live`
 
 ## Blockers
 
@@ -50,4 +50,5 @@
 1. ~~Implement domain module + codec + Room/SwiftData adapters + tests.~~ (Phase 1)
 2. ~~Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.~~ (Phase 2)
 3. ~~Purge on worktree removal; Clear All Data; Settings size + clear.~~ (Phase 3)
-4. Disable composer when unreachable; stale/offline chrome; manual offline cold-start verification.
+4. ~~Disable composer / mutations when unreachable; reuse connection chrome.~~ (Phase 4)
+5. Manual offline cold-start verification (airplane mode / kill server), then PR.

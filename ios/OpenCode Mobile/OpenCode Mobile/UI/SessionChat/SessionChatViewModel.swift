@@ -221,8 +221,10 @@ final class SessionChatViewModel {
     func runClientSlashAction(_ action: ClientSlashAction) {
         switch action {
         case .new:
+            guard isConnectionLive else { return }
             commands.runNew()
         case .fork:
+            guard isConnectionLive else { return }
             commands.openForkDialog(currentTitle: uiState.sessionTitle)
         case .undo:
             commands.runUndo(
@@ -259,6 +261,7 @@ final class SessionChatViewModel {
     }
 
     func confirmFork() {
+        guard isConnectionLive else { return }
         commands.confirmFork()
     }
 
@@ -298,10 +301,12 @@ final class SessionChatViewModel {
     }
 
     func confirmRenameSession() async {
+        guard isConnectionLive else { return }
         await sessionInfo.confirmRenameSession()
     }
 
     func sendPrompt() async {
+        guard isConnectionLive else { return }
         guard permissionRequests.isEmpty, questionRequests.isEmpty else { return }
         await composer.sendPrompt(
             sessionID: sessionID,
@@ -325,6 +330,7 @@ final class SessionChatViewModel {
     }
 
     func abortSession() async {
+        guard isConnectionLive else { return }
         await composer.abortSession(timelineIsReady: timeline.state.timeline == .ready)
     }
 
@@ -451,6 +457,7 @@ final class SessionChatViewModel {
         sessionID: String,
         decision: PermissionDecision
     ) async {
+        guard isConnectionLive else { return }
         guard let request = permissionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
               permissionSubmittingID == nil else { return }
         permissionSubmittingID = request.id
@@ -580,6 +587,10 @@ final class SessionChatViewModel {
         } else {
             questionWizardIndex = min(max(questionWizardIndex, 0), max(0, visible.questions.count - 1))
         }
+    }
+
+    private var isConnectionLive: Bool {
+        sessionInfo.state.connectionStatus == .live
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {
