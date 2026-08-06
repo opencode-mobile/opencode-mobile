@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.command.CommandInvocationCollapser
+import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -167,6 +169,23 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlocksResult.Ok ->
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
+        }
+    }
+
+    /**
+     * Rewrites user text blocks that are expanded slash-command / skill
+     * templates into `[/name] args` for Session Chat display.
+     */
+    fun collapseCommandInvocations(
+        role: MessageRole,
+        blocks: List<SessionChatTimelineBlock>,
+        commands: List<ServerCommand>,
+    ): List<SessionChatTimelineBlock> {
+        if (role != MessageRole.User || commands.isEmpty() || blocks.isEmpty()) return blocks
+        return blocks.map { block ->
+            if (block !is SessionChatTimelineBlock.Text) return@map block
+            val collapsed = CommandInvocationCollapser.collapse(block.text, commands) ?: return@map block
+            block.copy(text = collapsed.text, renderedMarkdown = null)
         }
     }
 

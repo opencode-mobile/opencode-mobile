@@ -154,6 +154,7 @@ class SessionChatViewModel
                 ) { timelineState, composerState, infoState, reviewChangesState, commandsState ->
                     SessionChatCombinedState(timelineState, composerState, infoState, reviewChangesState, commandsState)
                 }.collect { (timelineState, composerState, infoState, reviewChangesState, commandsState) ->
+                    timeline.updateServerCommands(composerState.serverCommands)
                     composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
                     reviewChanges.updateCandidate(
                         messages = timelineState.messages,

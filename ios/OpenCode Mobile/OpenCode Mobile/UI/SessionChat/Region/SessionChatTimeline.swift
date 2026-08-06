@@ -21,6 +21,8 @@ final class SessionChatTimeline {
     private var pendingBaselineSignatureCounts: [String: Int] = [:]
     private var lastLoadedMessages: [Message] = []
     private var displayFrameRevision: UInt64 = 0
+    /// Catalog used to collapse expanded slash-command templates in user bubbles.
+    private(set) var serverCommands: [ServerCommand] = []
 
     init(
         sessionID: String,
@@ -34,6 +36,21 @@ final class SessionChatTimeline {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
         self.sentTimeFormatter = formatter
+    }
+
+    func updateServerCommands(_ commands: [ServerCommand]) {
+        guard commands != serverCommands else { return }
+        let wasEmpty = serverCommands.isEmpty
+        serverCommands = commands
+        guard wasEmpty, !commands.isEmpty, !lastLoadedMessages.isEmpty else { return }
+        let snapshot = lastLoadedMessages.map { DisplayMessage(message: $0) }
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true
+            )
+        }
     }
 
     func reset() {
@@ -240,7 +257,8 @@ final class SessionChatTimeline {
             sessionKey: sessionID,
             frameRevision: 0,
             sourceRevision: 0,
-            displayMessages: [display]
+            displayMessages: [display],
+            serverCommands: serverCommands
         )
         guard !frame.messages.isEmpty else { return nil }
         let previousTimeline: TimelineFrame? =
@@ -303,7 +321,8 @@ final class SessionChatTimeline {
             sessionKey: sessionID,
             frameRevision: displayFrameRevision,
             sourceRevision: displayFrameRevision,
-            displayMessages: displayMessages
+            displayMessages: displayMessages,
+            serverCommands: serverCommands
         )
         await Task.yield()
         guard !Task.isCancelled else { return }

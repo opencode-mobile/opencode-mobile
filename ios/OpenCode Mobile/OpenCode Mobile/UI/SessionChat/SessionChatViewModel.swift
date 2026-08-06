@@ -111,7 +111,11 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("bind session=\(sessionID, privacy: .public) worktree=\(worktree, privacy: .private) title=\(sessionTitle, privacy: .public)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
-        composer.onChange = { [weak self] in self?.publishUiState() }
+        composer.onChange = { [weak self] in
+            guard let self else { return }
+            self.timeline.updateServerCommands(self.composer.state.serverCommands)
+            self.publishUiState()
+        }
         sessionInfo.onChange = { [weak self] in self?.publishUiState() }
         reviewChanges.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }

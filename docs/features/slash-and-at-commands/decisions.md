@@ -61,3 +61,20 @@
 - Transient Session Chat banner errors (Commands, send, abort, archive/delete,
   …) are presented as auto-dismissing `OpenCodeSnackbar` messages, not sticky
   red text. The timeline full-screen load-error empty state stays a page state.
+
+## Collapse expanded slash-command bodies in chat
+
+- Date: 2026-08-06
+- Decision: Keep `template` on the server-command catalog. When Session Chat
+  projects a user message, if its text matches a catalog template (exact or
+  template + appended args), rewrite the bubble to `[/name]` plus the user’s
+  arguments. Highlight `[/name]` with `syntax-type` (same as `@` mentions).
+  Optimistic send uses the same form for `/name args`. Commands that embed
+  `$ARGUMENTS` / `$N` into the template body are only collapsed from the
+  composer slash form, not by template rewrite.
+- Reason: `POST …/command` stores the expanded skill/command template as the
+  user text part (not `synthetic`). Showing that body dumps whole skills into
+  chat; users want the invocation token and typed params only.
+- Revisit when: upstream stores command name / marks expanded templates as
+  synthetic so clients need not reverse-match catalog templates.
+- ADR: not warranted — presentation mapping over an upstream storage quirk.

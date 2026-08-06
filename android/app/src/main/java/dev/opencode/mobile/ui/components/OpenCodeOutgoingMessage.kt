@@ -20,12 +20,17 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.command.commandTokenHighlightRange
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
@@ -99,8 +104,22 @@ fun OpenCodeOutgoingMessage(
                                         modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
                                     )
                                 } else {
+                                    val highlight = commandTokenHighlightRange(part.text)
+                                    val highlightColor = openCodeColor("syntax-type")
                                     Text(
-                                        text = part.text,
+                                        text =
+                                            if (highlight == null) {
+                                                AnnotatedString(part.text)
+                                            } else {
+                                                buildAnnotatedString {
+                                                    append(part.text)
+                                                    addStyle(
+                                                        SpanStyle(color = highlightColor),
+                                                        highlight.first,
+                                                        highlight.last + 1,
+                                                    )
+                                                }
+                                            },
                                         style = MaterialTheme.typography.bodyLarge,
                                         overflow = TextOverflow.Clip,
                                         modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),

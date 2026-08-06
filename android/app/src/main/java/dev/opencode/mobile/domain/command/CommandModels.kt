@@ -13,6 +13,8 @@ data class ServerCommand(
     val name: String,
     val description: String? = null,
     val source: ServerCommandSource = ServerCommandSource.Command,
+    /** Expanded prompt template from `GET /command`; used to collapse chat display. */
+    val template: String? = null,
 )
 
 data class CommandRunOptions(

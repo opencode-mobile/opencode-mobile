@@ -12,11 +12,19 @@ struct ServerCommand: Equatable, Sendable, Identifiable {
     let name: String
     let description: String?
     let source: ServerCommandSource
+    /// Expanded prompt template from `GET /command`; used to collapse chat display.
+    let template: String?
 
-    init(name: String, description: String? = nil, source: ServerCommandSource = .command) {
+    init(
+        name: String,
+        description: String? = nil,
+        source: ServerCommandSource = .command,
+        template: String? = nil
+    ) {
         self.name = name
         self.description = description
         self.source = source
+        self.template = template
     }
 }
 
