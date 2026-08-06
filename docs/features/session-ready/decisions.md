@@ -124,6 +124,25 @@ must match these locks.
   `SessionChatViewModel.startObserving` / `stopObserving` (view lifecycle).
   Bug report logs: open Ready → leave → Ready still shown after refresh.
 
+## Live idle catch-up is opt-in, excluded for speculative watches
+
+- **Decision:** Idle catch-up (`restoredAlreadyIdle` after a watch first
+  sighting) is opt-in per watch via `allowIdleCatchUp` on the internal
+  `WatchRecord`. It is enabled for prompt-sent watches, watches armed on a
+  focused busy/retry sighting, watches armed on leave-while-busy, and watches
+  restored from persistence. It is disabled for the speculative
+  `focused-status-event` watch, because an idle session is often absent from
+  the status map and catch-up would re-stamp Ready after the user left the
+  session they opened to clear it.
+- **Why:** Restart and leave-while-busy catch-up are real “this device was
+  waiting” cases; a bare `session.status` before the debounced reload reveals
+  the turn type is not one. Narrowing to “prompt-sent + restored” would miss
+  the focused-busy and leave-while-busy turns the focused watch was added for.
+- **Evidence:** OPE-110 bug: open Ready session → focused `session.status`
+  watch → leave → idle rows absent from status map → Ready re-stamped.
+  Regression tests `openReady_thenStatusEvent_thenLeave_doesNotRestampReady`
+  on both platforms.
+
 ## Ready survives a later busy turn until focus
 
 - **Decision:** When a session is already in the Ready set and later becomes
