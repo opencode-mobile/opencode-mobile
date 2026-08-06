@@ -1883,6 +1883,8 @@ struct SessionChatViewModelTests {
         questionLiveStore: (any QuestionLiveStore)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
+        // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
+        eventStream.setConnectionState(.connected)
         let sessionRepository = sessionRepository ?? FakeChatSessionRepository()
         let sessionStatusLiveStore = DefaultSessionStatusLiveStore(
             sessionRepository: sessionRepository,

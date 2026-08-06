@@ -21,6 +21,7 @@ final class SessionChatViewModel {
     private let questionLiveStore: any QuestionLiveStore
     private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
+    private let foregroundEventStream: any ForegroundEventStream
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
@@ -71,6 +72,7 @@ final class SessionChatViewModel {
         self.questionLiveStore = questionLiveStore ?? EmptyQuestionLiveStore()
         self.sessionTodoLiveStore = sessionTodoLiveStore ?? EmptySessionTodoLiveStore()
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
+        self.foregroundEventStream = foregroundEventStream
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -590,7 +592,9 @@ final class SessionChatViewModel {
     }
 
     private var isConnectionLive: Bool {
-        sessionInfo.state.connectionStatus == .live
+        // Prefer the live event-stream state over SessionInfo's mirrored status so
+        // mutations are not blocked while connection observation is still catching up.
+        foregroundEventStream.connectionState == .connected
     }
 
     private func visibleQuestionRequest() -> QuestionRequest? {

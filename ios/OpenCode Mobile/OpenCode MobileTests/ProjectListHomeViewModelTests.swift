@@ -39,6 +39,14 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
+        // Disk-first paints empty cache immediately; wait for live SWR to fill sections.
+        let populated = await waitUntil {
+            if case let .loaded(sections, _, _, _, _, _) = viewModel.state {
+                return sections.first?.totalSessionCount == 7
+            }
+            return false
+        }
+        #expect(populated)
         guard case let .loaded(sections, _, _, _, focusedWorktree, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
@@ -68,6 +76,13 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
+        let populated = await waitUntil {
+            if case let .loaded(sections, _, _, _, _, _) = viewModel.state {
+                return sections.first?.allSessions.map(\.id) == ["active"]
+            }
+            return false
+        }
+        #expect(populated)
         guard case let .loaded(sections, _, _, _, _, _) = viewModel.state else {
             Issue.record("Expected loaded")
             return
@@ -386,6 +401,8 @@ private func makeViewModel(
     newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
+    // Mutations (createSession) require Connected; default fakes start Idle.
+    eventStream.setConnectionState(.connected)
     let manager = ActiveConnectionManager()
     manager.apply(ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
     let coordinator = ConnectionSessionCoordinator(
@@ -689,4 +706,17 @@ private enum TestError: LocalizedError {
             message
         }
     }
+}
+
+@MainActor
+private func waitUntil(
+    timeoutMs: Int = 2_000,
+    predicate: @MainActor () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+    while Date() < deadline {
+        if predicate() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return predicate()
 }

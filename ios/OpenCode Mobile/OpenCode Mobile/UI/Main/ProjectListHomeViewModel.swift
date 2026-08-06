@@ -315,7 +315,9 @@ final class ProjectListHomeViewModel {
     }
 
     func createSession(in worktree: String) async {
-        guard liveUpdatesConnectionState == .connected else {
+        // Read the live stream, not `liveUpdatesConnectionState` (UI mirror). That
+        // mirror can lag or stay Idle when nothing has collected updates yet.
+        guard foregroundEventStream.connectionState == .connected else {
             setProjectSessionCreateError("Reconnect to create a session")
             return
         }

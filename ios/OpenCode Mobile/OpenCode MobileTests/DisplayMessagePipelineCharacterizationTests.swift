@@ -43,9 +43,11 @@ struct DisplayMessagePipelineCharacterizationTests {
         )
 
         await harness.source.emit(.messages(history, isFromCache: false))
+        // Newest-first HistoryPlainFirst: newest message frame, then remaining history.
         let formatFirst = await waitUntil {
-            collector.emissions.count == 1
-                && collector.emissions[0].allSatisfy { $0.renderedMarkdown != nil }
+            collector.emissions.count == 2
+                && collector.emissions[0].last?.renderedMarkdown != nil
+                && collector.emissions[1].allSatisfy { $0.renderedMarkdown != nil }
         }
         #expect(formatFirst)
         #expect(harness.preparer.prepareMessagesInvocations[0].mode == .historyPlainFirst)
@@ -55,12 +57,12 @@ struct DisplayMessagePipelineCharacterizationTests {
 
         harness.clock.releaseSleep()
         let enriched = await waitUntil {
-            collector.emissions.count >= 2
+            collector.emissions.count >= 3
                 && collector.emissions.last?.allSatisfy { $0.renderedMarkdown != nil } == true
         }
         #expect(enriched)
 
-        let enrichmentFrames = Array(collector.emissions.dropFirst())
+        let enrichmentFrames = Array(collector.emissions.dropFirst(2))
         #expect(enrichmentFrames.count <= 2)
         #expect(enrichmentFrames.last?.count == 5)
         #expect(enrichmentFrames.last?.allSatisfy { $0.renderedMarkdown != nil } == true)
@@ -77,16 +79,17 @@ struct DisplayMessagePipelineCharacterizationTests {
         }
 
         await harness.source.emit(.messages([largeMarkdownAssistant(id: "msg-1")], isFromCache: false))
+        // Newest-first publishes the single message, then the remaining plain-first pass.
         let formatFirst = await waitUntil {
-            collector.emissions.count == 1
-                && collector.emissions[0].first?.renderedMarkdown != nil
+            collector.emissions.count == 2
+                && collector.emissions.last?.first?.renderedMarkdown != nil
         }
         #expect(formatFirst)
         let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
         #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
         harness.clock.releaseSleep()
-        let enriched = await waitUntil { collector.emissions.count == 2 }
+        let enriched = await waitUntil { collector.emissions.count >= 3 }
         #expect(enriched)
         #expect(collector.emissions.last?.first?.renderedMarkdown != nil)
 
@@ -293,19 +296,22 @@ struct DisplayMessagePipelineCharacterizationTests {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
 
-        harness.preparer.holdNextPrepareMessage()
         await harness.source.emit(.messages([largeMarkdownAssistant(id: "history")], isFromCache: false))
-        _ = await waitUntil { collector.emissions.count == 1 }
+        // Newest-first publishes plain-first before enrichment is scheduled.
+        let plainFirst = await waitUntil { collector.emissions.count == 2 }
+        #expect(plainFirst)
         let enrichmentParked = await waitUntil { harness.clock.pendingSleep == .milliseconds(48) }
         #expect(enrichmentParked)
         #expect(harness.clock.pendingSleep == .milliseconds(48))
 
+        // Hold the enrichment prepare (not plain-first) after the 48ms gate is parked.
+        harness.preparer.holdNextPrepareMessage()
         harness.clock.releaseSleep()
         let held = await waitUntil { harness.preparer.hasPendingPrepareMessageHold }
         #expect(held)
 
         await harness.source.emit(.messages([streamingAssistant(id: "live", text: "token")], isFromCache: false))
-        let livePublished = await waitUntil { collector.emissions.count >= 2 }
+        let livePublished = await waitUntil { collector.emissions.count >= 3 }
         #expect(livePublished)
         let emissionsBeforeRelease = collector.emissions.count
 
@@ -579,6 +585,8 @@ private final class Harness {
     let pipeline: DisplayMessagePipeline
 
     init(holdSleep: Bool = false) {
+        // Enrichment frames only publish when plain-first left rows awaiting TextMate.
+        MarkdownHighlightPreferences.shared.setTextMateEnabled(true)
         let clock = ControllablePipelineClock(holdSleep: holdSleep)
         self.clock = clock
         self.pipeline = DisplayMessagePipeline(
