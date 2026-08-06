@@ -182,14 +182,13 @@ class SessionChatViewModel
             // bound ViewModel without a full reset, and Ready must clear on open.
             sessionReadyStore.setFocusedSession(sessionId, worktree)
             if (boundSessionId == sessionId && boundWorktree == worktree) {
-                if (boundSessionTitle != sessionTitle) {
-                    boundSessionTitle = sessionTitle
-                    sessionInfo.bind(sessionId, sessionTitle, worktree)
-                }
+                bindTitleIfChanged(sessionId, sessionTitle, worktree)
                 return
             }
             boundSessionId = sessionId
-            boundSessionTitle = sessionTitle
+            // Clear so bindTitleIfChanged always rebinds sessionInfo for a new identity,
+            // even when the previous session shared the same title.
+            boundSessionTitle = null
             boundWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
@@ -198,7 +197,7 @@ class SessionChatViewModel
             _uiState.value = SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
-            sessionInfo.bind(sessionId, sessionTitle, worktree)
+            bindTitleIfChanged(sessionId, sessionTitle, worktree)
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             observePermissions(sessionId, worktree)
@@ -207,6 +206,16 @@ class SessionChatViewModel
             viewModelScope.launch {
                 composer.loadCatalog()
             }
+        }
+
+        private fun bindTitleIfChanged(
+            sessionId: String,
+            sessionTitle: String,
+            worktree: String,
+        ) {
+            if (boundSessionTitle == sessionTitle) return
+            boundSessionTitle = sessionTitle
+            sessionInfo.bind(sessionId, sessionTitle, worktree)
         }
 
         fun clearSessionReadyFocus() {
