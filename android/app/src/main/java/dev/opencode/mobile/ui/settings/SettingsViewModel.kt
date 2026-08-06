@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
@@ -57,6 +58,7 @@ class SettingsViewModel
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()
                 MarkdownHighlightPreferences.clear()
+                AppOnboardingPreferences.clear()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
                 textMateLogbook.clear()

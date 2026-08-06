@@ -15,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -73,6 +74,7 @@ import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScree
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.main.MainScreen
+import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
@@ -89,6 +91,8 @@ import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 fun MainNavigation() {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
+    val presentConnectionSetupAfterOnboarding by
+        rootViewModel.presentConnectionSetup.collectAsStateWithLifecycle()
     val setupViewModel: ConnectionSetupViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
@@ -99,6 +103,13 @@ fun MainNavigation() {
         setupViewModel.configure(initialProfile)
         if (backStack.lastOrNull() != ConnectionSetupHome) {
             backStack.add(ConnectionSetupHome)
+        }
+    }
+
+    LaunchedEffect(rootState, presentConnectionSetupAfterOnboarding) {
+        if (rootState == AppRootState.Home && presentConnectionSetupAfterOnboarding) {
+            presentConnectionSetup(initialProfile = null)
+            rootViewModel.consumePresentConnectionSetup()
         }
     }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
@@ -116,6 +127,19 @@ fun MainNavigation() {
                 when (rootState) {
                     AppRootState.Loading ->
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    AppRootState.AppOnboarding ->
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .systemBarsPadding()
+                                    .displayCutoutPadding(),
+                        ) {
+                            AppOnboardingScreen(
+                                onSkip = { rootViewModel.completeAppOnboarding(openConnectionSetup = false) },
+                                onConnect = { rootViewModel.completeAppOnboarding(openConnectionSetup = true) },
+                            )
+                        }
                     AppRootState.Home ->
                         NavDisplay(
                             modifier =
