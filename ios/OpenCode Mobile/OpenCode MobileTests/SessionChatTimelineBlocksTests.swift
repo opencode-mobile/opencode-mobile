@@ -757,6 +757,46 @@ struct SessionChatTimelineBlocksTests {
         #expect(!tool.opensChangesReview)
     }
 
+    @Test func build_hidesSyntheticTextBesideFileAttachment() {
+        let blocks = okBlocks(
+            role: .user,
+            parts: [
+                text("prt-1", "I attached logs"),
+                .text(
+                    TextPart(
+                        id: "prt-2",
+                        text: #"Called the Read tool with the following input: {"filePath":"notes.txt"}"#,
+                        isStreaming: false,
+                        isSynthetic: true
+                    )
+                ),
+                .text(TextPart(id: "prt-3", text: "file body", isStreaming: false, isSynthetic: true)),
+                .file(
+                    FilePart(
+                        id: "prt-4",
+                        filename: "notes.txt",
+                        mime: "text/plain",
+                        kind: .text,
+                        dataURL: "data:text/plain;base64,ZmlsZSBib2R5"
+                    )
+                ),
+            ]
+        )
+        #expect(blocks.count == 2)
+        guard case .text(let textID, let prompt, _) = blocks[0] else {
+            Issue.record("Expected user prompt text")
+            return
+        }
+        #expect(textID == PresentationBlockId.direct("prt-1"))
+        #expect(prompt == "I attached logs")
+        guard case .attachment(let attachmentID, let file) = blocks[1] else {
+            Issue.record("Expected attachment")
+            return
+        }
+        #expect(attachmentID == PresentationBlockId.direct("prt-4"))
+        #expect(file.filename == "notes.txt")
+    }
+
     @Test func build_missingTextPartId_returnsMissingPartIds() {
         let result = SessionChatTimelineBlocks.build(
             role: .assistant,

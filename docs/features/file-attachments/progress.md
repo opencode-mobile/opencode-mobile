@@ -54,6 +54,8 @@
 - Android debug assembly and iOS simulator build pass.
 - Physical-device picker and document-provider exercise remains a release
   validation risk; it does not create an implementation parity gap.
+- 2026-08-06: regression coverage for hiding server `synthetic` / `ignored`
+  text beside text-file attachments (desktop `UserMessageDisplay` parity).
 
 ## Remaining work
 

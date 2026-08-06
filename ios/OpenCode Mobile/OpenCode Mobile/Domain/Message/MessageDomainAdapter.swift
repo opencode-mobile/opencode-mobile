@@ -50,7 +50,15 @@ struct MessageDomainAdapter: Sendable {
         switch dto.type {
         case "text":
             guard let text = dto.text else { return nil }
-            return .text(TextPart(id: dto.id, text: text, isStreaming: false))
+            return .text(
+                TextPart(
+                    id: dto.id,
+                    text: text,
+                    isStreaming: false,
+                    isSynthetic: dto.synthetic == true,
+                    isIgnored: dto.ignored == true
+                )
+            )
         case "file":
             guard let url = dto.url,
                   let mime = dto.mime?.lowercased(),
@@ -218,6 +226,7 @@ struct MessageDomainAdapter: Sendable {
         let segments: [String] = parts.compactMap { part in
             switch part {
             case .text(let t):
+                guard t.isDisplayable else { return nil }
                 let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
             case .file:
