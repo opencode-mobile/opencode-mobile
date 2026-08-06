@@ -205,6 +205,26 @@ enum SessionChatTimelineBlocks {
         }
     }
 
+    /// Rewrites user text blocks that are expanded slash-command / skill
+    /// templates into `[/name] args` for Session Chat display.
+    static func collapseCommandInvocations(
+        role: MessageRole,
+        blocks: [SessionChatTimelineBlock],
+        commands: [ServerCommand]
+    ) -> [SessionChatTimelineBlock] {
+        guard role == .user, !commands.isEmpty, !blocks.isEmpty else { return blocks }
+        return blocks.map { block in
+            guard case .text(let blockID, let text, _) = block,
+                  let collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
+            else { return block }
+            return .text(
+                blockID: blockID,
+                text: collapsed.text,
+                renderedMarkdown: nil
+            )
+        }
+    }
+
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
         let name = tool.toolName.lowercased()
         if name == "todowrite" { return false }

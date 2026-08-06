@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
@@ -38,6 +39,26 @@ class SessionChatTimeline(
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+
+    @Volatile
+    var serverCommands: List<ServerCommand> = emptyList()
+
+    fun updateServerCommands(commands: List<ServerCommand>) {
+        if (commands == serverCommands) return
+        val wasEmpty = serverCommands.isEmpty()
+        serverCommands = commands
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (wasEmpty && commands.isNotEmpty() && lastLoadedMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedMessages.map { DisplayMessage(it) },
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "commands-ready",
+            )
+        }
+    }
 
     private val _state = MutableStateFlow(SessionChatTimelineRegionState())
     val state: StateFlow<SessionChatTimelineRegionState> = _state.asStateFlow()
@@ -574,11 +595,16 @@ class SessionChatTimeline(
     ): DisplayMessageBody? {
         val message = display.message
         val resolvedBlocks =
-            SessionChatTimelineBlocks.buildOrFallback(
+            SessionChatTimelineBlocks.collapseCommandInvocations(
                 role = message.role,
-                parts = message.parts,
-                messageId = message.id,
-                fallbackText = message.text,
+                blocks =
+                    SessionChatTimelineBlocks.buildOrFallback(
+                        role = message.role,
+                        parts = message.parts,
+                        messageId = message.id,
+                        fallbackText = message.text,
+                    ),
+                commands = serverCommands,
             )
         if (resolvedBlocks.isEmpty()) return null
 
@@ -607,9 +633,12 @@ class SessionChatTimeline(
             }
 
         val renderedMarkdown =
-            display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
-                display.isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
-            }
+            matchingMarkdown(
+                display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
+                    display.isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
+                },
+                blocksWithCache,
+            )
         val blocks = attachMarkdownBridge(blocksWithCache, renderedMarkdown)
         return DisplayMessageBody(message = message, blocks = blocks)
     }
@@ -617,6 +646,9 @@ class SessionChatTimeline(
     /**
      * Temporary Phase 5 bridge: message-scoped markdown lands on the sole text
      * block when per-block cache has not already decorated it.
+     *
+     * Skip when the sole text was rewritten (slash-command collapse) so the
+     * expanded template document is not pasted onto `[/name] args`.
      */
     private fun attachMarkdownBridge(
         blocks: List<SessionChatTimelineBlock>,
@@ -631,8 +663,22 @@ class SessionChatTimeline(
         val textIndex = textBlockIndexes.single()
         val textBlock = blocks[textIndex] as SessionChatTimelineBlock.Text
         if (textBlock.renderedMarkdown != null) return blocks
+        if (ContentRevision.of(textBlock.text).textHash != renderedMarkdown.sourceHash) return blocks
         return blocks.toMutableList().also {
             it[textIndex] = textBlock.copy(renderedMarkdown = renderedMarkdown)
+        }
+    }
+
+    private fun matchingMarkdown(
+        renderedMarkdown: MarkdownDocument?,
+        blocks: List<SessionChatTimelineBlock>,
+    ): MarkdownDocument? {
+        if (renderedMarkdown == null) return null
+        val soleText =
+            blocks.filterIsInstance<SessionChatTimelineBlock.Text>().singleOrNull()
+                ?: return renderedMarkdown
+        return renderedMarkdown.takeIf {
+            ContentRevision.of(soleText.text).textHash == it.sourceHash
         }
     }
 

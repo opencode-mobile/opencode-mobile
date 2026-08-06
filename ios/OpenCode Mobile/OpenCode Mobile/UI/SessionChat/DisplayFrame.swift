@@ -41,7 +41,8 @@ enum DisplayFrameBuilder {
         sessionKey: String,
         frameRevision: UInt64,
         sourceRevision: UInt64,
-        displayMessages: [DisplayMessage]
+        displayMessages: [DisplayMessage],
+        serverCommands: [ServerCommand] = []
     ) -> DisplayFrame {
         let sorted =
             displayMessages
@@ -67,19 +68,25 @@ enum DisplayFrameBuilder {
                 messageId: message.id,
                 fallbackText: message.text
             )
+            blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
+                role: message.role,
+                blocks: blocks,
+                commands: serverCommands
+            )
             guard !blocks.isEmpty else { continue }
             blocks = attachCachedBlockMarkdown(
                 blocks,
                 sessionKey: sessionKey,
                 isStreaming: display.isStreaming
             )
-            blocks = attachSoleTextMarkdown(blocks, display.renderedMarkdown)
+            let rootMarkdown = matchingMarkdown(display.renderedMarkdown, blocks: blocks)
+            blocks = attachSoleTextMarkdown(blocks, rootMarkdown)
             bodies.append(
                 DisplayMessageBody(
                     message: message,
                     isStreaming: display.isStreaming,
                     blocks: blocks,
-                    renderedMarkdown: display.renderedMarkdown
+                    renderedMarkdown: rootMarkdown
                 )
             )
         }
@@ -116,6 +123,9 @@ enum DisplayFrameBuilder {
 
     /// Bridge: when the pipeline still publishes message-root markdown, copy it
     /// onto the only text block so views can prefer per-block docs.
+    ///
+    /// Skip when the sole text was rewritten (slash-command collapse) so the
+    /// expanded template document is not pasted onto `[/name] args`.
     static func attachSoleTextMarkdown(
         _ blocks: [SessionChatTimelineBlock],
         _ markdown: NativeMarkdownDocument?
@@ -128,8 +138,22 @@ enum DisplayFrameBuilder {
         guard textIndices.count == 1, let index = textIndices.first else { return blocks }
         guard case .text(let blockID, let text, let existing) = blocks[index] else { return blocks }
         if existing != nil { return blocks }
+        guard ContentRevision.of(text).textHash == markdown.sourceHash else { return blocks }
         var result = blocks
         result[index] = .text(blockID: blockID, text: text, renderedMarkdown: markdown)
         return result
+    }
+
+    static func matchingMarkdown(
+        _ markdown: NativeMarkdownDocument?,
+        blocks: [SessionChatTimelineBlock]
+    ) -> NativeMarkdownDocument? {
+        guard let markdown else { return nil }
+        let texts = blocks.compactMap { block -> String? in
+            if case .text(_, let text, _) = block { return text }
+            return nil
+        }
+        guard texts.count == 1, let text = texts.first else { return markdown }
+        return ContentRevision.of(text).textHash == markdown.sourceHash ? markdown : nil
     }
 }

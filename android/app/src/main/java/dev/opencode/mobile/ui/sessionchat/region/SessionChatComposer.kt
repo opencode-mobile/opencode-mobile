@@ -4,6 +4,7 @@ import android.util.Log
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
+import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ComposerSubmitIntent
@@ -556,15 +557,24 @@ class SessionChatComposer(
         val selectedModel = composer.selectedModel ?: return
         if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
 
+        val collapsedDisplay =
+            CommandInvocationCollapser.collapse(
+                text = prompt,
+                commands = _state.value.serverCommands,
+            )
+        val displayText = collapsedDisplay?.text ?: prompt
         scope.launch {
             val display =
                 withContext(ioDispatcher) {
                     messageRepository.prepareOptimisticUserMessage(
                         id = "pending-${UUID.randomUUID()}",
-                        text = prompt,
+                        text = displayText,
                         attachments = attachments,
                     )
                 }
+            // Keep collapsed slash tokens as plain text so `[/name]` can use
+            // syntax-type highlight instead of markdown paint.
+            val optimisticMarkdown = display.renderedMarkdown.takeUnless { collapsedDisplay != null }
             val enriched =
                 attachments.map(AttachmentPresentationMapper::toItem).let { attachmentItems ->
                     listOf(
@@ -575,7 +585,7 @@ class SessionChatComposer(
                             metadataLabel = composerMetadataLabel(composer),
                             isPending = true,
                             isStreaming = false,
-                            renderedMarkdown = display.renderedMarkdown,
+                            renderedMarkdown = optimisticMarkdown,
                             attachments = attachmentItems,
                             blocks =
                                 buildList {
@@ -584,7 +594,7 @@ class SessionChatComposer(
                                             SessionChatTimelineBlock.Text(
                                                 blockID = PresentationBlockId.messageFallback(display.id),
                                                 text = display.text,
-                                                renderedMarkdown = display.renderedMarkdown,
+                                                renderedMarkdown = optimisticMarkdown,
                                             ),
                                         )
                                     }

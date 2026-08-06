@@ -151,13 +151,29 @@ struct OpenCodeOutgoingMessage: View {
                 variant: .outgoingMessage
             )
         } else {
-            Text(text)
+            Text(attributedCommandDisplayText(text))
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
+}
+
+private func attributedCommandDisplayText(_ text: String) -> AttributedString {
+    var attributed = AttributedString(text)
+    guard text.hasPrefix("[/"), let end = text.firstIndex(of: "]") else {
+        attributed.foregroundColor = OpenCodeColors.textStrong
+        return attributed
+    }
+    let tokenEnd = text.distance(from: text.startIndex, to: end) + 1
+    let tokenRange = attributed.startIndex ..< attributed.index(attributed.startIndex, offsetByCharacters: tokenEnd)
+    attributed[tokenRange].foregroundColor = OpenCodeColors.syntaxType
+    let remainderStart = attributed.index(attributed.startIndex, offsetByCharacters: tokenEnd)
+    if remainderStart < attributed.endIndex {
+        attributed[remainderStart ..< attributed.endIndex].foregroundColor = OpenCodeColors.textStrong
+    }
+    return attributed
 }
 
 #Preview("Short") {

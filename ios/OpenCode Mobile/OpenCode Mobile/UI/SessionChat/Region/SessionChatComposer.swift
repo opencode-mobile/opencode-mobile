@@ -499,13 +499,16 @@ final class SessionChatComposer {
                 )
             )
         }
+        let collapsedDisplay =
+            CommandInvocationCollapser.collapse(text: trimmed, commands: state.serverCommands)
+        let displayText = collapsedDisplay?.text ?? trimmed
         let optimisticBlocks =
-            (trimmed.isEmpty
+            (displayText.isEmpty
                 ? []
                 : [
                     SessionChatTimelineBlock.text(
                         blockID: PresentationBlockId.direct("optimistic-text"),
-                        text: trimmed,
+                        text: displayText,
                         renderedMarkdown: nil
                     ),
                 ]) + attachmentBlocks
@@ -513,7 +516,7 @@ final class SessionChatComposer {
         let optimistic = SessionChatRow(
             id: "pending-\(UUID().uuidString)",
             role: .user,
-            text: trimmed,
+            text: displayText,
             metadataLabel: metadataLabel(
                 mode: composer.selectedMode,
                 model: composer.selectedModel?.modelLabel,
@@ -528,8 +531,16 @@ final class SessionChatComposer {
             contextInputTokens: nil
         )
 
-        let prepared = await messageRepository.prepareOptimisticUserMessage(id: optimistic.id, text: trimmed)
-        let enriched = [row(from: prepared, optimistic: optimistic)]
+        let prepared = await messageRepository.prepareOptimisticUserMessage(id: optimistic.id, text: displayText)
+        // Keep collapsed slash tokens as plain text so `[/name]` can use
+        // syntax-type highlight instead of markdown paint.
+        let enriched = [
+            row(
+                from: prepared,
+                optimistic: optimistic,
+                preferPlainCommandHighlight: collapsedDisplay != nil
+            ),
+        ]
         state.isSending = true
         state.errorMessage = nil
         notifyChange()
@@ -813,7 +824,11 @@ final class SessionChatComposer {
         onChange?()
     }
 
-    private func row(from prepared: DisplayMessage, optimistic: SessionChatRow) -> SessionChatRow {
+    private func row(
+        from prepared: DisplayMessage,
+        optimistic: SessionChatRow,
+        preferPlainCommandHighlight: Bool = false
+    ) -> SessionChatRow {
         SessionChatRow(
             id: optimistic.id,
             role: optimistic.role,
@@ -821,7 +836,7 @@ final class SessionChatComposer {
             metadataLabel: optimistic.metadataLabel,
             isPending: optimistic.isPending,
             isStreaming: optimistic.isStreaming,
-            renderedMarkdown: prepared.renderedMarkdown,
+            renderedMarkdown: preferPlainCommandHighlight ? nil : prepared.renderedMarkdown,
             blocks: optimistic.blocks,
             modelProviderID: optimistic.modelProviderID,
             modelID: optimistic.modelID,

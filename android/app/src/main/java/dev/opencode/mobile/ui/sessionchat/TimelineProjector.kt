@@ -192,11 +192,19 @@ object TimelineProjector {
         if (body.blocks.isEmpty()) return null
         val attachments =
             body.blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
+        // Prefer sole text-block copy so slash-command collapse is what chat shows
+        // and copies, not the server-expanded template still on Message.text.
+        val displayText =
+            body.blocks
+                .filterIsInstance<SessionChatTimelineBlock.Text>()
+                .singleOrNull()
+                ?.text
+                ?: message.text
         val draft =
             TimelineRow(
                 id = message.id,
                 role = message.role,
-                text = message.text,
+                text = displayText,
                 metadataLabel = metadataLabel(message),
                 isPending = false,
                 isStreaming = isStreaming(message),
@@ -205,7 +213,7 @@ object TimelineProjector {
                 modelProviderId = message.modelProviderId,
                 modelId = message.modelId,
                 contextInputTokens = message.contextInputTokens,
-                contentRevision = ContentRevision.of(message.text),
+                contentRevision = ContentRevision.of(displayText),
                 layoutRevision = 0L,
             )
         return finalizeRow(draft, previous)

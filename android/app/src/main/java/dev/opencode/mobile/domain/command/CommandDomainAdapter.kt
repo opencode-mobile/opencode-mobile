@@ -13,6 +13,7 @@ class CommandDomainAdapter {
                 name = dto.name,
                 description = dto.description?.takeIf { it.isNotBlank() },
                 source = toSource(dto.source),
+                template = dto.template?.takeIf { it.isNotBlank() },
             )
         }
 

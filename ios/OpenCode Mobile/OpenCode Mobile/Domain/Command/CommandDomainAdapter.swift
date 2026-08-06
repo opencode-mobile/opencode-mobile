@@ -6,7 +6,8 @@ struct CommandDomainAdapter: Sendable {
             ServerCommand(
                 name: dto.name,
                 description: dto.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                source: toSource(dto.source)
+                source: toSource(dto.source),
+                template: dto.template?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             )
         }
     }

@@ -85,12 +85,21 @@ enum SessionChatTimelineProjector {
         metadataLabel: (Message) -> String
     ) -> TimelineRow {
         let message = body.message
-        let contentRevision = ContentRevision.of(message.text)
+        // Prefer sole text-block copy so slash-command collapse is what chat shows
+        // and copies, not the server-expanded template still on Message.text.
+        let displayText: String = {
+            let texts = body.blocks.compactMap { block -> String? in
+                if case .text(_, let text, _) = block { return text }
+                return nil
+            }
+            return texts.count == 1 ? texts[0] : message.text
+        }()
+        let contentRevision = ContentRevision.of(displayText)
         let bridgeMarkdown = bridgeRenderedMarkdown(body: body, previous: previous)
 
         if let previous,
            !previous.isPending,
-           previous.text == message.text,
+           previous.text == displayText,
            previous.isStreaming == body.isStreaming,
            previous.role == message.role,
            previous.blocks == body.blocks,
@@ -108,7 +117,7 @@ enum SessionChatTimelineProjector {
                     provisional(
                         id: message.id,
                         role: message.role,
-                        text: message.text,
+                        text: displayText,
                         isStreaming: body.isStreaming,
                         renderedMarkdown: bridgeMarkdown,
                         blocks: body.blocks,
@@ -125,7 +134,7 @@ enum SessionChatTimelineProjector {
         return TimelineRow(
             id: message.id,
             role: message.role,
-            text: message.text,
+            text: displayText,
             metadataLabel: metadataLabel(message),
             isPending: false,
             isStreaming: body.isStreaming,

@@ -78,8 +78,19 @@ Linear: [OPE-56](https://linear.app/opencode-mobile/issue/OPE-56/slash-and-comma
       banner errors and `clientActionNotice` moved to auto-dismiss snackbars
 - [x] Timeline full-screen load-error empty state unchanged (page state)
 
+## Collapse expanded slash-command bodies in chat
+
+- [x] Keep `template` on server-command catalog (iOS + Android adapters)
+- [x] `CommandInvocationCollapser` rewrites `/name args` and expanded templates
+      to `[/name] args`
+- [x] Timeline projection collapses user text blocks; skips re-attaching
+      message-root markdown when source hash no longer matches
+- [x] Outgoing bubbles highlight `[/name]` with `syntax-type`
+- [x] Unit tests for collapser (iOS + Android); decisions recorded
+
 ## Remaining
 
 - [ ] None — OPE-58 is implemented on both platforms; see
       [ope-58-plan.md](./ope-58-plan.md) and [parity-gaps.md](./parity-gaps.md)
       for the recorded iOS navigation parity gap.
+      Slash-command chat collapse is implemented on both platforms.
