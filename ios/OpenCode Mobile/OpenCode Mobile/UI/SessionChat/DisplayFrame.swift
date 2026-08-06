@@ -79,8 +79,8 @@ enum DisplayFrameBuilder {
                 sessionKey: sessionKey,
                 isStreaming: display.isStreaming
             )
-            let rootMarkdown = matchingMarkdown(display.renderedMarkdown, blocks: blocks)
-            blocks = attachSoleTextMarkdown(blocks, rootMarkdown)
+            let rootMarkdown = matchingMarkdown(display.renderedMarkdown, message: message, blocks: blocks)
+            blocks = attachSoleTextMarkdown(blocks, rootMarkdown, message: message)
             bodies.append(
                 DisplayMessageBody(
                     message: message,
@@ -124,11 +124,14 @@ enum DisplayFrameBuilder {
     /// Bridge: when the pipeline still publishes message-root markdown, copy it
     /// onto the only text block so views can prefer per-block docs.
     ///
-    /// Skip when the sole text was rewritten (slash-command collapse) so the
-    /// expanded template document is not pasted onto `[/name] args`.
+    /// Skip when slash-command collapse rewrote the sole text away from
+    /// `Message.text` so the expanded template document is not pasted onto
+    /// `[/name] args`. Streaming may keep a stale previous document whose hash
+    /// no longer matches growing text — that remains intentional.
     static func attachSoleTextMarkdown(
         _ blocks: [SessionChatTimelineBlock],
-        _ markdown: NativeMarkdownDocument?
+        _ markdown: NativeMarkdownDocument?,
+        message: Message
     ) -> [SessionChatTimelineBlock] {
         guard let markdown else { return blocks }
         let textIndices = blocks.indices.filter { index in
@@ -138,7 +141,7 @@ enum DisplayFrameBuilder {
         guard textIndices.count == 1, let index = textIndices.first else { return blocks }
         guard case .text(let blockID, let text, let existing) = blocks[index] else { return blocks }
         if existing != nil { return blocks }
-        guard ContentRevision.of(text).textHash == markdown.sourceHash else { return blocks }
+        if isCollapsedAwayFromMessageText(message: message, soleText: text) { return blocks }
         var result = blocks
         result[index] = .text(blockID: blockID, text: text, renderedMarkdown: markdown)
         return result
@@ -146,6 +149,7 @@ enum DisplayFrameBuilder {
 
     static func matchingMarkdown(
         _ markdown: NativeMarkdownDocument?,
+        message: Message,
         blocks: [SessionChatTimelineBlock]
     ) -> NativeMarkdownDocument? {
         guard let markdown else { return nil }
@@ -154,6 +158,10 @@ enum DisplayFrameBuilder {
             return nil
         }
         guard texts.count == 1, let text = texts.first else { return markdown }
-        return ContentRevision.of(text).textHash == markdown.sourceHash ? markdown : nil
+        return isCollapsedAwayFromMessageText(message: message, soleText: text) ? nil : markdown
+    }
+
+    static func isCollapsedAwayFromMessageText(message: Message, soleText: String) -> Bool {
+        message.role == .user && soleText != message.text
     }
 }

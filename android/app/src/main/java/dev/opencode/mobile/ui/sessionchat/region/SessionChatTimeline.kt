@@ -634,12 +634,14 @@ class SessionChatTimeline(
 
         val renderedMarkdown =
             matchingMarkdown(
-                display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
-                    display.isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
-                },
-                blocksWithCache,
+                candidate =
+                    display.renderedMarkdown ?: previous?.renderedMarkdown.takeIf {
+                        display.isStreaming && (previous?.isStreaming == true || previous?.text == message.text)
+                    },
+                message = message,
+                blocks = blocksWithCache,
             )
-        val blocks = attachMarkdownBridge(blocksWithCache, renderedMarkdown)
+        val blocks = attachMarkdownBridge(blocksWithCache, renderedMarkdown, message)
         return DisplayMessageBody(message = message, blocks = blocks)
     }
 
@@ -647,12 +649,15 @@ class SessionChatTimeline(
      * Temporary Phase 5 bridge: message-scoped markdown lands on the sole text
      * block when per-block cache has not already decorated it.
      *
-     * Skip when the sole text was rewritten (slash-command collapse) so the
-     * expanded template document is not pasted onto `[/name] args`.
+     * Skip when slash-command collapse rewrote the sole text away from
+     * [Message.text] so the expanded template document is not pasted onto
+     * `[/name] args`. Streaming may keep a stale previous document whose hash
+     * no longer matches growing text — that remains intentional.
      */
     private fun attachMarkdownBridge(
         blocks: List<SessionChatTimelineBlock>,
         renderedMarkdown: MarkdownDocument?,
+        message: Message,
     ): List<SessionChatTimelineBlock> {
         if (renderedMarkdown == null) return blocks
         val textBlockIndexes =
@@ -663,24 +668,29 @@ class SessionChatTimeline(
         val textIndex = textBlockIndexes.single()
         val textBlock = blocks[textIndex] as SessionChatTimelineBlock.Text
         if (textBlock.renderedMarkdown != null) return blocks
-        if (ContentRevision.of(textBlock.text).textHash != renderedMarkdown.sourceHash) return blocks
+        if (isCollapsedAwayFromMessageText(message, textBlock.text)) return blocks
         return blocks.toMutableList().also {
             it[textIndex] = textBlock.copy(renderedMarkdown = renderedMarkdown)
         }
     }
 
     private fun matchingMarkdown(
-        renderedMarkdown: MarkdownDocument?,
+        candidate: MarkdownDocument?,
+        message: Message,
         blocks: List<SessionChatTimelineBlock>,
     ): MarkdownDocument? {
-        if (renderedMarkdown == null) return null
+        if (candidate == null) return null
         val soleText =
             blocks.filterIsInstance<SessionChatTimelineBlock.Text>().singleOrNull()
-                ?: return renderedMarkdown
-        return renderedMarkdown.takeIf {
-            ContentRevision.of(soleText.text).textHash == it.sourceHash
-        }
+                ?: return candidate
+        return candidate.takeUnless { isCollapsedAwayFromMessageText(message, soleText.text) }
     }
+
+    private fun isCollapsedAwayFromMessageText(
+        message: Message,
+        soleText: String,
+    ): Boolean = message.role == MessageRole.User && soleText != message.text
+
 
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {
