@@ -65,7 +65,14 @@ sealed class MessagePart {
         val text: String,
         val isStreaming: Boolean = false,
         val id: String? = null,
-    ) : MessagePart()
+        /** Server-injected context (e.g. decoded text-file attachment body). Hidden in UI. */
+        val isSynthetic: Boolean = false,
+        /** Server-marked non-display text. Hidden in UI. */
+        val isIgnored: Boolean = false,
+    ) : MessagePart() {
+        val isDisplayable: Boolean
+            get() = !isSynthetic && !isIgnored
+    }
 
     data class Tool(
         val toolName: String,

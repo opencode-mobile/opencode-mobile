@@ -179,6 +179,22 @@ struct MessageDomainAdapterTests {
         #expect(t.id == "prt-1")
         #expect(t.text == "Hello")
         #expect(t.isStreaming == false)
+        #expect(t.isSynthetic == false)
+        #expect(t.isIgnored == false)
+    }
+
+    @Test func messagePart_textType_mapsSyntheticAndIgnoredFlags() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"text","text":"file body","synthetic":true,"ignored":true}"#.data(using: .utf8)!
+        )
+        guard case .text(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected text part")
+            return
+        }
+        #expect(t.isSynthetic)
+        #expect(t.isIgnored)
+        #expect(!t.isDisplayable)
     }
 
     @Test func messagePart_reasoningType_returnsNil() throws {
@@ -384,6 +400,63 @@ struct MessageDomainAdapterTests {
 
     @Test func flattenedText_emptyParts_returnsEmptyString() {
         #expect(adapter.flattenedText(from: []) == "")
+    }
+
+    @Test func flattenedText_skipsSyntheticAndIgnoredTextParts() {
+        let parts: [MessagePart] = [
+            .text(TextPart(id: "prt-1", text: "User prompt", isStreaming: false)),
+            .text(
+                TextPart(
+                    id: "prt-2",
+                    text: #"Called the Read tool with the following input: {"filePath":"notes.txt"}"#,
+                    isStreaming: false,
+                    isSynthetic: true
+                )
+            ),
+            .text(TextPart(id: "prt-3", text: "file body contents", isStreaming: false, isSynthetic: true)),
+            .text(TextPart(id: "prt-4", text: "ignored", isStreaming: false, isIgnored: true)),
+        ]
+        #expect(adapter.flattenedText(from: parts) == "User prompt")
+    }
+
+    @Test func message_hidesSyntheticTextFileBodyFromDisplayText() throws {
+        let data =
+            """
+            {
+              "info": { "id": "msg-1", "role": "user", "sessionID": "ses-1" },
+              "parts": [
+                { "type": "text", "id": "prt-1", "text": "I attached logs" },
+                {
+                  "type": "text",
+                  "id": "prt-2",
+                  "text": "Called the Read tool with the following input: {\\"filePath\\":\\"notes.txt\\"}",
+                  "synthetic": true
+                },
+                { "type": "text", "id": "prt-3", "text": "file body", "synthetic": true },
+                {
+                  "type": "file",
+                  "id": "prt-4",
+                  "mime": "text/plain",
+                  "filename": "notes.txt",
+                  "url": "data:text/plain;base64,ZmlsZSBib2R5"
+                }
+              ]
+            }
+            """.data(using: .utf8)!
+        let dto = try decoder.decode(MessageDTO.self, from: data)
+        let message = adapter.message(from: dto)
+        #expect(message.text == "I attached logs")
+        #expect(message.parts.count == 4)
+        guard case .text(let synthetic) = message.parts[2] else {
+            Issue.record("Expected synthetic text part")
+            return
+        }
+        #expect(synthetic.isSynthetic)
+        guard case .file(let file) = message.parts[3] else {
+            Issue.record("Expected file part")
+            return
+        }
+        #expect(file.filename == "notes.txt")
     }
 
     @Test func message_parsesPartsIntoFlattenedText() throws {

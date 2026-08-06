@@ -298,7 +298,25 @@ class MessageDomainAdapterTest {
         assertTrue(part is MessagePart.Text)
         assertEquals("Hello", (part as MessagePart.Text).text)
         assertFalse(part.isStreaming)
+        assertFalse(part.isSynthetic)
+        assertFalse(part.isIgnored)
         assertEquals("prt-1", part.id)
+    }
+
+    @Test
+    fun toMessagePart_textType_mapsSyntheticAndIgnoredFlags() {
+        val dto =
+            MessagePartDto(
+                id = "prt-1",
+                type = "text",
+                text = "file body",
+                synthetic = true,
+                ignored = true,
+            )
+        val part = adapter.toMessagePart(dto) as MessagePart.Text
+        assertTrue(part.isSynthetic)
+        assertTrue(part.isIgnored)
+        assertFalse(part.isDisplayable)
     }
 
     @Test
@@ -559,6 +577,57 @@ class MessageDomainAdapterTest {
     @Test
     fun flattenedText_emptyParts_returnsEmptyString() {
         assertEquals("", adapter.flattenedText(emptyList()))
+    }
+
+    @Test
+    fun flattenedText_skipsSyntheticAndIgnoredTextParts() {
+        val parts =
+            listOf<MessagePart>(
+                MessagePart.Text("User prompt", id = "prt-1"),
+                MessagePart.Text(
+                    "Called the Read tool with the following input: {\"filePath\":\"notes.txt\"}",
+                    id = "prt-2",
+                    isSynthetic = true,
+                ),
+                MessagePart.Text("file body contents", id = "prt-3", isSynthetic = true),
+                MessagePart.Text("ignored", id = "prt-4", isIgnored = true),
+            )
+        assertEquals("User prompt", adapter.flattenedText(parts))
+    }
+
+    @Test
+    fun toMessage_hidesSyntheticTextFileBodyFromDisplayText() {
+        val dataUrl = "data:text/plain;base64,ZmlsZSBib2R5"
+        val raw =
+            """
+            {
+              "info": { "id": "msg-1", "role": "user", "sessionID": "ses-1" },
+              "parts": [
+                { "type": "text", "id": "prt-1", "text": "I attached logs" },
+                {
+                  "type": "text",
+                  "id": "prt-2",
+                  "text": "Called the Read tool with the following input: {\"filePath\":\"notes.txt\"}",
+                  "synthetic": true
+                },
+                { "type": "text", "id": "prt-3", "text": "file body", "synthetic": true },
+                {
+                  "type": "file",
+                  "id": "prt-4",
+                  "mime": "text/plain",
+                  "filename": "notes.txt",
+                  "url": "$dataUrl"
+                }
+              ]
+            }
+            """.trimIndent()
+        val dto = json.decodeFromString<MessageDto>(raw)
+        val message = adapter.toMessage(dto)
+        assertEquals("I attached logs", message.text)
+        assertEquals(4, message.parts.size)
+        assertTrue((message.parts[1] as MessagePart.Text).isSynthetic)
+        assertTrue((message.parts[2] as MessagePart.Text).isSynthetic)
+        assertTrue(message.parts[3] is MessagePart.File)
     }
 
     @Test

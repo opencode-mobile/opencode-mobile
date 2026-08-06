@@ -84,6 +84,21 @@ Resolved in the 2026-07-16 grilling session (all recommendations accepted).
   mobile IDE scope.
 - Revisit when: richer preview is requested.
 
+## Hide synthetic and ignored text parts in Session Chat
+
+- Date: 2026-08-06
+- Decision: Map wire `synthetic` / `ignored` onto domain `TextPart`, keep the
+  parts for store/context fidelity, and exclude them from `displayText` and
+  Session Chat timeline text blocks. Match desktop
+  `UserMessageDisplay` (`!synthetic`) and prompt restore (`!synthetic &&
+  !ignored`).
+- Reason: For text-file attachments the server injects synthetic text (Read
+  tool label + decoded file body) beside the `file` part. Showing that raw
+  body duplicates the attachment row and diverges from desktop.
+- Revisit when: mobile adds review-comment extraction from synthetic metadata
+  (desktop `MessageComment.fromPart`).
+- ADR: not warranted — follows upstream UI contract.
+
 ## Gate Attach on model input capabilities
 
 - Date: 2026-07-17

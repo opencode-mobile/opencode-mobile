@@ -448,6 +448,12 @@ class InMemoryMessageStore
                         text = baseText,
                         isStreaming = true,
                         id = partId,
+                        isSynthetic =
+                            (existingPart as? MessagePart.Text)?.isSynthetic
+                                ?: (partDto.synthetic == true),
+                        isIgnored =
+                            (existingPart as? MessagePart.Text)?.isIgnored
+                                ?: (partDto.ignored == true),
                     )
                 if (partId != null) {
                     appendChunk(sessionId, messageId, partId, baseText, delta)

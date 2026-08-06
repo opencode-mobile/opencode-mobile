@@ -180,7 +180,15 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
                 let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
                 let wasStreaming = text.isStreaming || hasChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
                 guard wasStreaming || flattened != text.text else { continue }
-                messageParts[partID] = .text(TextPart(id: text.id, text: flattened, isStreaming: false))
+                messageParts[partID] = .text(
+                    TextPart(
+                        id: text.id,
+                        text: flattened,
+                        isStreaming: false,
+                        isSynthetic: text.isSynthetic,
+                        isIgnored: text.isIgnored
+                    )
+                )
                 clearChunks(sessionID: sessionID, messageID: messageID, partID: text.id)
                 changed = true
             }
@@ -316,7 +324,15 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
         let wasStreaming = existing.isStreaming
         if !wasStreaming {
             partsCache[sessionID]?[messageID]?[partID] =
-                .text(TextPart(id: existing.id, text: existing.text, isStreaming: true))
+                .text(
+                    TextPart(
+                        id: existing.id,
+                        text: existing.text,
+                        isStreaming: true,
+                        isSynthetic: existing.isSynthetic,
+                        isIgnored: existing.isIgnored
+                    )
+                )
         }
         return SessionChangeSet(
             sessionRevision: 0,
@@ -473,7 +489,23 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
                 existingText = partDTO.text ?? ""
             }
             let partID = partDTO.id
-            let textPart = TextPart(id: partID, text: existingText, isStreaming: true)
+            let textPart = TextPart(
+                id: partID,
+                text: existingText,
+                isStreaming: true,
+                isSynthetic: {
+                    if case .text(let existing) = existingPart {
+                        return existing.isSynthetic
+                    }
+                    return partDTO.synthetic == true
+                }(),
+                isIgnored: {
+                    if case .text(let existing) = existingPart {
+                        return existing.isIgnored
+                    }
+                    return partDTO.ignored == true
+                }()
+            )
             if let partID {
                 appendChunk(
                     sessionID: sessionID,
@@ -510,7 +542,17 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     private func resolveStoredPart(sessionID: String, messageID: String, part: MessagePart) -> MessagePart {
         guard case .text(let text) = part else { return part }
         let flattened = flattenedText(sessionID: sessionID, messageID: messageID, part: text)
-        return flattened == text.text ? part : .text(TextPart(id: text.id, text: flattened, isStreaming: text.isStreaming))
+        return flattened == text.text
+            ? part
+            : .text(
+                TextPart(
+                    id: text.id,
+                    text: flattened,
+                    isStreaming: text.isStreaming,
+                    isSynthetic: text.isSynthetic,
+                    isIgnored: text.isIgnored
+                )
+            )
     }
 
     private func hasRenderableContent(_ message: Message) -> Bool {

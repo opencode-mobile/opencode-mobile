@@ -72,7 +72,13 @@ class MessageDomainAdapter {
         return when (dto.type) {
             "text" -> {
                 val text = dto.text ?: return null
-                MessagePart.Text(text = text, isStreaming = false, id = dto.id)
+                MessagePart.Text(
+                    text = text,
+                    isStreaming = false,
+                    id = dto.id,
+                    isSynthetic = dto.synthetic == true,
+                    isIgnored = dto.ignored == true,
+                )
             }
             "tool" -> {
                 val toolName = dto.tool ?: return null
@@ -219,7 +225,8 @@ class MessageDomainAdapter {
         val segments =
             parts.mapNotNull { part ->
                 when (part) {
-                    is MessagePart.Text -> part.text.trim().takeIf { it.isNotEmpty() }
+                    is MessagePart.Text ->
+                        if (part.isDisplayable) part.text.trim().takeIf { it.isNotEmpty() } else null
                     is MessagePart.Tool -> null
                     is MessagePart.File -> null
                 }

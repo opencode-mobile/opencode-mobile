@@ -122,10 +122,12 @@ enum SessionChatTimelineBlocks {
         while index < parts.count {
             switch parts[index] {
             case .text(let textPart):
-                let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    guard let partId = textPart.id else { return .missingPartIds }
-                    pendingText.append((id: partId, text: trimmed))
+                if textPart.isDisplayable {
+                    let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        guard let partId = textPart.id else { return .missingPartIds }
+                        pendingText.append((id: partId, text: trimmed))
+                    }
                 }
                 index += 1
             case .file(let file):

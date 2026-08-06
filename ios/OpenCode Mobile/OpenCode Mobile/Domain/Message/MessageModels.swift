@@ -92,11 +92,25 @@ struct TextPart: Equatable, Sendable {
     let id: String?
     let text: String
     var isStreaming: Bool
+    /// Server-injected context (e.g. decoded text-file attachment body). Hidden in UI.
+    let isSynthetic: Bool
+    /// Server-marked non-display text. Hidden in UI.
+    let isIgnored: Bool
 
-    init(id: String? = nil, text: String, isStreaming: Bool) {
+    var isDisplayable: Bool { !isSynthetic && !isIgnored }
+
+    init(
+        id: String? = nil,
+        text: String,
+        isStreaming: Bool,
+        isSynthetic: Bool = false,
+        isIgnored: Bool = false
+    ) {
         self.id = id
         self.text = text
         self.isStreaming = isStreaming
+        self.isSynthetic = isSynthetic
+        self.isIgnored = isIgnored
     }
 }
 

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -265,6 +266,44 @@ class SessionChatTimelineBlocksTest {
             ),
             blocks,
         )
+    }
+
+    @Test
+    fun build_hidesSyntheticTextBesideFileAttachment() {
+        val dataUrl = "data:text/plain;base64,ZmlsZSBib2R5"
+        val blocks =
+            buildBlocks(
+                role = MessageRole.User,
+                parts =
+                    listOf(
+                        MessagePart.Text("I attached logs", id = "prt-1"),
+                        MessagePart.Text(
+                            """Called the Read tool with the following input: {"filePath":"notes.txt"}""",
+                            id = "prt-2",
+                            isSynthetic = true,
+                        ),
+                        MessagePart.Text("file body", id = "prt-3", isSynthetic = true),
+                        MessagePart.File(
+                            id = "prt-4",
+                            filename = "notes.txt",
+                            mime = "text/plain",
+                            kind = AttachmentKind.Text,
+                            dataUrl = dataUrl,
+                        ),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        assertEquals(
+            SessionChatTimelineBlock.Text(
+                blockID = PresentationBlockId.direct("prt-1"),
+                text = "I attached logs",
+            ),
+            blocks[0],
+        )
+        val attachment = blocks[1] as SessionChatTimelineBlock.Attachment
+        assertEquals(PresentationBlockId.direct("prt-4"), attachment.blockID)
+        assertEquals("notes.txt", attachment.attachment.filename)
     }
 
     @Test

@@ -90,10 +90,12 @@ object SessionChatTimelineBlocks {
         while (index < parts.size) {
             when (val part = parts[index]) {
                 is MessagePart.Text -> {
-                    val trimmed = part.text.trim()
-                    if (trimmed.isNotEmpty()) {
-                        val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        pendingText += partId to trimmed
+                    if (part.isDisplayable) {
+                        val trimmed = part.text.trim()
+                        if (trimmed.isNotEmpty()) {
+                            val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                            pendingText += partId to trimmed
+                        }
                     }
                     index += 1
                 }
