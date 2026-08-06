@@ -379,6 +379,49 @@ final class ProjectListHomeViewModel {
             state = .disconnected
             return
         }
+
+        let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
+
+        // Disk-first home: local worktrees + Session Cache paint .loaded
+        // without .probing/.loading. Live store then SWR-refreshes.
+        if !preserveContent, !worktrees.isEmpty {
+            let sections = await loadSectionsFromCache(worktrees: worktrees)
+            let focusedWorktree = resolvedFocusedWorktree(in: sections)
+            homeFocusedWorktree = focusedWorktree
+            requestedFocusWorktree = nil
+            state = .loaded(
+                sections: sections,
+                showAddProjectSheet: false,
+                navigator: nil,
+                seeAllSessions: nil,
+                focusedWorktree: focusedWorktree,
+                projectSessionCreateError: nil
+            )
+            startLiveObservations(worktrees: worktrees)
+            if !skipProbe {
+                do {
+                    try await projectRepository.probeServer()
+                } catch {
+                    // Keep cached home; connection chrome reflects reachability.
+                }
+            }
+            return
+        }
+
+        if worktrees.isEmpty, !preserveContent {
+            stopLiveObservations()
+            homeFocusedWorktree = nil
+            state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+            if !skipProbe {
+                do {
+                    try await projectRepository.probeServer()
+                } catch {
+                    state = .probeFailed(error.localizedDescription)
+                }
+            }
+            return
+        }
+
         if !skipProbe {
             if !preserveContent {
                 state = .probing
@@ -403,8 +446,6 @@ final class ProjectListHomeViewModel {
             state = .loading
         }
         do {
-            let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
-
             if worktrees.isEmpty {
                 stopLiveObservations()
                 homeFocusedWorktree = nil
@@ -462,6 +503,42 @@ final class ProjectListHomeViewModel {
             stopLiveObservations()
             state = .probeFailed(error.localizedDescription)
         }
+    }
+
+    private func loadSectionsFromCache(worktrees: [String]) async -> [ProjectSectionItem] {
+        var sections: [ProjectSectionItem] = []
+        sections.reserveCapacity(worktrees.count)
+        for worktree in worktrees {
+            sections.append(await sectionFromCache(worktree: worktree))
+        }
+        return sections
+    }
+
+    private func sectionFromCache(worktree: String) async -> ProjectSectionItem {
+        let seeded = await sessionCache.seedSessions(worktree: worktree)
+        let sessions =
+            (seeded ?? [])
+                .activeSessions()
+                .rootSessions()
+                .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
+        let items =
+            sessions.map { session in
+                sessionAdapter.listItem(from: session, worktree: worktree, statusLabel: nil)
+            }
+        let name = ProjectDomainAdapter.displayName(from: worktree)
+        return ProjectSectionItem(
+            id: worktree,
+            worktree: worktree,
+            displayName: name,
+            pathSubtitle: worktree,
+            letter: letterCharacter(for: name),
+            letterAccent: letterAccent(for: worktree),
+            previewSessions: Array(items.prefix(Self.previewSessionLimit)),
+            allSessions: items,
+            totalSessionCount: items.count,
+            loadError: nil,
+            sessionsFromCache: seeded != nil
+        )
     }
 
     private func loadSections(worktrees: [String]) async -> [ProjectSectionItem] {

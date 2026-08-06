@@ -103,6 +103,12 @@ struct TimelineFrame: Equatable, Sendable {
         insertedRowIDs.union(layoutChangedRowIDs)
     }
 
+    /// Armed follow targets: inserts and non-decorate layout changes.
+    /// Decorate-only (TextMate / slash collapse) should not re-pin.
+    var structureAffectingRowIDs: Set<String> {
+        insertedRowIDs.union(layoutChangedRowIDs.subtracting(decorateRowIDs))
+    }
+
     /// Diffable reconfigure targets: content and/or layout changes on existing rows.
     var reconfigureRowIDs: Set<String> {
         changedRowIDs.union(layoutChangedRowIDs)
@@ -137,6 +143,10 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
 
     var layoutAffectingRowIDs: Set<String> {
         insertedRowIDs.union(layoutChangedRowIDs)
+    }
+
+    var structureAffectingRowIDs: Set<String> {
+        insertedRowIDs.union(layoutChangedRowIDs.subtracting(decorateRowIDs))
     }
 
     var reconfigureRowIDs: Set<String> {

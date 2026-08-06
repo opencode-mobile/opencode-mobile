@@ -236,9 +236,8 @@ final class MessageSync: @unchecked Sendable {
             publishMessages(seededMerged, true)
         }
 
-        // Warm reopen already replayed SharedLiveObservation.lastValue. Skip an
-        // identical REST republish so DisplayMessagePipeline does not cancel
-        // in-flight enrich / plain-first and start over on the MainActor.
+        // Skip an identical REST republish after cache seed or warm replay so
+        // DisplayMessagePipeline does not cancel in-flight enrich / plain-first.
         let fingerprintBeforeReload = fingerprint(for: key.storeSlot)
         let expectedRevision = store.revision(sessionID: key.storeSlot)
         do {
@@ -267,8 +266,11 @@ final class MessageSync: @unchecked Sendable {
                 setPublishedFrame(merged, revision: store.revision(sessionID: key.storeSlot), for: key.storeSlot)
                 setFingerprint(fingerprint, for: key.storeSlot)
                 setHealth(.healthy, for: key)
-                if fingerprintBeforeReload != fingerprint || emittedSeed {
+                if fingerprintBeforeReload != fingerprint {
                     publishMessages(merged, false)
+                } else if emittedSeed {
+                    // Confirm disk without a second UI paint.
+                    cacheHandle.note(messages: merged)
                 }
             }
         } catch {

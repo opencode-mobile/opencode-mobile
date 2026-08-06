@@ -331,6 +331,47 @@ class MainScreenViewModel
                 _uiState.value = MainScreenUiState.Disconnected
                 return
             }
+
+            val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
+
+            // Disk-first home: local worktrees + Session Cache paint Loaded
+            // without Probing/Loading. Live store then SWR-refreshes.
+            if (!preserveContent && worktrees.isNotEmpty()) {
+                val sections = loadSectionsFromCache(worktrees)
+                val focusedWorktree = resolvedFocusedWorktree(sections)
+                homeFocusedWorktree = focusedWorktree
+                requestedFocusWorktree = null
+                _uiState.value =
+                    MainScreenUiState.Loaded(sections = sections, focusedWorktree = focusedWorktree)
+                startLiveObservations(worktrees)
+                if (!skipProbe) {
+                    runCatching { projectRepository.probeServer() }
+                        .onFailure {
+                            // Keep cached home; connection chrome reflects reachability.
+                        }
+                }
+                return
+            }
+
+            if (worktrees.isEmpty() && !preserveContent) {
+                stopLiveObservations()
+                homeFocusedWorktree = null
+                _uiState.value = MainScreenUiState.Empty()
+                if (!skipProbe) {
+                    runCatching { projectRepository.probeServer() }
+                        .onFailure { error ->
+                            _uiState.value =
+                                MainScreenUiState.ProbeFailed(
+                                    when (error) {
+                                        is ServerProbeError -> probeErrorMessage(error)
+                                        else -> error.message ?: "Unable to reach the server"
+                                    },
+                                )
+                        }
+                }
+                return
+            }
+
             if (!skipProbe) {
                 if (!preserveContent) {
                     _uiState.value = MainScreenUiState.Probing
@@ -355,8 +396,6 @@ class MainScreenViewModel
                 _uiState.value = MainScreenUiState.Loading
             }
             try {
-                val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
-
                 if (worktrees.isEmpty()) {
                     stopLiveObservations()
                     homeFocusedWorktree = null
@@ -394,6 +433,36 @@ class MainScreenViewModel
                 stopLiveObservations()
                 _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
             }
+        }
+
+        private suspend fun loadSectionsFromCache(worktrees: List<String>): List<ProjectSectionUi> =
+            worktrees.map { worktree -> sectionFromCache(worktree) }
+
+        private suspend fun sectionFromCache(worktree: String): ProjectSectionUi {
+            val seeded = runCatching { sessionCache.seedSessions(worktree) }.getOrNull()
+            val sessions =
+                seeded
+                    ?.activeSessions()
+                    ?.rootSessions()
+                    ?.sortedByDescending { it.updatedAtEpochMs ?: 0L }
+                    .orEmpty()
+            val summaries =
+                sessions.map { session ->
+                    sessionDomainAdapter.toSessionSummary(session)
+                }
+            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
+            return ProjectSectionUi(
+                worktree = worktree,
+                displayName = displayName,
+                pathSubtitle = worktree,
+                letter = letterCharacterForProject(displayName),
+                letterAccent = letterAccentForWorktree(worktree),
+                previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
+                allSessions = summaries,
+                totalSessionCount = summaries.size,
+                loadError = null,
+                sessionsFromCache = seeded != null,
+            )
         }
 
         private suspend fun loadProjectSections(worktrees: List<String>): List<ProjectSectionUi> =

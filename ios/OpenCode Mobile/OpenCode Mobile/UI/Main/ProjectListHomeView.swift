@@ -243,9 +243,11 @@ struct ProjectListHomeView: View {
     private var content: some View {
         switch viewModel.state {
         case .probing, .loading:
-            Spacer()
-            ProgressView()
-            Spacer()
+            OpenCodeStatusStack(
+                title: "Loading sessions",
+                subtitle: "Checking server…",
+                accessibilityIdentifier: "homeLoading"
+            )
         case .disconnected:
             ConnectionOnboardingView(onConnectClick: presentConnectionSetup)
         case let .probeFailed(message):

@@ -561,6 +561,7 @@ class MessageSync(
                             )
                         }
                     } else {
+                        val previousFingerprint = lastFingerprints[storeSlot]
                         engine.replaceAllIfRevision(storeSlot, messages, expectedRevision)
                         val merged = engine.messages(storeSlot)
                         rememberPublishedFrame(storeSlot, merged)
@@ -569,12 +570,23 @@ class MessageSync(
                             "fullReload session=${key.sessionId} reason=initial-subscribe " +
                                 "count=${merged.size} ms=$elapsedMs",
                         )
-                        logI(
-                            "observeMessages emit session=${key.sessionId} count=${merged.size} " +
-                                "source=initial-subscribe",
-                        )
-                        emitMessages(merged, isFromCache = false)
-                        MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                        // Skip identical REST republish after cache seed (or warm
+                        // replay) so DisplayMessagePipeline does not cancel
+                        // HistoryPlainFirst enrich and flash a second timeline.
+                        if (previousFingerprint != messageFingerprint(merged)) {
+                            logI(
+                                "observeMessages emit session=${key.sessionId} count=${merged.size} " +
+                                    "source=initial-subscribe",
+                            )
+                            emitMessages(merged, isFromCache = false)
+                            MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                        } else {
+                            cacheHandle.note(merged)
+                            logI(
+                                "observeMessages skip session=${key.sessionId} count=${merged.size} " +
+                                    "source=initial-subscribe fingerprint-unchanged",
+                            )
+                        }
                     }
                 }
 

@@ -459,6 +459,75 @@ class DisplayMessagePipeline(
                     }
             }
 
+            /**
+             * HistoryPlainFirst newest-first: format the bottom message first and
+             * publish immediately, then fill the rest of history.
+             */
+            fun schedulePlainFirstNewestFirst(
+                generation: Long,
+                messages: List<Message>,
+                onCommitted: (() -> Unit)? = null,
+            ) {
+                prepareJob?.cancel()
+                prepareJob =
+                    launch {
+                        val byId =
+                            messages
+                                .associate { message ->
+                                    val previous = previousById[message.id]?.takeIf { it.text == message.text }
+                                    message.id to (
+                                        previous
+                                            ?: DisplayMessage(message = message, renderedMarkdown = null)
+                                    )
+                                }.toMutableMap()
+
+                        suspend fun publish(label: String) {
+                            if (!isCurrent(generation)) return
+                            val frame = messages.map { byId.getValue(it.id) }
+                            if (!commitPrepared(generation, frame, MessagePreparationMode.HistoryPlainFirst)) {
+                                return
+                            }
+                            lastPublishedMessages = messages
+                            lastPublishedAt = timeSource.markNow()
+                            emitDisplayMessages(frame)
+                        }
+
+                        // Phase 1: newest markdown message only — what the open
+                        // viewport shows — then publish before older history.
+                        val newestMarkdown =
+                            messages.asReversed().firstOrNull {
+                                OpenCodeMarkdownDetector.shouldRender(it.text)
+                            }
+                        if (newestMarkdown != null) {
+                            val prepared =
+                                contentPreparer.prepareMessage(
+                                    message = newestMarkdown,
+                                    previous = byId[newestMarkdown.id],
+                                    mode = MessagePreparationMode.HistoryPlainFirst,
+                                )
+                            if (!isActive || !isCurrent(generation)) return@launch
+                            byId[newestMarkdown.id] = prepared
+                            previousById = previousById + (newestMarkdown.id to prepared)
+                            publish("plain-first-newest")
+                        }
+
+                        // Phase 2: remaining HistoryPlainFirst (reuses newest).
+                        val phase2 =
+                            contentPreparer.prepareMessages(
+                                messages,
+                                byId,
+                                MessagePreparationMode.HistoryPlainFirst,
+                            )
+                        if (!isActive || !isCurrent(generation)) return@launch
+                        for (display in phase2) {
+                            byId[display.id] = display
+                        }
+                        previousById = byId.toMap()
+                        publish("plain-first-rest")
+                        onCommitted?.invoke()
+                    }
+            }
+
             try {
                 snapshotSource.observeMessages(sessionId, directory).collect { update ->
                     when (update) {
@@ -510,11 +579,16 @@ class DisplayMessagePipeline(
                                 val hadStreamingPrevious = previousById.values.any { it.isStreaming }
                                 if (hadStreamingPrevious) {
                                     scheduleFinalization(generation, update.messages)
-                                } else if (shouldPlainFirstHistoryPublish(update.messages, previousById)) {
-                                    schedulePrepare(
+                                } else if (sourceIsFromCache ||
+                                    shouldPlainFirstHistoryPublish(update.messages, previousById)
+                                ) {
+                                    // Newest-first HistoryPlainFirst: format the open
+                                    // viewport (last message) before older history.
+                                    // Skip null-markdown flash. REST fingerprint-unchanged
+                                    // keeps TextMate enrich from being cancelled.
+                                    schedulePlainFirstNewestFirst(
                                         generation = generation,
                                         messages = update.messages,
-                                        mode = MessagePreparationMode.HistoryPlainFirst,
                                         onCommitted = {
                                             if (isCurrent(generation)) {
                                                 enrichHistoryInBackground(generation, update.messages)
@@ -660,4 +734,22 @@ internal fun shouldPlainFirstHistoryPublish(
         }
     }
     return false
+}
+
+/** Newest markdown-bearing message ids for the open viewport (bottom of chat). */
+internal fun newestMarkdownViewportIds(
+    messages: List<Message>,
+    maxCount: Int = MessageContentPreparer.HISTORY_ENRICH_VIEWPORT_MESSAGE_COUNT,
+    charBudget: Int = MessageContentPreparer.HISTORY_ENRICH_VIEWPORT_CHARACTER_BUDGET,
+): Set<String> {
+    if (messages.isEmpty() || maxCount <= 0) return emptySet()
+    val ids = LinkedHashSet<String>()
+    var remainingChars = charBudget
+    for (message in messages.asReversed()) {
+        if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
+        ids += message.id
+        remainingChars -= message.text.length
+        if (ids.size >= maxCount || remainingChars <= 0) break
+    }
+    return ids
 }

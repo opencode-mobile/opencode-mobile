@@ -20,6 +20,7 @@ final class SessionChatTimeline {
     private var pendingOptimisticRows: [SessionChatRow] = []
     private var pendingBaselineSignatureCounts: [String: Int] = [:]
     private var lastLoadedMessages: [Message] = []
+    private var lastLoadedDisplayMessages: [DisplayMessage] = []
     private var displayFrameRevision: UInt64 = 0
     /// Catalog used to collapse expanded slash-command templates in user bubbles.
     private(set) var serverCommands: [ServerCommand] = []
@@ -42,13 +43,15 @@ final class SessionChatTimeline {
         guard commands != serverCommands else { return }
         let wasEmpty = serverCommands.isEmpty
         serverCommands = commands
-        guard wasEmpty, !commands.isEmpty, !lastLoadedMessages.isEmpty else { return }
-        let snapshot = lastLoadedMessages.map { DisplayMessage(message: $0) }
+        guard wasEmpty, !commands.isEmpty, !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
         Task {
             await applyLoadedDisplayMessagesTransform(
                 snapshot,
                 isRefreshing: false,
-                fromQuietRefresh: true
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache
             )
         }
     }
@@ -59,6 +62,7 @@ final class SessionChatTimeline {
         pendingOptimisticRows = []
         pendingBaselineSignatureCounts = [:]
         lastLoadedMessages = []
+        lastLoadedDisplayMessages = []
         timelineFrame = .empty
         displayFrameRevision = 0
         state = SessionChatTimelineRegionState()
@@ -309,6 +313,7 @@ final class SessionChatTimeline {
         messagesFromCache: Bool = false,
         onPublished: (() -> Void)? = nil
     ) async {
+        lastLoadedDisplayMessages = displayMessages
         lastLoadedMessages = displayMessages.map(\.message)
         guard !Task.isCancelled else { return }
 
@@ -442,6 +447,7 @@ final class SessionChatTimeline {
         let retainLastGood = !state.messages.isEmpty
         if !retainLastGood {
             lastLoadedMessages = []
+            lastLoadedDisplayMessages = []
             timelineFrame = .empty
             state.messages = []
         }

@@ -51,4 +51,6 @@
 2. ~~Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.~~ (Phase 2)
 3. ~~Purge on worktree removal; Clear All Data; Settings size + clear.~~ (Phase 3)
 4. ~~Disable composer / mutations when unreachable; reuse connection chrome.~~ (Phase 4)
-5. Manual offline cold-start verification (airplane mode / kill server), then PR.
+5. ~~Disk-first home cold start (skip Probing/Loading when worktrees + cache).~~
+6. ~~Cache-hit Session Chat: structure/plain-first paint (no spinner wait for Final).~~
+7. Manual offline cold-start verification (airplane mode / kill server), then PR.

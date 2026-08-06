@@ -434,6 +434,75 @@ final class DisplayMessagePipeline {
                 }
 
                 @MainActor
+                func schedulePlainFirstNewestFirst(
+                    generation: UInt64,
+                    messages: [Message],
+                    reason: String,
+                    onCommitted: (() -> Void)? = nil
+                ) {
+                    prepareTask?.cancel()
+                    prepareTask = Task { @MainActor in
+                        var byID = Dictionary(
+                            uniqueKeysWithValues: messages.map { message in
+                                (
+                                    message.id,
+                                    previousByID[message.id].flatMap { cached in
+                                        cached.text == message.text ? cached : nil
+                                    } ?? DisplayMessage(message: message, renderedMarkdown: nil)
+                                )
+                            }
+                        )
+
+                        @MainActor
+                        func publish(label: String) {
+                            guard isCurrent(generation) else { return }
+                            let frame = messages.map { byID[$0.id]! }
+                            guard commitPrepared(
+                                generation: generation,
+                                prepared: frame,
+                                mode: .historyPlainFirst
+                            ) else { return }
+                            lastPublishedMessages = messages
+                            lastPublishedAt = clock.now
+                            OpenCodeLog.messageContent.info(
+                                "displayPublish reason=\(reason, privacy: .public)-\(label, privacy: .public) generation=\(generation)"
+                            )
+                            emitDisplayMessages(frame)
+                        }
+
+                        // Phase 1: newest markdown message only, then publish.
+                        if let newest = messages.reversed().first(where: {
+                            OpenCodeRenderedMarkdownDetector.shouldRender($0.text)
+                        }) {
+                            let prepared = await contentPreparer.prepareMessage(
+                                newest,
+                                previous: byID[newest.id],
+                                mode: .historyPlainFirst
+                            )
+                            guard !Task.isCancelled, isCurrent(generation) else { return }
+                            byID[newest.id] = prepared
+                            previousByID[newest.id] = prepared
+                            preparedHistoryCache.setMessages(previousByID, for: cacheKey)
+                            publish(label: "newest")
+                        }
+
+                        let phase2 = await contentPreparer.prepareMessages(
+                            messages,
+                            previousByID: byID,
+                            mode: .historyPlainFirst
+                        )
+                        guard !Task.isCancelled, isCurrent(generation) else { return }
+                        for display in phase2 {
+                            byID[display.id] = display
+                        }
+                        previousByID = byID
+                        preparedHistoryCache.setMessages(previousByID, for: cacheKey)
+                        publish(label: "rest")
+                        onCommitted?()
+                    }
+                }
+
+                @MainActor
                 func scheduleFinalization(generation: UInt64, messages: [Message]) {
                     prepareTask?.cancel()
                     prepareTask = Task { @MainActor in
@@ -628,21 +697,25 @@ final class DisplayMessagePipeline {
                             if hadStreamingPrevious {
                                 scheduleFinalization(generation: generation, messages: messages)
                             } else if hasCompleteMarkdownCache {
+                                // Warm prepared markdown: one Final paint.
                                 schedulePrepare(
                                     generation: generation,
                                     messages: messages,
                                     reason: "cache-hit",
                                     mode: .final
                                 )
-                            } else if shouldPlainFirstHistoryPublish(
-                                messages: messages,
-                                previousByID: previousByID
-                            ) {
-                                schedulePrepare(
+                            } else if sourceIsFromCache ||
+                                shouldPlainFirstHistoryPublish(
+                                    messages: messages,
+                                    previousByID: previousByID
+                                )
+                            {
+                                // Newest-first HistoryPlainFirst: format the open
+                                // viewport before older history. No null-markdown flash.
+                                schedulePlainFirstNewestFirst(
                                     generation: generation,
                                     messages: messages,
-                                    reason: "plain-first",
-                                    mode: .historyPlainFirst,
+                                    reason: sourceIsFromCache ? "cache-seed-plain-first" : "plain-first",
                                     onCommitted: {
                                         guard isCurrent(generation) else { return }
                                         enrichHistoryInBackground(
@@ -704,6 +777,24 @@ func shouldPlainFirstHistoryPublish(
         }
     }
     return false
+}
+
+/// Newest markdown-bearing message ids for the open viewport (bottom of chat).
+func newestMarkdownViewportIDs(
+    messages: [Message],
+    maxCount: Int = MessageContentPreparer.historyEnrichViewportMessageCount,
+    charBudget: Int = MessageContentPreparer.historyEnrichViewportCharacterBudget
+) -> Set<String> {
+    guard !messages.isEmpty, maxCount > 0 else { return [] }
+    var ids = Set<String>()
+    var remainingChars = charBudget
+    for message in messages.reversed() {
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+        ids.insert(message.id)
+        remainingChars -= message.text.count
+        if ids.count >= maxCount || remainingChars <= 0 { break }
+    }
+    return ids
 }
 
 func hasCompletePreparedMarkdownCache(

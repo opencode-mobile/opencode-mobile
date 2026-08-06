@@ -95,6 +95,57 @@
 - Reason: Old MessageSync patches and `CachedMessagePayload` codecs are stale.
 - Revisit when: N/A (one-time migration choice).
 
+## Disk-first home cold start
+
+- Date: 2026-08-06
+- Decision: When a Connection Profile has added worktrees, home paints
+  `Loaded` from local worktrees + `SessionCache.seedSessions` immediately —
+  no full-screen Probing/Loading. Probe runs in the background; failure keeps
+  cached home (connection chrome). Live store then SWR-refreshes. Empty
+  worktrees show Empty without a network wait; probe failure there can still
+  surface ProbeFailed. Soft pull-to-refresh (`preserveContent`) keeps the
+  prior network path.
+- Reason: Logs showed ~800ms health + REST before UI; Session Chat already
+  SWR’d while home still blocked on probe.
+- Revisit when: project metadata needs more than worktree-derived names on
+  cache seed.
+
+## Smooth cold reopen timeline paint
+
+- Date: 2026-08-06 (revised same day)
+- Decision: (1) Disk cache seed paints **HistoryPlainFirst** then TextMate
+  enrich (same as large history) — do **not** block Loading on Final-only.
+  Warm reopen with complete prepared markdown still uses one **Final**.
+  (2) `commands-ready` reuses last `DisplayMessage` snapshot
+  (keeps `renderedMarkdown`) instead of bare `Message`. (3) Armed auto-follow
+  / re-pin keys off **structureAffecting** only; decorate-only frames still
+  drive unarmed anchor restore but do not re-scroll.
+- Reason: Final-only on cache left Session Chat on a spinner for seconds while
+  TextMate ran (e.g. ~2s after disk seed on a 50-message session). Plain-first
+  leaves Loading as soon as structure rows emit; fingerprint-skip keeps enrich
+  from being cancelled by identical REST. Timeline Loading chrome is blank
+  (no ProgressView / CircularProgressIndicator) so disk decode is not a
+  spinner either — content appears when seed paints. Cache/large-history
+  HistoryPlainFirst is **newest-first**: prepare and publish the bottom
+  markdown message immediately, then fill older history — so the last
+  message formats without waiting for the full history parse, and without a
+  null-markdown Structure flash.
+- Revisit when: disk decode itself (pre-seed) still feels empty too long on
+  very large timelines, or plain→Final height shift returns.
+
+## Skip identical REST republish after cache seed
+
+- Date: 2026-08-06
+- Decision: After disk seed (or warm fingerprint), if
+  `initial-subscribe` REST payload fingerprints equal the published frame,
+  still replace/store + `note()` + Healthy, but do **not** emit a second
+  `Messages` update. iOS drops the old `|| emittedSeed` force-publish.
+- Reason: Unconditional republish cancelled HistoryPlainFirst enrich and
+  re-prepared Final, producing a visible Ready→Ready blink on cold reopen
+  even when content was unchanged.
+- Revisit when: fingerprint misses meaningful display fields and UI stays
+  stale after a silent confirm.
+
 ## Composer and mutation gate when not Live
 
 - Date: 2026-08-06
