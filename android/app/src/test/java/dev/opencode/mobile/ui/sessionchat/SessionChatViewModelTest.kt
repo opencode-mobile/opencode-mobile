@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
+import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
@@ -815,6 +816,25 @@ class SessionChatViewModelTest {
             assertEquals("Second", viewModel.uiState.value.sessionTitle)
             assertEquals("", viewModel.uiState.value.composer.text)
             assertEquals(SessionChatTimelineState.Loading, viewModel.uiState.value.timeline)
+        }
+
+    @Test
+    fun bind_sameSessionReuse_reassertsReadyFocus() =
+        runTest(testDispatcher) {
+            val readyStore = RecordingSessionReadyStore()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionReadyStore = readyStore)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(listOf("ses-1" to "/repo"), readyStore.focusCalls)
+
+            // Re-entering the same session+worktree after dispose cleared focus must still
+            // re-assert Ready focus so opening the session clears Ready.
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(2, readyStore.focusCalls.size)
+            assertEquals("ses-1" to "/repo", readyStore.focusCalls.last())
         }
 
     @Test
@@ -2636,6 +2656,7 @@ class SessionChatViewModelTest {
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
+        sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -2665,7 +2686,7 @@ class SessionChatViewModelTest {
             sessionRepository = sessionRepository,
             permissionLiveStore = permissionLiveStore,
             questionLiveStore = questionLiveStore,
-            sessionReadyStore = EmptySessionReadyStore,
+            sessionReadyStore = sessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
             eventDomainAdapter = EventDomainAdapter(json),
@@ -2709,6 +2730,27 @@ class SessionChatViewModelTest {
             text = "Change it",
             metadataLabel = "Build",
         )
+}
+
+private class RecordingSessionReadyStore : SessionReadyStore {
+    val focusCalls = mutableListOf<Pair<String?, String?>>()
+
+    override fun observeReadyIds(directory: String): Flow<Set<String>> =
+        kotlinx.coroutines.flow.flowOf(emptySet())
+
+    override fun notifyPromptSent(
+        sessionId: String,
+        directory: String,
+    ) = Unit
+
+    override fun setFocusedSession(
+        sessionId: String?,
+        directory: String?,
+    ) {
+        focusCalls.add(sessionId to directory)
+    }
+
+    override fun clearCache() = Unit
 }
 
 private class FakeSessionModelSelectionStore(
