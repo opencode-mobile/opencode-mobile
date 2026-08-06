@@ -657,6 +657,7 @@ class MainScreenViewModelTest {
                     selectionStore,
                     modelRepository,
                 ),
+            sessionCache = NoOpSessionCache,
         )
     }
 }

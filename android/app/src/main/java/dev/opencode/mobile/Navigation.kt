@@ -92,6 +92,7 @@ fun MainNavigation() {
     val setupViewModel: ConnectionSetupViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
+    val sessionCacheSizeLabel by settingsViewModel.sessionCacheSizeLabel.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
 
@@ -158,6 +159,9 @@ fun MainNavigation() {
                                                     }
                                                 },
                                                 onClearData = settingsViewModel::clearAllData,
+                                                onClearSessionCache = settingsViewModel::clearSessionCache,
+                                                sessionCacheSizeLabel = sessionCacheSizeLabel,
+                                                onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
                                                 onImportTheme = settingsViewModel::importThemeFromUri,
                                                 onApplyPreset = settingsViewModel::applyPreset,
                                                 showSessionListOnHome = HomeDisplayPreferences.showSessionListOnHome,

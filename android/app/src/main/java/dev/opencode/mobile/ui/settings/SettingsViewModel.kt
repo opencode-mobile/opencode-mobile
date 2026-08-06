@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
@@ -19,9 +20,12 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.theme.ThemeManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -42,7 +46,25 @@ class SettingsViewModel
         private val messageContentPreparer: MessageContentPreparer,
         private val textMateLogbook: TextMateLogbook,
         private val diagnosticLogBuffer: DiagnosticLogBuffer,
+        private val sessionCache: SessionCache,
     ) : ViewModel() {
+        private val _sessionCacheSizeLabel = MutableStateFlow("Empty")
+        val sessionCacheSizeLabel: StateFlow<String> = _sessionCacheSizeLabel.asStateFlow()
+
+        fun refreshSessionCacheSize() {
+            viewModelScope.launch {
+                val bytes = runCatching { sessionCache.estimatedSizeBytes() }.getOrDefault(0L)
+                _sessionCacheSizeLabel.value = SessionCacheSizeFormatter.format(bytes)
+            }
+        }
+
+        fun clearSessionCache() {
+            viewModelScope.launch {
+                runCatching { sessionCache.clearAll() }
+                refreshSessionCacheSize()
+            }
+        }
+
         fun clearAllData() {
             viewModelScope.launch {
                 foregroundEventStream.stop()
@@ -54,6 +76,7 @@ class SettingsViewModel
                 sessionTodoLiveStore.clearCache()
                 sessionReadyStore.clearCache()
                 messageRepository.clearMessageCache()
+                runCatching { sessionCache.clearAll() }
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()
                 MarkdownHighlightPreferences.clear()
@@ -61,6 +84,7 @@ class SettingsViewModel
                 BlockDecorationCache.clear()
                 textMateLogbook.clear()
                 diagnosticLogBuffer.clear()
+                refreshSessionCacheSize()
             }
         }
 

@@ -26,6 +26,7 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
 import dev.opencode.mobile.domain.session.rootSessions
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -62,6 +63,7 @@ class MainScreenViewModel
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
+        private val sessionCache: SessionCache,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -303,6 +305,7 @@ class MainScreenViewModel
             val pending = (_uiState.value as? MainScreenUiState.Loaded)?.pendingProjectRemoval ?: return
             viewModelScope.launch {
                 runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, pending.worktree) }
+                runCatching { sessionCache.purgeWorktree(serverBaseUrl, pending.worktree) }
                 dismissProjectRemoval()
                 runHomeLoad(skipProbe = true)
                 _removalSnackbar.value =

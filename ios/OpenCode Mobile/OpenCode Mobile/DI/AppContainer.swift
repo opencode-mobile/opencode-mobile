@@ -370,7 +370,8 @@ extension Container {
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
                     modelRepository: self.modelRepository()
-                )
+                ),
+                sessionCache: self.sessionCache()
             )
         }
     }
@@ -455,6 +456,7 @@ extension Container {
             shared.sessionTodoLiveStore().clearCache()
             shared.sessionReadyStore().clearCache()
             shared.messageRepository().clearMessageCache()
+            await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
             MarkdownHighlightPreferences.shared.clear()
@@ -463,5 +465,16 @@ extension Container {
             await TextMateLogbook.shared.clear()
             DiagnosticLogBuffer.shared.clear()
         }
+    }
+
+    @MainActor
+    static func refreshSessionCacheSizeLabel() async -> String {
+        let bytes = await shared.sessionCache().estimatedSizeBytes()
+        return SessionCacheSizeFormatter.format(bytes: bytes)
+    }
+
+    @MainActor
+    static func clearSessionCache() async {
+        await shared.sessionCache().clearAll()
     }
 }

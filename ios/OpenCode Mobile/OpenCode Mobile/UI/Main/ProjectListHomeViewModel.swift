@@ -94,6 +94,7 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let foregroundEventStream: any ForegroundEventStream
+    private let sessionCache: any SessionCache
     private let eventAdapter = EventDomainAdapter()
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
@@ -119,7 +120,8 @@ final class ProjectListHomeViewModel {
         sessionReadyStore: any SessionReadyStore,
         foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
-        newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
+        newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
+        sessionCache: any SessionCache = NoOpSessionCache.shared
     ) {
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
@@ -132,6 +134,7 @@ final class ProjectListHomeViewModel {
         self.foregroundEventStream = foregroundEventStream
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
+        self.sessionCache = sessionCache
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.sessionReadyStore.clearCache()
@@ -356,6 +359,7 @@ final class ProjectListHomeViewModel {
     func confirmRemoveProject() async {
         guard let pending = pendingProjectRemoval else { return }
         await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
+        await sessionCache.purgeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
         dismissProjectRemoval()
         await runHomeLoad(skipProbe: true)
         removalSnackbar = OpenCodeSnackbarMessage(text: "Removed \"\(pending.displayName)\" from home")

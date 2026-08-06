@@ -95,6 +95,46 @@
 - Reason: Old MessageSync patches and `CachedMessagePayload` codecs are stale.
 - Revisit when: N/A (one-time migration choice).
 
+## Settings size label format
+
+- Date: 2026-08-06
+- Decision: Format `estimatedSizeBytes` in Settings as binary IEC-style
+  `"N KB"` / `"N.N MB"` / `"N.N GB"` (whole numbers for B/KB; one decimal for
+  MB+). Empty cache shows `"Empty"`, not `"0 KB"`. Humanize in the Settings UI
+  layer; keep `SessionCache.estimatedSizeBytes()` as raw bytes.
+- Reason: Presentation belongs beside Settings; empty is clearer than zero.
+- Revisit when: locales need platform `ByteCountFormatter` strings, or another
+  screen shares the label and drifts.
+
+## Clear Session Cache confirmation copy
+
+- Date: 2026-08-06
+- Decision: Title `"Clear session cache?"`; body `"Removes cached sessions and
+  messages. Your connection and credentials stay."`; confirm `"Clear"`; cancel
+  `"Cancel"`.
+- Reason: Destructive but scoped; locked no-disconnect must stay explicit.
+- Revisit when: cache stores more than list + opened messages.
+
+## Settings size refresh
+
+- Date: 2026-08-06
+- Decision: Load size when Settings appears; refresh after a successful Clear
+  Session Cache (and after Clear All Data if Settings remains). No polling or
+  live observation.
+- Reason: Size changes rarely; admin API has no observation channel.
+- Revisit when: Settings stays open across long chat writes and stale size
+  matters.
+
+## Clear All Data includes Session Cache silently
+
+- Date: 2026-08-06
+- Decision: Call `SessionCache.clearAll()` inside Clear All Data orchestration.
+  Keep existing confirm copy (`"Clear all data?"` / `"This cannot be undone."`);
+  do not add a Session Cache bullet.
+- Reason: Matches non-itemized clear-data UX; list subtitle already says
+  “cache”.
+- Revisit when: Clear All Data copy is redesigned as an inventory.
+
 ## Observation freshness channel
 
 - Date: 2026-08-06

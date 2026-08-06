@@ -29,7 +29,7 @@
 - [x] Hilt binding (`SessionCacheModule`)
 - [x] Unit tests (`DefaultSessionCacheTest`)
 - [x] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
-- [ ] Worktree purge + Clear All Data + Settings Session Cache section
+- [x] Worktree purge + Clear All Data + Settings Session Cache section
 - [ ] Composer disabled when offline
 
 ## iOS
@@ -38,7 +38,7 @@
 - [x] `AppContainer` wiring (`sessionCache` / `sessionCacheStore`)
 - [x] Unit tests (`DefaultSessionCacheTests`, 6/6)
 - [x] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
-- [ ] Worktree purge + Clear All Data + Settings Session Cache section
+- [x] Worktree purge + Clear All Data + Settings Session Cache section
 - [ ] Composer disabled when offline
 
 ## Blockers
@@ -49,5 +49,5 @@
 
 1. ~~Implement domain module + codec + Room/SwiftData adapters + tests.~~ (Phase 1)
 2. ~~Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.~~ (Phase 2)
-3. Purge on worktree removal; Clear All Data; Settings size + clear.
-4. Disable composer when unreachable; manual offline cold-start verification.
+3. ~~Purge on worktree removal; Clear All Data; Settings size + clear.~~ (Phase 3)
+4. Disable composer when unreachable; stale/offline chrome; manual offline cold-start verification.
