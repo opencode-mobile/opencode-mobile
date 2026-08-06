@@ -304,7 +304,8 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
-                foregroundEventStream: self.foregroundEventStream()
+                foregroundEventStream: self.foregroundEventStream(),
+                appOnboardingPreferences: AppOnboardingPreferences.shared
             )
         }
     }
@@ -422,6 +423,7 @@ extension Container {
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
             MarkdownHighlightPreferences.shared.clear()
+            AppOnboardingPreferences.shared.clear()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
             await TextMateLogbook.shared.clear()

@@ -6,6 +6,7 @@ import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
@@ -19,6 +20,7 @@ class OpenCodeMobileApplication : Application() {
         ThemeManager.initialize(this)
         HomeDisplayPreferences.initialize(this)
         MarkdownHighlightPreferences.initialize(this)
+        AppOnboardingPreferences.initialize(this)
         OpenCodeAndroidMarkdownAssets.init(this)
         OpenCodeReleaseObservability.initialize(this)
         EntryPointAccessors
