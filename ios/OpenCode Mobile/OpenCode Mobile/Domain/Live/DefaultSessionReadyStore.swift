@@ -19,6 +19,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     private struct WatchRecord {
         var directory: String
         var watchedAtEpochMs: Double
+        /// focused-status-event watches are speculative; do not idle-catch-up from them.
+        var allowIdleCatchUp: Bool
     }
 
     private let sessionStatusLiveStore: any SessionStatusLiveStore
@@ -110,14 +112,28 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         guard let sessionID else { return }
         focusedSessionID = sessionID
         focusedDirectory = directory
-        if let readyRecord = ready.removeValue(forKey: sessionID) {
-            logger.info("ready cleared on focus session=\(sessionID, privacy: .public)")
+        // Opening Session Chat acknowledges Ready. Drop Ready and any leftover watch so
+        // idle catch-up cannot immediately re-stamp Ready after a focused session.status
+        // arms a speculative watch.
+        let readyRecord = ready.removeValue(forKey: sessionID)
+        let watchRecord = watched.removeValue(forKey: sessionID)
+        if readyRecord != nil || watchRecord != nil {
+            if readyRecord != nil {
+                logger.info("ready cleared on focus session=\(sessionID, privacy: .public)")
+            }
+            if watchRecord != nil {
+                logger.info("watch cleared on focus session=\(sessionID, privacy: .public)")
+            }
             persistState()
-            publishReady(directory: readyRecord.directory)
+            publishReady(directory: readyRecord?.directory ?? watchRecord?.directory)
         }
         if let directory {
             let handle = handles[directory] ?? DirectoryHandle()
             handles[directory] = handle
+            let previous = handle.previousTypes[sessionID] ?? nil
+            if !previous.isBusyOrRetry {
+                handle.previousTypes[sessionID] = "idle"
+            }
             ensureStatusObservation(directory: directory, handle: handle)
         }
     }
@@ -188,8 +204,9 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             }
 
             if watched[sessionID]?.directory == directory {
+                let watch = watched[sessionID]
                 let becameIdle = wasBusy && !isBusy
-                let restoredAlreadyIdle = firstSighting && !isBusy
+                let restoredAlreadyIdle = firstSighting && !isBusy && (watch?.allowIdleCatchUp == true)
                 if becameIdle || restoredAlreadyIdle {
                     if handleIdle(sessionID: sessionID, directory: directory, markPreviousIdle: false) {
                         readyChanged = true
@@ -212,7 +229,15 @@ final class DefaultSessionReadyStore: SessionReadyStore {
     @discardableResult
     private func startWatch(sessionID: String, directory: String, reason: String) -> Bool {
         if watched[sessionID]?.directory == directory { return false }
-        watched[sessionID] = WatchRecord(directory: directory, watchedAtEpochMs: clock.nowEpochMs())
+        // focused-status-event is speculative (type unknown before debounce). It must not
+        // use restoredAlreadyIdle catch-up, or opening an idle Ready session can re-arm
+        // Ready after leave when the status map still omits idle rows.
+        let allowIdleCatchUp = reason != "focused-status-event"
+        watched[sessionID] = WatchRecord(
+            directory: directory,
+            watchedAtEpochMs: clock.nowEpochMs(),
+            allowIdleCatchUp: allowIdleCatchUp
+        )
         logger.info(
             "watch started reason=\(reason, privacy: .public) session=\(sessionID, privacy: .public) directory=\(directory, privacy: .public)"
         )
@@ -267,7 +292,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
             if ready[entry.sessionID] != nil { continue }
             watched[entry.sessionID] = WatchRecord(
                 directory: entry.directory,
-                watchedAtEpochMs: entry.atEpochMs
+                watchedAtEpochMs: entry.atEpochMs,
+                allowIdleCatchUp: true
             )
         }
         if pruned || !ready.isEmpty || !watched.isEmpty {

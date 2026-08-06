@@ -94,6 +94,34 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(ready.latest.isEmpty)
     }
 
+    func testOpenReady_thenStatusEvent_thenLeave_doesNotRestampReady() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        store.notifyPromptSent(sessionID: "ses-1", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["ses-1": status(type: "busy")])
+        await settle()
+        // Idle sessions are often absent from the status map.
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await ready.waitUntil { $0.contains("ses-1") }
+
+        store.setFocusedSession(sessionID: "ses-1", directory: "/repo")
+        await ready.waitUntil { $0.isEmpty }
+
+        eventStream.emit(OpencodeEvent(type: "session.status", sessionID: "ses-1"))
+        await settle()
+        store.setFocusedSession(sessionID: nil, directory: nil)
+        await settle()
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await settle()
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.isEmpty)
+    }
+
     func testClearCache_emptiesReady() async {
         let statusStore = FakeReadyStatusStore()
         let eventStream = FakeForegroundEventStream()

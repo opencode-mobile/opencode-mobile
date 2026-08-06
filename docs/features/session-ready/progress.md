@@ -41,6 +41,15 @@ Ticket: [OPE-105](https://linear.app/opencode-mobile/issue/OPE-105/session-ready
 - Also persist **watched** and catch up to Ready after relaunch if the session
   is already idle (covers kill-while-waiting).
 
+## Follow-up fix (Ready stuck after open)
+
+- Status: **fixed**. Opening a Ready session cleared Ready, but a focused
+  `session.status` could arm a speculative watch; after leave, idle catch-up
+  re-stamped Ready when the status map omitted idle rows.
+- Fix: focus clears Ready **and** watched; `focused-status-event` watches do
+  not use `restoredAlreadyIdle`; Android `bind` always re-asserts focus even on
+  same-session reuse. Regression tests on both platforms.
+
 ## Blockers
 
 - None for code. Manual smoke remains.

@@ -113,11 +113,16 @@ must match these locks.
 - **Decision:** Detect “open” via `setFocusedSession(sessionId)` from Session
   Chat bind / `startObserving`, and `setFocusedSession(null)` on teardown /
   `stopObserving` / `onCleared`. Clear Ready when focus lands on that session
-  id.
+  id. Also clear any watched entry for that session, and treat focus as an
+  idle baseline in `previousTypes` when the session is not already busy/retry.
 - **Why:** Reliable across Android `bind` reuse and iOS per-session ViewModel
-  lifetime without parsing navigation graphs.
+  lifetime without parsing navigation graphs. Opening an idle Ready session can
+  receive `session.status` (speculative watch) and then
+  `restoredAlreadyIdle` after leave when idle rows are absent from the status
+  map — that re-stamped Ready despite the user opening the session to clear it.
 - **Evidence:** Android `SessionChatViewModel.bind`; iOS
   `SessionChatViewModel.startObserving` / `stopObserving` (view lifecycle).
+  Bug report logs: open Ready → leave → Ready still shown after refresh.
 
 ## Ready survives a later busy turn until focus
 
