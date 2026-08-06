@@ -162,6 +162,44 @@ class SessionReadyStoreTest {
         }
 
     @Test
+    fun openReady_thenStatusEvent_thenLeave_doesNotRestampReady() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val eventStream = FakeForegroundEventStream()
+            val store = createStore(statusStore, eventStream)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    store.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.notifyPromptSent("ses-1", "/repo")
+            statusStore.emit("/repo", mapOf("ses-1" to status("busy")))
+            advanceUntilIdle()
+            // Idle sessions are often absent from the status map.
+            statusStore.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            assertTrue(emissions.last().contains("ses-1"))
+
+            // User opens Ready session to clear the pill.
+            store.setFocusedSession("ses-1", "/repo")
+            advanceUntilIdle()
+            assertTrue(emissions.last().isEmpty())
+
+            // Speculative session.status while focused must not re-arm Ready after leave.
+            eventStream.emit(OpencodeEvent(type = "session.status", sessionId = "ses-1"))
+            advanceUntilIdle()
+            store.setFocusedSession(null)
+            advanceUntilIdle()
+            statusStore.emit("/repo", emptyMap())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().isEmpty())
+        }
+
+    @Test
     fun readySurvivesLaterBusyUntilFocus() =
         runTest(testDispatcher) {
             val statusStore = FakeReadyStatusStore()

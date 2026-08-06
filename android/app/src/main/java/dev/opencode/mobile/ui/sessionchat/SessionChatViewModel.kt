@@ -177,13 +177,19 @@ class SessionChatViewModel
         ) {
             // Identity is session + worktree. Title may diverge after rename / session.updated;
             // do not full-reset when navigation still carries a stale title.
+            // Always re-assert Ready focus: nav can dispose/clear focus then re-enter the same
+            // bound ViewModel without a full reset, and Ready must clear on open.
+            sessionReadyStore.setFocusedSession(sessionId, worktree)
             if (boundSessionId == sessionId && boundWorktree == worktree) {
+                if (boundSessionTitle != sessionTitle) {
+                    boundSessionTitle = sessionTitle
+                    sessionInfo.bind(sessionId, sessionTitle, worktree)
+                }
                 return
             }
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
-            sessionReadyStore.setFocusedSession(sessionId, worktree)
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L

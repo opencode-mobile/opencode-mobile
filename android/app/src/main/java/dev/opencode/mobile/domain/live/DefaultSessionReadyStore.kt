@@ -88,11 +88,27 @@ class DefaultSessionReadyStore
                 } else {
                     focusedSessionId = sessionId
                     focusedDirectory = directory
+                    // Opening Session Chat acknowledges Ready. Drop Ready and any
+                    // leftover watch so idle catch-up cannot immediately re-stamp Ready
+                    // after a focused session.status arms a speculative watch.
                     val readyRecord = ready.remove(sessionId)
-                    if (readyRecord != null) {
-                        logI("ready cleared on focus session=$sessionId")
+                    val watchRecord = watched.remove(sessionId)
+                    if (readyRecord != null || watchRecord != null) {
+                        if (readyRecord != null) {
+                            logI("ready cleared on focus session=$sessionId")
+                        }
+                        if (watchRecord != null) {
+                            logI("watch cleared on focus session=$sessionId")
+                        }
                         persistStateLocked()
-                        publishReadyLocked(readyRecord.directory)
+                        val directoryToPublish = readyRecord?.directory ?: watchRecord?.directory
+                        publishReadyLocked(directoryToPublish)
+                    }
+                    if (directory != null) {
+                        val previous = previousTypes.getOrPut(directory) { mutableMapOf() }
+                        if (!previous[sessionId].isBusyOrRetry()) {
+                            previous[sessionId] = "idle"
+                        }
                     }
                 }
             }
@@ -182,8 +198,10 @@ class DefaultSessionReadyStore
                     }
 
                     if (watched[sessionId]?.directory == directory) {
+                        val watch = watched[sessionId]
                         val becameIdle = wasBusy && !isBusy
-                        val restoredAlreadyIdle = firstSighting && !isBusy
+                        val restoredAlreadyIdle =
+                            firstSighting && !isBusy && (watch?.allowIdleCatchUp == true)
                         if (becameIdle || restoredAlreadyIdle) {
                             if (handleIdleLocked(sessionId, directory, markPreviousIdle = false)) {
                                 readyChanged = true
@@ -211,10 +229,15 @@ class DefaultSessionReadyStore
             reason: String,
         ): Boolean {
             if (watched[sessionId]?.directory == directory) return false
+            // focused-status-event is speculative (type unknown before debounce). It must
+            // not use restoredAlreadyIdle catch-up, or opening an idle Ready session can
+            // re-arm Ready after leave when the status map still omits idle rows.
+            val allowIdleCatchUp = reason != "focused-status-event"
             watched[sessionId] =
                 WatchRecord(
                     directory = directory,
                     watchedAtEpochMs = clock.nowEpochMs(),
+                    allowIdleCatchUp = allowIdleCatchUp,
                 )
             logI("watch started reason=$reason session=$sessionId directory=$directory")
             persistStateLocked()
@@ -270,6 +293,7 @@ class DefaultSessionReadyStore
                     WatchRecord(
                         directory = entry.directory,
                         watchedAtEpochMs = entry.atEpochMs,
+                        allowIdleCatchUp = true,
                     )
             }
             if (pruned || ready.isNotEmpty() || watched.isNotEmpty()) {
@@ -364,6 +388,7 @@ class DefaultSessionReadyStore
         private data class WatchRecord(
             val directory: String,
             val watchedAtEpochMs: Long,
+            val allowIdleCatchUp: Boolean,
         )
 
         companion object {
