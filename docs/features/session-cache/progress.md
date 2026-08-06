@@ -1,0 +1,54 @@
+# Session Cache — Progress
+
+## Planning
+
+- [x] Product decisions grilled and locked (2026-06-28; reaffirmed 2026-08-06)
+- [x] Hybrid architecture locked (deep `SessionCache` + internal store)
+- [x] Feature docs under `docs/features/session-cache/`
+- [x] Linear [OPE-27](https://linear.app/opencode-mobile/issue/OPE-27/session-cache)
+- [x] Branch `feature/ope-27-session-cache` from `main`
+- [x] `CONTEXT.md` Session Cache glossary entry
+- [x] ADR 0006 stale-while-revalidate session cache
+
+## Design-system dependencies
+
+- None new. Settings uses existing `OpenCodeListItem` + `OpenCodeDialog`.
+  Offline chrome reuses existing connection status components.
+
+## Shared / domain
+
+- [ ] `SessionCache` + `SessionMessageCacheHandle` on both platforms
+- [ ] Internal `SessionCacheStore` + versioned JSON codec for current
+      `Session` / `Message` models
+- [ ] `SessionListSnapshot` / message freshness (`isFromCache` or equivalent)
+- [ ] In-memory test adapter
+
+## Android
+
+- [ ] Room database + entities/DAO + `RoomSessionCacheStore`
+- [ ] Hilt binding
+- [ ] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
+- [ ] Worktree purge + Clear All Data + Settings Session Cache section
+- [ ] Composer disabled when offline
+- [ ] Unit tests
+
+## iOS
+
+- [ ] SwiftData models + `SwiftDataSessionCacheStore`
+- [ ] `AppContainer` wiring
+- [ ] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
+- [ ] Worktree purge + Clear All Data + Settings Session Cache section
+- [ ] Composer disabled when offline
+- [ ] Unit tests
+
+## Blockers
+
+- None for planning. Implementation must not rebase
+  `ivanfenenko/ope-27-session-cache`.
+
+## Remaining Work
+
+1. Implement domain module + codec + Room/SwiftData adapters + tests.
+2. Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.
+3. Purge on worktree removal; Clear All Data; Settings size + clear.
+4. Disable composer when unreachable; manual offline cold-start verification.
