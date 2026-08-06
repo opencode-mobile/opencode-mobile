@@ -28,6 +28,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import kotlinx.coroutines.CompletableDeferred
@@ -1423,11 +1424,12 @@ class SessionLiveStoreTest {
                     repository,
                     eventStream,
                     LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    sessionCache = NoOpSessionCache,
                 )
             val emissions = mutableListOf<List<Session>>()
             val collectJob =
                 launch {
-                    store.observeSessions("/repo").collect { emissions.add(it) }
+                    store.observeSessions("/repo").collect { emissions.add(it.sessions) }
                 }
             advanceUntilIdle()
 
@@ -1458,11 +1460,12 @@ class SessionLiveStoreTest {
                     repository,
                     eventStream,
                     LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+                    sessionCache = NoOpSessionCache,
                 )
             val emissions = mutableListOf<List<Session>>()
             val collectJob =
                 launch {
-                    store.observeSessions("/repo").collect { emissions.add(it) }
+                    store.observeSessions("/repo").collect { emissions.add(it.sessions) }
                 }
             advanceUntilIdle()
 

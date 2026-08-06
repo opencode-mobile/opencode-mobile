@@ -95,6 +95,7 @@ data class SessionChatUiState(
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
+    val messagesFromCache: Boolean = false,
     val contextUsageFraction: Float? = null,
     val errorMessage: String? = null,
     val snackbar: SessionChatSnackbar? = null,
@@ -246,6 +247,7 @@ data class SessionChatTimelineRegionState(
     val messages: List<SessionChatMessageItem> = emptyList(),
     val timelineFrame: TimelineFrame? = null,
     val isRefreshing: Boolean = false,
+    val messagesFromCache: Boolean = false,
     val errorMessage: String? = null,
 )
 

@@ -95,6 +95,20 @@
 - Reason: Old MessageSync patches and `CachedMessagePayload` codecs are stale.
 - Revisit when: N/A (one-time migration choice).
 
+## Observation freshness channel
+
+- Date: 2026-08-06
+- Decision: `observeSessions` returns `SessionListSnapshot(sessions, isFromCache)`
+  (single channel, not a parallel freshness stream). `MessageListUpdate.Messages`
+  and `DisplayMessageListUpdate.Messages` carry `isFromCache` (default `false`);
+  DisplayMessagePipeline forwards the flag. MessageSync `note()`s every successful
+  Messages publish, including SSE incremental frames.
+- Reason: One emission avoids join races; Session Chat observes display updates;
+  debounce inside the handle makes frequent `note()` safe. Screen Models never
+  call `SessionCache`.
+- Revisit when: per-row TTL, a different public display frame type, or coarser
+  write policy is required.
+
 ## Distinct from model-selection session cache
 
 - Date: 2026-08-06

@@ -712,6 +712,7 @@ final class SessionChatViewModel {
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: sessionTodos),
             sessionTodoTotalCount: sessionTodos.count,
             connectionStatus: infoState.connectionStatus,
+            messagesFromCache: timelineState.messagesFromCache,
             contextUsageFraction: sessionInfo.contextUsageFraction(
                 messages: timelineState.messages,
                 modelOptions: composerState.composer.modelOptions,

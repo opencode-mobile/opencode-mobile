@@ -60,7 +60,17 @@ class DisplayMessagePipeline(
             var lastPublishedAt: kotlin.time.TimeMark? = null
             // True while coalescing a live streaming reply (including in-flight prepare).
             var isStreamingSession = false
+            var sourceIsFromCache = false
             val decorationBacklog = DecorationBacklog()
+
+            suspend fun emitDisplayMessages(messages: List<DisplayMessage>) {
+                send(
+                    DisplayMessageListUpdate.Messages(
+                        messages = messages,
+                        isFromCache = sourceIsFromCache,
+                    ),
+                )
+            }
 
             fun invalidateInFlightWork() {
                 debounceJob?.cancel()
@@ -223,7 +233,7 @@ class DisplayMessagePipeline(
                             if (!commitPrepared(job.generation, merged, MessagePreparationMode.Streaming)) {
                                 continue
                             }
-                            send(DisplayMessageListUpdate.Messages(merged))
+                            emitDisplayMessages(merged)
                         }
                         decorationJob = null
                     }
@@ -264,7 +274,7 @@ class DisplayMessagePipeline(
                 previousById = frame.associateBy { it.id }
                 lastPublishedMessages = messages
                 lastPublishedAt = timeSource.markNow()
-                send(DisplayMessageListUpdate.Messages(frame))
+                emitDisplayMessages(frame)
                 scheduleStreamingDecoration(generation, messages)
             }
 
@@ -315,7 +325,7 @@ class DisplayMessagePipeline(
                             return@launch
                         }
                         lastPublishedMessages = messages
-                        send(DisplayMessageListUpdate.Messages(placeholder))
+                        emitDisplayMessages(placeholder)
 
                         val finalized =
                             contentPreparer.prepareMessages(
@@ -329,7 +339,7 @@ class DisplayMessagePipeline(
                         if (!isActive || !isCurrent(generation)) return@launch
                         if (!commitPrepared(generation, finalized, MessagePreparationMode.Final)) return@launch
                         lastPublishedMessages = messages
-                        send(DisplayMessageListUpdate.Messages(finalized))
+                        emitDisplayMessages(finalized)
                     }
             }
 
@@ -367,7 +377,7 @@ class DisplayMessagePipeline(
                             previousById = byId.toMap()
                             lastPublishedMessages = messages
                             lastPublishedAt = timeSource.markNow()
-                            send(DisplayMessageListUpdate.Messages(messages.map { byId.getValue(it.id) }))
+                            emitDisplayMessages(messages.map { byId.getValue(it.id) })
                         }
 
                         // Newest first: open settles near the bottom, so enrich what the
@@ -444,7 +454,7 @@ class DisplayMessagePipeline(
                         lastPublishedMessages = messages
                         // Format-first history is publishable; do not hold Ready on
                         // unprocessed plain while TextMate enrichment catches up.
-                        send(DisplayMessageListUpdate.Messages(prepared))
+                        emitDisplayMessages(prepared)
                         onCommitted?.invoke()
                     }
             }
@@ -462,6 +472,7 @@ class DisplayMessagePipeline(
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
                         is MessageListUpdate.Messages -> {
+                            sourceIsFromCache = update.isFromCache
                             if (hasStreamingDelta(update.messages)) {
                                 // Coalesce streaming tokens into pendingMessages. Do not bump
                                 // generation on every delta — decoration stays generation-gated

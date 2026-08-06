@@ -519,7 +519,8 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
     )
     let sessionLiveStore = DefaultSessionLiveStore(
         sessionRepository: PreviewSessionRepository(),
-        eventStream: previewEventStream
+        eventStream: previewEventStream,
+        sessionCache: NoOpSessionCache.shared
     )
     let sessionReadyStore = DefaultSessionReadyStore(
         sessionStatusLiveStore: sessionStatusLiveStore,

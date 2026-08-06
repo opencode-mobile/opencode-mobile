@@ -161,7 +161,8 @@ extension Container {
                         baseURL: connection.baseURL.absoluteString,
                         username: connection.username
                     )
-                }
+                },
+                sessionCache: self.sessionCache()
             )
         }.singleton
     }
@@ -317,7 +318,8 @@ extension Container {
         self { @MainActor in
             DefaultSessionLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
+                eventStream: self.foregroundEventStream(),
+                sessionCache: self.sessionCache()
             )
         }.singleton
     }

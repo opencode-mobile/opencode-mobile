@@ -148,11 +148,16 @@ final class DisplayMessagePipeline {
                 var lastPublishedAt: Duration?
                 /// True while coalescing a live streaming reply (including in-flight prepare).
                 var isStreamingSession = false
+                var sourceIsFromCache = false
                 let decorationBacklog = DecorationBacklog()
                 if !previousByID.isEmpty {
                     OpenCodeLog.messageContent.info(
                         "displayCache hit session=\(sessionID, privacy: .public) count=\(previousByID.count)"
                     )
+                }
+
+                func emitDisplayMessages(_ messages: [DisplayMessage]) {
+                    continuation.yield(.messages(messages, isFromCache: sourceIsFromCache))
                 }
 
                 func invalidateInFlightWork() {
@@ -321,7 +326,7 @@ final class DisplayMessagePipeline {
                             OpenCodeLog.messageContent.info(
                                 "displayPublish reason=streaming-decoration generation=\(job.generation)"
                             )
-                            continuation.yield(.messages(merged))
+                            emitDisplayMessages(merged)
                         }
                     }
                 }
@@ -361,7 +366,7 @@ final class DisplayMessagePipeline {
                     OpenCodeLog.messageContent.info(
                         "displayPublish reason=streaming-structure-first chars=\(streamingMessageCharCount(messages)) generation=\(generation)"
                     )
-                    continuation.yield(.messages(frame))
+                    emitDisplayMessages(frame)
                     scheduleStreamingDecoration(generation: generation, messages: messages)
                 }
 
@@ -423,7 +428,7 @@ final class DisplayMessagePipeline {
                         OpenCodeLog.messageContent.info(
                             "displayPublish reason=\(reason, privacy: .public) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(sinceLastPublishMs) generation=\(generation)"
                         )
-                        continuation.yield(.messages(prepared))
+                        emitDisplayMessages(prepared)
                         onCommitted?()
                     }
                 }
@@ -448,7 +453,7 @@ final class DisplayMessagePipeline {
                         OpenCodeLog.messageContent.info(
                             "displayPublish reason=final-placeholder generation=\(generation)"
                         )
-                        continuation.yield(.messages(placeholder))
+                        emitDisplayMessages(placeholder)
 
                         let finalized = await contentPreparer.prepareMessages(
                             messages,
@@ -468,7 +473,7 @@ final class DisplayMessagePipeline {
                         OpenCodeLog.messageContent.info(
                             "displayPublish reason=final generation=\(generation)"
                         )
-                        continuation.yield(.messages(finalized))
+                        emitDisplayMessages(finalized)
                     }
                 }
 
@@ -511,7 +516,7 @@ final class DisplayMessagePipeline {
                             OpenCodeLog.messageContent.info(
                                 "displayPublish reason=\(reason, privacy: .public) count=\(count) generation=\(generation)"
                             )
-                            continuation.yield(.messages(snapshot))
+                            emitDisplayMessages(snapshot)
                         }
 
                         for message in messages.reversed() {
@@ -582,7 +587,8 @@ final class DisplayMessagePipeline {
                         lastPublishedMessages = nil
                         isStreamingSession = false
                         continuation.yield(.loadFailed(error))
-                    case .messages(let messages):
+                    case .messages(let messages, let isFromCache):
+                        sourceIsFromCache = isFromCache
                         if messagesContainStreamingText(messages) {
                             // Coalesce streaming tokens into `pendingMessages`. Do not bump
                             // generation on every delta — decoration stays generation-gated

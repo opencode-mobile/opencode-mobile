@@ -20,7 +20,7 @@
 - [x] `SessionCache` + `SessionMessageCacheHandle` on both platforms
 - [x] Internal `SessionCacheStore` + versioned JSON codec for current
       `Session` / `Message` models (schemaVersion 1)
-- [ ] `SessionListSnapshot` / message freshness (`isFromCache` or equivalent)
+- [x] `SessionListSnapshot` / message freshness (`isFromCache`)
 - [x] In-memory test adapter
 
 ## Android
@@ -28,7 +28,7 @@
 - [x] Room database + entities/DAO + `RoomSessionCacheStore`
 - [x] Hilt binding (`SessionCacheModule`)
 - [x] Unit tests (`DefaultSessionCacheTest`)
-- [ ] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
+- [x] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
 - [ ] Worktree purge + Clear All Data + Settings Session Cache section
 - [ ] Composer disabled when offline
 
@@ -37,7 +37,7 @@
 - [x] SwiftData models + `SwiftDataSessionCacheStore`
 - [x] `AppContainer` wiring (`sessionCache` / `sessionCacheStore`)
 - [x] Unit tests (`DefaultSessionCacheTests`, 6/6)
-- [ ] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
+- [x] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
 - [ ] Worktree purge + Clear All Data + Settings Session Cache section
 - [ ] Composer disabled when offline
 
@@ -48,6 +48,6 @@
 ## Remaining Work
 
 1. ~~Implement domain module + codec + Room/SwiftData adapters + tests.~~ (Phase 1)
-2. Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.
+2. ~~Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.~~ (Phase 2)
 3. Purge on worktree removal; Clear All Data; Settings size + clear.
 4. Disable composer when unreachable; manual offline cold-start verification.

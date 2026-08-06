@@ -12,6 +12,7 @@ struct ProjectSectionItem: Identifiable, Equatable {
     let allSessions: [SessionListItem]
     let totalSessionCount: Int
     let loadError: String?
+    var sessionsFromCache: Bool = false
 }
 
 struct AddProjectDirectoryItem: Identifiable, Equatable {
@@ -101,7 +102,7 @@ final class ProjectListHomeViewModel {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
     private var liveObservationTasks: [Task<Void, Never>] = []
-    private var liveSessionsByWorktree: [String: [Session]] = [:]
+    private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: [String: SessionStatus]] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
     private var requestedFocusWorktree: String?
@@ -638,8 +639,8 @@ final class ProjectListHomeViewModel {
     private func observeWorktree(_ worktree: String) async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
-                for await sessions in self.sessionLiveStore.observeSessions(directory: worktree) {
-                    self.liveSessionsByWorktree[worktree] = sessions
+                for await snapshot in self.sessionLiveStore.observeSessions(directory: worktree) {
+                    self.liveSessionsByWorktree[worktree] = snapshot
                     self.applyLiveUpdate(worktree: worktree)
                 }
             }
@@ -659,17 +660,24 @@ final class ProjectListHomeViewModel {
     }
 
     private func applyLiveUpdate(worktree: String) {
-        guard let sessions = liveSessionsByWorktree[worktree] else { return }
+        guard let snapshot = liveSessionsByWorktree[worktree] else { return }
         let statuses = liveStatusesByWorktree[worktree] ?? [:]
         let readyIds = liveReadyIdsByWorktree[worktree] ?? []
-        updateSectionFromLiveData(worktree: worktree, sessions: sessions, statuses: statuses, readyIds: readyIds)
+        updateSectionFromLiveData(
+            worktree: worktree,
+            sessions: snapshot.sessions,
+            statuses: statuses,
+            readyIds: readyIds,
+            sessionsFromCache: snapshot.isFromCache
+        )
     }
 
     private func updateSectionFromLiveData(
         worktree: String,
         sessions: [Session],
         statuses: [String: SessionStatus],
-        readyIds: Set<String>
+        readyIds: Set<String>,
+        sessionsFromCache: Bool
     ) {
         guard case let .loaded(sections, showAdd, navigator, seeAll, focused, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
@@ -696,7 +704,8 @@ final class ProjectListHomeViewModel {
             previewSessions: Array(items.prefix(Self.previewSessionLimit)),
             allSessions: items,
             totalSessionCount: items.count,
-            loadError: section.loadError
+            loadError: section.loadError,
+            sessionsFromCache: sessionsFromCache
         )
         let updatedSections =
             sections.map { current in

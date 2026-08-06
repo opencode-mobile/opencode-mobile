@@ -169,6 +169,7 @@ struct SessionChatUiState: Equatable {
     var sessionTodoCompletedCount: Int = 0
     var sessionTodoTotalCount: Int = 0
     var connectionStatus: SessionConnectionStatus = .offline
+    var messagesFromCache: Bool = false
     var contextUsageFraction: Double?
     var errorMessage: String?
     var snackbar: SessionChatSnackbar?
@@ -340,6 +341,7 @@ struct SessionChatTimelineRegionState: Equatable {
     var timeline: SessionChatTimelineState = .loading
     var messages: [SessionChatRow] = []
     var isRefreshing: Bool = false
+    var messagesFromCache: Bool = false
     var errorMessage: String?
 }
 

@@ -562,10 +562,16 @@ class MainScreenViewModel
                             sessionLiveStore.observeSessions(worktree),
                             sessionStatusLiveStore.observeStatuses(worktree),
                             sessionReadyStore.observeReadyIds(worktree),
-                        ) { sessions, statuses, readyIds ->
-                            Triple(sessions, statuses, readyIds)
-                        }.collect { (sessions, statuses, readyIds) ->
-                            updateSectionFromLiveData(worktree, sessions, statuses, readyIds)
+                        ) { snapshot, statuses, readyIds ->
+                            Triple(snapshot, statuses, readyIds)
+                        }.collect { (snapshot, statuses, readyIds) ->
+                            updateSectionFromLiveData(
+                                worktree,
+                                snapshot.sessions,
+                                statuses,
+                                readyIds,
+                                sessionsFromCache = snapshot.isFromCache,
+                            )
                         }
                     }
                 }
@@ -581,6 +587,7 @@ class MainScreenViewModel
             sessions: List<Session>,
             statuses: Map<String, SessionStatus>,
             readyIds: Set<String>,
+            sessionsFromCache: Boolean,
         ) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
@@ -601,6 +608,7 @@ class MainScreenViewModel
                     previewSessions = summaries.take(PREVIEW_SESSION_LIMIT),
                     allSessions = summaries,
                     totalSessionCount = summaries.size,
+                    sessionsFromCache = sessionsFromCache,
                 )
             val updatedSections =
                 state.sections.map { current ->
@@ -684,6 +692,7 @@ data class ProjectSectionUi(
     val allSessions: List<SessionSummary>,
     val totalSessionCount: Int,
     val loadError: String? = null,
+    val sessionsFromCache: Boolean = false,
 )
 
 data class AddProjectDirectoryUi(

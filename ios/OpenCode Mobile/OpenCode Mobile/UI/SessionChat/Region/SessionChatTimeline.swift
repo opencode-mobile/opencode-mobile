@@ -107,11 +107,12 @@ final class SessionChatTimeline {
                     switch current {
                     case .loadFailed(let error):
                         applyError(error)
-                    case .messages(let displayMessages):
+                    case .messages(let displayMessages, let isFromCache):
                         await applyLoadedDisplayMessagesTransform(
                             displayMessages,
                             isRefreshing: false,
-                            fromQuietRefresh: true
+                            fromQuietRefresh: true,
+                            messagesFromCache: isFromCache
                         )
                     }
                     // Yield so the observation task can land a newer snapshot while we apply;
@@ -305,6 +306,7 @@ final class SessionChatTimeline {
         _ displayMessages: [DisplayMessage],
         isRefreshing: Bool,
         fromQuietRefresh: Bool = false,
+        messagesFromCache: Bool = false,
         onPublished: (() -> Void)? = nil
     ) async {
         lastLoadedMessages = displayMessages.map(\.message)
@@ -419,6 +421,7 @@ final class SessionChatTimeline {
         state.timeline = resolvedTimeline
         state.messages = rows
         state.isRefreshing = isRefreshing
+        state.messagesFromCache = messagesFromCache
         state.errorMessage = resolvedErrorMessage
         if !fromQuietRefresh {
             mergePendingWhileSending = false

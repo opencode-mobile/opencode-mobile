@@ -1149,7 +1149,7 @@ private final class MessageCollector: @unchecked Sendable {
 
     func collect(_ stream: AsyncStream<MessageListUpdate>) async {
         for await update in stream {
-            if case .messages(let messages) = update {
+            if case .messages(let messages, _) = update {
                 emissions.append(messages)
             }
         }
@@ -1166,7 +1166,7 @@ private final class DisplayMessageCollector: @unchecked Sendable {
 
     func collect(_ stream: AsyncStream<DisplayMessageListUpdate>) async {
         for await update in stream {
-            if case .messages(let messages) = update {
+            if case .messages(let messages, _) = update {
                 emissions.append(messages)
             }
         }

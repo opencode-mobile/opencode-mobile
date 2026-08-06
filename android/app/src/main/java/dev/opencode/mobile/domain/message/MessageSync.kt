@@ -7,6 +7,9 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -45,12 +48,14 @@ class MessageSync(
     private val connectionProfileIdProvider: () -> String = { "local" },
     private val recoveryDelay: suspend (Long) -> Unit = { ms -> delay(ms) },
     private val connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared,
+    private val sessionCache: SessionCache = NoOpSessionCache,
 ) {
     private val observationCache = ConcurrentHashMap<MessageSessionKey, SharedFlow<MessageListUpdate>>()
     private val lastFingerprints = ConcurrentHashMap<String, String>()
     private val lastPublishedFrames = ConcurrentHashMap<String, List<Message>>()
     private val lastPublishedRevisions = ConcurrentHashMap<String, Long>()
     private val healthByKey = ConcurrentHashMap<MessageSessionKey, MessageSyncHealth>()
+    private val messageCacheHandles = ConcurrentHashMap<MessageSessionKey, SessionMessageCacheHandle>()
 
     fun observeMessages(
         sessionId: String,
@@ -103,6 +108,15 @@ class MessageSync(
             timelinePollFlow(key),
         )
 
+    private fun messageCacheHandle(key: MessageSessionKey): SessionMessageCacheHandle =
+        messageCacheHandles.computeIfAbsent(key) {
+            sessionCache.openMessages(sessionId = key.sessionId, worktree = key.directory)
+        }
+
+    private fun closeMessageCacheHandle(key: MessageSessionKey) {
+        messageCacheHandles.remove(key)?.close()
+    }
+
     private fun incrementalMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
             // Adopted forward on stream.reconnected / server.connected so a
@@ -121,6 +135,17 @@ class MessageSync(
             var serverConnectedReloadJob: Job? = null
             val storeSlot = key.storeSlot
             val directory = key.directory.ifEmpty { null }
+            val cacheHandle = messageCacheHandle(key)
+
+            suspend fun emitMessages(
+                messages: List<Message>,
+                isFromCache: Boolean = false,
+            ) {
+                if (!isFromCache) {
+                    cacheHandle.note(messages)
+                }
+                send(MessageListUpdate.Messages(messages = messages, isFromCache = isFromCache))
+            }
 
             fun noteQueued(cost: Int) {
                 val depth = queued.incrementAndGet()
@@ -311,7 +336,7 @@ class MessageSync(
                             )
                             if (isCurrentEpoch()) {
                                 rememberPublishedFrame(storeSlot, result.messages)
-                                send(MessageListUpdate.Messages(result.messages))
+                                emitMessages(result.messages)
                                 MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
                             }
                             if (becameHealthy) return
@@ -370,7 +395,7 @@ class MessageSync(
                                         "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
                                             "source=message.part.updated-rest-seeded",
                                     )
-                                    send(MessageListUpdate.Messages(result.messages))
+                                    emitMessages(result.messages)
                                     if (!healthy) {
                                         performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
                                     }
@@ -418,7 +443,7 @@ class MessageSync(
                                         "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
                                             "source=message.part.removed-rest-seeded",
                                     )
-                                    send(MessageListUpdate.Messages(result.messages))
+                                    emitMessages(result.messages)
                                     if (!healthy) {
                                         performClosedLoopRecovery(MessageSyncRecoveryReason.RacedAuthority)
                                     }
@@ -450,7 +475,7 @@ class MessageSync(
                                     "observeMessages emit session=${key.sessionId} count=${result.messages.size} " +
                                         "source=session.idle",
                                 )
-                                send(MessageListUpdate.Messages(result.messages))
+                                emitMessages(result.messages)
                                 publishHealth(MessageSyncHealth.Healthy)
                             }
                             is ReloadResult.Failure -> {
@@ -459,7 +484,7 @@ class MessageSync(
                                 if (markChanged(storeSlot, recovered)) {
                                     rememberPublishedFrame(storeSlot, recovered)
                                     logW("session.idle reload failed; resumed polling session=${key.sessionId}")
-                                    send(MessageListUpdate.Messages(recovered))
+                                    emitMessages(recovered)
                                 }
                             }
                         }
@@ -486,12 +511,26 @@ class MessageSync(
                     "observeMessages emit session=${key.sessionId} count=${frame.size} " +
                         "source=sse-incremental type=${event.type} revision=${changeSet.sessionRevision}",
                 )
-                send(MessageListUpdate.Messages(frame))
+                emitMessages(frame)
                 MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
             }
 
             logI("observeMessages subscribe session=${key.sessionId} directory=${directory ?: "-"}")
             try {
+                val seeded = cacheHandle.seed()
+                if (seeded != null) {
+                    val seedRevision = engine.revision(storeSlot)
+                    engine.replaceAllIfRevision(storeSlot, seeded, seedRevision)
+                    val seededMerged = engine.messages(storeSlot)
+                    rememberPublishedFrame(storeSlot, seededMerged)
+                    logI(
+                        "observeMessages emit session=${key.sessionId} count=${seededMerged.size} " +
+                            "source=cache-seed",
+                    )
+                    emitMessages(seededMerged, isFromCache = true)
+                    MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
+                }
+
                 val expectedRevision = engine.revision(storeSlot)
                 var loaded: List<Message>? = null
                 var failure: Throwable? = null
@@ -534,7 +573,7 @@ class MessageSync(
                             "observeMessages emit session=${key.sessionId} count=${merged.size} " +
                                 "source=initial-subscribe",
                         )
-                        send(MessageListUpdate.Messages(merged))
+                        emitMessages(merged, isFromCache = false)
                         MessagePipelineProbe.emit(MessagePipelineProbe.Marker.DisplayFramePublished)
                     }
                 }
@@ -567,6 +606,7 @@ class MessageSync(
                 producer.cancel()
                 connectionWatcher.cancel()
                 staging.close()
+                closeMessageCacheHandle(key)
             }
         }
 
@@ -603,7 +643,8 @@ class MessageSync(
                         "observeMessages emit session=${key.sessionId} count=${merged.size} " +
                             "source=poll fingerprint-changed",
                     )
-                    send(MessageListUpdate.Messages(merged))
+                    messageCacheHandle(key).note(merged)
+                    send(MessageListUpdate.Messages(messages = merged, isFromCache = false))
                 }
             }
         }

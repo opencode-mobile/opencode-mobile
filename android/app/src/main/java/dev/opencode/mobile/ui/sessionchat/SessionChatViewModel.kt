@@ -843,6 +843,7 @@ class SessionChatViewModel
                 sessionTodoCompletedCount = SessionTodoList.completedCount(sessionTodos),
                 sessionTodoTotalCount = sessionTodos.size,
                 connectionStatus = infoState.connectionStatus,
+                messagesFromCache = timelineState.messagesFromCache,
                 contextUsageFraction =
                     sessionInfo.contextUsageFraction(
                         timelineState.messages,

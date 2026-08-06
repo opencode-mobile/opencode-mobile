@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.message
 sealed interface MessageListUpdate {
     data class Messages(
         val messages: List<Message>,
+        val isFromCache: Boolean = false,
     ) : MessageListUpdate
 
     data class LoadFailed(

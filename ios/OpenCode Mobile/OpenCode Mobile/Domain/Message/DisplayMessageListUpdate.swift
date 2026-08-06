@@ -1,6 +1,6 @@
 import Foundation
 
 enum DisplayMessageListUpdate: Sendable {
-    case messages([DisplayMessage])
+    case messages([DisplayMessage], isFromCache: Bool)
     case loadFailed(Error)
 }
