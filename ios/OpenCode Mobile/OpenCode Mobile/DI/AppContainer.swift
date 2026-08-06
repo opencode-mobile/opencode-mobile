@@ -102,6 +102,40 @@ extension Container {
         self { InMemoryMessageStore() }.singleton
     }
 
+    var sessionCacheStore: Factory<any SessionCacheStore> {
+        self {
+            do {
+                let container = try SwiftDataSessionCacheStore.makePersistentContainer()
+                return SwiftDataSessionCacheStore(container: container)
+            } catch {
+                print("SessionCache: persistent SwiftData store failed (\(error)); using in-memory fallback")
+                do {
+                    let container = try SwiftDataSessionCacheStore.makeInMemoryContainer()
+                    return SwiftDataSessionCacheStore(container: container)
+                } catch {
+                    print("SessionCache: in-memory SwiftData store failed (\(error)); using InMemorySessionCacheStore")
+                    return InMemorySessionCacheStore()
+                }
+            }
+        }.singleton
+    }
+
+    var sessionCache: Factory<any SessionCache> {
+        self {
+            let manager = self.activeConnectionManager()
+            return DefaultSessionCache(
+                store: self.sessionCacheStore(),
+                connectionIdProvider: {
+                    guard let connection = manager.connection else { return nil }
+                    return CacheUrlNormalizer.connectionId(
+                        baseURL: connection.baseURL.absoluteString,
+                        username: connection.username
+                    )
+                }
+            )
+        }.singleton
+    }
+
     var sessionMessageEngine: Factory<SessionMessageEngine> {
         self { SessionMessageEngine(store: self.messageStore()) }.singleton
     }

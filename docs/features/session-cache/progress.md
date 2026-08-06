@@ -17,38 +17,37 @@
 
 ## Shared / domain
 
-- [ ] `SessionCache` + `SessionMessageCacheHandle` on both platforms
-- [ ] Internal `SessionCacheStore` + versioned JSON codec for current
-      `Session` / `Message` models
+- [x] `SessionCache` + `SessionMessageCacheHandle` on both platforms
+- [x] Internal `SessionCacheStore` + versioned JSON codec for current
+      `Session` / `Message` models (schemaVersion 1)
 - [ ] `SessionListSnapshot` / message freshness (`isFromCache` or equivalent)
-- [ ] In-memory test adapter
+- [x] In-memory test adapter
 
 ## Android
 
-- [ ] Room database + entities/DAO + `RoomSessionCacheStore`
-- [ ] Hilt binding
+- [x] Room database + entities/DAO + `RoomSessionCacheStore`
+- [x] Hilt binding (`SessionCacheModule`)
+- [x] Unit tests (`DefaultSessionCacheTest`)
 - [ ] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
 - [ ] Worktree purge + Clear All Data + Settings Session Cache section
 - [ ] Composer disabled when offline
-- [ ] Unit tests
 
 ## iOS
 
-- [ ] SwiftData models + `SwiftDataSessionCacheStore`
-- [ ] `AppContainer` wiring
+- [x] SwiftData models + `SwiftDataSessionCacheStore`
+- [x] `AppContainer` wiring (`sessionCache` / `sessionCacheStore`)
+- [x] Unit tests (`DefaultSessionCacheTests`, 6/6)
 - [ ] `DefaultSessionLiveStore` + `MessageSync` SWR wiring
 - [ ] Worktree purge + Clear All Data + Settings Session Cache section
 - [ ] Composer disabled when offline
-- [ ] Unit tests
 
 ## Blockers
 
-- None for planning. Implementation must not rebase
-  `ivanfenenko/ope-27-session-cache`.
+- None. Do not rebase `ivanfenenko/ope-27-session-cache`.
 
 ## Remaining Work
 
-1. Implement domain module + codec + Room/SwiftData adapters + tests.
+1. ~~Implement domain module + codec + Room/SwiftData adapters + tests.~~ (Phase 1)
 2. Wire Live Store and MessageSync SWR; expose freshness to home and Session Chat.
 3. Purge on worktree removal; Clear All Data; Settings size + clear.
 4. Disable composer when unreachable; manual offline cold-start verification.
