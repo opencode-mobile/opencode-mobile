@@ -24,14 +24,21 @@ Not in this slice. Android release distribution ([OPE-69](https://linear.app/ope
 
 ## Blockers
 
-First protected `main` run
-([31220419382](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31220419382))
-failed with locked keychain / missing profiles under the headless runner. Fix:
-ephemeral signing keychain in the iOS Release workflow.
+Protected `main` runs failed through signing keychain iteration:
+
+| Run | Failure |
+| --- | --- |
+| [31220419382](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31220419382) | Locked login keychain / missing Development profiles |
+| [31220999817](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31220999817) | `set-key-partition-list` on empty ephemeral keychain |
+| [31221431607](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31221431607) | Forced `Apple Distribution` vs Automatic + Factory SPM |
+| [31221885977](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31221885977) | Orphaned ASC Development cert after ephemeral keychain delete |
+
+Fix in flight: persistent runner keychain + revoke orphaned API Development
+cert `95KD8FA42B`.
 
 ## Remaining work
 
-1. Land keychain fix, then run **iOS Release** twice on `main`
+1. Land persistent keychain fix, then run **iOS Release** twice on `main`
    (`0.1.0-internal.1`, `0.1.0-internal.2`).
 2. Human confirm ASC app stays private (checkpoint 3).
 3. OPE-103 then OPE-102 per parent Remaining order.

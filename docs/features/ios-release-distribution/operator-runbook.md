@@ -47,6 +47,18 @@ Distribution.
   dev.opencode.mobile
 ```
 
+## Runner signing keychain
+
+On the `mac-mini` self-hosted runner, iOS Release keeps signing material in:
+
+- `~/.opencode-mobile/ios-release.keychain-db`
+- `~/.opencode-mobile/ios-release.keychain.password`
+
+Do not delete these between runs. To rotate signing material: delete both files,
+revoke orphaned Apple Development / Distribution certificates in the developer
+portal if needed, then re-run **iOS Release** so Xcode recreates them via the
+ASC API key.
+
 ## Key rotation
 
 1. Create a new ASC Team key in Users and Access → Integrations.
