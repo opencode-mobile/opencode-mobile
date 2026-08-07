@@ -32,9 +32,11 @@ Protected `main` runs failed through signing keychain iteration:
 | [31220999817](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31220999817) | `set-key-partition-list` on empty ephemeral keychain |
 | [31221431607](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31221431607) | Forced `Apple Distribution` vs Automatic + Factory SPM |
 | [31221885977](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31221885977) | Orphaned ASC Development cert after ephemeral keychain delete |
+| [31222428580](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31222428580) | **Success** — `0.1.0-internal.1` signed IPA/xcarchive |
+| [31222585476](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31222585476) | Locked keychain: `set-keychain-settings` before unlock |
 
-Fix in flight: persistent runner keychain + revoke orphaned API Development
-cert `95KD8FA42B`.
+Fix in flight: unlock persistent keychain before `set-keychain-settings`. Orphaned
+ASC Development cert `95KD8FA42B` was revoked via the API.
 
 ## Remaining work
 
