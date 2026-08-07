@@ -2660,8 +2660,8 @@ class SessionChatViewModelTest {
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
         val json = Json { ignoreUnknownKeys = true }
+        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
         val connectionProfileStore = FakeConnectionProfileStore()
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {

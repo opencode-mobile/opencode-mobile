@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -44,8 +45,10 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -1330,18 +1333,66 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
-    fun observeStatuses_emitsEmptyMapWhenStatusLoadFails() =
+    fun observeStatuses_keepsPriorWhenStatusLoadFails() =
         runTest(testDispatcher) {
-            val repository = FakeSessionRepository(shouldFailStatuses = true)
-            val store = createStatusStore(repository, FakeForegroundEventStream())
+            val repository =
+                FakeSessionRepository(
+                    statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
 
-            val statuses = store.observeStatuses("/repo").first()
+            repository.shouldFailStatuses = true
+            eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceTimeBy(350)
+            advanceUntilIdle()
+            collectJob.cancel()
 
-            assertEquals(emptyMap<String, SessionStatus>(), statuses)
+            assertEquals(1, emissions.size)
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
         }
 
     @Test
-    fun observeStatuses_refreshesOnStatusEvent() =
+    fun observeStatuses_appliesStatusEventLocallyWithoutWaitingForGet() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val store = createStatusStore(repository, eventStream)
+            val emissions = mutableListOf<Map<String, SessionStatus>>()
+            val collectJob =
+                launch {
+                    store.observeStatuses("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+            val fetchesAfterBootstrap = repository.statusFetchCount
+
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "session.status",
+                    sessionId = "ses-1",
+                    rawProperties =
+                        buildJsonObject {
+                            put("sessionID", "ses-1")
+                            putJsonObject("status") { put("type", "busy") }
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals("busy", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertEquals(fetchesAfterBootstrap, repository.statusFetchCount)
+        }
+
+    @Test
+    fun observeStatuses_removesSessionOnIdleEvent() =
         runTest(testDispatcher) {
             val repository =
                 FakeSessionRepository(
@@ -1356,14 +1407,12 @@ class SessionStatusLiveStoreTest {
                 }
             advanceUntilIdle()
 
-            repository.statuses = listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "idle")))
             eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
-            advanceTimeBy(350)
             advanceUntilIdle()
             collectJob.cancel()
 
             assertEquals(2, emissions.size)
-            assertEquals("idle", emissions.last()["ses-1"]?.raw?.get("type"))
+            assertTrue(emissions.last().isEmpty())
         }
 
     @Test
@@ -1404,6 +1453,7 @@ class SessionStatusLiveStoreTest {
             repository,
             eventStream,
             LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+            EventDomainAdapter(Json { ignoreUnknownKeys = true }),
         )
 }
 
@@ -1570,6 +1620,7 @@ private class FakeSessionRepository(
     var statuses: List<SessionStatus> = emptyList(),
     var todos: List<SessionTodo> = emptyList(),
     var listTodosCallCount: Int = 0,
+    var statusFetchCount: Int = 0,
     var shouldFailList: Boolean = false,
     var shouldFailStatuses: Boolean = false,
 ) : SessionRepository {
@@ -1585,6 +1636,7 @@ private class FakeSessionRepository(
     ): Session = error("unused")
 
     override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
+        statusFetchCount += 1
         if (shouldFailStatuses) error("status failed")
         return statuses
     }

@@ -1,5 +1,21 @@
 # Session Chat Decisions
 
+## OPE-113 immediate status + optimistic busy + Working row
+
+- Date: 2026-08-07
+- Decision: Match web `session_working` feedback by (1) applying SSE
+  `session.status` / `session.idle` payloads in `SessionStatusLiveStore`
+  immediately, keeping GET for bootstrap/reconnect only; (2) setting optimistic
+  busy on send until authoritative status arrives or send fails; (3) showing a
+  feature-local muted Working/Retrying timeline row when busy with no assistant
+  content yet — not a design-system shimmer and not web’s tab progress dots.
+- Reason: Stop alone lagged behind HTTP accept and offered no secondary chrome;
+  Android emptyMap-on-failure could also clear busy mid-turn.
+- Evidence: [research-session-running-indicator-gap.md](./research-session-running-indicator-gap.md),
+  [ope-113-plan.md](./ope-113-plan.md)
+- Revisit when: product wants web-style progress-dot chrome or a shared shimmer
+  primitive.
+
 ## Ship Android region row-reuse (Phase 4)
 
 - Date: 2026-07-28

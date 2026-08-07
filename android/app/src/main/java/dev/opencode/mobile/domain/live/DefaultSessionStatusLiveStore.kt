@@ -1,23 +1,22 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
-@OptIn(FlowPreview::class)
 @Singleton
 class DefaultSessionStatusLiveStore
     @Inject
@@ -25,6 +24,7 @@ class DefaultSessionStatusLiveStore
         private val sessionRepository: SessionRepository,
         private val eventStream: ForegroundEventStream,
         private val liveStoreScope: LiveStoreScope,
+        private val eventDomainAdapter: EventDomainAdapter,
     ) : SessionStatusLiveStore {
         private val cache = ConcurrentHashMap<String, SharedFlow<Map<String, SessionStatus>>>()
 
@@ -45,24 +45,69 @@ class DefaultSessionStatusLiveStore
 
         private fun buildStatusFlow(directory: String): Flow<Map<String, SessionStatus>> =
             channelFlow {
-                suspend fun loadStatuses(): Map<String, SessionStatus> =
+                var current = emptyMap<String, SessionStatus>()
+                var reconnectRefresh: Job? = null
+
+                suspend fun reloadFromServer(): Map<String, SessionStatus>? =
                     runCatching {
                         sessionRepository
                             .getAllSessionStatuses(directory = directory)
                             .associateBy(SessionStatus::sessionId)
-                    }.getOrDefault(emptyMap())
+                    }.getOrNull()
 
-                send(loadStatuses())
+                reloadFromServer()?.let {
+                    current = it
+                    send(current)
+                }
 
-                merge(
-                    eventStream.events
-                        .filter {
-                            it.type == "stream.reconnected" || it.type == "server.connected"
-                        }.map { },
-                    eventStream.events.filter { it.triggersStatusRefresh }.map { },
-                ).debounce(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
-                    .collect {
-                        send(loadStatuses())
+                try {
+                    eventStream.events.collect { event ->
+                        when {
+                            event.type == "stream.reconnected" || event.type == "server.connected" -> {
+                                reconnectRefresh?.cancel()
+                                reconnectRefresh =
+                                    launch {
+                                        delay(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS)
+                                        reloadFromServer()?.let { statuses ->
+                                            current = statuses
+                                            send(current)
+                                        }
+                                    }
+                            }
+                            event.triggersStatusRefresh -> {
+                                val next = applyStatusEvent(current, event) ?: return@collect
+                                if (next != current) {
+                                    current = next
+                                    send(current)
+                                }
+                            }
+                        }
                     }
+                } finally {
+                    reconnectRefresh?.cancel()
+                }
             }
+
+        private fun applyStatusEvent(
+            current: Map<String, SessionStatus>,
+            event: OpencodeEvent,
+        ): Map<String, SessionStatus>? {
+            return when (event.type) {
+                "session.status" -> {
+                    val status = eventDomainAdapter.sessionStatusFromEvent(event) ?: return null
+                    if (status.raw["type"] == "idle") {
+                        if (status.sessionId !in current) return null
+                        current - status.sessionId
+                    } else {
+                        current + (status.sessionId to status)
+                    }
+                }
+                "session.idle" -> {
+                    val sessionId = event.sessionId ?: return null
+                    if (sessionId !in current) return null
+                    current - sessionId
+                }
+                else -> null
+            }
+        }
     }

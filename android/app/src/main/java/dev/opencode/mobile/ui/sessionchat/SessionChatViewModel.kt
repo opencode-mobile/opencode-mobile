@@ -402,6 +402,7 @@ class SessionChatViewModel
             if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) return
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
+            sessionInfo.markOptimisticBusy()
             composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
@@ -415,6 +416,7 @@ class SessionChatViewModel
                     )
                 },
                 onSendFailed = { optimisticId, error ->
+                    sessionInfo.clearOptimisticBusy()
                     timeline.failOptimisticSend(optimisticId, error)
                 },
             )
@@ -848,6 +850,11 @@ class SessionChatViewModel
                     }
                 }
             val snackbar = resolveSnackbar(transientError, commandsState.actionSuccessMessage)
+            val workingIndicatorLabel =
+                WorkingTurnIndicator.labelForActiveTurn(
+                    statusLabel = infoState.sessionStatusLabel,
+                    messages = messages,
+                )
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -859,6 +866,7 @@ class SessionChatViewModel
                 isRefreshing = timelineState.isRefreshing,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = infoState.sessionStatusLabel,
+                workingIndicatorLabel = workingIndicatorLabel,
                 sessionTodos = sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
                 sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),

@@ -90,6 +90,7 @@ struct SessionChatView: View {
                         isRefreshing: viewModel.uiState.isRefreshing,
                         errorMessage: viewModel.uiState.errorMessage,
                         reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
+                        workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                         sessionTodosVisible: sessionTodosPillVisible,
                         sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                         sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,

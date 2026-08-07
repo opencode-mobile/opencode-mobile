@@ -88,6 +88,8 @@ data class SessionChatUiState(
     val isRefreshing: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
+    /** In-chat Working/Retrying label when busy with no assistant content yet. */
+    val workingIndicatorLabel: String? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),
     val sessionTodosVisible: Boolean = false,
     val sessionTodosFinished: Boolean = false,
@@ -306,6 +308,8 @@ data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
     val sessionStatusLabel: String? = null,
+    val authoritativeStatusLabel: String? = null,
+    val optimisticBusy: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val rename: SessionRenameUiState = SessionRenameUiState(),
@@ -314,6 +318,21 @@ data class SessionInfoRegionState(
     val shouldLeaveSession: Boolean = false,
     val errorMessage: String? = null,
 )
+
+/** Effective Working/Retrying label: authoritative status, else optimistic busy. */
+fun SessionInfoRegionState.withStatus(
+    authoritative: String?,
+    optimisticBusy: Boolean = this.optimisticBusy,
+    hasResolved: Boolean = hasResolvedSessionStatus || authoritative != null,
+): SessionInfoRegionState {
+    val resolvedOptimistic = if (authoritative != null) false else optimisticBusy
+    return copy(
+        authoritativeStatusLabel = authoritative,
+        optimisticBusy = resolvedOptimistic,
+        sessionStatusLabel = authoritative ?: if (resolvedOptimistic) "Working" else null,
+        hasResolvedSessionStatus = hasResolved,
+    )
+}
 
 data class SessionChatReviewChangesRegionState(
     val messageId: String? = null,

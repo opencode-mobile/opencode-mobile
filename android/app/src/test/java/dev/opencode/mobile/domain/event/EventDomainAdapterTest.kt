@@ -78,6 +78,19 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun sessionStatusFromEvent_readsBusyPayload() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.status","properties":{"sessionID":"ses-1","status":{"type":"busy"}}}}""",
+            )
+
+        val status = adapter.sessionStatusFromEvent(event!!)
+        assertEquals("ses-1", status?.sessionId)
+        assertEquals("busy", status?.raw?.get("type"))
+        assertEquals("Working", status?.let(adapter::statusLabel))
+    }
+
+    @Test
     fun sessionTitleUpdate_readsInfoTitle() {
         val event =
             adapter.parseEvent(

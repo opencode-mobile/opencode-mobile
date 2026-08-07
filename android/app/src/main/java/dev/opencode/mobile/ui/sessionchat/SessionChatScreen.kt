@@ -318,6 +318,7 @@ fun SessionChatScreen(
                             isRefreshing = uiState.isRefreshing,
                             errorMessage = uiState.errorMessage,
                             reviewChangesSummary = uiState.reviewChangesSummary,
+                            workingIndicatorLabel = uiState.workingIndicatorLabel,
                             sessionTodosVisible = sessionTodosPillVisible,
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,

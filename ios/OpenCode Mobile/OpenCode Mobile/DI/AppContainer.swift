@@ -272,7 +272,8 @@ extension Container {
         self { @MainActor in
             DefaultSessionStatusLiveStore(
                 sessionRepository: self.sessionRepository(),
-                eventStream: self.foregroundEventStream()
+                eventStream: self.foregroundEventStream(),
+                eventAdapter: self.eventDomainAdapter()
             )
         }.singleton
     }
