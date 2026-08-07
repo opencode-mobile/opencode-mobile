@@ -84,7 +84,7 @@ jobs:
           # Headless Actions cannot unlock the login keychain ("User interaction
           # is not allowed"). Use an ephemeral keychain for ASC-managed certs.
           keychain_path="$RUNNER_TEMP/ios-release.keychain-db"
-          keychain_password="$(openssl rand -base64 32)"
+          keychain_password="$(openssl rand -base64 32 | tr -d '\n/=+')"
           security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
           security create-keychain -p "$keychain_password" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
@@ -93,10 +93,12 @@ jobs:
           # shellcheck disable=SC2086
           security list-keychains -d user -s "$keychain_path" $existing_keychains
           security default-keychain -s "$keychain_path"
+          # Empty keychains have no private keys yet; partition ACL is applied
+          # again after archive imports Apple Distribution material.
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
             -s -k "$keychain_password" \
-            "$keychain_path" >/dev/null
+            "$keychain_path" >/dev/null 2>&1 || true
           {
             echo "IOS_RELEASE_KEYCHAIN_PATH=$keychain_path"
             echo "IOS_RELEASE_KEYCHAIN_PASSWORD=$keychain_password"
@@ -135,6 +137,10 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             SWIFT_OPTIMIZATION_LEVEL=-Onone \
             SWIFT_COMPILATION_MODE=singlefile
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$IOS_RELEASE_KEYCHAIN_PASSWORD" \
+            "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
           echo "IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
 
       - name: Export signed App Store IPA
