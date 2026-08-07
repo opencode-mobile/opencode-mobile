@@ -54,12 +54,16 @@ Checkpoint complete when every item above exists and the ticket can change from
 - [x] Retain IPA and xcarchive artifacts for seven days.
 - [x] Document triggers, inputs, secret names, key recovery/rotation, artifact
       retrieval, and OPE-103 / OPE-102 extension points.
-- [ ] Run the workflow twice from protected `main` and record both successes.
+- [x] Run the workflow twice from protected `main` and record both successes
+      (`0.1.0-internal.1` /
+      [31222428580](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31222428580);
+      `0.1.0-internal.2` /
+      [31222978681](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31222978681)).
 - [x] Local dry-run archive/export/verify succeeded with ASC API auth
       (`Apple Distribution`, Team `677MTXPXZZ`, bundle `dev.opencode.mobile`).
 
 Checkpoint complete when two protected `main` runs satisfy every automated gate
-and produce usable signed artifacts.
+and produce usable signed artifacts. **Met.**
 
 ## Checkpoint 3 — Human completion
 
