@@ -186,6 +186,14 @@ struct MessageSyncTests {
 
         for cycle in 0..<2 {
             let recoveredText = "recovered-\(cycle)"
+            // Block the event consumer on REST so staging can accumulate. A waiting
+            // consumer otherwise handoffs each enqueue without buffering, so byte
+            // overflow never trips under real scheduling (CI flake).
+            repo.holdNextListMessages()
+            eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1", rawProperties: nil))
+            let blocked = await waitUntil { repo.isListBlocked }
+            #expect(blocked)
+
             repo.shouldFailList = true
             for _ in 0..<8 {
                 eventStream.emit(
@@ -197,6 +205,12 @@ struct MessageSyncTests {
                     )
                 )
             }
+            // Let the producer drain AsyncStream into staging while the consumer
+            // remains blocked on the idle reload.
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(20))
+            repo.resumeListMessages()
+
             let recovering = await waitUntil {
                 if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
                     return true
