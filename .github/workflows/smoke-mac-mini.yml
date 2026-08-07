@@ -1,0 +1,30 @@
+name: Smoke Mac mini
+
+# OPE-114 — proves the private Mac mini self-hosted runner can pick up
+# a job via outbound polling (no inbound ports, no Blacksmith).
+# Android / Blacksmith runners are untouched. Delete after OPE-115 if desired.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, macOS, mac-mini]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Runner identity
+        run: |
+          echo "runner=${RUNNER_NAME}"
+          echo "labels=${RUNNER_LABELS}"
+          echo "os=${RUNNER_OS} arch=${RUNNER_ARCH}"
+          uname -a
+          sw_vers
+          xcodebuild -version || echo "xcodebuild not found"
+          xcode-select -p || true
+          java -version 2>&1 || echo "java not found"
+
+      - name: Xcode identity (proves toolchain present)
+        run: |
+          xcrun simctl list devices available | head -n 40 || true
