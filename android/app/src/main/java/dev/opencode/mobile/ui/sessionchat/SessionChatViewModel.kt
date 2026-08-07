@@ -405,7 +405,11 @@ class SessionChatViewModel
             composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
-                onOptimisticRows = { rows -> timeline.beginOptimisticSend(rows) },
+                onOptimisticRows = { rows ->
+                    // Mark only after composer passes early-return checks.
+                    sessionInfo.markOptimisticBusy()
+                    timeline.beginOptimisticSend(rows)
+                },
                 onSendAccepted = {
                     sessionReadyStore.notifyPromptSent(sessionId, worktree)
                     sessionInfo.refreshStatus()
@@ -415,6 +419,7 @@ class SessionChatViewModel
                     )
                 },
                 onSendFailed = { optimisticId, error ->
+                    sessionInfo.clearOptimisticBusy()
                     timeline.failOptimisticSend(optimisticId, error)
                 },
             )
@@ -848,6 +853,11 @@ class SessionChatViewModel
                     }
                 }
             val snackbar = resolveSnackbar(transientError, commandsState.actionSuccessMessage)
+            val workingIndicatorLabel =
+                WorkingTurnIndicator.labelForActiveTurn(
+                    statusLabel = infoState.sessionStatusLabel,
+                    messages = messages,
+                )
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -859,6 +869,7 @@ class SessionChatViewModel
                 isRefreshing = timelineState.isRefreshing,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = infoState.sessionStatusLabel,
+                workingIndicatorLabel = workingIndicatorLabel,
                 sessionTodos = sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
                 sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),

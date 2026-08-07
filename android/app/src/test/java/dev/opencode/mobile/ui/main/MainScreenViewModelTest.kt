@@ -633,7 +633,7 @@ class MainScreenViewModelTest {
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
             )
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
+        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
         val sessionLiveStore = DefaultSessionLiveStore(sessionRepository, eventStream, liveStoreScope, NoOpSessionCache)
         val sessionReadyStore =
             DefaultSessionReadyStore(

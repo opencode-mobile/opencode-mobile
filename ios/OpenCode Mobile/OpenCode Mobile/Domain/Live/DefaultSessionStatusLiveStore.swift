@@ -4,11 +4,17 @@ import Foundation
 final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let sessionRepository: any SessionRepository
     private let eventStream: any ForegroundEventStream
+    private let eventAdapter: EventDomainAdapter
     private var cache: [String: SharedLiveObservation<[String: SessionStatus]>] = [:]
 
-    init(sessionRepository: any SessionRepository, eventStream: any ForegroundEventStream) {
+    init(
+        sessionRepository: any SessionRepository,
+        eventStream: any ForegroundEventStream,
+        eventAdapter: EventDomainAdapter = EventDomainAdapter()
+    ) {
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
+        self.eventAdapter = eventAdapter
     }
 
     func observeStatuses(directory: String) -> AsyncStream<[String: SessionStatus]> {
@@ -23,25 +29,31 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     }
 
     private func runStatusLoop(directory: String, yield: @escaping ([String: SessionStatus]) -> Void) async {
+        var current: [String: SessionStatus] = [:]
         if let statuses = await loadStatuses(directory: directory) {
-            yield(statuses)
+            current = statuses
+            yield(current)
         }
 
-        var refreshTask: Task<Void, Never>?
-        defer { refreshTask?.cancel() }
+        var reconnectTask: Task<Void, Never>?
+        defer { reconnectTask?.cancel() }
         for await event in eventStream.events() {
-            guard event.type == "stream.reconnected"
-                || event.type == "server.connected"
-                || event.triggersStatusRefresh
-            else { continue }
-            refreshTask?.cancel()
-            refreshTask = Task {
-                try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
-                guard !Task.isCancelled else { return }
-                if let statuses = await loadStatuses(directory: directory) {
-                    yield(statuses)
+            if event.type == "stream.reconnected" || event.type == "server.connected" {
+                reconnectTask?.cancel()
+                reconnectTask = Task {
+                    try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.statusDebounceMs))
+                    guard !Task.isCancelled else { return }
+                    if let statuses = await self.loadStatuses(directory: directory) {
+                        current = statuses
+                        yield(current)
+                    }
                 }
+                continue
             }
+            guard event.triggersStatusRefresh else { continue }
+            guard let next = applyStatusEvent(current: current, event: event), next != current else { continue }
+            current = next
+            yield(current)
         }
     }
 
@@ -54,5 +66,31 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
             return nil
         }
         return Dictionary(uniqueKeysWithValues: statuses.map { ($0.sessionID, $0) })
+    }
+
+    private func applyStatusEvent(
+        current: [String: SessionStatus],
+        event: OpencodeEvent
+    ) -> [String: SessionStatus]? {
+        switch event.type {
+        case "session.status":
+            guard let status = eventAdapter.sessionStatus(from: event) else { return nil }
+            if status.raw["type"] == "idle" {
+                guard current[status.sessionID] != nil else { return nil }
+                var next = current
+                next.removeValue(forKey: status.sessionID)
+                return next
+            }
+            var next = current
+            next[status.sessionID] = status
+            return next
+        case "session.idle":
+            guard let sessionID = event.sessionID, current[sessionID] != nil else { return nil }
+            var next = current
+            next.removeValue(forKey: sessionID)
+            return next
+        default:
+            return nil
+        }
     }
 }

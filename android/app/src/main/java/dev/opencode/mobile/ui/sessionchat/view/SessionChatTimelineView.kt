@@ -80,6 +80,7 @@ internal data class SessionChatTimelineViewProps(
     val isRefreshing: Boolean,
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
+    val workingIndicatorLabel: String? = null,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
@@ -142,6 +143,7 @@ internal fun SessionChatTimelineView(
                 timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
                 reviewChangesSummary = props.reviewChangesSummary,
+                workingIndicatorLabel = props.workingIndicatorLabel,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
@@ -168,6 +170,7 @@ private fun SessionChatTimelineReadyView(
     timelineFrame: TimelineFrame?,
     isRefreshing: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
+    workingIndicatorLabel: String?,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
     sessionTodoTotalCount: Int,
@@ -277,6 +280,23 @@ private fun SessionChatTimelineReadyView(
                         bottom = bottomOverlayInset,
                     ),
                 key = { message -> message.id },
+                workingIndicatorKey =
+                    workingIndicatorLabel?.let { SESSION_CHAT_WORKING_INDICATOR_KEY },
+                workingIndicatorContent =
+                    workingIndicatorLabel?.let { label ->
+                        {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp)
+                                        .semantics { contentDescription = label },
+                            )
+                        }
+                    },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
                     message = message,
@@ -647,6 +667,7 @@ private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
     }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
+private const val SESSION_CHAT_WORKING_INDICATOR_KEY = "session-chat-working-indicator"
 
 @Composable
 private fun FallbackMessageBubble(

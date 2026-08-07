@@ -313,6 +313,8 @@ final class SessionChatViewModel {
         await composer.sendPrompt(
             sessionID: sessionID,
             onOptimisticRows: { [weak self] rows in
+                // Mark only after composer passes early-return checks.
+                self?.sessionInfo.markOptimisticBusy()
                 self?.timeline.beginOptimisticSend(rows)
             },
             onSendAccepted: { [weak self] in
@@ -325,6 +327,7 @@ final class SessionChatViewModel {
                 )
             },
             onSendFailed: { [weak self] optimisticID, error in
+                self?.sessionInfo.clearOptimisticBusy()
                 self?.composer.setSendError(error)
                 self?.timeline.failOptimisticSend(optimisticID: optimisticID, error: error)
             }
@@ -720,6 +723,10 @@ final class SessionChatViewModel {
             isRefreshing: timelineState.isRefreshing,
             isAborting: composerState.isAborting,
             sessionStatusLabel: infoState.sessionStatusLabel,
+            workingIndicatorLabel: WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: infoState.sessionStatusLabel,
+                messages: timelineState.messages
+            ),
             sessionTodos: sessionTodos,
             sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
             sessionTodosFinished: SessionTodoList.isFinished(sessionTodos),

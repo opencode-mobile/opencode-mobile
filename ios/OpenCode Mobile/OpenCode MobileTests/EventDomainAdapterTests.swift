@@ -67,6 +67,17 @@ struct EventDomainAdapterTests {
         #expect(idle == nil)
     }
 
+    @Test func sessionStatus_readsBusyPayload() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.status","properties":{"sessionID":"ses-1","status":{"type":"busy"}}}}"#
+        )
+        let status = adapter.sessionStatus(from: event!)
+        #expect(status?.sessionID == "ses-1")
+        #expect(status?.raw["type"] == "busy")
+        #expect(adapter.statusLabel(from: status!) == "Working")
+    }
+
     @Test func sessionTitleUpdate_readsInfoTitle() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
