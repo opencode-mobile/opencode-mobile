@@ -127,6 +127,8 @@ final class SessionChatViewModel {
     func startObserving() {
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        composer.startCatalogLoads()
+        commands.start()
         sessionInfo.startObserving()
         timeline.startObserving()
         startPermissionObservation()

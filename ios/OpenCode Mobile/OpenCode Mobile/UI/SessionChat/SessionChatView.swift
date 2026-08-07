@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel: SessionChatViewModel
+    @State private var viewModelStorage: SessionChatViewModel?
     @State private var activePicker: ComposerPickerKind?
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
@@ -28,23 +28,51 @@ struct SessionChatView: View {
     @State private var composerOverlayHeight: CGFloat = 0
     @State private var bottomSafeAreaInset: CGFloat = 0
 
+    private let session: SessionListItem
+    private let injectedViewModel: SessionChatViewModel?
+
     init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
         self.session = session
-        _viewModel = State(
-            initialValue: viewModel ?? Container.makeSessionChatViewModel(
-                sessionID: session.id,
-                sessionTitle: session.title,
-                worktree: session.worktree
-            )
-        )
+        // Do not construct the ViewModel in `State(initialValue:)` — SwiftUI re-runs
+        // View.init (and that expression) whenever the parent body refreshes, while
+        // keeping one live `@State`. Eager make() was spawning bind storms and
+        // exhausting URLSession.shared during compaction status churn.
+        self.injectedViewModel = viewModel
     }
 
-    private let session: SessionListItem
+    /// Available after `.task` bootstrap; only read from content that is gated on storage.
+    private var viewModel: SessionChatViewModel {
+        viewModelStorage!
+    }
 
     /// Temporarily off: bar currently only shows context usage.
     private static let showsSessionStatusBar = false
 
     var body: some View {
+        Group {
+            if viewModelStorage != nil {
+                sessionChatBody
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(OpenCodeColors.backgroundBase)
+            }
+        }
+        .task(id: session.id) {
+            if viewModelStorage == nil {
+                viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
+                    sessionID: session.id,
+                    sessionTitle: session.title,
+                    worktree: session.worktree
+                )
+            }
+            viewModel.startObserving()
+            await viewModel.loadMessages()
+        }
+    }
+
+    @ViewBuilder
+    private var sessionChatBody: some View {
         VStack(spacing: 0) {
             OpenCodeTopBarOverflowHost(
                 isPresented: $menuExpanded,
@@ -303,10 +331,6 @@ struct SessionChatView: View {
                 )
             )
         }
-        .task {
-            viewModel.startObserving()
-            await viewModel.loadMessages()
-        }
         .onChange(of: activePicker) { _, picker in
             if picker != .model {
                 activeModelProviderID = nil
@@ -357,7 +381,7 @@ struct SessionChatView: View {
             }
         )
         .onDisappear {
-            viewModel.stopObserving()
+            viewModelStorage?.stopObserving()
         }
         .openCodeDialog(
             isPresented: renameDialogBinding,
@@ -513,7 +537,7 @@ struct SessionChatView: View {
     }
 
     private func leaveSession() {
-        viewModel.stopObserving()
+        viewModelStorage?.stopObserving()
         dismiss()
     }
 

@@ -684,7 +684,7 @@ private fun SessionChatWorkingIndicatorRow(label: String) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 2.dp, top = 4.dp, bottom = 10.dp)
+                .padding(start = 4.dp, top = 10.dp, bottom = 8.dp)
                 .semantics { contentDescription = label },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

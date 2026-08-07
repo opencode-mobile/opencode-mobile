@@ -35,6 +35,10 @@ final class SessionChatCommands {
         self.sessionRepository = sessionRepository
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
+    }
+
+    /// Revert visibility fetch — must not run from `init` (see SessionChatComposer.startCatalogLoads).
+    func start() {
         refreshRevert()
     }
 

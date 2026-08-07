@@ -302,9 +302,9 @@ private struct SessionChatWorkingIndicatorRow: View {
                 .foregroundStyle(OpenCodeColors.textWeak)
             Spacer(minLength: 0)
         }
-        .padding(.leading, 2)
-        .padding(.top, 4)
-        .padding(.bottom, 10)
+        .padding(.leading, 4)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
