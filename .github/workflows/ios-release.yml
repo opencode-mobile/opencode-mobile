@@ -77,31 +77,47 @@ jobs:
             echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
           } >> "$GITHUB_ENV"
 
-      - name: Prepare temporary signing keychain
+      - name: Prepare persistent signing keychain
         shell: bash
         run: |
           set -euo pipefail
           # Headless Actions cannot unlock the login keychain ("User interaction
-          # is not allowed"). Use an ephemeral keychain for ASC-managed certs.
-          keychain_path="$RUNNER_TEMP/ios-release.keychain-db"
-          keychain_password="$(openssl rand -base64 32 | tr -d '\n/=+')"
-          security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
-          security create-keychain -p "$keychain_password" "$keychain_path"
+          # is not allowed"). Use a runner-local persistent keychain so
+          # ASC-created Development/Distribution private keys survive across
+          # jobs. Deleting an ephemeral keychain orphans cloud certificates.
+          keychain_dir="${HOME}/.opencode-mobile"
+          keychain_path="${keychain_dir}/ios-release.keychain-db"
+          password_path="${keychain_dir}/ios-release.keychain.password"
+          mkdir -p "$keychain_dir"
+          chmod 700 "$keychain_dir"
+          if [[ ! -f "$password_path" ]]; then
+            openssl rand -base64 32 | tr -d '\n/=+' > "$password_path"
+            chmod 600 "$password_path"
+          fi
+          keychain_password="$(tr -d '\n' < "$password_path")"
+          if [[ ! -f "$keychain_path" ]]; then
+            security create-keychain -p "$keychain_password" "$keychain_path"
+          fi
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$keychain_password" "$keychain_path"
-          existing_keychains="$(security list-keychains -d user | sed -E 's/^[[:space:]]*"//;s/"$//')"
-          # shellcheck disable=SC2086
-          security list-keychains -d user -s "$keychain_path" $existing_keychains
+          existing_keychains=()
+          while IFS= read -r line; do
+            keychain="${line#\"}"
+            keychain="${keychain%\"}"
+            keychain="$(printf '%s' "$keychain" | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//')"
+            [[ -z "$keychain" || "$keychain" == "$keychain_path" ]] && continue
+            existing_keychains+=("$keychain")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain_path" "${existing_keychains[@]+"${existing_keychains[@]}"}"
           security default-keychain -s "$keychain_path"
-          # Empty keychains have no private keys yet; partition ACL is applied
-          # again after archive imports Apple Distribution material.
+          # Partition ACL may no-op on an empty keychain; re-applied after archive.
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
             -s -k "$keychain_password" \
             "$keychain_path" >/dev/null 2>&1 || true
           {
             echo "IOS_RELEASE_KEYCHAIN_PATH=$keychain_path"
-            echo "IOS_RELEASE_KEYCHAIN_PASSWORD=$keychain_password"
+            echo "IOS_RELEASE_KEYCHAIN_PASSWORD_PATH=$password_path"
           } >> "$GITHUB_ENV"
 
       - name: Resolve Swift Package dependencies
@@ -114,8 +130,9 @@ jobs:
         run: |
           set -euo pipefail
           archive_path="$RUNNER_TEMP/OpenCode-Mobile.xcarchive"
-          # Keep the ephemeral keychain unlocked for the long archive.
-          security unlock-keychain -p "$IOS_RELEASE_KEYCHAIN_PASSWORD" "$IOS_RELEASE_KEYCHAIN_PATH"
+          keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
+          # Keep the persistent signing keychain unlocked for the long archive.
+          security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
           # Xcode 26.x Release WMO crashes the Swift frontend on this target
           # (SILPerformanceInliner). Keep Release configuration/signing, but
           # compile without WMO until Apple fixes the optimizer.
@@ -137,14 +154,15 @@ jobs:
             SWIFT_COMPILATION_MODE=singlefile
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
-            -s -k "$IOS_RELEASE_KEYCHAIN_PASSWORD" \
+            -s -k "$keychain_password" \
             "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
           echo "IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
 
       - name: Export signed App Store IPA
         run: |
           set -euo pipefail
-          security unlock-keychain -p "$IOS_RELEASE_KEYCHAIN_PASSWORD" "$IOS_RELEASE_KEYCHAIN_PATH"
+          keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
+          security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
           export_dir="$RUNNER_TEMP/ios-ipa-export"
           mkdir -p "$export_dir"
           xcodebuild -exportArchive \
@@ -188,19 +206,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Remove temporary ASC API key and signing keychain
+      - name: Remove temporary ASC API key and restore keychain search list
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           rm -f "${ASC_API_KEY_PATH:-}"
-          if [[ -n "${IOS_RELEASE_KEYCHAIN_PATH:-}" ]]; then
-            security delete-keychain "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
-            rm -f "$IOS_RELEASE_KEYCHAIN_PATH"
-          fi
-          # Restore the default login keychain search list for later jobs on
-          # this self-hosted runner.
+          # Keep the persistent signing keychain and its password on the runner.
+          # Only restore the login keychain as the interactive default.
           if [[ -f "$HOME/Library/Keychains/login.keychain-db" ]]; then
             security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db"
             security default-keychain -s "$HOME/Library/Keychains/login.keychain-db" || true
+          fi
+          if [[ -n "${IOS_RELEASE_KEYCHAIN_PATH:-}" ]]; then
+            security lock-keychain "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
           fi

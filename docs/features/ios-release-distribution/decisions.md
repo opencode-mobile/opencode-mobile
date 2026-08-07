@@ -42,10 +42,14 @@ Release configuration and Apple Distribution signing, but passes
 a fixed toolchain can compile Release WMO successfully. Revisit after an Xcode
 update.
 
-## Ephemeral CI signing keychain
+## Persistent CI signing keychain
 
 Self-hosted Actions cannot unlock the interactive login keychain
-(`User interaction is not allowed`). The iOS Release workflow creates a
-temporary keychain, unlocks it for ASC-managed Apple Distribution certificates
-and profiles, then deletes it at job end and restores the login keychain search
-list.
+(`User interaction is not allowed`). The iOS Release workflow uses a
+runner-local persistent keychain at `~/.opencode-mobile/ios-release.keychain-db`
+(password file alongside it) so ASC-created Development and Distribution
+private keys survive across jobs. An earlier ephemeral keychain deleted those
+keys at job end and orphaned cloud certificates, which blocked the next archive
+(`Revoke certificate… private key is not installed`). Cleanup restores the
+login keychain search list and locks the signing keychain; it does not delete
+it.
