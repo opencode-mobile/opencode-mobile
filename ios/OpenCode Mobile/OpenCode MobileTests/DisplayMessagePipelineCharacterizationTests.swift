@@ -396,6 +396,73 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func failingPrepareTextBlock_keepsPublishedPlainStreamingText() async {
+        let harness = Harness(holdSleep: true)
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        collector.emissions.removeAll()
+
+        harness.preparer.setFailNextPrepareTextBlock()
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello")], isFromCache: false))
+        _ = await waitUntil { harness.clock.pendingSleep != nil }
+        harness.clock.releaseSleep()
+        let plainPublished = await waitUntil { collector.emissions.count >= 1 }
+        #expect(plainPublished)
+        #expect(collector.emissions.last?.first?.text == "# Hello")
+        #expect(collector.emissions.last?.first?.isStreaming == true)
+
+        harness.clock.advance(by: streamingPrepareMaxBatchDuration)
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello world")], isFromCache: false))
+        let secondPlain = await waitUntil {
+            collector.emissions.last?.first?.text == "# Hello world"
+        }
+        #expect(secondPlain)
+        #expect(collector.failures.isEmpty)
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
+    @Test func decorationBacklogPressure_doesNotBlockPlainStreamingTextLane() async {
+        let harness = Harness(holdSleep: true)
+        harness.preparer.minimumPrepareDelay = .seconds(5)
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
+        _ = await waitUntil { collector.emissions.count == 1 }
+        collector.emissions.removeAll()
+
+        harness.preparer.holdNextPrepareMessages()
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Stream")], isFromCache: false))
+        _ = await waitUntil { harness.clock.pendingSleep != nil }
+        harness.clock.releaseSleep()
+        let first = await waitUntil { collector.emissions.last?.first?.text == "# Stream" }
+        #expect(first)
+
+        harness.clock.advance(by: streamingPrepareMaxBatchDuration)
+        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Stream more")], isFromCache: false))
+        let second = await waitUntil { collector.emissions.last?.first?.text == "# Stream more" }
+        #expect(second)
+
+        harness.preparer.releaseNextPrepareMessages()
+        if harness.clock.pendingSleep != nil {
+            harness.clock.releaseSleep()
+        }
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(collector.emissions.last?.first?.text == "# Stream more")
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
     @Test func structureFirstStreamingPublishesCodeBlockChromeBeforeDecoration() async {
         let harness = Harness(holdSleep: true)
         let collector = CharacterizationDisplayCollector()
@@ -631,6 +698,7 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     private var prepareMessageHold: CheckedContinuation<Void, Never>?
     private var holdNextPrepareMessagesRequested = false
     private var holdNextPrepareMessageRequested = false
+    private var failNextPrepareTextBlock = false
     private var documentSerial = 1
     /// Wall-clock delay inside `prepareMessages` so dense intake can overlap prepares.
     var minimumPrepareDelay: Duration?
@@ -663,6 +731,12 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     func holdNextPrepareMessages() {
         lock.lock()
         holdNextPrepareMessagesRequested = true
+        lock.unlock()
+    }
+
+    func setFailNextPrepareTextBlock() {
+        lock.lock()
+        failNextPrepareTextBlock = true
         lock.unlock()
     }
 
@@ -773,6 +847,14 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
                 prepareMessagesHold = continuation
                 lock.unlock()
             }
+        }
+
+        lock.lock()
+        let shouldFail = failNextPrepareTextBlock
+        failNextPrepareTextBlock = false
+        lock.unlock()
+        if shouldFail {
+            return nil
         }
 
         if let minimumPrepareDelay {

@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,6 +37,34 @@ class DecorationBacklogTest {
         val ids = generateSequence { backlog.poll() }.map { it.blockID }.toSet()
         assertTrue(ids.contains("streaming-block"))
         assertFalse(ids.contains("history-0"))
+    }
+
+    @Test
+    fun dropsLowestPriorityUnderCharCostPressure() {
+        val backlog = DecorationBacklog()
+        val large = DecorationBacklogPolicy.PENDING_CHAR_COST_BUDGET / 2 + 1
+        assertTrue(
+            backlog.tryEnqueue(
+                job(
+                    blockID = "history-large",
+                    length = large,
+                    priority = 0,
+                ),
+            ),
+        )
+        assertTrue(
+            backlog.tryEnqueue(
+                job(
+                    blockID = "streaming-large",
+                    length = large,
+                    priority = 2,
+                ),
+            ),
+        )
+        assertEquals(1, backlog.size)
+        val kept = backlog.poll()
+        assertEquals("streaming-large", kept?.blockID)
+        assertNull(backlog.poll())
     }
 
     @Test

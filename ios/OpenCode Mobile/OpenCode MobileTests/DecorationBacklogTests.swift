@@ -29,6 +29,25 @@ struct DecorationBacklogTests {
         #expect(!ids.contains("history-0"))
     }
 
+    @Test func dropsLowestPriorityUnderCharCostPressure() {
+        let backlog = DecorationBacklog()
+        let large = DecorationBacklogPolicy.pendingCharCostBudget / 2 + 1
+        #expect(
+            backlog.tryEnqueue(
+                job(id: "history-large", text: String(repeating: "x", count: large), priority: 0)
+            )
+        )
+        #expect(
+            backlog.tryEnqueue(
+                job(id: "streaming-large", text: String(repeating: "x", count: large), priority: 2)
+            )
+        )
+        #expect(backlog.size == 1)
+        let kept = backlog.poll()
+        #expect(kept?.messageID == "streaming-large")
+        #expect(backlog.poll() == nil)
+    }
+
     @Test func replaceStreamingKeepsLatestCandidateOnly() {
         let backlog = DecorationBacklog()
         #expect(backlog.replaceStreamingJob(job(id: "msg-1", text: "abcd", priority: 2)))

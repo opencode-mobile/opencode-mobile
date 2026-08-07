@@ -222,6 +222,156 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = 60_000L,
+                    eventStagingCapacity = 64,
+                    eventStagingByteCapacity = 200,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("Hello", emissions.last().single().text)
+
+            repeat(2) { cycle ->
+                val recoveredText = "recovered-$cycle"
+                repository.shouldFailLoad = true
+                repeat(8) {
+                    eventStream.emit(
+                        partDeltaEvent(
+                            partId = "prt-$cycle",
+                            messageId = "msg-1",
+                            delta = "x".repeat(80),
+                        ),
+                    )
+                }
+                advanceTimeBy(50)
+                assertTrue(
+                    "cycle $cycle should enter recovering after overflow",
+                    sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Recovering,
+                )
+                assertEquals(
+                    if (cycle == 0) "Hello" else "recovered-${cycle - 1}",
+                    emissions.last().single().text,
+                )
+
+                repository.messages =
+                    listOf(
+                        Message(
+                            id = "msg-recovered-$cycle",
+                            role = MessageRole.Assistant,
+                            text = recoveredText,
+                        ),
+                    )
+                repository.shouldFailLoad = false
+                advanceTimeBy(50)
+                assertEquals(recoveredText, emissions.last().single().text)
+                assertEquals(MessageSyncHealth.Healthy, sync.syncHealth("ses-1", "/repo"))
+            }
+
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_rapidSessionSwitchAtoBtoA_noCrossSessionPublish() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeMessageRepository(
+                    messagesBySession =
+                        mutableMapOf(
+                            "ses-A" to
+                                listOf(
+                                    Message(id = "msg-a", role = MessageRole.Assistant, text = "session-A"),
+                                ),
+                            "ses-B" to
+                                listOf(
+                                    Message(id = "msg-b", role = MessageRole.Assistant, text = "session-B"),
+                                ),
+                        ),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+
+            val emissionsA1 = mutableListOf<List<Message>>()
+            val jobA1 =
+                launch {
+                    sync.observeMessages("ses-A", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissionsA1.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("session-A", emissionsA1.last().single().text)
+            assertTrue(emissionsA1.none { frame -> frame.any { it.id == "msg-b" } })
+            jobA1.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val emissionsB = mutableListOf<List<Message>>()
+            val jobB =
+                launch {
+                    sync.observeMessages("ses-B", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissionsB.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("session-B", emissionsB.last().single().text)
+            assertTrue(emissionsB.none { frame -> frame.any { it.id == "msg-a" } })
+
+            // Foreign session events while observing B must not leak A content.
+            eventStream.emit(
+                OpencodeEvent(
+                    type = "message.updated",
+                    sessionId = "ses-A",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "info",
+                                buildJsonObject {
+                                    put("id", "msg-a-foreign")
+                                    put("role", "assistant")
+                                    put("sessionID", "ses-A")
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceTimeBy(50)
+            assertTrue(emissionsB.none { frame -> frame.any { it.id == "msg-a" || it.id == "msg-a-foreign" } })
+            assertEquals("session-B", emissionsB.last().single().text)
+
+            jobB.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+
+            val emissionsA2 = mutableListOf<List<Message>>()
+            val jobA2 =
+                launch {
+                    sync.observeMessages("ses-A", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissionsA2.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            assertEquals("session-A", emissionsA2.last().single().text)
+            assertTrue(emissionsA2.none { frame -> frame.any { it.id == "msg-b" } })
+            jobA2.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_sessionKeysIsolateProfiles() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -1492,6 +1642,7 @@ private fun testSession(
 
 private class FakeMessageRepository(
     var messages: List<Message> = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello")),
+    var messagesBySession: MutableMap<String, List<Message>> = mutableMapOf(),
     var shouldFailLoad: Boolean = false,
     private val holdLoadUntil: CompletableDeferred<Unit>? = null,
 ) : MessageRepository {
@@ -1543,7 +1694,7 @@ private class FakeMessageRepository(
         }
         listMessagesCallCount += 1
         if (shouldFailLoad) error("load failed")
-        return messages
+        return messagesBySession[sessionId] ?: messages
     }
 
     override suspend fun getMessage(
