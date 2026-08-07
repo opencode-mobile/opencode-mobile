@@ -65,6 +65,26 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_showsCompactingEvenWithAssistantContent() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "Hello")],
+                isCompacting: true
+            ) == SessionCompactChrome.statusLabel
+        )
+    }
+
+    @Test func labelForActiveTurn_showsCompactingWhenIdleStatus() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: nil,
+                messages: [user("u1")],
+                isCompacting: true
+            ) == SessionCompactChrome.statusLabel
+        )
+    }
+
     private func user(_ id: String) -> SessionChatRow {
         SessionChatRow(id: id, role: .user, text: "Hi", metadataLabel: "")
     }

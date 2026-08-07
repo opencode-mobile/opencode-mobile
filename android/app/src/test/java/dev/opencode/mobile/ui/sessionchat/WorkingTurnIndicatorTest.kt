@@ -86,6 +86,30 @@ class WorkingTurnIndicatorTest {
         )
     }
 
+    @Test
+    fun labelForActiveTurn_showsCompactingEvenWithAssistantContent() {
+        assertEquals(
+            SessionCompactChrome.STATUS_LABEL,
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages = listOf(user("u1"), assistant("a1", "Hello")),
+                isCompacting = true,
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_showsCompactingWhenIdleStatus() {
+        assertEquals(
+            SessionCompactChrome.STATUS_LABEL,
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = null,
+                messages = listOf(user("u1")),
+                isCompacting = true,
+            ),
+        )
+    }
+
     private fun user(id: String) =
         SessionChatMessageItem(
             id = id,

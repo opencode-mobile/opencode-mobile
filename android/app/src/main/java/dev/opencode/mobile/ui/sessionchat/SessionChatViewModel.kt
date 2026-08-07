@@ -159,7 +159,12 @@ class SessionChatViewModel
                     reviewChanges.updateCandidate(
                         messages = timelineState.messages,
                         hasResolvedSessionStatus = infoState.hasResolvedSessionStatus,
-                        isTurnActive = infoState.sessionStatusLabel != null,
+                        isTurnActive =
+                            infoState.sessionStatusLabel != null ||
+                                effectiveCompacting(
+                                    localCompacting = commandsState.isCompacting,
+                                    sessionStatusLabel = infoState.sessionStatusLabel,
+                                ),
                         isSending = composerState.isSending,
                     )
                     commands.updateVisibility(
@@ -316,22 +321,41 @@ class SessionChatViewModel
                 }
                 ClientSlashAction.Undo ->
                     commands.runUndo(
-                        isBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                        isBusy =
+                            sessionInfo.state.value.sessionStatusLabel != null ||
+                                effectiveCompacting(
+                                    localCompacting = commands.state.value.isCompacting,
+                                    sessionStatusLabel = sessionInfo.state.value.sessionStatusLabel,
+                                ),
                         restoreComposerText = composer::restoreComposerText,
                     )
                 ClientSlashAction.Redo ->
                     commands.runRedo(
-                        isBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                        isBusy =
+                            sessionInfo.state.value.sessionStatusLabel != null ||
+                                effectiveCompacting(
+                                    localCompacting = commands.state.value.isCompacting,
+                                    sessionStatusLabel = sessionInfo.state.value.sessionStatusLabel,
+                                ),
                         clearComposerRestore = { composer.restoreComposerText("") },
                     )
                 ClientSlashAction.Compact -> {
                     val model = composer.state.value.composer.selectedModel ?: return
+                    val beforeFraction = _uiState.value.contextUsageFraction
                     commands.runCompact(
                         providerId = model.option.providerId,
                         modelId = model.option.modelId,
-                        onSuccess = {
-                            timeline.refreshMessages()
-                            sessionInfo.refreshStatus()
+                        beforeContextFraction = beforeFraction,
+                        awaitAfterContextFraction = {
+                            // Prefer SSE-streamed timeline for the after fraction. A full
+                            // refresh is optional and must not gate clearing Compacting…
+                            // (see iOS freeze when refresh rebuilt the transcript on MainActor).
+                            sessionInfo.refreshStatusSuspending()
+                            sessionInfo.contextUsageFraction(
+                                messages = timeline.state.value.messages,
+                                modelOptions = composer.state.value.composer.modelOptions,
+                                selectedModel = composer.state.value.composer.selectedModel,
+                            )
                         },
                     )
                 }
@@ -802,8 +826,14 @@ class SessionChatViewModel
             refilterQuestionOrphans()
             val visibleQuestion = visibleQuestionRequest()
             val questionDraft = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+            val isCompacting =
+                effectiveCompacting(
+                    localCompacting = commandsState.isCompacting,
+                    sessionStatusLabel = infoState.sessionStatusLabel,
+                )
             val isLive =
-                infoState.sessionStatusLabel != null ||
+                isCompacting ||
+                    infoState.sessionStatusLabel != null ||
                     permissionRequests.isNotEmpty() ||
                     questionRequests.isNotEmpty()
             val sessionId = infoState.sessionId.ifEmpty { boundSessionId.orEmpty() }
@@ -853,10 +883,17 @@ class SessionChatViewModel
                     }
                 }
             val snackbar = resolveSnackbar(transientError, commandsState.actionSuccessMessage)
+            val sessionStatusLabel =
+                if (isCompacting) {
+                    SessionCompactChrome.STATUS_LABEL
+                } else {
+                    infoState.sessionStatusLabel
+                }
             val workingIndicatorLabel =
                 WorkingTurnIndicator.labelForActiveTurn(
-                    statusLabel = infoState.sessionStatusLabel,
+                    statusLabel = sessionStatusLabel,
                     messages = messages,
+                    isCompacting = isCompacting,
                 )
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
@@ -868,7 +905,7 @@ class SessionChatViewModel
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,
                 isAborting = composerState.isAborting,
-                sessionStatusLabel = infoState.sessionStatusLabel,
+                sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
                 sessionTodos = sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
@@ -954,6 +991,17 @@ class SessionChatViewModel
                         SessionChatSnackbarTone.Default
                     },
                 id = snackbarSequence,
+            )
+        }
+
+        private fun effectiveCompacting(
+            localCompacting: Boolean,
+            sessionStatusLabel: String?,
+        ): Boolean {
+            if (localCompacting) return true
+            return SessionCompactionPresence.isActive(
+                messages = timeline.loadedMessages(),
+                isSessionBusy = sessionStatusLabel != null,
             )
         }
 

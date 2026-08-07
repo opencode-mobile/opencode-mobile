@@ -86,6 +86,7 @@ class MessageDomainAdapter {
                 toToolPart(toolName = toolName, callId = dto.callId, state = stateDto, id = dto.id)
             }
             "file" -> toFilePart(dto)
+            "compaction" -> MessagePart.Compaction(id = dto.id, auto = dto.auto == true)
             else -> null
         }
     }
@@ -227,8 +228,10 @@ class MessageDomainAdapter {
                 when (part) {
                     is MessagePart.Text ->
                         if (part.isDisplayable) part.text.trim().takeIf { it.isNotEmpty() } else null
-                    is MessagePart.Tool -> null
-                    is MessagePart.File -> null
+                    is MessagePart.Tool,
+                    is MessagePart.File,
+                    is MessagePart.Compaction,
+                    -> null
                 }
             }
         return segments.joinToString("\n")

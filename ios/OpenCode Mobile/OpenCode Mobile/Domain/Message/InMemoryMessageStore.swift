@@ -600,6 +600,8 @@ final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
             tool.id
         case .file(let file):
             file.id
+        case .compaction(let part):
+            part.id
         }
     }
 }

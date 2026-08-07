@@ -3,14 +3,17 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.message.MessageRole
 
 /**
- * In-chat Working/Retrying chrome for an active turn with no assistant content yet.
- * Reuses product labels from [EventDomainAdapter] (`Working` / `Retrying`).
+ * In-chat Working/Retrying/Compacting chrome for an active turn.
+ * Reuses product labels from [EventDomainAdapter] (`Working` / `Retrying`),
+ * plus [SessionCompactChrome.STATUS_LABEL] while compact is in flight.
  */
 object WorkingTurnIndicator {
     fun labelForActiveTurn(
         statusLabel: String?,
         messages: List<SessionChatMessageItem>,
+        isCompacting: Boolean = false,
     ): String? {
+        if (isCompacting) return SessionCompactChrome.STATUS_LABEL
         if (statusLabel == null) return null
         if (hasVisibleAssistantContentAfterLastUser(messages)) return null
         return statusLabel

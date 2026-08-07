@@ -19,6 +19,8 @@ import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.setJsonBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpTimeoutConfig
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
@@ -222,6 +224,12 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("session/$id/summarize") {
+                // Compaction can stream for minutes; OkHttp's default 10s read was aborting
+                // the POST while SSE still delivered session.compacted (false failure toast).
+                timeout {
+                    requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                    socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                }
                 applyDirectory(directory)
                 setJsonBody(json, body)
             }.body()

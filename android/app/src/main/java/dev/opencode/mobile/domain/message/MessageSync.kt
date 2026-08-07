@@ -756,6 +756,7 @@ class MessageSync(
                         is MessagePart.File ->
                             "file:${part.id}:${part.filename}:${part.mime}:" +
                                 "${part.dataUrl.length}:${part.dataUrl.hashCode()}"
+                        is MessagePart.Compaction -> "compaction:${part.id}:${part.auto}"
                     }
                 }
             "${message.id}:${message.text.length}:${message.text.hashCode()}:$parts"

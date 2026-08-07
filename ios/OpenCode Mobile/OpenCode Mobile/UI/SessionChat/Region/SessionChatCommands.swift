@@ -246,22 +246,58 @@ final class SessionChatCommands {
         }
     }
 
-    func runCompact(providerID: String, modelID: String, onSuccess: @escaping () -> Void) {
+    func runCompact(
+        providerID: String,
+        modelID: String,
+        beforeContextFraction: Float?,
+        awaitAfterContextFraction: @escaping () async -> Float?
+    ) {
         dismissCommands()
         let sessionID = sessionID
         actionTask?.cancel()
+        state.isCompacting = true
+        state.actionErrorMessage = nil
+        state.actionSuccessMessage = nil
+        notifyChange()
+        // Summarize off the MainActor (Android uses ioDispatcher). Compaction can run for
+        // minutes; keeping the await on MainActor lets SSE timeline applies starve touches
+        // and delays clearing Compacting… until a follow-up full refresh finishes.
+        let repository = sessionRepository
         actionTask = Task {
             do {
-                _ = try await sessionRepository.summarizeSession(id: sessionID, providerID: providerID, modelID: modelID)
-                guard !Task.isCancelled else { return }
+                _ = try await Task.detached {
+                    try await repository.summarizeSession(
+                        id: sessionID,
+                        providerID: providerID,
+                        modelID: modelID
+                    )
+                }.value
+                guard !Task.isCancelled else {
+                    state.isCompacting = false
+                    notifyChange()
+                    return
+                }
                 OpenCodeLog.sessionChat.info("compact success session=\(sessionID, privacy: .public)")
-                state.actionSuccessMessage = "Session compacted."
+                // Clear chrome before any post-success work so a heavy refresh cannot leave
+                // Compacting… stuck while MainActor rebuilds the transcript.
+                state.isCompacting = false
                 notifyChange()
-                onSuccess()
-            } catch {
+                let after = await awaitAfterContextFraction()
                 guard !Task.isCancelled else { return }
+                state.actionSuccessMessage = SessionCompactChrome.successMessage(
+                    beforeFraction: beforeContextFraction,
+                    afterFraction: after
+                )
+                notifyChange()
+            } catch {
+                guard !Task.isCancelled else {
+                    state.isCompacting = false
+                    notifyChange()
+                    return
+                }
                 OpenCodeLog.sessionChat.warning("compact failed session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                state.actionErrorMessage = "Couldn't compact session context."
+                state.isCompacting = false
+                state.actionErrorMessage = SessionCompactChrome.failure
                 state.actionSuccessMessage = nil
                 notifyChange()
             }

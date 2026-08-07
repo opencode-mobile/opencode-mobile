@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -249,22 +250,44 @@ class SessionChatCommands(
     fun runCompact(
         providerId: String,
         modelId: String,
-        onSuccess: () -> Unit,
+        beforeContextFraction: Float?,
+        awaitAfterContextFraction: suspend () -> Float?,
     ) {
         dismissCommands()
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
+        _state.update {
+            it.copy(
+                isCompacting = true,
+                actionErrorMessage = null,
+                actionSuccessMessage = null,
+            )
+        }
         scope.launch(ioDispatcher) {
             runCatching { sessionRepository.summarizeSession(sessionId, providerId, modelId, worktree) }
                 .onSuccess {
                     logI("compact success session=$sessionId")
-                    _state.update { it.copy(actionSuccessMessage = "Session compacted.") }
-                    onSuccess()
-                }.onFailure { error ->
-                    logW("compact failed session=$sessionId error=${error.message}")
+                    // Clear Compacting… before post-success refresh so a slow timeline
+                    // rebuild cannot leave the chrome stuck (iOS MainActor freeze twin).
+                    _state.update { it.copy(isCompacting = false) }
+                    val after = runCatching { awaitAfterContextFraction() }.getOrNull()
                     _state.update {
                         it.copy(
-                            actionErrorMessage = "Couldn't compact session context.",
+                            actionSuccessMessage =
+                                SessionCompactChrome.successMessage(
+                                    beforeFraction = beforeContextFraction,
+                                    afterFraction = after,
+                                ),
+                        )
+                    }
+                }.onFailure { error ->
+                    logW(
+                        "compact failed session=$sessionId error=${error.message ?: error::class.java.simpleName}",
+                    )
+                    _state.update {
+                        it.copy(
+                            isCompacting = false,
+                            actionErrorMessage = SessionCompactChrome.FAILURE,
                             actionSuccessMessage = null,
                         )
                     }

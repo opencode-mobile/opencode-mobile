@@ -1,9 +1,15 @@
 import Foundation
 
-/// In-chat Working/Retrying chrome for an active turn with no assistant content yet.
-/// Reuses product labels from `EventDomainAdapter` (`Working` / `Retrying`).
+/// In-chat Working/Retrying/Compacting chrome for an active turn.
+/// Reuses product labels from `EventDomainAdapter` (`Working` / `Retrying`),
+/// plus `SessionCompactChrome.statusLabel` while compact is in flight.
 enum WorkingTurnIndicator {
-    static func labelForActiveTurn(statusLabel: String?, messages: [SessionChatRow]) -> String? {
+    static func labelForActiveTurn(
+        statusLabel: String?,
+        messages: [SessionChatRow],
+        isCompacting: Bool = false
+    ) -> String? {
+        if isCompacting { return SessionCompactChrome.statusLabel }
         guard let statusLabel else { return nil }
         if hasVisibleAssistantContentAfterLastUser(messages) { return nil }
         return statusLabel

@@ -78,6 +78,8 @@ struct MessageDomainAdapter: Sendable {
         case "tool":
             guard let toolName = dto.tool else { return nil }
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
+        case "compaction":
+            return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true))
         default:
             return nil
         }
@@ -229,9 +231,7 @@ struct MessageDomainAdapter: Sendable {
                 guard t.isDisplayable else { return nil }
                 let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
-            case .file:
-                return nil
-            case .tool:
+            case .file, .tool, .compaction:
                 return nil
             }
         }

@@ -670,7 +670,9 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
                 if (!allowToolCards || !isVisibleToolForStreamingDecoration(part)) continue
                 flush()
             }
-            is MessagePart.File -> flush()
+            is MessagePart.File,
+            is MessagePart.Compaction,
+            -> flush()
         }
     }
     flush()
