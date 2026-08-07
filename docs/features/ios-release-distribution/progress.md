@@ -24,13 +24,14 @@ Not in this slice. Android release distribution ([OPE-69](https://linear.app/ope
 
 ## Blockers
 
-Workflow must merge to `main` before `ios-release` environment runs can succeed
-(branch policy: `main` only). Local ASC-authenticated archive/export/verify
-already succeeded.
+First protected `main` run
+([31220419382](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31220419382))
+failed with locked keychain / missing profiles under the headless runner. Fix:
+ephemeral signing keychain in the iOS Release workflow.
 
 ## Remaining work
 
-1. Commit/PR/merge OPE-101 CI to `main`, then run **iOS Release** twice
+1. Land keychain fix, then run **iOS Release** twice on `main`
    (`0.1.0-internal.1`, `0.1.0-internal.2`).
 2. Human confirm ASC app stays private (checkpoint 3).
 3. OPE-103 then OPE-102 per parent Remaining order.

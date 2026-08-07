@@ -41,3 +41,11 @@ Release configuration and Apple Distribution signing, but passes
 `SWIFT_OPTIMIZATION_LEVEL=-Onone` and `SWIFT_COMPILATION_MODE=singlefile` until
 a fixed toolchain can compile Release WMO successfully. Revisit after an Xcode
 update.
+
+## Ephemeral CI signing keychain
+
+Self-hosted Actions cannot unlock the interactive login keychain
+(`User interaction is not allowed`). The iOS Release workflow creates a
+temporary keychain, unlocks it for ASC-managed Apple Distribution certificates
+and profiles, then deletes it at job end and restores the login keychain search
+list.

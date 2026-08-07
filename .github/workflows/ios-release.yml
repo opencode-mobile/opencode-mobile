@@ -77,6 +77,31 @@ jobs:
             echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
           } >> "$GITHUB_ENV"
 
+      - name: Prepare temporary signing keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Headless Actions cannot unlock the login keychain ("User interaction
+          # is not allowed"). Use an ephemeral keychain for ASC-managed certs.
+          keychain_path="$RUNNER_TEMP/ios-release.keychain-db"
+          keychain_password="$(openssl rand -base64 32)"
+          security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          existing_keychains="$(security list-keychains -d user | sed -E 's/^[[:space:]]*"//;s/"$//')"
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$keychain_path" $existing_keychains
+          security default-keychain -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" \
+            "$keychain_path" >/dev/null
+          {
+            echo "IOS_RELEASE_KEYCHAIN_PATH=$keychain_path"
+            echo "IOS_RELEASE_KEYCHAIN_PASSWORD=$keychain_password"
+          } >> "$GITHUB_ENV"
+
       - name: Resolve Swift Package dependencies
         run: |
           xcodebuild -resolvePackageDependencies \
@@ -87,6 +112,8 @@ jobs:
         run: |
           set -euo pipefail
           archive_path="$RUNNER_TEMP/OpenCode-Mobile.xcarchive"
+          # Keep the ephemeral keychain unlocked for the long archive.
+          security unlock-keychain -p "$IOS_RELEASE_KEYCHAIN_PASSWORD" "$IOS_RELEASE_KEYCHAIN_PATH"
           # Xcode 26.x Release WMO crashes the Swift frontend on this target
           # (SILPerformanceInliner). Keep Release configuration/signing, but
           # compile without WMO until Apple fixes the optimizer.
@@ -97,12 +124,15 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$archive_path" \
             -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
             -authenticationKeyPath "$ASC_API_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             MARKETING_VERSION="$IOS_MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
             DEVELOPMENT_TEAM="$EXPECTED_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             SWIFT_OPTIMIZATION_LEVEL=-Onone \
             SWIFT_COMPILATION_MODE=singlefile
           echo "IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
@@ -110,6 +140,7 @@ jobs:
       - name: Export signed App Store IPA
         run: |
           set -euo pipefail
+          security unlock-keychain -p "$IOS_RELEASE_KEYCHAIN_PASSWORD" "$IOS_RELEASE_KEYCHAIN_PATH"
           export_dir="$RUNNER_TEMP/ios-ipa-export"
           mkdir -p "$export_dir"
           xcodebuild -exportArchive \
@@ -117,6 +148,7 @@ jobs:
             -exportPath "$export_dir" \
             -exportOptionsPlist "$GITHUB_WORKSPACE/.github/ios/ExportOptions-AppStore.plist" \
             -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
             -authenticationKeyPath "$ASC_API_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
@@ -152,7 +184,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Remove temporary ASC API key
+      - name: Remove temporary ASC API key and signing keychain
         if: always()
         shell: bash
-        run: rm -f "${ASC_API_KEY_PATH:-}"
+        run: |
+          set -euo pipefail
+          rm -f "${ASC_API_KEY_PATH:-}"
+          if [[ -n "${IOS_RELEASE_KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
+            rm -f "$IOS_RELEASE_KEYCHAIN_PATH"
+          fi
+          # Restore the default login keychain search list for later jobs on
+          # this self-hosted runner.
+          if [[ -f "$HOME/Library/Keychains/login.keychain-db" ]]; then
+            security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db"
+            security default-keychain -s "$HOME/Library/Keychains/login.keychain-db" || true
+          fi
