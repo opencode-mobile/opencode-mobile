@@ -55,6 +55,12 @@ final class SessionChatComposer {
         formatter.dateFormat = "h:mm a"
         self.sentTimeFormatter = formatter
         Task { await self.loadCachedSelection() }
+    }
+
+    /// Catalog loads that used to run from `init` — keep them off View construction.
+    /// `SessionChatView` init can run on every parent body refresh while `@State` keeps
+    /// one live ViewModel; orphan inits must not hit the network.
+    func startCatalogLoads() {
         loadServerCommands()
         loadMentionableAgents()
     }

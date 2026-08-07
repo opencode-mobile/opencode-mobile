@@ -93,6 +93,12 @@ sealed class MessagePart {
         val kind: AttachmentKind,
         val dataUrl: String,
     ) : MessagePart()
+
+    /** Server compaction marker. Kept for live Compacting… detection; not rendered in timeline. */
+    data class Compaction(
+        val id: String? = null,
+        val auto: Boolean = false,
+    ) : MessagePart()
 }
 
 data class PromptSendOptions(

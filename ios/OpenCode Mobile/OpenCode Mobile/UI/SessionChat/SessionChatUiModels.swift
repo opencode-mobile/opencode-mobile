@@ -461,6 +461,7 @@ struct SessionChatCommandsRegionState: Equatable {
     var forkErrorMessage: String?
     var forkResultVisible = false
     var forkedSessionTitle = ""
+    var isCompacting = false
     var actionErrorMessage: String?
     var actionSuccessMessage: String?
     var pendingSessionReplace: ChildSessionNavigationTarget?

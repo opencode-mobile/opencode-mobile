@@ -324,7 +324,7 @@ struct MessageDomainAdapterTests {
     }
 
     @Test func messagePart_hiddenTypes_returnNil() throws {
-        let hiddenTypes = ["reasoning", "step-start", "step-finish", "agent", "subtask", "compaction", "retry", "snapshot", "patch"]
+        let hiddenTypes = ["reasoning", "step-start", "step-finish", "agent", "subtask", "retry", "snapshot", "patch"]
         for type in hiddenTypes {
             let dto = try decoder.decode(
                 MessagePartDTO.self,
@@ -333,6 +333,19 @@ struct MessageDomainAdapterTests {
             let part = adapter.messagePart(from: dto)
             #expect(part == nil, "\(type) should return nil")
         }
+    }
+
+    @Test func messagePart_compaction_returnsCompactionPart() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-c","type":"compaction","auto":true}"#.data(using: .utf8)!
+        )
+        guard case .compaction(let part) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected compaction part")
+            return
+        }
+        #expect(part.id == "prt-c")
+        #expect(part.auto == true)
     }
 
     @Test func messagePart_textTypeMissingText_returnsNil() throws {

@@ -1,0 +1,874 @@
+<!doctype html>
+<!--
+  PROTOTYPE — Richer Session Compact UX.
+
+  Question: How should Session Chat show compaction while it runs and after
+  it finishes, given Commands [compact] already calls POST …/summarize?
+
+  A — Timeline checkpoint   (row in the chat stream)
+  B — Status chrome only    (working label + context ring + snackbar)
+  C — Float pill + sheet    (todos-style overlay + summary sheet)
+
+  Variants via ?variant=A|B|C (or floating bar / arrow keys).
+  Phase via ?phase=idle|compacting|done (or phase chips).
+  Throwaway. Not for production.
+-->
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — Session Compact UX</title>
+    <style>
+      :root {
+        --page-bg: #070708;
+        --phone-bg: #0f0f10;
+        --surface: #161618;
+        --surface-2: #1c1c1f;
+        --text: #ededed;
+        --text-base: #a3a3a8;
+        --text-weak: #6e6e74;
+        --text-weaker: #48484e;
+        --border: #2a2a2e;
+        --border-weak: #222226;
+        --accent: #fab283;
+        --ok: #7fd88f;
+        --warn: #f5a742;
+        --info: #56b6c2;
+        --danger: #e06c75;
+        --bubble-user: #232328;
+        --bubble-assistant: transparent;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --phone-w: 340px;
+        --phone-h: 700px;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font);
+        background:
+          radial-gradient(900px 480px at 12% -10%, #2a1f14 0%, transparent 55%),
+          radial-gradient(800px 420px at 100% 0%, #142028 0%, transparent 50%),
+          var(--page-bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 72px 16px 130px;
+        gap: 18px;
+      }
+
+      .page-meta {
+        text-align: center;
+        max-width: 640px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--text-base);
+      }
+      .page-meta strong {
+        display: block;
+        color: var(--text);
+        font-size: 15px;
+        margin-bottom: 4px;
+      }
+      .page-meta code {
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 5px;
+        border-radius: 4px;
+        color: #d8c4a8;
+      }
+
+      .proposal {
+        max-width: 640px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-base);
+      }
+      .proposal h2 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-weak);
+      }
+      .proposal ul { margin: 0; padding-left: 18px; }
+      .proposal li { margin: 2px 0; }
+      .proposal .keep {
+        margin-top: 8px;
+        color: var(--ok);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        align-items: center;
+      }
+      .chip-row {
+        display: flex;
+        gap: 6px;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 4px;
+      }
+      .chip {
+        border: 0;
+        background: transparent;
+        color: var(--text-base);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .chip[aria-pressed="true"] {
+        background: var(--surface-2);
+        color: var(--text);
+      }
+      .chip-label {
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--text-weak);
+        margin-right: 4px;
+      }
+
+      .stage {
+        display: flex;
+        justify-content: center;
+      }
+
+      .phone {
+        width: var(--phone-w);
+        height: var(--phone-h);
+        background: var(--phone-bg);
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+      }
+
+      .status-fake {
+        height: 28px;
+        padding: 10px 18px 0;
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      .topbar {
+        height: 48px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--border-weak);
+        flex-shrink: 0;
+      }
+      .topbar .back { color: var(--text-base); font-size: 18px; width: 24px; }
+      .topbar .title-block { flex: 1; min-width: 0; }
+      .topbar .title {
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .topbar .subtitle {
+        font-size: 11px;
+        color: var(--text-weak);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .ctx-ring {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--text-weaker);
+        border-top-color: var(--accent);
+        flex-shrink: 0;
+        position: relative;
+      }
+      .ctx-ring[data-level="high"] {
+        border-color: color-mix(in srgb, var(--danger) 35%, var(--text-weaker));
+        border-top-color: var(--danger);
+      }
+      .ctx-ring[data-level="mid"] {
+        border-top-color: var(--warn);
+      }
+      .ctx-ring[data-level="low"] {
+        border-top-color: var(--ok);
+      }
+      .ctx-ring.pulse {
+        animation: ring-pulse 1.1s ease-in-out infinite;
+      }
+      @keyframes ring-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.18); opacity: 0.7; }
+      }
+
+      .working-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 0 rgba(250, 178, 131, 0.5);
+        animation: dot-pulse 1.2s ease-out infinite;
+      }
+      .working-dot.compact {
+        background: var(--info);
+        box-shadow: 0 0 0 0 rgba(86, 182, 194, 0.5);
+      }
+      @keyframes dot-pulse {
+        0% { box-shadow: 0 0 0 0 currentColor; }
+        70% { box-shadow: 0 0 0 6px transparent; }
+        100% { box-shadow: 0 0 0 0 transparent; }
+      }
+
+      .timeline {
+        flex: 1;
+        overflow: auto;
+        padding: 14px 14px 96px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .msg-user {
+        align-self: flex-end;
+        max-width: 86%;
+        background: var(--bubble-user);
+        border-radius: 16px 16px 4px 16px;
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .msg-assistant {
+        align-self: stretch;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--text);
+      }
+      .msg-assistant .meta {
+        font-size: 11px;
+        color: var(--text-weak);
+        margin-bottom: 4px;
+      }
+      .msg-assistant p { margin: 0 0 8px; color: var(--text-base); }
+      .msg-assistant p:last-child { margin-bottom: 0; }
+
+      .tool-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-weak);
+        padding: 2px 0;
+      }
+      .tool-row .check { color: var(--ok); }
+
+      /* A — checkpoint card */
+      .checkpoint {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 14px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .checkpoint.running {
+        border-color: color-mix(in srgb, var(--info) 40%, var(--border));
+        background: color-mix(in srgb, var(--info) 8%, var(--surface));
+      }
+      .checkpoint .head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .checkpoint .head .icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        background: var(--surface-2);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        color: var(--info);
+      }
+      .checkpoint .delta {
+        font-size: 11px;
+        color: var(--text-weak);
+        font-family: var(--mono);
+      }
+      .checkpoint .delta b { color: var(--ok); font-weight: 600; }
+      .checkpoint .summary {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--text-base);
+        border-top: 1px solid var(--border-weak);
+        padding-top: 8px;
+      }
+      .checkpoint .shimmer {
+        height: 10px;
+        border-radius: 4px;
+        background: linear-gradient(
+          90deg,
+          var(--surface-2) 0%,
+          #2a2a30 45%,
+          var(--surface-2) 90%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.2s linear infinite;
+      }
+      .checkpoint .shimmer.w60 { width: 60%; }
+      .checkpoint .shimmer.w85 { width: 85%; margin-top: 6px; }
+      @keyframes shimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+      }
+
+      .working-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-base);
+        padding: 4px 0;
+      }
+
+      /* C — float pill */
+      .float-stack {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 78px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        pointer-events: none;
+        z-index: 4;
+      }
+      .pill {
+        pointer-events: auto;
+        border: 1px solid var(--border);
+        background: rgba(28, 28, 31, 0.92);
+        backdrop-filter: blur(10px);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        max-width: 100%;
+      }
+      .pill .sub {
+        font-weight: 500;
+        color: var(--text-weak);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sheet-scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 6;
+        display: none;
+      }
+      .sheet-scrim.open { display: block; }
+      .sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 7;
+        background: var(--surface);
+        border-radius: 18px 18px 0 0;
+        border-top: 1px solid var(--border);
+        padding: 10px 16px 28px;
+        transform: translateY(110%);
+        transition: transform 0.22s ease;
+        max-height: 62%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .sheet.open { transform: translateY(0); }
+      .sheet .grab {
+        width: 36px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--border);
+        align-self: center;
+        margin-bottom: 4px;
+      }
+      .sheet h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .sheet .meta {
+        font-size: 12px;
+        color: var(--text-weak);
+        font-family: var(--mono);
+      }
+      .sheet .body {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--text-base);
+        overflow: auto;
+      }
+
+      .composer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 10px 12px 16px;
+        background: linear-gradient(transparent, var(--phone-bg) 28%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        z-index: 5;
+      }
+      .composer .attach,
+      .composer .slash,
+      .composer .send {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-base);
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .composer .send {
+        background: var(--accent);
+        border-color: transparent;
+        color: #1a120c;
+        font-weight: 700;
+      }
+      .composer .field {
+        flex: 1;
+        height: 40px;
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        padding: 0 14px;
+        display: flex;
+        align-items: center;
+        font-size: 13px;
+        color: var(--text-weak);
+      }
+
+      .snackbar {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 78px;
+        z-index: 8;
+        background: #2a2a2e;
+        color: var(--text);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 13px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+        display: none;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .snackbar.show { display: flex; }
+      .snackbar .mark { color: var(--ok); font-weight: 700; }
+
+      .variant-panel { display: none; width: 100%; height: 100%; }
+      .variant-panel.active {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1;
+      }
+
+      .switcher {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #f4f4f5;
+        color: #111;
+        border-radius: 999px;
+        padding: 8px 10px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+        font-size: 13px;
+        font-weight: 600;
+        user-select: none;
+      }
+      .switcher button {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 0;
+        background: #e4e4e7;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .switcher .label {
+        min-width: 190px;
+        text-align: center;
+      }
+      .switcher .sub {
+        display: block;
+        font-size: 10px;
+        font-weight: 500;
+        color: #71717a;
+      }
+
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="page-meta">
+      <strong>PROTOTYPE — Richer Session Compact UX</strong>
+      How should compaction feel while running and after finish?
+      Keep one action (Commands → compact). Variants:
+      <code>?variant=A|B|C</code> · phases: <code>?phase=idle|compacting|done</code>
+    </div>
+
+    <div class="proposal">
+      <h2>Proposal (shared across variants)</h2>
+      <ul>
+        <li><b>One verb:</b> Compact only — no separate Summarize entry.</li>
+        <li><b>Running:</b> Specific “Compacting…” chrome, not only generic Working.</li>
+        <li><b>Done:</b> Show context delta; optionally surface the checkpoint summary.</li>
+        <li><b>Reuse:</b> existing Stop / working turn, context ring, snackbar patterns.</li>
+      </ul>
+      <div class="keep">Disagree on <em>where</em> the result lives (timeline vs chrome vs pill) — that is what A/B/C test.</div>
+    </div>
+
+    <div class="controls">
+      <span class="chip-label">Phase</span>
+      <div class="chip-row" id="phaseChips" role="group" aria-label="Compaction phase">
+        <button type="button" class="chip" data-phase="idle">Idle</button>
+        <button type="button" class="chip" data-phase="compacting">Compacting</button>
+        <button type="button" class="chip" data-phase="done">Done</button>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="phone" id="phone">
+        <div class="status-fake"><span>9:41</span><span>●●●</span></div>
+        <div class="topbar">
+          <div class="back">‹</div>
+          <div class="title-block">
+            <div class="title">Refactor auth middleware</div>
+            <div class="subtitle" id="statusLine">
+              <!-- filled by JS -->
+            </div>
+          </div>
+          <div class="ctx-ring" id="ctxRing" data-level="high" title="Context usage"></div>
+        </div>
+
+        <!-- ========== VARIANT A ========== -->
+        <div class="variant-panel" data-variant="A" id="panelA">
+          <div class="timeline">
+            <div class="msg-user">Can you tighten the JWT refresh path and drop the duplicate middleware?</div>
+            <div class="msg-assistant">
+              <div class="meta">Build · Claude Sonnet</div>
+              <p>I’ll inspect the auth stack and remove the duplicate guard.</p>
+              <div class="tool-row"><span class="check">✓</span> read <span>src/auth/middleware.ts</span></div>
+              <div class="tool-row"><span class="check">✓</span> edit <span>src/auth/refresh.ts</span></div>
+              <p>Refresh now shares one middleware path; duplicate guard removed.</p>
+            </div>
+            <div class="msg-user">Also summarize what still uses the old helper.</div>
+            <div class="msg-assistant">
+              <div class="meta">Build · Claude Sonnet</div>
+              <p>Only tests still import the old helper — I’ll migrate those next.</p>
+            </div>
+
+            <div id="aRunning" class="checkpoint running hidden">
+              <div class="head">
+                <div class="icon">◎</div>
+                Compacting context…
+              </div>
+              <div class="shimmer w85"></div>
+              <div class="shimmer w60"></div>
+            </div>
+
+            <div id="aDone" class="checkpoint hidden">
+              <div class="head">
+                <div class="icon">▣</div>
+                Context compacted
+              </div>
+              <div class="delta">Context <s style="color:var(--text-weaker)">72%</s> → <b>34%</b></div>
+              <div class="summary">
+                Goal: simplify JWT refresh. Done: shared middleware, removed
+                duplicate guard. Next: migrate tests off the old helper.
+                Files: <code style="font-size:11px">middleware.ts</code>,
+                <code style="font-size:11px">refresh.ts</code>.
+              </div>
+            </div>
+
+            <div id="aWorking" class="working-row hidden">
+              <span class="working-dot"></span>
+              Thinking…
+            </div>
+          </div>
+        </div>
+
+        <!-- ========== VARIANT B ========== -->
+        <div class="variant-panel" data-variant="B" id="panelB">
+          <div class="timeline">
+            <div class="msg-user">Can you tighten the JWT refresh path and drop the duplicate middleware?</div>
+            <div class="msg-assistant">
+              <div class="meta">Build · Claude Sonnet</div>
+              <p>I’ll inspect the auth stack and remove the duplicate guard.</p>
+              <div class="tool-row"><span class="check">✓</span> read <span>src/auth/middleware.ts</span></div>
+              <div class="tool-row"><span class="check">✓</span> edit <span>src/auth/refresh.ts</span></div>
+              <p>Refresh now shares one middleware path; duplicate guard removed.</p>
+            </div>
+            <div class="msg-user">Also summarize what still uses the old helper.</div>
+            <div class="msg-assistant">
+              <div class="meta">Build · Claude Sonnet</div>
+              <p>Only tests still import the old helper — I’ll migrate those next.</p>
+            </div>
+            <div id="bWorking" class="working-row hidden">
+              <span class="working-dot compact"></span>
+              <span id="bWorkingLabel">Compacting…</span>
+            </div>
+          </div>
+          <div class="snackbar" id="bSnackbar">
+            <span class="mark">✓</span>
+            <span>Context compacted · 72% → 34%</span>
+          </div>
+        </div>
+
+        <!-- ========== VARIANT C ========== -->
+        <div class="variant-panel" data-variant="C" id="panelC">
+          <div class="timeline">
+            <div class="msg-user">Can you tighten the JWT refresh path and drop the duplicate middleware?</div>
+            <div class="msg-assistant">
+              <div class="meta">Build · Claude Sonnet</div>
+              <p>I’ll inspect the auth stack and remove the duplicate guard.</p>
+              <div class="tool-row"><span class="check">✓</span> read <span>src/auth/middleware.ts</span></div>
+              <div class="tool-row"><span class="check">✓</span> edit <span>src/auth/refresh.ts</span></div>
+              <p>Refresh now shares one middleware path; duplicate guard removed.</p>
+            </div>
+            <div class="msg-user">Also summarize what still uses the old helper.</div>
+            <div class="msg-assistant">
+              <div class="meta">Build · Claude Sonnet</div>
+              <p>Only tests still import the old helper — I’ll migrate those next.</p>
+            </div>
+            <div id="cWorking" class="working-row hidden">
+              <span class="working-dot"></span>
+              Working…
+            </div>
+          </div>
+
+          <div class="float-stack" id="cFloat">
+            <div class="pill" id="cPill" role="button" tabindex="0">
+              <span class="working-dot compact" id="cPillDot"></span>
+              <span id="cPillMain">Compacting…</span>
+              <span class="sub" id="cPillSub"></span>
+            </div>
+          </div>
+
+          <div class="sheet-scrim" id="cScrim"></div>
+          <div class="sheet" id="cSheet">
+            <div class="grab"></div>
+            <h3>Context compacted</h3>
+            <div class="meta">72% → 34% · checkpoint summary</div>
+            <div class="body">
+              Goal: simplify JWT refresh. Completed work: shared middleware path,
+              removed duplicate guard. Active next: migrate tests off the old
+              helper. Relevant files: middleware.ts, refresh.ts.
+            </div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <div class="attach">+</div>
+          <div class="slash">/</div>
+          <div class="field">Message…</div>
+          <div class="send">↑</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="switcher" id="switcher" aria-label="Prototype variant switcher">
+      <button type="button" id="prev" aria-label="Previous variant">←</button>
+      <div class="label">
+        <span id="switchLabel">A — Timeline checkpoint</span>
+        <span class="sub" id="switchSub">Compaction is a chat row</span>
+      </div>
+      <button type="button" id="next" aria-label="Next variant">→</button>
+    </div>
+
+    <script>
+      const VARIANTS = {
+        A: {
+          name: "Timeline checkpoint",
+          sub: "Compaction is a chat row",
+        },
+        B: {
+          name: "Status chrome only",
+          sub: "Working label + ring + snackbar",
+        },
+        C: {
+          name: "Float pill + sheet",
+          sub: "Todos-style overlay for summary",
+        },
+      };
+      const ORDER = ["A", "B", "C"];
+      const PHASES = ["idle", "compacting", "done"];
+
+      function params() {
+        return new URLSearchParams(location.search);
+      }
+      function getVariant() {
+        const v = (params().get("variant") || "A").toUpperCase();
+        return ORDER.includes(v) ? v : "A";
+      }
+      function getPhase() {
+        const p = (params().get("phase") || "compacting").toLowerCase();
+        return PHASES.includes(p) ? p : "compacting";
+      }
+      function setParam(key, value) {
+        const p = params();
+        p.set(key, value);
+        history.replaceState(null, "", "?" + p.toString());
+        render();
+      }
+
+      function render() {
+        const variant = getVariant();
+        const phase = getPhase();
+
+        document.querySelectorAll(".variant-panel").forEach((el) => {
+          el.classList.toggle("active", el.dataset.variant === variant);
+        });
+
+        document.querySelectorAll("#phaseChips .chip").forEach((el) => {
+          el.setAttribute("aria-pressed", el.dataset.phase === phase ? "true" : "false");
+        });
+
+        const meta = VARIANTS[variant];
+        document.getElementById("switchLabel").textContent = variant + " — " + meta.name;
+        document.getElementById("switchSub").textContent = meta.sub;
+
+        // Shared status / context ring
+        const ring = document.getElementById("ctxRing");
+        const statusLine = document.getElementById("statusLine");
+        ring.classList.remove("pulse");
+
+        if (phase === "idle") {
+          ring.dataset.level = "high";
+          statusLine.innerHTML = "";
+        } else if (phase === "compacting") {
+          ring.dataset.level = "high";
+          ring.classList.add("pulse");
+          if (variant === "B") {
+            statusLine.innerHTML = '<span class="working-dot compact"></span> Compacting… · Stop';
+          } else if (variant === "A") {
+            statusLine.innerHTML = '<span class="working-dot compact"></span> Compacting…';
+          } else {
+            statusLine.innerHTML = '<span class="working-dot"></span> Working…';
+          }
+        } else {
+          ring.dataset.level = "low";
+          statusLine.innerHTML = "";
+        }
+
+        // Variant A
+        document.getElementById("aRunning").classList.toggle("hidden", !(variant === "A" && phase === "compacting"));
+        document.getElementById("aDone").classList.toggle("hidden", !(variant === "A" && phase === "done"));
+        document.getElementById("aWorking").classList.toggle("hidden", true);
+
+        // Variant B
+        document.getElementById("bWorking").classList.toggle("hidden", !(variant === "B" && phase === "compacting"));
+        document.getElementById("bSnackbar").classList.toggle("show", variant === "B" && phase === "done");
+
+        // Variant C
+        const showPill = variant === "C" && (phase === "compacting" || phase === "done");
+        document.getElementById("cFloat").classList.toggle("hidden", !showPill);
+        document.getElementById("cWorking").classList.toggle("hidden", !(variant === "C" && phase === "compacting"));
+        document.getElementById("cPillDot").style.display = phase === "compacting" ? "" : "none";
+        document.getElementById("cPillMain").textContent =
+          phase === "compacting" ? "Compacting…" : "Context compacted";
+        document.getElementById("cPillSub").textContent =
+          phase === "done" ? "72% → 34%" : "";
+        if (variant !== "C" || phase !== "done") closeSheet();
+      }
+
+      function closeSheet() {
+        document.getElementById("cSheet").classList.remove("open");
+        document.getElementById("cScrim").classList.remove("open");
+      }
+      function openSheet() {
+        if (getVariant() !== "C" || getPhase() !== "done") return;
+        document.getElementById("cSheet").classList.add("open");
+        document.getElementById("cScrim").classList.add("open");
+      }
+
+      document.getElementById("phaseChips").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-phase]");
+        if (!btn) return;
+        setParam("phase", btn.dataset.phase);
+      });
+
+      document.getElementById("prev").addEventListener("click", () => {
+        const i = ORDER.indexOf(getVariant());
+        setParam("variant", ORDER[(i - 1 + ORDER.length) % ORDER.length]);
+      });
+      document.getElementById("next").addEventListener("click", () => {
+        const i = ORDER.indexOf(getVariant());
+        setParam("variant", ORDER[(i + 1) % ORDER.length]);
+      });
+
+      document.getElementById("cPill").addEventListener("click", openSheet);
+      document.getElementById("cScrim").addEventListener("click", closeSheet);
+
+      window.addEventListener("keydown", (e) => {
+        const tag = (e.target && e.target.tagName) || "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+        if (e.key === "ArrowLeft") {
+          document.getElementById("prev").click();
+        } else if (e.key === "ArrowRight") {
+          document.getElementById("next").click();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>

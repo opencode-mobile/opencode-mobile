@@ -164,17 +164,19 @@ class SessionInfo(
     }
 
     fun refreshStatus() {
+        scope.launch { refreshStatusSuspending() }
+    }
+
+    suspend fun refreshStatusSuspending() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        scope.launch {
-            runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
-                .onSuccess { statuses ->
-                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
-                    val status = statuses.firstOrNull { it.sessionId == sessionId }
-                    val label = status?.let(eventDomainAdapter::statusLabel)
-                    _state.update { it.withStatus(authoritative = label, hasResolved = true) }
-                }
-        }
+        runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
+            .onSuccess { statuses ->
+                if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                val status = statuses.firstOrNull { it.sessionId == sessionId }
+                val label = status?.let(eventDomainAdapter::statusLabel)
+                _state.update { it.withStatus(authoritative = label, hasResolved = true) }
+            }
     }
 
     fun markOptimisticBusy() {

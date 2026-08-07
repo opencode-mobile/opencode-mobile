@@ -139,6 +139,8 @@ enum SessionChatTimelineBlocks {
                     )
                 )
                 index += 1
+            case .compaction:
+                index += 1
             case .tool(let tool):
                 guard allowToolCards, isVisibleTool(tool) else {
                     index += 1

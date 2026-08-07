@@ -496,6 +496,9 @@ private extension MessagePart {
                 attachmentKind: part.kind.rawValue,
                 dataUrl: part.dataURL
             )
+        case .compaction:
+            // Live marker only; rehydrated from SSE / refresh while session is open.
+            return nil
         }
     }
 }

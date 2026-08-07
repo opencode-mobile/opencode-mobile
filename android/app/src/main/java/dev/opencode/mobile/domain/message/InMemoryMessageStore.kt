@@ -520,6 +520,7 @@ class InMemoryMessageStore
                 is MessagePart.Text -> id
                 is MessagePart.Tool -> id
                 is MessagePart.File -> id
+                is MessagePart.Compaction -> id
             }
 
         private fun tryParsePartDto(jsonObject: JsonObject): MessagePartDto? =

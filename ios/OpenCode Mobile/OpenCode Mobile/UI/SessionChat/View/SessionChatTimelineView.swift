@@ -263,11 +263,7 @@ private struct SessionChatTimelineHostRow: View {
 
     var body: some View {
         if message.id == SessionChatWorkingIndicator.id {
-            Text(message.text)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textWeak)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel(message.text)
+            SessionChatWorkingIndicatorRow(label: message.text)
         } else {
             HStack {
                 if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
@@ -291,6 +287,44 @@ private struct SessionChatTimelineHostRow: View {
                 }
             }
         }
+    }
+}
+
+/// Feature-local Working/Retrying/Compacting status chrome (not prose).
+private struct SessionChatWorkingIndicatorRow: View {
+    let label: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            SessionChatWorkingStatusDot()
+            Text(label)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textWeak)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct SessionChatWorkingStatusDot: View {
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(OpenCodeColors.textWeak)
+            .frame(width: 6, height: 6)
+            .opacity(pulse ? 0.35 : 1)
+            .animation(
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                value: pulse
+            )
+            .onAppear { pulse = true }
+            .accessibilityHidden(true)
     }
 }
 

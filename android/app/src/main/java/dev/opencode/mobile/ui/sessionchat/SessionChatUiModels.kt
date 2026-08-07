@@ -359,6 +359,7 @@ data class SessionChatCommandsRegionState(
     val forkErrorMessage: String? = null,
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
+    val isCompacting: Boolean = false,
     val actionErrorMessage: String? = null,
     val actionSuccessMessage: String? = null,
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
