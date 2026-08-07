@@ -59,18 +59,19 @@ npm run api:sync        # fetch OpenAPI spec and generate clients
 
 ## CI
 
-Checks run on Blacksmith for every **ready-for-review** pull request (drafts are
-skipped). Android Build and iOS Build stay manual.
+Checks run for every **ready-for-review** pull request (drafts are skipped).
+Android stays on Blacksmith Linux; iOS runs on the private Mac mini
+self-hosted runner. Android Build and iOS Build stay manual.
 
-| Workflow | Trigger | What it does |
-|---|---|---|
-| Android Checks | PR (non-draft) + dispatch | ktlint/lint (soft-fail) + unit tests |
-| iOS Checks | PR (non-draft) + dispatch | Build, analyzer, unit tests |
-| Android Build | `workflow_dispatch` | Assemble debug APK |
-| Android Release | `workflow_dispatch` on `main` | Build and verify signed AAB + APK, then publish to Play internal |
-| Android App Distribution | `push` to `main` | Build and verify a signed APK, then distribute it to the private Firebase tester group |
-| Android Test Lab | `workflow_dispatch` on `main` | Run bounded Robo tests against a signed release APK |
-| iOS Build | `workflow_dispatch` | Simulator build |
+| Workflow | Trigger | Runner | What it does |
+|---|---|---|---|
+| Android Checks | PR (non-draft) + dispatch | Blacksmith Linux | ktlint/lint (soft-fail) + unit tests |
+| iOS Checks | PR (non-draft) + dispatch | Mac mini (`self-hosted, macOS, mac-mini`) | Build, analyzer, unit tests |
+| Android Build | `workflow_dispatch` | Blacksmith Linux | Assemble debug APK |
+| Android Release | `workflow_dispatch` on `main` | Blacksmith Linux | Build and verify signed AAB + APK, then publish to Play internal |
+| Android App Distribution | `push` to `main` | Blacksmith Linux | Build and verify a signed APK, then distribute it to the private Firebase tester group |
+| Android Test Lab | `workflow_dispatch` on `main` | Blacksmith Linux | Run bounded Robo tests against a signed release APK |
+| iOS Build | `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Simulator build |
 
 To block merges, require status checks `android-checks` and `ios-checks` on
 `main` (repository ruleset or branch protection, strict up-to-date). See
@@ -88,7 +89,8 @@ Android Release, Android App Distribution, and Android Test Lab use the
 protected `android-release` environment. See the
 [Android release operator runbook](docs/features/android-release-distribution/operator-runbook.md)
 for secrets, artifacts, Play internal testing, Test Lab, and recovery
-instructions.
+instructions. iOS runner setup, reboot recovery, and fallback are in
+[docs/mac-mini-runner.md](docs/mac-mini-runner.md).
 
 After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing.
 

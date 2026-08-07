@@ -22,7 +22,7 @@ concurrency:
 jobs:
   ios-checks:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: blacksmith-6vcpu-macos-26
+    runs-on: [self-hosted, macOS, mac-mini]
     defaults:
       run:
         working-directory: ios/OpenCode Mobile
