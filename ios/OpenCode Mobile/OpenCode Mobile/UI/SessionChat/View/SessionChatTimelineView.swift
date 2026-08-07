@@ -303,7 +303,7 @@ private struct SessionChatWorkingIndicatorRow: View {
             Spacer(minLength: 0)
         }
         .padding(.leading, 4)
-        .padding(.top, 10)
+        .padding(.top, 12)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
