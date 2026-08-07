@@ -98,8 +98,10 @@ jobs:
           if [[ ! -f "$keychain_path" ]]; then
             security create-keychain -p "$keychain_password" "$keychain_path"
           fi
-          security set-keychain-settings -lut 21600 "$keychain_path"
+          # Locked keychains reject set-keychain-settings with
+          # "User interaction is not allowed" (exit 36). Unlock first.
           security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
           existing_keychains=()
           while IFS= read -r line; do
             keychain="${line#\"}"
