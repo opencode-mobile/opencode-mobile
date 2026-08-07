@@ -133,8 +133,6 @@ jobs:
             MARKETING_VERSION="$IOS_MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
             DEVELOPMENT_TEAM="$EXPECTED_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
             SWIFT_OPTIMIZATION_LEVEL=-Onone \
             SWIFT_COMPILATION_MODE=singlefile
           security set-key-partition-list \
