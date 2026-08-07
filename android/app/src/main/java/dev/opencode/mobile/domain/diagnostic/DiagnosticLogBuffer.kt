@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.diagnostic
 
+import androidx.core.util.AtomicFile
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -68,11 +70,18 @@ object DiagnosticLogRedactor {
 }
 
 class DiagnosticLogBuffer(
+    private val file: File? = null,
     private val clockEpochMilliseconds: () -> Long = System::currentTimeMillis,
 ) {
     private val lock = ReentrantLock()
     private val entries = ArrayDeque<DiagnosticLogEntry>()
     private var droppedBySoftCap = 0
+
+    init {
+        if (file != null) {
+            loadFromDisk()
+        }
+    }
 
     fun append(
         area: DiagnosticLogArea,
@@ -89,13 +98,17 @@ class DiagnosticLogBuffer(
         lock.withLock {
             entries.addLast(entry)
             evictLocked(now = entry.timestampEpochMilliseconds)
+            persistLocked()
         }
     }
 
     fun snapshot(): DiagnosticLogSnapshot =
         lock.withLock {
             val now = clockEpochMilliseconds()
-            evictLocked(now = now)
+            val changed = evictLocked(now = now)
+            if (changed) {
+                persistLocked()
+            }
             DiagnosticLogSnapshot(
                 entries = entries.toList(),
                 droppedBySoftCap = droppedBySoftCap,
@@ -108,6 +121,7 @@ class DiagnosticLogBuffer(
         lock.withLock {
             entries.clear()
             droppedBySoftCap = 0
+            clearPersistedLocked()
         }
     }
 
@@ -139,7 +153,8 @@ class DiagnosticLogBuffer(
         return lines.joinToString(separator = "\n", postfix = "\n")
     }
 
-    private fun evictLocked(now: Long) {
+    private fun evictLocked(now: Long): Boolean {
+        val beforeCount = entries.size
         val cutoff = now - WINDOW_MILLISECONDS
         while (entries.isNotEmpty() && entries.first().timestampEpochMilliseconds < cutoff) {
             entries.removeFirst()
@@ -148,6 +163,57 @@ class DiagnosticLogBuffer(
             entries.removeFirst()
             droppedBySoftCap += 1
         }
+        return entries.size != beforeCount
+    }
+
+    private fun loadFromDisk() {
+        val store = file ?: return
+        if (!store.exists()) return
+        val loaded =
+            runCatching {
+                store.useLines { lines ->
+                    lines.mapNotNull { line ->
+                        line
+                            .takeIf(String::isNotBlank)
+                            ?.let { encoded ->
+                                runCatching { json.decodeFromString<DiagnosticLogEntry>(encoded) }.getOrNull()
+                            }
+                    }.toList()
+                }
+            }.getOrDefault(emptyList())
+        entries.clear()
+        entries.addAll(loaded)
+        droppedBySoftCap = 0
+        val changed = evictLocked(now = clockEpochMilliseconds())
+        if (changed) {
+            persistLocked()
+        }
+    }
+
+    private fun persistLocked() {
+        val store = file ?: return
+        runCatching {
+            store.parentFile?.mkdirs()
+            val atomicFile = AtomicFile(store)
+            val output = atomicFile.startWrite()
+            try {
+                val writer = output.bufferedWriter()
+                entries.forEach { entry ->
+                    writer.append(json.encodeToString(entry))
+                    writer.newLine()
+                }
+                writer.flush()
+                atomicFile.finishWrite(output)
+            } catch (failure: Throwable) {
+                atomicFile.failWrite(output)
+                throw failure
+            }
+        }
+    }
+
+    private fun clearPersistedLocked() {
+        val store = file ?: return
+        runCatching { AtomicFile(store).delete() }
     }
 
     companion object {
@@ -161,8 +227,25 @@ class DiagnosticLogBuffer(
                 ignoreUnknownKeys = true
             }
 
+        private val sharedLock = Any()
+
+        @Volatile
+        private var sharedInstance: DiagnosticLogBuffer? = null
+
         /** Process-lifetime buffer shared by DI and non-injected call sites. */
-        val shared = DiagnosticLogBuffer()
+        val shared: DiagnosticLogBuffer
+            get() =
+                synchronized(sharedLock) {
+                    sharedInstance ?: DiagnosticLogBuffer().also { sharedInstance = it }
+                }
+
+        fun bindShared(buffer: DiagnosticLogBuffer) {
+            synchronized(sharedLock) {
+                sharedInstance = buffer
+            }
+        }
+
+        fun fileIn(filesDirectory: File): File = File(filesDirectory, "debug/diagnostic-logs-v1.jsonl")
     }
 }
 

@@ -80,7 +80,7 @@ nonisolated enum DiagnosticLogRedactor: Sendable {
 }
 
 nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
-    static let shared = DiagnosticLogBuffer()
+    static let shared = DiagnosticLogBuffer(fileURL: defaultFileURL())
 
     static let windowMilliseconds: Int64 = 5 * 60 * 1_000
     static let softCap = 2_000
@@ -90,11 +90,19 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
     private var entries: [DiagnosticLogEntry] = []
     private var droppedBySoftCap = 0
     private let clock: () -> Int64
+    private let fileURL: URL?
 
-    init(clock: @escaping () -> Int64 = {
-        Int64(Date().timeIntervalSince1970 * 1_000)
-    }) {
+    init(
+        fileURL: URL? = nil,
+        clock: @escaping () -> Int64 = {
+            Int64(Date().timeIntervalSince1970 * 1_000)
+        }
+    ) {
+        self.fileURL = fileURL
         self.clock = clock
+        if fileURL != nil {
+            loadFromDiskUnlocked()
+        }
     }
 
     func append(area: DiagnosticLogArea, level: DiagnosticLogLevel, message: String) {
@@ -108,13 +116,17 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         defer { lock.unlock() }
         entries.append(entry)
         evictLocked(now: entry.timestampEpochMilliseconds)
+        persistLocked()
     }
 
     func snapshot() -> DiagnosticLogSnapshot {
         lock.lock()
         defer { lock.unlock() }
         let now = clock()
-        evictLocked(now: now)
+        let changed = evictLocked(now: now)
+        if changed {
+            persistLocked()
+        }
         return DiagnosticLogSnapshot(
             entries: entries,
             droppedBySoftCap: droppedBySoftCap,
@@ -128,6 +140,7 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         defer { lock.unlock() }
         entries.removeAll(keepingCapacity: true)
         droppedBySoftCap = 0
+        clearPersistedLocked()
     }
 
     func exportJSONL() throws -> Data {
@@ -158,13 +171,56 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         return Data((lines.joined(separator: "\n") + "\n").utf8)
     }
 
-    private func evictLocked(now: Int64) {
+    @discardableResult
+    private func evictLocked(now: Int64) -> Bool {
+        let beforeCount = entries.count
         let cutoff = now - Self.windowMilliseconds
         entries.removeAll { $0.timestampEpochMilliseconds < cutoff }
         while entries.count > Self.softCap {
             entries.removeFirst()
             droppedBySoftCap += 1
         }
+        return entries.count != beforeCount
+    }
+
+    private func loadFromDiskUnlocked() {
+        guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: fileURL)
+            let decoder = JSONDecoder()
+            let loaded = data.split(separator: 0x0A).compactMap { line -> DiagnosticLogEntry? in
+                guard !line.isEmpty else { return nil }
+                return try? decoder.decode(DiagnosticLogEntry.self, from: Data(line))
+            }
+            entries = loaded
+            droppedBySoftCap = 0
+            _ = evictLocked(now: clock())
+            if entries.count != loaded.count {
+                persistLocked()
+            }
+        } catch {
+            // Leave memory empty when the store is unreadable; next append recreates it.
+            entries = []
+            droppedBySoftCap = 0
+        }
+    }
+
+    private func persistLocked() {
+        guard let fileURL else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Self.encodedLines(entries).write(to: fileURL, options: .atomic)
+        } catch {
+            // Persistence is best-effort; in-memory window remains authoritative for this process.
+        }
+    }
+
+    private func clearPersistedLocked() {
+        guard let fileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
     }
 
     private func jsonObjectLine(_ object: [String: Any]) throws -> String {
@@ -173,5 +229,32 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
             throw CocoaError(.fileWriteInapplicableStringEncoding)
         }
         return line
+    }
+
+    private static func encodedLines(_ entries: [DiagnosticLogEntry]) throws -> Data {
+        let encoder = JSONEncoder()
+        var output = Data()
+        for entry in entries {
+            output.append(try encoder.encode(entry))
+            output.append(0x0A)
+        }
+        return output
+    }
+
+    static func defaultFileURL() -> URL? {
+        guard let applicationSupport =
+            try? FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+        else {
+            return nil
+        }
+        return applicationSupport
+            .appendingPathComponent("OpenCodeMobile", isDirectory: true)
+            .appendingPathComponent("Debug", isDirectory: true)
+            .appendingPathComponent("diagnostic-logs-v1.jsonl", isDirectory: false)
     }
 }

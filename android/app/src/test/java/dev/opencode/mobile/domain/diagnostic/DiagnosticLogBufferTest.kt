@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.diagnostic
 
+import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -84,5 +85,40 @@ class DiagnosticLogBufferTest {
         assertTrue(text.contains("\"area\":\"sse\""))
         assertFalse(text.contains("nope"))
         assertTrue(text.contains("[REDACTED]"))
+    }
+
+    @Test
+    fun persistsAcrossRelaunchWithinWindow() {
+        val directory = Files.createTempDirectory("diagnostic-logs-persist").toFile()
+        val file = DiagnosticLogBuffer.fileIn(directory)
+        var now = 1_700_000_000_000L
+
+        val first = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+        first.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "before restart")
+        first.append(DiagnosticLogArea.Session, DiagnosticLogLevel.Warning, "busy stuck")
+
+        val reopened = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+        assertEquals(
+            listOf("before restart", "busy stuck"),
+            reopened.snapshot().entries.map { it.message },
+        )
+        assertTrue(file.exists())
+
+        now += DiagnosticLogBuffer.WINDOW_MILLISECONDS + 1
+        val expired = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+        assertTrue(expired.snapshot().entries.isEmpty())
+    }
+
+    @Test
+    fun clearRemovesPersistedFile() {
+        val directory = Files.createTempDirectory("diagnostic-logs-clear").toFile()
+        val file = DiagnosticLogBuffer.fileIn(directory)
+        val buffer = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { 99L })
+        buffer.append(DiagnosticLogArea.Permission, DiagnosticLogLevel.Info, "pending count=1")
+        assertTrue(file.exists())
+
+        buffer.clear()
+        assertTrue(buffer.snapshot().entries.isEmpty())
+        assertFalse(file.exists())
     }
 }

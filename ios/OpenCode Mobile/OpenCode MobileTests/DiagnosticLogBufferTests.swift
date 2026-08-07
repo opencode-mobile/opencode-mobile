@@ -77,6 +77,43 @@ struct DiagnosticLogBufferTests {
         #expect(!text.contains("nope"))
         #expect(text.contains("[REDACTED]"))
     }
+
+    @Test func persistsAcrossRelaunchWithinWindow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("diagnostic-logs-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("diagnostic-logs-v1.jsonl")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var now: Int64 = 1_700_000_000_000
+        let first = DiagnosticLogBuffer(fileURL: file, clock: { now })
+        first.append(area: .sse, level: .info, message: "before restart")
+        first.append(area: .session, level: .warning, message: "busy stuck")
+
+        let reopened = DiagnosticLogBuffer(fileURL: file, clock: { now })
+        #expect(reopened.snapshot().entries.map(\.message) == ["before restart", "busy stuck"])
+        #expect(FileManager.default.fileExists(atPath: file.path))
+
+        now += DiagnosticLogBuffer.windowMilliseconds + 1
+        let expired = DiagnosticLogBuffer(fileURL: file, clock: { now })
+        #expect(expired.snapshot().entries.isEmpty)
+    }
+
+    @Test func clearRemovesPersistedFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("diagnostic-logs-clear-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("diagnostic-logs-v1.jsonl")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let buffer = DiagnosticLogBuffer(fileURL: file, clock: { 99 })
+        buffer.append(area: .permission, level: .info, message: "pending count=1")
+        #expect(FileManager.default.fileExists(atPath: file.path))
+
+        buffer.clear()
+        #expect(buffer.snapshot().entries.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
 }
 
 private extension Array {

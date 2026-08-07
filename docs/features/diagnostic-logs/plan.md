@@ -10,7 +10,8 @@ stuck busy state, SSE drops) can be diagnosed without adb or Xcode.
 
 ## In Scope
 
-- Always-on in-process rolling buffer with a **5-minute** primary time window.
+- Always-on rolling buffer with a **5-minute** primary time window, mirrored to
+  a local JSONL file so the window survives app restart / process death.
 - Silent soft safety cap of **2,000 entries** (drop oldest); time eviction stays
   primary.
 - Structured lines: timestamp, area, level, message (and optional opaque ids /
@@ -32,8 +33,8 @@ stuck busy state, SSE drops) can be diagnosed without adb or Xcode.
 
 - Full logcat / `os_log` mirror.
 - Crash upload or always-on remote telemetry.
-- Push notifications or background capture beyond process lifetime.
-- Disk persistence across process death (v1 is in-process only).
+- Push notifications or background capture beyond the persisted foreground
+  window.
 - Expanding TextMate Logbook into this surface (keep separate; optional later
   share for TextMate JSONL).
 - Surfacing MB or entry-count knobs in the UI.
@@ -65,7 +66,8 @@ buffer, for example:
 - `DiagnosticLogLevel` — at least `debug`, `info`, `warning`, `error`.
 - `DiagnosticLogEntry` — timestamp, area, level, message (redacted).
 - `DiagnosticLogBuffer` — append, snapshot (time window), clear; enforces
-  5-minute eviction and 2,000-entry soft cap.
+  5-minute eviction and 2,000-entry soft cap; persists the window to local
+  JSONL and reloads on launch.
 - App logging facade that dual-writes to platform logging and the buffer.
 - Export snapshot metadata should note truncation / dropped count when the soft
   cap dropped lines inside the window.
