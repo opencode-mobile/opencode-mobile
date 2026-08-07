@@ -402,11 +402,14 @@ class SessionChatViewModel
             if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) return
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
-            sessionInfo.markOptimisticBusy()
             composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
-                onOptimisticRows = { rows -> timeline.beginOptimisticSend(rows) },
+                onOptimisticRows = { rows ->
+                    // Mark only after composer passes early-return checks.
+                    sessionInfo.markOptimisticBusy()
+                    timeline.beginOptimisticSend(rows)
+                },
                 onSendAccepted = {
                     sessionReadyStore.notifyPromptSent(sessionId, worktree)
                     sessionInfo.refreshStatus()

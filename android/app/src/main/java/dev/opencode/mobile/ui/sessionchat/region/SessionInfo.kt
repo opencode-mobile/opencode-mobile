@@ -299,7 +299,9 @@ class SessionInfo(
                             _state.update {
                                 it.withStatus(
                                     authoritative = status?.let(eventDomainAdapter::statusLabel),
-                                    hasResolved = it.hasResolvedSessionStatus || status != null,
+                                    // Every LiveStore emission is an authoritative snapshot
+                                    // (including idle / missing session).
+                                    hasResolved = true,
                                 )
                             }
                         }

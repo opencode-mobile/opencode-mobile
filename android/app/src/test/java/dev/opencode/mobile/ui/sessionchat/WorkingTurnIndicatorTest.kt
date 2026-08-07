@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -37,6 +38,54 @@ class WorkingTurnIndicatorTest {
         )
     }
 
+    @Test
+    fun labelForActiveTurn_showsRetryingAfterUserWithNoAssistant() {
+        assertEquals(
+            "Retrying",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Retrying",
+                messages = listOf(user("u1")),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_showsWhenAssistantHasBlankTextOnly() {
+        assertEquals(
+            "Working",
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages = listOf(user("u1"), assistant("a1", "   ")),
+            ),
+        )
+    }
+
+    @Test
+    fun labelForActiveTurn_hidesWhenAssistantHasToolCard() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                messages =
+                    listOf(
+                        user("u1"),
+                        assistant(
+                            id = "a1",
+                            text = "",
+                            blocks =
+                                listOf(
+                                    SessionChatTimelineBlock.ToolCard(
+                                        blockID = "tool-1",
+                                        toolName = "bash",
+                                        status = ToolStatus.Running,
+                                        title = "bash",
+                                    ),
+                                ),
+                        ),
+                    ),
+            ),
+        )
+    }
+
     private fun user(id: String) =
         SessionChatMessageItem(
             id = id,
@@ -48,10 +97,12 @@ class WorkingTurnIndicatorTest {
     private fun assistant(
         id: String,
         text: String,
+        blocks: List<SessionChatTimelineBlock> = emptyList(),
     ) = SessionChatMessageItem(
         id = id,
         role = MessageRole.Assistant,
         text = text,
         metadataLabel = "",
+        blocks = blocks,
     )
 }

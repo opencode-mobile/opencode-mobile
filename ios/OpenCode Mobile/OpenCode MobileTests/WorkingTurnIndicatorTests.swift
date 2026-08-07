@@ -30,11 +30,50 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_showsRetryingAfterUserWithNoAssistant() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Retrying",
+                messages: [user("u1")]
+            ) == "Retrying"
+        )
+    }
+
+    @Test func labelForActiveTurn_showsWhenAssistantHasBlankTextOnly() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "   ")]
+            ) == "Working"
+        )
+    }
+
+    @Test func labelForActiveTurn_hidesWhenAssistantHasToolCard() {
+        let toolCard: SessionChatTimelineBlock = .toolCard(
+            blockID: "tool-1",
+            card: SessionChatToolCardBlock(
+                toolName: "bash",
+                status: .running,
+                title: "bash"
+            )
+        )
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Working",
+                messages: [user("u1"), assistant("a1", text: "", blocks: [toolCard])]
+            ) == nil
+        )
+    }
+
     private func user(_ id: String) -> SessionChatRow {
         SessionChatRow(id: id, role: .user, text: "Hi", metadataLabel: "")
     }
 
-    private func assistant(_ id: String, text: String) -> SessionChatRow {
-        SessionChatRow(id: id, role: .assistant, text: text, metadataLabel: "")
+    private func assistant(
+        _ id: String,
+        text: String,
+        blocks: [SessionChatTimelineBlock] = []
+    ) -> SessionChatRow {
+        SessionChatRow(id: id, role: .assistant, text: text, metadataLabel: "", blocks: blocks)
     }
 }

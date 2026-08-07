@@ -16,14 +16,14 @@ web/desktop `session_working` feedback.
    `SessionStatusLiveStore`; keep `GET /session/status` for bootstrap and
    reconnect catch-up.
 2. Android: do not emit an empty map when a status GET fails (keep prior).
-3. Optimistic busy on prompt/command send; clear on send failure or authoritative
-   idle.
+3. Optimistic busy after composer accepts a send (not before early returns);
+   clear on send failure, authoritative busy, or resolved idle.
 4. Drive Stop / `isTurnActive` / todos live from effective working label
    (authoritative ∪ optimistic).
 5. In-chat Working/Retrying row when the session is working and the active turn
    has no visible assistant content yet.
 6. Unit tests on both platforms for LiveStore apply, failed GET, optimistic
-   busy, and Working row gating.
+   busy / idle clear, and Working row gating.
 
 ## Out of scope
 

@@ -310,10 +310,11 @@ final class SessionChatViewModel {
     func sendPrompt() async {
         guard isConnectionLive else { return }
         guard permissionRequests.isEmpty, questionRequests.isEmpty else { return }
-        sessionInfo.markOptimisticBusy()
         await composer.sendPrompt(
             sessionID: sessionID,
             onOptimisticRows: { [weak self] rows in
+                // Mark only after composer passes early-return checks.
+                self?.sessionInfo.markOptimisticBusy()
                 self?.timeline.beginOptimisticSend(rows)
             },
             onSendAccepted: { [weak self] in

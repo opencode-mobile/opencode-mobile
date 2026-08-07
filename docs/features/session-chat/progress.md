@@ -2,14 +2,18 @@
 
 ## OPE-113 Session working indicator (2026-08-07)
 
-- Status: implemented on both platforms (unit-tested Android; iOS sources updated).
+- Status: implemented on both platforms (unit-tested Android + iOS).
 - Plan: [ope-113-plan.md](./ope-113-plan.md)
 - Research: [research-session-running-indicator-gap.md](./research-session-running-indicator-gap.md)
 - Done:
   - `SessionStatusLiveStore` applies `session.status` / `session.idle` locally;
     GET only on bootstrap + reconnect (no empty-map wipe on Android failure).
-  - Optimistic busy on send; Stop / turn-active from effective Working label.
+  - Optimistic busy after composer accepts send; clears on failure, authoritative
+    busy, or resolved idle; Stop / turn-active from effective Working label.
   - In-chat Working/Retrying row when busy with no assistant content yet.
+  - Follow-up: stuck-optimistic fixes + SessionInfo status / LiveStore /
+    Working-row gating unit tests on both platforms; intentional host-insertion
+    parity recorded.
 - Remaining: device smoke (send → immediate Stop + Working; mid-turn open;
   failed status refetch keeps busy on Android).
 
