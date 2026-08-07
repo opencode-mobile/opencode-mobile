@@ -7,6 +7,7 @@ Ownership: private Mac mini on LAN. No inbound ports, no relay.
 - Labels: `self-hosted`, `macOS`, `mac-mini` (same as `smoke-mac-mini.yml`, `ios-checks.yml`, `ios-build.yml`)
 - Registration: repo-level self-hosted runner (Settings → Actions → Runners → New self-hosted runner → macOS ARM64)
 - Pin drift intentionally: `sw_vers` + `xcodebuild -version` are logged in `Smoke Mac mini` and any failed iOS Checks run shows the current pinned versions. Bump Xcode/macOS deliberately.
+- Current pin (2026-08-07, verified on `mac-mini-1`): macOS 26.5.2 (25F84), Xcode 26.6 (17F113), `xcode-select` → `/Applications/Xcode.app/Contents/Developer`, Runner 2.336.0. Update this line when Xcode/macOS is bumped.
 
 ## What runs where
 
@@ -37,9 +38,13 @@ Ownership: private Mac mini on LAN. No inbound ports, no relay.
    - Ensure the user account that owns the runner auto-logs in if using a LaunchAgent (LaunchDaemon avoids this).
 
 3. Verify after reboot:
-   - GitHub → Settings → Actions → Runners → `mac-mini` shows **Idle** (green).
-   - `sudo ./svc.sh status` or `launchctl list | grep actions.runner` is loaded.
-   - Dispatch `Smoke Mac mini` → green.
+   - GitHub → Settings → Actions → Runners → `mac-mini-1` shows **Idle** (green, `macOS` `ARM64` `self-hosted` `mac-mini`).
+   - `cd ~/actions-runner && ./svc.sh status` → `Started: <pid> actions.runner...` and `launchctl print gui/$(id -u)/actions.runner...` shows `state = running` / `RunAtLoad = true`.
+   - Dispatch `Smoke Mac mini` → green. If `xcode-select -p` drifts back to `/Library/Developer/CommandLineTools`, rerun `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+
+## Troubleshooting: duplicate sessions
+
+If `stdout.log` shows `SessionConflictException` / `Runner listener exit with Session Conflict` and `launchctl list` shows no `actions.runner` while `ps aux | grep Runner.Listener` still shows a `run`-type listener, a manual `./run.sh` instance is colliding with the `svc.sh` LaunchAgent. Fix: `cd ~/actions-runner && ./svc.sh stop; kill <manual-pid>; ./svc.sh start`. The 2026-08-07 duplicate (`34304` manual vs `42903` service) was fixed this way; the service `43036` then reported `Listening for Jobs` cleanly.
 
 ## Recovery
 
