@@ -49,10 +49,11 @@
 
 - **Date:** 2026-08-07
 - **Decision:** Effective Compacting… is local `isCompacting` **or**
-  server-detected active compaction: session busy and the active turn (messages
-  after the last user) contains a kept `compaction` part or an assistant with
-  `mode`/`agent` equal to `"compaction"` (case-insensitive). Keep compaction
-  parts in the domain model for presence; do not render them in the timeline.
+  server-detected active compaction: session busy and the active turn (from the
+  last user message through the end of the turn) contains a kept `compaction`
+  part or an assistant with `mode`/`agent` equal to `"compaction"`
+  (case-insensitive). Keep compaction parts in the domain model for presence;
+  do not render them in the timeline.
   Do not rely on `session.time.compacting`. Success snackbar stays initiator-only.
 - **Reason:** A second client with the same session open never set the local
   Commands flag, so it only showed generic Working. Live message + busy signals
