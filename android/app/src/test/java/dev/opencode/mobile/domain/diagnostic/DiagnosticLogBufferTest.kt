@@ -121,4 +121,51 @@ class DiagnosticLogBufferTest {
         assertTrue(buffer.snapshot().entries.isEmpty())
         assertFalse(file.exists())
     }
+
+    @Test
+    fun bindSharedAbsorbsEarlyEphemeralEntriesIntoFileBackedBuffer() {
+        DiagnosticLogBuffer.resetSharedForTests()
+        try {
+            val directory = Files.createTempDirectory("diagnostic-logs-bind").toFile()
+            val file = DiagnosticLogBuffer.fileIn(directory)
+            var now = 1_700_000_000_000L
+
+            // Pre-DI facade path: install a memory-only shared buffer first.
+            val ephemeral = DiagnosticLogBuffer(clockEpochMilliseconds = { now })
+            DiagnosticLogBuffer.bindShared(ephemeral)
+            ephemeral.append(
+                DiagnosticLogArea.Sse,
+                DiagnosticLogLevel.Info,
+                "early before bind",
+            )
+
+            // Prior session residue on disk (separate writer, same clock).
+            DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now }).append(
+                DiagnosticLogArea.Session,
+                DiagnosticLogLevel.Warning,
+                "from previous process",
+            )
+
+            val bound =
+                DiagnosticLogBuffer(
+                    file = file,
+                    clockEpochMilliseconds = { now },
+                )
+            DiagnosticLogBuffer.bindShared(bound)
+
+            assertTrue(DiagnosticLogBuffer.shared === bound)
+            assertEquals(
+                listOf("from previous process", "early before bind"),
+                bound.snapshot().entries.map { it.message },
+            )
+
+            val reopened = DiagnosticLogBuffer(file = file, clockEpochMilliseconds = { now })
+            assertEquals(
+                listOf("from previous process", "early before bind"),
+                reopened.snapshot().entries.map { it.message },
+            )
+        } finally {
+            DiagnosticLogBuffer.resetSharedForTests()
+        }
+    }
 }

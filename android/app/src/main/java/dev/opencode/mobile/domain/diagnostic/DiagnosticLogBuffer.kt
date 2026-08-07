@@ -216,6 +216,35 @@ class DiagnosticLogBuffer(
         runCatching { AtomicFile(store).delete() }
     }
 
+    /** Drain entries when handing off an early in-memory buffer to a file-backed one. */
+    private fun drainForHandoff(): List<DiagnosticLogEntry> =
+        lock.withLock {
+            if (entries.isEmpty()) return@withLock emptyList()
+            val drained = entries.toList()
+            entries.clear()
+            droppedBySoftCap = 0
+            drained
+        }
+
+    /** Merge orphaned early entries into this buffer and persist when file-backed. */
+    private fun absorb(incoming: List<DiagnosticLogEntry>) {
+        if (incoming.isEmpty()) return
+        lock.withLock {
+            val byId = LinkedHashMap<String, DiagnosticLogEntry>()
+            for (entry in entries) {
+                byId[entry.id] = entry
+            }
+            for (entry in incoming) {
+                byId.putIfAbsent(entry.id, entry)
+            }
+            val merged = byId.values.sortedBy { it.timestampEpochMilliseconds }
+            entries.clear()
+            entries.addAll(merged)
+            evictLocked(now = clockEpochMilliseconds())
+            persistLocked()
+        }
+    }
+
     companion object {
         const val WINDOW_MINUTES = 5
         const val WINDOW_MILLISECONDS: Long = WINDOW_MINUTES * 60L * 1_000L
@@ -232,7 +261,12 @@ class DiagnosticLogBuffer(
         @Volatile
         private var sharedInstance: DiagnosticLogBuffer? = null
 
-        /** Process-lifetime buffer shared by DI and non-injected call sites. */
+        /**
+         * Process-lifetime buffer shared by DI and non-injected call sites.
+         *
+         * May start as an in-memory buffer before Hilt binds the file-backed
+         * singleton; [bindShared] absorbs any early entries into that singleton.
+         */
         val shared: DiagnosticLogBuffer
             get() =
                 synchronized(sharedLock) {
@@ -241,7 +275,18 @@ class DiagnosticLogBuffer(
 
         fun bindShared(buffer: DiagnosticLogBuffer) {
             synchronized(sharedLock) {
+                val previous = sharedInstance
+                if (previous != null && previous !== buffer) {
+                    buffer.absorb(previous.drainForHandoff())
+                }
                 sharedInstance = buffer
+            }
+        }
+
+        /** Test-only: clear the process-wide shared handle between cases. */
+        internal fun resetSharedForTests() {
+            synchronized(sharedLock) {
+                sharedInstance = null
             }
         }
 
