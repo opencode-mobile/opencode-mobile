@@ -2,9 +2,9 @@
 
 ## Status
 
-Planning locked. Phase 7a closed the main hardening plan. This document is the
-canonical Phase **7b** umbrella: an honest, shippable follow-up that prefers
-coverage slices over architecture mega-migrations.
+Slice 1 (soak coverage) complete — scenarios 4–7 **full** on Android and iOS.
+Phase 7a closed the main hardening plan. This document remains the canonical
+Phase **7b** umbrella for parked architecture reopen triggers.
 
 Scroll remains **view-owned**. Screen Model does not gain viewport geometry.
 Public repository observation stays **list-shaped**.
@@ -16,7 +16,7 @@ Visual companion:
 
 Linear: [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b)
 (umbrella) · [OPE-87](https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps)
-(Slice 1 coverage).
+(Slice 1 coverage — Done).
 ## Objective
 
 Close deferred hardening follow-ups without stuffing high-risk refactors into a
@@ -106,28 +106,19 @@ None of these are 7b slices. Reopen triggers below create a **new** planning loc
 Only Slice 1 is in-scope work. Later numbers exist only if a reopen trigger fires
 and a **new** triage supersedes this lock.
 
-### Slice 1 — Soak coverage debt (ship)
+### Slice 1 — Soak coverage debt (shipped)
 
 **Ticket:** [OPE-87](https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps)
 under [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b)
 (not an architecture PR).
 
-**Scope**
-
-- Repeated overflow → recovering → healthy only after validated replace
-  (multi-cycle, not single-cycle only).
-- Parser / preparer failure retains plain text (injected failure fixture).
-- Rapid session switch / teardown (A→B→A; zero cross-session display publish).
-- Tighten related pressure gaps called out as partial in
-  [phase-7a-soak-matrix.md](./phase-7a-soak-matrix.md) where cheap at the same
-  seams (memory/backlog pressure integrated fixtures preferred if low-risk).
-
-**Exit criteria**
+**Exit criteria — met**
 
 - Matrix scenarios **4–7** are **full** on Android and iOS.
 - No production API shape change.
 - Scroll contracts unchanged and still view-owned.
-- Coverage doc + `parity-gaps.md` updated only where intentional gaps remain.
+- Coverage doc updated; intentional architecture parks unchanged in
+  `parity-gaps.md`.
 
 ### Slice 2+ — Architecture reopen (not scheduled)
 

@@ -324,8 +324,8 @@ fun SessionChatScreen(
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
-                            // End-pin gap is the 16 overhang inside timelineBottomInset
-                            // (composer + 16) — not an extra 12 on top.
+                            // Composer + 16 end-pin gap; float stack uses this as-is
+                            // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
                             onReviewChangesClick = {

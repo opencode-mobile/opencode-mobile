@@ -56,7 +56,6 @@ import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
-import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
@@ -327,15 +326,12 @@ private fun SessionChatTimelineReadyView(
             val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
             val showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
             if (showFloatStack) {
+                // bottomOverlayInset is already composer + 16 end-pin gap.
                 Column(
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(
-                                bottom =
-                                    MessageListTimelineDefaults.scrollToEndPillBottomPadding +
-                                        bottomOverlayInset,
-                            ),
+                            .padding(bottom = bottomOverlayInset),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {

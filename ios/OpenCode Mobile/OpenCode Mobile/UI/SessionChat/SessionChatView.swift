@@ -96,7 +96,8 @@ struct SessionChatView: View {
                         sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                         sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
                         hideFloatStack: showSessionTodosSheet,
-                        // Clearance is composer + 16 end-pin gap (section bottom is 0).
+                        // Composer + 16 end-pin gap; float stack uses this as-is
+                        // (no extra scrollToEndPillBottomPadding).
                         bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight),
                         onRefresh: { await viewModel.refreshMessages() },
                         onReviewChangesTap: {

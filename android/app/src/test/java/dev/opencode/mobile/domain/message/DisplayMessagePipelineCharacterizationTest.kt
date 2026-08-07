@@ -414,6 +414,74 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
+    fun failingPrepareTextBlock_keepsPublishedPlainStreamingText() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            harness.emissions.clear()
+            harness.preparer.prepareTextBlockInvocations.clear()
+
+            harness.preparer.failNextPrepareTextBlock = true
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Hello"))),
+            )
+            harness.delay.release()
+            advanceUntilIdle()
+
+            assertTrue(harness.emissions.isNotEmpty())
+            val plain = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals("# Hello", plain.messages.single().text)
+            assertTrue(plain.messages.single().isStreaming)
+
+            harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Hello world"))),
+            )
+            advanceUntilIdle()
+
+            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals("# Hello world", latest.messages.single().text)
+            assertTrue(harness.emissions.none { it is DisplayMessageListUpdate.LoadFailed })
+        }
+
+    @Test
+    fun decorationBacklogPressure_doesNotBlockPlainStreamingTextLane() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+            harness.preparer.minimumPrepareDelayMs = 5_000L
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
+            harness.emissions.clear()
+
+            // Hold decoration so backlog work piles up while text lane must still publish.
+            harness.preparer.holdNextPrepareMessages()
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Stream"))),
+            )
+            harness.delay.release()
+            advanceUntilIdle()
+
+            assertTrue(harness.emissions.isNotEmpty())
+            val first = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals("# Stream", first.messages.single().text)
+
+            harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Stream more"))),
+            )
+            advanceUntilIdle()
+
+            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals("# Stream more", latest.messages.single().text)
+            assertTrue(harness.emissions.none { it is DisplayMessageListUpdate.LoadFailed })
+
+            harness.preparer.releaseNextPrepareMessages()
+            advanceUntilIdle()
+            assertEquals("# Stream more", (harness.emissions.last() as DisplayMessageListUpdate.Messages).messages.single().text)
+        }
+
+    @Test
     fun structureFirstStreamingPublishesCodeBlockChromeBeforeDecoration() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
@@ -659,6 +727,9 @@ class DisplayMessagePipelineCharacterizationTest {
         private val documentSerial = AtomicInteger(1)
         var minimumPrepareDelayMs: Long? = null
 
+        @Volatile
+        var failNextPrepareTextBlock: Boolean = false
+
         data class PrepareTextBlockInvocation(
             val blockID: String,
             val plain: String,
@@ -765,6 +836,10 @@ class DisplayMessagePipelineCharacterizationTest {
                 activePrepareMessagesHold = hold
                 hold.await()
                 activePrepareMessagesHold = null
+            }
+            if (failNextPrepareTextBlock) {
+                failNextPrepareTextBlock = false
+                error("injected prepareTextBlock failure")
             }
             minimumPrepareDelayMs?.let { delay(it) }
             if (mode == MessagePreparationMode.Streaming &&

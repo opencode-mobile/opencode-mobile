@@ -211,10 +211,8 @@ private struct SessionChatTimelineReadyView: View {
                                 )
                             }
                         }
-                        .padding(
-                            .bottom,
-                            MessageListTimelineDefaults.scrollToEndPillBottomPadding + props.bottomOverlayInset
-                        )
+                        // bottomOverlayInset is already composer + 16 end-pin gap.
+                        .padding(.bottom, props.bottomOverlayInset)
                     }
                 }
                 .onChange(of: props.sessionTodoTotalCount) { _, total in

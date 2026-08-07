@@ -44,8 +44,10 @@
   - **Primary** (nearest composer): Scroll to end **XOR** Review changes.
   - **Secondary** (above primary): Session Todos when live / finished hold.
   Compose **only visible** pills. Shared bottom inset once
-  (`scrollToEndPillBottomPadding + composer overlay`); spacing only between
-  real siblings. Do not leave zero-height animation hosts in a spaced column.
+  (`bottomOverlayInset` = composer stack + 16 end-pin gap — same as timeline
+  pin / bottom-fade overhang; do not also add `scrollToEndPillBottomPadding`);
+  spacing only between real siblings. Do not leave zero-height animation hosts
+  in a spaced column.
 - Why: Android `AnimatedVisibility` + `spacedBy` reserved ~8dp under Scroll to
   end even with no Todos pill, shifting its resting position. Primary baseline
   must stay fixed when secondary toggles off.

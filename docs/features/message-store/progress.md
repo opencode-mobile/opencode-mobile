@@ -96,15 +96,13 @@ None. The message-display-rendering-hardening plan is closed via Phase 7a.
 - Phases 1–7a of
   [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md)
   are complete. Soak matrix:
-  [phase-7a-soak-matrix.md](./phase-7a-soak-matrix.md).
-- Phase 7b plan locked:
-  [message-display-rendering-7b-plan.md](./message-display-rendering-7b-plan.md)
-  ([HTML](./message-display-rendering-7b-plan.html)).
-  Linear: [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b)
-  umbrella;
+  [phase-7a-soak-matrix.md](./phase-7a-soak-matrix.md) (scenarios 1–8 **full**
+  after OPE-87).
+- Phase 7b Slice 1 (soak coverage) shipped under
   [OPE-87](https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps)
-  coverage ticket.
-  **Ship:** coverage ticket to move soak scenarios 4–7 from partial → full.
-  **Parked** (reopen triggers only): public `DisplayFrame`, Sync/Pipeline
-  absorption, fingerprint→revision, change-set hint, `syncHealth` UI, device
-  p95 CI, sole-text bridge deletion.
+  / umbrella
+  [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b).
+  Plan: [message-display-rendering-7b-plan.md](./message-display-rendering-7b-plan.md).
+- **Parked** (reopen triggers only; not scheduled): public `DisplayFrame`,
+  Sync/Pipeline absorption, fingerprint→revision, change-set hint, `syncHealth`
+  UI, device p95 CI, sole-text bridge deletion.
