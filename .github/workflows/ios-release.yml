@@ -1,0 +1,158 @@
+name: iOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Semantic version: MAJOR.MINOR.PATCH[-PRERELEASE]"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, mac-mini]
+    environment: ios-release
+    defaults:
+      run:
+        working-directory: ios/OpenCode Mobile
+    env:
+      IOS_MARKETING_VERSION: ${{ inputs.version_name }}
+      IOS_BUILD_NUMBER: ${{ github.run_number }}
+      EXPECTED_TEAM_ID: 677MTXPXZZ
+      EXPECTED_BUNDLE_ID: dev.opencode.mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+          if [[ ! "$IOS_MARKETING_VERSION" =~ $version_pattern ]]; then
+            echo "version_name must match MAJOR.MINOR.PATCH[-PRERELEASE]." >&2
+            exit 1
+          fi
+          if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "GitHub run number did not produce a positive build number." >&2
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ASC_API_KEY_P8:-}" || -z "${ASC_KEY_ID:-}" || -z "${ASC_ISSUER_ID:-}" ]]; then
+            echo "ASC_API_KEY_P8, ASC_KEY_ID, and ASC_ISSUER_ID are required in the ios-release environment." >&2
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "ASC_API_KEY_PATH=$key_path"
+            echo "ASC_KEY_ID=$ASC_KEY_ID"
+            echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve Swift Package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile"
+
+      - name: Archive Release for iOS device
+        run: |
+          set -euo pipefail
+          archive_path="$RUNNER_TEMP/OpenCode-Mobile.xcarchive"
+          # Xcode 26.x Release WMO crashes the Swift frontend on this target
+          # (SILPerformanceInliner). Keep Release configuration/signing, but
+          # compile without WMO until Apple fixes the optimizer.
+          xcodebuild archive \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$archive_path" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            MARKETING_VERSION="$IOS_MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$EXPECTED_TEAM_ID" \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            SWIFT_COMPILATION_MODE=singlefile
+          echo "IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
+
+      - name: Export signed App Store IPA
+        run: |
+          set -euo pipefail
+          export_dir="$RUNNER_TEMP/ios-ipa-export"
+          mkdir -p "$export_dir"
+          xcodebuild -exportArchive \
+            -archivePath "$IOS_ARCHIVE_PATH" \
+            -exportPath "$export_dir" \
+            -exportOptionsPlist "$GITHUB_WORKSPACE/.github/ios/ExportOptions-AppStore.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ipa_path="$(find "$export_dir" -maxdepth 1 -name '*.ipa' -type f | head -n 1)"
+          if [[ -z "$ipa_path" ]]; then
+            echo "No IPA produced by exportArchive." >&2
+            ls -la "$export_dir" >&2 || true
+            exit 1
+          fi
+          echo "IOS_IPA_PATH=$ipa_path" >> "$GITHUB_ENV"
+
+      - name: Verify IPA signature
+        working-directory: .
+        run: |
+          .github/scripts/verify-ios-release-ipa.sh \
+            "$IOS_IPA_PATH" \
+            "$EXPECTED_TEAM_ID" \
+            "$EXPECTED_BUNDLE_ID"
+
+      - name: Upload signed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-${{ inputs.version_name }}-${{ github.run_number }}
+          path: ${{ env.IOS_IPA_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload xcarchive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcarchive-${{ inputs.version_name }}-${{ github.run_number }}
+          path: ${{ env.IOS_ARCHIVE_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove temporary ASC API key
+        if: always()
+        shell: bash
+        run: rm -f "${ASC_API_KEY_PATH:-}"
