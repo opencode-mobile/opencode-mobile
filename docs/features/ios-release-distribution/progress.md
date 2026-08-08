@@ -15,7 +15,7 @@ Not applicable.
 - [x] OPE-101 checkpoint 1 — Apple / Firebase / GitHub human setup
 - [x] OPE-101 checkpoint 2 workflow + scripts + docs + two protected `main` runs
 - [x] OPE-101 checkpoint 3 — ASC Prepare for Submission + signed `main` artifacts confirmed
-- [ ] OPE-103 TestFlight Internal Testing — agent upload path implemented; awaiting merge + protected verification
+- [x] OPE-103 TestFlight Internal Testing — upload + Internal Testing install verified
 - [ ] OPE-102 Firebase App Distribution
 
 ## Android implementation
@@ -49,11 +49,8 @@ persistent-keychain success path.
 | Version | Build | Run | Outcome |
 | --- | --- | --- | --- |
 | `0.1.0-internal.3` | 8 | [31248314838](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248314838) | Failed ASC upload: prerelease marketing version (`-19239`) |
-| `0.1.0` | 9 | [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789) | ASC accepted upload (awaiting processing + TestFlight install) |
+| `0.1.0` | 9 | [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789) | ASC accepted; processing VALID; Internal Testing READY; owner installed on device (2026-08-08) |
 
 ## Remaining work
 
-1. OPE-103 checkpoint 3 — wait for ASC processing, install from TestFlight
-   Internal, confirm App Store stays Prepare for Submission. Merge strict
-   versioning guard ([PR #113](https://github.com/opencode-mobile/opencode-mobile/pull/113)).
-2. OPE-102 Firebase App Distribution.
+1. OPE-102 Firebase App Distribution.
