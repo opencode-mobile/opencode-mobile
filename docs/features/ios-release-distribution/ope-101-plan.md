@@ -67,9 +67,10 @@ and produce usable signed artifacts. **Met.**
 
 ## Checkpoint 3 — Human completion
 
-- [ ] Confirm first signed artifact builds cleanly from protected `main`.
-- [ ] Confirm ASC app record exists and remains private / not submitted for
-      public App Review.
+- [x] Confirm first signed artifact builds cleanly from protected `main`
+      (`0.1.0-internal.1` / `0.1.0-internal.2` artifact runs above).
+- [x] Confirm ASC app record exists and remains private / not submitted for
+      public App Review (**Prepare for Submission**, 2026-08-08).
 
 ## Acceptance
 

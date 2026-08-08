@@ -23,20 +23,61 @@ Recovery copies of `.p8` and `GoogleService-Info.plist` live in the owner-only
 | `ASC_KEY_ID` | App Store Connect API Key ID |
 | `ASC_API_KEY_P8` | Raw `.p8` PEM for key `ios-release-ci` |
 
-## Run iOS Release
+## Versioning
 
-1. Merge the release-signing changes to `main`.
+| Field | Owner | Source |
+| --- | --- | --- |
+| Marketing version (`CFBundleShortVersionString`) | Operator | `version_name` workflow input (`MAJOR.MINOR.PATCH[-PRERELEASE]`) |
+| Build number (`CFBundleVersion`) | CI | `github.run_number` for that iOS Release run |
+
+TestFlight shows both. Never reuse a lower build number for the same marketing
+version after ASC has accepted a higher one.
+
+## Run iOS Release (sign + TestFlight upload)
+
+1. Merge the release changes to `main`.
 2. Actions → **iOS Release** → Run workflow on `main`.
-3. Set `version_name` (example: `0.1.0-internal.1`).
-4. Wait for archive, App Store IPA export, signature verification, and artifact
-   upload.
-5. Download `ios-ipa-…` and `ios-xcarchive-…` artifacts (7-day retention).
+3. Set `version_name` (example: `0.1.0-internal.3`).
+4. Wait for archive, App Store IPA export, signature verification, **ASC
+   upload**, and artifact retention.
+5. Download `ios-ipa-…` and `ios-xcarchive-…` artifacts if needed (7-day
+   retention). The workflow already uploaded the same IPA to App Store Connect.
 
 Build number (`CFBundleVersion`) equals the workflow run number.
 
 The archive step currently forces `SWIFT_OPTIMIZATION_LEVEL=-Onone` because
 Xcode 26.x Release WMO crashes on this project. Signing remains Apple
 Distribution.
+
+### Upload accepted vs build processed
+
+- **Upload accepted** — CI finished `xcrun altool --upload-package`
+  successfully. The binary was delivered to App Store Connect.
+- **Build processed** — App Store Connect finished processing (can take minutes).
+  Only then does the build appear under TestFlight for Internal Testing.
+
+CI does **not** wait for processing. That is a human follow-up.
+
+## Install from TestFlight Internal Testing
+
+1. Open [App Store Connect](https://appstoreconnect.apple.com) →
+   **OpenCode Mobile — Unofficial** → **TestFlight**.
+2. Wait until the new build leaves **Processing** and is available.
+3. Confirm it is under **Internal Testing** (ASC team users only).
+4. On the verification device, open the **TestFlight** app, accept the build if
+   prompted, install, and launch **OpenCode Mobile — Unofficial**.
+
+### Stay private (required)
+
+Do **not**:
+
+- click **Submit for Review** or release the app to the App Store;
+- create or use **External** TestFlight groups for this slice;
+- change the App Store version out of an unpublished draft state
+  (e.g. **Prepare for Submission**).
+
+Internal Testing does not require App Review or Beta App Review and does not
+make the app publicly searchable or downloadable.
 
 ## Verify an IPA locally
 
@@ -66,8 +107,15 @@ ASC API key.
 3. Revoke the old key in App Store Connect.
 4. Confirm the next iOS Release run succeeds.
 
+## Export compliance
+
+The app target sets `ITSAppUsesNonExemptEncryption=NO` because it uses only
+standard system HTTPS/TLS (and ATS-allowed cleartext to user-managed LAN
+servers), not custom encryption. If that assumption changes, update the plist
+key and/or answer the ASC export-compliance questionnaire before the next
+upload.
+
 ## Extension points
 
-- **OPE-103** — upload the signed App Store IPA to TestFlight Internal Testing.
 - **OPE-102** — build/distribute Ad Hoc IPAs to Firebase App Distribution on
   every `main` merge.

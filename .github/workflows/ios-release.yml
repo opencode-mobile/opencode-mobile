@@ -192,6 +192,38 @@ jobs:
             "$EXPECTED_TEAM_ID" \
             "$EXPECTED_BUNDLE_ID"
 
+      - name: Upload IPA to App Store Connect
+        env:
+          API_PRIVATE_KEYS_DIR: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ASC_KEY_ID:-}" || -z "${ASC_ISSUER_ID:-}" ]]; then
+            echo "ASC_KEY_ID and ASC_ISSUER_ID must be prepared before upload." >&2
+            exit 1
+          fi
+          if [[ ! -f "${API_PRIVATE_KEYS_DIR}/AuthKey_${ASC_KEY_ID}.p8" ]]; then
+            echo "ASC API key file AuthKey_${ASC_KEY_ID}.p8 is missing from the runner temp directory." >&2
+            exit 1
+          fi
+          echo "Uploading signature-verified IPA to App Store Connect for TestFlight Internal Testing."
+          echo "Marketing version: ${IOS_MARKETING_VERSION}"
+          echo "Build number: ${IOS_BUILD_NUMBER}"
+          # Succeeds when ASC accepts the delivery. Processing and TestFlight
+          # availability are a human follow-up; do not Submit for Review.
+          xcrun altool --upload-package "$IOS_IPA_PATH" \
+            --api-key "$ASC_KEY_ID" \
+            --api-issuer "$ASC_ISSUER_ID" \
+            --show-progress
+          {
+            echo "## iOS Release upload"
+            echo ""
+            echo "- Marketing version (\`CFBundleShortVersionString\`): \`${IOS_MARKETING_VERSION}\`"
+            echo "- Build number (\`CFBundleVersion\`): \`${IOS_BUILD_NUMBER}\`"
+            echo "- ASC accepted the IPA upload."
+            echo "- Wait for App Store Connect processing, then install via TestFlight **Internal Testing**."
+            echo "- Do **not** Submit for Review, release the app, or create External TestFlight groups."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload signed IPA
         uses: actions/upload-artifact@v4
         with:

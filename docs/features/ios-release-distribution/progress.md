@@ -14,8 +14,8 @@ Not applicable.
 
 - [x] OPE-101 checkpoint 1 — Apple / Firebase / GitHub human setup
 - [x] OPE-101 checkpoint 2 workflow + scripts + docs + two protected `main` runs
-- [ ] OPE-101 checkpoint 3 — human confirmation of first `main` artifacts
-- [ ] OPE-103 TestFlight Internal Testing
+- [x] OPE-101 checkpoint 3 — ASC Prepare for Submission + signed `main` artifacts confirmed
+- [ ] OPE-103 TestFlight Internal Testing — agent upload path implemented; awaiting merge + protected verification
 - [ ] OPE-102 Firebase App Distribution
 
 ## Android implementation
@@ -46,5 +46,6 @@ persistent-keychain success path.
 
 ## Remaining work
 
-1. Human confirm ASC app stays private (OPE-101 checkpoint 3).
-2. OPE-103 then OPE-102 per parent Remaining order.
+1. OPE-103 — merge agent changes, protected `main` upload, TestFlight Internal
+   install (see [`ope-103-plan.md`](ope-103-plan.md) checkpoint 3).
+2. OPE-102 Firebase App Distribution.
