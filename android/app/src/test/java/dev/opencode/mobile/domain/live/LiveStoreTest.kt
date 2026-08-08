@@ -486,6 +486,118 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_backgroundResumeToLiveWithoutReconnect_refreshesAfterStreamingLatch() =
+        runTest(testDispatcher) {
+            // Repro for grocery-shopping resume: mid-stream background stop clears
+            // wasConnected so cold start reaches Connected/Live without
+            // stream.reconnected. If server.connected is also missed, the open
+            // streaming latch must not block poll/recovery forever — otherwise UI
+            // stays Live on a stale timeline until pull-to-refresh.
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val epoch = ConnectionEpoch()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
+                    connectionEpoch = epoch,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+            eventStream.emit(messageUpdatedEvent("msg-2", "assistant"))
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-2", text = ""))
+            eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Partial"))
+            advanceTimeBy(50)
+            assertEquals("Partial", emissions.last().first { it.id == "msg-2" }.text)
+
+            // Background: ProcessLifecycle stop grace ends → SSE Idle.
+            eventStream.setConnectionState(EventStreamConnectionState.Idle)
+            advanceTimeBy(1)
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Stale)
+
+            // Server finished the turn while backgrounded.
+            repository.messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "Finished while away",
+                        parts = listOf(MessagePart.Text(text = "Finished while away", isStreaming = false)),
+                    ),
+                )
+
+            // Foreground resume: start() bumps epoch and HTTP open marks Connected
+            // (Live) without emitting stream.reconnected after stop() cleared wasConnected.
+            epoch.bump()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 50)
+
+            assertEquals(
+                "Finished while away",
+                emissions.last().first { it.id == "msg-2" }.text,
+            )
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
+    fun observeMessages_backgroundResumeToLiveWithoutReconnect_refreshesWhenNotStreaming() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val eventStream = FakeForegroundEventStream()
+            val epoch = ConnectionEpoch()
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val sync =
+                MessageSync(
+                    listMessages = { sessionId, directory -> repository.listMessages(sessionId, directory) },
+                    engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
+                    eventStream = eventStream,
+                    liveStoreScope = scope,
+                    pollIntervalMs = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
+                    connectionEpoch = epoch,
+                    recoveryDelay = { delay(1) },
+                )
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(1)
+
+            eventStream.setConnectionState(EventStreamConnectionState.Idle)
+            advanceTimeBy(1)
+            repository.messages =
+                listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Updated while away"))
+
+            epoch.bump()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 50)
+
+            assertEquals("Updated while away", emissions.last().single().text)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_staleEpochEventDoesNotMutateStore() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

@@ -292,13 +292,31 @@ class MessageSync(
                     var seenConnected = false
                     eventStream.connectionState.collect { state ->
                         when (state) {
-                            EventStreamConnectionState.Connected -> seenConnected = true
+                            EventStreamConnectionState.Connected -> {
+                                // Cold resume after stop() reaches Connected/Live without
+                                // stream.reconnected. If server.connected is missed, still
+                                // adopt the bumped epoch and fullReload — otherwise a
+                                // latched streaming turn blocks the poll watchdog forever.
+                                val shouldRecover =
+                                    seenConnected &&
+                                        (
+                                            health.get() is MessageSyncHealth.Stale ||
+                                                !isCurrentEpoch()
+                                        )
+                                seenConnected = true
+                                if (shouldRecover) {
+                                    staging.trySend(StagedItem.TransportResumed)
+                                }
+                            }
                             EventStreamConnectionState.Disconnected,
                             EventStreamConnectionState.Reconnecting,
                             EventStreamConnectionState.Idle,
                             -> {
                                 if (!seenConnected) return@collect
                                 if (lastPublishedFrames[storeSlot] == null) return@collect
+                                // Unlatch streaming so the poll watchdog can catch up even
+                                // before Connected triggers TransportResumed recovery.
+                                engine.finishStreamingText(storeSlot)
                                 if (!isCurrentEpoch()) return@collect
                                 if (!health.get().isHealthy) return@collect
                                 publishHealth(
@@ -598,6 +616,13 @@ class MessageSync(
                                     ?: MessageSyncRecoveryReason.Overflow
                             performClosedLoopRecovery(reason)
                         }
+                        is StagedItem.TransportResumed -> {
+                            serverConnectedReloadJob?.cancel()
+                            serverConnectedReloadJob = null
+                            adoptCurrentEpoch()
+                            enterRecovering(MessageSyncRecoveryReason.Reconnect, wakeConsumer = false)
+                            performClosedLoopRecovery(MessageSyncRecoveryReason.Reconnect)
+                        }
                         is StagedItem.Event -> {
                             noteDequeued(item.byteCost)
                             if (item.epoch != observationEpoch.get()) {
@@ -632,6 +657,9 @@ class MessageSync(
         data object Overflow : StagedItem
 
         data object RecoveryRequired : StagedItem
+
+        /** SSE returned to Connected after Idle/Disconnect without a reconnect event. */
+        data object TransportResumed : StagedItem
     }
 
     private fun timelinePollFlow(key: MessageSessionKey): Flow<MessageListUpdate> =

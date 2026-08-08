@@ -190,11 +190,34 @@ nonisolated final class MessageSync: @unchecked Sendable {
             for await state in await eventStream.connectionStateUpdates() {
                 switch state {
                 case .connected:
+                    // Cold resume after stop() reaches Connected/Live without
+                    // stream.reconnected. If server.connected is missed, still
+                    // adopt the bumped epoch and fullReload — otherwise a
+                    // latched streaming turn blocks the poll watchdog forever.
+                    let health = self.syncHealth(
+                        sessionID: key.sessionID,
+                        directory: key.directory.isEmpty ? nil : key.directory
+                    )
+                    let shouldRecover =
+                        seenConnected &&
+                        (
+                            {
+                                if case .stale = health { return true }
+                                return false
+                            }()
+                                || self.connectionEpoch.current() != observationEpoch.current
+                        )
                     seenConnected = true
+                    if shouldRecover {
+                        staging.requestTransportResume()
+                    }
                 case .disconnected, .reconnecting, .idle:
                     guard seenConnected else { continue }
                     guard self.fingerprint(for: key.storeSlot) != nil else { continue }
-                    guard self.connectionEpoch.current() == observationEpoch.current else { return }
+                    // Unlatch streaming so the poll watchdog can catch up even
+                    // before Connected triggers transport-resumed recovery.
+                    self.store.finishStreamingText(sessionID: key.storeSlot)
+                    guard self.connectionEpoch.current() == observationEpoch.current else { continue }
                     let current = self.syncHealth(sessionID: key.sessionID, directory: key.directory.isEmpty ? nil : key.directory)
                     guard current.isHealthy else { continue }
                     staging.enterStale(.transportUnavailable)
@@ -492,6 +515,20 @@ nonisolated final class MessageSync: @unchecked Sendable {
                         if case .recovering(let reason) = staging.currentHealth { return reason }
                         return .overflow
                     }(),
+                    publishMessages: publishMessages
+                )
+                continue
+            case .transportResumed:
+                debounceTask?.cancel()
+                debounceTask = nil
+                observationEpoch.adopt(connectionEpoch.current())
+                staging.enterRecovering(.reconnect, wakeConsumer: false)
+                setHealth(staging.currentHealth, for: key)
+                await performClosedLoopRecovery(
+                    key: key,
+                    staging: staging,
+                    observationEpoch: observationEpoch,
+                    reason: .reconnect,
                     publishMessages: publishMessages
                 )
                 continue
