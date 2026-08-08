@@ -15,11 +15,16 @@ protected GitHub Environment `ios-release` only.
 
 ## Release versioning
 
-- Operator supplies semantic `version_name` (`MAJOR.MINOR.PATCH[-PRERELEASE]`).
+- Operator supplies App Store marketing `version_name` as
+  `MAJOR.MINOR.PATCH` with integers only (no `-PRERELEASE`).
 - CI owns `CFBundleVersion` / `CURRENT_PROJECT_VERSION` from
   `github.run_number`.
-- Same shape as Android Release (`versionName` input + `versionCode` from run
-  number).
+- App Store Connect rejects prerelease marketing versions
+  (`CFBundleShortVersionString` must be one to three period-separated integers).
+  Internal iterations use the same marketing version with an increasing build
+  number (e.g. TestFlight shows `0.1.0 (8)`).
+- Android Release may still accept `versionName` with a prerelease suffix; that
+  divergence is intentional for ASC compatibility.
 
 ## Export method for OPE-101
 

@@ -17,9 +17,21 @@
 | Field | Value |
 | --- | --- |
 | Expected shared intent | Closed tester paths on both platforms (Play internal ↔ TestFlight Internal; Firebase App Distribution on both). |
-| Current iOS state | OPE-101 signing foundation complete; TestFlight and Firebase distribution still open (OPE-103, OPE-102). |
+| Current iOS state | OPE-101 signing foundation complete; TestFlight upload path on `main`; first ASC upload failed on prerelease marketing version (fix in progress). |
 | Current Android state | Play internal + Firebase App Distribution complete. |
 | Affected area | Missing implementation (distribution). |
 | Reason | Sequenced after ASC account and OPE-101 signing foundation. |
-| Owner / next action | Execute [`ope-103-plan.md`](ope-103-plan.md), then OPE-102. |
+| Owner / next action | Land strict `MAJOR.MINOR.PATCH` validation, re-run upload, complete TestFlight install. |
 | Status | Temporary |
+
+## Release marketing-version shape differs by platform
+
+| Field | Value |
+| --- | --- |
+| Expected shared intent | Operator-owned marketing version + CI-owned monotonic build/code. |
+| Current iOS state | `version_name` must be `MAJOR.MINOR.PATCH` integers only (ASC `CFBundleShortVersionString` rule). |
+| Current Android state | `versionName` may include a prerelease suffix (e.g. `0.1.0-internal.4`). |
+| Affected area | Behavior (release input contract). |
+| Reason | App Store Connect rejects prerelease marketing versions (`-19239`); Play does not. |
+| Owner / next action | Keep platform-specific input validation; do not force Android onto ASC rules. |
+| Status | Intentional |

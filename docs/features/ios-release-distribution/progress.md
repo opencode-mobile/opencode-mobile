@@ -44,8 +44,14 @@ Signing iteration that led here (all on `main`):
 Orphaned ASC Development cert `95KD8FA42B` was revoked via the API before the
 persistent-keychain success path.
 
+## OPE-103 upload attempts
+
+| Version | Build | Run | Outcome |
+| --- | --- | --- | --- |
+| `0.1.0-internal.3` | 8 | [31248314838](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248314838) | Failed ASC upload: prerelease marketing version (`-19239`) |
+
 ## Remaining work
 
-1. OPE-103 — merge agent changes, protected `main` upload, TestFlight Internal
-   install (see [`ope-103-plan.md`](ope-103-plan.md) checkpoint 3).
+1. OPE-103 — enforce strict `MAJOR.MINOR.PATCH`, re-run protected upload with
+   e.g. `0.1.0`, then TestFlight Internal install (checkpoint 3).
 2. OPE-102 Firebase App Distribution.

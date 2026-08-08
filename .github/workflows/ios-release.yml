@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: "Semantic version: MAJOR.MINOR.PATCH[-PRERELEASE]"
+        description: "App Store marketing version: MAJOR.MINOR.PATCH (integers only)"
         required: true
         type: string
 
@@ -37,9 +37,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+          # App Store Connect rejects prerelease marketing versions
+          # (CFBundleShortVersionString must be 1–3 period-separated integers).
+          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+$'
           if [[ ! "$IOS_MARKETING_VERSION" =~ $version_pattern ]]; then
-            echo "version_name must match MAJOR.MINOR.PATCH[-PRERELEASE]." >&2
+            echo "version_name must match MAJOR.MINOR.PATCH (integers only; no -PRERELEASE)." >&2
             exit 1
           fi
           if [[ ! "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
