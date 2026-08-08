@@ -1,6 +1,6 @@
 import Foundation
 
-struct ServerConnection: Sendable {
+nonisolated struct ServerConnection: Sendable {
     static let defaultUsername = ServerConnectionDefaults.username
 
     let baseURL: URL

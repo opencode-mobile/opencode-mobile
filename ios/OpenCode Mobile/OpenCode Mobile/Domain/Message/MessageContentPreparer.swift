@@ -83,7 +83,7 @@ nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendabl
     }
 }
 
-final class MessageContentPreparer: @unchecked Sendable {
+nonisolated final class MessageContentPreparer: @unchecked Sendable {
     static let shared = MessageContentPreparer()
 
     /// Legacy size gate still used by disposable streaming decoration fixtures.

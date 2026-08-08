@@ -1,11 +1,11 @@
 import Foundation
 
-struct MessageDTO: Codable, Sendable {
+nonisolated struct MessageDTO: Codable, Sendable {
     let info: MessageInfoDTO
     let parts: [MessagePartDTO]
 }
 
-struct MessageInfoDTO: Codable, Sendable {
+nonisolated struct MessageInfoDTO: Codable, Sendable {
     let id: String
     let sessionID: String?
     let role: String
@@ -21,40 +21,40 @@ struct MessageInfoDTO: Codable, Sendable {
     let cost: Double?
 }
 
-struct MessageTokensDTO: Codable, Sendable {
+nonisolated struct MessageTokensDTO: Codable, Sendable {
     let input: Int64?
     let output: Int64?
     let reasoning: Int64?
     let cache: MessageTokenCacheDTO?
 }
 
-struct MessageTokenCacheDTO: Codable, Sendable {
+nonisolated struct MessageTokenCacheDTO: Codable, Sendable {
     let read: Int64?
     let write: Int64?
 }
 
-struct MessageErrorInfoDTO: Codable, Sendable {
+nonisolated struct MessageErrorInfoDTO: Codable, Sendable {
     let name: String?
     let data: MessageErrorDataDTO?
 }
 
-struct MessageErrorDataDTO: Codable, Sendable {
+nonisolated struct MessageErrorDataDTO: Codable, Sendable {
     let message: String?
     let statusCode: Int?
     let responseBody: String?
 }
 
-struct MessageModelRefDTO: Codable, Sendable {
+nonisolated struct MessageModelRefDTO: Codable, Sendable {
     let modelID: String?
     let providerID: String?
 }
 
-struct MessageTimeDTO: Codable, Sendable {
+nonisolated struct MessageTimeDTO: Codable, Sendable {
     let created: Int64?
     let completed: Int64?
 }
 
-struct MessagePartDTO: Codable, Sendable {
+nonisolated struct MessagePartDTO: Codable, Sendable {
     let id: String?
     let sessionID: String?
     let messageID: String?
@@ -85,7 +85,7 @@ struct MessagePartDTO: Codable, Sendable {
     let url: String?
 }
 
-struct MessageToolStateDTO: Codable, Sendable {
+nonisolated struct MessageToolStateDTO: Codable, Sendable {
     let status: String
     let input: [String: AnyCodable]?
     let raw: String?
@@ -96,19 +96,19 @@ struct MessageToolStateDTO: Codable, Sendable {
     let metadata: [String: AnyCodable]?
 }
 
-struct MessageToolTimeDTO: Codable, Sendable {
+nonisolated struct MessageToolTimeDTO: Codable, Sendable {
     let start: Int64?
     let end: Int64?
     let compacted: Int64?
     let created: Int64?
 }
 
-struct MessagePartTimeDTO: Codable, Sendable {
+nonisolated struct MessagePartTimeDTO: Codable, Sendable {
     let start: Int64?
     let end: Int64?
 }
 
-struct SendMessageRequestDTO: Codable, Sendable {
+nonisolated struct SendMessageRequestDTO: Codable, Sendable {
     let parts: [SendMessagePartDTO]
     let model: SendPromptModelDTO?
     let variant: String?
@@ -122,12 +122,12 @@ struct SendMessageRequestDTO: Codable, Sendable {
     }
 }
 
-struct SendPromptModelDTO: Codable, Sendable {
+nonisolated struct SendPromptModelDTO: Codable, Sendable {
     let providerID: String
     let modelID: String
 }
 
-struct SendMessagePartDTO: Codable, Sendable {
+nonisolated struct SendMessagePartDTO: Codable, Sendable {
     let id: String?
     let type: String
     let text: String?
@@ -158,14 +158,14 @@ struct SendMessagePartDTO: Codable, Sendable {
     }
 }
 
-struct AgentPartSourceDTO: Codable, Sendable {
+nonisolated struct AgentPartSourceDTO: Codable, Sendable {
     let value: String
     let start: Int
     let end: Int
 }
 
 /// A type-erased Codable value for flexible JSON content.
-enum AnyCodable: Codable, Sendable, Equatable {
+nonisolated enum AnyCodable: Codable, Sendable, Equatable {
     case string(String)
     case int(Int)
     case double(Double)

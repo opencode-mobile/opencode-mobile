@@ -1,6 +1,6 @@
 import Foundation
 
-struct EventDomainAdapter: Sendable {
+nonisolated struct EventDomainAdapter: Sendable {
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         guard let data = dataLine.data(using: .utf8) else { return nil }
         guard
@@ -72,7 +72,7 @@ struct EventDomainAdapter: Sendable {
     }
 }
 
-struct SessionTitleUpdate: Equatable, Sendable {
+nonisolated struct SessionTitleUpdate: Equatable, Sendable {
     let sessionID: String
     let title: String
 }

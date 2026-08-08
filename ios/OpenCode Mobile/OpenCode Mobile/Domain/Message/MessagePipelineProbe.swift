@@ -2,7 +2,7 @@ import Foundation
 
 /// Content-free pipeline timing markers. Never attach message text or IDs that
 /// contain user content — only phase names and optional opaque counters.
-enum MessagePipelineProbe {
+nonisolated enum MessagePipelineProbe {
     enum Marker: String, Sendable {
         case eventAccepted = "event_accepted"
         case reducerCommitted = "reducer_committed"

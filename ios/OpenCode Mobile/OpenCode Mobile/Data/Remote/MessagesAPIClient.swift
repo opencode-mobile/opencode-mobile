@@ -1,6 +1,6 @@
 import Foundation
 
-enum MessagesAPIError: Error {
+nonisolated enum MessagesAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
@@ -13,7 +13,7 @@ protocol MessagesAPI: Sendable {
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
 }
 
-struct MessagesAPIClient: MessagesAPI, Sendable {
+nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()

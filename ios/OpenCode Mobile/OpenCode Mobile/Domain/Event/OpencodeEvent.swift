@@ -1,6 +1,6 @@
 import Foundation
 
-struct OpencodeEvent: Sendable, Equatable {
+nonisolated struct OpencodeEvent: Sendable, Equatable {
     let type: String
     let sessionID: String?
     let rawProperties: [String: AnySendable]?
@@ -68,7 +68,7 @@ struct OpencodeEvent: Sendable, Equatable {
 }
 
 /// A type-erased value that can be sent across concurrency boundaries.
-enum AnySendable: Sendable, Equatable {
+nonisolated enum AnySendable: Sendable, Equatable {
     case string(String)
     case int(Int)
     case int64(Int64)

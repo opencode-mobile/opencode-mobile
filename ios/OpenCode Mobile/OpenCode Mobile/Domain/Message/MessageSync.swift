@@ -3,7 +3,9 @@ import OSLog
 
 typealias MessageListFetcher = @Sendable (String, String?) async throws -> [Message]
 
-final class MessageSync: @unchecked Sendable {
+/// Explicitly nonisolated: app default actor isolation is MainActor, but
+/// ingress/reduction must stay off the UI thread (Android parity; send freezes).
+nonisolated final class MessageSync: @unchecked Sendable {
     private let listMessages: MessageListFetcher
     private let store: SessionMessageEngine
     private let eventStream: any ForegroundEventStream
@@ -83,7 +85,10 @@ final class MessageSync: @unchecked Sendable {
         lock.lock()
         if observationCache[key] == nil {
             observationCache[key] = SharedLiveObservation { yield in
-                Task {
+                // Detach from caller isolation (often MainActor via DisplayMessagePipeline).
+                // Ingress/reduction must not run on the main thread — matches Android
+                // MessageSync.assertOffMainThread and avoids send-path MainActor deadlock.
+                Task.detached {
                     await self.runMessageLoop(key: key, yield: yield)
                 }
             }

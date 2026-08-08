@@ -1,6 +1,6 @@
 import Foundation
 
-enum MessagePatch: Sendable {
+nonisolated enum MessagePatch: Sendable {
     case infoUpdated([String: AnySendable])
     case partUpdated(part: [String: AnySendable], delta: String?)
     /// Append a text delta to an existing part by ID (SSE `message.part.delta`).

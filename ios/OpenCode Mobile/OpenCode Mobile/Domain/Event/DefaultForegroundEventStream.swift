@@ -49,8 +49,11 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         _ = ConnectionEpoch.shared.bump()
         let api = api
         let adapter = adapter
-        streamTask = Task { @MainActor [weak self] in
-            await self?.runStreamLoop(api: api, adapter: adapter)
+        // Byte read + line parse must not occupy MainActor. State publish hops
+        // back via MainActor.run. Running the loop on MainActor starved UI on
+        // send (production freezes; diagnostic blackout).
+        streamTask = Task(priority: .userInitiated) { [weak self] in
+            await Self.runStreamLoop(api: api, adapter: adapter, owner: self)
         }
     }
 
@@ -121,50 +124,57 @@ final class DefaultForegroundEventStream: ForegroundEventStream {
         }
     }
 
-    private func runStreamLoop(api: EventsAPIClient, adapter: EventDomainAdapter) async {
+    /// Nonisolated so the Task body does not hop to MainActor for the whole loop.
+    private nonisolated static func runStreamLoop(
+        api: EventsAPIClient,
+        adapter: EventDomainAdapter,
+        owner: DefaultForegroundEventStream?
+    ) async {
         var retryAttempt = 0
         while !Task.isCancelled {
-            await MainActor.run {
-                currentStreamWasConnected = false
-                emittedReconnectForCurrentStream = false
-                applyConnectionState(wasConnected ? .reconnecting : .connecting)
+            let wasConnected = await MainActor.run { [weak owner] in
+                guard let owner else { return false }
+                owner.currentStreamWasConnected = false
+                owner.emittedReconnectForCurrentStream = false
+                let wasConnected = owner.wasConnected
+                owner.applyConnectionState(wasConnected ? .reconnecting : .connecting)
+                return wasConnected
             }
 
             do {
                 try await api.streamGlobalEvents(
                     onHTTPResponse: { statusCode in
                         DiagnosticLog.info(.sse, "GET /global/event opened status=\(statusCode)")
-                        await MainActor.run { [weak self] in
-                            guard let self else { return }
-                            markStreamConnected()
+                        await MainActor.run { [weak owner] in
+                            owner?.markStreamConnected()
                         }
                         retryAttempt = 0
                     },
-                    onDataLine: { [adapter] dataLine in
+                    onDataLine: { dataLine in
                         guard let event = adapter.parseEvent(dataLine: dataLine) else {
                             DiagnosticLog.warning(.sse, "SSE event parse failed")
                             return
                         }
-                        let shouldResetRetry = await MainActor.run { [weak self] in
-                            self?.handleStreamEvent(event) ?? false
+                        let shouldResetRetry = await MainActor.run { [weak owner] in
+                            owner?.handleStreamEvent(event) ?? false
                         }
                         if shouldResetRetry {
                             retryAttempt = 0
                         }
                     }
                 )
-                await MainActor.run {
-                    applyConnectionState(.disconnected)
+                await MainActor.run { [weak owner] in
+                    owner?.applyConnectionState(.disconnected)
                 }
             } catch is CancellationError {
-                await MainActor.run {
-                    applyConnectionState(.idle)
+                await MainActor.run { [weak owner] in
+                    owner?.applyConnectionState(.idle)
                 }
                 return
             } catch {
                 DiagnosticLog.warning(.sse, "foreground SSE stream failed error=\(String(describing: error))")
-                await MainActor.run {
-                    applyConnectionState(wasConnected ? .reconnecting : .disconnected)
+                await MainActor.run { [weak owner] in
+                    owner?.applyConnectionState(wasConnected ? .reconnecting : .disconnected)
                 }
             }
 

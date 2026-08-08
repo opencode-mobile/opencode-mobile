@@ -22,6 +22,35 @@ struct MessageSyncTests {
         #expect(collector.emissions.count >= 1)
     }
 
+    @Test func initialLoad_messageLoopDoesNotRunOnMainThread() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let callerOnMain = MainThreadFlag()
+        // Build MessageSync with an explicit listMessages probe so we record the
+        // caller thread before any MainActor hop into the fake repository.
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                callerOnMain.note(Thread.isMainThread)
+                return try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: LiveStoreRefreshPolicy.workingPollIntervalMs,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
+        )
+        let collector = MessageCollector()
+        // Start observation from MainActor (production DisplayMessagePipeline path).
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil {
+            collector.latest()?.first?.text == "Hello"
+        }
+        task.cancel()
+        #expect(loaded)
+        #expect(callerOnMain.sawMain == false)
+        #expect(callerOnMain.calls > 0)
+    }
+
     @Test func initialLoad_buffersEventsThatArriveDuringRestRequest() async {
         let repo = FakeLiveMessageRepository()
         repo.holdNextListMessages()
@@ -1143,6 +1172,19 @@ struct MessageSyncTests {
 
 // MARK: - Helpers
 
+private final class MainThreadFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var sawMain = false
+    private(set) var calls = 0
+
+    func note(_ isMain: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        calls += 1
+        if isMain { sawMain = true }
+    }
+}
+
 private final class MessageCollector: @unchecked Sendable {
     private(set) var emissions: [[Message]] = []
     private(set) var isFinished = false
@@ -1208,9 +1250,12 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
     var shouldFailList = false
     private var holdNextList = false
     private var blockedListContinuation: CheckedContinuation<Void, Never>?
+    private let lock = NSLock()
 
     var isListBlocked: Bool {
-        blockedListContinuation != nil
+        lock.lock()
+        defer { lock.unlock() }
+        return blockedListContinuation != nil
     }
 
     func holdNextListMessages() {
@@ -1218,8 +1263,11 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
     }
 
     func resumeListMessages() {
-        blockedListContinuation?.resume()
+        lock.lock()
+        let continuation = blockedListContinuation
         blockedListContinuation = nil
+        lock.unlock()
+        continuation?.resume()
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
@@ -1252,7 +1300,9 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
         if holdNextList {
             holdNextList = false
             await withCheckedContinuation { continuation in
+                lock.lock()
                 blockedListContinuation = continuation
+                lock.unlock()
             }
         }
         if shouldFailList {

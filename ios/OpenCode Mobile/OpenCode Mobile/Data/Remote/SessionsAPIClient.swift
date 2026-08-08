@@ -1,12 +1,12 @@
 import Foundation
 
-enum SessionsAPIError: Error {
+nonisolated enum SessionsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-struct SessionsAPIClient: Sendable {
+nonisolated struct SessionsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let urlSession: URLSession
     private let decoder = JSONDecoder()

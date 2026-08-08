@@ -1,6 +1,6 @@
 import Foundation
 
-enum EventStreamConnectionState: Equatable, Sendable {
+nonisolated enum EventStreamConnectionState: Equatable, Sendable {
     case idle
     case connecting
     case connected

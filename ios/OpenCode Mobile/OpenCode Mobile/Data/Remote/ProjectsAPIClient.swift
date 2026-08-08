@@ -1,12 +1,12 @@
 import Foundation
 
-enum ProjectsAPIError: Error {
+nonisolated enum ProjectsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-struct ProjectsAPIClient: Sendable {
+nonisolated struct ProjectsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
 
