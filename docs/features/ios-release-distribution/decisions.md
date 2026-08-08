@@ -84,3 +84,19 @@ keys at job end and orphaned cloud certificates, which blocked the next archive
 (`Revoke certificate… private key is not installed`). Cleanup restores the
 login keychain search list and locks the signing keychain; it does not delete
 it.
+
+## Separate iOS Firebase App Distribution workflow
+
+OPE-102 adds `.github/workflows/ios-app-distribution.yml` rather than extending
+manual **iOS Release**. Merge distribution uses a signed **Ad Hoc** IPA
+(`.github/ios/ExportOptions-AdHoc.plist`) uploaded with Firebase CLI to private
+group `ios-internal`. That keeps every `main` merge off App Store Connect
+processing and out of TestFlight.
+
+App Distribution build numbers use `1000000000 + github.run_number` with fixed
+marketing version `0.1.0`, so they never collide with the low TestFlight
+`github.run_number` sequence. The workflow reuses the same `ios-release`
+environment secrets (ASC API trio + App Distribution SA JSON) and the same
+persistent signing keychain / WMO workaround as iOS Release. Ad Hoc requires
+registered device UDIDs; new tester devices need a UDID registration and a new
+build.

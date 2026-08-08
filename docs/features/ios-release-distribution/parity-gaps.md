@@ -17,11 +17,11 @@
 | Field | Value |
 | --- | --- |
 | Expected shared intent | Closed tester paths on both platforms (Play internal ↔ TestFlight Internal; Firebase App Distribution on both). |
-| Current iOS state | OPE-101 + OPE-103 complete (TestFlight Internal). Firebase App Distribution still open (OPE-102). |
+| Current iOS state | OPE-101 + OPE-103 complete (TestFlight Internal). OPE-102 workflow + docs are ready; first merge-triggered Ad Hoc install still pending. |
 | Current Android state | Play internal + Firebase App Distribution complete. |
-| Affected area | Missing implementation (distribution). |
+| Affected area | Missing verification (distribution). |
 | Reason | Sequenced after ASC account and OPE-101 signing foundation. |
-| Owner / next action | Execute OPE-102 Firebase App Distribution. |
+| Owner / next action | Merge OPE-102 to `main`, confirm Firebase release + owner Ad Hoc install. |
 | Status | Temporary |
 
 ## Release marketing-version shape differs by platform
