@@ -129,7 +129,7 @@ private struct AppRootHomeHost: View {
     var body: some View {
         ProjectListHomeView(
             viewModel: Container.makeProjectListHomeViewModel(),
-            presentConnectionSetupOnAppear: presentConnectionSetupOnAppear
+            presentConnectionSetupOnAppear: $presentConnectionSetupOnAppear
         )
     }
 }
