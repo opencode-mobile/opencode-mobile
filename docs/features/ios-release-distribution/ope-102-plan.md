@@ -133,14 +133,14 @@ upload to `ios-internal` without new secrets in PR workflows. **Met.**
 
 ## Checkpoint 3 — Protected verification
 
-- [ ] Merge workflow to `main` so the merge itself (or the next merge) triggers
+- [x] Merge workflow to `main` so the merge itself (or the next merge) triggers
       exactly one App Distribution run.
-- [ ] Firebase shows the expected commit/build for group `ios-internal`.
-- [ ] Owner installs the Ad Hoc build via the Firebase tester flow on a
+- [x] Firebase shows the expected commit/build for group `ios-internal`.
+- [x] Owner installs the Ad Hoc build via the Firebase tester flow on a
       physical device.
-- [ ] Confirm no TestFlight / App Store publication side effect; App Store
+- [x] Confirm no TestFlight / App Store publication side effect; App Store
       remains Prepare for Submission.
-- [ ] Record durable evidence (Actions URL, Firebase release link) without
+- [x] Record durable evidence (Actions URL, Firebase release link) without
       tester PII.
 
 ## Acceptance
@@ -162,7 +162,14 @@ succeeds, TestFlight/App Store remain unchanged, and PRs stay credential-free.
 
 ## Protected-main evidence
 
-_To be filled after the first successful merge distribution + device install._
+| Field | Value |
+| --- | --- |
+| Merge | [PR #116](https://github.com/opencode-mobile/opencode-mobile/pull/116) → `e584a2f` on `main` |
+| Actions | [iOS App Distribution #1](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31252901264) — success |
+| Marketing / build | `0.1.0` / `1000000001` |
+| Firebase | [Release](https://console.firebase.google.com/project/opencode-mobile-release/appdistribution/app/ios:dev.opencode.mobile/releases/10n7be4jvnrb0?utm_source=firebase-tools) → group `ios-internal` |
+| Device | Owner installed via [tester experience](https://appdistribution.firebase.google.com/testerapps/1:569439646238:ios:2ffd276bbaf8a1528df40f/releases/10n7be4jvnrb0?utm_source=firebase-tools) (2026-08-08) |
+| Store side effects | Workflow does not call `altool` / App Review; App Store listing unchanged (Prepare for Submission) |
 
 ## Risks
 

@@ -16,7 +16,7 @@ Not applicable.
 - [x] OPE-101 checkpoint 2 workflow + scripts + docs + two protected `main` runs
 - [x] OPE-101 checkpoint 3 — ASC Prepare for Submission + signed `main` artifacts confirmed
 - [x] OPE-103 TestFlight Internal Testing — upload + Internal Testing install verified
-- [ ] OPE-102 Firebase App Distribution — workflow ready; awaiting merge + install
+- [x] OPE-102 Firebase App Distribution — merge-triggered Ad Hoc install verified
 
 ## Android implementation
 
@@ -53,21 +53,13 @@ persistent-keychain success path.
 
 ## OPE-102 App Distribution
 
-Human prep complete: Firebase group `ios-internal` (1 tester, 0 invite links),
-owner device UDID registered in Apple Developer, and
-`FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON` present in `ios-release`
-alongside ASC secrets.
-
-Agent implementation ready on
-`feature/ope-102-ios-firebase-app-distribution`:
-
-- `.github/workflows/ios-app-distribution.yml`
-- `.github/ios/ExportOptions-AdHoc.plist`
-- runbook / decisions / parity updates
+| Field | Value |
+| --- | --- |
+| Merge | [PR #116](https://github.com/opencode-mobile/opencode-mobile/pull/116) |
+| Run | [31252901264](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31252901264) — `0.1.0` / `1000000001` |
+| Firebase | [Release `10n7be4jvnrb0`](https://console.firebase.google.com/project/opencode-mobile-release/appdistribution/app/ios:dev.opencode.mobile/releases/10n7be4jvnrb0?utm_source=firebase-tools) → `ios-internal` |
+| Device | Owner installed via Firebase tester flow (2026-08-08) |
 
 ## Remaining work
 
-1. Merge OPE-102 to `main` so the push triggers one App Distribution run.
-2. Owner installs the Ad Hoc build via Firebase tester flow; confirm no
-   TestFlight / App Store side effects; record evidence and close OPE-102 /
-   OPE-100.
+None for OPE-100. Follow-up (out of slice): iOS Crashlytics / Analytics parity with Android OPE-72.

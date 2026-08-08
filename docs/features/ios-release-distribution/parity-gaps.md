@@ -12,17 +12,17 @@
 | Owner / next action | Open an iOS Crashlytics/Analytics ticket after distribution works. |
 | Status | Intentional |
 
-## Distribution channels still incomplete on iOS
+## Distribution channels aligned (closed)
 
 | Field | Value |
 | --- | --- |
 | Expected shared intent | Closed tester paths on both platforms (Play internal ↔ TestFlight Internal; Firebase App Distribution on both). |
-| Current iOS state | OPE-101 + OPE-103 complete (TestFlight Internal). OPE-102 workflow + docs are ready; first merge-triggered Ad Hoc install still pending. |
+| Current iOS state | OPE-101 + OPE-103 + OPE-102 complete (TestFlight Internal on demand; Firebase Ad Hoc on every `main` merge). |
 | Current Android state | Play internal + Firebase App Distribution complete. |
-| Affected area | Missing verification (distribution). |
-| Reason | Sequenced after ASC account and OPE-101 signing foundation. |
-| Owner / next action | Merge OPE-102 to `main`, confirm Firebase release + owner Ad Hoc install. |
-| Status | Temporary |
+| Affected area | None for distribution channels. |
+| Reason | OPE-100 slice finished 2026-08-08. |
+| Owner / next action | None. |
+| Status | Resolved |
 
 ## Release marketing-version shape differs by platform
 
