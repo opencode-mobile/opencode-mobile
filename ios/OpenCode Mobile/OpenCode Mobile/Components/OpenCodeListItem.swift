@@ -93,30 +93,36 @@ struct OpenCodeListItem<Trailing: View>: View {
     var body: some View {
         Group {
             if let onLongPress {
+                // Gestures must sit above Text in an overlay. Putting onTap/onLongPress
+                // directly on `content` lets Text claim the touch, so long-press only
+                // works on padding/Spacer (background) and fails on the title/subtitle.
                 content
-                    .contentShape(Rectangle())
                     .background { pressHighlight }
                     .scaleEffect(rowScale)
                     .animation(listItemPressAnimation, value: isPressing)
                     .animation(listItemPopAnimation, value: popScale)
-                    .onTapGesture {
-                        guard enabled else { return }
-                        action?()
+                    .overlay {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                guard enabled else { return }
+                                action?()
+                            }
+                            .onLongPressGesture(
+                                minimumDuration: 0.42,
+                                maximumDistance: 18,
+                                pressing: { pressing in
+                                    guard enabled else { return }
+                                    isPressing = pressing
+                                },
+                                perform: {
+                                    guard enabled else { return }
+                                    isPressing = false
+                                    triggerContextActionPop()
+                                    onLongPress()
+                                }
+                            )
                     }
-                    .onLongPressGesture(
-                        minimumDuration: 0.42,
-                        maximumDistance: 18,
-                        pressing: { pressing in
-                            guard enabled else { return }
-                            isPressing = pressing
-                        },
-                        perform: {
-                            guard enabled else { return }
-                            isPressing = false
-                            triggerContextActionPop()
-                            onLongPress()
-                        }
-                    )
                     .allowsHitTesting(enabled)
                     .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.9), trigger: contextActionHapticTick)
             } else if let action {

@@ -68,8 +68,10 @@ reads as a real pill without an accent color.
 
 ## Platform Notes
 
-- iOS: press `ButtonStyle` when only tap exists; when long-press is set, press
-  tracking + spring pop/haptic on context action recognition.
+- iOS: press `ButtonStyle` when only tap exists; when long-press is set, an
+  invisible full-row gesture overlay owns tap/long-press so `Text` cannot steal
+  hits (padding-only long-press), with press tracking + spring pop/haptic on
+  context action recognition.
 - Android: shared `interactionSource` with ripple, press scale, and long-press
   spring pop/haptic. Interactive rows clip to the shared corner radius so press
   chrome stays rounded even for plain style.
