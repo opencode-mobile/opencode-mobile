@@ -64,12 +64,33 @@ private struct Representable: UIViewRepresentable {
             selectionRevision: selectionRevision,
             to: uiView
         )
+        let width = uiView.bounds.width
+        if width > 0 {
+            let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+            uiView.isScrollEnabled = fitting.height > Self.maxCollapsedHeight + 0.5
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: PlaceholderTextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite else { return nil }
+        // Measure from current props — `sizeThatFits` can run before `updateUIView`.
+        let resolvedTextColor = UIColor(OpenCodeColors.textStrong)
+        let resolvedMentionColor = UIColor(OpenCodeColors.syntaxType)
+        context.coordinator.apply(
+            text: text,
+            mentionRanges: mentionRanges,
+            textColor: resolvedTextColor,
+            mentionColor: resolvedMentionColor,
+            selectionStart: selectionStart,
+            selectionEnd: selectionEnd,
+            selectionRevision: selectionRevision,
+            to: uiView
+        )
         let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: max(fitting.height, Self.font.lineHeight))
+        let idealHeight = max(fitting.height, Self.font.lineHeight)
+        // Cap growth so chips/send stay above the keyboard; further text scrolls
+        // inside the field (OPE-118).
+        return CGSize(width: width, height: min(idealHeight, Self.maxCollapsedHeight))
     }
 
     func makeCoordinator() -> Coordinator {
@@ -77,6 +98,8 @@ private struct Representable: UIViewRepresentable {
     }
 
     fileprivate static let font = UIFont.systemFont(ofSize: 16, weight: .regular)
+    /// ~5 body lines — enough for a long prompt without swallowing the chat.
+    fileprivate static let maxCollapsedHeight: CGFloat = font.lineHeight * 5
 
     final class Coordinator: NSObject, UITextViewDelegate {
         private let onChange: (String, Int, Int) -> Void
