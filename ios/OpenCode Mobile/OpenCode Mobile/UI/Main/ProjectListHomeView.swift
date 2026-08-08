@@ -34,6 +34,9 @@ struct ProjectListHomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
+            // Custom OpenCodeTopBar owns chrome; keep the system bar out of this stack
+            // so pushes do not animate in the Liquid Glass back button.
+            .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottom) {
                 OpenCodeSnackbarHost(
                     message: viewModel.removalSnackbar,
