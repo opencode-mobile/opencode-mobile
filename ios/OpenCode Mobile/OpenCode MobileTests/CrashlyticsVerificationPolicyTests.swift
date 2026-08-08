@@ -32,4 +32,14 @@ final class CrashlyticsVerificationPolicyTests: XCTestCase {
             "crashlytics_verified_42"
         )
     }
+
+    func testInfoPlistGateDefaultsDisabledAndParsesBoolLikeValues() {
+        XCTAssertFalse(CrashlyticsVerificationPolicy.isEnabled(infoValue: nil))
+        XCTAssertFalse(CrashlyticsVerificationPolicy.isEnabled(infoValue: false))
+        XCTAssertFalse(CrashlyticsVerificationPolicy.isEnabled(infoValue: "no"))
+        XCTAssertTrue(CrashlyticsVerificationPolicy.isEnabled(infoValue: true))
+        XCTAssertTrue(CrashlyticsVerificationPolicy.isEnabled(infoValue: NSNumber(value: true)))
+        XCTAssertTrue(CrashlyticsVerificationPolicy.isEnabled(infoValue: "YES"))
+        XCTAssertTrue(CrashlyticsVerificationPolicy.isEnabled(infoValue: "true"))
+    }
 }

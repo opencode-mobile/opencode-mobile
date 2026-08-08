@@ -108,7 +108,7 @@ Both platforms must satisfy:
 | Client config | Tracked `android/app/google-services.json` | Tracked `ios/.../GoogleService-Info.plist` |
 | Crashlytics + Analytics SDK | Release-only (OPE-72 done) | Release init + Debug no-op / plist strip (OPE-122) |
 | Observability seam | `OpenCodeReleaseObservability` debug no-op / release Firebase | `OpenCodeReleaseObservability` Debug no-op / Release Firebase |
-| Verification non-fatal | Protected CI input, one-shot per version | Protected CI `VERIFY_CRASHLYTICS`, one-shot per build |
+| Verification non-fatal | Protected CI input, one-shot per version | Protected CI Info.plist gate, one-shot per build |
 
 ## Phased Work
 

@@ -182,10 +182,10 @@ gh workflow run "iOS Release" \
   -f verify_crashlytics=true
 ```
 
-The workflow input compiles a content-free
-`OpenCodeMobileCrashlyticsVerification` non-fatal into that Release build via
-`VERIFY_CRASHLYTICS`. The app records it once per installed build number and
-stores the marker in `UserDefaults` (`release_observability` key family).
+The workflow input flips `OpenCodeVerifyCrashlytics` in the app Info.plist for
+that Release build only (app-target gate; not a global Swift compilation flag).
+The app records a content-free `OpenCodeMobileCrashlyticsVerification` non-fatal
+once per installed build number and stores the marker in `UserDefaults`.
 Install from TestFlight Internal Testing (or an equivalent Ad Hoc App
 Distribution build if that path is chosen), launch once, then relaunch so
 Crashlytics can upload the batched report. Confirm the expected version, build

@@ -96,8 +96,8 @@ Stop for owner approval before changing Firebase / GA console state.
 - [x] Keep Crashlytics user IDs unset; add no custom keys or logs with user
       content.
 - [x] Extend the protected `iOS Release` workflow with optional
-      `verify_crashlytics` (default `false`) that compiles the one-shot
-      verification path.
+      `verify_crashlytics` (default `false`) that enables the one-shot
+      verification path via app Info.plist (`OpenCodeVerifyCrashlytics`).
 - [x] Persist a one-shot marker by build number so repeated launches do not
       duplicate the verification non-fatal.
 - [x] Update `docs/features/ios-release-distribution/operator-runbook.md` and
