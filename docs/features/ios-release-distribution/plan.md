@@ -23,7 +23,9 @@ Mirrors [Android Release Distribution](../android-release-distribution/plan.md)
 
 - Public App Store submission or App Review.
 - External TestFlight groups.
-- Crashlytics / Analytics on iOS (follow-up; Android OPE-72 parity).
+- Crashlytics / Analytics on iOS (owned by
+  [Release Observability](../release-observability/plan.md) / OPE-121;
+  parity ticket OPE-122).
 - Firebase Test Lab equivalent for iOS.
 - Changing merge-gate iOS Checks / simulator Build (remain credential-free).
 

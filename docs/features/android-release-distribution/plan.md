@@ -28,8 +28,9 @@ Companion visual review: [`plan.html`](plan.html).
 - Apple Developer Program, App Store Connect, TestFlight, or iOS signing.
 - Public / production / open testing Play tracks (follow-up after internal
   track works).
-- App-managed push notifications, Analytics productization, Remote Config,
-  FCM, or other Firebase products outside the ticketed release scope.
+- App-managed push notifications, Analytics productization (owned by
+  [Release Observability](../release-observability/plan.md) / OPE-121), Remote
+  Config, FCM, or other Firebase products outside the ticketed release scope.
 - Guaranteed background execution or Play-only features outside v1 product
   scope.
 - Fixing historical ktlint / Android Lint debt (still owned by CI PR gating

@@ -7,6 +7,11 @@ on:
         description: "App Store marketing version: MAJOR.MINOR.PATCH (integers only)"
         required: true
         type: string
+      verify_crashlytics:
+        description: "Record one Crashlytics verification non-fatal for this build"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ jobs:
     env:
       IOS_MARKETING_VERSION: ${{ inputs.version_name }}
       IOS_BUILD_NUMBER: ${{ github.run_number }}
+      IOS_VERIFY_CRASHLYTICS: ${{ inputs.verify_crashlytics }}
       EXPECTED_TEAM_ID: 677MTXPXZZ
       EXPECTED_BUNDLE_ID: dev.opencode.mobile
 
@@ -48,6 +54,13 @@ jobs:
             echo "GitHub run number did not produce a positive build number." >&2
             exit 1
           fi
+          case "${IOS_VERIFY_CRASHLYTICS}" in
+            true|false) ;;
+            *)
+              echo "verify_crashlytics must be a boolean (got: ${IOS_VERIFY_CRASHLYTICS})." >&2
+              exit 1
+              ;;
+          esac
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -140,6 +153,10 @@ jobs:
           # Xcode 26.x Release WMO crashes the Swift frontend on this target
           # (SILPerformanceInliner). Keep Release configuration/signing, but
           # compile without WMO until Apple fixes the optimizer.
+          verify_swift_flags=()
+          if [[ "${IOS_VERIFY_CRASHLYTICS}" == "true" ]]; then
+            verify_swift_flags+=(SWIFT_ACTIVE_COMPILATION_CONDITIONS=VERIFY_CRASHLYTICS)
+          fi
           xcodebuild archive \
             -project "OpenCode Mobile.xcodeproj" \
             -scheme "OpenCode Mobile" \
@@ -155,7 +172,8 @@ jobs:
             CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
             DEVELOPMENT_TEAM="$EXPECTED_TEAM_ID" \
             SWIFT_OPTIMIZATION_LEVEL=-Onone \
-            SWIFT_COMPILATION_MODE=singlefile
+            SWIFT_COMPILATION_MODE=singlefile \
+            "${verify_swift_flags[@]}"
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
             -s -k "$keychain_password" \
@@ -221,6 +239,7 @@ jobs:
             echo ""
             echo "- Marketing version (\`CFBundleShortVersionString\`): \`${IOS_MARKETING_VERSION}\`"
             echo "- Build number (\`CFBundleVersion\`): \`${IOS_BUILD_NUMBER}\`"
+            echo "- Crashlytics verification non-fatal: \`${IOS_VERIFY_CRASHLYTICS}\`"
             echo "- ASC accepted the IPA upload."
             echo "- Wait for App Store Connect processing, then install via TestFlight **Internal Testing**."
             echo "- Do **not** Submit for Review, release the app, or create External TestFlight groups."

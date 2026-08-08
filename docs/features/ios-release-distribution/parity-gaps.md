@@ -4,13 +4,13 @@
 
 | Field | Value |
 | --- | --- |
-| Expected shared intent | Both platforms eventually share release-only Crashlytics and minimal Analytics. |
+| Expected shared intent | Both platforms share release-only Crashlytics and minimal Analytics. |
 | Current iOS state | Firebase iOS app registered; no SDK in the app. |
 | Current Android state | OPE-72 release-only Crashlytics / minimal Analytics complete. |
 | Affected area | Missing implementation (observability). |
-| Reason | Explicitly out of OPE-100 / OPE-101; track as follow-up. |
-| Owner / next action | Open an iOS Crashlytics/Analytics ticket after distribution works. |
-| Status | Intentional |
+| Reason | Explicitly out of OPE-100; moved to Release Observability. |
+| Owner / next action | [OPE-122](../release-observability/ope-122-plan.md) under [OPE-121](../release-observability/plan.md). |
+| Status | Temporary (tracked under release-observability) |
 
 ## Distribution channels aligned (closed)
 
