@@ -408,8 +408,24 @@ struct OpenCodeBottomSheetEntry: View {
             .contentShape(Rectangle())
             .opacity(enabled ? 1 : 0.7)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpenCodeBottomSheetEntryPressStyle(enabled: enabled))
         .disabled(!enabled)
+    }
+}
+
+private struct OpenCodeBottomSheetEntryPressStyle: ButtonStyle {
+    let enabled: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if configuration.isPressed && enabled {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(OpenCodeColors.surfaceRaisedBase.opacity(0.88))
+                }
+            }
+            .scaleEffect(configuration.isPressed && enabled ? 0.97 : 1)
+            .animation(.spring(response: 0.26, dampingFraction: 0.62), value: configuration.isPressed)
     }
 }
 

@@ -1,11 +1,17 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,13 +30,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -56,6 +71,8 @@ private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
 private val StatusChipShape = RoundedCornerShape(999.dp)
+private const val ListItemPressedScale = 0.965f
+private const val ListItemPopPeakScale = 1.035f
 
 enum class OpenCodeListItemStyle {
     Plain,
@@ -106,19 +123,41 @@ fun OpenCodeListItem(
     require(subtitle == null || subtitleSegments == null) {
         "List Item accepts either a plain subtitle or semantic segments"
     }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val haptic = LocalHapticFeedback.current
+    val popScale = remember { Animatable(1f) }
+    var popTick by remember { mutableIntStateOf(0) }
+    var isPopping by remember { mutableStateOf(false) }
+    val pressScale by animateFloatAsState(
+        targetValue = if (enabled && isPressed && !isPopping) ListItemPressedScale else 1f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium),
+        label = "listItemPressScale",
+    )
+    LaunchedEffect(popTick) {
+        if (popTick == 0) return@LaunchedEffect
+        isPopping = true
+        popScale.snapTo(ListItemPressedScale)
+        popScale.animateTo(
+            ListItemPopPeakScale,
+            animationSpec = spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow),
+        )
+        popScale.animateTo(
+            1f,
+            animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
+        )
+        isPopping = false
+    }
+    val combinedScale = if (isPopping) popScale.value else pressScale
     val containerColor =
         when {
             style == OpenCodeListItemStyle.Card && selected -> MaterialTheme.colorScheme.surfaceVariant
             style == OpenCodeListItemStyle.Card -> MaterialTheme.colorScheme.surface
             selected -> MaterialTheme.colorScheme.surfaceVariant
+            enabled && isPressed -> openCodeColor("surface-raised-base").copy(alpha = 0.92f)
             else -> Color.Transparent
         }
-    val containerShape =
-        if (style == OpenCodeListItemStyle.Plain && !selected) {
-            RectangleShape
-        } else {
-            RoundedCornerShape(ListItemCornerRadius)
-        }
+    val containerShape = RoundedCornerShape(ListItemCornerRadius)
     val contentColor =
         if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
     val textStrong = openCodeColor("text-strong")
@@ -126,21 +165,41 @@ fun OpenCodeListItem(
     val textWeaker = openCodeColor("text-weaker")
     val surfaceRaised = openCodeColor("surface-raised-base")
     val hasMeta = status != null || !caption.isNullOrEmpty()
+    val playContextPop: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        popTick += 1
+    }
     val interactionModifier =
         when {
             onClick != null && onLongPress != null ->
                 Modifier.combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(bounded = true),
                     enabled = enabled,
                     onClick = onClick,
-                    onLongClick = onLongPress,
+                    onLongClick = {
+                        playContextPop()
+                        onLongPress()
+                    },
                     onLongClickLabel = "Show actions",
                 )
-            onClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
+            onClick != null ->
+                Modifier.clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(bounded = true),
+                    enabled = enabled,
+                    onClick = onClick,
+                )
             onLongPress != null ->
                 Modifier.combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(bounded = true),
                     enabled = enabled,
                     onClick = {},
-                    onLongClick = onLongPress,
+                    onLongClick = {
+                        playContextPop()
+                        onLongPress()
+                    },
                     onLongClickLabel = "Show actions",
                 )
             else -> Modifier
@@ -150,6 +209,8 @@ fun OpenCodeListItem(
         modifier =
             modifier
                 .fillMaxWidth()
+                .scale(combinedScale)
+                .clip(containerShape)
                 .then(interactionModifier),
         shape = containerShape,
         color = containerColor,

@@ -59,6 +59,8 @@ presentation state.
 
 Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
+Enabled entries use a spring press scale (~0.97) with a soft raised highlight so
+context actions feel clickable.
 
 Use `form` mode when the sheet hosts text fields. While the sheet is presented,
 the presenting screen ignores keyboard-driven safe-area resizing so background

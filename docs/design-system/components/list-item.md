@@ -54,6 +54,10 @@ Tap/click when a handler is provided. Long-press when `onLongPress` is provided
 the secondary surface. Disabled rows reduce emphasis and do not run actions.
 Long strings truncate to one line.
 
+Press feedback: pressed rows briefly scale down (~0.965) with a soft raised
+highlight. Context long-press adds a spring “pop” (overshoot then settle) plus
+haptic so the action sheet feels intentional, not silent.
+
 When `status` and/or `caption` are set, they form a trailing meta column
 (caption on top, status pill below), end-aligned so both share one trailing
 edge. Custom `trailing` content (chevrons, etc.) sits after that column.
@@ -64,10 +68,11 @@ reads as a real pill without an accent color.
 
 ## Platform Notes
 
-- iOS: plain `Button` when only tap exists; when long-press is set, use a content
-  shape with tap and long-press gestures so long-press does not also open.
-- Android: `Surface` with `Modifier.clickable` when only tap exists; use
-  `combinedClickable` when long-press is also provided.
+- iOS: press `ButtonStyle` when only tap exists; when long-press is set, press
+  tracking + spring pop/haptic on context action recognition.
+- Android: shared `interactionSource` with ripple, press scale, and long-press
+  spring pop/haptic. Interactive rows clip to the shared corner radius so press
+  chrome stays rounded even for plain style.
 
 ## Review Surfaces
 

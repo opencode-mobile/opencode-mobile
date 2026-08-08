@@ -8,6 +8,11 @@ private let listItemIconDecoratorSize: CGFloat = 24
 private let listItemVerticalPadding: CGFloat = 12
 private let listItemTitleSubtitleSpacing: CGFloat = 2
 private let listItemMetaSpacing: CGFloat = 4
+private let listItemPressedScale: CGFloat = 0.965
+private let listItemPopPeakScale: CGFloat = 1.035
+private let listItemPressAnimation = Animation.easeOut(duration: 0.12)
+private let listItemPopAnimation = Animation.spring(response: 0.28, dampingFraction: 0.52)
+private let listItemPopSettleAnimation = Animation.spring(response: 0.34, dampingFraction: 0.72)
 
 enum OpenCodeListItemStyle {
     case plain
@@ -52,6 +57,10 @@ struct OpenCodeListItem<Trailing: View>: View {
     let onLongPress: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
 
+    @State private var isPressing = false
+    @State private var popScale: CGFloat = 1
+    @State private var contextActionHapticTick = 0
+
     init(
         title: String,
         subtitle: String? = nil,
@@ -86,23 +95,65 @@ struct OpenCodeListItem<Trailing: View>: View {
             if let onLongPress {
                 content
                     .contentShape(Rectangle())
+                    .background { pressHighlight }
+                    .scaleEffect(rowScale)
+                    .animation(listItemPressAnimation, value: isPressing)
+                    .animation(listItemPopAnimation, value: popScale)
                     .onTapGesture {
                         guard enabled else { return }
                         action?()
                     }
-                    .onLongPressGesture {
-                        guard enabled else { return }
-                        onLongPress()
-                    }
+                    .onLongPressGesture(
+                        minimumDuration: 0.42,
+                        maximumDistance: 18,
+                        pressing: { pressing in
+                            guard enabled else { return }
+                            isPressing = pressing
+                        },
+                        perform: {
+                            guard enabled else { return }
+                            isPressing = false
+                            triggerContextActionPop()
+                            onLongPress()
+                        }
+                    )
                     .allowsHitTesting(enabled)
+                    .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.9), trigger: contextActionHapticTick)
             } else if let action {
                 Button(action: action) {
                     content
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(OpenCodeListItemPressStyle(enabled: enabled))
                 .disabled(!enabled)
             } else {
                 content
+            }
+        }
+    }
+
+    private var rowScale: CGFloat {
+        if isPressing { return listItemPressedScale }
+        return popScale
+    }
+
+    @ViewBuilder
+    private var pressHighlight: some View {
+        if isPressing || popScale != 1 {
+            RoundedRectangle(cornerRadius: listItemCornerRadius)
+                .fill(OpenCodeColors.surfaceRaisedBase.opacity(isPressing ? 0.92 : 0.55))
+        }
+    }
+
+    private func triggerContextActionPop() {
+        contextActionHapticTick &+= 1
+        popScale = listItemPressedScale
+        withAnimation(listItemPopAnimation) {
+            popScale = listItemPopPeakScale
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 90_000_000)
+            withAnimation(listItemPopSettleAnimation) {
+                popScale = 1
             }
         }
     }
@@ -286,6 +337,22 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
     let upper = String(character).uppercased(with: .current)
     guard let first = upper.first else { return "?" }
     return first.isLetter || first.isNumber ? String(first) : "?"
+}
+
+private struct OpenCodeListItemPressStyle: ButtonStyle {
+    let enabled: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                if configuration.isPressed && enabled {
+                    RoundedRectangle(cornerRadius: listItemCornerRadius)
+                        .fill(OpenCodeColors.surfaceRaisedBase.opacity(0.92))
+                }
+            }
+            .scaleEffect(configuration.isPressed && enabled ? listItemPressedScale : 1)
+            .animation(listItemPressAnimation, value: configuration.isPressed)
+    }
 }
 
 #if DEBUG
