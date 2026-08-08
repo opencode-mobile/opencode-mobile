@@ -66,8 +66,10 @@ This ticket does not:
    create an External TestFlight group as part of this ticket. Acceptance fails
    if the App Store version is anything other than an unpublished draft state
    (e.g. Prepare for Submission).
-7. **Versioning unchanged.** Operator `version_name`; CI `github.run_number` as
-   `CFBundleVersion`. Document that TestFlight shows both.
+7. **Strict App Store marketing version.** Operator `version_name` must be
+   `MAJOR.MINOR.PATCH` (integers only). CI `github.run_number` remains the build
+   number. ASC rejects prerelease marketing versions (observed on
+   `0.1.0-internal.3` → error `-19239`).
 
 ## Checkpoint 1 — Human prep (`ready-for-human`)
 

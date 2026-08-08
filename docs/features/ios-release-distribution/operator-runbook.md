@@ -27,17 +27,18 @@ Recovery copies of `.p8` and `GoogleService-Info.plist` live in the owner-only
 
 | Field | Owner | Source |
 | --- | --- | --- |
-| Marketing version (`CFBundleShortVersionString`) | Operator | `version_name` workflow input (`MAJOR.MINOR.PATCH[-PRERELEASE]`) |
+| Marketing version (`CFBundleShortVersionString`) | Operator | `version_name` workflow input (`MAJOR.MINOR.PATCH`, integers only) |
 | Build number (`CFBundleVersion`) | CI | `github.run_number` for that iOS Release run |
 
-TestFlight shows both. Never reuse a lower build number for the same marketing
-version after ASC has accepted a higher one.
+TestFlight shows both (example: `0.1.0 (8)`). Never reuse a lower build number
+for the same marketing version after ASC has accepted a higher one. Do not use
+`-internal` / other prerelease suffixes — ASC rejects them.
 
 ## Run iOS Release (sign + TestFlight upload)
 
 1. Merge the release changes to `main`.
 2. Actions → **iOS Release** → Run workflow on `main`.
-3. Set `version_name` (example: `0.1.0-internal.3`).
+3. Set `version_name` (example: `0.1.0`).
 4. Wait for archive, App Store IPA export, signature verification, **ASC
    upload**, and artifact retention.
 5. Download `ios-ipa-…` and `ios-xcarchive-…` artifacts if needed (7-day
