@@ -30,10 +30,13 @@ enum KeyboardOverlap {
 /// Needed for Session Chat: the UIKit timeline host plus `UITextView` composer
 /// defeat automatic keyboard avoidance on device.
 ///
-/// Bottom alignment is load-bearing (OPE-118): when the floating composer grows
-/// taller than the space above the keyboard, top alignment overflows downward
-/// into the keyboard and covers send/attach. Bottom alignment keeps that edge
-/// pinned above the keyboard so growth extends upward into the timeline.
+/// Apply this only below the top bar (timeline + floating composer). Bottom
+/// alignment is load-bearing for OPE-118: when the composer grows taller than
+/// the space above the keyboard, top alignment overflows downward into the
+/// keyboard and covers send/attach. Bottom alignment keeps that edge pinned so
+/// growth extends upward into the timeline. Wrapping the top bar in the same
+/// GeometryReader left a keyboard-sized gap above the chrome (title/back under
+/// the status bar / Dynamic Island).
 struct KeyboardOverlapPaddingModifier: ViewModifier {
     @State private var overlap: CGFloat = 0
 

@@ -114,6 +114,10 @@ struct SessionChatView: View {
                     .padding(.bottom, 8)
             }
 
+            // Keyboard avoidance wraps only the timeline + composer so the top bar
+            // stays fixed. Bottom alignment inside the modifier keeps multiline
+            // growth above the keyboard (OPE-118) without sliding chrome under the
+            // status bar.
             ZStack(alignment: .bottom) {
                 SessionChatTimelineView(
                     props: SessionChatTimelineViewProps(
@@ -237,6 +241,7 @@ struct SessionChatView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .keyboardOverlapPadding()
         }
         .background(OpenCodeColors.backgroundBase)
         .background {
@@ -248,7 +253,6 @@ struct SessionChatView: View {
                     }
             }
         }
-        .keyboardOverlapPadding()
         .sessionChatMessageActionsSheet(
             target: $messageActionsTarget,
             onRestoreToComposer: { viewModel.restoreComposerText($0) }
