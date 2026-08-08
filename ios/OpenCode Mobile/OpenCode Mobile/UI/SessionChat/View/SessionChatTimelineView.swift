@@ -184,33 +184,11 @@ private struct SessionChatTimelineReadyView: View {
                 let showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
                 Group {
                     if showFloatStack {
-                        VStack(spacing: 8) {
-                            if showSessionTodosPill {
-                                OpenCodeSessionTodosPill(
-                                    completedCount: sessionTodosPillCompletedCount,
-                                    totalCount: sessionTodosPillTotalCount,
-                                    activePreview: sessionTodosPillActivePreview,
-                                    action: props.onSessionTodosTap
-                                )
-                            }
-
-                            if showScrollToEnd {
-                                OpenCodeActionPill(variant: .scrollToEnd) {
-                                    logScroll("pill-click count=\(props.messages.count)")
-                                    scrollController.scrollToEndAnimated()
-                                }
-                            }
-
-                            if showReviewChanges, let summary = props.reviewChangesSummary {
-                                OpenCodeReviewChangesPill(
-                                    variant: .latestTurn,
-                                    changedFileCount: summary.fileCount,
-                                    additions: summary.additions,
-                                    deletions: summary.deletions,
-                                    action: props.onReviewChangesTap
-                                )
-                            }
-                        }
+                        floatStackContent(
+                            showSessionTodosPill: showSessionTodosPill,
+                            showScrollToEnd: showScrollToEnd,
+                            showReviewChanges: showReviewChanges
+                        )
                         // bottomOverlayInset is already composer + 16 end-pin gap.
                         .padding(.bottom, props.bottomOverlayInset)
                     }
@@ -240,6 +218,49 @@ private struct SessionChatTimelineReadyView: View {
 
     private func logScroll(_ message: String) {
         OpenCodeLog.sessionChat.debug("scroll \(message, privacy: .public)")
+    }
+
+    @ViewBuilder
+    private func floatStackContent(
+        showSessionTodosPill: Bool,
+        showScrollToEnd: Bool,
+        showReviewChanges: Bool
+    ) -> some View {
+        let pills = VStack(spacing: 8) {
+            if showSessionTodosPill {
+                OpenCodeSessionTodosPill(
+                    completedCount: sessionTodosPillCompletedCount,
+                    totalCount: sessionTodosPillTotalCount,
+                    activePreview: sessionTodosPillActivePreview,
+                    action: props.onSessionTodosTap
+                )
+            }
+
+            if showScrollToEnd {
+                OpenCodeActionPill(variant: .scrollToEnd) {
+                    logScroll("pill-click count=\(props.messages.count)")
+                    scrollController.scrollToEndAnimated()
+                }
+            }
+
+            if showReviewChanges, let summary = props.reviewChangesSummary {
+                OpenCodeReviewChangesPill(
+                    variant: .latestTurn,
+                    changedFileCount: summary.fileCount,
+                    additions: summary.additions,
+                    deletions: summary.deletions,
+                    action: props.onReviewChangesTap
+                )
+            }
+        }
+
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 8) {
+                pills
+            }
+        } else {
+            pills
+        }
     }
 
     private func refreshSessionTodosPillSnapshot(totalCount: Int) {

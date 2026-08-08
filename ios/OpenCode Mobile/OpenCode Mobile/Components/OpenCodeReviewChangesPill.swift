@@ -73,11 +73,13 @@ struct OpenCodeReviewChangesPill: View {
         Button(action: action) {
             summaryText(summary)
                 .font(OpenCodeTypography.button)
-            .padding(.horizontal, Self.paddingHorizontal)
-            .padding(.vertical, Self.paddingVertical)
-            .frame(minHeight: Self.minHeight)
+                .padding(.horizontal, Self.paddingHorizontal)
+                .padding(.vertical, Self.paddingVertical)
+                .frame(minHeight: Self.minHeight)
+                .contentShape(Capsule())
         }
-        .buttonStyle(OpenCodeReviewChangesPillButtonStyle(enabled: enabled))
+        .buttonStyle(OpenCodeFloatingPillPressStyle())
+        .openCodeFloatingPillChrome(enabled: enabled)
         .disabled(!enabled)
         .accessibilityLabel(summary.accessibilityLabel)
     }
@@ -139,23 +141,6 @@ private struct ReviewChangesPillSummary {
         ["Review changes", fileLabel, additionAccessibilityLabel, deletionAccessibilityLabel]
             .compactMap { $0 }
             .joined(separator: ", ")
-    }
-}
-
-private struct OpenCodeReviewChangesPillButtonStyle: ButtonStyle {
-    let enabled: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(backgroundColor(isPressed: configuration.isPressed), in: Capsule())
-            .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1))
-            .shadow(color: enabled ? Color.black.opacity(0.12) : .clear, radius: 4, y: 2)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-
-    private func backgroundColor(isPressed: Bool) -> Color {
-        guard enabled else { return OpenCodeColors.surfaceRaisedBase }
-        return isPressed ? OpenCodeColors.surfaceRaisedBaseHover : OpenCodeColors.surfaceRaisedBase
     }
 }
 

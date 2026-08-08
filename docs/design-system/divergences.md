@@ -209,18 +209,22 @@ implementation belong in the feature's `parity-gaps.md`.
 
 - Status: intentional
 - Area: component
-- Shared intent: Floating Dock, Session Chat Composer shell, and composer
-  suggestion overlays share one floating chrome family (materials via
-  `OpenCodeFloatingChrome` / `openCodeFloatingChrome`) with equivalent layout
-  affordances per surface. Session List home also uses dense rows and bottom-fade
-  geometry (`background.base` `0 → 0.7 → 0.7`, top = dock top + 16, solid to
-  screen edge).
+- Shared intent: Floating Dock, Session Chat Composer shell, composer suggestion
+  overlays, and Session Chat floating pills (Action / Review Changes / Session
+  Todos) share one floating chrome family — rounded/dock chrome via
+  `OpenCodeFloatingChrome` / `openCodeFloatingChrome`, capsules via
+  `OpenCodeFloatingPillChrome` — with equivalent layout affordances per surface.
+  Session List home also uses dense rows and bottom-fade geometry
+  (`background.base` `0 → 0.7 → 0.7`, top = dock top + 16, solid to screen
+  edge). Composer mode / model Choice Badges (including **Plan**) use the
+  related capsule glass Choice Badge variant.
 - iOS behavior: iOS 26+ `glassEffect` with `surface-raised-base` underlay at
-  0.92 opacity on floating chrome; glass button styles on dock CTAs / chips /
-  key home controls; material fallbacks below iOS 26. Capsule chips and Choice
-  Badge glass use **non-interactive** `glassEffect` plus subtle scale/opacity
-  press — not `.interactive()` lens feedback. Composer IconCircles stay
-  non-glass in the OPE-99 shell-only slice.
+  0.92 opacity on floating chrome and floating pills; glass button styles on
+  dock CTAs / chips / key home controls; material fallbacks below iOS 26.
+  Capsule chips, Choice Badge glass, and floating pills use **non-interactive**
+  `glassEffect` plus subtle scale/opacity press — not `.interactive()` lens
+  feedback. Multi-pill float stacks use `GlassEffectContainer`. Composer
+  IconCircles stay non-glass in the OPE-99 shell-only slice.
 - Android behavior: Material 3 raised `Surface` (fill alpha 0.95, light
   elevation) and bordered CTAs as a glass-like stand-in; no system Liquid Glass
   API.

@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ActionPillShape = RoundedCornerShape(percent = 50)
@@ -51,8 +52,8 @@ fun OpenCodeActionPill(
         }
     val accessibilityLabel = label
 
-    val containerColor = MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val surfaceRaised = openCodeColor("surface-raised-base")
+    val borderColor = openCodeColor("border-weaker-base")
     val contentColor =
         if (enabled) {
             MaterialTheme.colorScheme.onSurface
@@ -68,9 +69,10 @@ fun OpenCodeActionPill(
                 .defaultMinSize(minHeight = ActionPillMinHeight)
                 .semantics { contentDescription = accessibilityLabel },
         shape = ActionPillShape,
-        color = containerColor,
+        color = surfaceRaised.copy(alpha = if (enabled) 0.95f else 0.7f),
         contentColor = contentColor,
         border = BorderStroke(1.dp, borderColor),
+        tonalElevation = 2.dp,
         shadowElevation = if (enabled) ActionPillShadowElevation else 0.dp,
     ) {
         Row(
