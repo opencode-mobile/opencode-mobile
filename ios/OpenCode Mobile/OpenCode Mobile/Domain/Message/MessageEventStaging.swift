@@ -11,6 +11,8 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         case event(OpencodeEvent, epoch: UInt64, byteCost: Int)
         case overflow
         case recoveryRequired
+        /// SSE returned to Connected after Idle/Disconnect without a reconnect event.
+        case transportResumed
     }
 
     private let lock = NSLock()
@@ -113,6 +115,13 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
         while count > 0 {
             _ = popFrontLocked()
         }
+    }
+
+    func requestTransportResume() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else { return }
+        deliverLocked(.transportResumed)
     }
 
     /// Clears a Recovering latch when authority cannot run for this generation.

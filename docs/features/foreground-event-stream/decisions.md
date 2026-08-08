@@ -24,10 +24,14 @@ stream** is active:
 - **Connect/reconnect:** Both platforms forward the server's
   `server.connected` event. `MessageSync` schedules a short-debounced
   synchronization for it; synthetic `stream.reconnected` reloads immediately
-  and cancels a pending connected-event reload when one exists. Home does not
-  run a broad section reload per SSE event. Explicit project additions can
-  reload with `skipProbe = true`; saved profile changes run the normal
-  probe-backed refresh path.
+  and cancels a pending connected-event reload when one exists. After a
+  transport drop (`Idle` / `Disconnected` / `Reconnecting`), returning to
+  `Connected` also triggers the same reconnect fullReload (cold resume after
+  `stop()` clears `wasConnected` and may miss `server.connected`). Transport
+  drop clears any latched streaming text so the poll watchdog is not blocked.
+  Home does not run a broad section reload per SSE event. Explicit project
+  additions can reload with `skipProbe = true`; saved profile changes run the
+  normal probe-backed refresh path.
 - **Quiet refresh:** MessageSync/display-pipeline updates in Session Chat
   preserve in-flight send state (pending optimistic bubble and `isSending`).
   See [Message Repository decisions](../message-repository/decisions.md#post-send-ux).
