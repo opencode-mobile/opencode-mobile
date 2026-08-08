@@ -12,6 +12,9 @@
 - Decision: Archive and delete are available only from Session Chat overflow in
   this slice.
 - Reason: Matches the grilled session-screen scope; home list actions stay out.
+- Update: Home-list long-press archive and delete are now owned by
+  [Home Session Actions](../home-session-actions/plan.md) (OPE-120). Session Chat
+  overflow archive/delete remain.
 
 ## Wait for server, then dismiss home
 

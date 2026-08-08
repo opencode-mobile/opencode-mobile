@@ -19,8 +19,9 @@ trailing meta (caption above a status pill).
 - States: enabled, disabled.
 - Required content: `title`.
 - Optional content: plain `subtitle`, semantic subtitle segments, `status`,
-  `caption`, and trailing accessory content. Plain subtitle and semantic
-  segments are mutually exclusive.
+  `caption`, trailing accessory content, optional `onClick`/`action`, and
+  optional `onLongPress`. Plain subtitle and semantic segments are mutually
+  exclusive.
 - Semantic subtitle segment tones: `secondary`, `addition`, and `deletion`.
 - **Status** (`OpenCodeListItemStatus`, optional): text plus a semantic tone
   rendered as a **capsule pill** (not a leading dot).
@@ -48,9 +49,10 @@ trailing meta (caption above a status pill).
 
 ## Behavior
 
-Tap/click when a handler is provided. Selected rows use the secondary surface.
-Disabled rows reduce emphasis and do not run actions. Long strings truncate to
-one line.
+Tap/click when a handler is provided. Long-press when `onLongPress` is provided
+(and the row is enabled); long-press does not also fire tap. Selected rows use
+the secondary surface. Disabled rows reduce emphasis and do not run actions.
+Long strings truncate to one line.
 
 When `status` and/or `caption` are set, they form a trailing meta column
 (caption on top, status pill below), end-aligned so both share one trailing
@@ -62,8 +64,10 @@ reads as a real pill without an accent color.
 
 ## Platform Notes
 
-- iOS: plain `Button` when action exists; otherwise static content.
-- Android: `Surface` with optional `Modifier.clickable`.
+- iOS: plain `Button` when only tap exists; when long-press is set, use a content
+  shape with tap and long-press gestures so long-press does not also open.
+- Android: `Surface` with `Modifier.clickable` when only tap exists; use
+  `combinedClickable` when long-press is also provided.
 
 ## Review Surfaces
 

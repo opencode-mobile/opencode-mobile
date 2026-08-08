@@ -14,6 +14,13 @@ import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.SessionReadyClock
+import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
+import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageListUpdate
+import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -39,6 +46,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -599,6 +608,246 @@ class MainScreenViewModelTest {
             assertTrue(sessionRepository.listSessionsCallCount >= 2)
         }
 
+    @Test
+    fun onSessionLongPress_showsSheetAndEnablesForkWhenUserMessagesExist() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    messageRepository =
+                        FakeMessageRepository(
+                            messagesBySession =
+                                mapOf(
+                                    "s1" to listOf(Message(id = "m1", role = MessageRole.User, text = "Hello")),
+                                ),
+                        ),
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            val opened = viewModel.sessionActions.value
+            assertTrue(opened.sheetVisible)
+            assertEquals("Session one", opened.target?.title)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.sessionActions.value.canFork)
+        }
+
+    @Test
+    fun onSessionLongPress_hidesForkWhenNoUserMessages() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    messageRepository =
+                        FakeMessageRepository(
+                            messagesBySession =
+                                mapOf(
+                                    "s1" to
+                                        listOf(
+                                            Message(id = "m1", role = MessageRole.Assistant, text = "Hi"),
+                                        ),
+                                ),
+                        ),
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            advanceUntilIdle()
+
+            assertFalse(viewModel.sessionActions.value.canFork)
+
+            viewModel.chooseFork()
+            assertFalse(viewModel.sessionActions.value.forkVisible)
+        }
+
+    @Test
+    fun onSessionLongPress_forkGateFailureLeavesForkHidden() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    messageRepository = FakeMessageRepository(listError = IllegalStateException("offline")),
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            advanceUntilIdle()
+
+            assertFalse(viewModel.sessionActions.value.canFork)
+            assertTrue(viewModel.sessionActions.value.sheetVisible)
+        }
+
+    @Test
+    fun chooseRename_thenConfirm_renamesSessionAndClearsActions() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseRename()
+            assertFalse(viewModel.sessionActions.value.sheetVisible)
+            assertTrue(viewModel.sessionActions.value.renameVisible)
+            assertEquals("Session one", viewModel.sessionActions.value.renameDraft)
+
+            viewModel.updateRenameDraft("Renamed")
+            viewModel.confirmRename()
+            advanceUntilIdle()
+
+            assertEquals(listOf("s1" to "Renamed"), sessionRepository.renamedTitles)
+            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+        }
+
+    @Test
+    fun confirmRename_emptyTitleKeepsDialogWithError() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseRename()
+            viewModel.updateRenameDraft("   ")
+            viewModel.confirmRename()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.sessionActions.value.renameVisible)
+            assertEquals("Enter a session title", viewModel.sessionActions.value.renameError)
+            assertTrue(sessionRepository.renamedTitles.isEmpty())
+        }
+
+    @Test
+    fun chooseArchive_failureShowsSnackbarAndStaysHome() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionsByWorktree = mutableMapOf("/repo" to emptyList()),
+                    archiveError = IllegalStateException("nope"),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseArchive()
+            advanceUntilIdle()
+
+            assertEquals(listOf("s1"), sessionRepository.archivedIds)
+            assertEquals("Couldn't archive session.", viewModel.removalSnackbar.value?.text)
+            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+        }
+
+    @Test
+    fun confirmDelete_failureShowsSnackbar() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionsByWorktree = mutableMapOf("/repo" to emptyList()),
+                    deleteResult = false,
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseDelete()
+            assertTrue(viewModel.sessionActions.value.deleteConfirmVisible)
+
+            viewModel.confirmDelete()
+            advanceUntilIdle()
+
+            assertEquals(listOf("s1"), sessionRepository.deletedIds)
+            assertEquals("Couldn't delete session.", viewModel.removalSnackbar.value?.text)
+            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+        }
+
+    @Test
+    fun confirmFork_thenOpen_setsPendingOpenSession() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                    messageRepository =
+                        FakeMessageRepository(
+                            messagesBySession =
+                                mapOf(
+                                    "s1" to listOf(Message(id = "m1", role = MessageRole.User, text = "Hello")),
+                                ),
+                        ),
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            advanceUntilIdle()
+            viewModel.chooseFork()
+            assertEquals("Fork of Session one", viewModel.sessionActions.value.forkDraft)
+
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertEquals(listOf("s1"), sessionRepository.forkedIds)
+            assertTrue(viewModel.sessionActions.value.forkResultVisible)
+            assertEquals("Fork of Session one", viewModel.sessionActions.value.forkedTitle)
+
+            viewModel.chooseForkOpen()
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("forked-s1", loaded.pendingOpenSession?.sessionId)
+            assertEquals("/repo", loaded.pendingOpenSession?.worktree)
+            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+        }
+
+    @Test
+    fun chooseForkStay_keepsHomeWithoutPendingOpen() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    messageRepository =
+                        FakeMessageRepository(
+                            messagesBySession =
+                                mapOf(
+                                    "s1" to listOf(Message(id = "m1", role = MessageRole.User, text = "Hello")),
+                                ),
+                        ),
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            advanceUntilIdle()
+            viewModel.chooseFork()
+            viewModel.confirmFork()
+            advanceUntilIdle()
+            viewModel.chooseForkStay()
+
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertNull(loaded.pendingOpenSession)
+            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+        }
+
+    @Test
+    fun suggestedHomeForkTitle_fallsBackForBlankTitle() {
+        assertEquals("Fork of Session one", suggestedHomeForkTitle("Session one"))
+        assertEquals("Forked session", suggestedHomeForkTitle("   "))
+    }
+
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
@@ -609,6 +858,7 @@ class MainScreenViewModelTest {
                 it.setConnectionState(EventStreamConnectionState.Connected)
             },
         sessionRepository: FakeSessionRepository = FakeSessionRepository(sessionsByWorktree.toMutableMap()),
+        messageRepository: MessageRepository = FakeMessageRepository(),
         selectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         projectRepository: FakeProjectRepository = FakeProjectRepository(shouldFailProbe, bootWorktree),
         filesystemRepository: FilesystemRepository = FakeFilesystemRepository(),
@@ -647,6 +897,7 @@ class MainScreenViewModelTest {
             projectRepository = projectRepository,
             filesystemRepository = filesystemRepository,
             sessionRepository = sessionRepository,
+            messageRepository = messageRepository,
             connectionProfileStore = connectionProfileStore,
             sessionDomainAdapter = SessionDomainAdapter(),
             eventDomainAdapter = EventDomainAdapter(json),
@@ -703,9 +954,18 @@ private class FakeFilesystemRepository(
 private class FakeSessionRepository(
     private val sessionsByWorktree: MutableMap<String, List<Session>>,
     private val createError: Throwable? = null,
+    private val updateError: Throwable? = null,
+    private val archiveError: Throwable? = null,
+    private val deleteError: Throwable? = null,
+    private val forkError: Throwable? = null,
+    private val deleteResult: Boolean = true,
 ) : SessionRepository {
     var listSessionsCallCount = 0
     val createdDirectories = mutableListOf<String?>()
+    val renamedTitles = mutableListOf<Pair<String, String?>>()
+    val archivedIds = mutableListOf<String>()
+    val deletedIds = mutableListOf<String>()
+    val forkedIds = mutableListOf<String>()
 
     override suspend fun listSessions(directory: String?): List<Session> {
         listSessionsCallCount += 1
@@ -727,23 +987,43 @@ private class FakeSessionRepository(
     override suspend fun getSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Session =
+        sessionsByWorktree[directory]?.firstOrNull { it.id == id }
+            ?: Session(id = id, title = "Session $id", directory = directory)
 
     override suspend fun updateSession(
         id: String,
         title: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        renamedTitles += id to title
+        updateError?.let { throw it }
+        return Session(id = id, title = title.orEmpty(), directory = directory, updatedAtEpochMs = 20L)
+    }
 
     override suspend fun archiveSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        archivedIds += id
+        archiveError?.let { throw it }
+        return Session(
+            id = id,
+            title = "Archived",
+            directory = directory,
+            updatedAtEpochMs = 20L,
+            archivedAtEpochMs = 20L,
+        )
+    }
 
     override suspend fun deleteSession(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): Boolean {
+        deletedIds += id
+        deleteError?.let { throw it }
+        return deleteResult
+    }
 
     override suspend fun listChildSessions(
         id: String,
@@ -767,7 +1047,11 @@ private class FakeSessionRepository(
         id: String,
         atMessageId: String?,
         directory: String?,
-    ) = error("unused")
+    ): Session {
+        forkedIds += id
+        forkError?.let { throw it }
+        return Session(id = "forked-$id", title = "Fork", directory = directory, updatedAtEpochMs = 20L)
+    }
 
     override suspend fun abortSession(
         id: String,
@@ -815,6 +1099,64 @@ private class FakeSessionRepository(
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
     ) = error("unused")
+}
+
+private class FakeMessageRepository(
+    private val messagesBySession: Map<String, List<Message>> = emptyMap(),
+    private val listError: Throwable? = null,
+) : MessageRepository {
+    override fun observeMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<MessageListUpdate> = emptyFlow()
+
+    override fun observeDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): Flow<DisplayMessageListUpdate> = emptyFlow()
+
+    override suspend fun refreshMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<Message> = listMessages(sessionId, directory)
+
+    override suspend fun refreshDisplayMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<DisplayMessage> = listMessages(sessionId, directory).map(::DisplayMessage)
+
+    override suspend fun prepareOptimisticUserMessage(
+        id: String,
+        text: String,
+    ): DisplayMessage = DisplayMessage(Message(id = id, role = MessageRole.User, text = text))
+
+    override fun clearMessageCache() = Unit
+
+    override suspend fun listMessages(
+        sessionId: String,
+        directory: String?,
+    ): List<Message> {
+        listError?.let { throw it }
+        return messagesBySession[sessionId].orEmpty()
+    }
+
+    override suspend fun getMessage(
+        sessionId: String,
+        messageId: String,
+        directory: String?,
+    ): Message = error("unused")
+
+    override suspend fun sendMessage(
+        sessionId: String,
+        text: String,
+        directory: String?,
+    ): Message = error("unused")
+
+    override suspend fun sendPromptAsync(
+        sessionId: String,
+        options: PromptSendOptions,
+        directory: String?,
+    ) = Unit
 }
 
 private class FakeConnectionProfileStore(

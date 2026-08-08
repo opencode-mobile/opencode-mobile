@@ -70,6 +70,7 @@ struct SessionList<EmptyContent: View>: View {
     let createError: String?
     let onFilterSelected: (String) -> Void
     let onSessionSelected: (SessionListSession) -> Void
+    let onSessionLongPress: ((SessionListSession) -> Void)?
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onRefresh: (() async -> Void)?
@@ -88,6 +89,7 @@ struct SessionList<EmptyContent: View>: View {
         createError: String? = nil,
         onFilterSelected: @escaping (String) -> Void,
         onSessionSelected: @escaping (SessionListSession) -> Void,
+        onSessionLongPress: ((SessionListSession) -> Void)? = nil,
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
         onRefresh: (() async -> Void)? = nil,
@@ -101,6 +103,7 @@ struct SessionList<EmptyContent: View>: View {
         self.createError = createError
         self.onFilterSelected = onFilterSelected
         self.onSessionSelected = onSessionSelected
+        self.onSessionLongPress = onSessionLongPress
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onRefresh = onRefresh
@@ -248,7 +251,8 @@ struct SessionList<EmptyContent: View>: View {
                 session.letterAccent,
                 statusDot: showStatusDot ? listItemStatus(session.status).tone : nil
             ),
-            action: { onSessionSelected(session) }
+            action: { onSessionSelected(session) },
+            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
     }
 

@@ -20,6 +20,9 @@ clear title, an explicit close affordance, and one or more tappable entries.
     scrollable body, such as a filter field.
   - entry start decorator: `none` or `icon`.
   - entry end decorator: `none` or `icon`.
+  - entry `destructive` (default false): title (and matching icon tint) use the
+    semantic error color, same product meaning as overflow menu destructive
+    rows.
 
 Entries are title-only in this version. Use `OpenCodeListItem` when a row needs
 subtitle content, selected state, or a larger list treatment.

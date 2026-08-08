@@ -28,15 +28,19 @@ the active list (archive) or is removed entirely (delete), then return home.
 ## Out Of Scope
 
 - Unarchive, archived-session browser, or restore.
-- Archive or delete from the home/session list (swipe, long-press, overflow).
 - Neighbor/parent session navigation after success (always dismiss to home).
 - Undo toasts, bulk archive, share, or rename from this menu.
 - Perfect remote handling when another client archives/deletes the open session
   (polish follow-up).
 
+Home-list archive and delete via long-press are owned by
+[Home Session Actions](../home-session-actions/plan.md) (OPE-120). Swipe actions
+remain out of scope.
+
 Related: [Session Chat](../session-chat/plan.md),
 [Session Repository](../session-repository/plan.md),
-[Session Rename](../session-rename/plan.md).
+[Session Rename](../session-rename/plan.md),
+[Home Session Actions](../home-session-actions/plan.md).
 
 ## Server APIs Involved
 

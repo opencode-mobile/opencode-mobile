@@ -1,9 +1,11 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,6 +86,7 @@ data class OpenCodeListItemStatus(
     val tone: OpenCodeListItemStatusTone,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OpenCodeListItem(
     title: String,
@@ -96,6 +99,7 @@ fun OpenCodeListItem(
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
     startDecorator: StartDecorator = StartDecorator.None,
     onClick: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
@@ -122,18 +126,31 @@ fun OpenCodeListItem(
     val textWeaker = openCodeColor("text-weaker")
     val surfaceRaised = openCodeColor("surface-raised-base")
     val hasMeta = status != null || !caption.isNullOrEmpty()
+    val interactionModifier =
+        when {
+            onClick != null && onLongPress != null ->
+                Modifier.combinedClickable(
+                    enabled = enabled,
+                    onClick = onClick,
+                    onLongClick = onLongPress,
+                    onLongClickLabel = "Show actions",
+                )
+            onClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
+            onLongPress != null ->
+                Modifier.combinedClickable(
+                    enabled = enabled,
+                    onClick = {},
+                    onLongClick = onLongPress,
+                    onLongClickLabel = "Show actions",
+                )
+            else -> Modifier
+        }
 
     Surface(
         modifier =
             modifier
                 .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        Modifier.clickable(enabled = enabled, onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ),
+                .then(interactionModifier),
         shape = containerShape,
         color = containerColor,
         contentColor = contentColor,

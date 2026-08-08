@@ -349,6 +349,7 @@ private struct BottomSheetKeyboardHostPolicy: ViewModifier {
 struct OpenCodeBottomSheetEntry: View {
     let title: String
     let enabled: Bool
+    let destructive: Bool
     let startDecorator: BottomSheetEntryDecorator
     let endDecorator: BottomSheetEntryDecorator
     let action: () -> Void
@@ -356,29 +357,50 @@ struct OpenCodeBottomSheetEntry: View {
     init(
         title: String,
         enabled: Bool = true,
+        destructive: Bool = false,
         startDecorator: BottomSheetEntryDecorator = .none,
         endDecorator: BottomSheetEntryDecorator = .none,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.enabled = enabled
+        self.destructive = destructive
         self.startDecorator = startDecorator
         self.endDecorator = endDecorator
         self.action = action
     }
 
+    private var titleColor: Color {
+        switch (enabled, destructive) {
+        case (false, _):
+            OpenCodeColors.textWeaker
+        case (true, true):
+            OpenCodeColors.error
+        case (true, false):
+            OpenCodeColors.textStrong
+        }
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                BottomSheetEntryDecoration(decorator: startDecorator, enabled: enabled)
+                BottomSheetEntryDecoration(
+                    decorator: startDecorator,
+                    enabled: enabled,
+                    destructive: destructive
+                )
 
                 Text(title)
                     .font(OpenCodeTypography.body)
-                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
+                    .foregroundStyle(titleColor)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                BottomSheetEntryDecoration(decorator: endDecorator, enabled: enabled)
+                BottomSheetEntryDecoration(
+                    decorator: endDecorator,
+                    enabled: enabled,
+                    destructive: destructive
+                )
             }
             .padding(.horizontal, bottomSheetEntryHorizontalPadding)
             .padding(.vertical, bottomSheetEntryVerticalPadding)
@@ -526,6 +548,18 @@ private struct OpenCodeBottomSheetContainer<PinnedContent: View, SheetContent: V
 private struct BottomSheetEntryDecoration: View {
     let decorator: BottomSheetEntryDecorator
     let enabled: Bool
+    var destructive: Bool = false
+
+    private var tint: Color {
+        switch (enabled, destructive) {
+        case (false, _):
+            OpenCodeColors.textWeaker
+        case (true, true):
+            OpenCodeColors.error
+        case (true, false):
+            OpenCodeColors.iconBase
+        }
+    }
 
     var body: some View {
         switch decorator {
@@ -533,7 +567,7 @@ private struct BottomSheetEntryDecoration: View {
             EmptyView()
         case let .icon(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon, size: bottomSheetEntryIconSize)
-                .foregroundStyle(enabled ? OpenCodeColors.iconBase : OpenCodeColors.textWeaker)
+                .foregroundStyle(tint)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
                 .accessibilityHidden(accessibilityLabel == nil)
                 .accessibilityLabel(accessibilityLabel ?? "")
@@ -682,7 +716,7 @@ extension View {
             )
             OpenCodeBottomSheetEntry(
                 title: "Delete session",
-                enabled: false,
+                destructive: true,
                 startDecorator: .icon(.close, accessibilityLabel: "Delete session"),
                 action: {}
             )

@@ -537,13 +537,22 @@ fun OpenCodeBottomSheetEntry(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    destructive: Boolean = false,
     startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
 ) {
     val contentColor =
-        if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            destructive -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurface
+        }
     val iconColor =
-        if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            destructive -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Row(
         modifier =
@@ -638,7 +647,7 @@ private fun OpenCodeBottomSheetDarkPreview() {
             )
             OpenCodeBottomSheetEntry(
                 title = "Delete session",
-                enabled = false,
+                destructive = true,
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, "Delete session"),
                 onClick = {},
             )

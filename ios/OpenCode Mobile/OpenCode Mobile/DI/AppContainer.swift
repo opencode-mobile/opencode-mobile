@@ -362,6 +362,7 @@ extension Container {
                 projectRepository: self.projectRepository(),
                 filesystemRepository: self.filesystemRepository(),
                 sessionRepository: self.sessionRepository(),
+                messageRepository: self.messageRepository(),
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
                 sessionLiveStore: self.sessionLiveStore(),

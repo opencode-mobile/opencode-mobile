@@ -389,6 +389,274 @@ struct ProjectListHomeViewModelTests {
             sessionID: "created"
         )?.modelID == "gpt-4")
     }
+
+    @Test func onSessionLongPress_opensSheetAndKeepsForkHiddenWithoutUserMessages() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+
+        #expect(viewModel.sessionActionsSheetVisible)
+        #expect(viewModel.sessionActionsTarget?.sessionId == "s1")
+        #expect(viewModel.sessionActionsTarget?.title == "Alpha")
+        let stayedHidden = await waitUntil(timeoutMs: 200) { viewModel.sessionActionsCanFork }
+        #expect(stayedHidden == false)
+    }
+
+    @Test func onSessionLongPress_showsForkWhenSessionHasVisibleUserMessage() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+
+        #expect(await waitUntil { viewModel.sessionActionsCanFork })
+    }
+
+    @Test func onSessionLongPress_hidesForkWhenMessageFetchFails() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            messageRepository: FakeMessageRepository(
+                messages: [userMessage(id: "m1", text: "Hello")],
+                listError: TestError.message("offline")
+            ),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+
+        let becameForkable = await waitUntil(timeoutMs: 200) { viewModel.sessionActionsCanFork }
+        #expect(becameForkable == false)
+    }
+
+    @Test func dismissSessionActions_clearsTarget() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.dismissSessionActions()
+
+        #expect(viewModel.sessionActionsSheetVisible == false)
+        #expect(viewModel.sessionActionsTarget == nil)
+    }
+
+    @Test func confirmSessionRename_updatesSessionAndClosesDialog() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionRename()
+        #expect(viewModel.sessionRenameDialog.draftTitle == "Alpha")
+        #expect(viewModel.sessionActionsSheetVisible == false)
+
+        viewModel.updateSessionRenameDraft("Beta")
+        await viewModel.confirmSessionRename()
+
+        #expect(sessionRepository.updatedTitles.map(\.title) == ["Beta"])
+        #expect(viewModel.sessionRenameDialog.isVisible == false)
+        #expect(viewModel.sessionActionsTarget == nil)
+    }
+
+    @Test func confirmSessionRename_emptyTitleShowsDialogError() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionRename()
+        viewModel.updateSessionRenameDraft("   ")
+        await viewModel.confirmSessionRename()
+
+        #expect(sessionRepository.updatedTitles.isEmpty)
+        #expect(viewModel.sessionRenameDialog.isVisible)
+        #expect(viewModel.sessionRenameDialog.errorMessage == "Enter a session title")
+    }
+
+    @Test func confirmSessionRename_unchangedTitleClosesWithoutRequest() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionRename()
+        await viewModel.confirmSessionRename()
+
+        #expect(sessionRepository.updatedTitles.isEmpty)
+        #expect(viewModel.sessionRenameDialog.isVisible == false)
+        #expect(viewModel.sessionActionsTarget == nil)
+    }
+
+    @Test func confirmSessionRename_failureKeepsDialogError() async {
+        let sessionRepository = FakeSessionRepository(updateError: TestError.message("nope"))
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionRename()
+        viewModel.updateSessionRenameDraft("Beta")
+        await viewModel.confirmSessionRename()
+
+        #expect(viewModel.sessionRenameDialog.isVisible)
+        #expect(viewModel.sessionRenameDialog.isSubmitting == false)
+        #expect(viewModel.sessionRenameDialog.errorMessage == "nope")
+    }
+
+    @Test func openSessionFork_suggestsForkTitle() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+
+        #expect(viewModel.sessionForkDialog.draftTitle == "Fork of Alpha")
+        #expect(ProjectListHomeViewModel.suggestedForkTitle(for: "  ") == "Forked session")
+    }
+
+    @Test func confirmSessionFork_openChoiceQueuesPendingSessionOpen() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+
+        #expect(sessionRepository.forkedIDs == ["s1"])
+        #expect(sessionRepository.updatedTitles.map(\.id) == ["forked"])
+        #expect(viewModel.sessionForkResult.isVisible)
+        #expect(viewModel.sessionForkResult.forkedTitle == "Fork of Alpha")
+
+        viewModel.chooseSessionForkOpen()
+        #expect(viewModel.pendingSessionOpen?.id == "forked")
+        #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
+        #expect(viewModel.sessionForkResult.isVisible == false)
+    }
+
+    @Test func confirmSessionFork_stayChoiceKeepsHome() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+        viewModel.chooseSessionForkStay()
+
+        #expect(viewModel.pendingSessionOpen == nil)
+        #expect(viewModel.sessionForkResult.isVisible == false)
+        #expect(viewModel.sessionActionsTarget == nil)
+    }
+
+    @Test func confirmSessionFork_failureKeepsDialogError() async {
+        let sessionRepository = FakeSessionRepository(forkError: TestError.message("no fork"))
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+
+        #expect(viewModel.sessionForkDialog.isVisible)
+        #expect(viewModel.sessionForkDialog.errorMessage == "no fork")
+        #expect(viewModel.sessionForkResult.isVisible == false)
+    }
+
+    @Test func archiveSessionAction_archivesAndClearsTarget() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        await viewModel.archiveSessionAction()
+
+        #expect(sessionRepository.archivedIDs == ["s1"])
+        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.removalSnackbar == nil)
+    }
+
+    @Test func archiveSessionAction_failureShowsSnackbar() async {
+        let sessionRepository = FakeSessionRepository(archiveError: TestError.message("boom"))
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        await viewModel.archiveSessionAction()
+
+        #expect(viewModel.removalSnackbar?.text == "Couldn't archive session.")
+        #expect(viewModel.sessionActionInFlight == false)
+        #expect(viewModel.sessionActionsTarget == nil)
+    }
+
+    @Test func confirmDeleteSessionAction_deletesAfterConfirmation() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.requestDeleteSessionAction()
+        #expect(viewModel.sessionDeleteConfirmVisible)
+        #expect(sessionRepository.deletedIDs.isEmpty)
+
+        await viewModel.confirmDeleteSessionAction()
+
+        #expect(sessionRepository.deletedIDs == ["s1"])
+        #expect(viewModel.sessionDeleteConfirmVisible == false)
+        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.removalSnackbar == nil)
+    }
+
+    @Test func confirmDeleteSessionAction_failureShowsSnackbar() async {
+        let sessionRepository = FakeSessionRepository(deleteError: TestError.message("boom"))
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.requestDeleteSessionAction()
+        await viewModel.confirmDeleteSessionAction()
+
+        #expect(viewModel.removalSnackbar?.text == "Couldn't delete session.")
+        #expect(viewModel.sessionActionsTarget == nil)
+    }
 }
 
 @MainActor
@@ -396,6 +664,7 @@ private func makeViewModel(
     projectRepository: any ProjectRepository,
     filesystemRepository: any FilesystemRepository = FakeFilesystemRepository(),
     sessionRepository: any SessionRepository = FakeSessionRepository(),
+    messageRepository: any MessageRepository = FakeMessageRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     eventStream: FakeForegroundEventStream? = nil,
     newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil
@@ -426,6 +695,7 @@ private func makeViewModel(
         projectRepository: projectRepository,
         filesystemRepository: filesystemRepository,
         sessionRepository: sessionRepository,
+        messageRepository: messageRepository,
         connectionProfileStore: connectionProfileStore,
         activeConnectionManager: manager,
         sessionLiveStore: sessionLiveStore,
@@ -656,14 +926,30 @@ private struct SlowFirstSessionRepository: SessionRepository {
 private final class FakeSessionRepository: SessionRepository, @unchecked Sendable {
     let sessions: [Session]
     let createError: Error?
+    let updateError: Error?
+    let archiveError: Error?
+    let deleteError: Error?
+    let forkError: Error?
     private(set) var createdDirectories: [String?] = []
+    private(set) var updatedTitles: [(id: String, title: String?)] = []
+    private(set) var archivedIDs: [String] = []
+    private(set) var deletedIDs: [String] = []
+    private(set) var forkedIDs: [String] = []
 
     init(
         sessions: [Session] = [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: nil, parentID: nil, updatedAtEpochMs: 1)],
-        createError: Error? = nil
+        createError: Error? = nil,
+        updateError: Error? = nil,
+        archiveError: Error? = nil,
+        deleteError: Error? = nil,
+        forkError: Error? = nil
     ) {
         self.sessions = sessions
         self.createError = createError
+        self.updateError = updateError
+        self.archiveError = archiveError
+        self.deleteError = deleteError
+        self.forkError = forkError
     }
 
     func listSessions(directory: String?) async throws -> [Session] { sessions }
@@ -675,13 +961,60 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
     func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
-    func updateSession(id: String, title: String?, directory: String?) async throws -> Session { fatalError() }
-    func archiveSession(id: String, directory: String?) async throws -> Session { fatalError() }
-    func deleteSession(id: String, directory: String?) async throws -> Bool { fatalError() }
+
+    func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
+        updatedTitles.append((id, title))
+        if let updateError { throw updateError }
+        return Session(
+            id: id,
+            title: title ?? "",
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: 20
+        )
+    }
+
+    func archiveSession(id: String, directory: String?) async throws -> Session {
+        archivedIDs.append(id)
+        if let archiveError { throw archiveError }
+        return Session(
+            id: id,
+            title: "Archived",
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: 30,
+            archivedAtEpochMs: 30
+        )
+    }
+
+    func deleteSession(id: String, directory: String?) async throws -> Bool {
+        deletedIDs.append(id)
+        if let deleteError { throw deleteError }
+        return true
+    }
+
     func listChildSessions(id: String) async throws -> [Session] { fatalError() }
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
-    func forkSession(id: String, atMessageID: String?) async throws -> Session { fatalError() }
+
+    func forkSession(id: String, atMessageID: String?) async throws -> Session {
+        forkedIDs.append(id)
+        if let forkError { throw forkError }
+        return Session(
+            id: "forked",
+            title: "Forked",
+            slug: nil,
+            projectID: nil,
+            directory: nil,
+            parentID: nil,
+            updatedAtEpochMs: 40
+        )
+    }
+
     func abortSession(id: String, directory: String?) async throws -> Bool { fatalError() }
     func shareSession(id: String) async throws -> Session { fatalError() }
     func unshareSession(id: String) async throws -> Session { fatalError() }
@@ -695,6 +1028,42 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         decision: PermissionDecision,
         directory: String?
     ) async throws -> Bool { fatalError() }
+}
+
+private final class FakeMessageRepository: MessageRepository, @unchecked Sendable {
+    let messages: [Message]
+    let listError: Error?
+
+    init(messages: [Message] = [], listError: Error? = nil) {
+        self.messages = messages
+        self.listError = listError
+    }
+
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
+        AsyncStream { $0.finish() }
+    }
+
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        AsyncStream { $0.finish() }
+    }
+
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] { messages }
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] { [] }
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage { fatalError() }
+    func clearMessageCache() {}
+
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        if let listError { throw listError }
+        return messages
+    }
+
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+}
+
+private func userMessage(id: String, text: String) -> Message {
+    Message(id: id, role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: 1)
 }
 
 private enum TestError: LocalizedError {

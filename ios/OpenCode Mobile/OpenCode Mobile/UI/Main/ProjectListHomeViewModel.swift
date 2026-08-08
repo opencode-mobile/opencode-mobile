@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 
 struct ProjectSectionItem: Identifiable, Equatable {
     let id: String
@@ -51,6 +52,25 @@ struct ProjectRemovalItem: Equatable {
     let displayName: String
 }
 
+struct HomeSessionActionTarget: Equatable {
+    let sessionId: String
+    let title: String
+    let worktree: String
+}
+
+/// Shared shape for the home rename and fork dialogs.
+struct HomeSessionTitleDialogState: Equatable {
+    var isVisible = false
+    var draftTitle = ""
+    var isSubmitting = false
+    var errorMessage: String?
+}
+
+struct HomeSessionForkResultState: Equatable {
+    var isVisible = false
+    var forkedTitle = ""
+}
+
 enum ProjectListHomeState: Equatable {
     case disconnected
     case probing
@@ -82,10 +102,21 @@ final class ProjectListHomeViewModel {
     private(set) var addProjectNavigator = AddProjectNavigatorState.empty
     private(set) var seeAllSessionsSheet: SeeAllSessionsSheetState?
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
+    /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
+    private(set) var sessionActionsTarget: HomeSessionActionTarget?
+    private(set) var sessionActionsSheetVisible = false
+    /// Stays false until a message fetch confirms the session is forkable.
+    private(set) var sessionActionsCanFork = false
+    private(set) var sessionRenameDialog = HomeSessionTitleDialogState()
+    private(set) var sessionForkDialog = HomeSessionTitleDialogState()
+    private(set) var sessionForkResult = HomeSessionForkResultState()
+    private(set) var sessionDeleteConfirmVisible = false
+    private(set) var sessionActionInFlight = false
     private let projectRepository: any ProjectRepository
     private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
+    private let messageRepository: any MessageRepository
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
@@ -108,11 +139,14 @@ final class ProjectListHomeViewModel {
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
     private var requestedFocusWorktree: String?
     private var homeFocusedWorktree: String?
+    private var forkGateTask: Task<Void, Never>?
+    private var forkedSessionOpenTarget: SessionListItem?
 
     init(
         projectRepository: any ProjectRepository,
         filesystemRepository: any FilesystemRepository,
         sessionRepository: any SessionRepository,
+        messageRepository: any MessageRepository,
         connectionProfileStore: any ConnectionProfileStore,
         activeConnectionManager: ActiveConnectionManager,
         sessionLiveStore: any SessionLiveStore,
@@ -126,6 +160,7 @@ final class ProjectListHomeViewModel {
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
         self.sessionRepository = sessionRepository
+        self.messageRepository = messageRepository
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
         self.sessionLiveStore = sessionLiveStore
@@ -374,6 +409,264 @@ final class ProjectListHomeViewModel {
     func consumeProjectRemovalSnackbar() {
         removalSnackbar = nil
     }
+
+    func onSessionLongPress(sessionId: String, title: String, worktree: String) {
+        let target = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
+        sessionActionsTarget = target
+        sessionActionsSheetVisible = true
+        sessionActionsCanFork = false
+        forkGateTask?.cancel()
+        forkGateTask = Task { await resolveForkVisibility(target) }
+    }
+
+    /// Dismissal from the sheet chrome. Action handlers hide the sheet themselves and
+    /// keep the target alive for the dialog they open.
+    func dismissSessionActions() {
+        sessionActionsSheetVisible = false
+        guard !hasOpenSessionActionDialog else { return }
+        clearSessionActionsTarget()
+    }
+
+    func openSessionRename() {
+        guard let target = sessionActionsTarget else { return }
+        sessionActionsSheetVisible = false
+        sessionRenameDialog = HomeSessionTitleDialogState(isVisible: true, draftTitle: target.title)
+    }
+
+    func updateSessionRenameDraft(_ text: String) {
+        sessionRenameDialog.draftTitle = text
+        sessionRenameDialog.errorMessage = nil
+    }
+
+    func cancelSessionRename() {
+        guard !sessionRenameDialog.isSubmitting else { return }
+        sessionRenameDialog = HomeSessionTitleDialogState()
+        clearSessionActionsTarget()
+    }
+
+    func confirmSessionRename() async {
+        guard let target = sessionActionsTarget, !sessionRenameDialog.isSubmitting else { return }
+        let trimmed = sessionRenameDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            sessionRenameDialog.errorMessage = Self.emptyTitleError
+            return
+        }
+        if trimmed == target.title {
+            cancelSessionRename()
+            return
+        }
+        sessionRenameDialog.isSubmitting = true
+        sessionRenameDialog.errorMessage = nil
+        OpenCodeLog.sessionChat.info("home rename submit session=\(target.sessionId, privacy: .public)")
+        do {
+            _ = try await sessionRepository.updateSession(
+                id: target.sessionId,
+                title: trimmed,
+                directory: target.worktree
+            )
+            guard sessionActionsTarget == target else { return }
+            OpenCodeLog.sessionChat.info("home rename success session=\(target.sessionId, privacy: .public)")
+            sessionRenameDialog = HomeSessionTitleDialogState()
+            clearSessionActionsTarget()
+        } catch {
+            guard sessionActionsTarget == target else { return }
+            OpenCodeLog.sessionChat.warning(
+                "home rename failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            sessionRenameDialog.isSubmitting = false
+            sessionRenameDialog.errorMessage = sessionMutationErrorMessage(error)
+        }
+    }
+
+    func openSessionFork() {
+        guard let target = sessionActionsTarget else { return }
+        sessionActionsSheetVisible = false
+        sessionForkDialog = HomeSessionTitleDialogState(
+            isVisible: true,
+            draftTitle: Self.suggestedForkTitle(for: target.title)
+        )
+    }
+
+    func updateSessionForkDraft(_ text: String) {
+        sessionForkDialog.draftTitle = text
+        sessionForkDialog.errorMessage = nil
+    }
+
+    func cancelSessionFork() {
+        guard !sessionForkDialog.isSubmitting else { return }
+        sessionForkDialog = HomeSessionTitleDialogState()
+        clearSessionActionsTarget()
+    }
+
+    func confirmSessionFork() async {
+        guard let target = sessionActionsTarget, !sessionForkDialog.isSubmitting else { return }
+        let trimmed = sessionForkDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            sessionForkDialog.errorMessage = Self.emptyTitleError
+            return
+        }
+        sessionForkDialog.isSubmitting = true
+        sessionForkDialog.errorMessage = nil
+        do {
+            let forked = try await sessionRepository.forkSession(id: target.sessionId, atMessageID: nil)
+            let updated = try await sessionRepository.updateSession(
+                id: forked.id,
+                title: trimmed,
+                directory: target.worktree
+            )
+            guard sessionActionsTarget == target else { return }
+            OpenCodeLog.sessionChat.info(
+                "home fork success sourceSession=\(target.sessionId, privacy: .public) forkedSession=\(updated.id, privacy: .public)"
+            )
+            forkedSessionOpenTarget = SessionListItem(
+                id: updated.id,
+                title: updated.title,
+                worktree: target.worktree
+            )
+            sessionForkDialog = HomeSessionTitleDialogState()
+            sessionForkResult = HomeSessionForkResultState(isVisible: true, forkedTitle: updated.title)
+        } catch {
+            guard sessionActionsTarget == target else { return }
+            OpenCodeLog.sessionChat.warning(
+                "home fork failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            sessionForkDialog.isSubmitting = false
+            sessionForkDialog.errorMessage = sessionMutationErrorMessage(error)
+        }
+    }
+
+    func chooseSessionForkOpen() {
+        let target = forkedSessionOpenTarget
+        forkedSessionOpenTarget = nil
+        sessionForkResult = HomeSessionForkResultState()
+        clearSessionActionsTarget()
+        pendingSessionOpen = target
+    }
+
+    func chooseSessionForkStay() {
+        forkedSessionOpenTarget = nil
+        sessionForkResult = HomeSessionForkResultState()
+        clearSessionActionsTarget()
+    }
+
+    func archiveSessionAction() async {
+        guard let target = sessionActionsTarget, !sessionActionInFlight else { return }
+        sessionActionsSheetVisible = false
+        sessionActionInFlight = true
+        OpenCodeLog.sessionChat.info("home archive start session=\(target.sessionId, privacy: .public)")
+        do {
+            _ = try await sessionRepository.archiveSession(id: target.sessionId, directory: target.worktree)
+            OpenCodeLog.sessionChat.info("home archive success session=\(target.sessionId, privacy: .public)")
+            sessionActionInFlight = false
+            clearSessionActionsTarget()
+        } catch {
+            OpenCodeLog.sessionChat.warning(
+                "home archive failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            sessionActionInFlight = false
+            clearSessionActionsTarget()
+            removalSnackbar = OpenCodeSnackbarMessage(text: Self.archiveError, variant: .error)
+        }
+    }
+
+    func requestDeleteSessionAction() {
+        guard sessionActionsTarget != nil else { return }
+        sessionActionsSheetVisible = false
+        sessionDeleteConfirmVisible = true
+    }
+
+    func cancelDeleteSessionAction() {
+        guard !sessionActionInFlight else { return }
+        sessionDeleteConfirmVisible = false
+        clearSessionActionsTarget()
+    }
+
+    func confirmDeleteSessionAction() async {
+        guard let target = sessionActionsTarget, !sessionActionInFlight else { return }
+        sessionDeleteConfirmVisible = false
+        sessionActionInFlight = true
+        OpenCodeLog.sessionChat.info("home delete start session=\(target.sessionId, privacy: .public)")
+        do {
+            let deleted = try await sessionRepository.deleteSession(id: target.sessionId, directory: target.worktree)
+            sessionActionInFlight = false
+            clearSessionActionsTarget()
+            if deleted {
+                OpenCodeLog.sessionChat.info("home delete success session=\(target.sessionId, privacy: .public)")
+            } else {
+                OpenCodeLog.sessionChat.info("home delete rejected session=\(target.sessionId, privacy: .public)")
+                removalSnackbar = OpenCodeSnackbarMessage(text: Self.deleteError, variant: .error)
+            }
+        } catch {
+            OpenCodeLog.sessionChat.warning(
+                "home delete failed session=\(target.sessionId, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            sessionActionInFlight = false
+            clearSessionActionsTarget()
+            removalSnackbar = OpenCodeSnackbarMessage(text: Self.deleteError, variant: .error)
+        }
+    }
+
+    /// Fork parity with Commands: at least one visible user message. A failed fetch
+    /// leaves Fork hidden rather than offering an action the server may reject.
+    private func resolveForkVisibility(_ target: HomeSessionActionTarget) async {
+        guard let messages = try? await messageRepository.listMessages(
+            sessionID: target.sessionId,
+            directory: target.worktree
+        ) else { return }
+        guard !Task.isCancelled, sessionActionsTarget == target else { return }
+        let refs = messages.map { message in
+            ClientSlashMessageRef(
+                id: message.id,
+                isUser: message.role == .user,
+                isPending: false,
+                isStreaming: false,
+                hasNonEmptyText: !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+        }
+        let input = ClientSlashActionCatalog.visibilityInput(
+            messages: refs,
+            revertMessageID: nil,
+            hasSelectedComposerModel: false
+        )
+        sessionActionsCanFork = ClientSlashActionCatalog.visibleActions(input).contains(.fork)
+    }
+
+    private var hasOpenSessionActionDialog: Bool {
+        sessionRenameDialog.isVisible
+            || sessionForkDialog.isVisible
+            || sessionForkResult.isVisible
+            || sessionDeleteConfirmVisible
+            || sessionActionInFlight
+    }
+
+    private func clearSessionActionsTarget() {
+        forkGateTask?.cancel()
+        forkGateTask = nil
+        sessionActionsTarget = nil
+        sessionActionsSheetVisible = false
+        sessionActionsCanFork = false
+    }
+
+    private func sessionMutationErrorMessage(_ error: Error) -> String {
+        guard let sessionError = error as? SessionError else { return error.localizedDescription }
+        switch sessionError {
+        case let .http(_, message):
+            return message ?? "Request failed"
+        case .transport:
+            return "Unable to reach the server"
+        case .decoding:
+            return "Unable to read server response"
+        }
+    }
+
+    static func suggestedForkTitle(for title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Forked session" : "Fork of \(trimmed)"
+    }
+
+    private static let emptyTitleError = "Enter a session title"
+    private static let archiveError = "Couldn't archive session."
+    private static let deleteError = "Couldn't delete session."
 
     private func runHomeLoad(skipProbe: Bool = false, preserveContent: Bool = false) async {
         guard activeConnectionManager.connection != nil else {

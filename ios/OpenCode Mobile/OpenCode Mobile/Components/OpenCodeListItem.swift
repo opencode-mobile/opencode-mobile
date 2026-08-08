@@ -49,6 +49,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     let style: OpenCodeListItemStyle
     let startDecorator: StartDecorator
     let action: (() -> Void)?
+    let onLongPress: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
 
     init(
@@ -62,6 +63,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         style: OpenCodeListItemStyle = .plain,
         startDecorator: StartDecorator = .none,
         action: (() -> Void)? = nil,
+        onLongPress: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
     ) {
         precondition(subtitle == nil || subtitleSegments == nil, "List Item accepts either a plain subtitle or semantic segments")
@@ -75,12 +77,25 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.style = style
         self.startDecorator = startDecorator
         self.action = action
+        self.onLongPress = onLongPress
         self.trailing = trailing
     }
 
     var body: some View {
         Group {
-            if let action {
+            if let onLongPress {
+                content
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard enabled else { return }
+                        action?()
+                    }
+                    .onLongPressGesture {
+                        guard enabled else { return }
+                        onLongPress()
+                    }
+                    .allowsHitTesting(enabled)
+            } else if let action {
                 Button(action: action) {
                     content
                 }
