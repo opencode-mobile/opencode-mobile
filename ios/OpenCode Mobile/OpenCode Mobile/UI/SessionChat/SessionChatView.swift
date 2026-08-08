@@ -58,6 +58,11 @@ struct SessionChatView: View {
                     .background(OpenCodeColors.backgroundBase)
             }
         }
+        // Hide system nav chrome on the root destination immediately — including the
+        // pre-VM ProgressView — so NavigationStack never flashes the Liquid Glass
+        // back button before OpenCodeTopBar mounts.
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .task(id: session.id) {
             if viewModelStorage == nil {
                 viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
@@ -309,7 +314,6 @@ struct SessionChatView: View {
             guard case let .success(urls) = result else { return }
             Task { await viewModel.addAttachmentFiles(urls) }
         }
-        .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $showSessionContext) {
             SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
         }
