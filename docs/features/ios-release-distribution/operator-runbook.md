@@ -12,8 +12,11 @@
 | Firebase iOS app | `1:569439646238:ios:2ffd276bbaf8a1528df40f` | Bundle `dev.opencode.mobile` |
 | GitHub Environment | `ios-release` | Custom branch policy: `main` only |
 
-Recovery copies of `.p8` and `GoogleService-Info.plist` live in the owner-only
-`opencode-mobile-release-credentials` folder. Never commit them.
+Recovery copies of `.p8` and a spare `GoogleService-Info.plist` live in the
+owner-only `opencode-mobile-release-credentials` folder. The tracked app plist
+at `ios/OpenCode Mobile/OpenCode Mobile/GoogleService-Info.plist` is public
+client routing config (same posture as Android `google-services.json`); never
+commit service-account JSON or `.p8` keys.
 
 ## GitHub secrets (`ios-release`)
 
@@ -40,9 +43,10 @@ for the same marketing version after ASC has accepted a higher one. Do not use
 1. Merge the release changes to `main`.
 2. Actions → **iOS Release** → Run workflow on `main`.
 3. Set `version_name` (example: `0.1.0`).
-4. Wait for archive, App Store IPA export, signature verification, **ASC
+4. Leave `verify_crashlytics` at **false** for normal releases.
+5. Wait for archive, App Store IPA export, signature verification, **ASC
    upload**, and artifact retention.
-5. Download `ios-ipa-…` and `ios-xcarchive-…` artifacts if needed (7-day
+6. Download `ios-ipa-…` and `ios-xcarchive-…` artifacts if needed (7-day
    retention). The workflow already uploaded the same IPA to App Store Connect.
 
 Build number (`CFBundleVersion`) equals the workflow run number.
@@ -162,3 +166,41 @@ verification, and Firebase upload steps. A failed run does not revert the
 merge. Rotate only the dedicated App Distribution key if that credential is
 exposed, and replace its protected GitHub secret in both `ios-release` and
 `android-release`.
+
+## Verify release observability
+
+Normal TestFlight releases leave the controlled verification path disabled
+(`verify_crashlytics=false`).
+
+After OPE-122 implementation is on `main`, run exactly one protected
+verification release:
+
+```bash
+gh workflow run "iOS Release" \
+  --ref main \
+  -f version_name=<next-semantic-version> \
+  -f verify_crashlytics=true
+```
+
+The workflow input compiles a content-free
+`OpenCodeMobileCrashlyticsVerification` non-fatal into that Release build via
+`VERIFY_CRASHLYTICS`. The app records it once per installed build number and
+stores the marker in `UserDefaults` (`release_observability` key family).
+Install from TestFlight Internal Testing (or an equivalent Ad Hoc App
+Distribution build if that path is chosen), launch once, then relaunch so
+Crashlytics can upload the batched report. Confirm the expected version, build
+number, device, and exception in the Crashlytics dashboard. A third launch must
+not produce another verification event for that build.
+
+The release Analytics contract allows only Firebase's remaining automatic
+lifecycle/technical events used as Crashlytics breadcrumbs. The app sends no
+custom events, screen views, app-assigned user IDs, or app-defined user
+properties. Automatic screen reporting and ad personalization defaults are
+disabled; do not add App Tracking Transparency or `NSUserTrackingUsageDescription`
+for this slice. Debug / day-to-day simulator builds do not initialize Firebase
+and strip `GoogleService-Info.plist` from the Debug app bundle.
+
+If the non-fatal does not appear, confirm the installed TestFlight build,
+relaunch the app, and check Crashlytics for a successful report upload before
+changing code. Do not paste raw dashboard exports, tester identifiers, app
+content, or credentials into the repository or Linear.

@@ -12,6 +12,7 @@ import SwiftUI
 struct OpenCode_MobileApp: App {
     init() {
         _ = ThemeManager.shared
+        OpenCodeReleaseObservability.initialize()
     }
 
     var body: some Scene {

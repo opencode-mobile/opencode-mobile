@@ -60,9 +60,13 @@ questionnaire when that answer is accurate.
 
 ## Firebase iOS registration without app SDK
 
-Register the iOS app in the existing Firebase project and keep
-`GoogleService-Info.plist` in the credentials folder. Do not add an app-side
-Firebase SDK until a later Crashlytics/Analytics ticket.
+**Status:** Accepted for OPE-100; SDK work moved to OPE-121  
+**Decision:** Register the iOS app in the existing Firebase project and keep
+`GoogleService-Info.plist` in the credentials folder during distribution setup.
+Do not add an app-side Firebase SDK in the release-distribution slice.
+Crashlytics / Analytics moved to
+[`release-observability`](../release-observability/plan.md) (OPE-121 / OPE-122),
+which may track the plist in the app tree like Android's `google-services.json`.
 
 ## Release archive Swift optimization workaround
 
