@@ -94,8 +94,10 @@ struct OpenCodeSessionTodosPill: View {
             .padding(.vertical, Self.paddingVertical)
             .frame(minHeight: Self.minHeight)
             .frame(maxWidth: Self.maxWidth)
+            .contentShape(Capsule())
         }
-        .buttonStyle(OpenCodeSessionTodosPillButtonStyle(enabled: enabled))
+        .buttonStyle(OpenCodeFloatingPillPressStyle())
+        .openCodeFloatingPillChrome(enabled: enabled)
         .disabled(!enabled)
         .accessibilityLabel(Self.accessibilityLabel(
             completedCount: completedCount,
@@ -125,23 +127,6 @@ struct OpenCodeSessionTodosPill: View {
     private static let statusDotSize: CGFloat = 8
     private static let contentSpacing: CGFloat = 8
     private static let maxWidth: CGFloat = 320
-}
-
-private struct OpenCodeSessionTodosPillButtonStyle: ButtonStyle {
-    let enabled: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(backgroundColor(isPressed: configuration.isPressed), in: Capsule())
-            .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1))
-            .shadow(color: enabled ? Color.black.opacity(0.12) : .clear, radius: 4, y: 2)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-
-    private func backgroundColor(isPressed: Bool) -> Color {
-        guard enabled else { return OpenCodeColors.surfaceRaisedBase }
-        return isPressed ? OpenCodeColors.surfaceRaisedBaseHover : OpenCodeColors.surfaceRaisedBase
-    }
 }
 
 private struct SessionTodosPillPreview: View {

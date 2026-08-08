@@ -30,10 +30,11 @@ copy and omits each zero-valued line total:
 
 ## Token Usage
 
-- Semantic tokens: `surface-raised-base`, `surface-raised-base-hover`,
-  `text-strong`, `text-base`, `diff-add`, `diff-delete`, and
-  `border-weaker-base`.
-- Component tokens: `reviewChangesPill.*` in `../tokens.md`.
+- Semantic tokens: `surface-raised-base`, `text-strong`, `text-base`,
+  `diff-add`, `diff-delete`, and `border-weaker-base` (fallback / Android
+  stand-in).
+- Component tokens: `reviewChangesPill.*` in `../tokens.md`. Shadow elevation
+  is Android / pre–iOS 26 fallback only.
 - Typography role: `type.button` in `../typography.md`.
 
 ## Behavior
@@ -53,15 +54,17 @@ within the capsule on both platforms.
 Accessibility identifies the control as the Review changes action and speaks
 the visible totals using pluralized phrases, for example `Review changes, 5
 files, 12 additions, 3 deletions`. Zero-valued addition or deletion phrases are
-omitted, matching the visible summary. Native pressed feedback uses the shared
-semantic surface mapping.
+omitted, matching the visible summary. Pressed feedback uses subtle
+scale/opacity shared with other floating glass pills.
 
 ## Platform Notes
 
-- iOS: native SwiftUI `Button` with a capsule surface and light shadow.
-- Android: Material 3 clickable `Surface` with capsule shape, border, and
-  elevation. A centered inner content container owns the minimum height so
-  font metrics cannot top-align the summary within the capsule.
+- iOS 26+: non-interactive `glassEffect(.regular)` capsule via shared
+  `OpenCodeFloatingPillChrome`; below iOS 26 raised capsule + border + shadow.
+- Android: Material 3 raised `Surface` stand-in (fill alpha `0.95`, light
+  elevation, weaker border). A centered inner content container owns the
+  minimum height so font metrics cannot top-align the summary within the
+  capsule.
 
 ## Review Surfaces
 
@@ -75,14 +78,15 @@ semantic surface mapping.
 ## Parity And Divergence
 
 The public copy, visibility contract, interaction, geometry, and accessibility
-meaning are shared. No intentional platform divergence is planned.
+meaning are shared. Material mapping follows the intentional Floating chrome
+divergence in `../divergences.md`.
 
 ## Completion Ledger
 
 - Public API and applicable enabled/disabled states: complete for a positive
   file count and nonnegative addition/deletion totals.
 - Token and typography mappings: complete; the implementations use the
-  documented `reviewChangesPill.*` geometry, raised semantic surfaces, and
+  documented `reviewChangesPill.*` geometry, floating glass capsule chrome, and
   button typography.
 - iOS and Android implementations: complete with equivalent required totals,
   formatting, semantic colors, disabled treatment, interaction, and
@@ -94,4 +98,4 @@ meaning are shared. No intentional platform divergence is planned.
   pluralization, visibility, and navigation checks: complete on both
   platforms. Android device execution remains subject to the repository's
   existing instrumentation build health.
-- Parity and divergences: complete; no observable divergence is known.
+- Parity and divergences: complete; materials follow Floating chrome.

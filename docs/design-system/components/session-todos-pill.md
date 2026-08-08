@@ -29,11 +29,11 @@ Visible summary:
 
 ## Token Usage
 
-- Semantic tokens: `surface-raised-base`, `surface-raised-base-hover`,
-  `text-strong`, `text-base`, `text-interactive-base`, `border-weaker-base`.
-- Component tokens: `sessionTodosPill.*` in `../tokens.md` (shared raised
-  capsule geometry with Action / Review Changes pills; max width for preview
-  truncation).
+- Semantic tokens: `surface-raised-base`, `text-strong`, `text-base`,
+  `text-interactive-base`, `border-weaker-base` (fallback / Android stand-in).
+- Component tokens: `sessionTodosPill.*` in `../tokens.md` (shared floating
+  glass capsule geometry with Action / Review Changes pills; max width for
+  preview truncation). Shadow elevation is Android / pre–iOS 26 fallback only.
 - Typography role: `type.button` in `../typography.md`.
 
 ## Behavior
@@ -49,11 +49,17 @@ Accessibility identifies the control as Session Todos and speaks progress plus
 the preview when present, for example `Session todos, 2 of 5 completed,
 Implement auth middleware`.
 
+Pressed feedback uses subtle scale/opacity shared with other floating glass
+pills.
+
 ## Platform Notes
 
-- iOS: native SwiftUI `Button` with a capsule surface and light shadow.
-- Android: Material 3 clickable `Surface` with capsule shape, border, and
-  elevation. Preview truncates with ellipsis inside a max-width constraint.
+- iOS 26+: non-interactive `glassEffect(.regular)` capsule via shared
+  `OpenCodeFloatingPillChrome`; below iOS 26 raised capsule + border + shadow.
+  Session Chat float stacks wrap visible pills in `GlassEffectContainer`.
+- Android: Material 3 raised `Surface` stand-in (fill alpha `0.95`, light
+  elevation, weaker border). Preview truncates with ellipsis inside a
+  max-width constraint.
 
 ## Review Surfaces
 
@@ -65,4 +71,5 @@ Implement auth middleware`.
 ## Parity And Divergence
 
 The public copy, interaction, geometry, and accessibility meaning are shared.
-No intentional platform divergence is planned.
+Material mapping follows the intentional Floating chrome divergence in
+`../divergences.md`.

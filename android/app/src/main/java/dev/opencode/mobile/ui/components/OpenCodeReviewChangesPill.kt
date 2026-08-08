@@ -2,7 +2,6 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
@@ -11,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,13 +122,11 @@ fun OpenCodeReviewChangesPill(
                 reviewChangesPillSummaryContent(changedFileCount, additions, deletions)
         }
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
     val contentColor =
         if (enabled) openCodeColor("text-strong") else MaterialTheme.colorScheme.onSurfaceVariant
     val additionsColor = if (enabled) openCodeColor("diff-add") else MaterialTheme.colorScheme.onSurfaceVariant
     val deletionsColor = if (enabled) openCodeColor("diff-delete") else MaterialTheme.colorScheme.onSurfaceVariant
-    val containerColor =
-        if (enabled && isPressed) openCodeColor("surface-raised-base-hover") else openCodeColor("surface-raised-base")
+    val surfaceRaised = openCodeColor("surface-raised-base")
 
     Surface(
         onClick = onClick,
@@ -139,9 +135,10 @@ fun OpenCodeReviewChangesPill(
             modifier
                 .semantics { contentDescription = summary.accessibilityLabel },
         shape = ReviewChangesPillShape,
-        color = containerColor,
+        color = surfaceRaised.copy(alpha = if (enabled) 0.95f else 0.7f),
         contentColor = contentColor,
         border = BorderStroke(1.dp, openCodeColor("border-weaker-base")),
+        tonalElevation = 2.dp,
         shadowElevation = if (enabled) 4.dp else 0.dp,
         interactionSource = interactionSource,
     ) {

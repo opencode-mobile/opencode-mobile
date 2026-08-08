@@ -22,10 +22,11 @@ and behaves when shown.
 
 ## Token Usage
 
-- Semantic tokens: `surface-raised-base`, `surface-raised-base-hover`,
-  `text-strong`, `icon-strong-base`, `border-weaker-base`.
+- Semantic tokens: `surface-raised-base`, `text-strong`, `icon-strong-base`,
+  `border-weaker-base` (fallback / Android stand-in).
 - Component tokens: geometry and elevation — see `actionPill.*` in
-  `docs/design-system/tokens.md`.
+  `docs/design-system/tokens.md`. Shadow elevation is Android / pre–iOS 26
+  fallback only.
 - Typography roles: `type.button`.
 
 ## Behavior
@@ -35,7 +36,8 @@ emphasis and block interaction.
 
 The pill is designed to float centered above content (for example above the
 composer). Callers position it with platform layout; the component supplies
-capsule geometry, raised surface fill, border, and shadow.
+capsule geometry and floating glass chrome shared with Review Changes and
+Session Todos pills.
 
 Callers should hide the pill while the user is actively scrolling and reveal
 it again after scrolling settles when the distance threshold is still met.
@@ -44,16 +46,21 @@ Accessibility labels:
 
 - `scrollToEnd`: **Scroll to end**.
 
-Pressed feedback uses native button interaction with shared token mapping.
+Pressed feedback uses subtle scale/opacity (not interactive Liquid Glass lens).
 
 ## Platform Notes
 
-- iOS: `Button` with plain style, capsule background, and light shadow.
+- iOS 26+: non-interactive `glassEffect(.regular)` capsule with
+  `surface-raised-base` underlay (shared `OpenCodeFloatingPillChrome`). Below
+  iOS 26: raised capsule + border + light shadow. Float stacks that show more
+  than one glass pill should wrap in `GlassEffectContainer`.
 - iOS session chat temporarily uses eager SwiftUI timeline layout for reliable
   scroll-to-end behavior; see
   `docs/design-system/divergences.md`.
-- Android: Material 3 `Surface(onClick = ...)` with capsule shape, border, and
-  shadow elevation.
+- Android: Material 3 raised `Surface` stand-in (fill alpha `0.95`, light
+  elevation, weaker border) — same floating-chrome family as the composer /
+  dock; no system Liquid Glass API. See
+  `docs/design-system/divergences.md`.
 
 ## Previews
 
@@ -67,4 +74,4 @@ Pressed feedback uses native button interaction with shared token mapping.
 ## Parity And Divergence
 
 Shared semantics for variant, states, and geometry are aligned across iOS and
-Android. No intentional divergence.
+Android. Material mapping follows the intentional Floating chrome divergence.
