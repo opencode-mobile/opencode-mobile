@@ -16,7 +16,7 @@ Not applicable.
 - [x] OPE-101 checkpoint 2 workflow + scripts + docs + two protected `main` runs
 - [x] OPE-101 checkpoint 3 — ASC Prepare for Submission + signed `main` artifacts confirmed
 - [x] OPE-103 TestFlight Internal Testing — upload + Internal Testing install verified
-- [ ] OPE-102 Firebase App Distribution
+- [ ] OPE-102 Firebase App Distribution — workflow ready; awaiting merge + install
 
 ## Android implementation
 
@@ -51,6 +51,23 @@ persistent-keychain success path.
 | `0.1.0-internal.3` | 8 | [31248314838](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248314838) | Failed ASC upload: prerelease marketing version (`-19239`) |
 | `0.1.0` | 9 | [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789) | ASC accepted; processing VALID; Internal Testing READY; owner installed on device (2026-08-08) |
 
+## OPE-102 App Distribution
+
+Human prep complete: Firebase group `ios-internal` (1 tester, 0 invite links),
+owner device UDID registered in Apple Developer, and
+`FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON` present in `ios-release`
+alongside ASC secrets.
+
+Agent implementation ready on
+`feature/ope-102-ios-firebase-app-distribution`:
+
+- `.github/workflows/ios-app-distribution.yml`
+- `.github/ios/ExportOptions-AdHoc.plist`
+- runbook / decisions / parity updates
+
 ## Remaining work
 
-1. OPE-102 Firebase App Distribution.
+1. Merge OPE-102 to `main` so the push triggers one App Distribution run.
+2. Owner installs the Ad Hoc build via Firebase tester flow; confirm no
+   TestFlight / App Store side effects; record evidence and close OPE-102 /
+   OPE-100.

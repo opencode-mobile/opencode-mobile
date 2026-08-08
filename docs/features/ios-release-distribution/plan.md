@@ -92,4 +92,4 @@ Extend the signed foundation with a manual protected upload to App Store Connect
 ### OPE-102 — Firebase App Distribution
 
 Distribute every successful `main` merge to a private iOS tester group via
-signed Ad Hoc IPA.
+signed Ad Hoc IPA. See [`ope-102-plan.md`](ope-102-plan.md).
