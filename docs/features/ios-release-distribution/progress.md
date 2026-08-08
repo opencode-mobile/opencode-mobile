@@ -49,9 +49,11 @@ persistent-keychain success path.
 | Version | Build | Run | Outcome |
 | --- | --- | --- | --- |
 | `0.1.0-internal.3` | 8 | [31248314838](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248314838) | Failed ASC upload: prerelease marketing version (`-19239`) |
+| `0.1.0` | 9 | [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789) | ASC accepted upload (awaiting processing + TestFlight install) |
 
 ## Remaining work
 
-1. OPE-103 — enforce strict `MAJOR.MINOR.PATCH`, re-run protected upload with
-   e.g. `0.1.0`, then TestFlight Internal install (checkpoint 3).
+1. OPE-103 checkpoint 3 — wait for ASC processing, install from TestFlight
+   Internal, confirm App Store stays Prepare for Submission. Merge strict
+   versioning guard ([PR #113](https://github.com/opencode-mobile/opencode-mobile/pull/113)).
 2. OPE-102 Firebase App Distribution.

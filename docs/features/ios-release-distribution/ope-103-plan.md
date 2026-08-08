@@ -109,8 +109,10 @@ a protected verification run.
 
 ## Checkpoint 3 — Protected `main` verification
 
-- [ ] Run **iOS Release** on `main` with the next semantic `version_name`.
-- [ ] Confirm the workflow uploads successfully (ASC accepts the binary).
+- [x] Run **iOS Release** on `main` with a strict marketing `version_name`
+      (`0.1.0` / build 9 —
+      [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789)).
+- [x] Confirm the workflow uploads successfully (ASC accepts the binary).
 - [ ] In App Store Connect → TestFlight, wait until the build finishes
       processing and appears under Internal Testing.
 - [ ] Confirm the App Store version stays unpublished / not submitted for
