@@ -1,7 +1,7 @@
 import Foundation
 
 /// Closed-loop observation health for MessageSync recovery.
-enum MessageSyncHealth: Equatable, Sendable {
+nonisolated enum MessageSyncHealth: Equatable, Sendable {
     case healthy
     case recovering(MessageSyncRecoveryReason)
     case stale(MessageSyncRecoveryReason)
@@ -17,7 +17,7 @@ enum MessageSyncHealth: Equatable, Sendable {
     }
 }
 
-enum MessageSyncRecoveryReason: String, Equatable, Sendable {
+nonisolated enum MessageSyncRecoveryReason: String, Equatable, Sendable {
     case overflow
     case reconnect
     case reloadFailed
@@ -26,7 +26,7 @@ enum MessageSyncRecoveryReason: String, Equatable, Sendable {
 }
 
 /// Complete ownership key for observation, recovery, fingerprints, and store slots.
-struct MessageSessionKey: Hashable, Sendable {
+nonisolated struct MessageSessionKey: Hashable, Sendable {
     let connectionProfileID: String
     let directory: String
     let sessionID: String
@@ -44,7 +44,7 @@ struct MessageSessionKey: Hashable, Sendable {
     }
 }
 
-enum MessageSyncRecoveryPolicy {
+nonisolated enum MessageSyncRecoveryPolicy {
     static let initialBackoffMs = 250
     static let maxBackoffMs = 5_000
 }

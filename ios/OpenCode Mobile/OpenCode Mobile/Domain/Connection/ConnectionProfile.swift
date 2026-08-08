@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConnectionProfile: Equatable, Sendable {
+nonisolated struct ConnectionProfile: Equatable, Sendable {
     var baseURL: String
     var username: String
     var password: String
@@ -9,7 +9,7 @@ struct ConnectionProfile: Equatable, Sendable {
     static let defaultUsername = "opencode"
 }
 
-enum ServerConnectionDefaults {
+nonisolated enum ServerConnectionDefaults {
     static let username = ConnectionProfile.defaultUsername
     static let baseURL = ConnectionProfile.defaultBaseURL
 }

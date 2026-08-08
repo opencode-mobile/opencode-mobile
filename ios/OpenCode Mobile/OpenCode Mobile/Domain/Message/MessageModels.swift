@@ -1,6 +1,6 @@
 import Foundation
 
-struct Message: Equatable, Sendable, Identifiable {
+nonisolated struct Message: Equatable, Sendable, Identifiable {
     let id: String
     let role: MessageRole
     let text: String
@@ -49,7 +49,7 @@ struct Message: Equatable, Sendable, Identifiable {
     }
 }
 
-struct MessageTokenUsage: Equatable, Sendable {
+nonisolated struct MessageTokenUsage: Equatable, Sendable {
     let input: Int64
     let output: Int64
     let reasoning: Int64
@@ -61,7 +61,7 @@ struct MessageTokenUsage: Equatable, Sendable {
     }
 }
 
-struct MessageContextEstimate: Equatable, Sendable {
+nonisolated struct MessageContextEstimate: Equatable, Sendable {
     let systemCharacters: Int
     let userCharacters: Int
     let assistantCharacters: Int
@@ -75,14 +75,14 @@ struct MessageContextEstimate: Equatable, Sendable {
     }
 }
 
-enum ToolStatus: String, Sendable, Equatable {
+nonisolated enum ToolStatus: String, Sendable, Equatable {
     case pending
     case running
     case completed
     case error
 }
 
-enum MessagePart: Equatable, Sendable {
+nonisolated enum MessagePart: Equatable, Sendable {
     case text(TextPart)
     case file(FilePart)
     case tool(ToolPart)
@@ -90,7 +90,7 @@ enum MessagePart: Equatable, Sendable {
     case compaction(CompactionPart)
 }
 
-struct TextPart: Equatable, Sendable {
+nonisolated struct TextPart: Equatable, Sendable {
     let id: String?
     let text: String
     var isStreaming: Bool
@@ -116,13 +116,13 @@ struct TextPart: Equatable, Sendable {
     }
 }
 
-enum AttachmentKind: String, Equatable, Sendable {
+nonisolated enum AttachmentKind: String, Equatable, Sendable {
     case image
     case pdf
     case text
 }
 
-struct Attachment: Equatable, Sendable, Identifiable {
+nonisolated struct Attachment: Equatable, Sendable, Identifiable {
     let id: String
     let filename: String
     let mime: String
@@ -130,7 +130,7 @@ struct Attachment: Equatable, Sendable, Identifiable {
     let dataURL: String
 }
 
-struct FilePart: Equatable, Sendable {
+nonisolated struct FilePart: Equatable, Sendable {
     let id: String
     let filename: String
     let mime: String
@@ -138,7 +138,7 @@ struct FilePart: Equatable, Sendable {
     let dataURL: String
 }
 
-struct ToolPart: Equatable, Sendable {
+nonisolated struct ToolPart: Equatable, Sendable {
     let id: String?
     let toolName: String
     let status: ToolStatus
@@ -172,7 +172,7 @@ struct ToolPart: Equatable, Sendable {
     }
 }
 
-struct CompactionPart: Equatable, Sendable {
+nonisolated struct CompactionPart: Equatable, Sendable {
     let id: String?
     let auto: Bool
 
@@ -182,7 +182,7 @@ struct CompactionPart: Equatable, Sendable {
     }
 }
 
-struct PromptSendOptions: Equatable, Sendable {
+nonisolated struct PromptSendOptions: Equatable, Sendable {
     let text: String
     let attachments: [Attachment]
     let model: PromptModelSelection?
@@ -207,12 +207,12 @@ struct PromptSendOptions: Equatable, Sendable {
     }
 }
 
-struct PromptModelSelection: Equatable, Sendable {
+nonisolated struct PromptModelSelection: Equatable, Sendable {
     let providerID: String
     let modelID: String
 }
 
-enum MessageRole: String, Sendable {
+nonisolated enum MessageRole: String, Sendable {
     case user
     case assistant
     case command
@@ -235,7 +235,7 @@ enum MessageRole: String, Sendable {
     }
 }
 
-enum MessageError: Error, Equatable {
+nonisolated enum MessageError: Error, Equatable {
     case transport(String)
     case http(statusCode: Int, message: String?)
     case decoding(String)

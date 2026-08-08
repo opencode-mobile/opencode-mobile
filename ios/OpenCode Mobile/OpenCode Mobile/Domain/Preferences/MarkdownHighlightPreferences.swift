@@ -9,7 +9,7 @@ import OpenCodeMarkdownCore
 /// Developer Tools language overrides: opt out of promoted languages, or
 /// force-enable packaged unpromoted languages.
 @Observable
-final class MarkdownHighlightPreferences {
+nonisolated final class MarkdownHighlightPreferences {
     static let shared = MarkdownHighlightPreferences()
 
     private enum StorageKeys {

@@ -19,6 +19,13 @@
 
 ## Shared Planning
 
+- **2026-08-08 (OPE-117):** iOS production freeze on send / model select.
+  `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` left MessageSync ingress, SSE byte
+  reading, API clients, and message domain types on MainActor. Fix: mark those
+  paths `nonisolated`, detach MessageSync observation, run SSE loop off main
+  (publish hops back), add `chat` diagnostic logs on send. Regression:
+  `MessageSyncTests.initialLoad_messageLoopDoesNotRunOnMainThread`. Manual
+  TestFlight QA still open.
 - Status: complete for scaffold-first Session Chat entry.
 - Shared scope: row tap opens Session Chat with local message/composer behavior.
 - **2026-07-28:** Streaming UI update backpressure plan drafted (architecture

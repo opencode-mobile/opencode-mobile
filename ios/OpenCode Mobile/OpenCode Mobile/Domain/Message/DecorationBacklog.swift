@@ -2,12 +2,12 @@ import Foundation
 
 /// Bounded pending decoration work for Phase 4/5 lanes.
 /// Text-lane publishes are never gated by this queue.
-enum DecorationBacklogPolicy {
+nonisolated enum DecorationBacklogPolicy {
     static let pendingCountCapacity = 128
     static let pendingCharCostBudget = 512_000
 }
 
-struct DecorationJob: Sendable {
+nonisolated struct DecorationJob: Sendable {
     let generation: UInt64
     let sessionKey: String
     let messageID: String
@@ -27,7 +27,7 @@ struct DecorationJob: Sendable {
 }
 
 /// Lowest-priority pending decoration is dropped first when bounds are exceeded.
-final class DecorationBacklog: @unchecked Sendable {
+nonisolated final class DecorationBacklog: @unchecked Sendable {
     private var jobs: [DecorationJob] = []
     private var queuedChars = 0
     private(set) var highWaterCount = 0

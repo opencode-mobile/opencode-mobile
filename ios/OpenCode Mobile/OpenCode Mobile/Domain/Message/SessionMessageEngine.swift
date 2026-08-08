@@ -2,7 +2,7 @@ import Foundation
 
 /// Named single-writer reducer facade. MessageSync owns transport/recovery;
 /// this type owns apply/revision and live-frame splicing.
-final class SessionMessageEngine: @unchecked Sendable {
+nonisolated final class SessionMessageEngine: @unchecked Sendable {
     private let store: InMemoryMessageStore
 
     init(store: InMemoryMessageStore) {

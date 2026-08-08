@@ -1,12 +1,12 @@
 import Foundation
 
-enum AgentsAPIError: Error {
+nonisolated enum AgentsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-struct AgentsAPIClient: Sendable {
+nonisolated struct AgentsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
 

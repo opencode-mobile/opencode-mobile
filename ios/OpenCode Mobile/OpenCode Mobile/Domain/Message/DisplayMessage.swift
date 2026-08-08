@@ -1,6 +1,6 @@
 import Foundation
 
-struct DisplayMessage: Sendable {
+nonisolated struct DisplayMessage: Sendable {
     let message: Message
     let renderedMarkdown: NativeMarkdownDocument?
     /// True when `renderedMarkdown` is still a streaming (semantic-fallback) parse

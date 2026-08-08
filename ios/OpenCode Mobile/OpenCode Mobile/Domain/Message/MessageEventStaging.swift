@@ -6,7 +6,7 @@ nonisolated let messageEventStagingCapacity = 4_096
 /// Bounded staging between foreground events and `MessageSync` apply.
 /// Overflow never drops accepted deltas silently: it marks recovery required.
 /// Uses a ring buffer so FIFO dequeue is O(1).
-final class MessageEventStaging: @unchecked Sendable {
+nonisolated final class MessageEventStaging: @unchecked Sendable {
     enum Item: Sendable {
         case event(OpencodeEvent, epoch: UInt64, byteCost: Int)
         case overflow

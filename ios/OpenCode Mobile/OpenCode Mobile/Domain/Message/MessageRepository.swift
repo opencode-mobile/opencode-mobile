@@ -101,6 +101,10 @@ final class DefaultMessageRepository: MessageRepository {
         OpenCodeLog.sessionChat.info(
             "prompt_async session=\(sessionID, privacy: .public) fileParts=\(options.attachments.count) textCharacters=\(options.text.count)"
         )
+        DiagnosticLog.info(
+            .chat,
+            "prompt_async session=\(sessionID) fileParts=\(options.attachments.count) textCharacters=\(options.text.count)"
+        )
         try await run {
             try await api.sendPromptAsync(
                 sessionID: sessionID,
@@ -108,6 +112,7 @@ final class DefaultMessageRepository: MessageRepository {
                 directory: directory
             )
         }
+        DiagnosticLog.info(.chat, "prompt_async done session=\(sessionID)")
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

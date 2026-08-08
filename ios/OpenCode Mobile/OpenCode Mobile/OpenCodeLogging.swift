@@ -11,7 +11,7 @@ nonisolated enum OpenCodeLog {
     private static let subsystem = "dev.opencode.mobile"
 }
 
-enum OpenCodeAPITrace {
+nonisolated enum OpenCodeAPITrace {
     static func start(_ request: URLRequest) -> Date {
         OpenCodeLog.api.info("API request \(method(request), privacy: .public) \(path(request), privacy: .public)")
         return Date()

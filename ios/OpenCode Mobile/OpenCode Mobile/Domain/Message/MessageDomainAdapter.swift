@@ -1,6 +1,6 @@
 import Foundation
 
-struct MessageDomainAdapter: Sendable {
+nonisolated struct MessageDomainAdapter: Sendable {
     func message(from dto: MessageDTO) -> Message {
         let info = dto.info
         let domainParts = parseParts(from: dto.parts)

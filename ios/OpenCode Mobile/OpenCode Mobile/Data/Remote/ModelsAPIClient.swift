@@ -1,12 +1,12 @@
 import Foundation
 
-enum ModelsAPIError: Error {
+nonisolated enum ModelsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-struct ModelsAPIClient: Sendable {
+nonisolated struct ModelsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
 

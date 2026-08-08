@@ -1,6 +1,6 @@
 import Foundation
 
-final class EventsAPIClient: Sendable {
+nonisolated final class EventsAPIClient: Sendable {
     private static let defaultStreamingSession: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
@@ -77,7 +77,7 @@ final class EventsAPIClient: Sendable {
     }
 }
 
-struct SSEDataLineParser {
+nonisolated struct SSEDataLineParser {
     private var dataBuffer = ""
 
     mutating func ingest(_ line: String) -> [String] {
@@ -117,7 +117,7 @@ struct SSEDataLineParser {
     }
 }
 
-enum EventsAPIError: Error, LocalizedError {
+nonisolated enum EventsAPIError: Error, LocalizedError {
     case invalidResponse
     case noActiveConnection
     case httpStatus(Int)

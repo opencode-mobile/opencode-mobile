@@ -3,7 +3,7 @@ import Foundation
 /// Filters which foreground events enter MessageSync per-session staging.
 /// Global consumers (permissions, questions, home/session list) keep their own
 /// filters on the shared stream.
-enum MessageEventRouter {
+nonisolated enum MessageEventRouter {
     static let messageIntakeTypes: Set<String> = [
         "message.updated",
         "message.part.updated",
@@ -38,7 +38,7 @@ enum MessageEventRouter {
 
 /// Monotonic foreground-connection generation. Bumped on each connect/reconnect
 /// cycle so observations can reject stale-epoch work.
-final class ConnectionEpoch: @unchecked Sendable {
+nonisolated final class ConnectionEpoch: @unchecked Sendable {
     static let shared = ConnectionEpoch()
 
     private let lock = NSLock()
@@ -61,7 +61,7 @@ final class ConnectionEpoch: @unchecked Sendable {
 
 /// Per-observation generation. Adopted forward on stream.reconnected /
 /// server.connected so an SSE start/reconnect bump does not latch Recovering.
-final class ObservationEpoch: @unchecked Sendable {
+nonisolated final class ObservationEpoch: @unchecked Sendable {
     private let lock = NSLock()
     private var value: UInt64
 

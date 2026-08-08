@@ -1,6 +1,6 @@
 import Foundation
 
-struct FilesystemAPIClient: Sendable {
+nonisolated struct FilesystemAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let decoder = JSONDecoder()
 

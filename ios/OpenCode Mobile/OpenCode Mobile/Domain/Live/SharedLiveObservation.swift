@@ -1,6 +1,6 @@
 import Foundation
 
-final class SharedLiveObservation<Value: Sendable>: @unchecked Sendable {
+nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuations: [UUID: AsyncStream<Value>.Continuation] = [:]
     private var upstreamTask: Task<Void, Never>?

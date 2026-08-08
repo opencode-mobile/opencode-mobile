@@ -1,6 +1,6 @@
 import Foundation
 
-enum MessageListUpdate: Sendable {
+nonisolated enum MessageListUpdate: Sendable {
     case messages([Message], isFromCache: Bool)
     case loadFailed(Error)
 }

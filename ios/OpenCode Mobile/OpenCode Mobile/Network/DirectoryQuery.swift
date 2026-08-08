@@ -1,7 +1,7 @@
 import Foundation
 
 extension URL {
-    func appendingDirectoryQuery(_ directory: String?) -> URL {
+    nonisolated func appendingDirectoryQuery(_ directory: String?) -> URL {
         guard let directory, !directory.isEmpty else { return self }
         guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return self }
         var items = components.queryItems ?? []

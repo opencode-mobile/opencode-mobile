@@ -1,6 +1,6 @@
 import Foundation
 
-final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
+nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable {
     private let lock = NSLock()
     private let adapter = MessageDomainAdapter()
     private let decoder = JSONDecoder()

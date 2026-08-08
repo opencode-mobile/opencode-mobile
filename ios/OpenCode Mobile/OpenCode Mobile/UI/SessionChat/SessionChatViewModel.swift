@@ -320,28 +320,40 @@ final class SessionChatViewModel {
     func sendPrompt() async {
         guard isConnectionLive else { return }
         guard permissionRequests.isEmpty, questionRequests.isEmpty else { return }
+        DiagnosticLog.info(.chat, "sendPrompt start session=\(sessionID)")
         await composer.sendPrompt(
             sessionID: sessionID,
             onOptimisticRows: { [weak self] rows in
+                DiagnosticLog.info(.chat, "sendPrompt optimistic rows=\(rows.count)")
                 // Mark only after composer passes early-return checks.
                 self?.sessionInfo.markOptimisticBusy()
                 self?.timeline.beginOptimisticSend(rows)
             },
             onSendAccepted: { [weak self] in
                 guard let self else { return }
+                DiagnosticLog.info(.chat, "sendPrompt accepted session=\(self.sessionID)")
                 self.sessionReadyStore.notifyPromptSent(sessionID: self.sessionID, directory: self.worktree)
                 await self.sessionInfo.refreshStatus()
+                DiagnosticLog.info(.chat, "sendPrompt reloadAfterSend start")
                 await self.timeline.reloadAfterSend(
-                    onComplete: { [weak self] in self?.composer.clearSending() },
-                    onReloadFailed: { [weak self] in self?.composer.clearSending() }
+                    onComplete: { [weak self] in
+                        DiagnosticLog.info(.chat, "sendPrompt reloadAfterSend complete")
+                        self?.composer.clearSending()
+                    },
+                    onReloadFailed: { [weak self] in
+                        DiagnosticLog.warning(.chat, "sendPrompt reloadAfterSend failed")
+                        self?.composer.clearSending()
+                    }
                 )
             },
             onSendFailed: { [weak self] optimisticID, error in
+                DiagnosticLog.warning(.chat, "sendPrompt failed error=\(error)")
                 self?.sessionInfo.clearOptimisticBusy()
                 self?.composer.setSendError(error)
                 self?.timeline.failOptimisticSend(optimisticID: optimisticID, error: error)
             }
         )
+        DiagnosticLog.info(.chat, "sendPrompt end session=\(sessionID)")
     }
 
     func abortSession() async {
