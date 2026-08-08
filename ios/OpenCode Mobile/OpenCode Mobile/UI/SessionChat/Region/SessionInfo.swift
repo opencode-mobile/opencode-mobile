@@ -125,8 +125,19 @@ final class SessionInfo {
         guard !state.sessionID.isEmpty else { return }
         guard let statuses = try? await sessionRepository.getAllSessionStatuses(directory: worktree) else { return }
         let status = statuses.first(where: { $0.sessionID == state.sessionID })
-        state.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
-        state.hasResolvedSessionStatus = true
+        state.applyStatus(authoritative: status.flatMap(eventAdapter.statusLabel(from:)), hasResolved: true)
+        notifyChange()
+    }
+
+    func markOptimisticBusy() {
+        guard state.sessionStatusLabel == nil else { return }
+        state.applyStatus(authoritative: state.authoritativeStatusLabel, optimisticBusy: true)
+        notifyChange()
+    }
+
+    func clearOptimisticBusy() {
+        guard state.optimisticBusy else { return }
+        state.applyStatus(authoritative: state.authoritativeStatusLabel, optimisticBusy: false)
         notifyChange()
     }
 
@@ -217,8 +228,10 @@ final class SessionInfo {
                 .session,
                 "live status session=\(state.sessionID) type=\(status?.raw["type"] ?? "-")"
             )
-            state.sessionStatusLabel = status.flatMap(eventAdapter.statusLabel(from:))
-            state.hasResolvedSessionStatus = true
+            state.applyStatus(
+                authoritative: status.flatMap(eventAdapter.statusLabel(from:)),
+                hasResolved: true
+            )
             notifyChange()
         }
     }

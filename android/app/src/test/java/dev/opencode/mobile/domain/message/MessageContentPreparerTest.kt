@@ -455,6 +455,56 @@ class MessageContentPreparerTest {
             }
         }
 
+    @Test
+    fun prepareTextBlock_highlighterThrow_fallsBackWithoutThrowing() =
+        runTest(testDispatcher) {
+            val prior = MarkdownHighlightPreferences.textMateEnabled
+            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            try {
+                val preparer =
+                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(ThrowingHighlighter())).apply {
+                        computationDispatcher = testDispatcher
+                    }
+                val fenced =
+                    """
+                    ```javascript
+                    const x = 1
+                    ```
+                    """.trimIndent()
+                val document =
+                    preparer.prepareTextBlock(
+                        blockID = "block-1",
+                        plain = fenced,
+                        isStreaming = false,
+                        sessionKey = "ses-1",
+                        mode = MessagePreparationMode.Final,
+                    )
+                // TextMate engine catches highlighter failures and keeps a semantic
+                // document rather than throwing into the pipeline.
+                assertNotNull(document)
+                assertTrue(document!!.blocks.any { it is MarkdownBlock.CodeBlock })
+                assertTrue(
+                    document.diagnostics.any { diagnostic ->
+                        diagnostic.message.contains("fallback", ignoreCase = true) ||
+                            diagnostic.kind.name.contains("Fallback", ignoreCase = true)
+                    },
+                )
+            } finally {
+                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            }
+        }
+
+    private class ThrowingHighlighter : OpenCodeCodeHighlighter {
+        override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+        override fun highlight(
+            languageOrAlias: String?,
+            code: String,
+        ): SyntaxHighlightResult {
+            error("injected highlighter failure")
+        }
+    }
+
     private class RecordingHighlighter : OpenCodeCodeHighlighter {
         var calls: Int = 0
 

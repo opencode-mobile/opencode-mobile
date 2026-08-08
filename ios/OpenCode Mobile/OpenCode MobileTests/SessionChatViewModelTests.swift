@@ -1864,11 +1864,75 @@ struct SessionChatViewModelTests {
 
         viewModel.runClientSlashAction(.compact)
         await waitUntil { sessionRepository.summarizeRequest != nil }
+        await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
 
         #expect(sessionRepository.summarizeRequest == .init(id: "ses-1", providerID: "anthropic", modelID: "claude-sonnet"))
-        #expect(viewModel.uiState.snackbar?.message == "Session compacted.")
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
         #expect(viewModel.uiState.snackbar?.tone == .default)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
         #expect(commandRepository.runCommandCalled == false)
+    }
+
+    @Test func runClientSlashAction_compact_showsCompactingWhileInFlight() async {
+        let hold = AsyncGate()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold)
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        await waitUntil { viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel }
+
+        #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
+
+        await hold.open()
+        await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.workingIndicatorLabel == nil)
+    }
+
+    @Test func runClientSlashAction_compact_failureClearsCompactingAndShowsError() async {
+        let sessionRepository = FakeChatSessionRepository(
+            summarizeError: .http(statusCode: 500, message: "boom")
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.failure }
+
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+    }
+
+    @Test func remoteCompaction_busyWithCompactionPart_showsCompactingWithoutLocalFlag() async {
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(
+                    id: "u1",
+                    role: .user,
+                    text: "",
+                    parts: [.compaction(CompactionPart(id: "c1", auto: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: 1
+                )
+            ]),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel }
+        #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
     }
 
     private func makeViewModel(
@@ -2480,6 +2544,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let revertError: SessionError?
     private let unrevertError: SessionError?
     private let summarizeError: SessionError?
+    private let summarizeHold: AsyncGate?
 
     init(
         sessions: [Session] = [],
@@ -2507,7 +2572,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         forkSessionError: SessionError? = nil,
         revertError: SessionError? = nil,
         unrevertError: SessionError? = nil,
-        summarizeError: SessionError? = nil
+        summarizeError: SessionError? = nil,
+        summarizeHold: AsyncGate? = nil
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -2530,6 +2596,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.revertError = revertError
         self.unrevertError = unrevertError
         self.summarizeError = summarizeError
+        self.summarizeHold = summarizeHold
         self.deleteError = deleteError
         self.deleteResult = deleteResult
         self.archiveHold = archiveHold
@@ -2647,6 +2714,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {
         summarizeRequest = SummarizeRequest(id: id, providerID: providerID, modelID: modelID)
+        if let summarizeHold { await summarizeHold.wait() }
         if let summarizeError { throw summarizeError }
         return true
     }

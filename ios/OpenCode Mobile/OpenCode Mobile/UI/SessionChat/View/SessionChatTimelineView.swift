@@ -8,6 +8,7 @@ struct SessionChatTimelineViewProps {
     let isRefreshing: Bool
     let errorMessage: String?
     let reviewChangesSummary: ReviewChangesSummary?
+    let workingIndicatorLabel: String?
     let sessionTodosVisible: Bool
     let sessionTodoCompletedCount: Int
     let sessionTodoTotalCount: Int
@@ -31,6 +32,7 @@ struct SessionChatTimelineViewProps {
         isRefreshing: Bool,
         errorMessage: String?,
         reviewChangesSummary: ReviewChangesSummary?,
+        workingIndicatorLabel: String? = nil,
         sessionTodosVisible: Bool = false,
         sessionTodoCompletedCount: Int = 0,
         sessionTodoTotalCount: Int = 0,
@@ -52,6 +54,7 @@ struct SessionChatTimelineViewProps {
         self.isRefreshing = isRefreshing
         self.errorMessage = errorMessage
         self.reviewChangesSummary = reviewChangesSummary
+        self.workingIndicatorLabel = workingIndicatorLabel
         self.sessionTodosVisible = sessionTodosVisible
         self.sessionTodoCompletedCount = sessionTodoCompletedCount
         self.sessionTodoTotalCount = sessionTodoTotalCount
@@ -126,11 +129,23 @@ private struct SessionChatTimelineReadyView: View {
         )
     }
 
+    private var displayMessages: [SessionChatRow] {
+        guard let label = props.workingIndicatorLabel else { return props.messages }
+        return props.messages + [
+            SessionChatRow(
+                id: SessionChatWorkingIndicator.id,
+                role: .assistant,
+                text: label,
+                metadataLabel: ""
+            ),
+        ]
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
-                items: props.messages,
-                applyPacket: .from(props.timelineFrame),
+                items: displayMessages,
+                applyPacket: props.workingIndicatorLabel == nil ? .from(props.timelineFrame) : nil,
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
@@ -196,10 +211,8 @@ private struct SessionChatTimelineReadyView: View {
                                 )
                             }
                         }
-                        .padding(
-                            .bottom,
-                            MessageListTimelineDefaults.scrollToEndPillBottomPadding + props.bottomOverlayInset
-                        )
+                        // bottomOverlayInset is already composer + 16 end-pin gap.
+                        .padding(.bottom, props.bottomOverlayInset)
                     }
                 }
                 .onChange(of: props.sessionTodoTotalCount) { _, total in
@@ -237,6 +250,10 @@ private struct SessionChatTimelineReadyView: View {
     }
 }
 
+private enum SessionChatWorkingIndicator {
+    static let id = "session-chat-working-indicator"
+}
+
 private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
@@ -245,27 +262,69 @@ private struct SessionChatTimelineHostRow: View {
     let onChangesReviewTap: (String, String?) -> Void
 
     var body: some View {
-        HStack {
-            if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
-                SessionChatMessageRow(
-                    message: message,
-                    onMessageActionsTap: onMessageActionsTap,
-                    onToolDetailTap: onToolDetailTap,
-                    onChildSessionTap: onChildSessionTap,
-                    onChangesReviewTap: onChangesReviewTap
-                )
-                Spacer(minLength: 0)
-            } else {
-                Spacer(minLength: 0)
-                SessionChatMessageRow(
-                    message: message,
-                    onMessageActionsTap: onMessageActionsTap,
-                    onToolDetailTap: onToolDetailTap,
-                    onChildSessionTap: onChildSessionTap,
-                    onChangesReviewTap: onChangesReviewTap
-                )
+        if message.id == SessionChatWorkingIndicator.id {
+            SessionChatWorkingIndicatorRow(label: message.text)
+        } else {
+            HStack {
+                if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
+                    SessionChatMessageRow(
+                        message: message,
+                        onMessageActionsTap: onMessageActionsTap,
+                        onToolDetailTap: onToolDetailTap,
+                        onChildSessionTap: onChildSessionTap,
+                        onChangesReviewTap: onChangesReviewTap
+                    )
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: 0)
+                    SessionChatMessageRow(
+                        message: message,
+                        onMessageActionsTap: onMessageActionsTap,
+                        onToolDetailTap: onToolDetailTap,
+                        onChildSessionTap: onChildSessionTap,
+                        onChangesReviewTap: onChangesReviewTap
+                    )
+                }
             }
         }
+    }
+}
+
+/// Feature-local Working/Retrying/Compacting status chrome (not prose).
+private struct SessionChatWorkingIndicatorRow: View {
+    let label: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            SessionChatWorkingStatusDot()
+            Text(label)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textWeak)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct SessionChatWorkingStatusDot: View {
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(OpenCodeColors.textWeak)
+            .frame(width: 6, height: 6)
+            .opacity(pulse ? 0.35 : 1)
+            .animation(
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                value: pulse
+            )
+            .onAppear { pulse = true }
+            .accessibilityHidden(true)
     }
 }
 

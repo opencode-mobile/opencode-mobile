@@ -254,7 +254,7 @@ fun DiagnosticLogsScreen(
                         title = "Entries",
                         subtitle =
                             if (state.hasEntries) {
-                                "${state.entryCount} redacted lines in memory"
+                                "${state.entryCount} redacted lines in the current window"
                             } else {
                                 "No entries in the current window yet"
                             },
@@ -365,7 +365,7 @@ fun DiagnosticLogsScreen(
     OpenCodeDialog(
         visible = showClearConfirmation,
         title = "Clear diagnostic logs?",
-        subtitle = "This removes the in-memory diagnostic window.",
+        subtitle = "This removes the stored diagnostic window.",
         primaryOption =
             OpenCodeDialogOption(
                 title = "Clear",

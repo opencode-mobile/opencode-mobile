@@ -127,6 +127,8 @@ final class SessionChatViewModel {
     func startObserving() {
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID, privacy: .public)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        composer.startCatalogLoads()
+        commands.start()
         sessionInfo.startObserving()
         timeline.startObserving()
         startPermissionObservation()
@@ -230,25 +232,33 @@ final class SessionChatViewModel {
             commands.openForkDialog(currentTitle: uiState.sessionTitle)
         case .undo:
             commands.runUndo(
-                isBusy: uiState.sessionStatusLabel != nil,
+                isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
                 restoreComposerText: { [weak self] text in self?.composer.restoreComposerText(text) }
             )
         case .redo:
             commands.runRedo(
-                isBusy: uiState.sessionStatusLabel != nil,
+                isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
                 clearComposerRestore: { [weak self] in self?.composer.restoreComposerText("") }
             )
         case .compact:
             guard let model = composer.state.composer.selectedModel else { return }
+            let beforeFraction = uiState.contextUsageFraction.map { Float($0) }
             commands.runCompact(
                 providerID: model.option.providerID,
                 modelID: model.option.modelID,
-                onSuccess: { [weak self] in
-                    guard let self else { return }
-                    Task {
-                        await self.timeline.refreshMessages()
-                        await self.sessionInfo.refreshStatus()
-                    }
+                beforeContextFraction: beforeFraction,
+                awaitAfterContextFraction: { [weak self] in
+                    guard let self else { return nil }
+                    // SSE already streamed the compacted transcript. Do not await a full
+                    // refreshDisplayMessages + MainActor timeline rebuild here — that froze
+                    // Session Chat with Compacting… still showing until kill/relaunch.
+                    await self.sessionInfo.refreshStatus()
+                    guard let after = self.sessionInfo.contextUsageFraction(
+                        messages: self.timeline.state.messages,
+                        modelOptions: self.composer.state.composer.modelOptions,
+                        selectedModel: self.composer.state.composer.selectedModel
+                    ) else { return nil }
+                    return Float(after)
                 }
             )
         }
@@ -315,6 +325,8 @@ final class SessionChatViewModel {
             sessionID: sessionID,
             onOptimisticRows: { [weak self] rows in
                 DiagnosticLog.info(.chat, "sendPrompt optimistic rows=\(rows.count)")
+                // Mark only after composer passes early-return checks.
+                self?.sessionInfo.markOptimisticBusy()
                 self?.timeline.beginOptimisticSend(rows)
             },
             onSendAccepted: { [weak self] in
@@ -336,6 +348,7 @@ final class SessionChatViewModel {
             },
             onSendFailed: { [weak self] optimisticID, error in
                 DiagnosticLog.warning(.chat, "sendPrompt failed error=\(error)")
+                self?.sessionInfo.clearOptimisticBusy()
                 self?.composer.setSendError(error)
                 self?.timeline.failOptimisticSend(optimisticID: optimisticID, error: error)
             }
@@ -673,8 +686,14 @@ final class SessionChatViewModel {
         let timelineState = timeline.state
         let composerState = composer.state
         let infoState = sessionInfo.state
+        let commandsState = commands.state
+        let isCompacting = effectiveCompacting(
+            localCompacting: commandsState.isCompacting,
+            sessionStatusLabel: infoState.sessionStatusLabel
+        )
         let isLive =
-            infoState.sessionStatusLabel != nil
+            isCompacting
+            || infoState.sessionStatusLabel != nil
             || !permissionRequests.isEmpty
             || !questionRequests.isEmpty
         if lastTodoLive != isLive {
@@ -688,7 +707,7 @@ final class SessionChatViewModel {
         reviewChanges.updateCandidate(
             messages: timelineState.messages,
             hasResolvedSessionStatus: infoState.hasResolvedSessionStatus,
-            isTurnActive: infoState.sessionStatusLabel != nil,
+            isTurnActive: infoState.sessionStatusLabel != nil || isCompacting,
             isSending: composerState.isSending
         )
         commands.updateVisibility(
@@ -696,7 +715,6 @@ final class SessionChatViewModel {
             hasSelectedComposerModel: composerState.composer.selectedModel != nil
         )
         let reviewChangesState = reviewChanges.state
-        let commandsState = commands.state
         let visibleQuestion = visibleQuestionRequest()
         let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
         let transientError: String? = {
@@ -721,6 +739,8 @@ final class SessionChatViewModel {
             nextTimelineFrame.frameRevision == uiState.timelineFrame.frameRevision
             ? uiState.timelineFrame
             : nextTimelineFrame
+        let sessionStatusLabel =
+            isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -731,7 +751,12 @@ final class SessionChatViewModel {
             isSending: composerState.isSending,
             isRefreshing: timelineState.isRefreshing,
             isAborting: composerState.isAborting,
-            sessionStatusLabel: infoState.sessionStatusLabel,
+            sessionStatusLabel: sessionStatusLabel,
+            workingIndicatorLabel: WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: sessionStatusLabel,
+                messages: timelineState.messages,
+                isCompacting: isCompacting
+            ),
             sessionTodos: sessionTodos,
             sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
             sessionTodosFinished: SessionTodoList.isFinished(sessionTodos),
@@ -806,6 +831,21 @@ final class SessionChatViewModel {
             id: snackbarSequence,
             message: transientError ?? successNotice!,
             tone: transientError != nil ? .error : .default
+        )
+    }
+
+    private func effectiveCompacting() -> Bool {
+        effectiveCompacting(
+            localCompacting: commands.state.isCompacting,
+            sessionStatusLabel: sessionInfo.state.sessionStatusLabel
+        )
+    }
+
+    private func effectiveCompacting(localCompacting: Bool, sessionStatusLabel: String?) -> Bool {
+        if localCompacting { return true }
+        return SessionCompactionPresence.isActive(
+            messages: timeline.loadedMessages(),
+            isSessionBusy: sessionStatusLabel != nil
         )
     }
 }

@@ -770,6 +770,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
             "file:\(file.id):\(file.mime):\(file.filename):\(file.dataURL.count):\(file.dataURL.hashValue)"
         case .tool(let tool):
             "tool:\(tool.toolName):\(tool.status.rawValue):\(tool.title ?? ""):\(tool.error ?? "")"
+        case .compaction(let part):
+            "compaction:\(part.id ?? ""):\(part.auto)"
         }
     }
 

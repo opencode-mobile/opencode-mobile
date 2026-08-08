@@ -132,7 +132,16 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     func summarizeSession(id: String, body: SummarizeSessionRequestDTO, directory: String? = nil) async throws -> Bool {
-        try await postEmpty(path: "session/\(id)/summarize", body: body, directory: directory)
+        var request = try requireConnection().authorizedRequest(path: "session/\(id)/summarize", method: "POST", directory: directory)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        // Compaction can run longer than URLSession.shared's 60s default.
+        request.timeoutInterval = .infinity
+        let data = try await data(for: request)
+        if let value = try? decoder.decode(Bool.self, from: data) {
+            return value
+        }
+        return true
     }
 
     func revertSession(id: String, body: RevertSessionRequestDTO, directory: String? = nil) async throws -> Bool {

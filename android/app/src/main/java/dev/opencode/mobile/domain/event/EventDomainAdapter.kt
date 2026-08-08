@@ -37,6 +37,22 @@ class EventDomainAdapter(
     fun statusLabel(sessionStatus: SessionStatus): String? = statusLabelFromRawKeys(sessionStatus.raw)
 
     /**
+     * Status carried by a `session.status` SSE payload.
+     * Returns null when the event is not a usable status update.
+     */
+    fun sessionStatusFromEvent(event: OpencodeEvent): SessionStatus? {
+        if (event.type != "session.status") return null
+        val sessionId = event.sessionId ?: return null
+        val status = event.rawProperties?.get("status")?.jsonObject ?: return null
+        val raw =
+            status.mapValues { (_, value) ->
+                val primitive = value as? kotlinx.serialization.json.JsonPrimitive
+                primitive?.contentOrNull ?: primitive?.content ?: value.toString()
+            }
+        return SessionStatus(sessionId = sessionId, raw = raw)
+    }
+
+    /**
      * Title change carried by a `session.updated` event for a concrete session id.
      * Returns null when the event is not a usable title update.
      */
@@ -52,11 +68,6 @@ class EventDomainAdapter(
                 ?: return null
         val title = info.string("title") ?: return null
         return SessionTitleUpdate(sessionId = sessionId, title = title)
-    }
-
-    private fun statusLabelFromRaw(status: JsonObject): String? {
-        val keys = status.mapValues { (_, value) -> value.jsonPrimitive.contentOrNull.orEmpty() }
-        return statusLabelFromRawKeys(keys)
     }
 
     private fun statusLabelFromRawKeys(raw: Map<String, String>): String? =

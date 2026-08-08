@@ -1,5 +1,36 @@
 # Session Chat Decisions
 
+## OPE-113 immediate status + optimistic busy + Working row
+
+- Date: 2026-08-07
+- Decision: Match web `session_working` feedback by (1) applying SSE
+  `session.status` / `session.idle` payloads in `SessionStatusLiveStore`
+  immediately, keeping GET for bootstrap/reconnect only; (2) setting optimistic
+  busy only after the composer accepts a send (not before early returns), and
+  clearing it on send failure, authoritative busy, or resolved idle; (3) showing
+  a feature-local muted Working/Retrying timeline row when busy with no assistant
+  content yet — not a design-system shimmer and not web’s tab progress dots.
+- Reason: Stop alone lagged behind HTTP accept and offered no secondary chrome;
+  Android emptyMap-on-failure could also clear busy mid-turn. Marking busy before
+  composer validation could leave Stop/Working stuck on no-op sends; keeping
+  optimistic across resolved idle did the same after a fast turn.
+- Evidence: [research-session-running-indicator-gap.md](./research-session-running-indicator-gap.md),
+  [ope-113-plan.md](./ope-113-plan.md)
+- Revisit when: product wants web-style progress-dot chrome or a shared shimmer
+  primitive.
+
+## OPE-113 Working-row host insertion (intentional)
+
+- Date: 2026-08-07
+- Decision: Keep platform-native timeline insertion for the Working/Retrying row.
+  iOS appends a synthetic assistant `SessionChatRow` and special-cases its id in
+  the host; Android uses a dedicated LazyColumn footer slot on
+  `MessageListTimeline`. Shared product gating stays in `WorkingTurnIndicator`.
+- Reason: Each host already owns list identity and apply-packet rules; forcing one
+  insertion model would fight existing scroll/apply seams without a user-visible
+  gain.
+- Revisit when: a shared timeline host abstraction lands.
+
 ## Ship Android region row-reuse (Phase 4)
 
 - Date: 2026-07-28

@@ -31,22 +31,26 @@ object KtorClientFactory {
         sse: Boolean = false,
     ): HttpClient =
         HttpClient(OkHttp) {
-            if (sse) {
-                engine {
-                    config {
-                        // 0 = infinite. Keep a normal connect timeout so bad hosts still fail fast.
-                        connectTimeout(10, TimeUnit.SECONDS)
-                        readTimeout(0, TimeUnit.MILLISECONDS)
-                        writeTimeout(0, TimeUnit.MILLISECONDS)
-                        callTimeout(0, TimeUnit.MILLISECONDS)
-                    }
+            engine {
+                config {
+                    // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and
+                    // per-request overrides) can bound normal calls without OkHttp's 10s default
+                    // cutting long ops like POST …/summarize mid-compaction.
+                    connectTimeout(10, TimeUnit.SECONDS)
+                    readTimeout(0, TimeUnit.MILLISECONDS)
+                    writeTimeout(if (sse) 0 else 60, TimeUnit.SECONDS)
+                    callTimeout(0, TimeUnit.MILLISECONDS)
                 }
-                // Disable Ktor's request/socket ceilings so they cannot reintroduce a 10s kill
-                // after OkHttp timeouts are cleared. Connect still fails fast via OkHttp above.
-                install(HttpTimeout) {
+            }
+            install(HttpTimeout) {
+                connectTimeoutMillis = 10_000
+                if (sse) {
                     requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
                     socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                    connectTimeoutMillis = 10_000
+                } else {
+                    // Default REST ceiling; long endpoints override per request.
+                    requestTimeoutMillis = 60_000
+                    socketTimeoutMillis = 60_000
                 }
             }
             if (contentNegotiation) {

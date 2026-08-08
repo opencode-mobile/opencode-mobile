@@ -34,29 +34,29 @@ invariants only), **gap** (no dedicated test found).
 
 | Platform | Coverage | Tests |
 | --- | --- | --- |
-| Android | **partial** | Single-cycle overflow + recovery: `LiveStoreTest.observeMessages_overflowDuringInitialRestTriggersAuthoritativeRecovery`; `observeMessages_byteCapacityOverflowEntersRecovering`; `observeMessages_overflowRecoveryFailureKeepsRecoveringAndLastFrame`; `observeMessages_eventDuringRecoveryKeepsRecoveringUntilQuietAuthority`. **Gap:** no test that drives *repeated* overflow cycles in one observation. |
-| iOS | **partial** | Same single-cycle coverage: `MessageSyncTests.initialLoad_overflowDuringRestTriggersAuthoritativeRecovery`; `overflowRecoveryFailure_keepsRecoveringAndLastFrame`; `eventDuringRecovery_keepsRecoveringUntilQuietAuthority`; `MessageEventStagingTests.enqueue_byteCapacityOverflow_entersRecovering`. **Gap:** no repeated-overflow loop. |
+| Android | **full** | Single-cycle: `LiveStoreTest.observeMessages_overflowDuringInitialRestTriggersAuthoritativeRecovery`; `observeMessages_byteCapacityOverflowEntersRecovering`; `observeMessages_overflowRecoveryFailureKeepsRecoveringAndLastFrame`; `observeMessages_eventDuringRecoveryKeepsRecoveringUntilQuietAuthority`. Multi-cycle: `observeMessages_repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace`. |
+| iOS | **full** | Single-cycle: `MessageSyncTests.initialLoad_overflowDuringRestTriggersAuthoritativeRecovery`; `overflowRecoveryFailure_keepsRecoveringAndLastFrame`; `eventDuringRecovery_keepsRecoveringUntilQuietAuthority`; `MessageEventStagingTests.enqueue_byteCapacityOverflow_entersRecovering`. Multi-cycle: `repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace`. |
 
 ## 5. Parser / preparer failure (plain retained)
 
 | Platform | Coverage | Tests |
 | --- | --- | --- |
-| Android | **partial** | Related: `DisplayMessagePipelineCharacterizationTest.blockedPreparerDoesNotDelayPlainStreamingTextLane`; `stalePrepareDoesNotPublishAfterNewerSnapshot`; preparer `runCatching` → plain fallback exists in `MessageContentPreparer`. **Gap:** no test that forces a parser/highlighter throw and asserts plain retained. |
-| iOS | **partial** | Related: `DisplayMessagePipelineCharacterizationTests.blockedPreparerDoesNotDelayPlainStreamingTextLane`; `stalePrepareDoesNotPublishAfterNewerSnapshot`; preparer documents bridge failure → plain. **Gap:** no injected parser-failure fixture. |
+| Android | **full** | Characterization: `DisplayMessagePipelineCharacterizationTest.failingPrepareTextBlock_keepsPublishedPlainStreamingText` (injected Controllable throw; text lane continues). Preparer: `MessageContentPreparerTest.prepareTextBlock_highlighterThrow_fallsBackWithoutThrowing` (TextMate highlighter failure → semantic fallback document). Related: `blockedPreparerDoesNotDelayPlainStreamingTextLane`; `stalePrepareDoesNotPublishAfterNewerSnapshot`. |
+| iOS | **full** | Characterization: `DisplayMessagePipelineCharacterizationTests.failingPrepareTextBlock_keepsPublishedPlainStreamingText` (Controllable returns nil; plain retained). Related: `blockedPreparerDoesNotDelayPlainStreamingTextLane`; `stalePrepareDoesNotPublishAfterNewerSnapshot`. |
 
 ## 6. Memory / backlog pressure
 
 | Platform | Coverage | Tests |
 | --- | --- | --- |
-| Android | **partial** | Decoration: `DecorationBacklogTest.dropsLowestPriorityUnderCountPressure`; `BlockDecorationCacheTest.evictsOldestWhenOverCapacity`. Staging overflow: `LiveStoreTest.observeMessages_byteCapacityOverflowEntersRecovering`. **Gap:** no integrated pipeline test under simultaneous decoration + staging pressure; iOS warm-cache memory-pressure eviction not applicable on Android. |
-| iOS | **partial** | `DecorationBacklogTests` pressure/coalesce cases; `BlockDecorationCacheTests` eviction; `MessageEventStagingTests.enqueue_byteCapacityOverflow_entersRecovering`; `PreparedHistoryCacheTests` (warm cache bounds). **Gap:** no single test combining decoration backlog + staging overflow. |
+| Android | **full** | Decoration: `DecorationBacklogTest.dropsLowestPriorityUnderCountPressure`; `dropsLowestPriorityUnderCharCostPressure`; `BlockDecorationCacheTest.evictsOldestWhenOverCapacity`. Pipeline text-lane under hold/pressure: `DisplayMessagePipelineCharacterizationTest.decorationBacklogPressure_doesNotBlockPlainStreamingTextLane`. Staging overflow: `LiveStoreTest.observeMessages_byteCapacityOverflowEntersRecovering` (+ scenario 4 multi-cycle). |
+| iOS | **full** | `DecorationBacklogTests` count + `dropsLowestPriorityUnderCharCostPressure`; `BlockDecorationCacheTests` eviction; `MessageEventStagingTests.enqueue_byteCapacityOverflow_entersRecovering`; `PreparedHistoryCacheTests` bounds + `handleMemoryPressure_clearsEntries`; `DisplayMessagePipelineCharacterizationTests.decorationBacklogPressure_doesNotBlockPlainStreamingTextLane`. |
 
 ## 7. Rapid session switch / teardown
 
 | Platform | Coverage | Tests |
 | --- | --- | --- |
-| Android | **partial** | Teardown / isolation: `DisplayMessagePipelineCharacterizationTest.observationCompletionDropsPendingStreamingSnapshot`; `LiveStoreTest.observeMessages_sessionKeysIsolateProfiles`; `observeMessages_ignoresEventsForOtherSessions`; `SessionChatViewModelTest.bind_resetsUiStateBeforeRegionsFinish`. **Gap:** no rapid A→B→A switch asserting zero cross-session display publish. |
-| iOS | **partial** | `DisplayMessagePipelineCharacterizationTests.observationCompletionDropsPendingStreamingSnapshot`; `MessageSyncTests.sessionKeys_isolateProfiles`; `eventsForOtherSessionsAreIgnored`; `SessionChatViewModelTests.stopObserving_cancelsBackgroundTasks`. **Gap:** same rapid multi-switch soak missing. |
+| Android | **full** | Rapid switch: `LiveStoreTest.observeMessages_rapidSessionSwitchAtoBtoA_noCrossSessionPublish`. Teardown / isolation: `DisplayMessagePipelineCharacterizationTest.observationCompletionDropsPendingStreamingSnapshot`; `observeMessages_sessionKeysIsolateProfiles`; `observeMessages_ignoresEventsForOtherSessions`; `SessionChatViewModelTest.bind_resetsUiStateBeforeRegionsFinish`. |
+| iOS | **full** | Rapid switch: `MessageSyncTests.rapidSessionSwitch_AtoBtoA_noCrossSessionPublish`. Teardown / isolation: `DisplayMessagePipelineCharacterizationTests.observationCompletionDropsPendingStreamingSnapshot`; `sessionKeys_isolateProfiles`; `eventsForOtherSessionsAreIgnored`; `SessionChatViewModelTests.stopObserving_cancelsBackgroundTasks`. |
 
 ## 8. Active scroll (unarmed / armed)
 
@@ -85,11 +85,12 @@ Recorded in [parity-gaps.md](./parity-gaps.md):
 | 1 Long-history format-first | full | full |
 | 2 Dense stream | full | full |
 | 3 Reconnect / authority | full | full |
-| 4 Repeated overflow cycles | partial | partial |
-| 5 Parser failure → plain | partial | partial |
-| 6 Memory / backlog pressure | partial | partial |
-| 7 Rapid session switch | partial | partial |
+| 4 Repeated overflow cycles | full | full |
+| 5 Parser failure → plain | full | full |
+| 6 Memory / backlog pressure | full | full |
+| 7 Rapid session switch | full | full |
 | 8 Active scroll | full (unit) | full (unit) |
 
-Gate-sufficient for 7a under the locked evidence standard, with the partial rows
-called out as known coverage holes rather than invented tests.
+Phase 7a soak was gate-sufficient with scenarios 4–7 called out as coverage
+debt; OPE-87 closed those rows to **full** on both platforms (unit /
+characterization + MessageSync fault fixtures).

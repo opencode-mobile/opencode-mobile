@@ -136,31 +136,33 @@ class SessionChatTimeline(
     }
 
     fun refreshMessages() {
+        scope.launch { refreshMessagesSuspending() }
+    }
+
+    suspend fun refreshMessagesSuspending() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        scope.launch {
-            if (!isCurrentBinding(sessionId, worktree)) return@launch
-            _state.update { it.copy(isRefreshing = true, errorMessage = null) }
-            runCatching {
-                withContext(ioDispatcher) {
-                    messageRepository.refreshDisplayMessages(sessionId, worktree)
-                }
-            }.onSuccess { displayMessages ->
-                applyLoadedDisplayMessages(
-                    displayMessages = displayMessages,
-                    sourceSessionId = sessionId,
-                    sourceWorktree = worktree,
-                    isRefreshing = false,
-                    source = "refresh",
-                )
-            }.onFailure { throwable ->
-                if (isCurrentBinding(sessionId, worktree)) {
-                    _state.update {
-                        it.copy(
-                            isRefreshing = false,
-                            errorMessage = errorMessage(throwable),
-                        )
-                    }
+        if (!isCurrentBinding(sessionId, worktree)) return
+        _state.update { it.copy(isRefreshing = true, errorMessage = null) }
+        runCatching {
+            withContext(ioDispatcher) {
+                messageRepository.refreshDisplayMessages(sessionId, worktree)
+            }
+        }.onSuccess { displayMessages ->
+            applyLoadedDisplayMessages(
+                displayMessages = displayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                isRefreshing = false,
+                source = "refresh",
+            )
+        }.onFailure { throwable ->
+            if (isCurrentBinding(sessionId, worktree)) {
+                _state.update {
+                    it.copy(
+                        isRefreshing = false,
+                        errorMessage = errorMessage(throwable),
+                    )
                 }
             }
         }

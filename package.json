@@ -16,7 +16,8 @@
     "prototype:home-activity": "npx --yes serve docs/features/home-activity-grouping/prototype -p 5181",
     "prototype:remove-project": "npx --yes serve docs/features/remove-project/prototype -p 5182",
     "prototype:app-onboarding": "npx --yes serve docs/features/app-onboarding/prototype -p 5183",
-    "prototype:initial-load": "npx --yes serve docs/features/initial-load-indicator/prototype -p 5184"
+    "prototype:initial-load": "npx --yes serve docs/features/initial-load-indicator/prototype -p 5184",
+    "prototype:session-compact": "npx --yes serve docs/features/session-compact/prototype -p 5185"
   },
   "devDependencies": {
     "@material-design-icons/svg": "^0.14.15",

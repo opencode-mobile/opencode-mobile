@@ -1,6 +1,11 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
 import android.util.Log
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,10 +14,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -56,7 +66,6 @@ import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
 import dev.opencode.mobile.ui.scroll.MessageListTimelineApplyHold
-import dev.opencode.mobile.ui.scroll.MessageListTimelineDefaults
 import dev.opencode.mobile.ui.scroll.messageListAnimateLastMessageSize
 import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
@@ -80,6 +89,7 @@ internal data class SessionChatTimelineViewProps(
     val isRefreshing: Boolean,
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
+    val workingIndicatorLabel: String? = null,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
@@ -142,6 +152,7 @@ internal fun SessionChatTimelineView(
                 timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
                 reviewChangesSummary = props.reviewChangesSummary,
+                workingIndicatorLabel = props.workingIndicatorLabel,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
@@ -168,6 +179,7 @@ private fun SessionChatTimelineReadyView(
     timelineFrame: TimelineFrame?,
     isRefreshing: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
+    workingIndicatorLabel: String?,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
     sessionTodoTotalCount: Int,
@@ -277,6 +289,14 @@ private fun SessionChatTimelineReadyView(
                         bottom = bottomOverlayInset,
                     ),
                 key = { message -> message.id },
+                workingIndicatorKey =
+                    workingIndicatorLabel?.let { SESSION_CHAT_WORKING_INDICATOR_KEY },
+                workingIndicatorContent =
+                    workingIndicatorLabel?.let { label ->
+                        {
+                            SessionChatWorkingIndicatorRow(label = label)
+                        }
+                    },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
                     message = message,
@@ -307,15 +327,12 @@ private fun SessionChatTimelineReadyView(
             val showSessionTodosPill = sessionTodosVisible && sessionTodoTotalCount > 0
             val showFloatStack = showSessionTodosPill || showScrollToEnd || showReviewChanges
             if (showFloatStack) {
+                // bottomOverlayInset is already composer + 16 end-pin gap.
                 Column(
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(
-                                bottom =
-                                    MessageListTimelineDefaults.scrollToEndPillBottomPadding +
-                                        bottomOverlayInset,
-                            ),
+                            .padding(bottom = bottomOverlayInset),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -647,6 +664,49 @@ private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
     }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
+private const val SESSION_CHAT_WORKING_INDICATOR_KEY = "session-chat-working-indicator"
+
+/** Feature-local Working/Retrying/Compacting status chrome (not prose). */
+@Composable
+private fun SessionChatWorkingIndicatorRow(label: String) {
+    val pulse =
+        rememberInfiniteTransition(label = "session-chat-working-dot").animateFloat(
+            initialValue = 1f,
+            targetValue = 0.35f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 900),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+            label = "session-chat-working-dot-alpha",
+        )
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
+                .semantics { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(6.dp)
+                    .alpha(pulse.value)
+                    .background(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = CircleShape,
+                    ),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
 
 @Composable
 private fun FallbackMessageBubble(

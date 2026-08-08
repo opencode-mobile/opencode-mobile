@@ -105,7 +105,7 @@ struct DiagnosticLogsView: View {
                         OpenCodeListItem(
                             title: "Entries",
                             subtitle: model.hasEntries
-                                ? "\(model.entryCount) redacted lines in memory"
+                                ? "\(model.entryCount) redacted lines in the current window"
                                 : "No entries in the current window yet",
                             style: .card
                         )
@@ -187,7 +187,7 @@ struct DiagnosticLogsView: View {
         .openCodeDialog(
             isPresented: $showClearConfirmation,
             title: "Clear diagnostic logs?",
-            subtitle: "This removes the in-memory diagnostic window.",
+            subtitle: "This removes the stored diagnostic window.",
             primaryOption: OpenCodeDialogOption(title: "Clear") {
                 model.clear()
                 showClearConfirmation = false

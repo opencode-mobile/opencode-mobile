@@ -86,6 +86,8 @@ nonisolated enum MessagePart: Equatable, Sendable {
     case text(TextPart)
     case file(FilePart)
     case tool(ToolPart)
+    /// Server compaction marker. Kept for live Compacting… detection; not rendered in timeline.
+    case compaction(CompactionPart)
 }
 
 nonisolated struct TextPart: Equatable, Sendable {
@@ -167,6 +169,16 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.input = input
         self.output = output
         self.metadata = metadata
+    }
+}
+
+nonisolated struct CompactionPart: Equatable, Sendable {
+    let id: String?
+    let auto: Bool
+
+    init(id: String? = nil, auto: Bool = false) {
+        self.id = id
+        self.auto = auto
     }
 }
 

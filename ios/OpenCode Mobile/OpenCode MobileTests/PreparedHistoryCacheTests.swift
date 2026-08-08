@@ -43,6 +43,16 @@ struct PreparedHistoryCacheTests {
         )
     }
 
+    @Test func handleMemoryPressure_clearsEntries() {
+        let cache = PreparedHistoryCache(characterBudget: 1_000_000, sessionEntryCap: 4)
+        let key = PreparedHistoryCacheKey(connectionProfileID: "profile-a", directory: "/a", sessionID: "ses-1")
+        cache.setMessages(["m1": display("m1", text: "one")], for: key)
+        #expect(cache.entryCount == 1)
+        cache.handleMemoryPressure()
+        #expect(cache.entryCount == 0)
+        #expect(cache.messages(for: key) == nil)
+    }
+
     @Test func isolatesEntriesByProfileAndDirectory() {
         let cache = PreparedHistoryCache()
         let keyA = PreparedHistoryCacheKey(connectionProfileID: "a", directory: "/one", sessionID: "ses-1")

@@ -140,6 +140,9 @@ object SessionChatTimelineBlocks {
                         )
                     index += 1
                 }
+                is MessagePart.Compaction -> {
+                    index += 1
+                }
             }
         }
         if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds

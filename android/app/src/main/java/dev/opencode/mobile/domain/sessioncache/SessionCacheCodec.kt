@@ -227,7 +227,7 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         id = id,
         role = role.name.lowercase(),
         text = text,
-        parts = parts.map { it.toCachePayload() },
+        parts = parts.mapNotNull { it.toCachePayload() },
         cost = cost,
         tokens = tokens?.toCachePayload(),
         model = model,
@@ -292,7 +292,7 @@ private fun CachedMessageContextEstimatePayload.toDomain(): MessageContextEstima
         toolCharacters = toolCharacters,
     )
 
-private fun MessagePart.toCachePayload(): CachedMessagePartPayload =
+private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
     when (this) {
         is MessagePart.Text ->
             CachedMessagePartPayload(
@@ -325,6 +325,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload =
                 attachmentKind = kind.name.lowercase(),
                 dataUrl = dataUrl,
             )
+        is MessagePart.Compaction -> null
     }
 
 private fun CachedMessagePartPayload.toDomain(): MessagePart? =

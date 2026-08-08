@@ -82,6 +82,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -2642,9 +2643,86 @@ class SessionChatViewModelTest {
                 ),
                 sessionRepository.summarizeRequest,
             )
-            assertEquals("Session compacted.", viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionCompactChrome.FALLBACK_SUCCESS, viewModel.uiState.value.snackbar?.message)
             assertEquals(SessionChatSnackbarTone.Default, viewModel.uiState.value.snackbar?.tone)
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertFalse(commandRepository.runCommandCalled)
+        }
+
+    @Test
+    fun runClientSlashAction_compact_showsCompactingWhileInFlight() =
+        runTest(testDispatcher) {
+            val hold = CompletableDeferred<Unit>()
+            val sessionRepository = FakeSessionRepository(summarizeHoldUntil = hold)
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+
+            hold.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(SessionCompactChrome.FALLBACK_SUCCESS, viewModel.uiState.value.snackbar?.message)
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+        }
+
+    @Test
+    fun runClientSlashAction_compact_failureClearsCompactingAndShowsError() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(summarizeError = RuntimeException("boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+
+            assertEquals(SessionCompactChrome.FAILURE, viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+        }
+
+    @Test
+    fun remoteCompaction_busyWithCompactionPart_showsCompactingWithoutLocalFlag() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "u1",
+                                        role = MessageRole.User,
+                                        text = "",
+                                        parts = listOf(MessagePart.Compaction(id = "c1", auto = false)),
+                                        model = null,
+                                        mode = null,
+                                        sentAtEpochMs = 1,
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
         }
 
     private fun createViewModel(
@@ -2660,8 +2738,8 @@ class SessionChatViewModelTest {
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
-        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope)
         val json = Json { ignoreUnknownKeys = true }
+        val sessionStatusLiveStore = DefaultSessionStatusLiveStore(sessionRepository, eventStream, liveStoreScope, EventDomainAdapter(json))
         val connectionProfileStore = FakeConnectionProfileStore()
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -3113,6 +3191,7 @@ private class FakeSessionRepository(
     private val revertError: Throwable? = null,
     private val unrevertError: Throwable? = null,
     private val summarizeError: Throwable? = null,
+    private val summarizeHoldUntil: CompletableDeferred<Unit>? = null,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
@@ -3325,6 +3404,7 @@ private class FakeSessionRepository(
         directory: String?,
     ): Boolean {
         summarizeRequest = SummarizeRequest(id = id, providerId = providerId, modelId = modelId, directory = directory)
+        summarizeHoldUntil?.await()
         summarizeError?.let { throw it }
         return true
     }

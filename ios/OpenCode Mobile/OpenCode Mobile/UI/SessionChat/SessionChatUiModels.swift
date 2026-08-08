@@ -162,6 +162,8 @@ struct SessionChatUiState: Equatable {
     var isRefreshing: Bool = false
     var isAborting: Bool = false
     var sessionStatusLabel: String?
+    /// In-chat Working/Retrying label when busy with no assistant content yet.
+    var workingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []
     var sessionTodosVisible: Bool = false
     var sessionTodosFinished: Bool = false
@@ -414,6 +416,8 @@ struct SessionInfoRegionState: Equatable {
     var sessionID: String = ""
     var sessionTitle: String = ""
     var sessionStatusLabel: String?
+    var authoritativeStatusLabel: String?
+    var optimisticBusy = false
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
     var rename = SessionRenameUiState()
@@ -421,6 +425,26 @@ struct SessionInfoRegionState: Equatable {
     var lifecycleErrorMessage: String?
     var shouldLeaveSession = false
     var errorMessage: String?
+
+    /// Effective Working/Retrying label: authoritative status, else optimistic busy.
+    /// Non-null `authoritative` always clears optimistic. Resolved idle (`authoritative == nil`
+    /// with `hasResolved`) also clears unless `optimisticBusy` is set explicitly (send mark).
+    mutating func applyStatus(authoritative: String?, optimisticBusy: Bool? = nil, hasResolved: Bool? = nil) {
+        authoritativeStatusLabel = authoritative
+        if let hasResolved {
+            hasResolvedSessionStatus = hasResolved
+        } else if authoritative != nil {
+            hasResolvedSessionStatus = true
+        }
+        if authoritative != nil {
+            self.optimisticBusy = false
+        } else if let optimisticBusy {
+            self.optimisticBusy = optimisticBusy
+        } else if hasResolvedSessionStatus {
+            self.optimisticBusy = false
+        }
+        sessionStatusLabel = authoritative ?? (self.optimisticBusy ? "Working" : nil)
+    }
 }
 
 struct SessionChatReviewChangesRegionState: Equatable {
@@ -437,6 +461,7 @@ struct SessionChatCommandsRegionState: Equatable {
     var forkErrorMessage: String?
     var forkResultVisible = false
     var forkedSessionTitle = ""
+    var isCompacting = false
     var actionErrorMessage: String?
     var actionSuccessMessage: String?
     var pendingSessionReplace: ChildSessionNavigationTarget?

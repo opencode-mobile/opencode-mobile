@@ -16,6 +16,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
+import dev.opencode.mobile.ui.sessionchat.withStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -163,18 +164,30 @@ class SessionInfo(
     }
 
     fun refreshStatus() {
+        scope.launch { refreshStatusSuspending() }
+    }
+
+    suspend fun refreshStatusSuspending() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        scope.launch {
-            runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
-                .onSuccess { statuses ->
-                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
-                    val status = statuses.firstOrNull { it.sessionId == sessionId }
-                    val label = status?.let(eventDomainAdapter::statusLabel)
-                    _state.update {
-                        it.copy(sessionStatusLabel = label, hasResolvedSessionStatus = true)
-                    }
-                }
+        runCatching { sessionRepository.getAllSessionStatuses(directory = worktree) }
+            .onSuccess { statuses ->
+                if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                val status = statuses.firstOrNull { it.sessionId == sessionId }
+                val label = status?.let(eventDomainAdapter::statusLabel)
+                _state.update { it.withStatus(authoritative = label, hasResolved = true) }
+            }
+    }
+
+    fun markOptimisticBusy() {
+        _state.update {
+            if (it.sessionStatusLabel != null) it else it.withStatus(authoritative = it.authoritativeStatusLabel, optimisticBusy = true)
+        }
+    }
+
+    fun clearOptimisticBusy() {
+        _state.update {
+            if (!it.optimisticBusy) it else it.withStatus(authoritative = it.authoritativeStatusLabel, optimisticBusy = false)
         }
     }
 
@@ -286,9 +299,11 @@ class SessionInfo(
                                 "live status session=$sessionId type=${status?.raw?.get("type") ?: "-"}",
                             )
                             _state.update {
-                                it.copy(
-                                    sessionStatusLabel = status?.let(eventDomainAdapter::statusLabel),
-                                    hasResolvedSessionStatus = it.hasResolvedSessionStatus || status != null,
+                                it.withStatus(
+                                    authoritative = status?.let(eventDomainAdapter::statusLabel),
+                                    // Every LiveStore emission is an authoritative snapshot
+                                    // (including idle / missing session).
+                                    hasResolved = true,
                                 )
                             }
                         }

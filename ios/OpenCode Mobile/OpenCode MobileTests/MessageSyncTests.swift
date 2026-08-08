@@ -193,6 +193,154 @@ struct MessageSyncTests {
         #expect(healthy)
     }
 
+    @Test func repeatedOverflowCycles_recoverToHealthyOnlyAfterValidatedReplace() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            pollIntervalMs: 60_000,
+            eventStagingCapacity: 64,
+            eventStagingByteCapacity: 200,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
+        )
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let loaded = await waitUntil { collector.latest()?.first?.text == "Hello" }
+        #expect(loaded)
+
+        for cycle in 0..<2 {
+            let recoveredText = "recovered-\(cycle)"
+            // Block the event consumer on REST so staging can accumulate. A waiting
+            // consumer otherwise handoffs each enqueue without buffering, so byte
+            // overflow never trips under real scheduling (CI flake).
+            repo.holdNextListMessages()
+            eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1", rawProperties: nil))
+            let blocked = await waitUntil { repo.isListBlocked }
+            #expect(blocked)
+
+            repo.shouldFailList = true
+            for _ in 0..<8 {
+                eventStream.emit(
+                    eventWithPartDelta(
+                        partID: "prt-\(cycle)",
+                        messageID: "msg-1",
+                        delta: String(repeating: "x", count: 80),
+                        sessionID: "ses-1"
+                    )
+                )
+            }
+            // Let the producer drain AsyncStream into staging while the consumer
+            // remains blocked on the idle reload.
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(20))
+            repo.resumeListMessages()
+
+            let recovering = await waitUntil {
+                if case .recovering = sync.syncHealth(sessionID: "ses-1", directory: "/repo") {
+                    return true
+                }
+                return false
+            }
+            #expect(recovering)
+            let expectedRetained = cycle == 0 ? "Hello" : "recovered-\(cycle - 1)"
+            #expect(collector.latest()?.first?.text == expectedRetained)
+
+            repo.messages = [
+                Message(
+                    id: "msg-recovered-\(cycle)",
+                    role: .assistant,
+                    text: recoveredText,
+                    parts: [.text(TextPart(text: recoveredText, isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+            repo.shouldFailList = false
+            let healthy = await waitUntil {
+                collector.latest()?.first?.text == recoveredText
+                    && sync.syncHealth(sessionID: "ses-1", directory: "/repo") == .healthy
+            }
+            #expect(healthy)
+        }
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
+    @Test func rapidSessionSwitch_AtoBtoA_noCrossSessionPublish() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messagesBySession = [
+            "ses-A": [
+                Message(
+                    id: "msg-a",
+                    role: .assistant,
+                    text: "session-A",
+                    parts: [.text(TextPart(text: "session-A", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ],
+            "ses-B": [
+                Message(
+                    id: "msg-b",
+                    role: .assistant,
+                    text: "session-B",
+                    parts: [.text(TextPart(text: "session-B", isStreaming: false))],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ],
+        ]
+        let eventStream = FakeForegroundEventStream()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+
+        let collectorA1 = MessageCollector()
+        let taskA1 = Task {
+            await collectorA1.collect(sync.observeMessages(sessionID: "ses-A", directory: "/repo"))
+        }
+        let loadedA1 = await waitUntil { collectorA1.latest()?.first?.text == "session-A" }
+        #expect(loadedA1)
+        #expect(collectorA1.emissions.contains { frame in frame.contains { $0.id == "msg-b" } } == false)
+        taskA1.cancel()
+        _ = await waitUntil { collectorA1.isFinished }
+
+        let collectorB = MessageCollector()
+        let taskB = Task {
+            await collectorB.collect(sync.observeMessages(sessionID: "ses-B", directory: "/repo"))
+        }
+        let loadedB = await waitUntil { collectorB.latest()?.first?.text == "session-B" }
+        #expect(loadedB)
+        #expect(collectorB.emissions.contains { frame in frame.contains { $0.id == "msg-a" } } == false)
+
+        eventStream.emit(eventWithInfo(id: "msg-a-foreign", role: "assistant", sessionID: "ses-A"))
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(collectorB.emissions.contains { frame in
+            frame.contains { $0.id == "msg-a" || $0.id == "msg-a-foreign" }
+        } == false)
+        #expect(collectorB.latest()?.first?.text == "session-B")
+
+        taskB.cancel()
+        _ = await waitUntil { collectorB.isFinished }
+
+        let collectorA2 = MessageCollector()
+        let taskA2 = Task {
+            await collectorA2.collect(sync.observeMessages(sessionID: "ses-A", directory: "/repo"))
+        }
+        let loadedA2 = await waitUntil { collectorA2.latest()?.first?.text == "session-A" }
+        #expect(loadedA2)
+        #expect(collectorA2.emissions.contains { frame in frame.contains { $0.id == "msg-b" } } == false)
+        taskA2.cancel()
+        _ = await waitUntil { collectorA2.isFinished }
+    }
+
     @Test func sessionKeys_isolateProfiles() async {
         let repo = FakeLiveMessageRepository()
         let eventStream = FakeForegroundEventStream()
@@ -1246,6 +1394,7 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
             .text(TextPart(text: "Hello", isStreaming: false)),
         ], model: nil, mode: nil, sentAtEpochMs: nil),
     ]
+    var messagesBySession: [String: [Message]] = [:]
     var listMessagesCallCount = 0
     var shouldFailList = false
     private var holdNextList = false
@@ -1308,7 +1457,7 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
         if shouldFailList {
             throw URLError(.cannotConnectToHost)
         }
-        return messages
+        return messagesBySession[sessionID] ?? messages
     }
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }

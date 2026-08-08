@@ -56,8 +56,9 @@
   implements that path; OPE-81 wires overflow and message fork later.
 - `undo`/`redo` match web session revert/unrevert (abort if busy; restore
   composer on undo). Message-sheet “Revert message” copy stays for a follow-up.
-- `compact` is a thin summarize call with the selected composer model; richer
-  compact UX remains OPE-80. Success and failure use `OpenCodeSnackbar`.
+- `compact` is a thin summarize call with the selected composer model. Richer
+  status-chrome feedback (Compacting… + context-delta snackbar) is OPE-116 /
+  `docs/features/session-compact/`. Success and failure use `OpenCodeSnackbar`.
 - Transient Session Chat banner errors (Commands, send, abort, archive/delete,
   …) are presented as auto-dismissing `OpenCodeSnackbar` messages, not sticky
   red text. The timeline full-screen load-error empty state stays a page state.

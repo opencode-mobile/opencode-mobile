@@ -45,6 +45,32 @@ nonisolated struct EventDomainAdapter: Sendable {
         statusLabel(fromRawType: status.raw["type"])
     }
 
+    /// Status carried by a `session.status` SSE payload.
+    /// Returns nil when the event is not a usable status update.
+    func sessionStatus(from event: OpencodeEvent) -> SessionStatus? {
+        guard event.type == "session.status" else { return nil }
+        guard let sessionID = event.sessionID else { return nil }
+        guard let status = event.rawProperties?["status"]?.dictionaryValue else { return nil }
+        var raw: [String: String] = [:]
+        for (key, value) in status {
+            if let string = Self.string(from: value) {
+                raw[key] = string
+            }
+        }
+        return SessionStatus(sessionID: sessionID, raw: raw)
+    }
+
+    private static func string(from value: AnySendable) -> String? {
+        switch value {
+        case let .string(s): s
+        case let .int(v): String(v)
+        case let .int64(v): String(v)
+        case let .double(v): String(v)
+        case let .bool(v): String(v)
+        case .dictionary, .array, .null: nil
+        }
+    }
+
     /// Title change carried by a `session.updated` event for a concrete session id.
     /// Returns nil when the event is not a usable title update.
     func sessionTitleUpdate(from event: OpencodeEvent) -> SessionTitleUpdate? {

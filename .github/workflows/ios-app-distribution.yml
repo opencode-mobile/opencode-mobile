@@ -1,0 +1,255 @@
+name: iOS App Distribution
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-distribution
+  cancel-in-progress: false
+
+jobs:
+  distribute:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, mac-mini]
+    environment: ios-release
+    defaults:
+      run:
+        working-directory: ios/OpenCode Mobile
+    env:
+      # Keep marketing version ASC-compatible; isolate build numbers from
+      # manual iOS Release / TestFlight run_number sequence.
+      IOS_MARKETING_VERSION: "0.1.0"
+      EXPECTED_TEAM_ID: 677MTXPXZZ
+      EXPECTED_BUNDLE_ID: dev.opencode.mobile
+      FIREBASE_APP_ID: 1:569439646238:ios:2ffd276bbaf8a1528df40f
+      FIREBASE_TESTER_GROUP: ios-internal
+      FIREBASE_TOOLS_VERSION: 15.24.0
+
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+
+      - name: Set distribution build number
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$((1000000000 + GITHUB_RUN_NUMBER))
+          echo "IOS_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ASC_API_KEY_P8:-}" || -z "${ASC_KEY_ID:-}" || -z "${ASC_ISSUER_ID:-}" ]]; then
+            echo "ASC_API_KEY_P8, ASC_KEY_ID, and ASC_ISSUER_ID are required in the ios-release environment." >&2
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "ASC_API_KEY_PATH=$key_path"
+            echo "ASC_KEY_ID=$ASC_KEY_ID"
+            echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare Firebase App Distribution credentials
+        shell: bash
+        env:
+          FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON:-}" ]]; then
+            echo "FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON is required in the ios-release environment." >&2
+            exit 1
+          fi
+          firebase_credentials_path="$RUNNER_TEMP/firebase-app-distribution.json"
+          printf '%s' "$FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON" > "$firebase_credentials_path"
+          chmod 600 "$firebase_credentials_path"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$firebase_credentials_path" >> "$GITHUB_ENV"
+
+      - name: Prepare persistent signing keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain_dir="${HOME}/.opencode-mobile"
+          keychain_path="${keychain_dir}/ios-release.keychain-db"
+          password_path="${keychain_dir}/ios-release.keychain.password"
+          mkdir -p "$keychain_dir"
+          chmod 700 "$keychain_dir"
+          if [[ ! -f "$password_path" ]]; then
+            openssl rand -base64 32 | tr -d '\n/=+' > "$password_path"
+            chmod 600 "$password_path"
+          fi
+          keychain_password="$(tr -d '\n' < "$password_path")"
+          if [[ ! -f "$keychain_path" ]]; then
+            security create-keychain -p "$keychain_password" "$keychain_path"
+          fi
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          existing_keychains=()
+          while IFS= read -r line; do
+            keychain="${line#\"}"
+            keychain="${keychain%\"}"
+            keychain="$(printf '%s' "$keychain" | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//')"
+            [[ -z "$keychain" || "$keychain" == "$keychain_path" ]] && continue
+            existing_keychains+=("$keychain")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain_path" "${existing_keychains[@]+"${existing_keychains[@]}"}"
+          security default-keychain -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" \
+            "$keychain_path" >/dev/null 2>&1 || true
+          {
+            echo "IOS_RELEASE_KEYCHAIN_PATH=$keychain_path"
+            echo "IOS_RELEASE_KEYCHAIN_PASSWORD_PATH=$password_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve Swift Package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile"
+
+      - name: Archive Release for iOS device
+        run: |
+          set -euo pipefail
+          archive_path="$RUNNER_TEMP/OpenCode-Mobile-AppDistribution.xcarchive"
+          keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
+          security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
+          xcodebuild archive \
+            -project "OpenCode Mobile.xcodeproj" \
+            -scheme "OpenCode Mobile" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$archive_path" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$ASC_API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            MARKETING_VERSION="$IOS_MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$EXPECTED_TEAM_ID" \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            SWIFT_COMPILATION_MODE=singlefile
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" \
+            "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
+          echo "IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
+
+      - name: Export signed Ad Hoc IPA
+        run: |
+          set -euo pipefail
+          keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
+          security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
+          export_dir="$RUNNER_TEMP/ios-adhoc-ipa-export"
+          mkdir -p "$export_dir"
+          xcodebuild -exportArchive \
+            -archivePath "$IOS_ARCHIVE_PATH" \
+            -exportPath "$export_dir" \
+            -exportOptionsPlist "$GITHUB_WORKSPACE/.github/ios/ExportOptions-AdHoc.plist" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$ASC_API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ipa_path="$(find "$export_dir" -maxdepth 1 -name '*.ipa' -type f | head -n 1)"
+          if [[ -z "$ipa_path" ]]; then
+            echo "No IPA produced by Ad Hoc exportArchive." >&2
+            ls -la "$export_dir" >&2 || true
+            exit 1
+          fi
+          echo "IOS_IPA_PATH=$ipa_path" >> "$GITHUB_ENV"
+
+      - name: Verify IPA signature
+        working-directory: .
+        run: |
+          .github/scripts/verify-ios-release-ipa.sh \
+            "$IOS_IPA_PATH" \
+            "$EXPECTED_TEAM_ID" \
+            "$EXPECTED_BUNDLE_ID"
+
+      - name: Upload signed Ad Hoc IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-distribution-${{ github.sha }}-${{ github.run_number }}
+          path: ${{ env.IOS_IPA_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Distribute to Firebase tester group
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          subject="$(git log -1 --pretty=%s)"
+          release_notes="Merge $short_sha: $subject"
+          if ! distribution_output="$(
+            npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
+              appdistribution:distribute \
+              "$IOS_IPA_PATH" \
+              --app "$FIREBASE_APP_ID" \
+              --groups "$FIREBASE_TESTER_GROUP" \
+              --release-notes "$release_notes" \
+              2>&1
+          )"; then
+            printf '%s\n' "$distribution_output"
+            exit 1
+          fi
+          firebase_console_uri="$(
+            sed -n 's/^.*View this release in the Firebase console: //p' <<<"$distribution_output" | tail -n 1
+          )"
+          testing_uri="$(
+            sed -n 's/^.*Share this release with testers who have access: //p' <<<"$distribution_output" | tail -n 1
+          )"
+          if [[ -z "$firebase_console_uri" || -z "$testing_uri" ]]; then
+            echo "Firebase CLI did not return the expected stable release links." >&2
+            printf '%s\n' "$distribution_output" >&2
+            exit 1
+          fi
+          {
+            echo "## iOS App Distribution"
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Marketing version: \`$IOS_MARKETING_VERSION\`"
+            echo "- Build number: \`$IOS_BUILD_NUMBER\`"
+            echo "- Tester group: \`$FIREBASE_TESTER_GROUP\`"
+            echo "- [Firebase release]($firebase_console_uri)"
+            echo "- [Open in the tester experience]($testing_uri)"
+            echo "- Does **not** upload to TestFlight or submit for App Review."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary credentials and restore keychain search list
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "${ASC_API_KEY_PATH:-}" "$RUNNER_TEMP/firebase-app-distribution.json"
+          if [[ -f "$HOME/Library/Keychains/login.keychain-db" ]]; then
+            security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db"
+            security default-keychain -s "$HOME/Library/Keychains/login.keychain-db" || true
+          fi
+          if [[ -n "${IOS_RELEASE_KEYCHAIN_PATH:-}" ]]; then
+            security lock-keychain "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
+          fi

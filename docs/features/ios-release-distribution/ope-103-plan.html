@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OPE-103 — Publish To TestFlight Internal Testing</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --text: #17202a;
+      --muted: #52606d;
+      --border: #d9e2ec;
+      --accent: #006b5f;
+      --pending: #9a6700;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111820;
+        --surface: #18222d;
+        --text: #edf2f7;
+        --muted: #b8c4cf;
+        --border: #344454;
+        --accent: #62d5c5;
+        --pending: #f2c66d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1040px, calc(100% - 32px)); margin: 40px auto; }
+    h1, h2 { line-height: 1.2; }
+    h1 { margin-bottom: 8px; }
+    h2 { margin-top: 32px; }
+    .lead { color: var(--muted); max-width: 760px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 24px 0;
+    }
+    .card, .flow-step, table {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .card { padding: 16px; }
+    .card strong { display: block; color: var(--accent); margin-bottom: 4px; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .flow-step { padding: 14px; }
+    .flow-step span { color: var(--muted); display: block; font-size: 0.9rem; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+    th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:last-child td { border-bottom: 0; }
+    .pending { color: var(--pending); font-weight: 700; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    a { color: var(--accent); }
+    @media (max-width: 760px) { .flow { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OPE-103 — Publish To TestFlight Internal Testing</h1>
+    <p class="lead">
+      Extend the signed App Store IPA from OPE-101 so a manual protected
+      <code>iOS Release</code> run uploads to App Store Connect and lands in
+      TestFlight Internal Testing. The app must remain private: not published
+      and not available on the public App Store. Markdown source:
+      <a href="./ope-103-plan.md"><code>ope-103-plan.md</code></a>.
+    </p>
+
+    <section class="cards" aria-label="Plan summary">
+      <div class="card"><strong>Trigger</strong>Manual <code>workflow_dispatch</code> on <code>main</code></div>
+      <div class="card"><strong>Artifact</strong>Signature-verified App Store IPA</div>
+      <div class="card"><strong>Audience</strong>TestFlight Internal (ASC team users)</div>
+      <div class="card"><strong>Privacy</strong>Not public — no App Review / no store release</div>
+    </section>
+
+    <h2>Delivery flow</h2>
+    <div class="flow">
+      <div class="flow-step"><strong>1. Dispatch</strong><span>Operator sets version_name on main</span></div>
+      <div class="flow-step"><strong>2. Sign</strong><span>Archive, export, verify IPA (OPE-101)</span></div>
+      <div class="flow-step"><strong>3. Upload</strong><span>ASC accepts the IPA via existing API key</span></div>
+      <div class="flow-step"><strong>4. Install</strong><span>Human waits for processing; TestFlight install</span></div>
+    </div>
+
+    <h2>Checkpoints</h2>
+    <table>
+      <thead><tr><th>Checkpoint</th><th>Required result</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>1 — Human prep</td>
+          <td>ASC stays Prepare for Submission; owner can use Internal Testing; TestFlight app installed</td>
+          <td>Done</td>
+        </tr>
+        <tr>
+          <td>2 — Agent implementation</td>
+          <td>Export-compliance plist key; upload step in <code>ios-release.yml</code>; runbook updated</td>
+          <td>Done</td>
+        </tr>
+        <tr>
+          <td>3 — Protected verification</td>
+          <td>Successful upload + Internal Testing build + physical-device install</td>
+          <td>Done — <code>0.1.0 (9)</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Privacy model</h2>
+    <table>
+      <thead><tr><th>Path</th><th>Review?</th><th>Public App Store?</th><th>In OPE-103?</th></tr></thead>
+      <tbody>
+        <tr><td>TestFlight Internal</td><td>No App Review / no Beta App Review</td><td>No</td><td>Yes</td></tr>
+        <tr><td>TestFlight External</td><td>Beta App Review (first build)</td><td>No (invite-only)</td><td>No</td></tr>
+        <tr><td>App Store release</td><td>Full App Review + release</td><td>Yes</td><td>No</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Locked decisions</h2>
+    <table>
+      <thead><tr><th>Topic</th><th>Choice</th></tr></thead>
+      <tbody>
+        <tr><td>Workflow</td><td>Extend canonical <code>iOS Release</code> (not a second workflow)</td></tr>
+        <tr><td>Upload</td><td><code>xcrun altool</code> / Transporter with existing <code>ios-release</code> ASC secrets</td></tr>
+        <tr><td>Processing</td><td>CI succeeds on upload accept; human waits for ASC processing</td></tr>
+        <tr><td>Compliance</td><td><code>ITSAppUsesNonExemptEncryption=NO</code> when HTTPS/TLS-only holds</td></tr>
+        <tr><td>Stay private</td><td>No Submit for Review, no Release, no External groups</td></tr>
+        <tr><td>Out of scope</td><td>App Review, External TestFlight, Firebase (OPE-102), Crashlytics</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Acceptance gates</h2>
+    <table>
+      <thead><tr><th>Gate</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Protected upload</td><td>Main-only iOS Release run uploads after IPA verify</td></tr>
+        <tr><td>Internal Testing</td><td>Build installable by ASC team member via TestFlight</td></tr>
+        <tr><td>Privacy</td><td>Still unpublished draft; not publicly available on the App Store</td></tr>
+        <tr><td>Merge gates</td><td>No PR trigger; Checks/Build stay credential-free</td></tr>
+        <tr><td>Versioning</td><td>Operator marketing version + CI run_number build documented</td></tr>
+        <tr><td>Device</td><td>First physical TestFlight install verified</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Compliance questionnaire blocks TF</td><td>Plist key when accurate; else one ASC answer</td></tr>
+        <tr><td>Long Processing queue</td><td>Human wait; no indefinite CI poll</td></tr>
+        <tr><td>Accidental App Review</td><td>Runbook forbids Submit for Review</td></tr>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

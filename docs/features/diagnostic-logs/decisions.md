@@ -38,7 +38,16 @@ TextMate Logbook remains fence-highlighting metrics only. Diagnostic Logs is
 the general runtime diagnostics surface. Optional later: a TextMate-specific
 share action without merging the stores.
 
-## Process-lifetime only for v1
+## Process-lifetime only for v1 → disk-backed window
 
-The buffer is in-process. No disk persistence across process death, crash
-upload, or remote telemetry in this slice.
+Originally the buffer was in-process only. After a force-quit / restart during
+freeze diagnosis wiped the window before export, the buffer now mirrors to a
+local JSONL file (same pattern as TextMate Logbook):
+
+- Path: app debug support (`diagnostic-logs-v1.jsonl`)
+- Load on launch; keep only entries still inside the 5-minute window
+- Clear and Clear All Data delete the file
+- Still no crash upload or remote telemetry
+
+The shareable product window remains 5 minutes; persistence only covers process
+death within that window.
