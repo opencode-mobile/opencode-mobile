@@ -17,9 +17,9 @@
 | Field | Value |
 | --- | --- |
 | Expected shared intent | Closed tester paths on both platforms (Play internal ↔ TestFlight Internal; Firebase App Distribution on both). |
-| Current iOS state | Signing foundation in progress (OPE-101); TestFlight and Firebase distribution still open (OPE-103, OPE-102). |
+| Current iOS state | OPE-101 signing foundation complete; TestFlight and Firebase distribution still open (OPE-103, OPE-102). |
 | Current Android state | Play internal + Firebase App Distribution complete. |
 | Affected area | Missing implementation (distribution). |
 | Reason | Sequenced after ASC account and OPE-101 signing foundation. |
-| Owner / next action | Finish OPE-101, then OPE-103, then OPE-102. |
+| Owner / next action | Execute [`ope-103-plan.md`](ope-103-plan.md), then OPE-102. |
 | Status | Temporary |

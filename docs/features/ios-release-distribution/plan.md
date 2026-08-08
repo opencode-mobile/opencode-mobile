@@ -87,7 +87,7 @@ verified App Store IPA without publishing. See [`ope-101-plan.md`](ope-101-plan.
 ### OPE-103 — TestFlight Internal Testing
 
 Extend the signed foundation with a manual protected upload to App Store Connect
-/ TestFlight Internal Testing.
+/ TestFlight Internal Testing. See [`ope-103-plan.md`](ope-103-plan.md).
 
 ### OPE-102 — Firebase App Distribution
 
