@@ -17,11 +17,11 @@
 | Field | Value |
 | --- | --- |
 | Expected shared intent | Closed tester paths on both platforms (Play internal ↔ TestFlight Internal; Firebase App Distribution on both). |
-| Current iOS state | OPE-101 signing foundation complete; TestFlight upload path on `main`; first ASC upload failed on prerelease marketing version (fix in progress). |
+| Current iOS state | OPE-101 + OPE-103 complete (TestFlight Internal). Firebase App Distribution still open (OPE-102). |
 | Current Android state | Play internal + Firebase App Distribution complete. |
 | Affected area | Missing implementation (distribution). |
 | Reason | Sequenced after ASC account and OPE-101 signing foundation. |
-| Owner / next action | Land strict `MAJOR.MINOR.PATCH` validation, re-run upload, complete TestFlight install. |
+| Owner / next action | Execute OPE-102 Firebase App Distribution. |
 | Status | Temporary |
 
 ## Release marketing-version shape differs by platform

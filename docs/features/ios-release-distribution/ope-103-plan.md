@@ -113,13 +113,16 @@ a protected verification run.
       (`0.1.0` / build 9 —
       [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789)).
 - [x] Confirm the workflow uploads successfully (ASC accepts the binary).
-- [ ] In App Store Connect → TestFlight, wait until the build finishes
-      processing and appears under Internal Testing.
-- [ ] Confirm the App Store version stays unpublished / not submitted for
-      review / not Available on the App Store (still Prepare for Submission or
-      equivalent draft). Confirm no External TestFlight group was created.
-- [ ] Install the build from TestFlight on a physical device and open the app.
-- [ ] Record the Actions run URL and ASC/TestFlight build identity (version +
+- [x] In App Store Connect → TestFlight, wait until the build finishes
+      processing and appears under Internal Testing (`processingState=VALID`,
+      `internalBuildState=READY_FOR_BETA_TESTING`).
+- [x] Confirm the App Store version stays unpublished / not submitted for
+      review / not Available on the App Store (ASC `appStoreState` remains
+      `PREPARE_FOR_SUBMISSION`). Confirm no External TestFlight group was
+      created.
+- [x] Install the build from TestFlight on a physical device and open the app
+      (`0.1.0 (9)`, owner, 2026-08-08).
+- [x] Record the Actions run URL and ASC/TestFlight build identity (version +
       build number) in this plan’s evidence section before closing OPE-103.
 
 ## Acceptance
@@ -150,7 +153,16 @@ OPE-103 is complete only when:
 
 ## Protected-main evidence
 
-_To be filled after the first successful upload + device install._
+| Item | Evidence |
+| --- | --- |
+| Workflow | [31248794789](https://github.com/opencode-mobile/opencode-mobile/actions/runs/31248794789) on `main` |
+| Marketing version | `0.1.0` |
+| Build number | `9` |
+| ASC upload | Accepted by `altool --upload-package` |
+| Processing | `VALID` |
+| Internal Testing | `READY_FOR_BETA_TESTING` |
+| App Store privacy | `PREPARE_FOR_SUBMISSION` (unpublished) |
+| Device | Owner installed `0.1.0 (9)` from TestFlight and opened the app (2026-08-08) |
 
 ## Risks
 
