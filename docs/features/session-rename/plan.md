@@ -28,7 +28,6 @@ matches the name the user wants, without leaving the session.
 
 ## Out Of Scope
 
-- Rename from the project/home session list, long-press, or other surfaces.
 - Tap-title inline editing on the top bar (desktop web has this; mobile does
   not in this slice).
 - Archive, delete, share, or other session lifecycle actions from this dialog.
@@ -36,8 +35,12 @@ matches the name the user wants, without leaving the session.
 - Guaranteed home-list refresh beyond existing Live Store / list observation
   behavior (follow-up only if home does not already pick up session updates).
 
+Home-list rename via long-press is owned by
+[Home Session Actions](../home-session-actions/plan.md) (OPE-120).
+
 Related: [Session Chat](../session-chat/plan.md),
-[Session Repository](../session-repository/plan.md).
+[Session Repository](../session-repository/plan.md),
+[Home Session Actions](../home-session-actions/plan.md).
 
 ## Server APIs Involved
 

@@ -75,6 +75,7 @@ fun SessionList(
     createError: String? = null,
     emptyContent: (@Composable () -> Unit)? = null,
     onRemoveProject: ((String) -> Unit)? = null,
+    onSessionLongPress: ((SessionListSession) -> Unit)? = null,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -141,6 +142,7 @@ fun SessionList(
                                     showDivider = index < section.items.lastIndex,
                                     borderWeaker = borderWeaker,
                                     onSessionSelected = onSessionSelected,
+                                    onSessionLongPress = onSessionLongPress,
                                 )
                             }
                         }
@@ -160,6 +162,7 @@ fun SessionList(
                                     showDivider = index < section.items.lastIndex,
                                     borderWeaker = borderWeaker,
                                     onSessionSelected = onSessionSelected,
+                                    onSessionLongPress = onSessionLongPress,
                                 )
                             }
                         }
@@ -219,6 +222,7 @@ private fun SessionListRow(
     showDivider: Boolean,
     borderWeaker: androidx.compose.ui.graphics.Color,
     onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
     val status = session.status.toListItemStatus()
     OpenCodeListItem(
@@ -233,6 +237,7 @@ private fun SessionListRow(
                 statusDot = if (showStatusDot) status.tone else null,
             ),
         onClick = { onSessionSelected(session) },
+        onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
     )
     if (showDivider) {
         HorizontalDivider(

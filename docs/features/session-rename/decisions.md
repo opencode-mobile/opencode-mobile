@@ -5,6 +5,9 @@
 - Decision: Rename is available only from Session Chat overflow in this slice.
 - Reason: Keeps v1 entry clear; home-list rename can be a later surface without
   changing the PATCH contract.
+- Update: Home-list long-press rename is now owned by
+  [Home Session Actions](../home-session-actions/plan.md) (OPE-120). Session Chat
+  overflow rename remains.
 
 ## Dialog, not inline title edit
 

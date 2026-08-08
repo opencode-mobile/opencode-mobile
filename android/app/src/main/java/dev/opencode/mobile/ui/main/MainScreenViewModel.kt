@@ -1,8 +1,11 @@
 package dev.opencode.mobile.ui.main
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
+import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
@@ -13,6 +16,8 @@ import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
@@ -21,6 +26,7 @@ import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -32,6 +38,7 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -53,6 +60,7 @@ class MainScreenViewModel
         private val projectRepository: ProjectRepository,
         private val filesystemRepository: FilesystemRepository,
         private val sessionRepository: SessionRepository,
+        private val messageRepository: MessageRepository,
         private val connectionProfileStore: ConnectionProfileStore,
         private val sessionDomainAdapter: SessionDomainAdapter,
         private val eventDomainAdapter: EventDomainAdapter,
@@ -71,6 +79,8 @@ class MainScreenViewModel
         val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
         private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
+        private val _sessionActions = MutableStateFlow(HomeSessionActionsUiState())
+        val sessionActions: StateFlow<HomeSessionActionsUiState> = _sessionActions.asStateFlow()
         val liveUpdatesConnectionState: StateFlow<EventStreamConnectionState> =
             foregroundEventStream.connectionState
                 .stateIn(
@@ -84,6 +94,8 @@ class MainScreenViewModel
         private var liveObservationJobs: List<Job> = emptyList()
         private var requestedFocusWorktree: String? = null
         private var homeFocusedWorktree: String? = null
+        private var forkGateJob: Job? = null
+        private var forkedOpenTarget: SessionOpenTarget? = null
 
         init {
             refresh()
@@ -321,6 +333,324 @@ class MainScreenViewModel
 
         fun consumeProjectRemovalSnackbar() {
             _removalSnackbar.value = null
+        }
+
+        fun onSessionLongPress(
+            sessionId: String,
+            title: String,
+            worktree: String,
+        ) {
+            forkGateJob?.cancel()
+            forkedOpenTarget = null
+            _sessionActions.value =
+                HomeSessionActionsUiState(
+                    target =
+                        HomeSessionActionTarget(
+                            sessionId = sessionId,
+                            title = title,
+                            worktree = worktree,
+                        ),
+                    sheetVisible = true,
+                )
+            forkGateJob = viewModelScope.launch { resolveForkAvailability(sessionId, worktree) }
+        }
+
+        /**
+         * Dismissal from the sheet chrome. Action handlers hide the sheet themselves and keep the
+         * target alive for the dialog they open.
+         */
+        fun dismissSessionActionsSheet() {
+            _sessionActions.update { it.copy(sheetVisible = false) }
+            if (!_sessionActions.value.hasOpenDialog) {
+                clearSessionActions()
+            }
+        }
+
+        fun chooseRename() {
+            val target = _sessionActions.value.target ?: return
+            _sessionActions.update {
+                it.copy(
+                    sheetVisible = false,
+                    renameVisible = true,
+                    renameDraft = target.title,
+                    renameSubmitting = false,
+                    renameError = null,
+                )
+            }
+        }
+
+        fun updateRenameDraft(text: String) {
+            _sessionActions.update { it.copy(renameDraft = text, renameError = null) }
+        }
+
+        fun cancelRename() {
+            if (_sessionActions.value.renameSubmitting) return
+            clearSessionActions()
+        }
+
+        fun confirmRename() {
+            val state = _sessionActions.value
+            val target = state.target ?: return
+            if (state.renameSubmitting) return
+            val trimmed = state.renameDraft.trim()
+            if (trimmed.isEmpty()) {
+                _sessionActions.update { it.copy(renameError = EMPTY_TITLE_ERROR) }
+                return
+            }
+            if (trimmed == target.title) {
+                cancelRename()
+                return
+            }
+            _sessionActions.update { it.copy(renameSubmitting = true, renameError = null) }
+            logI("rename submit session=${target.sessionId}")
+            viewModelScope.launch {
+                runCatching {
+                    sessionRepository.updateSession(
+                        id = target.sessionId,
+                        title = trimmed,
+                        directory = target.worktree,
+                    )
+                }.onSuccess {
+                    logI("rename success session=${target.sessionId}")
+                    clearSessionActions(target.sessionId)
+                }.onFailure { error ->
+                    logW("rename failed session=${target.sessionId} message=${error.message}")
+                    _sessionActions.update { current ->
+                        if (current.target?.sessionId != target.sessionId) {
+                            current
+                        } else {
+                            current.copy(renameSubmitting = false, renameError = mutationErrorMessage(error))
+                        }
+                    }
+                }
+            }
+        }
+
+        fun chooseFork() {
+            val state = _sessionActions.value
+            val target = state.target ?: return
+            if (!state.canFork) return
+            _sessionActions.update {
+                it.copy(
+                    sheetVisible = false,
+                    forkVisible = true,
+                    forkDraft = suggestedHomeForkTitle(target.title),
+                    forkSubmitting = false,
+                    forkError = null,
+                )
+            }
+        }
+
+        fun updateForkDraft(text: String) {
+            _sessionActions.update { it.copy(forkDraft = text, forkError = null) }
+        }
+
+        fun cancelFork() {
+            if (_sessionActions.value.forkSubmitting) return
+            clearSessionActions()
+        }
+
+        fun confirmFork() {
+            val state = _sessionActions.value
+            val target = state.target ?: return
+            if (state.forkSubmitting) return
+            val title = state.forkDraft.trim()
+            if (title.isEmpty()) {
+                _sessionActions.update { it.copy(forkError = EMPTY_TITLE_ERROR) }
+                return
+            }
+            _sessionActions.update { it.copy(forkSubmitting = true, forkError = null) }
+            logI("fork submit session=${target.sessionId}")
+            viewModelScope.launch {
+                runCatching {
+                    val forked =
+                        sessionRepository.forkSession(
+                            id = target.sessionId,
+                            atMessageId = null,
+                            directory = target.worktree,
+                        )
+                    sessionRepository.updateSession(
+                        id = forked.id,
+                        title = title,
+                        directory = target.worktree,
+                    )
+                }.onSuccess { forked ->
+                    logI("fork success session=${target.sessionId} forkedSession=${forked.id}")
+                    forkedOpenTarget =
+                        SessionOpenTarget(
+                            sessionId = forked.id,
+                            title = forked.title,
+                            worktree = target.worktree,
+                        )
+                    _sessionActions.update { current ->
+                        if (current.target?.sessionId != target.sessionId) {
+                            current
+                        } else {
+                            current.copy(
+                                forkVisible = false,
+                                forkSubmitting = false,
+                                forkResultVisible = true,
+                                forkedTitle = forked.title,
+                            )
+                        }
+                    }
+                }.onFailure { error ->
+                    logW("fork failed session=${target.sessionId} message=${error.message}")
+                    _sessionActions.update { current ->
+                        if (current.target?.sessionId != target.sessionId) {
+                            current
+                        } else {
+                            current.copy(forkSubmitting = false, forkError = mutationErrorMessage(error))
+                        }
+                    }
+                }
+            }
+        }
+
+        fun chooseForkOpen() {
+            val target = forkedOpenTarget
+            forkedOpenTarget = null
+            clearSessionActions()
+            if (target == null) return
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = target) else state
+            }
+        }
+
+        fun chooseForkStay() {
+            forkedOpenTarget = null
+            clearSessionActions()
+        }
+
+        fun chooseArchive() {
+            val state = _sessionActions.value
+            val target = state.target ?: return
+            if (state.lifecycleInFlight) return
+            _sessionActions.update { it.copy(sheetVisible = false, lifecycleInFlight = true) }
+            logI("archive start session=${target.sessionId}")
+            viewModelScope.launch {
+                runCatching { sessionRepository.archiveSession(id = target.sessionId, directory = target.worktree) }
+                    .onSuccess {
+                        logI("archive success session=${target.sessionId}")
+                        clearSessionActions(target.sessionId)
+                    }.onFailure { error ->
+                        logW("archive failed session=${target.sessionId} message=${error.message}")
+                        clearSessionActions(target.sessionId)
+                        _removalSnackbar.value =
+                            OpenCodeSnackbarMessage(
+                                text = ARCHIVE_ERROR,
+                                variant = OpenCodeSnackbarVariant.Error,
+                            )
+                    }
+            }
+        }
+
+        fun chooseDelete() {
+            if (_sessionActions.value.target == null) return
+            _sessionActions.update { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
+        }
+
+        fun dismissDeleteConfirm() {
+            if (_sessionActions.value.lifecycleInFlight) return
+            clearSessionActions()
+        }
+
+        fun confirmDelete() {
+            val state = _sessionActions.value
+            val target = state.target ?: return
+            if (state.lifecycleInFlight) return
+            _sessionActions.update { it.copy(deleteConfirmVisible = false, lifecycleInFlight = true) }
+            logI("delete start session=${target.sessionId}")
+            viewModelScope.launch {
+                runCatching { sessionRepository.deleteSession(id = target.sessionId, directory = target.worktree) }
+                    .onSuccess { deleted ->
+                        clearSessionActions(target.sessionId)
+                        if (deleted) {
+                            logI("delete success session=${target.sessionId}")
+                        } else {
+                            logW("delete rejected session=${target.sessionId}")
+                            _removalSnackbar.value =
+                                OpenCodeSnackbarMessage(
+                                    text = DELETE_ERROR,
+                                    variant = OpenCodeSnackbarVariant.Error,
+                                )
+                        }
+                    }.onFailure { error ->
+                        logW("delete failed session=${target.sessionId} message=${error.message}")
+                        clearSessionActions(target.sessionId)
+                        _removalSnackbar.value =
+                            OpenCodeSnackbarMessage(
+                                text = DELETE_ERROR,
+                                variant = OpenCodeSnackbarVariant.Error,
+                            )
+                    }
+            }
+        }
+
+        /**
+         * Fork is hidden until a message fetch proves the session has at least one visible user
+         * message, matching the Commands sheet rule. A failed fetch leaves Fork hidden. Home keeps
+         * this to one request per long-press and so passes no revert boundary (see parity gaps).
+         */
+        private suspend fun resolveForkAvailability(
+            sessionId: String,
+            worktree: String,
+        ) {
+            val messages =
+                runCatching { messageRepository.listMessages(sessionId = sessionId, directory = worktree) }
+                    .getOrNull() ?: return
+            val refs =
+                messages.map { message ->
+                    ClientSlashMessageRef(
+                        id = message.id,
+                        isUser = message.role == MessageRole.User,
+                        isPending = false,
+                        isStreaming = false,
+                        hasNonEmptyText = message.text.isNotBlank(),
+                    )
+                }
+            val visibility =
+                ClientSlashActionCatalog.visibilityInput(
+                    messages = refs,
+                    revertMessageId = null,
+                    hasSelectedComposerModel = false,
+                )
+            _sessionActions.update { current ->
+                if (current.target?.sessionId != sessionId) {
+                    current
+                } else {
+                    current.copy(canFork = visibility.visibleUserMessageCount > 0)
+                }
+            }
+        }
+
+        /** Resets the whole action surface; [sessionId] guards against a stale in-flight action. */
+        private fun clearSessionActions(sessionId: String? = null) {
+            forkGateJob?.cancel()
+            forkGateJob = null
+            _sessionActions.update { current ->
+                if (sessionId != null && current.target?.sessionId != sessionId) {
+                    current
+                } else {
+                    HomeSessionActionsUiState()
+                }
+            }
+        }
+
+        private fun mutationErrorMessage(throwable: Throwable): String =
+            when (throwable) {
+                is SessionError.Http -> throwable.message ?: "Request failed"
+                is SessionError.Transport -> "Unable to reach the server"
+                is SessionError.Decoding -> "Unable to read server response"
+                else -> throwable.message ?: "Something went wrong"
+            }
+
+        private fun logI(message: String) {
+            runCatching { Log.i(TAG, message) }
+        }
+
+        private fun logW(message: String) {
+            runCatching { Log.w(TAG, message) }
         }
 
         private suspend fun runHomeLoad(
@@ -721,8 +1051,17 @@ class MainScreenViewModel
 
         private companion object {
             const val PREVIEW_SESSION_LIMIT = 3
+            const val TAG = "MainScreenViewModel"
+            const val EMPTY_TITLE_ERROR = "Enter a session title"
+            const val ARCHIVE_ERROR = "Couldn't archive session."
+            const val DELETE_ERROR = "Couldn't delete session."
         }
     }
+
+fun suggestedHomeForkTitle(currentTitle: String): String {
+    val trimmed = currentTitle.trim()
+    return if (trimmed.isEmpty()) "Forked session" else "Fork of $trimmed"
+}
 
 sealed interface MainScreenUiState {
     data object Disconnected : MainScreenUiState
@@ -757,6 +1096,33 @@ data class ProjectRemovalUi(
     val worktree: String,
     val displayName: String,
 )
+
+data class HomeSessionActionTarget(
+    val sessionId: String,
+    val title: String,
+    val worktree: String,
+)
+
+data class HomeSessionActionsUiState(
+    val target: HomeSessionActionTarget? = null,
+    val sheetVisible: Boolean = false,
+    val canFork: Boolean = false,
+    val renameVisible: Boolean = false,
+    val renameDraft: String = "",
+    val renameSubmitting: Boolean = false,
+    val renameError: String? = null,
+    val forkVisible: Boolean = false,
+    val forkDraft: String = "",
+    val forkSubmitting: Boolean = false,
+    val forkError: String? = null,
+    val forkResultVisible: Boolean = false,
+    val forkedTitle: String = "",
+    val deleteConfirmVisible: Boolean = false,
+    val lifecycleInFlight: Boolean = false,
+) {
+    val hasOpenDialog: Boolean
+        get() = renameVisible || forkVisible || forkResultVisible || deleteConfirmVisible || lifecycleInFlight
+}
 
 data class ProjectSectionUi(
     val worktree: String,

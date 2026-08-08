@@ -3,7 +3,9 @@ package dev.opencode.mobile.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,6 +17,7 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
@@ -65,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -537,20 +544,51 @@ fun OpenCodeBottomSheetEntry(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    destructive: Boolean = false,
     startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (enabled && isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium),
+        label = "bottomSheetEntryPressScale",
+    )
     val contentColor =
-        if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            destructive -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurface
+        }
     val iconColor =
-        if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            destructive -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    val entryShape = RoundedCornerShape(10.dp)
 
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
+                .scale(pressScale)
+                .clip(entryShape)
+                .background(
+                    if (enabled && isPressed) {
+                        openCodeColor("surface-raised-base").copy(alpha = 0.88f)
+                    } else {
+                        Color.Transparent
+                    },
+                )
                 .defaultMinSize(minHeight = BottomSheetEntryMinHeight)
-                .clickable(enabled = enabled, onClick = onClick)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(bounded = true),
+                    enabled = enabled,
+                    onClick = onClick,
+                )
                 .padding(
                     horizontal = BottomSheetEntryHorizontalPadding,
                     vertical = BottomSheetEntryVerticalPadding,
@@ -638,7 +676,7 @@ private fun OpenCodeBottomSheetDarkPreview() {
             )
             OpenCodeBottomSheetEntry(
                 title = "Delete session",
-                enabled = false,
+                destructive = true,
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, "Delete session"),
                 onClick = {},
             )

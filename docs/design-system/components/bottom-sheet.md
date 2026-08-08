@@ -20,6 +20,9 @@ clear title, an explicit close affordance, and one or more tappable entries.
     scrollable body, such as a filter field.
   - entry start decorator: `none` or `icon`.
   - entry end decorator: `none` or `icon`.
+  - entry `destructive` (default false): title (and matching icon tint) use the
+    semantic error color, same product meaning as overflow menu destructive
+    rows.
 
 Entries are title-only in this version. Use `OpenCodeListItem` when a row needs
 subtitle content, selected state, or a larger list treatment.
@@ -56,6 +59,8 @@ presentation state.
 
 Entries trigger their action only when enabled. Disabled entries reduce text and
 icon emphasis and block interaction. Long entry titles truncate to one line.
+Enabled entries use a spring press scale (~0.97) with a soft raised highlight so
+context actions feel clickable.
 
 Use `form` mode when the sheet hosts text fields. While the sheet is presented,
 the presenting screen ignores keyboard-driven safe-area resizing so background

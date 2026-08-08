@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
@@ -59,6 +60,25 @@ import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
+/** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
+data class HomeSessionActionsCallbacks(
+    val onSessionLongPress: (SessionListSession) -> Unit = {},
+    val onDismissSheet: () -> Unit = {},
+    val onChooseRename: () -> Unit = {},
+    val onRenameDraftChange: (String) -> Unit = {},
+    val onCancelRename: () -> Unit = {},
+    val onConfirmRename: () -> Unit = {},
+    val onChooseFork: () -> Unit = {},
+    val onForkDraftChange: (String) -> Unit = {},
+    val onCancelFork: () -> Unit = {},
+    val onConfirmFork: () -> Unit = {},
+    val onForkOpen: () -> Unit = {},
+    val onForkStay: () -> Unit = {},
+    val onChooseArchive: () -> Unit = {},
+    val onChooseDelete: () -> Unit = {},
+    val onConfirmDelete: () -> Unit = {},
+    val onDismissDeleteConfirm: () -> Unit = {},
+)
 
 @Composable
 fun MainScreen(
@@ -73,11 +93,38 @@ fun MainScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val liveUpdatesConnectionState by viewModel.liveUpdatesConnectionState.collectAsStateWithLifecycle()
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
+    val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     MainScreen(
         uiState = state,
         isRefreshing = isRefreshing,
         liveUpdatesConnectionState = liveUpdatesConnectionState,
         removalSnackbar = removalSnackbar,
+        sessionActions = sessionActions,
+        sessionActionsCallbacks =
+            HomeSessionActionsCallbacks(
+                onSessionLongPress = { session ->
+                    viewModel.onSessionLongPress(
+                        sessionId = session.id,
+                        title = session.title,
+                        worktree = session.worktree,
+                    )
+                },
+                onDismissSheet = viewModel::dismissSessionActionsSheet,
+                onChooseRename = viewModel::chooseRename,
+                onRenameDraftChange = viewModel::updateRenameDraft,
+                onCancelRename = viewModel::cancelRename,
+                onConfirmRename = viewModel::confirmRename,
+                onChooseFork = viewModel::chooseFork,
+                onForkDraftChange = viewModel::updateForkDraft,
+                onCancelFork = viewModel::cancelFork,
+                onConfirmFork = viewModel::confirmFork,
+                onForkOpen = viewModel::chooseForkOpen,
+                onForkStay = viewModel::chooseForkStay,
+                onChooseArchive = viewModel::chooseArchive,
+                onChooseDelete = viewModel::chooseDelete,
+                onConfirmDelete = viewModel::confirmDelete,
+                onDismissDeleteConfirm = viewModel::dismissDeleteConfirm,
+            ),
         onSettingsClick = onSettingsClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
@@ -132,6 +179,8 @@ internal fun MainScreen(
     onConsumeProjectRemovalSnackbar: () -> Unit,
     modifier: Modifier = Modifier,
     isRefreshing: Boolean = false,
+    sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
+    sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
 ) {
     val appName = stringResource(R.string.app_name)
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
@@ -238,6 +287,7 @@ internal fun MainScreen(
                         onNewSession = onNewSession,
                         onRequestNewSessionProjectPicker = { showNewSessionProjectPicker = true },
                         onRemoveProject = onRemoveProject,
+                        onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -272,6 +322,8 @@ internal fun MainScreen(
             ),
         onDismissRequest = onDismissProjectRemoval,
     )
+
+    HomeSessionActions(state = sessionActions, callbacks = sessionActionsCallbacks)
 
     if (showAddSheet) {
         val navigator = addNavigator ?: AddProjectNavigatorUi.empty()
@@ -401,6 +453,135 @@ internal fun MainScreen(
 }
 
 @Composable
+private fun HomeSessionActions(
+    state: HomeSessionActionsUiState,
+    callbacks: HomeSessionActionsCallbacks,
+) {
+    val target = state.target ?: return
+
+    OpenCodeBottomSheet(
+        visible = state.sheetVisible,
+        title = "Session actions",
+        onDismissRequest = callbacks.onDismissSheet,
+    ) {
+        OpenCodeBottomSheetEntry(
+            title = "Rename session",
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
+            onClick = callbacks.onChooseRename,
+        )
+        if (state.canFork) {
+            OpenCodeBottomSheetEntry(
+                title = "Fork session",
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
+                onClick = callbacks.onChooseFork,
+            )
+        }
+        OpenCodeBottomSheetEntry(
+            title = "Archive",
+            enabled = !state.lifecycleInFlight,
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+            onClick = callbacks.onChooseArchive,
+        )
+        OpenCodeBottomSheetEntry(
+            title = "Delete",
+            enabled = !state.lifecycleInFlight,
+            destructive = true,
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, null),
+            onClick = callbacks.onChooseDelete,
+        )
+    }
+
+    OpenCodeDialog(
+        visible = state.renameVisible,
+        title = "Rename session",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Save",
+                enabled = !state.renameSubmitting,
+                onClick = callbacks.onConfirmRename,
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                enabled = !state.renameSubmitting,
+                onClick = callbacks.onCancelRename,
+            ),
+        textField =
+            OpenCodeDialogTextField(
+                value = state.renameDraft,
+                onValueChange = callbacks.onRenameDraftChange,
+                hint = "Title",
+                enabled = !state.renameSubmitting,
+                errorMessage = state.renameError,
+            ),
+        onDismissRequest = {
+            if (!state.renameSubmitting) {
+                callbacks.onCancelRename()
+            }
+        },
+    )
+
+    OpenCodeDialog(
+        visible = state.forkVisible,
+        title = "Fork session",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Fork",
+                enabled = !state.forkSubmitting,
+                onClick = callbacks.onConfirmFork,
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                enabled = !state.forkSubmitting,
+                onClick = callbacks.onCancelFork,
+            ),
+        textField =
+            OpenCodeDialogTextField(
+                value = state.forkDraft,
+                onValueChange = callbacks.onForkDraftChange,
+                hint = "Title",
+                enabled = !state.forkSubmitting,
+                errorMessage = state.forkError,
+            ),
+        onDismissRequest = {
+            if (!state.forkSubmitting) {
+                callbacks.onCancelFork()
+            }
+        },
+    )
+
+    OpenCodeDialog(
+        visible = state.forkResultVisible,
+        title = "Session forked",
+        subtitle = "“${state.forkedTitle}” is ready.",
+        primaryOption = OpenCodeDialogOption(title = "Open", onClick = callbacks.onForkOpen),
+        secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = callbacks.onForkStay),
+        onDismissRequest = callbacks.onForkStay,
+    )
+
+    OpenCodeDialog(
+        visible = state.deleteConfirmVisible,
+        title = "Delete session",
+        subtitle = "Delete session “${target.title}”?",
+        primaryOption =
+            OpenCodeDialogOption(
+                title = "Delete",
+                destructive = true,
+                enabled = !state.lifecycleInFlight,
+                onClick = callbacks.onConfirmDelete,
+            ),
+        secondaryOption =
+            OpenCodeDialogOption(
+                title = "Cancel",
+                enabled = !state.lifecycleInFlight,
+                onClick = callbacks.onDismissDeleteConfirm,
+            ),
+        onDismissRequest = callbacks.onDismissDeleteConfirm,
+    )
+}
+
+@Composable
 private fun ProbeFailedContent(
     message: String,
     onRetry: () -> Unit,
@@ -445,6 +626,7 @@ private fun HomeProjectsContent(
     onNewSession: (String) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
     onRemoveProject: (String) -> Unit,
+    onSessionLongPress: (SessionListSession) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val showSessionList = HomeDisplayPreferences.showSessionListOnHome
@@ -483,6 +665,7 @@ private fun HomeProjectsContent(
                 onAddProject = onBrowseProjectsClick,
                 onNewSession = onRequestNewSessionProjectPicker,
                 onRemoveProject = onRemoveProject,
+                onSessionLongPress = onSessionLongPress,
                 modifier = Modifier.fillMaxSize(),
                 emptyContent =
                     if (sections.isEmpty()) {

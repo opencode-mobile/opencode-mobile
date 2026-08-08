@@ -144,6 +144,36 @@ struct ProjectListHomeView: View {
                     }
                 }
             }
+            .openCodeBottomSheet(
+                isPresented: sessionActionsSheetBinding,
+                title: "Session actions"
+            ) {
+                OpenCodeBottomSheetEntry(
+                    title: "Rename session",
+                    startDecorator: .icon(.edit),
+                    action: { viewModel.openSessionRename() }
+                )
+                if viewModel.sessionActionsCanFork {
+                    OpenCodeBottomSheetEntry(
+                        title: "Fork session",
+                        startDecorator: .icon(.contentCopy),
+                        action: { viewModel.openSessionFork() }
+                    )
+                }
+                OpenCodeBottomSheetEntry(
+                    title: "Archive",
+                    enabled: !viewModel.sessionActionInFlight,
+                    startDecorator: .icon(.archive),
+                    action: { Task { await viewModel.archiveSessionAction() } }
+                )
+                OpenCodeBottomSheetEntry(
+                    title: "Delete",
+                    enabled: !viewModel.sessionActionInFlight,
+                    destructive: true,
+                    startDecorator: .icon(.close),
+                    action: { viewModel.requestDeleteSessionAction() }
+                )
+            }
             .fullScreenCover(item: $connectionSetupPresentation) { presentation in
                 ConnectionSetupView(
                     viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(initialProfile: presentation.initialProfile),
@@ -170,7 +200,128 @@ struct ProjectListHomeView: View {
                     viewModel.dismissProjectRemoval()
                 }
             )
+            .openCodeDialog(
+                isPresented: sessionRenameDialogBinding,
+                title: "Rename session",
+                primaryOption: OpenCodeDialogOption(
+                    title: "Save",
+                    enabled: !viewModel.sessionRenameDialog.isSubmitting
+                ) {
+                    Task { await viewModel.confirmSessionRename() }
+                },
+                secondaryOption: OpenCodeDialogOption(
+                    title: "Cancel",
+                    enabled: !viewModel.sessionRenameDialog.isSubmitting,
+                    action: viewModel.cancelSessionRename
+                ),
+                textField: OpenCodeDialogTextField(
+                    text: Binding(
+                        get: { viewModel.sessionRenameDialog.draftTitle },
+                        set: viewModel.updateSessionRenameDraft
+                    ),
+                    hint: "Title",
+                    enabled: !viewModel.sessionRenameDialog.isSubmitting,
+                    errorMessage: viewModel.sessionRenameDialog.errorMessage
+                )
+            )
+            .openCodeDialog(
+                isPresented: sessionForkDialogBinding,
+                title: "Fork session",
+                primaryOption: OpenCodeDialogOption(
+                    title: "Fork",
+                    enabled: !viewModel.sessionForkDialog.isSubmitting
+                ) {
+                    Task { await viewModel.confirmSessionFork() }
+                },
+                secondaryOption: OpenCodeDialogOption(
+                    title: "Cancel",
+                    enabled: !viewModel.sessionForkDialog.isSubmitting,
+                    action: viewModel.cancelSessionFork
+                ),
+                textField: OpenCodeDialogTextField(
+                    text: Binding(
+                        get: { viewModel.sessionForkDialog.draftTitle },
+                        set: viewModel.updateSessionForkDraft
+                    ),
+                    hint: "Title",
+                    enabled: !viewModel.sessionForkDialog.isSubmitting,
+                    errorMessage: viewModel.sessionForkDialog.errorMessage
+                )
+            )
+            .openCodeDialog(
+                isPresented: sessionForkResultBinding,
+                title: "Session forked",
+                subtitle: "Forked as “\(viewModel.sessionForkResult.forkedTitle)”.",
+                primaryOption: OpenCodeDialogOption(title: "Open") {
+                    viewModel.chooseSessionForkOpen()
+                },
+                secondaryOption: OpenCodeDialogOption(title: "Stay") {
+                    viewModel.chooseSessionForkStay()
+                }
+            )
+            .openCodeDialog(
+                isPresented: sessionDeleteConfirmBinding,
+                title: "Delete session",
+                subtitle: viewModel.sessionActionsTarget.map { "Delete session “\($0.title)”?" },
+                primaryOption: OpenCodeDialogOption(
+                    title: "Delete",
+                    enabled: !viewModel.sessionActionInFlight,
+                    destructive: true
+                ) {
+                    Task { await viewModel.confirmDeleteSessionAction() }
+                },
+                secondaryOption: OpenCodeDialogOption(
+                    title: "Cancel",
+                    enabled: !viewModel.sessionActionInFlight,
+                    action: viewModel.cancelDeleteSessionAction
+                )
+            )
         }
+    }
+
+    private var sessionActionsSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.sessionActionsSheetVisible },
+            set: { visible in
+                if !visible { viewModel.dismissSessionActions() }
+            }
+        )
+    }
+
+    private var sessionRenameDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.sessionRenameDialog.isVisible },
+            set: { visible in
+                if !visible { viewModel.cancelSessionRename() }
+            }
+        )
+    }
+
+    private var sessionForkDialogBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.sessionForkDialog.isVisible },
+            set: { visible in
+                if !visible { viewModel.cancelSessionFork() }
+            }
+        )
+    }
+
+    private var sessionForkResultBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.sessionForkResult.isVisible },
+            set: { visible in
+                if !visible { viewModel.chooseSessionForkStay() }
+            }
+        )
+    }
+
+    private var sessionDeleteConfirmBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.sessionDeleteConfirmVisible },
+            set: { visible in
+                if !visible { viewModel.cancelDeleteSessionAction() }
+            }
+        )
     }
 
     private var projectRemovalBinding: Binding<Bool> {
@@ -312,6 +463,13 @@ struct ProjectListHomeView: View {
                             title: session.title,
                             worktree: session.worktree
                         )
+                    )
+                },
+                onSessionLongPress: { session in
+                    viewModel.onSessionLongPress(
+                        sessionId: session.id,
+                        title: session.title,
+                        worktree: session.worktree
                     )
                 },
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
@@ -540,6 +698,7 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
         projectRepository: PreviewProjectRepository(),
         filesystemRepository: PreviewFilesystemRepository(),
         sessionRepository: PreviewSessionRepository(),
+        messageRepository: PreviewMessageRepository(),
         connectionProfileStore: store,
         activeConnectionManager: manager,
         sessionLiveStore: sessionLiveStore,
@@ -607,6 +766,25 @@ private struct PreviewSessionRepository: SessionRepository {
         decision: PermissionDecision,
         directory: String?
     ) async throws -> Bool { fatalError() }
+}
+
+private struct PreviewMessageRepository: MessageRepository {
+    func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
+        AsyncStream { $0.finish() }
+    }
+
+    func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
+        AsyncStream { $0.finish() }
+    }
+
+    func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] { [] }
+    func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] { [] }
+    func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage { fatalError() }
+    func clearMessageCache() {}
+    func listMessages(sessionID: String, directory: String?) async throws -> [Message] { [] }
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
+    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
+    func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 }
 
 @MainActor
