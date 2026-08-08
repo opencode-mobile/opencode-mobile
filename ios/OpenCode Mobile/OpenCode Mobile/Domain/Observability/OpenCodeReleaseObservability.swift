@@ -22,12 +22,7 @@ private enum ReleaseFirebaseBootstrap {
             FirebaseApp.configure()
         }
 
-        #if VERIFY_CRASHLYTICS
-        let verificationEnabled = true
-        #else
-        let verificationEnabled = false
-        #endif
-
+        let verificationEnabled = CrashlyticsVerificationPolicy.isEnabled(in: .main)
         let buildNumber = Bundle.main
             .object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
         let markerKey = CrashlyticsVerificationPolicy.markerKey(buildNumber: buildNumber)

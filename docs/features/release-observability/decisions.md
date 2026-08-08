@@ -57,3 +57,14 @@ behind `OpenCodeReleaseObservability`.
 **Why:** Matches the current Firebase Apple release line, keeps day-to-day
 simulator paths from collecting data, and mirrors Android's Debug/Release seam
 within SPM's project-wide package product linkage.
+
+## iOS verification gate is Info.plist metadata
+
+**Status:** Accepted  
+**Decision:** Gate the Crashlytics verification non-fatal with the app Info.plist
+key `OpenCodeVerifyCrashlytics` (default `false`; CI flips it for one protected
+release). Do not pass `SWIFT_ACTIVE_COMPILATION_CONDITIONS` on the archive
+command line.  
+**Why:** A project-wide Swift compilation condition leaks into Firebase SPM
+packages and breaks device archives (`GoogleUtilities` module resolution).
+Info.plist stays app-scoped, matching Android's release manifest metadata.
