@@ -981,4 +981,3 @@ neither is a shipping performance claim.
 - [Shiki visual parity paths](./shiki-visual-parity-paths-plan.md)
 - [Native Rendered Markdown progress](./progress.md)
 - [Native Rendered Markdown parity gaps](./parity-gaps.md)
-- [Visual companion to this report](./textmate-markdown-highlighter-architecture-report.html)

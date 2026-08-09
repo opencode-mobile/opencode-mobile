@@ -2,7 +2,6 @@
 
 Linear: [OPE-102](https://linear.app/opencode-mobile/issue/OPE-102/distribute-every-merged-ios-build-through-firebase-app-distribution)
 Parent: [OPE-100](https://linear.app/opencode-mobile/issue/OPE-100/ios-release-distribution)
-Companion visual review: [`ope-102-plan.html`](ope-102-plan.html).
 
 ## Outcome
 

@@ -16,17 +16,16 @@ docs/features/<feature-slug>/
 └── decisions.md
 ```
 
-The four feature-wide files describe shared intent and state. Add these artifacts
-as needed for focused execution work:
+The four feature-wide files describe shared intent and state. Add focused
+execution detail as needed for ticket or task work:
 
 ```text
 docs/features/<feature-slug>/<ticket-or-task>-plan.md
-docs/features/<feature-slug>/<ticket-or-task>-plan.html
 ```
 
-A task-specific plan does not replace `plan.md`. An HTML file is an optional
-visual companion with the same basename as its Markdown source, not a separate
-source of truth.
+A task-specific plan does not replace `plan.md`. Plans are Markdown only;
+committed HTML companions are retired. Render a temporary visual review on
+demand when one is needed.
 
 ## `plan.md`
 

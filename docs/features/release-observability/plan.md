@@ -8,7 +8,6 @@ Firebase types. Under the accepted public-release privacy gate, product
 Analytics stays behind store-form verification and in-app Analytics consent.
 
 Linear: [OPE-121](https://linear.app/opencode-mobile/issue/OPE-121/release-observability).
-Companion visual review: [`plan.html`](plan.html).
 
 Android already delivered the release-only half in
 [OPE-72](../android-release-distribution/ope-72-plan.md)

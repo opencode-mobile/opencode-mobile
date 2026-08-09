@@ -5,8 +5,8 @@
 - Status: **implemented on branch** `feature/ope-107-home-activity-grouping`.
 - Ticket: [OPE-107](https://linear.app/opencode-mobile/issue/OPE-107/home-activity-grouping)
   (In Progress).
-- Layout prototype verdict (time ladder, no pin):
-  [`prototype/VERDICT.md`](prototype/VERDICT.md).
+- Layout prototype verdict (time ladder, no pin) is recorded in
+  `decisions.md`.
 - High-level plan: [`ope-107-plan.md`](ope-107-plan.md).
 
 ## Design System

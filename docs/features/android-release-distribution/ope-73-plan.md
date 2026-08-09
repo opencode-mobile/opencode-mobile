@@ -2,7 +2,6 @@
 
 Linear: [OPE-73](https://linear.app/opencode-mobile/issue/OPE-73/distribute-every-merged-android-build-through-firebase-app)
 Parent: [OPE-69](https://linear.app/opencode-mobile/issue/OPE-69/android-release-distribution)
-Companion visual review: [`ope-73-plan.html`](ope-73-plan.html).
 
 ## Outcome
 

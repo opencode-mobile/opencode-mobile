@@ -33,10 +33,8 @@ official OpenCode product.
 
 ## Locked Product Rules
 
-Prototype verdict: classic pager
-([`prototype/VERDICT.md`](./prototype/VERDICT.md)). Interactive reference:
-[`prototype/index.html`](./prototype/index.html) via
-`npm run prototype:app-onboarding` (`?variant=A`).
+Prototype verdict (classic pager) is recorded in
+[`decisions.md`](decisions.md).
 
 | Rule | Locked behavior |
 | --- | --- |

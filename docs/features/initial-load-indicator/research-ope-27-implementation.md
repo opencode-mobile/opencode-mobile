@@ -3,7 +3,7 @@
 **Date:** 2026-08-06  
 **Branch inspected:** `feature/ope-27-session-cache` @ `3ab188f` (via `git show`; current worktree not switched)  
 **Linear:** [OPE-27 Session Cache](https://linear.app/opencode-mobile/issue/OPE-27/session-cache)  
-**Locked visual:** [prototype/VERDICT.md](./prototype/VERDICT.md)
+**Locked visual:** [`decisions.md`](./decisions.md#mid-well-status-stack-is-the-loading-chrome)
 
 ## Executive summary
 
@@ -132,7 +132,7 @@ out of Mid-Well scope.
 Reasons:
 
 - Same visual contract on Home + Session with only copy differences
-  ([VERDICT.md](./prototype/VERDICT.md)).
+  ([`decisions.md`](./decisions.md#mid-well-status-stack-is-the-loading-chrome)).
 - No progress/loading component exists under `docs/design-system/components/`
   (empty-state, session-status-bar, etc.; none for indeterminate status stack).
 - `OpenCodeEmptyState` is instructional empty (title `text-strong` /
@@ -195,7 +195,7 @@ previews with Home and Session sample copy.
 
 ## Copy / a11y / identifiers
 
-### Locked copy ([VERDICT.md](./prototype/VERDICT.md))
+### Locked copy ([`decisions.md`](./decisions.md#mid-well-status-stack-is-the-loading-chrome))
 
 | Screen | Primary (`text-base`) | Subline (`text-weaker`) |
 | --- | --- | --- |
@@ -250,13 +250,13 @@ No Android UITest currently asserts a Session loading tag (grep: none).
 ## Out of scope
 
 - Skeleton rails, hairline, wellhead panel, capsule, dock whisper, accent
-  system spinner ([VERDICT.md](./prototype/VERDICT.md) rejected set).
+  system spinner (prototype rejected set, see
+  [`decisions.md`](./decisions.md#mid-well-status-stack-is-the-loading-chrome)).
 - Determinate progress, percentage, or multi-step wizards.
 - Offline / stale banners (OPE-27 reuses connection chrome only).
 - Implementing disk-first **skip** of Home Probing/Loading (OPE-27 product
   intent; not Mid-Well chrome) — coordinate only.
 - AppRoot, navigator, Changes, Session Context, Settings logs, composer busy.
-- HTML prototype productionization (`prototype/` remains throwaway reference).
 - Writing production UI in this research pass.
 
 ## Suggested implementation order
@@ -285,8 +285,7 @@ No Android UITest currently asserts a Session loading tag (grep: none).
 
 | Claim | Source |
 | --- | --- |
-| Winner Mid-Well Status Stack + copy + neutrals | `docs/features/initial-load-indicator/prototype/VERDICT.md` |
-| Prototype context | `docs/features/initial-load-indicator/prototype/README.md` |
+| Winner Mid-Well Status Stack + copy + neutrals | `docs/features/initial-load-indicator/decisions.md` |
 | OPE-27 scope / SWR / no new cache UI components | `docs/features/session-cache/plan.md` |
 | Progress / remaining manual QA | `docs/features/session-cache/progress.md` |
 | Offline chrome = connection only; freshness channel | `docs/features/session-cache/decisions.md` |

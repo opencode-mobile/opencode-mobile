@@ -142,4 +142,3 @@ production palette parity.
   parity beyond layer 5
 - [parity-gaps.md](./parity-gaps.md) — cross-platform highlighter parity gaps
 - [progress.md](./progress.md) — implementation progress and remaining tokenizer work
-- [web-vs-mobile-highlighter.html](./web-vs-mobile-highlighter.html) — visual companion

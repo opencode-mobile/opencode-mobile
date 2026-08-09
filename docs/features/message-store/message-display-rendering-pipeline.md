@@ -4,8 +4,7 @@
 
 Implemented architecture as shipped through Phases 1–6 of
 [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md)
-(Phase 7a documentation flip). Visual review companion:
-[message-display-rendering-pipeline.html](./message-display-rendering-pipeline.html).
+(Phase 7a documentation flip).
 
 ## Scope And Boundary
 

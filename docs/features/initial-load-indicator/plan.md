@@ -65,6 +65,6 @@ Not applicable.
 
 ## Prototype / research
 
-- Verdict: `docs/features/initial-load-indicator/prototype/VERDICT.md`
+- Prototype verdict (Mid-Well Status Stack) is recorded in `decisions.md`.
 - Implementation research:
   `docs/features/initial-load-indicator/research-ope-27-implementation.md`

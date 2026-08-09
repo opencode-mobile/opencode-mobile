@@ -830,7 +830,6 @@ divergence unless recorded in `parity-gaps.md`.
 | `message-display-rendering-pipeline.md` | Highest lag: remove sole-text gate / `layoutSignature` as current; describe declared-ID hosts, internal `DisplayFrame` → `TimelineFrame`, sole-text bridge as residual |
 | `assistant-message-pipeline.md` | Reflect dual-lane prep, block decoration, recovery health ownership, list-shaped public observe |
 | `message-display-rendering-hardening-plan.md` | Phase 7 → Complete via 7a; record 7b deferrals; acceptance criteria checkboxes match reality |
-| `message-display-rendering-hardening-plan.html` | Status badges match Markdown |
 | `progress.md` | Frontier = plan closed (7a); 7b called out if tracked |
 | `decisions.md` | This Phase 7 lock |
 | `parity-gaps.md` | Confirm Android drag newest-immutable + any soak-found intentional gaps |
@@ -865,8 +864,7 @@ divergence unless recorded in `parity-gaps.md`.
 Locked after Phase 7a closeout of
 [message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md).
 Canonical plan:
-[message-display-rendering-7b-plan.md](./message-display-rendering-7b-plan.md)
-([HTML](./message-display-rendering-7b-plan.html)).
+[message-display-rendering-7b-plan.md](./message-display-rendering-7b-plan.md).
 Linear: [OPE-86](https://linear.app/opencode-mobile/issue/OPE-86/message-display-rendering-phase-7b)
 · [OPE-87](https://linear.app/opencode-mobile/issue/OPE-87/fill-phase-7a-soak-coverage-gaps).
 

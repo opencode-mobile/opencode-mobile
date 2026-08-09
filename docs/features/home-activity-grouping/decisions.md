@@ -8,7 +8,6 @@ Ticket: [OPE-107](https://linear.app/opencode-mobile/issue/OPE-107/home-activity
   older by week**. No pin affordance in the first cut.
 - **Why:** Prototype A won for scanability; pin variants added hierarchy cost
   before the ladder is validated in product.
-- **Evidence:** [`prototype/VERDICT.md`](prototype/VERDICT.md)
 - **Rejected:** Spotlight rail, attention inbox, pinned shelf / pins-in-Recent /
   pin chip rail / Live·Fresh·Pin split.
 

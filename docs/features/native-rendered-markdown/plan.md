@@ -8,9 +8,7 @@ Compose rendering on Android. The first shipped slice is Session Chat markdown,
 code, tables, and fenced diff display; a dedicated session diff viewer remains a
 later feature.
 
-This document is the source-of-truth plan. The companion
-[`plan.html`](plan.html) is a visual review artifact only and is not used at
-runtime.
+This document is the source-of-truth plan.
 
 ## Goals
 

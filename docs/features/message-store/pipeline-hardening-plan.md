@@ -307,13 +307,11 @@ Expected result: the documented contract and both native implementations agree.
 
 - `assistant-message-pipeline.md` — implemented architecture and invariants.
 - `pipeline-hardening-plan.md` — phased implementation and acceptance gates.
-- `pipeline-hardening-plan.html` — visual step board with per-step status.
 - `plan.md` — feature-wide scope and links.
 - `decisions.md` — durable feature-level architecture choices.
 - `parity-gaps.md` — current observable implementation differences.
 - `progress.md` — plan and hardening implementation complete.
 
-When a phase or step starts or finishes, update the status badges in
-[pipeline-hardening-plan.html](./pipeline-hardening-plan.html) and keep
+When a phase or step starts or finishes, keep
 `progress.md` / `parity-gaps.md` aligned. Markdown remains the source of truth
 for scope and acceptance criteria.

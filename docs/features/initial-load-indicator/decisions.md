@@ -7,8 +7,8 @@
 system spinners, blank wells, skeletons, or top hairlines.
 
 **Why:** Prototype passes rejected tiny ring, empty hairline, inhale wash,
-scaffold, and wellhead. Mid-Well Status Stack was locked in
-`prototype/VERDICT.md`.
+scaffold, and wellhead. Mid-Well Status Stack was locked by the prototype
+verdict.
 
 ## Session Loading shows Status Stack (not blank)
 

@@ -106,15 +106,10 @@ The implemented ViewModel-to-native-pixels architecture, including row
 projection, structured blocks, native markdown painting, and timeline scroll
 ownership, is documented in
 [message-display-rendering-pipeline.md](./message-display-rendering-pipeline.md).
-A self-contained visual review is available in
-[message-display-rendering-pipeline.html](./message-display-rendering-pipeline.html).
 The latest-wins, bounded cross-platform hardening is complete in
-[pipeline-hardening-plan.md](./pipeline-hardening-plan.md), with a step-status
-board in [pipeline-hardening-plan.html](./pipeline-hardening-plan.html).
+[pipeline-hardening-plan.md](./pipeline-hardening-plan.md).
 The next reliability and responsiveness slice is planned in
-[message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md),
-with a visual phase board in
-[message-display-rendering-hardening-plan.html](./message-display-rendering-hardening-plan.html).
+[message-display-rendering-hardening-plan.md](./message-display-rendering-hardening-plan.md).
 
 | Step | Layer | What happens |
 |------|--------|----------------|

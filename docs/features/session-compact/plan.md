@@ -103,9 +103,8 @@ User action unchanged: Commands → compact.
 
 ## Prototype
 
-- `docs/features/session-compact/prototype/`
-- Run: `npm run prototype:session-compact`
-- Verdict: [prototype/VERDICT.md](./prototype/VERDICT.md)
+UI exploration verdict (status-chrome-only) is recorded in
+[`decisions.md`](decisions.md).
 
 ## Child / Related Tickets
 
