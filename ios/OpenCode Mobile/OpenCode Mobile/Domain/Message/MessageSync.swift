@@ -299,6 +299,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 } else if emittedSeed {
                     // Confirm disk without a second UI paint.
                     cacheHandle.note(messages: merged)
+                    yield(.cacheSyncConfirmed)
                 }
             }
         } catch {

@@ -90,6 +90,7 @@ internal data class SessionChatTimelineViewProps(
     val isRefreshing: Boolean,
     val errorMessage: String?,
     val reviewChangesSummary: ReviewChangesSummary?,
+    val syncingIndicatorLabel: String? = null,
     val workingIndicatorLabel: String? = null,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
@@ -153,6 +154,7 @@ internal fun SessionChatTimelineView(
                 timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
                 reviewChangesSummary = props.reviewChangesSummary,
+                syncingIndicatorLabel = props.syncingIndicatorLabel,
                 workingIndicatorLabel = props.workingIndicatorLabel,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
@@ -180,6 +182,7 @@ private fun SessionChatTimelineReadyView(
     timelineFrame: TimelineFrame?,
     isRefreshing: Boolean,
     reviewChangesSummary: ReviewChangesSummary?,
+    syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
@@ -290,13 +293,22 @@ private fun SessionChatTimelineReadyView(
                         bottom = bottomOverlayInset,
                     ),
                 key = { message -> message.id },
-                workingIndicatorKey =
-                    workingIndicatorLabel?.let { SESSION_CHAT_WORKING_INDICATOR_KEY },
-                workingIndicatorContent =
-                    workingIndicatorLabel?.let { label ->
+                statusIndicatorKey =
+                    if (syncingIndicatorLabel != null || workingIndicatorLabel != null) {
+                        SESSION_CHAT_STATUS_INDICATOR_KEY
+                    } else {
+                        null
+                    },
+                statusIndicatorContent =
+                    if (syncingIndicatorLabel != null || workingIndicatorLabel != null) {
                         {
-                            SessionChatWorkingIndicatorRow(label = label)
+                            SessionChatStatusIndicatorRows(
+                                syncingLabel = syncingIndicatorLabel,
+                                workingLabel = workingIndicatorLabel,
+                            )
                         }
+                    } else {
+                        null
                     },
             ) { message, isNewestMessage, onContentSizeSettled ->
                 SessionChatMessageRow(
@@ -669,7 +681,23 @@ private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
     }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
-private const val SESSION_CHAT_WORKING_INDICATOR_KEY = "session-chat-working-indicator"
+private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indicators"
+
+/** Feature-local Syncing / Working / Retrying / Compacting status chrome (not prose). */
+@Composable
+private fun SessionChatStatusIndicatorRows(
+    syncingLabel: String?,
+    workingLabel: String?,
+) {
+    Column {
+        syncingLabel?.let { label ->
+            SessionChatWorkingIndicatorRow(label = label)
+        }
+        workingLabel?.let { label ->
+            SessionChatWorkingIndicatorRow(label = label)
+        }
+    }
+}
 
 /** Feature-local Working/Retrying/Compacting status chrome (not prose). */
 @Composable

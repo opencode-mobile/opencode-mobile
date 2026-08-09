@@ -1005,6 +1005,8 @@ private final class CharacterizationDisplayCollector: @unchecked Sendable {
                 lock.lock()
                 _failures.append(error)
                 lock.unlock()
+            case .cacheSyncConfirmed:
+                break
             }
         }
         lock.lock()

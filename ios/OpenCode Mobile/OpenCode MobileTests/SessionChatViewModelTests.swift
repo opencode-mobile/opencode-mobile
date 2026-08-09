@@ -2148,10 +2148,12 @@ private final class FakeObservingMessageRepository: MessageRepository, @unchecke
                     switch update {
                     case .loadFailed(let error):
                         continuation.yield(.loadFailed(error))
+                    case .cacheSyncConfirmed:
+                        continuation.yield(.cacheSyncConfirmed)
                     case .messages(let messages, let isFromCache):
                         let prepared = await MessageContentPreparer.shared.prepareMessages(messages, previousByID: previousByID)
                         previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
-                        continuation.yield(.messages(prepared, isFromCache: false))
+                        continuation.yield(.messages(prepared, isFromCache: isFromCache))
                     }
                 }
                 continuation.finish()

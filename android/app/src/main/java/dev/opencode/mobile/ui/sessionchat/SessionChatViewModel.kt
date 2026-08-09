@@ -1022,6 +1022,12 @@ class SessionChatViewModel
                     messages = messages,
                     isCompacting = isCompacting,
                 )
+            val syncingIndicatorLabel =
+                if (timelineState.isSyncingMessages) {
+                    SessionMessageSyncChrome.STATUS_LABEL
+                } else {
+                    null
+                }
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -1034,6 +1040,7 @@ class SessionChatViewModel
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
+                syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(sessionTodos, isLive),
                 sessionTodosFinished = SessionTodoList.isFinished(sessionTodos),

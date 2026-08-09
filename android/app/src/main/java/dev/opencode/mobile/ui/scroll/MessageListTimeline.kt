@@ -217,6 +217,8 @@ internal fun <T> MessageListReversedTimelineColumn(
     key: (T) -> Any,
     workingIndicatorKey: String? = null,
     workingIndicatorContent: (@Composable () -> Unit)? = null,
+    statusIndicatorKey: String? = null,
+    statusIndicatorContent: (@Composable () -> Unit)? = null,
     itemContent:
         @Composable (
             item: T,
@@ -235,7 +237,11 @@ internal fun <T> MessageListReversedTimelineColumn(
         item(key = bottomAnchorKey) {
             Spacer(modifier = Modifier.height(bottomAnchorHeight))
         }
-        if (workingIndicatorKey != null && workingIndicatorContent != null) {
+        if (statusIndicatorKey != null && statusIndicatorContent != null) {
+            item(key = statusIndicatorKey) {
+                statusIndicatorContent()
+            }
+        } else if (workingIndicatorKey != null && workingIndicatorContent != null) {
             item(key = workingIndicatorKey) {
                 workingIndicatorContent()
             }
@@ -244,7 +250,10 @@ internal fun <T> MessageListReversedTimelineColumn(
             items = items.asReversed(),
             key = { _, item -> key(item) },
         ) { reversedIndex, item ->
-            val isNewestMessage = reversedIndex == 0 && workingIndicatorContent == null
+            val isNewestMessage =
+                reversedIndex == 0 &&
+                    statusIndicatorContent == null &&
+                    workingIndicatorContent == null
             itemContent(
                 item,
                 isNewestMessage,

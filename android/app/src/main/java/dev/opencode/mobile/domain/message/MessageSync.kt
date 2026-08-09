@@ -604,6 +604,7 @@ class MessageSync(
                                 "observeMessages skip session=${key.sessionId} count=${merged.size} " +
                                     "source=initial-subscribe fingerprint-unchanged",
                             )
+                            send(MessageListUpdate.CacheSyncConfirmed)
                         }
                     }
                 }

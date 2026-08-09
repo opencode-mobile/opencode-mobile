@@ -939,6 +939,9 @@ final class SessionChatViewModel {
                 messages: timelineState.messages,
                 isCompacting: isCompacting
             ),
+            syncingIndicatorLabel: timelineState.isSyncingMessages
+                ? SessionMessageSyncChrome.statusLabel
+                : nil,
             sessionTodos: sessionTodos,
             sessionTodosVisible: SessionTodoList.isVisible(todos: sessionTodos, isLive: isLive),
             sessionTodosFinished: SessionTodoList.isFinished(sessionTodos),

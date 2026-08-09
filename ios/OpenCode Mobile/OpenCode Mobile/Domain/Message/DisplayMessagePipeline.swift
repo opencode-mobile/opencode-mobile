@@ -733,6 +733,8 @@ final class DisplayMessagePipeline {
                                 )
                             }
                         }
+                    case .cacheSyncConfirmed:
+                        continuation.yield(.cacheSyncConfirmed)
                     }
                 }
 

@@ -540,6 +540,9 @@ class DisplayMessagePipeline(
                             BlockDecorationCache.clear()
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
+                        is MessageListUpdate.CacheSyncConfirmed -> {
+                            send(DisplayMessageListUpdate.CacheSyncConfirmed)
+                        }
                         is MessageListUpdate.Messages -> {
                             sourceIsFromCache = update.isFromCache
                             if (hasStreamingDelta(update.messages)) {
