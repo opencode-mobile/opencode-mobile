@@ -10,11 +10,14 @@ struct ProjectListHomeView: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var showNewSessionProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
-    private let presentConnectionSetupOnAppear: Bool
+    @Binding private var presentConnectionSetupOnAppear: Bool
 
-    init(viewModel: ProjectListHomeViewModel, presentConnectionSetupOnAppear: Bool = false) {
+    init(
+        viewModel: ProjectListHomeViewModel,
+        presentConnectionSetupOnAppear: Binding<Bool> = .constant(false)
+    ) {
         _viewModel = State(initialValue: viewModel)
-        self.presentConnectionSetupOnAppear = presentConnectionSetupOnAppear
+        _presentConnectionSetupOnAppear = presentConnectionSetupOnAppear
     }
 
     var body: some View {
@@ -50,7 +53,9 @@ struct ProjectListHomeView: View {
                 SessionChatView(session: session)
             }
             .task {
-                if presentConnectionSetupOnAppear {
+                let decision = ConnectionSetupOnAppear.consume(presentConnectionSetupOnAppear)
+                presentConnectionSetupOnAppear = decision.pending
+                if decision.shouldPresent {
                     presentConnectionSetup()
                 }
                 await viewModel.refresh()
