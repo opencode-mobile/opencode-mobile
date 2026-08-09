@@ -132,8 +132,9 @@ See [`ope-122-plan.md`](ope-122-plan.md).
 After both platforms have a seam, align responsibilities and naming so future
 product events have one place to land. No collection expansion.
 
-Contract: both expose `OpenCodeReleaseObservability.initialize(...)` only;
-Debug is a no-op; Release owns SDK readiness + the verification non-fatal;
+Contract: both expose `OpenCodeReleaseObservability.initialize(...)` plus the
+OPE-129 consent / `logProductEvent` surface; Debug is a no-op for Firebase
+sends; Release owns SDK readiness + verification + consented product events;
 feature code never imports Firebase. Full responsibilities and intentional
 platform differences are recorded in [`decisions.md`](decisions.md)
 (Shared release-observability seam contract).
@@ -153,9 +154,11 @@ events ship.
   Crashlytics + minimal Analytics (human). Task plan:
   [`ope-128-plan.md`](ope-128-plan.md).
 - **OPE-129** — In-app Analytics consent UI for product / custom events.
+  Task plan: [`ope-129-plan.md`](ope-129-plan.md). Settings Privacy toggle +
+  seam gate shipped; taxonomy instrumentation remains OPE-124.
 
 ### OPE-124 — Product Analytics taxonomy and instrumentation
 
-**Blocked** until OPE-128, OPE-129, a second store-form pass for product
-events, and narrow taxonomy + hard bans. Docs-only taxonomy drafts may exist;
-public release instrumentation must not.
+**Blocked** until OPE-128, OPE-129 (consent gate done), a second store-form
+pass for product events, and narrow taxonomy + hard bans. Docs-only taxonomy
+drafts may exist; public release instrumentation must not.

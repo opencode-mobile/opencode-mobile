@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageRepository
+import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
@@ -81,6 +82,7 @@ class SettingsViewModel
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()
                 MarkdownHighlightPreferences.clear()
+                AnalyticsConsentPreferences.clear()
                 AppOnboardingPreferences.clear()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
@@ -114,5 +116,9 @@ class SettingsViewModel
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
             messageContentPreparer.clearDocumentCache()
             BlockDecorationCache.clear()
+        }
+
+        fun setProductAnalyticsConsented(enabled: Boolean) {
+            AnalyticsConsentPreferences.updateProductAnalyticsConsented(enabled)
         }
     }

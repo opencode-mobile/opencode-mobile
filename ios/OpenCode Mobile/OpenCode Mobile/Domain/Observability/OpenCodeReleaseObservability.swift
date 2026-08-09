@@ -1,10 +1,9 @@
 import Foundation
 
-/// Shared release-observability seam (OPE-123).
-/// Public surface is `initialize` only until product Analytics (OPE-124) after
-/// OPE-125. Debug is a no-op; Release configures Firebase in-seam (unlike
-/// Android, which relies on google-services auto-init) and may record the
-/// protected one-shot Crashlytics verification non-fatal.
+/// Shared release-observability seam (OPE-123 / OPE-129).
+/// Owns release bootstrap, Crashlytics verification, product-analytics consent
+/// reads/writes, and the gated `logProductEvent` API. Debug is Firebase-free;
+/// Release configures Firebase in-seam. Feature code must never import Firebase.
 enum OpenCodeReleaseObservability {
     static func initialize() {
         #if DEBUG
@@ -15,9 +14,33 @@ enum OpenCodeReleaseObservability {
         ReleaseFirebaseBootstrap.start()
         #endif
     }
+
+    static func isProductAnalyticsConsented() -> Bool {
+        AnalyticsConsentPreferences.shared.productAnalyticsConsented
+    }
+
+    static func setProductAnalyticsConsented(_ value: Bool) {
+        AnalyticsConsentPreferences.shared.setProductAnalyticsConsented(value)
+    }
+
+    /// Logs a product / custom Analytics event when consent is on (Release only).
+    /// Always a no-op in Debug. Never used for Crashlytics.
+    static func logProductEvent(name: String, parameters: [String: String] = [:]) {
+        #if DEBUG
+        return
+        #else
+        guard ProductAnalyticsConsentPolicy.shouldLog(
+            consented: isProductAnalyticsConsented()
+        ) else {
+            return
+        }
+        ReleaseFirebaseBootstrap.logProductEvent(name: name, parameters: parameters)
+        #endif
+    }
 }
 
 #if !DEBUG
+import FirebaseAnalytics
 import FirebaseCore
 import FirebaseCrashlytics
 
@@ -51,6 +74,10 @@ private enum ReleaseFirebaseBootstrap {
         Crashlytics.crashlytics().record(error: error)
         defaults.set(true, forKey: markerKey)
         defaults.synchronize()
+    }
+
+    static func logProductEvent(name: String, parameters: [String: String]) {
+        Analytics.logEvent(name, parameters: parameters.isEmpty ? nil : parameters)
     }
 }
 #endif

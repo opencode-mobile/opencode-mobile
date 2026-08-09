@@ -63,6 +63,8 @@ fun SettingsScreen(
     onRecentWindowHoursChange: (Int) -> Unit,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
+    productAnalyticsConsented: Boolean,
+    onProductAnalyticsConsentedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
@@ -200,6 +202,22 @@ fun SettingsScreen(
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear Session Cache"),
                 onClick = { showClearSessionCacheConfirmation = true },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+
+            SectionHeader(title = "Privacy")
+
+            OpenCodeListItem(
+                title = "Product Analytics",
+                subtitle = "Allow optional product usage events. Crash reporting is unchanged.",
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
+                trailing = {
+                    Switch(
+                        checked = productAnalyticsConsented,
+                        onCheckedChange = onProductAnalyticsConsentedChange,
+                    )
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -399,6 +417,8 @@ private fun SettingsScreenLightPreview() {
             onRecentWindowHoursChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
+            productAnalyticsConsented = false,
+            onProductAnalyticsConsentedChange = {},
         )
     }
 }
@@ -428,6 +448,8 @@ private fun SettingsScreenDarkPreview() {
             onRecentWindowHoursChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
+            productAnalyticsConsented = false,
+            onProductAnalyticsConsentedChange = {},
         )
     }
 }
