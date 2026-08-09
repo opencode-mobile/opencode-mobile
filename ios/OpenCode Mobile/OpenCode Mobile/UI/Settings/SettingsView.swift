@@ -36,6 +36,7 @@ struct SettingsView: View {
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
+    @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -162,6 +163,27 @@ struct SettingsView: View {
                         style: .card,
                         startDecorator: .icon(.close, accessibilityLabel: "Clear Session Cache"),
                         action: { showClearSessionCacheConfirmation = true }
+                    )
+                    .padding(.horizontal, 16)
+
+                    SectionHeader(title: "Privacy")
+
+                    OpenCodeListItem(
+                        title: "Product Analytics",
+                        subtitle: "Allow optional product usage events. Crash reporting is unchanged.",
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "Product Analytics"),
+                        trailing: {
+                            Toggle(
+                                "Product Analytics",
+                                isOn: Binding(
+                                    get: { analyticsConsentPreferences.productAnalyticsConsented },
+                                    set: { analyticsConsentPreferences.setProductAnalyticsConsented($0) }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
                     )
                     .padding(.horizontal, 16)
 

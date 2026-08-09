@@ -463,6 +463,7 @@ extension Container {
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
             MarkdownHighlightPreferences.shared.clear()
+            AnalyticsConsentPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
