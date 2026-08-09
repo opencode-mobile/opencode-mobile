@@ -106,7 +106,10 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   Next / Submit. During question submission, option and navigation actions are
   disabled and the active mutation shows progress.
 - An error keeps the decisions available and announces the failure.
-- The shell height remains content-adaptive in every variant.
+- The shell height remains content-adaptive in every variant, except prompt
+  entry text: the prompt field grows with wrapped lines up to about **5 body
+  lines**, then scrolls inside the field so chips and send stay above the
+  keyboard (parity with iOS OPE-118 / Android OPE-127).
 
 ## Platform Notes
 
@@ -115,20 +118,22 @@ models, server DTOs, repositories, and Screen Models are not component inputs.
   `TextField`) so mention spans can be attributed with `syntax-type` while
   still reporting caret/selection changes back through `textChanged`; the
   representable applies caret placement only when `selectionRevision`
-  changes, matching Android's revision-gated selection updates. Question custom
-  text uses `OpenCodeTextInput`. Shell fill uses shared
+  changes, matching Android's revision-gated selection updates. Prompt height
+  caps at `font.lineHeight * 5` with internal scroll beyond that. Question
+  custom text uses `OpenCodeTextInput`. Shell fill uses shared
   `openCodeFloatingChrome` (iOS 26+ Liquid Glass + underlay; material fallback).
 - Android uses Compose selection, live-region semantics, and progress
   primitives. Prompt mention spans render through a `VisualTransformation` on
   `BasicTextField` (not `AnnotatedString` on `TextFieldValue`) so
   `syntax-type` styling survives IME updates that drop local span state; caret
   and selection sync from Screen Model values only when `selectionRevision`
-  changes. Question custom text uses `OpenCodeTextInput`. Its fixed screen
-  gutter and bottom inset sit outside the animated content boundary.
-  `AnimatedContent` coordinates the crossfade and `SizeTransform`; shared
-  `OpenCodeFloatingChrome` (raised Surface) and the outline wrap that boundary
-  so the shell redraws at each intermediate height instead of revealing
-  already-switched content inside a lagging container.
+  changes. Prompt `BasicTextField` uses `maxLines = 5` so growth stops and
+  scrolls after about five body lines. Question custom text uses
+  `OpenCodeTextInput`. Its fixed screen gutter and bottom inset sit outside the
+  animated content boundary. `AnimatedContent` coordinates the crossfade and
+  `SizeTransform`; shared `OpenCodeFloatingChrome` (raised Surface) and the
+  outline wrap that boundary so the shell redraws at each intermediate height
+  instead of revealing already-switched content inside a lagging container.
 - Native progress indicators may differ while preserving shared state behavior.
 
 ## Review Surfaces
@@ -167,7 +172,8 @@ resize motion can be reviewed in a realistic Session Chat placement.
 - Parity and divergences: intentional glass vs raised Surface via Floating
   Chrome; see `../divergences.md`.
 - Automated checks: compile on iOS simulator and Android `compileDebugKotlin`
-  for OPE-99 materials.
+  for OPE-99 materials; Android `compileDebugKotlin` for OPE-127 prompt
+  `maxLines`.
 
 ## Parity And Divergence
 

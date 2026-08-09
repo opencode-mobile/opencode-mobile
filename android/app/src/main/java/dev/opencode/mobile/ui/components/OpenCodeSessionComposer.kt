@@ -184,6 +184,9 @@ sealed interface OpenCodeSessionComposerAction {
     ) : OpenCodeSessionComposerAction
 }
 
+/** ~5 body lines — enough for a long prompt without swallowing the chat (OPE-127). */
+private const val PromptMaxVisibleLines = 5
+
 @Composable
 fun OpenCodeSessionComposer(
     state: OpenCodeSessionComposerState,
@@ -320,6 +323,8 @@ private fun PromptEntryContent(
         }
     }
 
+    // Cap growth so chips/send stay above the keyboard; further text scrolls
+    // inside the field (OPE-127). Matches iOS OpenCodeMentionTextView (~5 body lines).
     BasicTextField(
         value = textFieldValue,
         onValueChange = { newValue ->
@@ -335,6 +340,7 @@ private fun PromptEntryContent(
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
         cursorBrush = SolidColor(bodyColor),
         visualTransformation = mentionTransformation,
+        maxLines = PromptMaxVisibleLines,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         decorationBox = { innerTextField ->
             Box {
