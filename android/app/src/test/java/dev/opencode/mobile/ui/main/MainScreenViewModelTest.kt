@@ -37,6 +37,8 @@ import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -487,63 +489,27 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             viewModel.createSession("/repo")
             advanceUntilIdle()
-            assertEquals(listOf("/repo"), sessionRepository.createdDirectories)
+            assertEquals(emptyList<String>(), sessionRepository.createdDirectories)
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, loaded.pendingOpenSession?.sessionId)
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
             assertNull(loaded.projectSessionCreateError)
         }
 
     @Test
-    fun createSession_failureStoresInlineError() =
+    fun optimisticCreateFailureStoresInlineError() =
         runTest(testDispatcher) {
-            val sessionRepository =
-                FakeSessionRepository(
-                    sessionsByWorktree = mutableMapOf("/repo" to emptyList()),
-                    createError = IllegalStateException("nope"),
-                )
+            val coordinator = OptimisticSessionCreateCoordinator()
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    sessionRepository = sessionRepository,
+                    optimisticSessionCreateCoordinator = coordinator,
                 )
             advanceUntilIdle()
-            viewModel.createSession("/repo")
+            coordinator.reportCreateFailed("nope")
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals("nope", loaded.projectSessionCreateError)
-        }
-
-    @Test
-    fun createSession_copiesResolvedPreferenceBeforeOpeningChat() =
-        runTest(testDispatcher) {
-            val selectionStore = FakeSessionModelSelectionStore()
-            val identity = ModelSelectionConnectionIdentity(serverUrl, "opencode")
-            selectionStore.saveNewSessionPreference(
-                identity,
-                "/repo",
-                SessionModelSelection("openai", "gpt-4", "high", 1_000L),
-            )
-            val option =
-                ModelSelectionOption("openai", "OpenAI", "gpt-4", "GPT-4", listOf("high"), 128_000)
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    sessionRepository = FakeSessionRepository(mutableMapOf()),
-                    selectionStore = selectionStore,
-                    modelRepository =
-                        object : ModelRepository {
-                            override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog =
-                                ModelSelectionCatalog(listOf(option), option)
-                        },
-                )
-            advanceUntilIdle()
-
-            viewModel.createSession("/repo")
-            advanceUntilIdle()
-
-            val target = (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession
-            assertEquals("created", target?.sessionId)
-            assertEquals("gpt-4", selectionStore.loadSession(identity, "/repo", "created")?.modelId)
         }
 
     @Test
@@ -866,6 +832,7 @@ class MainScreenViewModelTest {
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
             },
+        optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -913,6 +880,7 @@ class MainScreenViewModelTest {
                     modelRepository,
                 ),
             sessionCache = NoOpSessionCache,
+            optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
         )
     }
 }

@@ -42,6 +42,8 @@ import dev.opencode.mobile.domain.session.QuestionInfo
 import dev.opencode.mobile.domain.session.QuestionOption
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
@@ -55,6 +57,7 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -2383,7 +2386,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun runClientSlashAction_new_createsSessionKeepsDraftNeverRunsCommand() =
+    fun runClientSlashAction_new_requestsOptimisticReplaceKeepsDraftNeverRunsCommand() =
         runTest(testDispatcher) {
             val sessionRepository =
                 FakeSessionRepository(
@@ -2404,10 +2407,14 @@ class SessionChatViewModelTest {
             viewModel.runClientSlashAction(ClientSlashAction.New)
             advanceUntilIdle()
 
-            assertEquals(FakeSessionRepository.LifecycleRequest(id = "", directory = "/repo"), sessionRepository.createSessionRequest)
+            assertNull(sessionRepository.createSessionRequest)
             assertFalse(viewModel.uiState.value.commandsSheetVisible)
             assertEquals(
-                ChildSessionNavigationTarget(sessionId = "ses-2", sessionTitle = "New session", worktree = "/repo"),
+                ChildSessionNavigationTarget(
+                    sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                    sessionTitle = "New Session",
+                    worktree = "/repo",
+                ),
                 viewModel.uiState.value.pendingSessionReplace,
             )
             assertEquals("draft that should survive", viewModel.uiState.value.composer.text)
@@ -2419,20 +2426,60 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun runClientSlashAction_new_failure_setsActionErrorMessage() =
+    fun bindOptimisticCreate_promotesSessionAndLoadsMessages() =
         runTest(testDispatcher) {
-            val sessionRepository = FakeSessionRepository(createSessionError = SessionError.Http(500, "boom"))
-            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
-            viewModel.bind("ses-1", "Title", "/repo")
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
             advanceUntilIdle()
 
-            viewModel.runClientSlashAction(ClientSlashAction.New)
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertTrue(
+                viewModel.uiState.value.timeline == SessionChatTimelineState.Empty ||
+                    viewModel.uiState.value.timeline == SessionChatTimelineState.Ready,
+            )
+            assertEquals(
+                FakeSessionRepository.LifecycleRequest(id = "", directory = "/repo"),
+                sessionRepository.createSessionRequest,
+            )
+        }
+
+    @Test
+    fun bindOptimisticCreate_failureLeavesSessionAndReportsCoordinator() =
+        runTest(testDispatcher) {
+            val coordinator = OptimisticSessionCreateCoordinator()
+            val failures = mutableListOf<String>()
+            val job = launch { coordinator.createFailed.collect { failures += it } }
+            runCurrent()
+            val sessionRepository =
+                FakeSessionRepository(createSessionError = SessionError.Http(500, "boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    optimisticSessionCreateCoordinator = coordinator,
+                )
+            viewModel.bind(
+                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                "New Session",
+                "/repo",
+            )
             advanceUntilIdle()
 
-            assertEquals(null, viewModel.uiState.value.pendingSessionReplace)
-            assertEquals("Couldn't start a new session.", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
-            assertEquals(null, viewModel.uiState.value.errorMessage)
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(listOf("boom"), failures)
+            job.cancel()
         }
 
     @Test
@@ -2735,6 +2782,7 @@ class SessionChatViewModelTest {
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
         sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
+        optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator = OptimisticSessionCreateCoordinator(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -2775,6 +2823,7 @@ class SessionChatViewModelTest {
                     store = sessionModelSelectionStore,
                     modelRepository = modelRepository,
                 ),
+            optimisticSessionCreateCoordinator = optimisticSessionCreateCoordinator,
         ).apply {
             ioDispatcher = testDispatcher
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.

@@ -223,7 +223,9 @@ class SessionChatComposer(
         val historyHints = latestHistoryHints ?: return
 
         when (timelineState.timeline) {
-            SessionChatTimelineState.Loading -> return
+            SessionChatTimelineState.Creating,
+            SessionChatTimelineState.Loading,
+            -> return
             SessionChatTimelineState.Error,
             SessionChatTimelineState.Empty,
             SessionChatTimelineState.Ready,

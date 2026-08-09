@@ -7,7 +7,7 @@ final class SessionChatComposer {
 
     private(set) var state = SessionChatComposerRegionState()
 
-    private let sessionID: String
+    private var sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
     private let modelRepository: any ModelRepository
@@ -60,6 +60,25 @@ final class SessionChatComposer {
     /// Catalog loads that used to run from `init` — keep them off View construction.
     /// `SessionChatView` init can run on every parent body refresh while `@State` keeps
     /// one live ViewModel; orphan inits must not hit the network.
+    func rebind(sessionID: String) {
+        guard sessionID != self.sessionID else { return }
+        self.sessionID = sessionID
+        loadedCatalog = nil
+        cachedSelection = nil
+        newSessionPreference = nil
+        initialSelectionState = .loadingCache
+        latestTimelineState = nil
+        latestHistoryHints = nil
+        draftRevision = 0
+        attachmentRevision = 0
+        attachmentRevisions = [:]
+        state = SessionChatComposerRegionState()
+        notifyChange()
+        Task { await self.loadCachedSelection() }
+        loadServerCommands()
+        loadMentionableAgents()
+    }
+
     func startCatalogLoads() {
         loadServerCommands()
         loadMentionableAgents()
@@ -153,7 +172,7 @@ final class SessionChatComposer {
         guard let timelineState = latestTimelineState else { return }
 
         switch timelineState.timeline {
-        case .loading:
+        case .creating, .loading:
             return
         case .error, .empty, .ready:
             guard let historyHints = latestHistoryHints else { return }

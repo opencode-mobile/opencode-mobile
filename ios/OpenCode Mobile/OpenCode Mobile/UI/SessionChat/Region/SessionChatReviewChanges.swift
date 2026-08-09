@@ -7,7 +7,7 @@ final class SessionChatReviewChanges {
 
     private(set) var state = SessionChatReviewChangesRegionState()
 
-    private let sessionID: String
+    private var sessionID: String
     private let worktree: String
     private let sessionRepository: any SessionRepository
     private var requestTask: Task<Void, Never>?
@@ -17,6 +17,16 @@ final class SessionChatReviewChanges {
         self.sessionID = sessionID
         self.worktree = worktree
         self.sessionRepository = sessionRepository
+    }
+
+    func rebind(sessionID: String) {
+        guard sessionID != self.sessionID else { return }
+        requestTask?.cancel()
+        requestTask = nil
+        candidateMessageID = nil
+        self.sessionID = sessionID
+        state = SessionChatReviewChangesRegionState()
+        notifyChange()
     }
 
     func updateCandidate(

@@ -9,7 +9,7 @@ final class SessionChatTimeline {
     /// Latest projected frame for Screen Model reuse and host declared-ID apply.
     private(set) var timelineFrame: TimelineFrame = .empty
 
-    private let sessionID: String
+    private var sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
     private let sentTimeFormatter: DateFormatter
@@ -67,6 +67,20 @@ final class SessionChatTimeline {
         displayFrameRevision = 0
         state = SessionChatTimelineRegionState()
         notifyChange()
+    }
+
+    func prepareForOptimisticCreate() {
+        cancelObservationTasks()
+        state.timeline = .creating
+        state.errorMessage = nil
+        notifyChange()
+    }
+
+    func rebind(sessionID: String) {
+        guard sessionID != self.sessionID else { return }
+        cancelObservationTasks()
+        self.sessionID = sessionID
+        reset()
     }
 
     func startObserving() {

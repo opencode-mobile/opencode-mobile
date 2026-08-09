@@ -196,11 +196,12 @@ data class SessionChatUiState(
         fun initial(
             sessionId: String,
             sessionTitle: String,
+            timeline: SessionChatTimelineState = SessionChatTimelineState.Loading,
         ): SessionChatUiState =
             SessionChatUiState(
                 sessionId = sessionId,
                 sessionTitle = sessionTitle,
-                timeline = SessionChatTimelineState.Loading,
+                timeline = timeline,
             )
     }
 }
@@ -403,6 +404,7 @@ fun EventStreamConnectionState.toSessionConnectionStatus(): SessionConnectionSta
     }
 
 enum class SessionChatTimelineState {
+    Creating,
     Loading,
     Empty,
     Ready,

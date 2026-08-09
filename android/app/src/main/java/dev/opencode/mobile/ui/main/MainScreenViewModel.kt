@@ -28,6 +28,8 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionError
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -73,6 +75,7 @@ class MainScreenViewModel
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val sessionCache: SessionCache,
+        private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -113,6 +116,11 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
                     _uiState.value = MainScreenUiState.Disconnected
+                }
+            }
+            viewModelScope.launch {
+                optimisticSessionCreateCoordinator.createFailed.collect { message ->
+                    setProjectSessionCreateError(message)
                 }
             }
         }
@@ -287,33 +295,19 @@ class MainScreenViewModel
                 setProjectSessionCreateError("Reconnect to create a session")
                 return
             }
-            viewModelScope.launch {
-                clearProjectSessionCreateError()
-                val profile = activeConnectionManager.currentProfile()
-                val selection =
-                    profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
-                val createResult = runCatching { sessionRepository.createSession(directory = worktree) }
-                createResult.onSuccess { session ->
-                    if (profile != null && selection != null) {
-                        newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
-                    }
-                    _uiState.update { state ->
-                        if (state is MainScreenUiState.Loaded) {
-                            state.copy(
-                                pendingOpenSession =
-                                    SessionOpenTarget(
-                                        sessionId = session.id,
-                                        title = session.title,
-                                        worktree = worktree,
-                                    ),
-                            )
-                        } else {
-                            state
-                        }
-                    }
-                }
-                createResult.onFailure { error ->
-                    setProjectSessionCreateError(error.message ?: "Unable to create session")
+            clearProjectSessionCreateError()
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) {
+                    state.copy(
+                        pendingOpenSession =
+                            SessionOpenTarget(
+                                sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                                title = "New Session",
+                                worktree = worktree,
+                            ),
+                    )
+                } else {
+                    state
                 }
             }
         }

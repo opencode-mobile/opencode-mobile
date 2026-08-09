@@ -78,6 +78,28 @@ class SessionChatTimeline(
     private var lastTimelineFrame: TimelineFrame? = null
     private var nextFrameRevision: Long = 1L
 
+    fun bindCreating(worktree: String) {
+        observeJob?.cancel()
+        transformJob?.cancel()
+        pendingRequiredDisplayApplies.clear()
+        pendingLiveDisplayApply = null
+        boundSessionId = null
+        boundWorktree = worktree
+        mergePendingWhileSending = false
+        pendingOptimisticRows = emptyList()
+        pendingBaselineSignatures = emptyMap()
+        lastLoadedMessages = emptyList()
+        lastLoadedDisplayMessages = emptyList()
+        lastTimelineFrame = null
+        nextFrameRevision = 1L
+        BlockDecorationCache.clear()
+        _state.value = SessionChatTimelineRegionState()
+        _state.update {
+            it.copy(timeline = SessionChatTimelineState.Creating, errorMessage = null)
+        }
+        logI("bind creating worktree=$worktree")
+    }
+
     fun bind(
         sessionId: String,
         worktree: String,

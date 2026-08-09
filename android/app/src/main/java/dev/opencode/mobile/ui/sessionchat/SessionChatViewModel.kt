@@ -28,6 +28,8 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.OptimisticSessionCreateCoordinator
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -44,7 +46,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -66,6 +70,7 @@ class SessionChatViewModel
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
+        private val optimisticSessionCreateCoordinator: OptimisticSessionCreateCoordinator,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -147,6 +152,9 @@ class SessionChatViewModel
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
         private var questionCustomEditReportedRequestId: String? = null
+        private var optimisticCreateJob: kotlinx.coroutines.Job? = null
+        private val newSessionModelSelectionResolver = newSessionModelSelectionResolver
+        private val connectionSessionCoordinator = connectionSessionCoordinator
 
         init {
             timeline.ioDispatcher = ioDispatcher
@@ -188,6 +196,10 @@ class SessionChatViewModel
             sessionTitle: String,
             worktree: String,
         ) {
+            if (OptimisticSessionCreate.isPlaceholder(sessionId)) {
+                bindOptimisticCreate(sessionTitle, worktree)
+                return
+            }
             // Identity is session + worktree. Title may diverge after rename / session.updated;
             // do not full-reset when navigation still carries a stale title.
             // Always re-assert Ready focus: nav can dispose/clear focus then re-enter the same
@@ -220,12 +232,84 @@ class SessionChatViewModel
             }
         }
 
+        private fun bindOptimisticCreate(
+            sessionTitle: String,
+            worktree: String,
+        ) {
+            if (boundWorktree == worktree && boundSessionId == OptimisticSessionCreate.PLACEHOLDER_SESSION_ID) {
+                return
+            }
+            optimisticCreateJob?.cancel()
+            boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+            boundSessionTitle = sessionTitle
+            boundWorktree = worktree
+            lastSnackbarKey = null
+            suppressedSnackbarKey = null
+            snackbarSequence = 0L
+            logI("bind optimistic create worktree=$worktree title=$sessionTitle")
+            _uiState.value =
+                SessionChatUiState.initial(
+                    sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                    sessionTitle = sessionTitle,
+                    timeline = SessionChatTimelineState.Creating,
+                )
+            timeline.bindCreating(worktree)
+            composer.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
+            sessionInfo.bindCreating(sessionTitle, worktree)
+            reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
+            commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
+            optimisticCreateJob =
+                viewModelScope.launch {
+                    runCatching {
+                        withContext(ioDispatcher) {
+                            val profile = connectionSessionCoordinator.currentProfile()
+                            val session = sessionRepository.createSession(directory = worktree)
+                            val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
+                            if (profile != null && selection != null) {
+                                newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
+                            }
+                            session
+                        }
+                    }.onSuccess { session ->
+                        logI("optimistic create success id=${session.id}")
+                        promoteOptimisticSession(session.id, session.title, worktree)
+                    }.onFailure { error ->
+                        logI("optimistic create failed error=${error.message}")
+                        optimisticSessionCreateCoordinator.reportCreateFailed(
+                            error.message ?: "Unable to create session",
+                        )
+                        sessionInfo.requestLeaveSession()
+                    }
+                }
+        }
+
+        private fun promoteOptimisticSession(
+            sessionId: String,
+            sessionTitle: String,
+            worktree: String,
+        ) {
+            boundSessionId = sessionId
+            boundSessionTitle = sessionTitle
+            sessionReadyStore.setFocusedSession(sessionId, worktree)
+            timeline.bind(sessionId, worktree)
+            composer.bind(sessionId, worktree)
+            sessionInfo.bind(sessionId, sessionTitle, worktree)
+            reviewChanges.bind(sessionId, worktree)
+            commands.bind(sessionId, worktree)
+            observePermissions(sessionId, worktree)
+            observeQuestions(sessionId, worktree)
+            observeTodos(sessionId, worktree)
+            viewModelScope.launch {
+                composer.loadCatalog()
+            }
+        }
+
         private fun bindTitleIfChanged(
             sessionId: String,
             sessionTitle: String,
             worktree: String,
         ) {
-            if (boundSessionTitle == sessionTitle) return
+            if (boundSessionId == sessionId && boundSessionTitle == sessionTitle) return
             boundSessionTitle = sessionTitle
             sessionInfo.bind(sessionId, sessionTitle, worktree)
         }

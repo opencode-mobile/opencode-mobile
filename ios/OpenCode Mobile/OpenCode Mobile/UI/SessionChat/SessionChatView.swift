@@ -772,6 +772,7 @@ struct SessionChatView: View {
                         composer.selectedModel != nil &&
                         composer.isModelSelectionReady &&
                         !isSending &&
+                        viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.connectionStatus == .live,
                     attachEnabled: composer.canAttach && composer.isModelSelectionReady,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,

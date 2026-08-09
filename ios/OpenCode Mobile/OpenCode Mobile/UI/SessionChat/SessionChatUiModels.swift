@@ -125,6 +125,7 @@ struct SessionChatComposerState: Equatable {
 }
 
 enum SessionChatTimelineState: Equatable {
+    case creating
     case loading
     case empty
     case ready
@@ -265,11 +266,15 @@ struct SessionChatUiState: Equatable {
         )
     }
 
-    static func initial(sessionID: String, sessionTitle: String) -> SessionChatUiState {
+    static func initial(
+        sessionID: String,
+        sessionTitle: String,
+        timeline: SessionChatTimelineState = .loading
+    ) -> SessionChatUiState {
         SessionChatUiState(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
-            timeline: .loading,
+            timeline: timeline,
             messages: [],
             timelineFrame: .empty,
             composer: SessionChatComposerState(

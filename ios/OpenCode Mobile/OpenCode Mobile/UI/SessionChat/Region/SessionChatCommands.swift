@@ -9,7 +9,7 @@ final class SessionChatCommands {
 
     private(set) var state = SessionChatCommandsRegionState()
 
-    private let sessionID: String
+    private var sessionID: String
     private let worktree: String
     private let sessionRepository: any SessionRepository
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
@@ -35,6 +35,19 @@ final class SessionChatCommands {
         self.sessionRepository = sessionRepository
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
+    }
+
+    func rebind(sessionID: String) {
+        guard sessionID != self.sessionID else { return }
+        actionTask?.cancel()
+        forkTask?.cancel()
+        revertTask?.cancel()
+        self.sessionID = sessionID
+        currentRevertMessageID = nil
+        forkedTarget = nil
+        state = SessionChatCommandsRegionState()
+        notifyChange()
+        refreshRevert()
     }
 
     /// Revert visibility fetch — must not run from `init` (see SessionChatComposer.startCatalogLoads).
@@ -91,39 +104,12 @@ final class SessionChatCommands {
         state.actionErrorMessage = nil
         state.actionSuccessMessage = nil
         notifyChange()
-        let worktree = worktree
-        actionTask?.cancel()
-        actionTask = Task {
-            do {
-                let profile = activeConnectionManager.currentProfile()
-                var selection: SessionModelSelection?
-                if let profile {
-                    selection = await newSessionModelSelectionResolver.resolve(profile: profile, worktree: worktree)
-                }
-                let session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: worktree)
-                if let profile, let selection {
-                    await newSessionModelSelectionResolver.seedSession(
-                        profile: profile,
-                        worktree: worktree,
-                        sessionID: session.id,
-                        selection: selection
-                    )
-                }
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("new session created id=\(session.id, privacy: .public)")
-                state.pendingSessionReplace = ChildSessionNavigationTarget(
-                    sessionID: session.id,
-                    sessionTitle: session.title,
-                    worktree: worktree
-                )
-                notifyChange()
-            } catch {
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.warning("new session failed error=\(error.localizedDescription, privacy: .public)")
-                state.actionErrorMessage = "Couldn't start a new session."
-                notifyChange()
-            }
-        }
+        state.pendingSessionReplace = ChildSessionNavigationTarget(
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session",
+            worktree: worktree
+        )
+        notifyChange()
     }
 
     func openForkDialog(currentTitle: String) {

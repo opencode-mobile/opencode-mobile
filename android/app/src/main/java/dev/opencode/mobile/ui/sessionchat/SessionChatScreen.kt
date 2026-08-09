@@ -566,6 +566,7 @@ fun SessionChatScreen(
                                     uiState.composer.selectedModel != null &&
                                     uiState.composer.isModelSelectionReady &&
                                     !uiState.isSending &&
+                                    uiState.timeline != SessionChatTimelineState.Creating &&
                                     uiState.connectionStatus == SessionConnectionStatus.Live,
                             attachEnabled = uiState.composer.canAttach && uiState.composer.isModelSelectionReady,
                             showStop = uiState.sessionStatusLabel != null,

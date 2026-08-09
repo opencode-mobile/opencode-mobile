@@ -185,6 +185,9 @@ final class ProjectListHomeViewModel {
                 self?.state = .disconnected
             }
         }
+        OptimisticSessionCreateCoordinator.shared.onCreateFailed { [weak self] message in
+            self?.setProjectSessionCreateError(message)
+        }
         startObservingConnectionState()
     }
 
@@ -395,37 +398,18 @@ final class ProjectListHomeViewModel {
     }
 
     func createSession(in worktree: String) async {
-        // Read the live stream, not `liveUpdatesConnectionState` (UI mirror). That
-        // mirror can lag or stay Idle when nothing has collected updates yet.
         guard foregroundEventStream.connectionState == .connected else {
             logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
             setProjectSessionCreateError("Reconnect to create a session")
             return
         }
         setProjectSessionCreateError(nil)
-        do {
-            let profile = activeConnectionManager.currentProfile()
-            let selection: SessionModelSelection? = if let profile {
-                await newSessionModelSelectionResolver?.resolve(profile: profile, worktree: worktree)
-            } else {
-                nil
-            }
-            let session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: worktree)
-            if let profile, let selection {
-                await newSessionModelSelectionResolver?.seedSession(
-                    profile: profile,
-                    worktree: worktree,
-                    sessionID: session.id,
-                    selection: selection
-                )
-            }
-            logCreateSession(outcome: ProductAnalytics.Outcome.success)
-            pendingSessionOpen =
-                SessionListItem(id: session.id, title: session.title, worktree: worktree)
-        } catch {
-            logCreateSession(outcome: ProductAnalytics.Outcome.failure)
-            setProjectSessionCreateError(error.localizedDescription)
-        }
+        logCreateSession(outcome: "started")
+        pendingSessionOpen = SessionListItem(
+            id: OptimisticSessionCreate.placeholderSessionID,
+            title: "New Session",
+            worktree: worktree
+        )
     }
 
     private func logCreateSession(outcome: String) {
