@@ -11,8 +11,7 @@ read-only unified diff. Use it as a bottom-centered overlay in a file viewer.
 - States: default, pressed, previous-disabled, next-disabled, and
   context-disabled. Native focus treatment applies where platform-relevant.
 - Required content: previous, next, and expandable-context availability;
-  current context mode; three actions; and, on Android, an optional selected-
-  hunk offset callback for an owning scroll container.
+  current context mode; and three actions.
 - Optional content: none.
 - Loading, error, empty, and selected states are not applicable. The owning
   viewer controls visibility and unavailable-preview presentation.

@@ -10,12 +10,13 @@ surfaces, not for general web content.
 ## Public API
 
 - Variants: `assistantMessage`, `outgoingMessage`, `standalone`.
-- States: default, streaming, collapsed, expanded, empty.
+- States: default, streaming, empty. Collapsed and expanded are not public
+  message states in this version.
 - Required content: a parsed native markdown document and the variant. Raw
   markdown remains owned by the message/domain layer.
-- Optional content: link-tap callback, streaming flag, expanded/collapsed state
-  for outgoing messages, and platform-specific height reporting used by
-  timeline layout.
+- Optional content: link-tap callback, streaming flag, initial height seed for
+  timeline layout (`initialHeight`), and platform-specific measured-height
+  reporting callbacks.
 
 ## Token Usage
 
@@ -69,9 +70,9 @@ renderer.
 Copy and restore actions use the original raw markdown text. Per-code-block copy
 controls are intentionally deferred.
 
-Outgoing messages clamp only when their document is structurally expandable.
-Long wrapped inline markdown that cannot expose an expand control stays fully
-visible rather than losing content below the collapsed height.
+Outgoing messages always render at full height through `OpenCodeOutgoingMessage`;
+this component does not expose in-message collapse controls for outgoing
+variants.
 
 ## Platform Notes
 

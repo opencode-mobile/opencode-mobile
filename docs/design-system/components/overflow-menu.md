@@ -26,11 +26,15 @@ many entries with scrolling.
     Omitting the icon on only some entries keeps the reserved slot so rows stay
     aligned with icon entries (for example selected/unselected check rows).
   - entry accessibility label when the title alone is insufficient.
+  - Android-only entry `contentDescription` for icon-only row semantics when the
+    title is not sufficient for the leading icon.
   - `destructive` (default false) — uses semantic error text/icon color when
     enabled so irreversible actions such as Delete read as destructive.
-  - iOS trigger via `OpenCodeOverflowMenu` label closure and `isPresented`
-    binding.
-  - Android trigger via `OpenCodeTopBarAction.Icon(MoreVert)` toggling `expanded`.
+  - iOS presentation via `OpenCodeTopBarOverflowHost(isPresented:entries:topBar:)`
+    wrapping the top bar; optional `OpenCodeOverflowMenuTrigger` for the
+    `moreVert` affordance.
+  - Android presentation via `OpenCodeTopBarOverflowHost` with
+    `OpenCodeTopBarAction.Icon(MoreVert)` toggling `expanded`.
 
 Entries are action rows only in this version. Toggles, dividers, and subtitles
 are out of scope.
@@ -68,8 +72,9 @@ do not reserve that column.
 
 ## Platform Notes
 
-- iOS: presented with a styled popover anchored to the trigger. Panel chrome
-  uses `surfaceBase`, `borderWeakerBase`, and `overflowMenu.cornerRadius`.
+- iOS: presented with a window-level overlay anchored below the measured top
+  bar (`OpenCodeOverflowMenuWindowOverlay`). Panel chrome uses `surfaceBase`,
+  `borderWeakerBase`, and `overflowMenu.cornerRadius`.
 - Android: presented with a styled window popup aligned to the top-trailing
   overflow-button anchor. Panel chrome uses `surface`, `outlineVariant`, and
   `overflowMenu.cornerRadius`.

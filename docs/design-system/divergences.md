@@ -154,13 +154,13 @@ implementation belong in the feature's `parity-gaps.md`.
 
 - Status: intentional
 - Area: component | accessibility
-- Shared intent: `OpenCodeOverflowMenu` exposes the same entry model, enabled
+- Shared intent: `OpenCodeTopBarOverflowHost` exposes the same entry model, enabled
   state, opaque elevated panel chrome, and dismissal behavior for compact
   top-bar overflow actions with a reserved leading icon slot and single-line
   label. The slot may contain a catalog icon or remain empty for aligned rows.
-- iOS behavior: presented with a styled popover anchored to the trigger supplied
-  through the component label closure. `OpenCodeOverflowMenuTrigger` provides the
-  standard `moreVert` button for top-bar placement.
+- iOS behavior: presented with a window-level overlay anchored below the
+  measured top bar. `OpenCodeOverflowMenuTrigger` provides the standard `moreVert`
+  button for top-bar placement.
 - Android behavior: presented with a styled window popup aligned to the
   top-trailing overflow-button anchor. The overflow icon in `OpenCodeTopBar`
   toggles an explicit `expanded` state.

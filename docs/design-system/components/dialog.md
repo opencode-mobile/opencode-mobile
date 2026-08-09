@@ -8,7 +8,7 @@ title, exactly two choices, and optionally one line of supporting copy or a
 single text field.
 
 Prefer `OpenCodeBottomSheet` for multi-entry action lists. Prefer
-`OpenCodeOverflowMenu` for anchored secondary actions.
+`OpenCodeTopBarOverflowHost` for anchored secondary actions.
 
 ## Public API
 
@@ -73,9 +73,9 @@ wire the field's done action to the primary option.
 
 ## Platform Notes
 
-- iOS: presented as a window-level overlay (same host pattern as
-  `OpenCodeOverflowMenu`) with a fade in/out, not a sliding cover. Keyboard
-  safe-area insets lift the card so the field stays visible.
+- iOS: presented as a window-level overlay (same host pattern as the overflow
+  menu) with a fade in/out, not a sliding cover. Keyboard safe-area insets lift
+  the card so the field stays visible.
 - Android: presented with Compose `Dialog` and a custom elevated card so chrome
   matches design-system tokens rather than raw Material `AlertDialog` defaults.
   `imePadding()` keeps the card above the IME when the text field is focused.

@@ -98,6 +98,8 @@ applicable item is complete.
 
 - `../icons.md` (shared Material icon catalog and sync workflow)
 - `attachment.md`
+- `connection-status-label.md`
+- `message-list.md`
 - `outgoing-message.md`
 - `tool-call-card.md`
 - `top-bar.md`
@@ -109,6 +111,7 @@ applicable item is complete.
 - `filter-chip.md`
 - `floating-dock.md`
 - `floating-chrome.md`
+- `floating-pill-chrome.md`
 - `session-list-dock.md`
 - `bottom-fade.md`
 - `list-item.md`

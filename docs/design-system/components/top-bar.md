@@ -67,7 +67,8 @@ is vertically centered inside that fixed block so switching between one-line and
 two-line content does not change overall bar height.
 
 When `subtitleAccessory.statusDot` is set, the second line renders through
-`OpenCodeConnectionStatusLabel` with lowercase status copy and a semantic dot.
+`OpenCodeConnectionStatusLabel` (see `connection-status-label.md`) with
+lowercase status copy and a semantic dot.
 Plain `subtitle` text is ignored while a status-dot accessory is present.
 
 Leading actions use semantic meaning rather than arbitrary placement:

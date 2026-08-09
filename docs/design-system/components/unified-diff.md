@@ -11,10 +11,12 @@ exposing editing actions.
 
 - Variants: collapsed context and expanded available context.
 - States: default and selected hunk.
-- Required content: file path, file status, additions, deletions, and a parsed
-  Unified Diff document containing typed hunks and rows with old/new line
+- Required content: domain `FileDiff` (path, status, additions, deletions) and a
+  parsed Unified Diff document containing typed hunks and rows with old/new line
   numbers and row kinds.
-- Optional content: selected hunk identifier.
+- Optional content: selected hunk identifier; Android-only
+  `onSelectedHunkOffset(y)` callback so an owning scroll container can bring
+  the selected hunk into view.
 - Loading, error, and empty states are not applicable; the owning screen
   presents those states before constructing the renderer.
 
@@ -58,7 +60,8 @@ markers twice.
   containers. The horizontal content stack adopts its widest row's intrinsic
   width so long lines produce a real scroll range.
 - Android: native Compose rows inside coordinated vertical and horizontal
-  scroll containers.
+  scroll containers. When `onSelectedHunkOffset` is provided, selected hunk rows
+  report their Y offset for parent scroll coordination.
 - Both platforms use equivalent unified-patch fixtures and existing syntax-role
   mappings; renderer implementation remains native.
 
