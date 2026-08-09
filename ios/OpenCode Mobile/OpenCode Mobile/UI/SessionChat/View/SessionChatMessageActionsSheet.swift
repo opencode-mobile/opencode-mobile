@@ -24,6 +24,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
             get: { target != nil },
             set: { presented in
                 if !presented {
+                    logAction(ProductAnalytics.Action.messageActionsDismiss)
                     target = nil
                 }
             }
@@ -37,6 +38,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
                 title: "Revert message",
                 startDecorator: .icon(.undo, accessibilityLabel: "Revert message"),
                 action: {
+                    logAction(ProductAnalytics.Action.messageActionsRevert)
                     if let target {
                         onRestoreToComposer(target.text)
                     }
@@ -48,11 +50,20 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
             title: "Copy message",
             startDecorator: .icon(.contentCopy, accessibilityLabel: "Copy message"),
             action: {
+                logAction(ProductAnalytics.Action.messageActionsCopy)
                 if let target {
                     UIPasteboard.general.string = target.text
                 }
                 self.target = nil
             }
+        )
+    }
+
+    /// Message text stays out of Analytics; only the taxonomy action is reported.
+    private func logAction(_ actionId: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionMessageActions,
+            actionId: actionId
         )
     }
 }

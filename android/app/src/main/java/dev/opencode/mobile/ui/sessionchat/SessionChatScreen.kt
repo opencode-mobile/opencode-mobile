@@ -30,6 +30,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -187,6 +189,42 @@ fun SessionChatScreen(
         }
     }
 
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+        presentation = ProductAnalytics.Presentation.OVERLAY,
+        visible = menuExpanded,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = uiState.commandsSheetVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_RENAME,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = uiState.rename.isDialogVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_FORK,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = uiState.forkDialogVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_FORK_RESULT,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = uiState.forkResultVisible,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_DELETE_CONFIRM,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = showDeleteConfirmation,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_ATTACHMENT_SOURCE,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = showAttachmentSource,
+    )
+
     OpenCodeDialog(
         visible = showDeleteConfirmation,
         title = "Delete session",
@@ -204,7 +242,13 @@ fun SessionChatScreen(
             OpenCodeDialogOption(
                 title = "Cancel",
                 enabled = lifecycleActionsEnabled,
-                onClick = { showDeleteConfirmation = false },
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SESSION_DELETE_CONFIRM,
+                        actionId = ProductAnalytics.Action.CHAT_DELETE_CANCEL,
+                    )
+                    showDeleteConfirmation = false
+                },
             ),
         onDismissRequest = {
             if (lifecycleActionsEnabled) {
@@ -232,6 +276,7 @@ fun SessionChatScreen(
                             title = "Review changes",
                             icon = OpenCodeIcons.Description,
                             onClick = {
+                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                 menuExpanded = false
                                 onReviewChangesClick(uiState.changesNavigationTarget(worktree))
                             },
@@ -240,6 +285,7 @@ fun SessionChatScreen(
                             title = "Session context",
                             icon = OpenCodeIcons.Architecture,
                             onClick = {
+                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
                                 menuExpanded = false
                                 onSessionContextClick()
                             },
@@ -248,6 +294,7 @@ fun SessionChatScreen(
                             title = "Copy session ID",
                             icon = OpenCodeIcons.ContentCopy,
                             onClick = {
+                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_COPY_SESSION_ID)
                                 menuExpanded = false
                                 copySessionIdToClipboard(context, uiState.sessionId)
                             },
@@ -267,6 +314,7 @@ fun SessionChatScreen(
                             enabled = lifecycleActionsEnabled,
                             destructive = true,
                             onClick = {
+                                logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_DELETE)
                                 menuExpanded = false
                                 showDeleteConfirmation = true
                             },
@@ -279,13 +327,22 @@ fun SessionChatScreen(
                         OpenCodeTopBarSubtitleAccessory.StatusDot(
                             uiState.connectionStatus.toOpenCodeSessionConnectionStatus(),
                         ),
-                    leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+                    leading =
+                        OpenCodeTopBarLeading.Back(
+                            onClick = {
+                                logChatAction(ProductAnalytics.Action.CHAT_BACK)
+                                onNavigateBack()
+                            },
+                        ),
                     actions =
                         listOf(
                             OpenCodeTopBarAction.Icon(
                                 imageVector = OpenCodeIcons.MoreVert,
                                 contentDescription = "More options",
-                                onClick = { menuExpanded = true },
+                                onClick = {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_OVERFLOW)
+                                    menuExpanded = true
+                                },
                             ),
                         ),
                     showDivider = true,
@@ -296,7 +353,10 @@ fun SessionChatScreen(
             if (ShowsSessionStatusBar) {
                 SessionStatusBar(
                     contextUsageFraction = uiState.contextUsageFraction,
-                    onContextClick = onSessionContextClick,
+                    onContextClick = {
+                        logChatAction(ProductAnalytics.Action.CHAT_OPEN_SESSION_CONTEXT)
+                        onSessionContextClick()
+                    },
                 )
             }
             uiState.composer.modelNotice?.let { notice ->
@@ -329,16 +389,25 @@ fun SessionChatScreen(
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
                             onReviewChangesClick = {
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
                                 uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
                             },
                             onSessionTodosClick = {
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
                                 if (!blocksSessionTodosSheet) {
                                     showSessionTodosSheet = true
                                 }
                             },
-                            onMessageActionsTap = { messageActionsTarget = it },
-                            onToolDetailTap = { toolDetailTarget = it },
+                            onMessageActionsTap = {
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_MESSAGE_ACTIONS)
+                                messageActionsTarget = it
+                            },
+                            onToolDetailTap = {
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                toolDetailTarget = it
+                            },
                             onChildSessionTap = { childSessionId, childTitle ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
                                 onChildSessionClick(
                                     ChildSessionNavigationTarget(
                                         sessionId = childSessionId,
@@ -348,6 +417,7 @@ fun SessionChatScreen(
                                 )
                             },
                             onChangesReviewTap = { assistantMessageId, initialFilePath ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
                                 uiState
                                     .fileChangeNavigationTarget(
                                         worktree = worktree,
@@ -514,16 +584,24 @@ fun SessionChatScreen(
                                         viewModel.retryModelCatalog()
                                         return@OpenCodeSessionComposer
                                     }
+                                    logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODEL_PICKER)
                                     activeModelProviderId =
                                         uiState.composer.selectedModel
                                             ?.option
                                             ?.providerId
                                     activePicker = ComposerPickerKind.Model
                                 }
-                                OpenCodeSessionComposerAction.SelectMode -> activePicker = ComposerPickerKind.Mode
-                                OpenCodeSessionComposerAction.SelectVariant -> activePicker = ComposerPickerKind.Variant
+                                OpenCodeSessionComposerAction.SelectMode -> {
+                                    logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODE_PICKER)
+                                    activePicker = ComposerPickerKind.Mode
+                                }
+                                OpenCodeSessionComposerAction.SelectVariant -> {
+                                    logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_VARIANT_PICKER)
+                                    activePicker = ComposerPickerKind.Variant
+                                }
                                 OpenCodeSessionComposerAction.OpenCommands -> viewModel.openCommands()
                                 OpenCodeSessionComposerAction.Attach -> {
+                                    logChatAction(ProductAnalytics.Action.COMPOSER_ATTACH)
                                     val photos = uiState.composer.canAttachPhotos
                                     val files = uiState.composer.canAttachFiles
                                     when {
@@ -585,13 +663,17 @@ fun SessionChatScreen(
         OpenCodeBottomSheet(
             visible = showAttachmentSource,
             title = "Add attachment",
-            onDismissRequest = { showAttachmentSource = false },
+            onDismissRequest = {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_SOURCE_DISMISS)
+                showAttachmentSource = false
+            },
         ) {
             if (uiState.composer.canAttachPhotos) {
                 OpenCodeBottomSheetEntry(
                     title = "Photos",
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
                     onClick = {
+                        logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_PHOTOS)
                         showAttachmentSource = false
                         photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     },
@@ -602,6 +684,7 @@ fun SessionChatScreen(
                     title = "Files",
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
                     onClick = {
+                        logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_FILES)
                         showAttachmentSource = false
                         documentPicker.launch(arrayOf("*/*"))
                     },
@@ -748,6 +831,27 @@ private fun SessionStatusBar(
 
 /** Temporarily off: bar currently only shows context usage. */
 private const val ShowsSessionStatusBar = false
+
+private fun logChatAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SESSION_CHAT,
+        actionId = actionId,
+    )
+}
+
+private fun logOverflowAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+        actionId = actionId,
+    )
+}
+
+private fun logAttachmentSourceAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SESSION_ATTACHMENT_SOURCE,
+        actionId = actionId,
+    )
+}
 
 private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCodeSessionConnectionStatus =
     when (this) {

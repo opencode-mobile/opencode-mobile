@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -22,16 +24,26 @@ internal fun SessionChatMessageActionsSheet(
 ) {
     val context = LocalContext.current
 
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SESSION_MESSAGE_ACTIONS,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = target != null,
+    )
+
     OpenCodeBottomSheet(
         visible = target != null,
         title = "Message",
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_DISMISS)
+            onDismiss()
+        },
     ) {
         if (target?.showsRevertMessage == true) {
             OpenCodeBottomSheetEntry(
                 title = "Revert message",
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Undo, "Revert message"),
                 onClick = {
+                    logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_REVERT)
                     target.let { onRestoreToComposer(it.text) }
                     onDismiss()
                 },
@@ -41,6 +53,7 @@ internal fun SessionChatMessageActionsSheet(
             title = "Copy message",
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, "Copy message"),
             onClick = {
+                logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_COPY)
                 target?.text?.let { text ->
                     val clipboardManager =
                         context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -50,4 +63,11 @@ internal fun SessionChatMessageActionsSheet(
             },
         )
     }
+}
+
+private fun logMessageActionsAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SESSION_MESSAGE_ACTIONS,
+        actionId = actionId,
+    )
 }

@@ -71,10 +71,11 @@ That seam owns:
    verification non-fatal via Crashlytics, then set the marker. Policy
    decisions live in Firebase-free `CrashlyticsVerificationPolicy`.
 4. **Feature isolation** — Screen Models, views, and domain feature code never
-   import Firebase. Product Analytics call sites (OPE-124) use only this seam’s
-   consented `logProductEvent` API (OPE-129). Consent **storage and enforcement**
-   live on the seam / `AnalyticsConsentPreferences`; consent **UI** lives in
-   Settings (not owned as presentation by the seam).
+   import Firebase. Product Analytics call sites (OPE-124) use
+   `ProductAnalytics.logScreenView` / `logUserAction`, which call only this
+   seam’s consented `logProductEvent` API (OPE-129). Consent **storage and
+   enforcement** live on the seam / `AnalyticsConsentPreferences`; consent
+   **UI** lives in Settings (not owned as presentation by the seam).
 
 **Not owned by the seam:** Play / TestFlight / App Distribution pipelines;
 Settings consent presentation; custom event taxonomy; FCM / Remote Config /
@@ -260,3 +261,25 @@ into product Analytics without an explicit consent and form story.
 
 **Why:** Matches the OPE-125 public-release product policy with a discoverable
 Settings control and a seam-owned gate before OPE-124 instrumentation.
+
+## Product Analytics taxonomy (OPE-124)
+
+**Status:** Accepted  
+**Decision:**
+
+1. **Coverage minimum:** Every product screen (route, sheet, dialog, overlay,
+   embedded home state) and every meaningful user interaction. Developer Tools
+   are excluded. Perf, SSE internals, and markdown/TextMate timings are deferred.
+2. **Event names:** `product_screen_view` and `product_user_action` (not
+   Firebase reserved `screen_view`). Automatic screen reporting stays off.
+3. **Params:** `screen_id`, `action_id`, `presentation`, `trigger`, plus small
+   enums only. No content, paths, URLs, credentials, filter text, or session
+   IDs as Analytics user identity.
+4. **API:** Shared `ProductAnalytics` helpers call
+   `OpenCodeReleaseObservability.logProductEvent` only.
+5. **Store disclosure:** Second store-form pass remains required before treating
+   product-event collection as disclosure-complete; runtime remains consent-gated.
+
+**Why:** Full product interaction coverage with a two-event schema keeps
+instrumentation reviewable and privacy-bounded without re-enabling automatic
+screen reporting.

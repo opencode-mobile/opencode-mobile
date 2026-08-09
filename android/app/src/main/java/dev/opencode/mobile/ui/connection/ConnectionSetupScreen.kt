@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -41,7 +42,16 @@ fun ConnectionSetupScreen(
     ) {
         OpenCodeTopBar(
             title = "Connect to server",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading =
+                OpenCodeTopBarLeading.Back(
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.CONNECTION_SETUP,
+                            actionId = ProductAnalytics.Action.CONNECTION_BACK_CANCEL,
+                        )
+                        onNavigateBack()
+                    },
+                ),
             showDivider = true,
         )
         ConnectionSetupFields(

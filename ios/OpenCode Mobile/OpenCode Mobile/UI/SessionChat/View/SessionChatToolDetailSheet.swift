@@ -29,6 +29,10 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
             get: { target != nil },
             set: { presented in
                 if !presented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionToolDetail,
+                        actionId: ProductAnalytics.Action.toolDetailDismiss
+                    )
                     target = nil
                 }
             }

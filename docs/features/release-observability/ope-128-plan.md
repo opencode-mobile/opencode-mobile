@@ -143,5 +143,7 @@ Do **not** commit screenshots, questionnaire JSON exports, or account emails.
 ## Done when
 
 Both store questionnaires match the current minimal Crashlytics + Analytics
-contract, completion is recorded in `progress.md`, and OPE-128 is Done. OPE-124
-remains blocked until OPE-129 and the later product-event form pass as well.
+contract, completion is recorded in `progress.md`, and OPE-128 is Done.
+
+**Completed** (operator confirmation). OPE-124 remains gated on the later
+product-event form pass (and may proceed with docs-only taxonomy drafts).

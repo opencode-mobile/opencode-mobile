@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
@@ -141,6 +142,12 @@ class SessionChatViewModel
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
 
+        // Title / custom-answer fields change per keystroke; report the first edit per
+        // dialog appearance so analytics measures engagement instead of typing volume.
+        private var renameDraftEditReported = false
+        private var forkDraftEditReported = false
+        private var questionCustomEditReportedRequestId: String? = null
+
         init {
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
@@ -238,10 +245,18 @@ class SessionChatViewModel
         }
 
         fun archiveSession() {
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_OVERFLOW_ARCHIVE,
+                screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+            )
             sessionInfo.archiveSession()
         }
 
         fun deleteSession() {
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_DELETE_CONFIRM,
+                screenId = ProductAnalytics.Screen.SESSION_DELETE_CONFIRM,
+            )
             sessionInfo.deleteSession()
         }
 
@@ -253,10 +268,13 @@ class SessionChatViewModel
         }
 
         fun selectSlashSuggestion(commandName: String) {
+            // Command and agent names can be user-defined, so only the fact is reported.
+            logAction(ProductAnalytics.Action.COMPOSER_SELECT_SLASH_SUGGESTION)
             composer.selectSlashSuggestion(commandName)
         }
 
         fun selectAtSuggestion(agentName: String) {
+            logAction(ProductAnalytics.Action.COMPOSER_SELECT_AT_SUGGESTION)
             composer.selectAtSuggestion(agentName)
         }
 
@@ -273,6 +291,7 @@ class SessionChatViewModel
         }
 
         fun removeAttachment(id: String) {
+            logAction(ProductAnalytics.Action.COMPOSER_REMOVE_ATTACHMENT)
             composer.removeAttachment(id)
         }
 
@@ -281,18 +300,32 @@ class SessionChatViewModel
         }
 
         fun retryModelCatalog() {
+            logAction(ProductAnalytics.Action.COMPOSER_RETRY_MODEL_CATALOG)
             composer.loadCatalog()
         }
 
         fun selectModel(option: ModelSelectionOption) {
+            logAction(
+                actionId = ProductAnalytics.Action.MODEL_PICKER_SELECT_MODEL,
+                screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
+            )
             composer.selectModel(option)
         }
 
         fun selectMode(mode: String) {
+            logAction(
+                actionId = ProductAnalytics.Action.MODE_PICKER_SELECT,
+                screenId = ProductAnalytics.Screen.SESSION_MODE_PICKER,
+                parameters = mapOf(ProductAnalytics.Param.MODE to mode),
+            )
             composer.selectMode(mode)
         }
 
         fun selectVariant(variant: String) {
+            logAction(
+                actionId = ProductAnalytics.Action.VARIANT_PICKER_SELECT,
+                screenId = ProductAnalytics.Screen.SESSION_VARIANT_PICKER,
+            )
             composer.selectVariant(variant)
         }
 
@@ -301,15 +334,25 @@ class SessionChatViewModel
         }
 
         fun openCommands() {
+            logAction(ProductAnalytics.Action.COMPOSER_OPEN_COMMANDS)
             commands.openCommands()
             composer.dismissSuggestions()
         }
 
         fun dismissCommands() {
+            logAction(
+                actionId = ProductAnalytics.Action.COMMANDS_DISMISS,
+                screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
+            )
             commands.dismissCommands()
         }
 
         fun runClientSlashAction(action: ClientSlashAction) {
+            logAction(
+                actionId = action.productActionId,
+                screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
+                parameters = mapOf(ProductAnalytics.Param.CLIENT_SLASH to action.name.lowercase()),
+            )
             when (action) {
                 ClientSlashAction.New -> {
                     if (!isConnectionLive()) return
@@ -317,6 +360,7 @@ class SessionChatViewModel
                 }
                 ClientSlashAction.Fork -> {
                     if (!isConnectionLive()) return
+                    forkDraftEditReported = false
                     commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
                 }
                 ClientSlashAction.Undo ->
@@ -363,23 +407,48 @@ class SessionChatViewModel
         }
 
         fun updateForkDraft(text: String) {
+            if (!forkDraftEditReported) {
+                forkDraftEditReported = true
+                logAction(
+                    actionId = ProductAnalytics.Action.CHAT_FORK_EDIT_TITLE,
+                    screenId = ProductAnalytics.Screen.SESSION_FORK,
+                )
+            }
             commands.updateForkDraft(text)
         }
 
         fun cancelForkDialog() {
+            forkDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_FORK_CANCEL,
+                screenId = ProductAnalytics.Screen.SESSION_FORK,
+            )
             commands.cancelForkDialog()
         }
 
         fun confirmFork() {
+            forkDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_FORK_CONFIRM,
+                screenId = ProductAnalytics.Screen.SESSION_FORK,
+            )
             if (!isConnectionLive()) return
             commands.confirmFork()
         }
 
         fun chooseForkOpen() {
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_FORK_OPEN,
+                screenId = ProductAnalytics.Screen.SESSION_FORK_RESULT,
+            )
             commands.chooseForkOpen()
         }
 
         fun chooseForkStay() {
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_FORK_STAY,
+                screenId = ProductAnalytics.Screen.SESSION_FORK_RESULT,
+            )
             commands.chooseForkStay()
         }
 
@@ -388,6 +457,7 @@ class SessionChatViewModel
         }
 
         fun consumeSnackbar() {
+            logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
             commands.clearActionFeedback()
             composer.clearTransientErrors()
@@ -405,23 +475,54 @@ class SessionChatViewModel
         }
 
         fun openRenameSession() {
+            renameDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_OVERFLOW_RENAME,
+                screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+            )
             sessionInfo.openRenameSession()
         }
 
         fun cancelRenameSession() {
+            renameDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_RENAME_CANCEL,
+                screenId = ProductAnalytics.Screen.SESSION_RENAME,
+            )
             sessionInfo.cancelRenameSession()
         }
 
         fun updateRenameDraft(text: String) {
+            if (!renameDraftEditReported) {
+                renameDraftEditReported = true
+                logAction(
+                    actionId = ProductAnalytics.Action.CHAT_RENAME_EDIT_TITLE,
+                    screenId = ProductAnalytics.Screen.SESSION_RENAME,
+                )
+            }
             sessionInfo.updateRenameDraft(text)
         }
 
         fun confirmRenameSession() {
+            renameDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_RENAME_SAVE,
+                screenId = ProductAnalytics.Screen.SESSION_RENAME,
+            )
             if (!isConnectionLive()) return
             sessionInfo.confirmRenameSession()
         }
 
         fun sendPrompt() {
+            val composerState = composer.state.value.composer
+            logAction(
+                actionId = ProductAnalytics.Action.COMPOSER_SEND,
+                parameters =
+                    mapOf(
+                        ProductAnalytics.Param.HAS_ATTACHMENTS to composerState.attachments.isNotEmpty().toString(),
+                        ProductAnalytics.Param.MODE to composerState.selectedMode,
+                    ),
+            )
             if (!isConnectionLive()) return
             if (permissionRequests.isNotEmpty() || questionRequests.isNotEmpty()) return
             val sessionId = boundSessionId ?: return
@@ -450,6 +551,7 @@ class SessionChatViewModel
         }
 
         fun abort() {
+            logAction(ProductAnalytics.Action.COMPOSER_ABORT)
             if (!isConnectionLive()) return
             composer.abort()
         }
@@ -469,6 +571,7 @@ class SessionChatViewModel
             sessionId: String,
             label: String,
         ) {
+            logAction(ProductAnalytics.Action.QUESTION_TOGGLE_OPTION)
             val request = visibleQuestionRequest() ?: return
             if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
             val question = request.questions.getOrNull(questionWizardIndex) ?: return
@@ -488,6 +591,7 @@ class SessionChatViewModel
             requestId: String,
             sessionId: String,
         ) {
+            logAction(ProductAnalytics.Action.QUESTION_TOGGLE_CUSTOM)
             val request = visibleQuestionRequest() ?: return
             if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
             val question = request.questions.getOrNull(questionWizardIndex) ?: return
@@ -507,6 +611,10 @@ class SessionChatViewModel
             sessionId: String,
             text: String,
         ) {
+            if (questionCustomEditReportedRequestId != requestId) {
+                questionCustomEditReportedRequestId = requestId
+                logAction(ProductAnalytics.Action.QUESTION_EDIT_CUSTOM_TEXT)
+            }
             val request = visibleQuestionRequest() ?: return
             if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
             val current = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
@@ -518,6 +626,7 @@ class SessionChatViewModel
             requestId: String,
             sessionId: String,
         ) {
+            logAction(ProductAnalytics.Action.QUESTION_BACK)
             val request = visibleQuestionRequest() ?: return
             if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
             if (questionWizardIndex <= 0) return
@@ -529,6 +638,7 @@ class SessionChatViewModel
             requestId: String,
             sessionId: String,
         ) {
+            logAction(ProductAnalytics.Action.QUESTION_NEXT)
             val request = visibleQuestionRequest() ?: return
             if (request.id != requestId || request.sessionId != sessionId || questionSubmittingId != null) return
             val question = request.questions.getOrNull(questionWizardIndex) ?: return
@@ -543,6 +653,14 @@ class SessionChatViewModel
             requestId: String,
             sessionId: String,
         ) {
+            logAction(
+                actionId = ProductAnalytics.Action.QUESTION_SUBMIT,
+                parameters =
+                    mapOf(
+                        ProductAnalytics.Param.QUESTION_RESPONSE to
+                            if (questionDrafts.values.any { it.customSelected }) "custom" else "options",
+                    ),
+            )
             val request =
                 questionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId } ?: return
             if (questionSubmittingId != null) return
@@ -562,6 +680,7 @@ class SessionChatViewModel
             requestId: String,
             sessionId: String,
         ) {
+            logAction(ProductAnalytics.Action.QUESTION_DISMISS)
             val request =
                 questionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId } ?: return
             if (questionSubmittingId != null) return
@@ -621,6 +740,14 @@ class SessionChatViewModel
             sessionId: String,
             decision: PermissionDecision,
         ) {
+            logAction(
+                actionId =
+                    when (decision) {
+                        PermissionDecision.AllowOnce -> ProductAnalytics.Action.PERMISSION_ALLOW_ONCE
+                        PermissionDecision.Deny -> ProductAnalytics.Action.PERMISSION_DENY
+                    },
+                parameters = mapOf(ProductAnalytics.Param.PERMISSION_DECISION to decision.name.lowercase()),
+            )
             if (!isConnectionLive()) return
             val request =
                 permissionRequests.firstOrNull { it.id == requestId && it.sessionId == sessionId }
@@ -1014,12 +1141,34 @@ class SessionChatViewModel
             runCatching { Log.i(TAG, message) }
         }
 
+        private fun logAction(
+            actionId: String,
+            screenId: String = ProductAnalytics.Screen.SESSION_CHAT,
+            parameters: Map<String, String> = emptyMap(),
+        ) {
+            ProductAnalytics.logUserAction(
+                screenId = screenId,
+                actionId = actionId,
+                parameters = parameters,
+            )
+        }
+
         companion object {
             private const val TAG = "SessionChat"
             val AvailableModes: List<String> = SessionChatComposer.AvailableModes
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
         }
     }
+
+private val ClientSlashAction.productActionId: String
+    get() =
+        when (this) {
+            ClientSlashAction.New -> ProductAnalytics.Action.COMMANDS_NEW
+            ClientSlashAction.Fork -> ProductAnalytics.Action.COMMANDS_FORK
+            ClientSlashAction.Undo -> ProductAnalytics.Action.COMMANDS_UNDO
+            ClientSlashAction.Redo -> ProductAnalytics.Action.COMMANDS_REDO
+            ClientSlashAction.Compact -> ProductAnalytics.Action.COMMANDS_COMPACT
+        }
 
 private object EmptyPermissionLiveStore : PermissionLiveStore {
     override fun observePermissions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<PermissionRequest>())

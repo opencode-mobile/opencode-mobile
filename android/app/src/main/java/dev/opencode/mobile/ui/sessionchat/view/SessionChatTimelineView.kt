@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -349,6 +350,10 @@ private fun SessionChatTimelineReadyView(
                         OpenCodeActionPill(
                             variant = OpenCodeActionPillVariant.ScrollToEnd,
                             onClick = {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                                    actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
+                                )
                                 timeline.scrollController.animateToEnd(
                                     messageCount = timeline.messageCount,
                                     tolerancePx = timeline.autoFollowTolerancePx,

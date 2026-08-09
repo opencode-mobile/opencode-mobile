@@ -44,6 +44,8 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.forwardRouteTransition
@@ -133,6 +135,20 @@ fun ChangesScreen(
 private val ChangesUiState.content: ChangesContentState?
     get() = (phase as? ChangesPhase.Content)?.changeSet
 
+private fun logChangesAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.CHANGES,
+        actionId = actionId,
+    )
+}
+
+private fun logFileViewerAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.CHANGES_FILE_VIEWER,
+        actionId = actionId,
+    )
+}
+
 @Composable
 private fun ChangedFilesScreen(
     state: ChangesUiState,
@@ -142,6 +158,7 @@ private fun ChangedFilesScreen(
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var listResetToken by rememberSaveable { mutableIntStateOf(0) }
+    ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.CHANGES)
     Column(Modifier.fillMaxSize()) {
         OpenCodeTopBarOverflowHost(
             expanded = menuExpanded,
@@ -163,13 +180,22 @@ private fun ChangedFilesScreen(
             OpenCodeTopBar(
                 title = "Changes",
                 subtitle = state.selectedSource.displayName,
-                leading = OpenCodeTopBarLeading.Back(onNavigateBack),
+                leading =
+                    OpenCodeTopBarLeading.Back(
+                        onClick = {
+                            logChangesAction(ProductAnalytics.Action.CHANGES_BACK)
+                            onNavigateBack()
+                        },
+                    ),
                 actions =
                     listOf(
                         OpenCodeTopBarAction.Icon(
                             imageVector = OpenCodeIcons.MoreVert,
                             contentDescription = "Choose change source",
-                            onClick = { menuExpanded = true },
+                            onClick = {
+                                logChangesAction(ProductAnalytics.Action.CHANGES_OPEN_SOURCE_MENU)
+                                menuExpanded = true
+                            },
                         ),
                     ),
                 showDivider = true,
@@ -198,7 +224,10 @@ private fun ChangedFilesScreen(
                         EmptyMessage("Unable to load changes", phase.message)
                         OpenCodeButton(
                             OpenCodeButtonVariant.CompactText("Retry"),
-                            onClick = viewModel::retry,
+                            onClick = {
+                                logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
+                                viewModel.retry()
+                            },
                             contrast = OpenCodeButtonContrast.Low,
                         )
                     }
@@ -264,7 +293,10 @@ private fun ChangedFilesContent(
                         )
                         OpenCodeButton(
                             OpenCodeButtonVariant.CompactText("Retry"),
-                            onClick = viewModel::refresh,
+                            onClick = {
+                                logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
+                                viewModel.refresh()
+                            },
                             contrast = OpenCodeButtonContrast.Low,
                         )
                     }
@@ -284,7 +316,11 @@ private fun ChangedFilesContent(
                         EmptyMessage("No matching files", "Try another path or clear the filter.")
                         OpenCodeButton(
                             OpenCodeButtonVariant.CompactText("Clear filter"),
-                            onClick = viewModel::clearFilter,
+                            // clearFilter() also runs when leaving Changes, so log the tap here.
+                            onClick = {
+                                logChangesAction(ProductAnalytics.Action.CHANGES_CLEAR_FILTER)
+                                viewModel.clearFilter()
+                            },
                             contrast = OpenCodeButtonContrast.Low,
                         )
                     }
@@ -308,7 +344,10 @@ private fun FileRow(
 ) {
     OpenCodeListItem(
         title = file.path,
-        onClick = { onOpenFile(file.path) },
+        onClick = {
+            logChangesAction(ProductAnalytics.Action.CHANGES_OPEN_FILE)
+            onOpenFile(file.path)
+        },
         modifier = Modifier.semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -331,10 +370,17 @@ private fun FileViewerScreen(
     LaunchedEffect(viewer.selectedHunkId, selectedHunkOffset) {
         scrollState.animateScrollTo(selectedHunkOffset)
     }
+    ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.CHANGES_FILE_VIEWER)
     Column(Modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = file.path,
-            leading = OpenCodeTopBarLeading.Back(onNavigateBack),
+            leading =
+                OpenCodeTopBarLeading.Back(
+                    onClick = {
+                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_BACK)
+                        onNavigateBack()
+                    },
+                ),
             showDivider = true,
         )
         if (!viewer.hasPreview) {
@@ -362,9 +408,18 @@ private fun FileViewerScreen(
                     nextEnabled = viewer.canSelectNextHunk,
                     contextEnabled = viewer.canExpandContext,
                     contextExpanded = viewer.contextMode == UnifiedDiffContextMode.Expanded,
-                    onPrevious = { viewer = viewer.selectPreviousHunk() },
-                    onToggleContext = { viewer = viewer.toggleContextMode() },
-                    onNext = { viewer = viewer.selectNextHunk() },
+                    onPrevious = {
+                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_PREVIOUS)
+                        viewer = viewer.selectPreviousHunk()
+                    },
+                    onToggleContext = {
+                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_TOGGLE_CONTEXT)
+                        viewer = viewer.toggleContextMode()
+                    },
+                    onNext = {
+                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_NEXT)
+                        viewer = viewer.selectNextHunk()
+                    },
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)

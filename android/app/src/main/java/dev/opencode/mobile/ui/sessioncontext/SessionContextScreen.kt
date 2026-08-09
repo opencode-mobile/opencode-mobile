@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownItem
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownKind
 import dev.opencode.mobile.theme.openCodeColor
@@ -58,7 +59,13 @@ fun SessionContextScreen(
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Session Context",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading =
+                OpenCodeTopBarLeading.Back(
+                    onClick = {
+                        logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_BACK)
+                        onNavigateBack()
+                    },
+                ),
             showDivider = true,
         )
         when (uiState.timeline) {
@@ -77,12 +84,22 @@ fun SessionContextScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OpenCodeButton(variant = OpenCodeButtonVariant.FullWidthText("Retry"), onClick = viewModel::load)
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Retry"),
+                        // load() also runs on bind, so the retry tap is logged here.
+                        onClick = {
+                            logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_RETRY)
+                            viewModel.load()
+                        },
+                    )
                 }
             SessionContextTimelineState.Ready ->
                 PullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
-                    onRefresh = viewModel::refresh,
+                    onRefresh = {
+                        logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_REFRESH)
+                        viewModel.refresh()
+                    },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) {
                     val display = uiState.display
@@ -92,6 +109,13 @@ fun SessionContextScreen(
                 }
         }
     }
+}
+
+private fun logSessionContextAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SESSION_CONTEXT,
+        actionId = actionId,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

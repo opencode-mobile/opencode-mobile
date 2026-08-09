@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -91,10 +93,37 @@ fun SettingsScreen(
             }
         }
 
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = showThemePicker,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
+        presentation = ProductAnalytics.Presentation.SHEET,
+        visible = showRecentWindowPicker,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_CACHE_CONFIRM,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = showClearSessionCacheConfirmation,
+    )
+    ProductPresentedScreenViewEffect(
+        screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_ALL_DATA_CONFIRM,
+        presentation = ProductAnalytics.Presentation.DIALOG,
+        visible = showClearConfirmation,
+    )
+
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Settings",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading =
+                OpenCodeTopBarLeading.Back(
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_BACK)
+                        onNavigateBack()
+                    },
+                ),
             showDivider = true,
         )
 
@@ -114,7 +143,10 @@ fun SettingsScreen(
                 subtitle = "Configure server URL and credentials",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Cloud, "Server Connection"),
-                onClick = onConnectionSetup,
+                onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
+                    onConnectionSetup()
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -125,7 +157,10 @@ fun SettingsScreen(
                 subtitle = currentTheme.name,
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
-                onClick = { showThemePicker = true },
+                onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_THEME_PICKER)
+                    showThemePicker = true
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -137,7 +172,10 @@ fun SettingsScreen(
                 trailing = {
                     Switch(
                         checked = showSessionListOnHome,
-                        onCheckedChange = onShowSessionListOnHomeChange,
+                        onCheckedChange = { enabled ->
+                            logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_SESSION_LIST, enabled)
+                            onShowSessionListOnHomeChange(enabled)
+                        },
                     )
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -151,7 +189,13 @@ fun SettingsScreen(
                 trailing = {
                     Switch(
                         checked = hideUserDirectoryPrefix,
-                        onCheckedChange = onHideUserDirectoryPrefixChange,
+                        onCheckedChange = { enabled ->
+                            logSettingsToggle(
+                                ProductAnalytics.Action.SETTINGS_TOGGLE_HIDE_USER_DIRECTORY,
+                                enabled,
+                            )
+                            onHideUserDirectoryPrefixChange(enabled)
+                        },
                     )
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -162,7 +206,10 @@ fun SettingsScreen(
                 subtitle = HomeSessionLadder.formatWindowHoursLabel(recentWindowHours),
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Recent Window"),
-                onClick = { showRecentWindowPicker = true },
+                onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_RECENT_WINDOW_PICKER)
+                    showRecentWindowPicker = true
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -172,6 +219,7 @@ fun SettingsScreen(
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Import Theme"),
                 onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_IMPORT_THEME)
                     themeImportLauncher.launch(arrayOf("application/json", "text/json", "*/*"))
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -201,7 +249,10 @@ fun SettingsScreen(
                 subtitle = "Remove cached sessions and messages",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear Session Cache"),
-                onClick = { showClearSessionCacheConfirmation = true },
+                onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_SESSION_CACHE)
+                    showClearSessionCacheConfirmation = true
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
 
@@ -215,7 +266,15 @@ fun SettingsScreen(
                 trailing = {
                     Switch(
                         checked = productAnalyticsConsented,
-                        onCheckedChange = onProductAnalyticsConsentedChange,
+                        onCheckedChange = { enabled ->
+                            // Log after the consent change so a revoke is dropped by the
+                            // consent gate instead of being recorded on the way out.
+                            onProductAnalyticsConsentedChange(enabled)
+                            logSettingsToggle(
+                                ProductAnalytics.Action.SETTINGS_TOGGLE_PRODUCT_ANALYTICS,
+                                enabled,
+                            )
+                        },
                     )
                 },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -278,7 +337,10 @@ fun SettingsScreen(
                 subtitle = "Remove connection, cache, and imported themes",
                 style = OpenCodeListItemStyle.Card,
                 startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
-                onClick = { showClearConfirmation = true },
+                onClick = {
+                    logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_ALL_DATA)
+                    showClearConfirmation = true
+                },
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
@@ -287,7 +349,13 @@ fun SettingsScreen(
     OpenCodeBottomSheet(
         visible = showThemePicker,
         title = "Theme",
-        onDismissRequest = { showThemePicker = false },
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
+                actionId = ProductAnalytics.Action.THEME_PICKER_DISMISS,
+            )
+            showThemePicker = false
+        },
     ) {
         presets.forEach { preset ->
             OpenCodeBottomSheetEntry(
@@ -299,6 +367,15 @@ fun SettingsScreen(
                         BottomSheetEntryDecorator.None
                     },
                 onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
+                        actionId = ProductAnalytics.Action.THEME_PICKER_SELECT_PRESET,
+                        parameters =
+                            mapOf(
+                                ProductAnalytics.Param.THEME_PRESET to
+                                    if (ThemeManager.isBundledPreset(preset.id)) preset.id else "imported",
+                            ),
+                    )
                     onApplyPreset(preset.id)
                     showThemePicker = false
                 },
@@ -309,7 +386,13 @@ fun SettingsScreen(
     OpenCodeBottomSheet(
         visible = showRecentWindowPicker,
         title = "Recent Window",
-        onDismissRequest = { showRecentWindowPicker = false },
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
+                actionId = ProductAnalytics.Action.RECENT_WINDOW_DISMISS,
+            )
+            showRecentWindowPicker = false
+        },
     ) {
         Text(
             text = "Sessions stay in Recent while Running or Ready, or when updated within this window.",
@@ -327,6 +410,11 @@ fun SettingsScreen(
                         BottomSheetEntryDecorator.None
                     },
                 onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
+                        actionId = ProductAnalytics.Action.RECENT_WINDOW_SELECT_HOURS,
+                        parameters = mapOf(ProductAnalytics.Param.HOURS to hours.toString()),
+                    )
                     onRecentWindowHoursChange(hours)
                     showRecentWindowPicker = false
                 },
@@ -342,6 +430,10 @@ fun SettingsScreen(
             OpenCodeDialogOption(
                 title = "Clear",
                 onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_CACHE_CONFIRM,
+                        actionId = ProductAnalytics.Action.CLEAR_CACHE_CONFIRM,
+                    )
                     showClearSessionCacheConfirmation = false
                     onClearSessionCache()
                 },
@@ -349,7 +441,13 @@ fun SettingsScreen(
         secondaryOption =
             OpenCodeDialogOption(
                 title = "Cancel",
-                onClick = { showClearSessionCacheConfirmation = false },
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_CACHE_CONFIRM,
+                        actionId = ProductAnalytics.Action.CLEAR_CACHE_CANCEL,
+                    )
+                    showClearSessionCacheConfirmation = false
+                },
             ),
         onDismissRequest = { showClearSessionCacheConfirmation = false },
     )
@@ -362,6 +460,11 @@ fun SettingsScreen(
             OpenCodeDialogOption(
                 title = "Clear",
                 onClick = {
+                    // Clearing all data also clears consent, so this must be logged first.
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_ALL_DATA_CONFIRM,
+                        actionId = ProductAnalytics.Action.CLEAR_ALL_DATA_CONFIRM,
+                    )
                     showClearConfirmation = false
                     onClearData()
                 },
@@ -369,9 +472,33 @@ fun SettingsScreen(
         secondaryOption =
             OpenCodeDialogOption(
                 title = "Cancel",
-                onClick = { showClearConfirmation = false },
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_ALL_DATA_CONFIRM,
+                        actionId = ProductAnalytics.Action.CLEAR_ALL_DATA_CANCEL,
+                    )
+                    showClearConfirmation = false
+                },
             ),
         onDismissRequest = { showClearConfirmation = false },
+    )
+}
+
+private fun logSettingsAction(actionId: String) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SETTINGS,
+        actionId = actionId,
+    )
+}
+
+private fun logSettingsToggle(
+    actionId: String,
+    enabled: Boolean,
+) {
+    ProductAnalytics.logUserAction(
+        screenId = ProductAnalytics.Screen.SETTINGS,
+        actionId = actionId,
+        parameters = mapOf(ProductAnalytics.Param.OUTCOME to if (enabled) "enabled" else "disabled"),
     )
 }
 

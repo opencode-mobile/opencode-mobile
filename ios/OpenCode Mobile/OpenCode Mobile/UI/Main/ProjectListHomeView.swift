@@ -29,7 +29,13 @@ struct ProjectListHomeView: View {
                         ? .statusDot(viewModel.liveUpdatesConnectionState.openCodeSessionConnectionStatus)
                         : nil,
                     actions: [
-                        .icon(.settings, accessibilityLabel: "Settings", action: { showSettings = true }),
+                        .icon(.settings, accessibilityLabel: "Settings", action: {
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.home,
+                                actionId: ProductAnalytics.Action.homeOpenSettings
+                            )
+                            showSettings = true
+                        }),
                     ]
                 )
                 content
@@ -53,6 +59,10 @@ struct ProjectListHomeView: View {
                 SessionChatView(session: session)
             }
             .task {
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.home,
+                    presentation: ProductAnalytics.Presentation.route
+                )
                 let decision = ConnectionSetupOnAppear.consume(presentConnectionSetupOnAppear)
                 presentConnectionSetupOnAppear = decision.pending
                 if decision.shouldPresent {
@@ -123,6 +133,10 @@ struct ProjectListHomeView: View {
                     OpenCodeBottomSheetEntry(
                         title: seeAllSessionEntryTitle(session),
                         action: {
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.homeSeeAllSessions,
+                                actionId: ProductAnalytics.Action.seeAllOpenSession
+                            )
                             viewModel.dismissSeeAllSessions()
                             openSession(session)
                         }
@@ -130,7 +144,7 @@ struct ProjectListHomeView: View {
                 }
             }
             .openCodeBottomSheet(
-                isPresented: $showNewSessionProjectPicker,
+                isPresented: newSessionPickerBinding,
                 title: "New session"
             ) {
                 let projects = newSessionPickerProjects
@@ -142,6 +156,10 @@ struct ProjectListHomeView: View {
                             title: project.displayName,
                             startDecorator: .icon(.folder),
                             action: {
+                                ProductAnalytics.logUserAction(
+                                    screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+                                    actionId: ProductAnalytics.Action.newSessionPickerSelectProject
+                                )
                                 showNewSessionProjectPicker = false
                                 Task { await viewModel.createSession(in: project.worktree) }
                             }
@@ -361,18 +379,45 @@ struct ProjectListHomeView: View {
         Binding(
             get: { viewModel.isAddProjectPresented },
             set: { presented in
-                if !presented { viewModel.dismissAddProjectSheet() }
+                if !presented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.homeAddProject,
+                        actionId: ProductAnalytics.Action.addProjectDismiss
+                    )
+                    viewModel.dismissAddProjectSheet()
+                }
             }
         )
     }
 
+    // Sheet-chrome dismissal only: entry taps clear presentation state on the
+    // Screen Model, which never routes back through these setters.
     private var seeAllSheetBinding: Binding<SeeAllSessionsSheetState?> {
         Binding(
             get: { viewModel.seeAllSessionsSheet },
             set: { value in
                 if value == nil {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.homeSeeAllSessions,
+                        actionId: ProductAnalytics.Action.seeAllDismiss
+                    )
                     viewModel.dismissSeeAllSessions()
                 }
+            }
+        )
+    }
+
+    private var newSessionPickerBinding: Binding<Bool> {
+        Binding(
+            get: { showNewSessionProjectPicker },
+            set: { presented in
+                if !presented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+                        actionId: ProductAnalytics.Action.newSessionPickerDismiss
+                    )
+                }
+                showNewSessionProjectPicker = presented
             }
         )
     }
@@ -413,7 +458,19 @@ struct ProjectListHomeView: View {
                 accessibilityIdentifier: "homeLoading"
             )
         case .disconnected:
-            ConnectionOnboardingView(onConnectClick: presentConnectionSetup)
+            ConnectionOnboardingView(onConnectClick: {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.homeConnectionEmpty,
+                    actionId: ProductAnalytics.Action.homeConnect
+                )
+                presentConnectionSetup()
+            })
+            .onAppear {
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.homeConnectionEmpty,
+                    presentation: ProductAnalytics.Presentation.embedded
+                )
+            }
         case let .probeFailed(message):
             probeFailed(message)
         case let .empty(_, _, createError):
@@ -435,11 +492,21 @@ struct ProjectListHomeView: View {
                 Task { await viewModel.retryProbe() }
             }
             OpenCodeButton(variant: .fullWidthText(title: "Edit connection")) {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.homeProbeFailed,
+                    actionId: ProductAnalytics.Action.homeEditConnection
+                )
                 presentConnectionSetup()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(24)
+        .onAppear {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.homeProbeFailed,
+                presentation: ProductAnalytics.Presentation.embedded
+            )
+        }
     }
 
     @ViewBuilder
@@ -460,8 +527,18 @@ struct ProjectListHomeView: View {
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: createError,
-                onFilterSelected: { selectedSessionFilterId = $0 },
+                onFilterSelected: { filterId in
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.home,
+                        actionId: ProductAnalytics.Action.homeSelectSessionFilter
+                    )
+                    selectedSessionFilterId = filterId
+                },
                 onSessionSelected: { session in
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.home,
+                        actionId: ProductAnalytics.Action.homeOpenSession
+                    )
                     openSession(
                         SessionListItem(
                             id: session.id,
@@ -478,7 +555,18 @@ struct ProjectListHomeView: View {
                     )
                 },
                 onAddProject: { Task { await viewModel.showAddProjectSheet() } },
-                onNewSession: { showNewSessionProjectPicker = true },
+                onNewSession: {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.home,
+                        actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
+                    )
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    showNewSessionProjectPicker = true
+                },
                 onRefresh: { await viewModel.pullToRefresh() },
                 onRemoveProject: { worktree in viewModel.requestRemoveProject(worktree: worktree) },
                 showsEmptyContent: sections.isEmpty,
@@ -517,6 +605,10 @@ struct ProjectListHomeView: View {
                                 onProjectSelected: { viewModel.focusProject(worktree: $0) },
                                 onBrowseProjects: { Task { await viewModel.showAddProjectSheet() } },
                                 onSessionSelected: { project, session in
+                                    ProductAnalytics.logUserAction(
+                                        screenId: ProductAnalytics.Screen.home,
+                                        actionId: ProductAnalytics.Action.homeOpenSession
+                                    )
                                     openSession(
                                         SessionListItem(id: session.id, title: session.title, worktree: project.worktree)
                                     )

@@ -9,7 +9,7 @@ struct SessionChatTodosSheetModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .openCodeBottomSheet(
-                isPresented: $isPresented,
+                isPresented: presentedBinding,
                 title: "Session todos",
                 content: {
                     VStack(alignment: .leading, spacing: 12) {
@@ -42,6 +42,21 @@ struct SessionChatTodosSheetModifier: ViewModifier {
                     }
                 }
             )
+    }
+
+    private var presentedBinding: Binding<Bool> {
+        Binding(
+            get: { isPresented },
+            set: { presented in
+                if !presented, isPresented {
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionTodos,
+                        actionId: ProductAnalytics.Action.todosDismiss
+                    )
+                }
+                isPresented = presented
+            }
+        )
     }
 }
 

@@ -8,13 +8,18 @@
 - OPE-123 shared seam contract recorded in `decisions.md` (extended for
   OPE-129 consent + `logProductEvent`).
 - OPE-125 privacy gate under a **public / production release** assumption.
+- OPE-128 **done**: store forms verified for current Crashlytics + minimal
+  Analytics (`ope-128-plan.md`).
 - OPE-129 task plan: `ope-129-plan.md`. Consent UX + seam gate implemented
   (default off; Settings Privacy toggle; Clear All Data resets).
+- OPE-124 task plan: `ope-124-plan.md`. Taxonomy:
+  `product_screen_view` + `product_user_action` via `ProductAnalytics` helpers;
+  product screens/actions instrumented on both apps (developer tools excluded).
 
 ## Design-system dependencies
 
 OPE-129 uses existing `OpenCodeListItem` + platform Switch/Toggle. No new
-design-system component.
+design-system component. OPE-124 needs none.
 
 ## Android
 
@@ -23,7 +28,9 @@ design-system component.
 - OPE-123: `OpenCodeReleaseObservability` aligned to the shared contract.
 - OPE-129: `AnalyticsConsentPreferences`, Settings Privacy toggle, release
   `logProductEvent` gated by consent; debug send no-op.
-- No product-event taxonomy instrumentation until OPE-124 reopen criteria.
+- OPE-124: `ProductAnalytics` + `ProductAnalyticsEffects`; product screen/action
+  call sites wired. Compile + unit tests green. Intentional gap:
+  `composer_dismiss_suggestions` (no explicit user dismiss).
 
 ## iOS
 
@@ -32,16 +39,16 @@ design-system component.
   `verify_crashlytics` on **iOS Release**; policy unit tests; operator runbook.
 - OPE-123 / OPE-129: seam exposes consent + gated `logProductEvent`; Settings
   Privacy toggle; Debug never sends.
+- OPE-124: `ProductAnalytics` helpers + product screen/action instrumentation
+  complete (38 screens; 157/158 actions). Unit suite green. Same intentional
+  gap: `composer_dismiss_suggestions`.
 
 ## Blockers
 
-- OPE-124 blocked until: (1) store privacy / data-safety verified for current
-  Crashlytics + minimal Analytics (OPE-128); (2) in-app Analytics consent UI
-  (**OPE-129 done**); (3) store forms updated again for product events;
-  (4) narrow taxonomy + hard bans only.
+- Store forms must still be updated for **product-event** collection before
+  treating disclosure as complete. Runtime sends remain consent-gated.
 
 ## Remaining work
 
-1. [OPE-128](https://linear.app/opencode-mobile/issue/OPE-128/verify-store-privacy-forms-for-crashlytics-and-analytics) — Store privacy / data-safety verification for **current** Crashlytics + minimal Analytics (human / store consoles).
-2. Store form pass **before** product events ship (after taxonomy is ready).
-3. [OPE-124](https://linear.app/opencode-mobile/issue/OPE-124/product-analytics-taxonomy-and-instrumentation) — Product Analytics taxonomy and instrumentation (after the above).
+1. Store form pass for product-event disclosure (operator).
+2. Publish OPE-124 (commit / PR) when ready.

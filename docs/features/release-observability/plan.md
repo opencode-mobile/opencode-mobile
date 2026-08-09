@@ -149,15 +149,20 @@ events ship.
 
 ### Follow-ups from the public-release gate
 
-- **OPE-128** — Verify store privacy / data-safety forms for current
-  Crashlytics + minimal Analytics (human). Task plan:
+- **OPE-128** — **Done.** Store privacy / data-safety forms verified for
+  current Crashlytics + minimal Analytics. Task plan:
   [`ope-128-plan.md`](ope-128-plan.md).
-- **OPE-129** — In-app Analytics consent UI for product / custom events.
-  Task plan: [`ope-129-plan.md`](ope-129-plan.md). Settings Privacy toggle +
-  seam gate shipped; taxonomy instrumentation remains OPE-124.
+- **OPE-129** — **Done.** In-app Analytics consent UI for product / custom
+  events. Task plan: [`ope-129-plan.md`](ope-129-plan.md). Settings Privacy
+  toggle + seam gate shipped; taxonomy instrumentation remains OPE-124.
 
 ### OPE-124 — Product Analytics taxonomy and instrumentation
 
-**Blocked** until OPE-128, OPE-129 (consent gate done), a second store-form
-pass for product events, and narrow taxonomy + hard bans. Docs-only taxonomy
-drafts may exist; public release instrumentation must not.
+OPE-128 and OPE-129 complete. Taxonomy: consented `product_screen_view` +
+`product_user_action` covering all product screens and interactions (developer
+tools excluded). Perf / SSE internals deferred. Task plan:
+[`ope-124-plan.md`](ope-124-plan.md).
+
+Store forms must still be updated for product-event collection before treating
+disclosure as complete; runtime sends remain consent-gated.
+

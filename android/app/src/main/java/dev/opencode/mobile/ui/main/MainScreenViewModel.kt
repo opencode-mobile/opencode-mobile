@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionProfile
@@ -97,6 +98,10 @@ class MainScreenViewModel
         private var forkGateJob: Job? = null
         private var forkedOpenTarget: SessionOpenTarget? = null
 
+        // Title fields report one edit per dialog appearance instead of per keystroke.
+        private var renameDraftEditReported = false
+        private var forkDraftEditReported = false
+
         init {
             refresh()
             viewModelScope.launch {
@@ -118,6 +123,7 @@ class MainScreenViewModel
 
         /** Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner. */
         fun pullToRefresh() {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_PULL_TO_REFRESH)
             when (_uiState.value) {
                 is MainScreenUiState.Loaded,
                 is MainScreenUiState.Empty,
@@ -137,10 +143,18 @@ class MainScreenViewModel
         }
 
         fun retryProbe() {
+            logAction(
+                ProductAnalytics.Screen.HOME_PROBE_FAILED,
+                ProductAnalytics.Action.HOME_RETRY_PROBE,
+            )
             refresh()
         }
 
         fun requestEditConnection(onProfileReady: (ConnectionProfile?) -> Unit) {
+            logAction(
+                ProductAnalytics.Screen.HOME_PROBE_FAILED,
+                ProductAnalytics.Action.HOME_EDIT_CONNECTION,
+            )
             activeConnectionManager.currentProfile()?.let { profile ->
                 onProfileReady(profile)
                 return
@@ -151,6 +165,7 @@ class MainScreenViewModel
         }
 
         fun showAddProjectSheet() {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_ADD_PROJECT)
             viewModelScope.launch { openDirectoryNavigator() }
         }
 
@@ -169,21 +184,37 @@ class MainScreenViewModel
         fun navigateAddProjectUp() {
             val navigator = currentAddProjectNavigator() ?: return
             val parent = DirectoryListingPolicy.parentPath(navigator.currentPath) ?: return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_GO_UP,
+            )
             viewModelScope.launch { loadDirectoryNavigator(parent) }
         }
 
         fun navigateAddProjectInto(path: String) {
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY,
+            )
             viewModelScope.launch { loadDirectoryNavigator(path) }
         }
 
         fun retryAddProjectNavigator() {
             val navigator = currentAddProjectNavigator() ?: return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_RETRY_NAVIGATOR,
+            )
             viewModelScope.launch { loadDirectoryNavigator(navigator.currentPath) }
         }
 
         fun selectCurrentDirectory() {
             val navigator = currentAddProjectNavigator() ?: return
             if (navigator.currentPath.isBlank() || navigator.isLoading || navigator.isValidating) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_SELECT_CURRENT,
+            )
             viewModelScope.launch { addProject(navigator.currentPath) }
         }
 
@@ -218,6 +249,7 @@ class MainScreenViewModel
         }
 
         fun focusProject(worktree: String) {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_FOCUS_PROJECT)
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded && state.sections.any { it.worktree == worktree }) {
                     homeFocusedWorktree = worktree
@@ -231,6 +263,7 @@ class MainScreenViewModel
         fun showSeeAllSessions(worktree: String) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_SEE_ALL_SESSIONS)
             _uiState.value =
                 state.copy(
                     seeAllSessions =
@@ -249,6 +282,7 @@ class MainScreenViewModel
         }
 
         fun createSession(worktree: String) {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
             if (foregroundEventStream.connectionState.value != EventStreamConnectionState.Connected) {
                 setProjectSessionCreateError("Reconnect to create a session")
                 return
@@ -291,6 +325,7 @@ class MainScreenViewModel
         }
 
         fun requestRemoveProject(worktree: String) {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_REMOVE_PROJECT)
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) {
                     val section = state.sections.firstOrNull { it.worktree == worktree }
@@ -312,6 +347,14 @@ class MainScreenViewModel
         }
 
         fun dismissProjectRemoval() {
+            logAction(
+                ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
+                ProductAnalytics.Action.HOME_REMOVE_PROJECT_CANCEL,
+            )
+            clearPendingProjectRemoval()
+        }
+
+        private fun clearPendingProjectRemoval() {
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingProjectRemoval = null) else state
             }
@@ -319,10 +362,14 @@ class MainScreenViewModel
 
         fun confirmRemoveProject() {
             val pending = (_uiState.value as? MainScreenUiState.Loaded)?.pendingProjectRemoval ?: return
+            logAction(
+                ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
+                ProductAnalytics.Action.HOME_REMOVE_PROJECT_CONFIRM,
+            )
             viewModelScope.launch {
                 runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, pending.worktree) }
                 runCatching { sessionCache.purgeWorktree(serverBaseUrl, pending.worktree) }
-                dismissProjectRemoval()
+                clearPendingProjectRemoval()
                 runHomeLoad(skipProbe = true)
                 _removalSnackbar.value =
                     OpenCodeSnackbarMessage(
@@ -332,6 +379,12 @@ class MainScreenViewModel
         }
 
         fun consumeProjectRemovalSnackbar() {
+            if (_removalSnackbar.value != null) {
+                logAction(
+                    ProductAnalytics.Screen.HOME,
+                    ProductAnalytics.Action.HOME_DISMISS_REMOVAL_SNACKBAR,
+                )
+            }
             _removalSnackbar.value = null
         }
 
@@ -340,6 +393,10 @@ class MainScreenViewModel
             title: String,
             worktree: String,
         ) {
+            logAction(
+                ProductAnalytics.Screen.HOME,
+                ProductAnalytics.Action.HOME_LONG_PRESS_SESSION,
+            )
             forkGateJob?.cancel()
             forkedOpenTarget = null
             _sessionActions.value =
@@ -360,6 +417,10 @@ class MainScreenViewModel
          * target alive for the dialog they open.
          */
         fun dismissSessionActionsSheet() {
+            logAction(
+                ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
+                ProductAnalytics.Action.SESSION_ACTIONS_DISMISS,
+            )
             _sessionActions.update { it.copy(sheetVisible = false) }
             if (!_sessionActions.value.hasOpenDialog) {
                 clearSessionActions()
@@ -368,6 +429,11 @@ class MainScreenViewModel
 
         fun chooseRename() {
             val target = _sessionActions.value.target ?: return
+            logAction(
+                ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
+                ProductAnalytics.Action.SESSION_ACTIONS_RENAME,
+            )
+            renameDraftEditReported = false
             _sessionActions.update {
                 it.copy(
                     sheetVisible = false,
@@ -380,11 +446,22 @@ class MainScreenViewModel
         }
 
         fun updateRenameDraft(text: String) {
+            if (!renameDraftEditReported) {
+                renameDraftEditReported = true
+                logAction(
+                    ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                    ProductAnalytics.Action.HOME_RENAME_EDIT_TITLE,
+                )
+            }
             _sessionActions.update { it.copy(renameDraft = text, renameError = null) }
         }
 
         fun cancelRename() {
             if (_sessionActions.value.renameSubmitting) return
+            logAction(
+                ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                ProductAnalytics.Action.HOME_RENAME_CANCEL,
+            )
             clearSessionActions()
         }
 
@@ -392,13 +469,17 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (state.renameSubmitting) return
+            logAction(
+                ProductAnalytics.Screen.HOME_RENAME_SESSION,
+                ProductAnalytics.Action.HOME_RENAME_SAVE,
+            )
             val trimmed = state.renameDraft.trim()
             if (trimmed.isEmpty()) {
                 _sessionActions.update { it.copy(renameError = EMPTY_TITLE_ERROR) }
                 return
             }
             if (trimmed == target.title) {
-                cancelRename()
+                clearSessionActions()
                 return
             }
             _sessionActions.update { it.copy(renameSubmitting = true, renameError = null) }
@@ -430,6 +511,11 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (!state.canFork) return
+            logAction(
+                ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
+                ProductAnalytics.Action.SESSION_ACTIONS_FORK,
+            )
+            forkDraftEditReported = false
             _sessionActions.update {
                 it.copy(
                     sheetVisible = false,
@@ -442,11 +528,22 @@ class MainScreenViewModel
         }
 
         fun updateForkDraft(text: String) {
+            if (!forkDraftEditReported) {
+                forkDraftEditReported = true
+                logAction(
+                    ProductAnalytics.Screen.HOME_FORK_SESSION,
+                    ProductAnalytics.Action.HOME_FORK_EDIT_TITLE,
+                )
+            }
             _sessionActions.update { it.copy(forkDraft = text, forkError = null) }
         }
 
         fun cancelFork() {
             if (_sessionActions.value.forkSubmitting) return
+            logAction(
+                ProductAnalytics.Screen.HOME_FORK_SESSION,
+                ProductAnalytics.Action.HOME_FORK_CANCEL,
+            )
             clearSessionActions()
         }
 
@@ -454,6 +551,10 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (state.forkSubmitting) return
+            logAction(
+                ProductAnalytics.Screen.HOME_FORK_SESSION,
+                ProductAnalytics.Action.HOME_FORK_CONFIRM,
+            )
             val title = state.forkDraft.trim()
             if (title.isEmpty()) {
                 _sessionActions.update { it.copy(forkError = EMPTY_TITLE_ERROR) }
@@ -508,6 +609,10 @@ class MainScreenViewModel
         }
 
         fun chooseForkOpen() {
+            logAction(
+                ProductAnalytics.Screen.HOME_FORK_RESULT,
+                ProductAnalytics.Action.HOME_FORK_OPEN,
+            )
             val target = forkedOpenTarget
             forkedOpenTarget = null
             clearSessionActions()
@@ -518,6 +623,10 @@ class MainScreenViewModel
         }
 
         fun chooseForkStay() {
+            logAction(
+                ProductAnalytics.Screen.HOME_FORK_RESULT,
+                ProductAnalytics.Action.HOME_FORK_STAY,
+            )
             forkedOpenTarget = null
             clearSessionActions()
         }
@@ -526,6 +635,10 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (state.lifecycleInFlight) return
+            logAction(
+                ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
+                ProductAnalytics.Action.SESSION_ACTIONS_ARCHIVE,
+            )
             _sessionActions.update { it.copy(sheetVisible = false, lifecycleInFlight = true) }
             logI("archive start session=${target.sessionId}")
             viewModelScope.launch {
@@ -547,11 +660,19 @@ class MainScreenViewModel
 
         fun chooseDelete() {
             if (_sessionActions.value.target == null) return
+            logAction(
+                ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
+                ProductAnalytics.Action.SESSION_ACTIONS_DELETE,
+            )
             _sessionActions.update { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
         }
 
         fun dismissDeleteConfirm() {
             if (_sessionActions.value.lifecycleInFlight) return
+            logAction(
+                ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
+                ProductAnalytics.Action.HOME_DELETE_CANCEL,
+            )
             clearSessionActions()
         }
 
@@ -559,6 +680,10 @@ class MainScreenViewModel
             val state = _sessionActions.value
             val target = state.target ?: return
             if (state.lifecycleInFlight) return
+            logAction(
+                ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
+                ProductAnalytics.Action.HOME_DELETE_CONFIRM,
+            )
             _sessionActions.update { it.copy(deleteConfirmVisible = false, lifecycleInFlight = true) }
             logI("delete start session=${target.sessionId}")
             viewModelScope.launch {
@@ -644,6 +769,13 @@ class MainScreenViewModel
                 is SessionError.Decoding -> "Unable to read server response"
                 else -> throwable.message ?: "Something went wrong"
             }
+
+        private fun logAction(
+            screenId: String,
+            actionId: String,
+        ) {
+            ProductAnalytics.logUserAction(screenId = screenId, actionId = actionId)
+        }
 
         private fun logI(message: String) {
             runCatching { Log.i(TAG, message) }
