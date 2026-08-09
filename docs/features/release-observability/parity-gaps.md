@@ -28,10 +28,10 @@
 
 | Field | Value |
 | --- | --- |
-| Expected shared intent | None until OPE-125 / OPE-124. Both platforms deliberately send no custom events. |
-| Current iOS state | No product events. |
-| Current Android state | No product events. |
+| Expected shared intent | On public builds, no product / custom events until store-form verification, in-app Analytics consent, a second form pass, then a narrow seam-only taxonomy with hard bans (OPE-125 public-release gate). |
+| Current iOS state | No product events; public-release privacy gate blocks instrumentation. |
+| Current Android state | No product events; public-release privacy gate blocks instrumentation. |
 | Affected area | Behavior |
-| Reason | Explicit deferral; privacy gate first. |
-| Owner or next action | OPE-125 then OPE-124 |
-| Status | Intentional |
+| Reason | OPE-125 superseded the private-internal unlock; OPE-124 remains blocked. |
+| Owner or next action | Store-form verification + consent UI follow-ups, then OPE-124 |
+| Status | Temporary |

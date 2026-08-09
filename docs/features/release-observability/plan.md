@@ -2,10 +2,10 @@
 
 ## User Goal
 
-Operators of private internal builds can see crash reports and the same narrow
-Analytics lifecycle footprint on both iOS and Android. Feature code stays free
-of Firebase types. Product Analytics is optional later, only after an explicit
-privacy gate.
+Operators of release builds can see crash reports and the same narrow Analytics
+lifecycle footprint on both iOS and Android. Feature code stays free of
+Firebase types. Under the accepted public-release privacy gate, product
+Analytics stays behind store-form verification and in-app Analytics consent.
 
 Linear: [OPE-121](https://linear.app/opencode-mobile/issue/OPE-121/release-observability).
 Companion visual review: [`plan.html`](plan.html).
@@ -24,8 +24,9 @@ an intentional follow-up.
 - Debug and day-to-day local builds remain Firebase-free on both platforms.
 - A conceptual release-observability seam so feature UI never imports Firebase.
 - Operator verification (controlled non-fatal) and runbook updates.
-- Deferred planning for product Analytics taxonomy and a privacy/consent review
-  before collection expands past private internal testers.
+- Privacy / consent gate for public release (OPE-125 accepted under a
+  released-as-is assumption); product Analytics taxonomy deferred behind
+  store-form verification and in-app Analytics consent.
 
 ## Out Of Scope
 
@@ -36,8 +37,9 @@ an intentional follow-up.
   IDFA collection, or ad personalization.
 - Automatic screen reporting (disabled until a separate decision re-enables it).
 - In-app crash or analytics control UI in the parity phase.
-- Public / production store distribution (still owned by release-distribution
-  follow-ups).
+- Public / production store **distribution pipelines** (still owned by
+  release-distribution follow-ups). Observability **privacy policy** for a
+  public release audience is owned by OPE-125 and its follow-ups.
 - Changing Play / TestFlight / App Distribution pipelines except where needed
   for observability verification inputs.
 
@@ -76,8 +78,11 @@ Operator-facing only:
 
 ## Permission Behavior
 
-Not applicable for app runtime in the minimal contract. Advertising ID / IDFA
-permissions must not be introduced. A future consent UI is owned by OPE-125.
+Advertising ID / IDFA permissions must not be introduced. Under the accepted
+public-release OPE-125 gate, Crashlytics + minimal automatic Analytics may
+continue without a separate Analytics consent control for crash reporting;
+**product / custom Analytics events** require an in-app Analytics consent UI
+before they may fire on public builds.
 
 ## Design-System Components
 
@@ -95,8 +100,10 @@ Both platforms must satisfy:
 4. Advertising ID / IDFA collection and ad personalization defaults are
    disabled; manifests / Info.plist must not request ad tracking permission.
 5. Only Firebase's remaining automatic lifecycle / technical events are
-   accepted (Crashlytics breadcrumbs). Expanding the event set requires
-   OPE-125 then OPE-124.
+   accepted (Crashlytics breadcrumbs). Expanding the event set on public
+   builds requires the OPE-125 public-release privacy gate prerequisites
+   (store-form verification, in-app Analytics consent, second form pass) then
+   OPE-124 instrumentation under that gate's hard bans.
 6. Feature and Screen Model code must not import Firebase types.
 
 ## Current Baseline
@@ -133,10 +140,22 @@ platform differences are recorded in [`decisions.md`](decisions.md)
 
 ### OPE-125 — Privacy and consent review
 
-Human gate before Analytics leaves the private-tester audience or gains custom
-events.
+Complete as a **policy** gate under a public / production release assumption.
+Accepted decision in [`decisions.md`](decisions.md) supersedes the earlier
+private-internal unlock: keep minimal Crashlytics + automatic Analytics;
+require store privacy / data-safety verification now; require in-app Analytics
+consent before product / custom events; update store forms again before those
+events ship.
+
+### Follow-ups from the public-release gate
+
+- **OPE-128** — Verify store privacy / data-safety forms for current
+  Crashlytics + minimal Analytics (human). Task plan:
+  [`ope-128-plan.md`](ope-128-plan.md).
+- **OPE-129** — In-app Analytics consent UI for product / custom events.
 
 ### OPE-124 — Product Analytics taxonomy and instrumentation
 
-Blocked by OPE-125. Shared event names, domain adapter methods, Screen Model
-call sites on both platforms.
+**Blocked** until OPE-128, OPE-129, a second store-form pass for product
+events, and narrow taxonomy + hard bans. Docs-only taxonomy drafts may exist;
+public release instrumentation must not.
